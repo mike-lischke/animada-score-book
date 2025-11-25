@@ -3,7 +3,7 @@
 * Licensed under the MIT License. See License.txt in the project root for license information.
 */
 
-import type { TrackView } from "../../../core/index.js";
+import type { TrackView } from "../core/index.js";
 
 /* eslint-disable prefer-arrow/prefer-arrow-functions, jsdoc/require-jsdoc */
 

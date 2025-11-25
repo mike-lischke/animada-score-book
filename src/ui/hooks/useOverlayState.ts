@@ -6,7 +6,7 @@
 /* eslint-disable prefer-arrow/prefer-arrow-functions, jsdoc/require-jsdoc */
 
 import { useContext } from "preact/hooks";
-import { OverlayStateContext } from "../components/Overlay.js";
+import { OverlayStateContext } from "../../components/ui/Overlay.js";
 import { useSubscription } from "./useSubscription.js";
 
 interface OverlayCallbacks {

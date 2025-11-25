@@ -6,7 +6,7 @@
 /* eslint-disable prefer-arrow/prefer-arrow-functions, @typescript-eslint/naming-convention, jsdoc/require-jsdoc */
 
 import type { JSX } from "preact/jsx-runtime";
-import { NoteStyle } from "../../../../../core/index.js";
+import { NoteStyle } from "../../../core/index.js";
 
 export function NoteStyleSymbolViewer({ noteStyle }: { noteStyle?: NoteStyle; }): JSX.Element | null {
     if (!noteStyle) {

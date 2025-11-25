@@ -8,7 +8,7 @@
 import { useContext, useMemo } from "preact/hooks";
 import type { JSX } from "preact/jsx-runtime";
 
-import { Timing } from "../../../../../core/index.js";
+import { Timing } from "../../../core/index.js";
 import { ArrangementPlayerContext } from "../arrangement/ArrangementViewer.js";
 import { getParityClass } from "../note/NoteViewer.js";
 import { BarDivisibilityContext } from "./Guiderail.js";
