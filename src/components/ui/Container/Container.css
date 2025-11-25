@@ -1,0 +1,54 @@
+/*
+ * Copyright (c) Mike Lischke. All rights reserved.
+ * Licensed under the MIT License. See License.txt in the project root for license information.
+ */
+
+.container {
+    display: flex;
+    position: relative;
+}
+
+.container.topLeft {
+    align-items: top;
+    justify-content: flex-start;
+}
+
+.container.topCenter {
+    align-items: top;
+    justify-content: center;
+}
+
+.container.topRight {
+    align-items: top;
+    justify-content: flex-end;
+}
+
+.container.middleLeft {
+    align-items: center;
+    justify-content: flex-start;
+}
+
+.container.middleCenter {
+    align-items: center;
+    justify-content: center;
+}
+
+.container.middleRight {
+    align-items: center;
+    justify-content: flex-end;
+}
+
+.container.bottomLeft {
+    align-items: flex-end;
+    justify-content: flex-start;
+}
+
+.container.bottomCenter {
+    align-items: flex-end;
+    justify-content: center;
+}
+
+.container.bottomRight {
+    align-items: flex-end;
+    justify-content: flex-end;
+}

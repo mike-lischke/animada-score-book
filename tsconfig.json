@@ -1,33 +1,56 @@
 {
     "compilerOptions": {
-        "target": "ESnext",
-        "module": "ESNext",
-        "moduleResolution": "bundler",
-        "noEmit": true,
+        "useDefineForClassFields": true,
         "jsx": "react-jsx",
         "jsxImportSource": "preact",
-        "skipLibCheck": true,
-        "strictNullChecks": true,
+        "target": "esnext",
+        "module": "Node16",
+        "moduleResolution": "Node16",
+        "allowJs": false,
+        "outDir": "dist",
+        "removeComments": true,
+        "sourceMap": true,
+        "esModuleInterop": true,
+        "strict": true,
+        "forceConsistentCasingInFileNames": true,
+        "resolveJsonModule": true,
         "isolatedModules": true,
+        "noEmit": true,
+        "noImplicitAny": true,
+        "sourceRoot": "src",
+        "strictNullChecks": true,
         "noImplicitOverride": true,
+        "lib": [
+            "es2022",
+            "dom",
+            "WebWorker"
+        ],
+        "skipLibCheck": true,
+        "allowSyntheticDefaultImports": false,
+        "strictPropertyInitialization": true,
+        "noFallthroughCasesInSwitch": false,
         "paths": {
             "react": [
                 "./node_modules/preact/compat/"
             ],
             "react-dom": [
                 "./node_modules/preact/compat/"
-            ],
+            ]
         },
-        "lib": [
-            "ESNext",
-            "DOM"
+        "types": [
+            "vite/client",
+            "vitest/globals"
         ]
     },
     "include": [
-        "node_modules/vite/client.d.ts",
-        "src/**/*"
+        "src/**/*",
+        "eslint.config.mjs",
+        "vite.config.ts",
+        "vitest.config.ts",
     ],
     "exclude": [
-        "dist"
-    ]
+        "dist",
+        "node_modules",
+        "tests",
+    ],
 }

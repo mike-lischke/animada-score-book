@@ -1,12 +1,21 @@
 {
     "private": true,
+    "homepage": "https://samba-chemnitz.de",
+    "description": "Score management and arrangement app for our **Banda Animada de Samba** group",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/mike-lischke/animada-score-book.git"
+    },
+    "license": "MIT",
     "type": "module",
-    "homepage": ".",
+    "version": "1.0.0",
     "scripts": {
         "dev": "vite",
-        "build": "vite build"
+        "build": "vite build",
+        "lint": "eslint 'src/**/*.{ts,tsx}'"
     },
     "dependencies": {
+        "classnames": "2.5.1",
         "preact": "10.27.2"
     },
     "devDependencies": {
@@ -22,7 +31,8 @@
         "eslint-plugin-prefer-arrow": "1.2.3",
         "typescript": "5.9.3",
         "typescript-eslint": "8.47.0",
-        "vite": "7.2.4"
+        "vite": "7.2.4",
+        "vitest": "^4.0.13"
     },
     "eslintConfig": {
         "extends": "preact"

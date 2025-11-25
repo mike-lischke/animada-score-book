@@ -9,6 +9,7 @@ import stylistic from "@stylistic/eslint-plugin";
 import jsdoc from "eslint-plugin-jsdoc";
 import preferArrow from "eslint-plugin-prefer-arrow";
 import importPlugin from "eslint-plugin-import";
+import globals from "globals";
 
 export default tslint.config(
     eslint.configs.recommended,
@@ -16,157 +17,305 @@ export default tslint.config(
     ...tslint.configs.stylisticTypeChecked,
     jsdoc.configs["flat/recommended"],
     {
-        // This must be in its own object to avoid a bug in the ESLint parser.
-        ignores: ["src/generated/*"],
+        files: ["*.ts", "*.tsx", "*.mjs" ],
     },
     {
         plugins: {
             "@stylistic": stylistic,
-            "jsdoc": jsdoc,
+            jsdoc,
             "prefer-arrow": preferArrow,
             "import": importPlugin,
         },
         languageOptions: {
+            ecmaVersion: "latest",
             parser: tslint.parser,
             parserOptions: {
                 projectService: {
-                    allowDefaultProject: ["eslint.config.mjs", "build/*.ts"],
+                    allowDefaultProject: [
+                        "eslint.config.mjs",
+                    ],
                     defaultProject: "tsconfig.json",
                 },
-                tsconfigRootDir: import.meta.dirname,
                 sourceType: "module",
+                ecmaFeatures: {
+                    jsx: true,
+                },
+            },
+            globals: {
+                ...globals.node,
             },
         },
         rules: {
+            // Some base rules must be disabled as they return wrong results.
+            // There are specialized rules instead in the typescript eslint rule section.
+            "no-explicit-any": "off",
+            "no-use-before-define": "off",
+            "no-shadow": "off",
+            "lines-between-class-members": "off",
+            "camelcase": "off",
             "no-fallthrough": [
                 "warn",
                 {
-                    "commentPattern": "\\[falls?-through\\]",
-                    "allowEmptyCase": true
-                }
+                    commentPattern: "\\[falls?-through\\]",
+                    allowEmptyCase: true,
+                },
             ],
+            "no-func-assign": [
+                "warn",
+            ],
+            "no-implied-eval": [
+                "warn",
+            ],
+            "no-invalid-regexp": [
+                "warn",
+            ],
+            "no-iterator": [
+                "warn",
+            ],
+            "no-label-var": [
+                "warn",
+            ],
+            "no-labels": [
+                "warn",
+                {
+                    allowLoop: true,
+                    allowSwitch: false,
+                },
+            ],
+            "no-lone-blocks": [
+                "warn",
+            ],
+            "no-loop-func": [
+                "warn",
+            ],
+            "no-multi-str": [
+                "warn",
+            ],
+            "no-global-assign": [
+                "warn",
+            ],
+            "no-unsafe-negation": [
+                "warn",
+            ],
+            "no-new-func": [
+                "warn",
+            ],
+            "no-new-object": [
+                "warn",
+            ],
+            "no-new-symbol": [
+                "warn",
+            ],
+            "no-new-wrappers": "error",
+            "no-obj-calls": [
+                "warn",
+            ],
+            "no-octal": [
+                "warn",
+            ],
+            "no-octal-escape": [
+                "warn",
+            ],
+            "no-redeclare": [
+                "warn",
+                {
+                    builtinGlobals: false,
+                },
+            ],
+            "no-regex-spaces": [
+                "warn",
+            ],
+            "no-useless-computed-key": [
+                "warn",
+            ],
+            "no-useless-concat": [
+                "warn",
+            ],
+            "no-useless-constructor": [
+                "off",
+            ],
+            "no-useless-escape": [
+                "warn",
+            ],
+            "no-useless-rename": [
+                "warn",
+                {
+                    ignoreDestructuring: false,
+                    ignoreImport: false,
+                    ignoreExport: false,
+                },
+            ],
+            "no-constant-condition": "off",
             "max-len": [
                 "error",
                 {
-                    "ignoreRegExpLiterals": false,
-                    "ignoreStrings": false,
-                    "code": 120
-                }
+                    ignoreRegExpLiterals: false,
+                    ignoreStrings: false,
+                    code: 120,
+                },
             ],
-            "brace-style": ["error", "1tbs", { "allowSingleLine": false }],
+            "brace-style": ["error", "1tbs", { allowSingleLine: false }],
             "curly": ["error", "all"],
             "arrow-body-style": ["error", "always"],
+            "prefer-arrow/prefer-arrow-functions": [
+                "warn",
+                {
+                    disallowPrototype: true,
+                    singleReturnOnly: false,
+                    classPropertiesAllowed: false,
+                },
+            ],
+            "keyword-spacing": ["error", { after: true }],
+            "no-restricted-syntax": [
+                "error",
+                {
+                    selector: "Identifier[name='process']",
+                    message: "Use of 'process' is forbidden."
+                }
+            ],
+            "@stylistic/no-mixed-operators": [
+                "warn",
+                {
+                    groups: [
+                        ["+", "-", "*", "/", "%", "**"],
+                        ["&", "|", "^", "~", "<<", ">>", ">>>"],
+                        ["==", "!=", "===", "!==", ">", ">=", "<", "<="],
+                        ["&&", "||"],
+                        ["in", "instanceof"],
+                    ],
+                    allowSamePrecedence: true,
+                },
+            ],
             "@stylistic/padding-line-between-statements": [
                 "error",
                 {
-                    "blankLine": "always",
-                    "prev": "*",
-                    "next": "return"
-                }
+                    blankLine: "always",
+                    prev: "*",
+                    next: "return",
+                },
             ],
             "@stylistic/quotes": [
                 "error",
                 "double",
                 {
-                    "avoidEscape": true,
-                    "allowTemplateLiterals": true
-                }
+                    avoidEscape: true,
+                    allowTemplateLiterals: "always",
+                },
             ],
             "@stylistic/indent": [
                 "error",
                 4,
                 {
-                    "ignoreComments": true,
-                    "SwitchCase": 1,
-                    "MemberExpression": 1
-                }
+                    ignoreComments: true,
+                    SwitchCase: 1,
+                    MemberExpression: 1,
+                    CallExpression: { arguments: 1 },
+                },
             ],
             "@stylistic/semi": [
                 "error",
-                "always"
+                "always",
             ],
-            "@stylistic/no-multiple-empty-lines": ["error", { "max": 1 }],
-            "@stylistic/no-multi-spaces": "error",
+            "@stylistic/no-multiple-empty-lines": ["error", { max: 1 }],
+            "@stylistic/no-multi-spaces": [
+                "error",
+                {
+                    ignoreEOLComments: true,
+                },
+            ],
             "@stylistic/lines-around-comment": [
                 "error",
                 {
-                    "afterBlockComment": false,
-                    "afterLineComment": false,
-                    "beforeBlockComment": false,
-                }
+                    afterBlockComment: false,
+                    afterLineComment: false,
+                    beforeBlockComment: false,
+                },
             ],
             "@stylistic/prefer-regexp-exec": "off",
+            "@stylistic/lines-between-class-members": [
+                "error",
+                {
+                    enforce: [
+                        { blankLine: "always", prev: "method", next: "method" },
+                    ],
+                },
+            ],
+
             "@typescript-eslint/naming-convention": [
                 "error",
                 {
-                    "selector": "default",
-                    "format": [
-                        "camelCase"
-                    ],
-                    "filter": {
-                        "regex": "^_",
-                        "match": false
-                    }
-                },
-                {
-                    "selector": "class",
-                    "format": [
-                        "PascalCase"
-                    ]
-                },
-                {
-                    "selector": "typeParameter",
-                    "format": [
-                        "PascalCase"
-                    ]
-                },
-                {
-                    "selector": "enum",
-                    "format": [
-                        "PascalCase"
-                    ]
-                },
-                {
-                    "selector": "enumMember",
-                    "format": [
-                        "PascalCase"
-                    ]
-                },
-                {
-                    "selector": "typeAlias",
-                    "format": [
-                        "PascalCase"
-                    ]
-                },
-                {
-                    "selector": "interface",
-                    "format": [
-                        "PascalCase"
-                    ]
-                },
-                {
-                    "selector": "property",
-                    "format": [
+                    selector: "default",
+                    format: [
                         "camelCase",
-                        "UPPER_CASE"
-                    ]
+                    ],
+                    filter: {
+                        regex: "^_",
+                        match: false,
+                    },
+                },
+                {
+                    selector: "variable",
+                    format: ["camelCase", "PascalCase"], // allow MyComponent
+                },
+                {
+                    selector: "class",
+                    format: [
+                        "PascalCase",
+                    ],
+                },
+                {
+                    selector: "typeParameter",
+                    format: [
+                        "PascalCase",
+                    ],
+                },
+                {
+                    selector: "enum",
+                    format: [
+                        "PascalCase",
+                    ],
+                },
+                {
+                    selector: "enumMember",
+                    format: [
+                        "PascalCase",
+                    ],
+                },
+                {
+                    selector: "typeAlias",
+                    format: [
+                        "PascalCase",
+                    ],
+                },
+                {
+                    selector: "interface",
+                    format: [
+                        "PascalCase",
+                    ],
                 },
                 {
                     selector: "import",
-                    format: ["camelCase", "PascalCase"],
+                    format: [
+                        "PascalCase",
+                        "camelCase",
+                    ],
                 },
                 {
-                    "selector": "property",
-                    "format": null,
-                    "filter": {
-                        "regex": `".*"`,
-                        "match": false
-                    }
-                }
+                    selector: "property",
+                    format: [
+                        "camelCase",
+                        "UPPER_CASE",
+                    ],
+                },
+                {
+                    selector: "property",
+                    format: null,
+                    filter: {
+                        regex: "^['\"].*['\"]$",
+                        match: false,
+                    },
+                },
             ],
-
-            "lines-between-class-members": "off", // Should be on, but handles overload signatures incorrectly.
-
             "@typescript-eslint/adjacent-overload-signatures": "error",
             "@typescript-eslint/no-explicit-any": "error",
             "@typescript-eslint/no-namespace": "off",
@@ -180,7 +329,7 @@ export default tslint.config(
                     // No ordering for getters and setters here, as that conflicts currently with the rule
                     // adjacent-overload-signatures.
 
-                    "default": [
+                    default: [
                         // Index signature
 
                         "signature",
@@ -217,25 +366,24 @@ export default tslint.config(
                         "protected-method",
                         "private-method",
                         "public-abstract-method",
-                        "protected-abstract-method"
-                    ]
-                }
+                        "protected-abstract-method",
+                    ],
+                },
             ],
             "@typescript-eslint/no-unused-vars": [
                 "warn",
                 {
-                    "args": "none",
-                    "ignoreRestSiblings": true,
-                    "varsIgnorePattern": "^_",
-                    "argsIgnorePattern": "^_"
-                }
+                    args: "none",
+                    ignoreRestSiblings: true,
+                    varsIgnorePattern: "^_",
+                    argsIgnorePattern: "^_",
+                },
             ],
             "@typescript-eslint/restrict-template-expressions": "off",
-            "@typescript-eslint/restrict-plus-operands": "off", // TODO: re-enable this rule
-            "@typescript-eslint/no-unsafe-member-access": "off", // TODO: enable
-            "@typescript-eslint/no-unnecessary-condition": ["error", { "allowConstantLoopConditions": true }],
+            "@typescript-eslint/restrict-plus-operands": "error",
+            "@typescript-eslint/no-unnecessary-condition": ["error", { allowConstantLoopConditions: true }],
             "@typescript-eslint/no-extraneous-class": "off",
-            "@typescript-eslint/array-type": ["error", { "default": "array-simple" }],
+            "@typescript-eslint/array-type": ["error", { default: "array-simple" }],
             "@typescript-eslint/prefer-return-this-type": "off",
             "@typescript-eslint/no-invalid-void-type": "off",
             "@typescript-eslint/unified-signatures": "off",
@@ -246,7 +394,10 @@ export default tslint.config(
             "@typescript-eslint/no-deprecated": "off",
             "@typescript-eslint/no-base-to-string": "off",
             "@typescript-eslint/prefer-regexp-exec": "off",
+            "@typescript-eslint/class-literal-property-style": "off",
             "@typescript-eslint/no-misused-spread": "off",
+            "@typescript-eslint/no-dynamic-delete": "off",
+
             "jsdoc/check-alignment": "error",
             "jsdoc/check-indentation": "off",
             "jsdoc/require-param-type": "off",
@@ -254,25 +405,16 @@ export default tslint.config(
             "jsdoc/no-undefined-types": [
                 "off", // Requires a comment syntax incompatible with VS Code.
                 {
-                    "markVariablesAsUsed": false
-                }
+                    markVariablesAsUsed: false,
+                },
             ],
             "jsdoc/tag-lines": [
                 "error",
                 "any",
                 {
-                    "startLines": 1
-                }
+                    startLines: 1,
+                },
             ],
-            "prefer-arrow/prefer-arrow-functions": [
-                "warn",
-                {
-                    "disallowPrototype": true,
-                    "singleReturnOnly": false,
-                    "classPropertiesAllowed": false
-                }
-            ],
-
         },
     },
 );

@@ -1,0 +1,90 @@
+/*
+* Copyright (c) Mike Lischke. All rights reserved.
+* Licensed under the MIT License. See License.txt in the project root for license information.
+*/
+
+/* eslint-disable prefer-arrow/prefer-arrow-functions, @typescript-eslint/naming-convention, jsdoc/require-jsdoc */
+
+import type { JSX } from "preact/jsx-runtime";
+import { useCallback, useState } from "preact/hooks";
+import type { ChangeEvent } from "preact/compat";
+
+import { ArrangementView, EditCommand_TimeParamsTimeSignature } from "../../../../../bananadrum-core/src/prod/index.js";
+import { useEditCommand } from "../../hooks/useEditCommand.js";
+import { useSubscription } from "../../hooks/useSubscription.js";
+import { NumberInput } from "../NumberInput.js";
+
+export function TimeControls({ arrangement }: { arrangement: ArrangementView; }): JSX.Element {
+    const { timeParams } = arrangement;
+    const [, update] = useState({ arrangement });
+    const edit = useEditCommand();
+
+    useSubscription(timeParams, () => {
+        update({ arrangement });
+    });
+
+    const pluralBars = timeParams.length > 1;
+
+    const changeTimeSignature = useCallback((event: ChangeEvent<HTMLSelectElement>) => {
+        const command: Partial<EditCommand_TimeParamsTimeSignature> = {
+            type: "EditCommand_TimeParamsTimeSignature", timeParams
+        };
+
+        command.timeSignature = (event.target as HTMLInputElement).value;
+        switch ((event.target as HTMLInputElement).value) {
+            case "4/4":
+                command.stepResolution = 16;
+                command.pulse = "1/4";
+                break;
+            case "6/8":
+                command.stepResolution = 8;
+                command.pulse = "3/8";
+                break;
+            case "5/4":
+                command.stepResolution = 8;
+                command.pulse = "1/2";
+                break;
+            case "7/8":
+                command.stepResolution = 8;
+                command.pulse = "1/2";
+                break;
+        }
+
+        edit(command as EditCommand_TimeParamsTimeSignature);
+    }, []);
+
+    return (
+        <div className="time-controls-wrapper">
+            <div className="time-control">
+                <select className="short" onChange={changeTimeSignature} value={timeParams.timeSignature}>
+                    <option>4/4</option>
+                    <option>6/8</option>
+                    <option>5/4</option>
+                    <option>7/8</option>
+                </select> time
+            </div>
+            <div className="time-control">
+                <NumberInput
+                    getValue={() => {
+                        return String(timeParams.tempo);
+                    }}
+                    setValue={(newValue: string) => {
+                        edit({ type: "EditCommand_TimeParamsTempo", timeParams, tempo: Number(newValue) });
+                    }}
+                    subscribable={timeParams}
+                /> bpm
+            </div>
+            <div className="time-control">
+                <NumberInput
+                    getValue={() => {
+                        return String(timeParams.length);
+                    }}
+                    setValue={(newValue: string) => {
+                        edit({ type: "EditCommand_TimeParamsLength", timeParams, length: Number(newValue) });
+                    }}
+                    subscribable={timeParams}
+                /> {pluralBars ? "bars" : "bar"}
+            </div>
+        </div>
+    );
+}

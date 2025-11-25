@@ -1,2 +1,4 @@
 node_modules
 .vscode/numbered-bookmarks.json
+dist
+.vscode/chrome
