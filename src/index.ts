@@ -6,10 +6,10 @@
 import {
     ArrangementSnapshot, createBananaDrum, deserialiseArrangement, getLibrary, getSerialisedArrangementFromParams,
     SerialisedArrangement
-} from "./bananadrum-core/src/prod/index.js";
-import { createBananaDrumPlayer } from "./bananadrum-player/src/prod/BananaDrumPlayer.js";
-import { createBananaDrumUi } from "./bananadrum-ui/src/prod/BananaDrumUi.js";
-import { getSessionSnapshot, resetSessionVariables } from "./bananadrum-ui/src/prod/session-recovery.js";
+} from "./core/index.js";
+import { createBananaDrumPlayer } from "./player/BananaDrumPlayer.js";
+import { createBananaDrumUi } from "./ui/BananaDrumUi.js";
+import { getSessionSnapshot, resetSessionVariables } from "./ui/session-recovery.js";
 import { bateriaInstruments } from "./bateria-instruments.js";
 import { demoSongString } from "./demo-song.js";
 

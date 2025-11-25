@@ -18,7 +18,7 @@ import oBigIcon from "./assets/images/icons/o_big.svg";
 import sunRaysIcon from "./assets/images/icons/sun_rays.svg";
 import oBigClosedIcon from "./assets/images/icons/o_big_closed.svg";
 
-import { PackedInstrument } from "./bananadrum-core/src/prod/index.js";
+import { PackedInstrument } from "./core/index.js";
 
 export const bateriaInstruments: PackedInstrument[] = [
     {
