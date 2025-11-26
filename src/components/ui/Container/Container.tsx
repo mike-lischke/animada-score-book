@@ -3,9 +3,10 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
+import { ComponentBase, type IComponentProperties } from "../ComponentBase/ComponentBase.js";
 import "./Container.css";
 
-import { Component, type ComponentChild, type CSSProperties } from "preact";
+import { type ComponentChild, type CSSProperties } from "preact";
 
 /** Content alignment on both the main axis and the cross axis. */
 export enum ContentAlignment {
@@ -34,7 +35,8 @@ export enum Orientation {
     RightToLeft = "row-reverse",
 }
 
-export interface IContainerProperties {
+export interface IContainerProperties extends IComponentProperties {
+    id?: string;
     className?: string;
     style?: CSSProperties;
 
@@ -48,7 +50,7 @@ export interface IContainerProperties {
 }
 
 /** A grouping element with flex layout. */
-export class Container extends Component<IContainerProperties> {
+export class Container extends ComponentBase<IContainerProperties> {
 
     public static override defaultProps = {
         orientation: Orientation.LeftToRight,
@@ -63,7 +65,10 @@ export class Container extends Component<IContainerProperties> {
     }
 
     public render(): ComponentChild {
-        const { className, children, style, orientation, mainAlignment, crossAlignment, wrap, innerRef } = this.props;
+        const {
+            id, className, children, style, orientation, mainAlignment, crossAlignment, wrap, innerRef,
+            onClick
+        } = this.props;
 
         const newStyle = {
             flexDirection: orientation,
@@ -74,7 +79,13 @@ export class Container extends Component<IContainerProperties> {
         };
 
         return (
-            <div ref={innerRef} style={newStyle} className={(className ?? "") + " container"}>
+            <div
+                id={id}
+                ref={innerRef}
+                style={newStyle}
+                className={(className ?? "") + " container"}
+                onClick={onClick}
+            >
                 {children}
             </ div>
         );

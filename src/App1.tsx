@@ -21,7 +21,7 @@ export class App extends ComponentBase {
         return (
             <ErrorBoundary>
                 <div id="wrapper">
-                    <div id="welcome" class="welcome">
+                    <div>
                         <img src={logo} style="height:80pt;" />
                         <h1>Welcome to Banda Animada de Samba Chemnitz!</h1>
                         <div id="loading-message-wrapper">

@@ -7,6 +7,13 @@ import type { CSSProperties } from "preact";
 import { Component, type ComponentChildren } from "preact";
 import cx from "classnames";
 
+// Click events can also be triggered using the keyboard.
+export type ClickEventCallback = (e: MouseEvent | KeyboardEvent) => void;
+export type MouseEventCallback = (e: MouseEvent) => void;
+export type KeyboardEventCallback = (e: KeyboardEvent) => void;
+export type PointerEventCallback = (e: PointerEvent) => void;
+export type DragEventCallback = (e: DragEvent) => void;
+
 export interface IComponentProperties {
     children?: ComponentChildren;
 
@@ -21,6 +28,14 @@ export interface IComponentProperties {
 
     /** For OS style tooltips. */
     title?: string;
+
+    /** Clicks can be triggered by both mouse and keyboard events. */
+    onClick?: ClickEventCallback;
+    onDoubleClick?: MouseEventCallback;
+    onKeyDown?: KeyboardEventCallback;
+    onKeyUp?: KeyboardEventCallback;
+    onKeyPress?: KeyboardEventCallback;
+
 }
 
 export interface IComponentState {

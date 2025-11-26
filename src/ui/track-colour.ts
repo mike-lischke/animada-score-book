@@ -35,7 +35,7 @@ const allColours: Record<string, string[]> = {
         "hsl(64, 100%, 86%)",
         "hsl(67, 100%, 90%)"
     ],
-    // High-mids: tamborims, repaniques
+    // High-mids: tamborims, repiniques
     orange: [
         "hsl(25, 80%, 63%)",
         "hsl(27, 84%, 66%)",

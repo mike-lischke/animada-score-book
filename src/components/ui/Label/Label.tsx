@@ -59,7 +59,7 @@ export class Label extends ComponentBase<ILabelProperties> {
 
     public render(): ComponentChild {
         const {
-            children, caption, textAlignment, quoted, code, heading, type, style, wrap,
+            id, children, caption, textAlignment, quoted, code, heading, type, style, wrap,
         } = this.props;
 
         const actualStyle = { ...style };
@@ -79,14 +79,15 @@ export class Label extends ComponentBase<ILabelProperties> {
         ]);
 
         return (
-            <label
+            <span
+                id={id}
                 ref={this.labelRef}
                 className={className}
                 data-tooltip="expand"
                 style={actualStyle}
             >
                 {content}
-            </label>
+            </span>
         );
     }
 }

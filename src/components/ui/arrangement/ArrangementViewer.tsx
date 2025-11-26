@@ -87,11 +87,11 @@ export function ArrangementViewer({ arrangementPlayer }: { arrangementPlayer: Ar
         <ArrangementPlayerContext.Provider value={arrangementPlayer}>
             <NoteWidthContext.Provider value={noteWidth}>
                 <NoteLineMinWidth.Provider value={noteLineMinWidth}>
-                    <div className="arrangement-viewer overlay-wrapper">
+                    <div className="arrangement-viewer">
                         <div className="arrangement-viewer-head">
                             <ArrangementControlsTop />
                         </div>
-                        <div className="arrangement-viewer-body overlay-wrapper">
+                        <div className="arrangement-viewer-body">
                             <div>
                                 <div
                                     className={`track-viewers-wrapper ${scrollShadowClasses}`}

@@ -68,7 +68,7 @@ export function ArrangementControlsTop(): JSX.Element {
             <div className={titleVisible ? "" : "hidden"}>
                 <ArrangementTitle editMode={editingTitle} onEditEnd={onEditEnd} />
             </div>
-            <div className="arrangement-controls arrangement-controls-top overlay-wrapper">
+            <div className="arrangement-controls arrangement-controls-top">
                 {
                     playing ? (
                         <button className="playback-control push-button" onClick={() => {

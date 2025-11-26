@@ -3,48 +3,56 @@
 * Licensed under the MIT License. See License.txt in the project root for license information.
 */
 
-/* eslint-disable prefer-arrow/prefer-arrow-functions, @typescript-eslint/naming-convention, jsdoc/require-jsdoc */
+import logo from "../../assets/images/animada-logo.svg";
 
-import { useState } from "preact/hooks";
-import type { JSX } from "preact/jsx-runtime";
+import type { ComponentChild } from "preact";
 
 import { errorLog } from "../../core/ErrorLog.js";
-import { useSubscription } from "../../ui/hooks/useSubscription.js";
-import { toggleOverlay } from "./Overlay.js";
+import { ComponentBase } from "./ComponentBase/ComponentBase.js";
+import { Container, ContentAlignment, Orientation } from "./Container/Container.js";
+import { Label } from "./Label/Label.js";
 
-export function About(): JSX.Element {
-    const [errorCount, setErrorCount] = useState(errorLog.getEntryCount());
-    const errorButtonVisibilityClass = errorCount ? "" : "hidden";
-    const [errorReportIsVisibile, setErrorReportIsVisibile] = useState(false);
+interface AboutState {
+    errorReportIsVisibile: boolean;
+    errorCount: number;
 
-    useSubscription(errorLog, () => {
-        setErrorCount(errorLog.getEntryCount());
-    });
+}
+export class About extends ComponentBase<{}, AboutState> {
+    public constructor(props: {}) {
+        super(props);
 
-    return (
-        <div className="viewport-wrapper">
-            <div id="about" className="welcome">
-                <img src="images/banana-with-feet.svg" style={{ height: "80pt" }} />
-                <h1>Welcome to Banana Drum!</h1>
+        this.state = {
+            errorCount: errorLog.getEntryCount(),
+            errorReportIsVisibile: false,
+        };
+    }
+
+    public override componentDidMount(): void {
+        errorLog.subscribe(this.updateErrorCount);
+    }
+
+    public override componentWillUnmount(): void {
+        errorLog.unsubscribe(this.updateErrorCount);
+    }
+
+    public render(): ComponentChild {
+        const { errorReportIsVisibile, errorCount } = this.state;
+        const errorButtonVisibilityClass = errorCount ? "" : "hidden";
+
+        return (
+            <Container
+                className="aboutBox"
+                orientation={Orientation.TopDown}
+                crossAlignment={ContentAlignment.Center}
+                onClick={this.handleClick}
+            >
+                <img className="logo" src={logo} />
+                <Label id="headingLabel">About Animada Score Book</Label>
                 <p>On your lap or in your pocket, an easy way to compose and share samba grooves</p>
-                <p>Send feedback and rhythms to
-                    <a
-                        target="_blank" href="https://www.facebook.com/bananadrum.net"
-                        rel="noreferrer">Banana Drum on Facebook</a>!
-                </p>
                 <p>
-                    <a target="_blank" href="https://jamofalltrades.com" rel="noreferrer">Check out the author</a>
-                    <br />
                     <a
-                        target="_blank" href="https://github.com/mooseling/BananaDrum"
+                        target="_blank" href="https://github.com/mike-lischke/animada-score-book"
                         rel="noreferrer">Check out the code
-                    </a>
-                    <br />
-                    <a
-                        target="_blank" href="https://trello.com/b/f6731Frf/bananadrum"
-                        rel="noreferrer"
-                    >
-                        Check on progress
                     </a>
                 </p>
                 <div className={errorButtonVisibilityClass}>
@@ -52,7 +60,7 @@ export function About(): JSX.Element {
                         id="report-error"
                         className='push-button'
                         onClick={() => {
-                            setErrorReportIsVisibile(true);
+                            this.setState({ errorReportIsVisibile: true });
                         }}
                     >There were errors! Click to view error report.</button>
                     <br /><br />
@@ -61,15 +69,16 @@ export function About(): JSX.Element {
                         <br />
                     </div>
                 </div>
-                <button
-                    id="load-button"
-                    className="push-button"
-                    onClick={() => {
-                        toggleOverlay("about", "hide");
-                        setErrorReportIsVisibile(false);
-                    }}
-                >Back to my beat!</button>
-            </div>
-        </div>
-    );
+            </Container>
+        );
+    }
+
+    private updateErrorCount = (): void => {
+        this.setState({ errorCount: errorLog.getEntryCount() });
+    };
+
+    private handleClick = (e: MouseEvent | KeyboardEvent) => {
+        // Don't let clicks inside the about box close the popup.
+        e.stopPropagation();
+    };
 }

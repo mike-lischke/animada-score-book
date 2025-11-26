@@ -54,7 +54,7 @@ export function TrackViewer({ trackPlayer, callbacks }: {
                 className={`track-viewer ${audible ? "audible" : "inaudible"}`}
                 data-colour-group={track.instrument.colourGroup}
             >
-                <div className="note-line-wrapper overlay-wrapper">
+                <div className="note-line-wrapper">
                     <NoteLine track={track} callbacks={callbacks} />
                     <Overlay name={overlayName}>
                         <TrackControls track={track} overlayName={overlayName} />

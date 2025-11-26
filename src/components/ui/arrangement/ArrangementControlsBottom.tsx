@@ -41,7 +41,7 @@ export function ArrangementControlsBottom(): JSX.Element {
     });
 
     return (
-        <div className="arrangement-controls arrangement-controls-bottom overlay-wrapper">
+        <div className="arrangement-controls arrangement-controls-bottom">
             <button
                 className="push-button"
                 onClick={() => {

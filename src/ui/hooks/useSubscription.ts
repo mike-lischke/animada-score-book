@@ -19,3 +19,12 @@ export function useSubscription(subscribable: Subscribable, callback: () => void
         };
     }, dependencyList);
 }
+
+export function useSubscription2(subscribable: Subscribable, callback: () => void,
+    dependencyList: unknown[] = []) {
+    subscribable.subscribe(callback);
+
+    return () => {
+        subscribable.unsubscribe(callback);
+    };
+}

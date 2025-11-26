@@ -36,7 +36,7 @@ export function Share(): JSX.Element {
 
     return (
         <div className="viewport-wrapper">
-            <div id="share" className="welcome">
+            <div id="share">
                 <div className="share-content-wrapper">
                     <>
                         {url ?
