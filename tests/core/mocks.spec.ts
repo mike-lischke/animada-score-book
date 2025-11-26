@@ -1,3 +1,16 @@
+/*
+ * Copyright (c) Mike Lischke. All rights reserved.
+ * Licensed under the MIT License. See License.txt in the project root for license information.
+ */
+
+import { describe, it } from "vitest";
+
+describe("Mocks", () => {
+    it("is a placeholder test", () => {
+        // TODO: Implement Mocks tests.
+    });
+});
+
 // import {assert} from 'chai';
 // import * as log from '../lib/logging.js';
 

@@ -1,3 +1,16 @@
+/*
+ * Copyright (c) Mike Lischke. All rights reserved.
+ * Licensed under the MIT License. See License.txt in the project root for license information.
+ */
+
+import { describe, it } from "vitest";
+
+describe("TrackClipboard", () => {
+    it("is a placeholder test", () => {
+        // TODO: Implement TrackClipboard tests.
+    });
+});
+
 // import {assert} from 'chai';
 // import { Note, Timing, Track } from '../../prod/types.js';
 // import {TrackClipboard} from '../../prod/TrackClipboard.js';
@@ -123,10 +136,13 @@
 //       throw "no note at " + index;
 //     const actualNoteStyle = mockTrack.notes[index].noteStyle;
 //     if (expectedId !== undefined) {
-//       assert.isDefined(actualNoteStyle, "actualNoteStyle undefined: " + index + ". whole thing: " + stringifyMockTrack());
-//       assert.equal(actualNoteStyle.id, expectedId, "actualNoteStyle wrong: " + index + ". whole thing: " + stringifyMockTrack());
+//       assert.isDefined(actualNoteStyle, "actualNoteStyle undefined: " + index + ". whole thing: " +
+//           stringifyMockTrack());
+//       assert.equal(actualNoteStyle.id, expectedId, "actualNoteStyle wrong: " + index + ". whole thing: " +
+//           stringifyMockTrack());
 //     } else {
-//       assert.isUndefined(actualNoteStyle, "actualNoteStyle should be undefined: " + index + ". whole thing: " + stringifyMockTrack());
+//       assert.isUndefined(actualNoteStyle, "actualNoteStyle should be undefined: " + index + ". whole thing: " +
+//           stringifyMockTrack());
 //     }
 //   });
 // }

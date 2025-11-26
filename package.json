@@ -12,6 +12,7 @@
     "scripts": {
         "dev": "vite",
         "build": "vite build",
+        "test": "vitest",
         "lint": "eslint 'src/**/*.{ts,tsx}'"
     },
     "dependencies": {

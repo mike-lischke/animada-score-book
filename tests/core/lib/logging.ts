@@ -1,20 +1,16 @@
-const log = {};
-
-/**
- *
- * @param key
- * @param value
+/*
+ * Copyright (c) Mike Lischke. All rights reserved.
+ * Licensed under the MIT License. See License.txt in the project root for license information.
  */
-export function set(key:string, value:any) {
+
+const log: Record<string, unknown> = {};
+
+export const set = (key: string, value: unknown) => {
     log[key] = value;
 
     return value;
-}
+};
 
-/**
- *
- * @param key
- */
-export function get(key:string) {
-    return log[key];
-}
+export const get = <T>(key: string): T | undefined => {
+    return log[key] as T;
+};

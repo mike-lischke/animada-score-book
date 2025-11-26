@@ -1,3 +1,16 @@
+/*
+ * Copyright (c) Mike Lischke. All rights reserved.
+ * Licensed under the MIT License. See License.txt in the project root for license information.
+ */
+
+import { describe, it } from "vitest";
+
+describe("TimeCoordinator", () => {
+    it("is a placeholder test", () => {
+        // TODO: Implement TimeCoordinator tests.
+    });
+});
+
 // import {assert} from 'chai';
 // import { TimeParams, Timing } from '../../prod/types.js';
 // import {createTimeCoordinator} from '../../prod/TimeCoordinator.js';
@@ -8,7 +21,8 @@
 // describe('TimeCoordinator', function() {
 //   describe('Time conversion', function() {
 //     describe('4/4 time, 120bpm', function() {
-//       const timeParams:TimeParams = createTimeParams({timeSignature:'4/4', tempo:120, length:1, pulse:'1/4', stepResolution:16});
+//       const timeParams:TimeParams = createTimeParams(
+//           {timeSignature:'4/4', tempo:120, length:1, pulse:'1/4', stepResolution:16});
 //       const timeCoordinator = createTimeCoordinator(timeParams);
 
 //       it('returns 0 on the 1', () => assert(timeCoordinator.convertToRealTime({bar:1,step:1}) === 0));
@@ -31,7 +45,8 @@
 //     });
 
 //     describe('6/8 time, 120bpm', function() {
-//       const timeParams:TimeParams = createTimeParams({timeSignature:'6/8', tempo:120, length:1, pulse:'3/8', stepResolution:8});
+//       const timeParams:TimeParams = createTimeParams(
+//           {timeSignature:'6/8', tempo:120, length:1, pulse:'3/8', stepResolution:8});
 //       const timeCoordinator = createTimeCoordinator(timeParams);
 
 //       it('returns 0 on the 1', () => assert(timeCoordinator.convertToRealTime({bar:1,step:1}) === 0));
@@ -56,7 +71,8 @@
 //     });
 
 //     describe('6/8 time, 140bpm', function() {
-//       const timeParams:TimeParams = createTimeParams({timeSignature:'6/8', tempo:140, length:1, pulse:'3/8', stepResolution:8});
+//       const timeParams:TimeParams = createTimeParams(
+//           {timeSignature:'6/8', tempo:140, length:1, pulse:'3/8', stepResolution:8});
 //       const timeCoordinator = createTimeCoordinator(timeParams);
 
 //       it('returns 0 on the 1', () => assert(timeCoordinator.convertToRealTime({bar:1,step:1}) === 0));
@@ -81,7 +97,8 @@
 //     });
 
 //     describe('5/4 time, 90bpm', function() {
-//       const timeParams:TimeParams = createTimeParams({timeSignature:'5/4', tempo:90, length:1, pulse:'1/2', stepResolution:8});
+//       const timeParams:TimeParams = createTimeParams(
+//           {timeSignature:'5/4', tempo:90, length:1, pulse:'1/2', stepResolution:8});
 //       const timeCoordinator = createTimeCoordinator(timeParams);
 
 //       it('returns 0 on the 1', () => assert(timeCoordinator.convertToRealTime({bar:1,step:1}) === 0));

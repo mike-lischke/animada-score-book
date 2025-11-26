@@ -1,7 +1,12 @@
+/*
+ * Copyright (c) Mike Lischke. All rights reserved.
+ * Licensed under the MIT License. See License.txt in the project root for license information.
+ */
+
 export class AudioContextMock {
-    timestamp:number;
-    contextTime:number;
-    running:boolean;
+    timestamp: number;
+    contextTime: number;
+    running: boolean;
 
     constructor() {
         this.timestamp = Date.now();
@@ -28,19 +33,20 @@ export class AudioContextMock {
         return (this.running ? this.contextTime + Date.now() - this.timestamp : this.contextTime) / 1000;
     }
 
-    decodeAudioData(arrayBuffer:ArrayBuffer): Promise<AudioBufferMock> {
+    decodeAudioData(arrayBuffer: ArrayBuffer): Promise<AudioBufferMock> {
         const audioBufferMock = new AudioBufferMock();
         const promise = new Promise(resolve => {
-            resolve(audioBufferMock); 
+            resolve(audioBufferMock);
         });
 
         return promise;
     }
 };
 
-export class AudioBufferMock {};
+export class AudioBufferMock { };
 
 export class AudioBufferSourceNodeMock {
-    connect() {}
-    start() {}
+    connect() { }
+
+    start() { }
 };

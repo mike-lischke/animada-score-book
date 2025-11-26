@@ -1,3 +1,16 @@
+/*
+ * Copyright (c) Mike Lischke. All rights reserved.
+ * Licensed under the MIT License. See License.txt in the project root for license information.
+ */
+
+import { describe, it } from "vitest";
+
+describe("Instrument Library", () => {
+    it("is a placeholder test", () => {
+        // TODO: Implement Instrument Library tests.
+    });
+});
+
 // import {assert} from 'chai';
 // import {instrumentCollection} from '../lib/example-instruments.js';
 
@@ -15,7 +28,8 @@
 //   });
 
 //   it("doesn't have clashes displayOrders", () => {
-//     assertNoClashes(instrumentCollection, 'displayOrder', (displayOrder:number) => `Duplicate instrument-displayOrder: ${displayOrder}`);
+//     assertNoClashes(instrumentCollection, 'displayOrder', (displayOrder:number) =>
+//         `Duplicate instrument-displayOrder: ${displayOrder}`);
 //   });
 // });
 

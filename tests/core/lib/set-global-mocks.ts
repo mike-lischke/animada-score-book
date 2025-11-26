@@ -1,10 +1,12 @@
-// Plain old javascript file because TS complains about using global
-// The real way to fix this is to install node types
-// But node types are then flagging errors in my browser code
-declare let global:any;
+/*
+ * Copyright (c) Mike Lischke. All rights reserved.
+ * Licensed under the MIT License. See License.txt in the project root for license information.
+ */
 
-import {AudioContextMock, AudioBufferMock, AudioBufferSourceNodeMock} from "../mocks/WebAudio.js";
-import {fetchMock} from "../mocks/fetch.js";
+declare let global: Record<string, unknown>;
+
+import { AudioContextMock, AudioBufferMock, AudioBufferSourceNodeMock } from "../mocks/WebAudio.js";
+import { fetchMock } from "../mocks/fetch.js";
 
 global.AudioContext = AudioContextMock;
 global.AudioBuffer = AudioBufferMock;

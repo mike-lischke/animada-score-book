@@ -1,4 +1,16 @@
-/* global fetch */
+/*
+ * Copyright (c) Mike Lischke. All rights reserved.
+ * Licensed under the MIT License. See License.txt in the project root for license information.
+ */
+
+import { describe, it } from "vitest";
+
+describe("loadAudio", () => {
+    it("is a placeholder test", () => {
+        // TODO: Implement loadAudio tests.
+    });
+});
+
 // import {assert} from 'chai';
 // import '../mocks/fetch.js';
 // import {loadAudio} from '../../prod/loadAudio.js';

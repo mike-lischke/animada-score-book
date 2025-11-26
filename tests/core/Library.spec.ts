@@ -1,3 +1,16 @@
+/*
+ * Copyright (c) Mike Lischke. All rights reserved.
+ * Licensed under the MIT License. See License.txt in the project root for license information.
+ */
+
+import { describe, it } from "vitest";
+
+describe("Library", () => {
+    it("is a placeholder test", () => {
+        // TODO: Implement Library tests.
+    });
+});
+
 // import {assert} from 'chai';
 // import {Library} from '../../prod/Library.js';
 // import {instrumentCollection} from '../lib/example-instruments.js';

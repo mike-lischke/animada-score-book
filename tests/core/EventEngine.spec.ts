@@ -1,3 +1,16 @@
+/*
+ * Copyright (c) Mike Lischke. All rights reserved.
+ * Licensed under the MIT License. See License.txt in the project root for license information.
+ */
+
+import { describe, it } from "vitest";
+
+describe("EventEngine", () => {
+    it("is a placeholder test", () => {
+        // TODO: Implement EventEngine tests.
+    });
+});
+
 // import {assert} from 'chai';
 // import {NoteEventSourceMock} from '../mocks/NoteSource.js';
 // import '../mocks/WebAudio.js';
@@ -42,7 +55,8 @@
 //     await promiseTimeout(() => assert(requestLog.length === requestNumber), 1000);
 //   });
 //
-//   it('requests time intervals with positive length', () => requestLog.forEach(request => assert(request[0] < request[1])));
+//   it('requests time intervals with positive length', () => requestLog.forEach(request =>
+//       assert(request[0] < request[1])));
 //
 //   it('requests intervals in increasing order', () => {
 //     let lastRequestStart = requestLog[0][0];
