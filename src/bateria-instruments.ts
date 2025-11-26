@@ -135,7 +135,7 @@ export const bateriaInstruments: PackedInstrument[] = [{
     packedNoteStyles: [
         {
             id: "1",
-            file: "Repanique_Center.mp3",
+            file: "Repinique_Center.mp3",
             symbol: {
                 src: xBigIcon,
                 string: "center"
@@ -143,7 +143,7 @@ export const bateriaInstruments: PackedInstrument[] = [{
         },
         {
             id: "2",
-            file: "Repanique_Edge.mp3",
+            file: "Repinique_Edge.mp3",
             symbol: {
                 src: xSmallIcon,
                 string: "edge"
@@ -151,7 +151,7 @@ export const bateriaInstruments: PackedInstrument[] = [{
         },
         {
             id: "3",
-            file: "Repanique_Rimshot.mp3",
+            file: "Repinique_Rimshot.mp3",
             symbol: {
                 src: sunriseRaiseIcon,
                 string: "rimshot"
@@ -159,7 +159,7 @@ export const bateriaInstruments: PackedInstrument[] = [{
         },
         {
             id: "4",
-            file: "Repanique_Rim.mp3",
+            file: "Repinique_Rim.mp3",
             symbol: {
                 src: rimIcon,
                 string: "rim"
@@ -167,7 +167,7 @@ export const bateriaInstruments: PackedInstrument[] = [{
         },
         {
             id: "5",
-            file: "Repanique_Buzz.mp3",
+            file: "Repinique_Buzz.mp3",
             symbol: {
                 src: tripleSlashIcon,
                 string: "buzz"
@@ -175,7 +175,7 @@ export const bateriaInstruments: PackedInstrument[] = [{
         },
         {
             id: "6",
-            file: "Repanique_Hand.mp3",
+            file: "Repinique_Hand.mp3",
             symbol: {
                 src: oBigIcon,
                 string: "hand"
@@ -183,7 +183,7 @@ export const bateriaInstruments: PackedInstrument[] = [{
         },
         {
             id: "7",
-            file: "Repanique_Slap.mp3",
+            file: "Repinique_Slap.mp3",
             symbol: {
                 src: sunRaysIcon,
                 string: "slap"
@@ -198,7 +198,7 @@ export const bateriaInstruments: PackedInstrument[] = [{
     packedNoteStyles: [
         {
             id: "1",
-            file: "Repanique_Whippy_Accent.mp3",
+            file: "Repinique_Whippy_Accent.mp3",
             symbol: {
                 src: xBigIcon,
                 string: "accent"
@@ -206,7 +206,7 @@ export const bateriaInstruments: PackedInstrument[] = [{
         },
         {
             id: "2",
-            file: "Repanique_Whippy_Ghost.mp3",
+            file: "Repinique_Whippy_Ghost.mp3",
             symbol: {
                 src: xSmallIcon,
                 string: "ghost"
@@ -260,7 +260,7 @@ export const bateriaInstruments: PackedInstrument[] = [{
     packedNoteStyles: [
         {
             id: "1",
-            file: "Timba_Open.mp3",
+            file: "Timbau_Open.mp3",
             symbol: {
                 src: oBigIcon,
                 string: "open"
@@ -268,7 +268,7 @@ export const bateriaInstruments: PackedInstrument[] = [{
         },
         {
             id: "2",
-            file: "Timba_Slap.mp3",
+            file: "Timbau_Slap.mp3",
             symbol: {
                 src: sunRaysIcon,
                 string: "slap"
@@ -276,7 +276,7 @@ export const bateriaInstruments: PackedInstrument[] = [{
         },
         {
             id: "3",
-            file: "Timba_Bass.mp3",
+            file: "Timbau_Bass.mp3",
             symbol: {
                 src: oBigClosedIcon,
                 string: "bass"

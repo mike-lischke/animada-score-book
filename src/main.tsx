@@ -3,7 +3,7 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import "./app.css";
+import "./App.css";
 
 import logo from "./assets/images/animada-logo.svg";
 
