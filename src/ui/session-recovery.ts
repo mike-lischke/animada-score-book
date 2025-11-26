@@ -58,7 +58,7 @@ export function getSessionSnapshot(): ArrangementSnapshot | null {
     return parsed.state;
 }
 
-// Will return something falsey if this is a new session
+// Will return something falsy if this is a new session
 function getExistingSessionId(): string | undefined {
     if ("state" in window.history && window.history.state) {
         const state = window.history.state as { sessionId?: string; };

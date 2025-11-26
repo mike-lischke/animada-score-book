@@ -26,7 +26,7 @@ export function getTrackColour(track: TrackView): string {
 // We have certain color categories that instruments fall into
 // And an inverted colour for selections
 const allColours: Record<string, string[]> = {
-    // kitchen, cymbols
+    // kitchen, cymbals
     yellow: [
         "hsl(52, 100%, 70%)",
         "hsl(55, 100%, 74%)",
@@ -53,7 +53,7 @@ const allColours: Record<string, string[]> = {
         "hsl(166, 59%, 75%)",
         "hsl(162, 57%, 82%)"
     ],
-    // Low-mids: toms, timba, congas
+    // Low-mids: toms, timbau, congas
     blue: [
         "hsl(200, 97%, 51%)",
         "hsl(196, 97%, 54%)",
