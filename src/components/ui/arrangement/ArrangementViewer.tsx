@@ -3,13 +3,13 @@
 * Licensed under the MIT License. See License.txt in the project root for license information.
 */
 
-/* eslint-disable prefer-arrow/prefer-arrow-functions, @typescript-eslint/naming-convention, jsdoc/require-jsdoc */
+/* eslint-disable prefer-arrow/prefer-arrow-functions, jsdoc/require-jsdoc */
 
 import { createContext, createRef, type JSX } from "preact";
 import type { Dispatch, MutableRefObject, SetStateAction } from "preact/compat";
 import { useContext, useEffect, useRef, useState } from "preact/hooks";
 
-import type { RealTime, TimeParamsView } from "../../../core/index.js";
+import type { RealTime, Subscription, TimeParamsView } from "../../../core/index.js";
 import { createPublisher } from "../../../core/Publisher.js";
 import type { ArrangementPlayer } from "../../../player/types.js";
 import { useStateSubscription } from "../../../ui/hooks/useStateSubscription.js";
@@ -24,6 +24,7 @@ import { Share } from "../Share.js";
 import { TrackViewer } from "../track/TrackViewer.js";
 import { ArrangementControlsBottom } from "./ArrangementControlsBottom.js";
 import { ArrangementControlsTop } from "./ArrangementControlsTop.js";
+import { ComponentBase, type IComponentProperties, type IComponentState } from "../ComponentBase/ComponentBase.js";
 
 const baseNoteWidth = 55.5; // 54pt flex-basis + 1.5pt for border
 
@@ -31,27 +32,19 @@ export const ArrangementPlayerContext = createContext<ArrangementPlayer | null>(
 export const NoteWidthContext = createContext<number | null>(null);
 export const NoteLineMinWidth = createContext<number | null>(null);
 
-export function ArrangementViewer({ arrangementPlayer }: { arrangementPlayer: ArrangementPlayer; }): JSX.Element {
-    const { arrangement } = arrangementPlayer;
-    const [, setTrackPlayerCount] = useState(arrangementPlayer.trackPlayers.size);
-    const animationEngine = useContext(ServicesContext)!.animationEngine;
+export interface IArrangementViewerProps extends IComponentProperties {
+    arrangementPlayer: ArrangementPlayer;
+}
 
-    // Scroll-shadows over the track-viewers
-    // We need to recalculate these classes when:
-    // -- The arrangement-viewer is first rendered
-    // -- The track-viewer-wrapper scrolls
-    // -- The track-viewer-wrapper resizes
-    // -- Notes are added or removed
-    const ref = createRef<HTMLDivElement>();
-    const [scrollShadowClasses, setScrollShadowClasses] = useState("");
-    const [noteWidth, setNoteWidth] = useState(0);
-    const updateScrollShadows = () => {
-        setScrollShadowClasses(getScrollShadowClasses(ref.current));
-    };
-    const updateNoteWidth = () => {
-        setNoteWidth(getNoteWidth(ref.current));
-    };
-    const contentWidthPublisher = createPublisher();
+interface IArrangementViewerState extends IComponentState {
+    noteWidth: number;
+    trackPlayerCount: number;
+    noteLineMinWidth: number;
+    scrollShadowClasses: string;
+}
+
+export class ArrangementViewer extends ComponentBase<IArrangementViewerProps, IArrangementViewerState> {
+    /*
 
     const { trackViewerCallbacks, handleWheel, onScrollbarGrab } =
         useAutoFollow(animationEngine, arrangementPlayer, ref);
@@ -67,105 +60,183 @@ export function ArrangementViewer({ arrangementPlayer }: { arrangementPlayer: Ar
         }, 0);
     }); // timeout so DOM updates first
 
-    useEffect(() => {
-        const handleResize = () => {
-            updateScrollShadows();
-            updateNoteWidth();
+*/
+
+    private viewerRef = createRef<HTMLDivElement>();
+    private contentWidthPublisher = createPublisher();
+
+    private animationEngine?: AnimationEngine;
+    private resizeObserver: ResizeObserver;
+
+    public constructor(props: IArrangementViewerProps) {
+        super(props);
+
+        this.state = {
+            noteWidth: 0,
+            trackPlayerCount: props.arrangementPlayer.trackPlayers.size,
+            noteLineMinWidth: this.getNoteLineMinWidth(props.arrangementPlayer.arrangement.timeParams),
+            scrollShadowClasses: ""
         };
-        const resizeObserver = new ResizeObserver(handleResize);
-        setTimeout(handleResize, 0);
-        resizeObserver.observe(ref.current!);
 
-        return () => {
-            resizeObserver.disconnect();
-        };
-    }, []);
+        this.resizeObserver = new ResizeObserver(this.handleResize);
+    }
 
-    const noteLineMinWidth = useStateSubscription(arrangement.timeParams, getNoteLineMinWidth);
+    public override componentDidMount(): void {
+        const { arrangementPlayer } = this.props;
 
-    return (
-        <ArrangementPlayerContext.Provider value={arrangementPlayer}>
-            <NoteWidthContext.Provider value={noteWidth}>
-                <NoteLineMinWidth.Provider value={noteLineMinWidth}>
-                    <div className="arrangement-viewer">
-                        <div className="arrangement-viewer-head">
-                            <ArrangementControlsTop />
-                        </div>
-                        <div className="arrangement-viewer-body">
-                            <div>
-                                <div
-                                    className={`track-viewers-wrapper ${scrollShadowClasses}`}
-                                    ref={ref}
-                                    onScroll={updateScrollShadows}
-                                    onWheel={handleWheel}
-                                >
-                                    <Guiderail arrangement={arrangement} />
-                                    {
-                                        arrangement.tracks.map(track => {
-                                            return arrangementPlayer.trackPlayers.get(track)!;
-                                        }).map(trackPlayer => {
-                                            return (
-                                                <TrackViewer
-                                                    trackPlayer={trackPlayer}
-                                                    callbacks={trackViewerCallbacks}
-                                                    key={trackPlayer.track.id}
-                                                />
-                                            );
-                                        })
-                                    }
-                                    <Scrollbar
-                                        wrapperRef={ref}
-                                        contentWidthPublisher={contentWidthPublisher}
-                                        callbacks={{ onGrab: onScrollbarGrab }}
-                                    />
-                                </div>
-                                <Overlay name="instrument_browser">
-                                    <InstrumentBrowser close={() => {
-                                        toggleOverlay("instrument_browser", "hide");
-                                    }} />
-                                </Overlay>
-                            </div>
-                        </div>
-                        <ArrangementControlsBottom />
-                        <Overlay name="share">
-                            <Share />
-                        </Overlay>
-                    </div>
-                </NoteLineMinWidth.Provider>
-            </NoteWidthContext.Provider>
-        </ArrangementPlayerContext.Provider>
-    );
-}
+        setTimeout(this.handleResize, 0);
+        this.resizeObserver.observe(this.viewerRef.current!);
 
-// We need scroll shadows if the note-lines are out of site to either the left or the right
-function getScrollShadowClasses(trackViewersWrapper: HTMLElement | null): string {
-    const notesWrapper = trackViewersWrapper?.querySelector(".notes-wrapper");
-    if (!notesWrapper) {
-        return "";
-    } // In case there are no tracks
+        const arrangement = arrangementPlayer.arrangement;
+        arrangement.subscribe(this.timeParamsSubscription as Subscription);
+    }
 
-    const { left: notesWrapperLeft } = notesWrapper.getBoundingClientRect();
-    const notesWrapperRight = notesWrapperLeft + notesWrapper.scrollWidth;
+    public override componentWillUnmount(): void {
+        const { arrangementPlayer } = this.props;
+        this.resizeObserver.disconnect();
 
-    // On the left side, the boundary is the right side of the track-metas
-    const { right: metaRight } = trackViewersWrapper!.querySelector(".track-meta")!.getBoundingClientRect();
+        const arrangement = arrangementPlayer.arrangement;
+        arrangement.unsubscribe(this.timeParamsSubscription as Subscription);
+    }
 
-    // On the right side, the boundary is right edge of the track-viewers-wrapper
-    const { right: wrapperRight } = trackViewersWrapper!.getBoundingClientRect();
+    public override render(): JSX.Element {
+        const { arrangementPlayer } = this.props;
+        const { noteWidth, noteLineMinWidth, scrollShadowClasses } = this.state;
 
-    // This works much better with a little bit of tolerance, so we do a little subtraction
-    if (notesWrapperRight - wrapperRight > 2) {
+        const arrangement = arrangementPlayer.arrangement;
+
+        return (
+            <ServicesContext.Consumer>
+                {(servicesContext) => {
+                    this.animationEngine ??= servicesContext!.animationEngine;
+
+                    return (
+                        <ArrangementPlayerContext.Provider value={arrangementPlayer}>
+                            <NoteWidthContext.Provider value={noteWidth}>
+                                <NoteLineMinWidth.Provider value={noteLineMinWidth}>
+                                    <div className="arrangement-viewer">
+                                        <div className="arrangement-viewer-head">
+                                            <ArrangementControlsTop />
+                                        </div>
+                                        <div className="arrangement-viewer-body">
+                                            <div>
+                                                <div
+                                                    className={`track-viewers-wrapper ${scrollShadowClasses}`}
+                                                    ref={this.viewerRef}
+                                                    onScroll={this.updateScrollShadows}
+                                                    onWheel={handleWheel}
+                                                >
+                                                    <Guiderail arrangement={arrangement} />
+                                                    {
+                                                        arrangement.tracks.map(track => {
+                                                            return arrangementPlayer.trackPlayers.get(track)!;
+                                                        }).map(trackPlayer => {
+                                                            return (
+                                                                <TrackViewer
+                                                                    trackPlayer={trackPlayer}
+                                                                    callbacks={trackViewerCallbacks}
+                                                                    key={trackPlayer.track.id}
+                                                                />
+                                                            );
+                                                        })
+                                                    }
+                                                    <Scrollbar
+                                                        wrapperRef={this.viewerRef}
+                                                        contentWidthPublisher={contentWidthPublisher}
+                                                        callbacks={{ onGrab: onScrollbarGrab }}
+                                                    />
+                                                </div>
+                                                <Overlay name="instrument_browser">
+                                                    <InstrumentBrowser close={() => {
+                                                        toggleOverlay("instrument_browser", "hide");
+                                                    }} />
+                                                </Overlay>
+                                            </div>
+                                        </div>
+                                        <ArrangementControlsBottom />
+                                        <Overlay name="share">
+                                            <Share />
+                                        </Overlay>
+                                    </div>
+                                </NoteLineMinWidth.Provider>
+                            </NoteWidthContext.Provider>
+                        </ArrangementPlayerContext.Provider>
+                    );
+                }}
+            </ServicesContext.Consumer>
+        );
+    }
+
+    // Returns width in pt
+    private getNoteLineMinWidth = (timeParams: TimeParamsView): number => {
+        const widthFromNotes = baseNoteWidth * timeParams.timings.length;
+        const extraWidthBetweenBars = (timeParams.length - 1) * 4;
+
+        return widthFromNotes + extraWidthBetweenBars;
+    };
+
+    private useSubscriptions = (
+        arrangementPlayerContext: React.ContextType<typeof ArrangementPlayerContext>,
+        bananaDrumContext: React.ContextType<typeof BananaDrumContext>
+    ): void => {
+        if (this.arrangementPlayerContext !== arrangementPlayerContext) {
+            this.arrangementPlayerContext = arrangementPlayerContext;
+            this.bananaDrumContext = bananaDrumContext;
+        }
+    };
+
+    private handleResize = () => {
+        this.updateScrollShadows();
+
+        this.updateNoteWidth();
+    };
+
+    // We need scroll shadows if the note-lines are out of site to either the left or the right
+    private getScrollShadowClasses(trackViewersWrapper: HTMLElement | null): string {
+        const notesWrapper = trackViewersWrapper?.querySelector(".notes-wrapper");
+        if (!notesWrapper) {
+            return "";
+        } // In case there are no tracks
+
+        const { left: notesWrapperLeft } = notesWrapper.getBoundingClientRect();
+        const notesWrapperRight = notesWrapperLeft + notesWrapper.scrollWidth;
+
+        // On the left side, the boundary is the right side of the track-metas
+        const { right: metaRight } = trackViewersWrapper!.querySelector(".track-meta")!.getBoundingClientRect();
+
+        // On the right side, the boundary is right edge of the track-viewers-wrapper
+        const { right: wrapperRight } = trackViewersWrapper!.getBoundingClientRect();
+
+        // This works much better with a little bit of tolerance, so we do a little subtraction
+        if (notesWrapperRight - wrapperRight > 2) {
+            if (metaRight - notesWrapperLeft > 2) {
+                return "overflowing-left overflowing-right";
+            }
+
+            return "overflowing-right";
+        }
         if (metaRight - notesWrapperLeft > 2) {
-            return "overflowing-left overflowing-right";
+            return "overflowing-left";
         }
 
-        return "overflowing-right";
-    }
-    if (metaRight - notesWrapperLeft > 2) {
-        return "overflowing-left";
+        return "";
     }
 
-    return "";
+    private updateScrollShadows = () => {
+        this.setState({ scrollShadowClasses: this.getScrollShadowClasses(this.viewerRef.current) });
+    };
+
+    private updateNoteWidth = () => {
+        this.setState({ noteWidth: getNoteWidth(this.viewerRef.current) });
+    };
+
+    private timeParamsSubscription = (timeParams: TimeParamsView) => {
+        return setTimeout(() => {
+            this.updateScrollShadows();
+            this.contentWidthPublisher.publish();
+            this.updateNoteWidth();
+        }, 0);
+    };
 }
 
 function getNoteWidth(trackViewersWrapper: HTMLElement | null): number {
@@ -290,12 +361,4 @@ function useTrackViewerTouchInterpretation(autoFollowIsOn: boolean, setAutoFollo
             noteLineTouchEnd: undefined
         };
     }
-}
-
-// Returns width in pt
-function getNoteLineMinWidth(timeParams: TimeParamsView): number {
-    const widthFromNotes = baseNoteWidth * timeParams.timings.length;
-    const extraWidthBetweenBars = (timeParams.length - 1) * 4;
-
-    return widthFromNotes + extraWidthBetweenBars;
 }

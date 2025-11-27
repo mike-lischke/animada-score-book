@@ -2,7 +2,7 @@
 ![License](https://img.shields.io/github/license/mike-lischke/animada-score-book?style=for-the-badge&color=lightgreen)
 
 <p align="center">
-<img src="src/assets/images/animada-logo.svg" title="Animada Store Book" alt="Animada Store Book" style="height: 200px" /><br/>
+<img src="src/assets/images/animada-logo2.svg" title="Animada Store Book" alt="Animada Store Book" style="height: 200px" /><br/>
 </p>
 
 <hr />

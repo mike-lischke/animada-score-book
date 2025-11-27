@@ -24,28 +24,6 @@ export class ArrangementControlsBottom extends ComponentBase<{}, IArrangementCon
     private arrangementPlayerContext?: React.ContextType<typeof ArrangementPlayerContext>;
     private servicesContext?: React.ContextType<typeof ServicesContext>;
 
-    /*
-    const arrangement: ArrangementView = useContext(ArrangementPlayerContext)!.arrangement;
-    const modeManager = useContext(ServicesContext)!.modeManager;
-    const edit = useEditCommand();
-
-    const[arePolyrhythms, setArePolyrhythms] = useState(hasPolyrhythms(arrangement));
-    /
-    useArrangementAndTracksSubscription(arrangement, () => {
-        const arePolyrhythms = hasPolyrhythms(arrangement);
-        if (!arePolyrhythms) {
-            toggleOverlay("delete_polyrhythms", "hide");
-            modeManager.deletePolyrhythmMode = false;
-        }
-        setArePolyrhythms(arePolyrhythms);
-    });
-
-useSubscription(modeManager, () => {
-    if (!modeManager.deletePolyrhythmMode) {
-        toggleOverlay("delete_polyrhythms", "hide");
-    }
-});
-*/
     public constructor(props: {}) {
         super(props);
 
@@ -60,7 +38,10 @@ useSubscription(modeManager, () => {
         this.subscribedTracks.forEach(track => {
             track.unsubscribe(this.arrangementCallback as Subscription);
         });
+
         this.subscribedTracks.clear();
+        this.arrangementPlayerContext = undefined;
+        this.servicesContext = undefined;
     }
 
     public render() {
@@ -190,7 +171,9 @@ useSubscription(modeManager, () => {
         const arePolyrhythms = this.hasPolyrhythms(arrangement);
         if (!arePolyrhythms) {
             toggleOverlay("delete_polyrhythms", "hide");
-            //modeManager.deletePolyrhythmMode = false;
+
+            const modeManager = this.servicesContext!.modeManager;
+            modeManager.deletePolyrhythmMode = false;
         }
         this.setState({ arePolyrhythms: arePolyrhythms });
     };
@@ -230,9 +213,11 @@ useSubscription(modeManager, () => {
             this.arrangementSubscription = arrangementSubscription;
 
             const modeManager = servicesContext!.modeManager;
-            if (!modeManager.deletePolyrhythmMode) {
-                toggleOverlay("delete_polyrhythms", "hide");
-            }
+            modeManager.subscribe(() => {
+                if (!modeManager.deletePolyrhythmMode) {
+                    toggleOverlay("delete_polyrhythms", "hide");
+                }
+            });
         }
     };
 };

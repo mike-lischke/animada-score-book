@@ -3,20 +3,15 @@
 * Licensed under the MIT License. See License.txt in the project root for license information.
 */
 
-/* eslint-disable prefer-arrow/prefer-arrow-functions, @typescript-eslint/naming-convention, jsdoc/require-jsdoc */
-
 import pauseIcon from "../../../assets/images/icons/pause.svg";
 import pencilIcon from "../../../assets/images/icons/pencil_white.svg";
 import playIcon from "../../../assets/images/icons/play.svg";
 
-import { useCallback, useContext, useRef, useState } from "preact/hooks";
-import type { JSX } from "preact/jsx-runtime";
-
-import type { ArrangementView } from "../../../core/index.js";
+import type { ComponentChild } from "preact";
+import type { ArrangementView, Subscription } from "../../../core/index.js";
 import { getEventEngine } from "../../../player/EventEngine.js";
-import { useStateSubscription } from "../../../ui/hooks/useStateSubscription.js";
-import { useSubscription } from "../../../ui/hooks/useSubscription.js";
 import { ServicesContext } from "../BananaDrumViewer.js";
+import { ComponentBase } from "../ComponentBase/ComponentBase.js";
 import { ExpandingSpacer } from "../ExpandingSpacer.js";
 import { Overlay, toggleOverlay } from "../Overlay.js";
 import { SelectionControls } from "../SelectionControls.js";
@@ -29,81 +24,150 @@ import { UndoRedo } from "./UndoRedo.js";
 
 const eventEngine = getEventEngine();
 
-export function ArrangementControlsTop(): JSX.Element {
-    const [playing, setPlaying] = useState(eventEngine.state === "playing");
-    useSubscription(eventEngine, () => {
-        setPlaying(eventEngine.state === "playing");
-    });
+interface IArrangementControlsTopState {
+    playing: boolean;
+    editingTitle: boolean;
+    title: string;
+}
 
-    const arrangement: ArrangementView = useContext(ArrangementPlayerContext)!.arrangement;
+export class ArrangementControlsTop extends ComponentBase<{}, IArrangementControlsTopState> {
 
-    const selectionManager = useContext(ServicesContext)!.selectionManager;
-    useSubscription(selectionManager, () => {
-        toggleOverlay("selection_controls", selectionManager.selections.size ? "show" : "hide");
-    });
+    private arrangementPlayerContext?: React.ContextType<typeof ArrangementPlayerContext>;
+    private servicesContext?: React.ContextType<typeof ServicesContext>;
 
-    const [editingTitle, setEditingTitle] = useState(false);
-    const title = useStateSubscription(arrangement, (arrangement: ArrangementView) => {
-        return arrangement.title;
-    });
-    const titleVisible = title || editingTitle;
+    private justFinishedEditingTitle = false;
 
-    const justFinishedEditingTitle = useRef(false);
-    const onEditEnd = useCallback(() => {
-        setEditingTitle(false);
-        justFinishedEditingTitle.current = true;
-        setTimeout(() => {
-            return justFinishedEditingTitle.current = false;
-        }, 100);
-    }, []);
+    public constructor(props: {}) {
+        super(props);
 
-    const onClickEditTitle = useCallback(() => {
-        if (!justFinishedEditingTitle.current) {
-            setEditingTitle(true);
+        this.state = {
+            playing: eventEngine.state === "playing",
+            editingTitle: false,
+            title: "",
+        };
+    }
+
+    public override componentWillUnmount(): void {
+        const arrangementPlayerContext = this.context as React.ContextType<typeof ArrangementPlayerContext>;
+        const arrangement: ArrangementView = arrangementPlayerContext!.arrangement;
+        const selectionManager = this.servicesContext!.selectionManager;
+
+        arrangement.unsubscribe(this.titleChangeSubscription as Subscription);
+        eventEngine.unsubscribe(this.onPlaybackStateChange);
+        selectionManager.unsubscribe(this.onSelectionChange as Subscription);
+    }
+
+    public override render(): ComponentChild {
+        const { playing, editingTitle, title } = this.state;
+
+        return (
+            <ArrangementPlayerContext.Consumer>
+                {(arrangementPlayerContext) => {
+                    return (
+                        <ServicesContext.Consumer>
+                            {(servicesContext) => {
+                                this.useSubscriptions(arrangementPlayerContext, servicesContext);
+                                const arrangement: ArrangementView = arrangementPlayerContext!.arrangement;
+                                const titleVisible = title.length > 0 || editingTitle;
+
+                                return (
+                                    <>
+                                        <div className={titleVisible ? "" : "hidden"}>
+                                            <ArrangementTitle editMode={editingTitle} onEditEnd={this.onEditEnd} />
+                                        </div>
+                                        <div className="arrangement-controls arrangement-controls-top">
+                                            {
+                                                playing ? (
+                                                    <button className="playback-control push-button" onClick={() => {
+                                                        eventEngine.stop();
+                                                    }}>
+                                                        <img src={pauseIcon} alt="stop" />
+                                                    </button>
+                                                ) : (
+                                                    <button className="playback-control push-button" onClick={() => {
+                                                        void eventEngine.play();
+                                                    }}>
+                                                        <img src={playIcon} alt="play" />
+                                                    </button>
+                                                )
+                                            }
+                                            <SmallSpacer />
+                                            <TimeControls arrangement={arrangement} />
+                                            <SmallSpacer />
+
+                                            <div className='other-controls-wrapper'>
+                                                <button
+                                                    className="push-button medium gray edit-title-button"
+                                                    onClick={this.onClickEditTitle}
+                                                >
+                                                    T&nbsp;<img src={pencilIcon} style={{ height: "0.78em" }} />
+                                                </button>
+                                                <SmallSpacer />
+                                                <UndoRedo />
+                                            </div>
+
+                                            <SmallSpacer />
+                                            <ExpandingSpacer />
+
+                                            <ShareButton />
+                                            <Overlay name="selection_controls">
+                                                <SelectionControls />
+                                            </Overlay>
+                                        </div>
+                                    </>
+                                );
+                            }}
+                        </ServicesContext.Consumer>
+                    );
+                }}
+            </ArrangementPlayerContext.Consumer>
+        );
+    }
+
+    private useSubscriptions = (
+        arrangementPlayerContext: React.ContextType<typeof ArrangementPlayerContext>,
+        servicesContext?: React.ContextType<typeof ServicesContext>
+    ): void => {
+        if (this.arrangementPlayerContext !== arrangementPlayerContext) {
+            this.arrangementPlayerContext = arrangementPlayerContext;
+            this.servicesContext = servicesContext;
+
+            eventEngine.subscribe(this.onPlaybackStateChange);
+
+            const arrangement = arrangementPlayerContext!.arrangement;
+            arrangement.subscribe(this.titleChangeSubscription as Subscription);
+
+            const selectionManager = this.servicesContext!.selectionManager;
+            selectionManager.subscribe(this.onSelectionChange as Subscription);
+
         }
-    }, []);
+    };
 
-    return (
-        <>
-            <div className={titleVisible ? "" : "hidden"}>
-                <ArrangementTitle editMode={editingTitle} onEditEnd={onEditEnd} />
-            </div>
-            <div className="arrangement-controls arrangement-controls-top">
-                {
-                    playing ? (
-                        <button className="playback-control push-button" onClick={() => {
-                            eventEngine.stop();
-                        }}>
-                            <img src={pauseIcon} alt="stop" />
-                        </button>
-                    ) : (
-                        <button className="playback-control push-button" onClick={() => {
-                            void eventEngine.play();
-                        }}>
-                            <img src={playIcon} alt="play" />
-                        </button>
-                    )
-                }
-                <SmallSpacer />
-                <TimeControls arrangement={arrangement} />
-                <SmallSpacer />
-                <div className='other-controls-wrapper'>
-                    <button
-                        className="push-button medium gray edit-title-button"
-                        onClick={onClickEditTitle}
-                    >
-                        T&nbsp;<img src={pencilIcon} style={{ height: "0.78em" }} />
-                    </button>
-                    <SmallSpacer />
-                    <UndoRedo />
-                </div>
-                <SmallSpacer />
-                <ExpandingSpacer />
-                <ShareButton />
-                <Overlay name="selection_controls">
-                    <SelectionControls />
-                </Overlay>
-            </div>
-        </>
-    );
+    private onEditEnd = () => {
+        this.setState({ editingTitle: false });
+        this.justFinishedEditingTitle = true;
+        setTimeout(() => {
+            return this.justFinishedEditingTitle = false;
+        }, 100);
+    };
+
+    private onClickEditTitle = () => {
+        if (!this.justFinishedEditingTitle) {
+            this.setState({ editingTitle: true });
+        }
+    };
+
+    private titleChangeSubscription = () => {
+        const arrangement = this.arrangementPlayerContext!.arrangement;
+        this.setState({ title: arrangement.title });
+    };
+
+    private onPlaybackStateChange = () => {
+        this.setState({ playing: eventEngine.state === "playing" });
+    };
+
+    private onSelectionChange = () => {
+        const selectionManager = this.servicesContext!.selectionManager;
+        toggleOverlay("selection_controls", selectionManager.selections.size ? "show" : "hide");
+    };
 }
