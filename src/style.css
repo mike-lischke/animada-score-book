@@ -833,3 +833,9 @@ button.anchor-button:hover {
     display: block;
     margin: 40px auto;
 }
+
+#githubLogo {
+    height: 32pt;
+    margin-left: 8pt;
+    vertical-align: middle;
+}

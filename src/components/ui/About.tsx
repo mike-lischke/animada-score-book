@@ -4,6 +4,7 @@
 */
 
 import logo from "../../assets/images/animada-logo.svg";
+import githubLogo from "../../assets/images/GitHub_Invertocat_Dark.svg";
 
 import type { ComponentChild } from "preact";
 
@@ -49,12 +50,14 @@ export class About extends ComponentBase<{}, AboutState> {
                 <img className="logo" src={logo} />
                 <Label id="headingLabel">About Animada Score Book</Label>
                 <p>On your lap or in your pocket, an easy way to compose and share samba grooves</p>
-                <p>
+                <Container>
                     <a
                         target="_blank" href="https://github.com/mike-lischke/animada-score-book"
-                        rel="noreferrer">Check out the code
+                        rel="noreferrer">
+                        Check out the code:
+                        <img src={githubLogo} id="githubLogo" />
                     </a>
-                </p>
+                </Container>
                 <div className={errorButtonVisibilityClass}>
                     <button
                         id="report-error"
