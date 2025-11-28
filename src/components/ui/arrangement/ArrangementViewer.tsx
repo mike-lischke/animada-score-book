@@ -3,19 +3,15 @@
 * Licensed under the MIT License. See License.txt in the project root for license information.
 */
 
-/* eslint-disable prefer-arrow/prefer-arrow-functions, jsdoc/require-jsdoc */
-
 import { createContext, createRef, type JSX } from "preact";
-import type { Dispatch, MutableRefObject, SetStateAction } from "preact/compat";
-import { useContext, useEffect, useRef, useState } from "preact/hooks";
+import type { MutableRefObject } from "preact/compat";
 
 import type { RealTime, Subscription, TimeParamsView } from "../../../core/index.js";
 import { createPublisher } from "../../../core/Publisher.js";
 import type { ArrangementPlayer } from "../../../player/types.js";
-import { useStateSubscription } from "../../../ui/hooks/useStateSubscription.js";
-import { useSubscription } from "../../../ui/hooks/useSubscription.js";
 import type { AnimationEngine } from "../../../ui/types.js";
 import { ServicesContext } from "../BananaDrumViewer.js";
+import { ComponentBase, type IComponentProperties, type IComponentState } from "../ComponentBase/ComponentBase.js";
 import { Guiderail } from "../guiderail/Guiderail.js";
 import { InstrumentBrowser } from "../InstrumentBrowser.js";
 import { Overlay, toggleOverlay } from "../Overlay.js";
@@ -24,7 +20,6 @@ import { Share } from "../Share.js";
 import { TrackViewer } from "../track/TrackViewer.js";
 import { ArrangementControlsBottom } from "./ArrangementControlsBottom.js";
 import { ArrangementControlsTop } from "./ArrangementControlsTop.js";
-import { ComponentBase, type IComponentProperties, type IComponentState } from "../ComponentBase/ComponentBase.js";
 
 const baseNoteWidth = 55.5; // 54pt flex-basis + 1.5pt for border
 
@@ -41,6 +36,8 @@ interface IArrangementViewerState extends IComponentState {
     trackPlayerCount: number;
     noteLineMinWidth: number;
     scrollShadowClasses: string;
+    autoFollowIsOn: boolean;
+    userMightBeTakingControl: boolean;
 }
 
 export class ArrangementViewer extends ComponentBase<IArrangementViewerProps, IArrangementViewerState> {
@@ -68,6 +65,10 @@ export class ArrangementViewer extends ComponentBase<IArrangementViewerProps, IA
     private animationEngine?: AnimationEngine;
     private resizeObserver: ResizeObserver;
 
+    private lastY = 0;
+    private lastX = 0;
+    private stopAutoFollowTimeoutId = 0;
+
     public constructor(props: IArrangementViewerProps) {
         super(props);
 
@@ -75,7 +76,9 @@ export class ArrangementViewer extends ComponentBase<IArrangementViewerProps, IA
             noteWidth: 0,
             trackPlayerCount: props.arrangementPlayer.trackPlayers.size,
             noteLineMinWidth: this.getNoteLineMinWidth(props.arrangementPlayer.arrangement.timeParams),
-            scrollShadowClasses: ""
+            scrollShadowClasses: "",
+            autoFollowIsOn: true,
+            userMightBeTakingControl: false
         };
 
         this.resizeObserver = new ResizeObserver(this.handleResize);
@@ -97,6 +100,10 @@ export class ArrangementViewer extends ComponentBase<IArrangementViewerProps, IA
 
         const arrangement = arrangementPlayer.arrangement;
         arrangement.unsubscribe(this.timeParamsSubscription as Subscription);
+
+        // Actually only one of these is active at a time.
+        this.animationEngine?.disconnect(this.autoFollowAnimation);
+        this.animationEngine?.unsubscribe(this.animationEngineSubscription);
     }
 
     public override render(): JSX.Element {
@@ -108,7 +115,9 @@ export class ArrangementViewer extends ComponentBase<IArrangementViewerProps, IA
         return (
             <ServicesContext.Consumer>
                 {(servicesContext) => {
-                    this.animationEngine ??= servicesContext!.animationEngine;
+                    this.useAutoFollow(servicesContext!.animationEngine, this.viewerRef);
+                    const { trackViewerCallbacks, handleWheel, onScrollbarGrab } =
+                        this.useAutoFollow(servicesContext!.animationEngine, this.viewerRef) ?? {};
 
                     return (
                         <ArrangementPlayerContext.Provider value={arrangementPlayer}>
@@ -128,13 +137,13 @@ export class ArrangementViewer extends ComponentBase<IArrangementViewerProps, IA
                                                 >
                                                     <Guiderail arrangement={arrangement} />
                                                     {
-                                                        arrangement.tracks.map(track => {
+                                                        arrangement.tracks.map((track) => {
                                                             return arrangementPlayer.trackPlayers.get(track)!;
-                                                        }).map(trackPlayer => {
+                                                        }).map((trackPlayer) => {
                                                             return (
                                                                 <TrackViewer
                                                                     trackPlayer={trackPlayer}
-                                                                    callbacks={trackViewerCallbacks}
+                                                                    callbacks={trackViewerCallbacks ?? {}}
                                                                     key={trackPlayer.track.id}
                                                                 />
                                                             );
@@ -142,7 +151,7 @@ export class ArrangementViewer extends ComponentBase<IArrangementViewerProps, IA
                                                     }
                                                     <Scrollbar
                                                         wrapperRef={this.viewerRef}
-                                                        contentWidthPublisher={contentWidthPublisher}
+                                                        contentWidthPublisher={this.contentWidthPublisher}
                                                         callbacks={{ onGrab: onScrollbarGrab }}
                                                     />
                                                 </div>
@@ -173,16 +182,6 @@ export class ArrangementViewer extends ComponentBase<IArrangementViewerProps, IA
         const extraWidthBetweenBars = (timeParams.length - 1) * 4;
 
         return widthFromNotes + extraWidthBetweenBars;
-    };
-
-    private useSubscriptions = (
-        arrangementPlayerContext: React.ContextType<typeof ArrangementPlayerContext>,
-        bananaDrumContext: React.ContextType<typeof BananaDrumContext>
-    ): void => {
-        if (this.arrangementPlayerContext !== arrangementPlayerContext) {
-            this.arrangementPlayerContext = arrangementPlayerContext;
-            this.bananaDrumContext = bananaDrumContext;
-        }
     };
 
     private handleResize = () => {
@@ -227,7 +226,7 @@ export class ArrangementViewer extends ComponentBase<IArrangementViewerProps, IA
     };
 
     private updateNoteWidth = () => {
-        this.setState({ noteWidth: getNoteWidth(this.viewerRef.current) });
+        this.setState({ noteWidth: this.getNoteWidth(this.viewerRef.current) });
     };
 
     private timeParamsSubscription = (timeParams: TimeParamsView) => {
@@ -237,128 +236,122 @@ export class ArrangementViewer extends ComponentBase<IArrangementViewerProps, IA
             this.updateNoteWidth();
         }, 0);
     };
-}
 
-function getNoteWidth(trackViewersWrapper: HTMLElement | null): number {
-    const noteViewer = trackViewersWrapper?.querySelector(".note-line-wrapper .notes-wrapper .note-viewer");
-    if (!noteViewer) {
-        return 0;
-    } // In case there are no tracks
+    private getNoteWidth(trackViewersWrapper: HTMLElement | null): number {
+        const noteViewer = trackViewersWrapper?.querySelector(".note-line-wrapper .notes-wrapper .note-viewer");
+        if (!noteViewer) {
+            return 0;
+        } // In case there are no tracks
 
-    return noteViewer.clientWidth;
-}
-
-function autoFollow(wrapper: HTMLDivElement | null, arrangementPlayer: ArrangementPlayer, realTime: RealTime) {
-    if (wrapper) {
-        const distanceMultiplier = arrangementPlayer.convertToLoopProgress(realTime);
-        wrapper.scrollLeft = (distanceMultiplier * wrapper.scrollWidth) - (wrapper.offsetWidth / 2);
+        return noteViewer.clientWidth;
     }
-}
 
-function useAutoFollow(animationEngine: AnimationEngine, arrangementPlayer: ArrangementPlayer,
-    wrapperRef: MutableRefObject<HTMLDivElement | null>) {
-    // Placing auto-follow in state means we rerender when toggling auto-follow
-    // This means we get register/don't register auto-follow callbacks based on state
-    // The alternative is to use a ref, always fire the callbacks, and use the ref to decide then what to do
-    const [autoFollowIsOn, setAutoFollow] = useState(true);
+    private autoFollow(wrapper: HTMLDivElement | null, realTime: RealTime) {
+        if (wrapper) {
+            const { arrangementPlayer } = this.props;
 
-    useEffect(() => {
+            const distanceMultiplier = arrangementPlayer.convertToLoopProgress(realTime);
+            wrapper.scrollLeft = (distanceMultiplier * wrapper.scrollWidth) - (wrapper.offsetWidth / 2);
+        }
+    }
+
+    private autoFollowAnimation = (realTime: RealTime) => {
+        this.autoFollow(this.viewerRef.current, realTime);
+    };
+
+    private animationEngineSubscription = () => {
+        if (this.animationEngine?.state === "playing") {
+            this.setState({ autoFollowIsOn: true });
+        }
+    };
+
+    private useAutoFollow(animationEngine: AnimationEngine, wrapperRef: MutableRefObject<HTMLDivElement | null>) {
+        if (this.animationEngine === animationEngine) {
+            return;
+        }
+
+        const { autoFollowIsOn } = this.state;
+
+        this.animationEngine = animationEngine;
+
         // If desired, turn on auto-follow like so
         if (autoFollowIsOn) {
-            const autoFollowAnimation = (realTime: RealTime) => {
-                autoFollow(wrapperRef.current, arrangementPlayer, realTime);
-            };
-            animationEngine.connect(autoFollowAnimation);
+            animationEngine.connect(this.autoFollowAnimation);
+        } else {
+            // Otherwise, set up the subscription which will turn it on again
+            animationEngine.subscribe(this.animationEngineSubscription);
 
-            return () => {
-                animationEngine.disconnect(autoFollowAnimation);
+        }
+
+        return {
+            handleWheel: autoFollowIsOn ? (event: WheelEvent) => {
+                if (event.deltaX > 6) {
+                    this.setState({ autoFollowIsOn: false });
+                }
+            } : undefined,
+            onScrollbarGrab: autoFollowIsOn ? () => {
+                this.setState({ autoFollowIsOn: false });
+            } : undefined,
+            trackViewerCallbacks: this.useTrackViewerTouchInterpretation()
+        };
+    }
+
+    private useTrackViewerTouchInterpretation() {
+        // Touchscreens:
+        // If user touches the tracks while we're auto-following
+        // If they are scrolling up or down, we do nothing
+        // If they are scrolling left or right, we stop auto-following
+        // If they hold for a whole second, we stop auto-following
+
+        const { userMightBeTakingControl, autoFollowIsOn } = this.state;
+
+        if (!autoFollowIsOn) {
+            return {
+                noteLineTouchStart: undefined,
+                noteLineTouchMove: undefined,
+                noteLineTouchEnd: undefined
             };
         }
 
-        // Otherwise, set up the subscription which will turn it on again
-        const animationEngineSubscription = () => {
-            if (animationEngine.state === "playing") {
-                setAutoFollow(true);
-            }
-        };
-        animationEngine.subscribe(animationEngineSubscription);
+        if (userMightBeTakingControl) {
+            return {
+                noteLineTouchStart: undefined,
+                noteLineTouchMove: (event: TouchEvent) => {
+                    if (Math.abs(this.lastX - event.touches[0].pageX) > 10) {
+                        this.setState({ autoFollowIsOn: false });
+                        clearTimeout(this.stopAutoFollowTimeoutId);
+                        this.setState({ userMightBeTakingControl: false });
 
-        return () => {
-            animationEngine.unsubscribe(animationEngineSubscription);
-        };
-    }, [autoFollowIsOn]);
+                        return;
+                    }
 
-    return {
-        handleWheel: autoFollowIsOn ? (event: WheelEvent) => {
-            if (event.deltaX > 6) {
-                setAutoFollow(false);
-            }
-        } : undefined,
-        onScrollbarGrab: autoFollowIsOn ? () => {
-            setAutoFollow(false);
-        } : undefined,
-        trackViewerCallbacks: useTrackViewerTouchInterpretation(autoFollowIsOn, setAutoFollow)
-    };
-}
-
-function useTrackViewerTouchInterpretation(autoFollowIsOn: boolean, setAutoFollow: Dispatch<SetStateAction<boolean>>) {
-    // Touchscreens:
-    // If user touches the tracks while we're auto-following
-    // If they are scrolling up or down, we do nothing
-    // If they are scrolling left or right, we stop auto-following
-    // If they hold for a whole second, we stop auto-following
-
-    const [userMightBeTakingControl, setUserMightBeTakingControl] = useState(false);
-    const lastY = useRef(0);
-    const lastX = useRef(0);
-    const stopAutoFollowTimeoutId = useRef(0);
-
-    if (!autoFollowIsOn) {
-        return {
-            noteLineTouchStart: undefined,
-            noteLineTouchMove: undefined,
-            noteLineTouchEnd: undefined
-        };
-    }
-
-    if (userMightBeTakingControl) {
-        return {
-            noteLineTouchStart: undefined,
-            noteLineTouchMove: (event: TouchEvent) => {
-                if (Math.abs(lastX.current - event.touches[0].pageX) > 10) {
-                    setAutoFollow(false);
-                    clearTimeout(stopAutoFollowTimeoutId.current);
-                    setUserMightBeTakingControl(false);
-
-                    return;
+                    if (Math.abs(this.lastY - event.touches[0].pageY) > 10) {
+                        clearTimeout(this.stopAutoFollowTimeoutId);
+                        this.setState({ userMightBeTakingControl: false });
+                    }
+                },
+                noteLineTouchEnd: () => {
+                    this.setState({ userMightBeTakingControl: false });
                 }
+            };
+        } else {
+            return {
+                noteLineTouchStart: (event: TouchEvent) => {
+                    if (event.touches.length != 1) {
+                        return;
+                    }
 
-                if (Math.abs(lastY.current - event.touches[0].pageY) > 10) {
-                    clearTimeout(stopAutoFollowTimeoutId.current);
-                    setUserMightBeTakingControl(false);
-                }
-            },
-            noteLineTouchEnd: () => {
-                setUserMightBeTakingControl(false);
-            }
-        };
-    } else {
-        return {
-            noteLineTouchStart: (event: TouchEvent) => {
-                if (event.touches.length != 1) {
-                    return;
-                }
+                    this.lastY = event.touches[0].pageY;
+                    this.lastX = event.touches[0].pageX;
+                    this.stopAutoFollowTimeoutId = setTimeout(() => {
+                        this.setState({ autoFollowIsOn: false });
+                    }, 1000);
 
-                lastY.current = event.touches[0].pageY;
-                lastX.current = event.touches[0].pageX;
-                stopAutoFollowTimeoutId.current = setTimeout(() => {
-                    setAutoFollow(false);
-                }, 1000);
-
-                setUserMightBeTakingControl(true);
-            },
-            noteLineTouchMove: undefined,
-            noteLineTouchEnd: undefined
-        };
+                    this.setState({ userMightBeTakingControl: true });
+                },
+                noteLineTouchMove: undefined,
+                noteLineTouchEnd: undefined
+            };
+        }
     }
 }

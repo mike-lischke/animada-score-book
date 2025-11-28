@@ -3,31 +3,84 @@
 * Licensed under the MIT License. See License.txt in the project root for license information.
 */
 
-/* eslint-disable prefer-arrow/prefer-arrow-functions, @typescript-eslint/naming-convention, jsdoc/require-jsdoc */
-
-import type { ChangeEvent } from "preact/compat";
-import { useCallback, useState } from "preact/hooks";
-import type { JSX } from "preact/jsx-runtime";
+import type { ComponentChild } from "preact";
 
 import type { ArrangementView, EditCommand_TimeParamsTimeSignature } from "../../../core/index.js";
-import { useEditCommand } from "../../../ui/hooks/useEditCommand.js";
-import { useSubscription } from "../../../ui/hooks/useSubscription.js";
+import { BananaDrumContext } from "../BananaDrumViewer.js";
+import { ComponentBase, type IComponentProperties } from "../ComponentBase/ComponentBase.js";
 import { NumberInput } from "../NumberInput.js";
 
-export function TimeControls({ arrangement }: { arrangement: ArrangementView; }): JSX.Element {
-    const { timeParams } = arrangement;
-    const [, update] = useState({ arrangement });
-    const edit = useEditCommand();
+export interface ITimeControlsProps extends IComponentProperties {
+    arrangement: ArrangementView;
+}
 
-    useSubscription(timeParams, () => {
-        update({ arrangement });
-    });
+export class TimeControls extends ComponentBase<ITimeControlsProps> {
+    private bananaDrumContext?: React.ContextType<typeof BananaDrumContext>;
 
-    const pluralBars = timeParams.length > 1;
+    public override render(): ComponentChild {
+        const { arrangement } = this.props;
+        const pluralBars = arrangement.timeParams.length > 1;
 
-    const changeTimeSignature = useCallback((event: ChangeEvent<HTMLSelectElement>) => {
+        return (
+            <BananaDrumContext.Consumer>
+                {(bananaDrumContext) => {
+                    this.bananaDrumContext = bananaDrumContext;
+
+                    return (
+                        <div className="time-controls-wrapper" >
+                            <div className="time-control">
+                                <select
+                                    className="short"
+                                    onInput={this.changeTimeSignature}
+                                    value={arrangement.timeParams.timeSignature}>
+                                    <option>4/4</option>
+                                    <option>6/8</option>
+                                    <option>5/4</option>
+                                    <option>7/8</option>
+                                </select> time
+                            </div>
+                            <div className="time-control">
+                                <NumberInput
+                                    getValue={() => {
+                                        return String(arrangement.timeParams.tempo);
+                                    }}
+                                    setValue={(newValue: string) => {
+                                        bananaDrumContext?.edit({
+                                            type: "EditCommand_TimeParamsTempo",
+                                            timeParams: arrangement.timeParams,
+                                            tempo: Number(newValue)
+                                        });
+                                    }}
+                                    subscribable={arrangement.timeParams}
+                                /> bpm
+                            </div>
+                            <div className="time-control">
+                                <NumberInput
+                                    getValue={() => {
+                                        return String(arrangement.timeParams.length);
+                                    }}
+                                    setValue={(newValue: string) => {
+                                        bananaDrumContext?.edit({
+                                            type: "EditCommand_TimeParamsLength",
+                                            timeParams: arrangement.timeParams,
+                                            length: Number(newValue)
+                                        });
+                                    }}
+                                    subscribable={arrangement.timeParams}
+                                /> {pluralBars ? "bars" : "bar"}
+                            </div>
+                        </div>
+                    );
+                }}
+            </BananaDrumContext.Consumer>
+        );
+    }
+
+    private changeTimeSignature = (event: InputEvent) => {
+        const { arrangement } = this.props;
+
         const command: Partial<EditCommand_TimeParamsTimeSignature> = {
-            type: "EditCommand_TimeParamsTimeSignature", timeParams
+            type: "EditCommand_TimeParamsTimeSignature", timeParams: arrangement.timeParams
         };
 
         command.timeSignature = (event.target as HTMLInputElement).value;
@@ -50,41 +103,7 @@ export function TimeControls({ arrangement }: { arrangement: ArrangementView; })
                 break;
         }
 
-        edit(command as EditCommand_TimeParamsTimeSignature);
-    }, []);
+        this.bananaDrumContext?.edit(command as EditCommand_TimeParamsTimeSignature);
+    };
 
-    return (
-        <div className="time-controls-wrapper">
-            <div className="time-control">
-                <select className="short" onChange={changeTimeSignature} value={timeParams.timeSignature}>
-                    <option>4/4</option>
-                    <option>6/8</option>
-                    <option>5/4</option>
-                    <option>7/8</option>
-                </select> time
-            </div>
-            <div className="time-control">
-                <NumberInput
-                    getValue={() => {
-                        return String(timeParams.tempo);
-                    }}
-                    setValue={(newValue: string) => {
-                        edit({ type: "EditCommand_TimeParamsTempo", timeParams, tempo: Number(newValue) });
-                    }}
-                    subscribable={timeParams}
-                /> bpm
-            </div>
-            <div className="time-control">
-                <NumberInput
-                    getValue={() => {
-                        return String(timeParams.length);
-                    }}
-                    setValue={(newValue: string) => {
-                        edit({ type: "EditCommand_TimeParamsLength", timeParams, length: Number(newValue) });
-                    }}
-                    subscribable={timeParams}
-                /> {pluralBars ? "bars" : "bar"}
-            </div>
-        </div>
-    );
 }

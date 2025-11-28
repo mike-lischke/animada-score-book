@@ -3,35 +3,72 @@
 * Licensed under the MIT License. See License.txt in the project root for license information.
 */
 
-/* eslint-disable prefer-arrow/prefer-arrow-functions, @typescript-eslint/naming-convention, jsdoc/require-jsdoc */
-
 import redoIcon from "../../../assets/images/icons/redo_white.svg";
 import undoIcon from "../../../assets/images/icons/undo_white.svg";
 
-import { useContext } from "preact/hooks";
-import type { JSX } from "preact/jsx-runtime";
-
-import { useStateSubscription } from "../../../ui/hooks/useStateSubscription.js";
+import type { ComponentChild } from "preact";
 import { BananaDrumContext } from "../BananaDrumViewer.js";
+import { ComponentBase, type IComponentState } from "../ComponentBase/ComponentBase.js";
 import { SmallSpacer } from "../SmallSpacer.js";
 
-export function UndoRedo(): JSX.Element {
-    const bananaDrum = useContext(BananaDrumContext)!;
+export interface IUndoRedoState extends IComponentState {
+    canUndo: boolean;
+    canRedo: boolean;
+}
 
-    const canUndo = useStateSubscription(bananaDrum.topics.canUndo, () => {
-        return bananaDrum.canUndo;
-    });
-    const canRedo = useStateSubscription(bananaDrum.topics.canRedo, () => {
-        return bananaDrum.canRedo;
-    });
+export class UndoRedo extends ComponentBase<{}, IUndoRedoState> {
+    private bananaDrumContext?: React.ContextType<typeof BananaDrumContext>;
 
-    return (<div className='undo-redo-wrapper'>
-        <button className='push-button medium gray' disabled={!canUndo} onClick={bananaDrum.undo}>
-            <img src={undoIcon} style={{ height: "0.78em" }} />
-        </button>
-        <SmallSpacer />
-        <button className='push-button medium gray' disabled={!canRedo} onClick={bananaDrum.redo}>
-            <img src={redoIcon} style={{ height: "0.78em" }} />
-        </button>
-    </div>);
+    public constructor(props: {}) {
+        super(props);
+
+        this.state = {
+            canUndo: false,
+            canRedo: false
+        };
+    }
+
+    public render(): ComponentChild {
+        const { canUndo, canRedo } = this.state;
+
+        return (
+            <BananaDrumContext.Consumer>
+                {(bananaDrumContext) => {
+                    this.useSubscription(bananaDrumContext);
+
+                    return (<div className='undo-redo-wrapper'>
+                        <button
+                            className='push-button medium gray'
+                            disabled={!canUndo}
+                            onClick={bananaDrumContext!.undo}
+                        >
+                            <img src={undoIcon} style={{ height: "0.78em" }} />
+                        </button>
+                        <SmallSpacer />
+                        <button
+                            className='push-button medium gray'
+                            disabled={!canRedo}
+                            onClick={bananaDrumContext!.redo}
+                        >
+                            <img src={redoIcon} style={{ height: "0.78em" }} />
+                        </button>
+                    </div>);
+                }}
+            </BananaDrumContext.Consumer >
+        );
+    }
+
+    private useSubscription(bananaDrumContext: React.ContextType<typeof BananaDrumContext>) {
+        if (this.bananaDrumContext === bananaDrumContext) {
+            return;
+        }
+
+        this.bananaDrumContext = bananaDrumContext;
+        bananaDrumContext?.topics.canUndo.subscribe(() => {
+            this.setState({ canUndo: bananaDrumContext.canUndo });
+        });
+        bananaDrumContext?.topics.canRedo.subscribe(() => {
+            this.setState({ canRedo: bananaDrumContext.canRedo });
+        });
+    }
 }

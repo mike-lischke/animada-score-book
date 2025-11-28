@@ -35,7 +35,7 @@ export class ArrangementControlsBottom extends ComponentBase<{}, IArrangementCon
 
         arrangement.unsubscribe(this.arrangementCallback as Subscription);
         arrangement.unsubscribe(this.arrangementSubscription!);
-        this.subscribedTracks.forEach(track => {
+        this.subscribedTracks.forEach((track) => {
             track.unsubscribe(this.arrangementCallback as Subscription);
         });
 
@@ -56,7 +56,7 @@ export class ArrangementControlsBottom extends ComponentBase<{}, IArrangementCon
                         <ServicesContext.Consumer>
                             {(servicesContext) => {
                                 this.useArrangementAndTrackSubscription(arrangementPlayerContext, servicesContext);
-                                const arrangement: ArrangementView = arrangementPlayerContext!.arrangement;
+                                const arrangement = arrangementPlayerContext!.arrangement;
                                 if (arePolyrhythms === undefined) {
                                     this.setState({
                                         arePolyrhythms: this.hasPolyrhythms(arrangement),
@@ -167,7 +167,9 @@ export class ArrangementControlsBottom extends ComponentBase<{}, IArrangementCon
         return false;
     }
 
-    private arrangementCallback = (arrangement: ArrangementView) => {
+    private arrangementCallback = () => {
+        const arrangement = this.arrangementPlayerContext!.arrangement;
+
         const arePolyrhythms = this.hasPolyrhythms(arrangement);
         if (!arePolyrhythms) {
             toggleOverlay("delete_polyrhythms", "hide");
@@ -188,20 +190,20 @@ export class ArrangementControlsBottom extends ComponentBase<{}, IArrangementCon
 
             const arrangement: ArrangementView = arrangementPlayerContext!.arrangement;
 
-            arrangement.tracks.forEach(track => {
+            arrangement.tracks.forEach((track) => {
                 track.subscribe(this.arrangementCallback as Subscription);
                 this.subscribedTracks.add(track);
             });
 
             const arrangementSubscription = () => {
-                this.subscribedTracks.forEach(track => {
+                this.subscribedTracks.forEach((track) => {
                     if (!arrangement.tracks.includes(track)) {
                         track.unsubscribe(this.arrangementCallback as Subscription);
                         this.subscribedTracks.delete(track);
                     }
                 });
 
-                arrangement.tracks.forEach(track => {
+                arrangement.tracks.forEach((track) => {
                     if (!this.subscribedTracks.has(track)) {
                         track.subscribe(this.arrangementCallback as Subscription);
                         this.subscribedTracks.add(track);

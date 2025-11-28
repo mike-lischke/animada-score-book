@@ -77,7 +77,7 @@ const editArrangement = (command: EditCommand_Arrangement): boolean => {
             for (const note of track.getNoteIterator()) {
                 if (note.noteStyle) {
                     // As soon as we find one note to clear, we're good
-                    arrangement.tracks.forEach(track => {
+                    arrangement.tracks.forEach((track) => {
                         track.clear();
                     });
 
@@ -92,8 +92,8 @@ const editArrangement = (command: EditCommand_Arrangement): boolean => {
     if (command.type === "EditCommand_ArrangementClearSelection") {
         let changedAnyNotes = false;
 
-        command.clearSelection.forEach(trackSelection => {
-            trackSelection.selectedNotes.forEach(note => {
+        command.clearSelection.forEach((trackSelection) => {
+            trackSelection.selectedNotes.forEach((note) => {
                 if (note.noteStyle) {
                     (note as Note).noteStyle = undefined;
                     changedAnyNotes = true;
@@ -121,7 +121,7 @@ const editTrack = (command: EditCommand_Track): boolean => {
     const track = command.track as Track;
 
     if (command.type === "EditCommand_TrackRemovePolyrhythm") {
-        if (track.polyrhythms.find(polyrhythm => {
+        if (track.polyrhythms.find((polyrhythm) => {
             return polyrhythm === command.removePolyrhythm;
         })) {
             track.removePolyrhythm(command.removePolyrhythm);

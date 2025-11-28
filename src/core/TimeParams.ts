@@ -105,7 +105,7 @@ export const createTimeParams = (
                 return false;
             } // timing falls outside the arrangement entirely
 
-            const [beatsPerBar, beatUnit] = timeSignature.split("/").map(value => {
+            const [beatsPerBar, beatUnit] = timeSignature.split("/").map((value) => {
                 return Number(value);
             });
             const stepsPerBeat = stepResolution / beatUnit;
@@ -160,7 +160,7 @@ const validateLength = (length: number) => {
 // Pulses are natural numbers of kinds of notes (often 8ths)
 // For example, 4/4 is usually beat = 8ths, 6/8 is beat = 3/8ths
 const validatePulse = (pulse: string): boolean => {
-    const [noteCount, noteResolution] = pulse.split("/").map(str => {
+    const [noteCount, noteResolution] = pulse.split("/").map((str) => {
         return Number(str);
     });
     if (!validateNoteValue(noteResolution)) {

@@ -22,7 +22,7 @@ export const createPublisher = (): Publisher => {
             });
         },
         publish: () => {
-            subscriptions.forEach(callback => {
+            subscriptions.forEach((callback) => {
                 callback?.();
             });
         }

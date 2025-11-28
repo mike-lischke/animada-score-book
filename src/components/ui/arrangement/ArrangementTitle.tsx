@@ -19,48 +19,6 @@ interface IArrangementTitleState {
 }
 
 export class ArrangementTitle extends ComponentBase<IArrangementTitleProps, IArrangementTitleState> {
-    /*
-    const arrangement = useContext(ArrangementPlayerContext)!.arrangement;
-    const title = useStateSubscription(arrangement, (arrangement: ArrangementView) => {
-        return arrangement.title;
-    });
-    const edit = useEditCommand();
-
-    const inputRef = useRef<HTMLInputElement>(null);
-
-    useEffect(() => {
-        if (editMode) {
-            inputRef.current?.focus();
-        }
-    }, [editMode]);
-
-    const [inputValue, setInputValue] = useState(arrangement.title);
-    useSubscription(arrangement, () => {
-        setInputValue(arrangement.title);
-    });
-
-    const keyUpHandler = useCallback((event: KeyboardEvent) => {
-        if (event.key === "Enter") { // Enter means submit the changes and stop editing
-            edit({
-                type: "EditCommand_ArrangementTitle",
-                arrangement,
-                newTitle: (event.target as HTMLInputElement).value
-            });
-            onEditEnd();
-        }
-
-        if (event.key === "Escape") { // Escape means stop editing and discard the changes
-            setInputValue(arrangement.title);
-            onEditEnd();
-        }
-    }, []);
-
-    // Click out of the input means submit the changes and stop editing
-    const blurHandler = useCallback((event: FocusEvent) => {
-        edit({ type: "EditCommand_ArrangementTitle", arrangement, newTitle: (event.target as HTMLInputElement).value });
-        onEditEnd();
-    }, []);
-*/
 
     private bananaDrumContext?: React.ContextType<typeof BananaDrumContext>;
     private arrangementPlayerContext?: React.ContextType<typeof ArrangementPlayerContext>;
@@ -72,6 +30,18 @@ export class ArrangementTitle extends ComponentBase<IArrangementTitleProps, IArr
         this.state = {
             title: "",
         };
+    }
+
+    public override componentDidMount(): void {
+        const { editMode } = this.props;
+        if (editMode) {
+            this.inputRef.current?.focus();
+        }
+
+        const arrangement = this.arrangementPlayerContext?.arrangement;
+        if (arrangement) {
+            this.setState({ title: arrangement.title, inputValue: arrangement.title });
+        }
     }
 
     public override render(): ComponentChild {
@@ -100,7 +70,7 @@ export class ArrangementTitle extends ComponentBase<IArrangementTitleProps, IArr
                                                         });
                                                     }}
                                                     onKeyUp={this.onKeyUp}
-                                                    onKeyDown={e => {
+                                                    onKeyDown={(e) => {
                                                         e.stopPropagation();
                                                     }}
                                                     // Don't want to trigger global keyboard handlers,
@@ -138,6 +108,8 @@ export class ArrangementTitle extends ComponentBase<IArrangementTitleProps, IArr
         if (this.arrangementPlayerContext !== arrangementPlayerContext) {
             this.arrangementPlayerContext = arrangementPlayerContext;
             this.bananaDrumContext = bananaDrumContext;
+
+            this.setState({ inputValue: arrangementPlayerContext!.arrangement.title });
         }
     };
 

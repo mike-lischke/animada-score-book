@@ -157,6 +157,7 @@ export default tslint.config(
             "brace-style": ["error", "1tbs", { allowSingleLine: false }],
             "curly": ["error", "all"],
             "arrow-body-style": ["error", "always"],
+            "arrow-parens": ["error", "always"],
             "prefer-arrow/prefer-arrow-functions": [
                 "warn",
                 {
