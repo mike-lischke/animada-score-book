@@ -11,7 +11,7 @@ import { createPublisher } from "../../../core/Publisher.js";
 import type { ArrangementPlayer } from "../../../player/types.js";
 import { ServicesContext } from "../ScoreBookViewer.js";
 import { ComponentBase, type IComponentProperties, type IComponentState } from "../ComponentBase/ComponentBase.js";
-import { GuideRail } from "../GuideRail1/GuideRail1.js";
+import { GuideRail } from "../GuideRail/GuideRail.js";
 import { InstrumentBrowser } from "../InstrumentBrowser.js";
 import { Overlay } from "../Overlay.js";
 import { Scrollbar } from "../Scrollbar.js";

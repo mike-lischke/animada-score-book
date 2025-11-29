@@ -8,7 +8,7 @@ import {
     SerialisedArrangement
 } from "./core/index.js";
 import { createScoreBookPlayer } from "./player/ScoreBookPlayer.js";
-import { createScoreBookUi } from "./ui/BananaDrumUi.js";
+import { createScoreBookUi } from "./ui/AnimadaScoreBookUi.js";
 import { getSessionSnapshot, resetSessionVariables } from "./ui/session-recovery.js";
 import { bateriaInstruments } from "./bateria-instruments.js";
 import { demoSongString } from "./demo-song.js";

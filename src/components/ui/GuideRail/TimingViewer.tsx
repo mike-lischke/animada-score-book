@@ -9,7 +9,7 @@ import type { ITiming, ITimeParamsView } from "../../../core/index.js";
 import { ArrangementPlayerContext } from "../arrangement/ArrangementViewer.js";
 import { ComponentBase, type IComponentProperties } from "../ComponentBase/ComponentBase.js";
 import { NoteViewer } from "../note/NoteViewer.js";
-import { BarDivisibilityContext, type BarDivisibility } from "./GuideRail1.js";
+import { BarDivisibilityContext, type BarDivisibility } from "./GuideRail.js";
 
 export interface ITimingViewerProps extends IComponentProperties {
     timing: ITiming;

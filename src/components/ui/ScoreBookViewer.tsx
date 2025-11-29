@@ -7,7 +7,7 @@ import { createContext, createRef, type ComponentChild } from "preact";
 
 import type { IAnimadaScoreBook } from "../../core/index.js";
 import type { ScoreBookPlayer } from "../../player/types.js";
-import type { ScoreBookUiServices } from "../../ui/BananaDrumUi.js";
+import type { ScoreBookUiServices } from "../../ui/AnimadaScoreBookUi.js";
 import { About } from "./About.js";
 import { ArrangementViewer } from "./arrangement/ArrangementViewer.js";
 import { ComponentBase, type IComponentProperties } from "./ComponentBase/ComponentBase.js";
