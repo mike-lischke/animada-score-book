@@ -4,13 +4,13 @@
 */
 
 import type { ComponentChild } from "preact";
-import type { Subscribable } from "../../core/types/general.js";
+import type { ISubscribable } from "../../core/types/general.js";
 import { ComponentBase, type IComponentProperties, type IComponentState } from "./ComponentBase/ComponentBase.js";
 
 export interface INumberInputProps extends IComponentProperties {
     getValue: () => string;
     setValue: (newValue: string) => void;
-    subscribable: Subscribable;
+    subscribable: ISubscribable;
 }
 
 interface INumberInputState extends IComponentState {

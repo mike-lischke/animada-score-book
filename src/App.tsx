@@ -6,7 +6,7 @@
 import "./App.css";
 import "./style.css";
 
-import logo from "./assets/images/animada-logo.svg";
+import logo from "./assets/images/animada-logo2.svg";
 
 import { ErrorBoundary } from "./components/ErrorBoundary.js";
 import { ComponentBase } from "./components/ui/ComponentBase/ComponentBase.js";

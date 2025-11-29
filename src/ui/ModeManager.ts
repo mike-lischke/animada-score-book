@@ -5,11 +5,11 @@
 
 /* eslint-disable prefer-arrow/prefer-arrow-functions, jsdoc/require-jsdoc */
 
-import type { Subscribable } from "../core/index.js";
+import type { ISubscribable } from "../core/index.js";
 import { createPublisher } from "../core/Publisher.js";
 import type { SelectionManager } from "./SelectionManager.js";
 
-export interface ModeManager extends Subscribable {
+export interface ModeManager extends ISubscribable {
     deletePolyrhythmMode: boolean;
     mobileSelectionMode: boolean;
     selectByMouseOverMode: boolean;

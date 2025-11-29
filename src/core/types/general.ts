@@ -6,9 +6,9 @@
 import type { EditCommand } from "./edit_commands.js";
 import type { ArrangementSnapshot } from "./snapshots.js";
 
-export interface BananaDrum {
-    library: Library;
-    arrangement: ArrangementView;
+export interface IAnimadaScoreBook {
+    library: ILibrary;
+    arrangement: IArrangementView;
     currentState: ArrangementSnapshot;
     canUndo: boolean;
     canRedo: boolean;
@@ -16,58 +16,58 @@ export interface BananaDrum {
     undo: () => void;
     redo: () => void;
     topics: {
-        canUndo: Subscribable;
-        canRedo: Subscribable;
-        currentState: Subscribable;
+        canUndo: ISubscribable;
+        canRedo: ISubscribable;
+        currentState: ISubscribable;
     };
 }
 
-export interface Library {
-    load(instrumentCollection: PackedInstrument[]): void;
-    instrumentMetas: InstrumentMeta[];
-    getInstrument(id: string): Instrument;
+export interface ILibrary {
+    load(instrumentCollection: IPackedInstrument[]): void;
+    instrumentMetas: IInstrumentMeta[];
+    getInstrument(id: string): IInstrument;
 }
 
-export interface InstrumentMeta {
+export interface IInstrumentMeta {
     id: string; // single digit or char, 0 is allowed
     displayOrder: number;
     displayName: string;
     colourGroup: string; // blue, purple, green, orange, or yellow
-    noteStyles?: Record<string, NoteStyleBase>;
+    noteStyles?: Record<string, INoteStyleBase>;
 }
 
-export interface PackedInstrument extends InstrumentMeta {
-    packedNoteStyles: PackedNoteStyle[];
+export interface IPackedInstrument extends IInstrumentMeta {
+    packedNoteStyles: IPackedNoteStyle[];
 }
 
-export interface Instrument extends InstrumentMeta, Subscribable {
+export interface IInstrument extends IInstrumentMeta, ISubscribable {
     readonly loaded: boolean;
-    noteStyles: Record<string, NoteStyle>;
+    noteStyles: Record<string, INoteStyle>;
 }
 
-export interface NoteStyleBase {
+export interface INoteStyleBase {
     id: string; // single digit or char, can't be 0
-    symbol?: NoteStyleSymbol;
+    symbol?: INoteStyleSymbol;
     muting?: MutingRule | MutingRule[];
 }
 
-export interface PackedNoteStyle extends NoteStyleBase {
+export interface IPackedNoteStyle extends INoteStyleBase {
     file: string;
 }
 
-export interface NoteStyle extends NoteStyleBase {
+export interface INoteStyle extends INoteStyleBase {
     audioBuffer: AudioBuffer | null; // null while the instrument is loading
-    instrument: Instrument;
+    instrument: IInstrument;
 }
 
-export interface NoteStyleSymbol {
+export interface INoteStyleSymbol {
     src?: string; // path to use an img src
     string: string; // string to display for this note-style
 }
 
-export type MutingRule = MutingRuleSimple | MutingRuleOtherInstrument;
+export type MutingRule = MutingRuleSimple | IMutingRuleOtherInstrument;
 
-export interface MutingRuleOtherInstrument {
+export interface IMutingRuleOtherInstrument {
     name: "otherInstrument";
     id: string;
 }
@@ -76,41 +76,41 @@ export type MutingRuleSimple = string;
 
 export type Subscription = (...args: unknown[]) => void;
 
-export interface Subscribable {
+export interface ISubscribable {
     subscribe: (callback: Subscription) => void;
     unsubscribe: (callback: Subscription) => void;
 }
 
-export interface Publisher extends Subscribable {
+export interface IPublisher extends ISubscribable {
     publish(): void;
 }
 
-export interface ArrangementView extends Subscribable {
+export interface IArrangementView extends ISubscribable {
     readonly title: string;
-    timeParams: TimeParamsView;
-    tracks: TrackView[];
+    timeParams: ITimeParamsView;
+    tracks: ITrackView[];
 }
 
-export interface Arrangement extends ArrangementView {
+export interface IArrangement extends IArrangementView {
     title: string;
-    timeParams: TimeParams;
-    tracks: Track[];
-    addTrack(instrument: Instrument, id?: number): Track;
-    removeTrack(track: Track): void;
+    timeParams: ITimeParams;
+    tracks: ITrack[];
+    addTrack(instrument: IInstrument, id?: number): ITrack;
+    removeTrack(track: ITrack): void;
 }
 
-export interface TimeParamsView extends Subscribable {
+export interface ITimeParamsView extends ISubscribable {
     readonly timeSignature: string;
     readonly tempo: number;
     readonly length: number;
     readonly pulse: string;
     readonly stepResolution: number;
-    isValid(timing: Timing): boolean;
-    readonly timings: Timing[];
+    isValid(timing: ITiming): boolean;
+    readonly timings: ITiming[];
 
 }
 
-export interface TimeParams extends TimeParamsView {
+export interface ITimeParams extends ITimeParamsView {
     timeSignature: string;
     tempo: number;
     length: number;
@@ -121,53 +121,54 @@ export interface TimeParams extends TimeParamsView {
 // steps are currently always sixteenths
 // When we bring in polyrhythms that will change
 // It may also change for other time signatures but I'm not sure yet
-export interface Timing { readonly bar: number, readonly step: number; };
+export interface ITiming { readonly bar: number, readonly step: number; };
+
 export type RealTime = number;
 
-export interface TrackView extends Subscribable {
+export interface ITrackView extends ISubscribable {
     id: number;
-    arrangement: ArrangementView;
-    instrument: Instrument;
-    notes: NoteView[]; // Must be kept in order - this is Track's job
-    polyrhythms: PolyrhythmView[];
-    getNoteAt(timing: Timing): NoteView | undefined;
-    getNoteIterator(polyrhythmsToIgnore?: PolyrhythmView[]): IterableIterator<NoteView>;
+    arrangement: IArrangementView;
+    instrument: IInstrument;
+    notes: INoteView[]; // Must be kept in order - this is Track's job
+    polyrhythms: IPolyrhythmView[];
+    getNoteAt(timing: ITiming): INoteView | undefined;
+    getNoteIterator(polyrhythmsToIgnore?: IPolyrhythmView[]): IterableIterator<INoteView>;
 }
 
-export interface Track extends TrackView {
-    arrangement: Arrangement;
-    notes: Note[];
-    polyrhythms: Polyrhythm[];
-    getNoteAt(timing: Timing): Note | undefined;
-    getNoteIterator(polyrhythmsToIgnore?: PolyrhythmView[]): IterableIterator<Note>;
-    addPolyrhythm(start: Note, end: Note, length: number, id?: number, index?: number): void;
-    removePolyrhythm(polyrhythm: PolyrhythmView): void;
+export interface ITrack extends ITrackView {
+    arrangement: IArrangement;
+    notes: INote[];
+    polyrhythms: IPolyrhythm[];
+    getNoteAt(timing: ITiming): INote | undefined;
+    getNoteIterator(polyrhythmsToIgnore?: IPolyrhythmView[]): IterableIterator<INote>;
+    addPolyrhythm(start: INote, end: INote, length: number, id?: number, index?: number): void;
+    removePolyrhythm(polyrhythm: IPolyrhythmView): void;
     clear(): void;
 }
 
-export interface PolyrhythmView {
+export interface IPolyrhythmView {
     id: number;
-    start: NoteView;
-    end: NoteView;
-    notes: NoteView[];
+    start: INoteView;
+    end: INoteView;
+    notes: INoteView[];
 }
 
-export interface Polyrhythm extends PolyrhythmView {
-    start: Note;
-    end: Note;
-    notes: Note[];
+export interface IPolyrhythm extends IPolyrhythmView {
+    start: INote;
+    end: INote;
+    notes: INote[];
 }
 
-export interface NoteView extends Subscribable {
+export interface INoteView extends ISubscribable {
     id: string;
-    timing: Timing;
-    track: TrackView;
-    polyrhythm?: PolyrhythmView;
-    readonly noteStyle?: NoteStyle; // undefined means this is a rest
+    timing: ITiming;
+    track: ITrackView;
+    polyrhythm?: IPolyrhythmView;
+    readonly noteStyle?: INoteStyle; // undefined means this is a rest
 }
 
-export interface Note extends NoteView {
-    readonly track: Track;
-    polyrhythm?: Polyrhythm;
-    noteStyle?: NoteStyle; // undefined means this is a rest
+export interface INote extends INoteView {
+    readonly track: ITrack;
+    polyrhythm?: IPolyrhythm;
+    noteStyle?: INoteStyle; // undefined means this is a rest
 }

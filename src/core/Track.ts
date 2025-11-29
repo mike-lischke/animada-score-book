@@ -8,11 +8,11 @@
 import { createNote } from "./Note.js";
 import { createPublisher } from "./Publisher.js";
 import { TrackClipboard } from "./TrackClipboard.js";
-import type { Arrangement, Instrument, Note, Polyrhythm, Timing, Track } from "./types/general.js";
+import type { IArrangement, IInstrument, INote, IPolyrhythm, ITiming, ITrack } from "./types/general.js";
 import { exists, getNewId, isSameTiming } from "./utils.js";
 
-export const createTrack = (arrangement: Arrangement, instrument: Instrument, id: number = getNewId()): Track => {
-    const getNoteAt = (timing: Timing): Note | undefined => {
+export const createTrack = (arrangement: IArrangement, instrument: IInstrument, id: number = getNewId()): ITrack => {
+    const getNoteAt = (timing: ITiming): INote | undefined => {
         for (const note of notes) {
             if (isSameTiming(note.timing, timing)) {
                 return note;
@@ -31,12 +31,12 @@ export const createTrack = (arrangement: Arrangement, instrument: Instrument, id
         });
     };
 
-    const addPolyrhythm = (start: Note, end: Note, length: number, id: number = getNewId(), index?: number) => {
+    const addPolyrhythm = (start: INote, end: INote, length: number, id: number = getNewId(), index?: number) => {
         if (length < 1) {
             return;
         }
 
-        const polyrhythm: Polyrhythm = { start, end, id, notes: [] };
+        const polyrhythm: IPolyrhythm = { start, end, id, notes: [] };
 
         /*for (let i = 0; i < length; ++i) {
             const t = createNote(track, { bar: 1, step: i }, polyrhythm);
@@ -57,7 +57,7 @@ export const createTrack = (arrangement: Arrangement, instrument: Instrument, id
         publisher.publish();
     };
 
-    const removePolyrhythm = (polyrhythm: Polyrhythm) => {
+    const removePolyrhythm = (polyrhythm: IPolyrhythm) => {
         polyrhythms.splice(polyrhythms.indexOf(polyrhythm), 1);
         publisher.publish();
     };
@@ -175,9 +175,9 @@ export const createTrack = (arrangement: Arrangement, instrument: Instrument, id
     };
 
     const publisher = createPublisher();
-    const notes: Note[] = [];
-    const polyrhythms: Polyrhythm[] = [];
-    const track: Track = {
+    const notes: INote[] = [];
+    const polyrhythms: IPolyrhythm[] = [];
+    const track: ITrack = {
         id, arrangement, instrument, notes, polyrhythms, addPolyrhythm, removePolyrhythm, getNoteAt, clear,
         getNoteIterator,
         subscribe: publisher.subscribe,
@@ -196,10 +196,10 @@ export const createTrack = (arrangement: Arrangement, instrument: Instrument, id
 
     // The note-iterator is what makes polyrhythms work
     // polyrhythmsToIgnore is for serialising, so we can walk the notes as if the polyrhythm hasn't been crated yet
-    function* getNoteIterator(polyrhythmsToIgnore: Polyrhythm[] = []) {
+    function* getNoteIterator(polyrhythmsToIgnore: IPolyrhythm[] = []) {
         let index = 0;
         let currentNoteSource = track.notes;
-        let note = currentNoteSource[index] as (Note | undefined);
+        let note = currentNoteSource[index] as (INote | undefined);
 
         while (note) {
             // First, ascend polyrhythms until we reach a visible note

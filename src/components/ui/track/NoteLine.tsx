@@ -5,7 +5,7 @@
 
 import { createRef, type ComponentChild } from "preact";
 
-import type { NoteView, PolyrhythmView, TrackView } from "../../../core/index.js";
+import type { INoteView, IPolyrhythmView, ITrackView } from "../../../core/index.js";
 import { NoteWidthContext } from "../arrangement/ArrangementViewer.js";
 import { ComponentBase, type IComponentProperties, type IComponentState } from "../ComponentBase/ComponentBase.js";
 import { NoteViewer } from "../note/NoteViewer.js";
@@ -13,13 +13,13 @@ import { PolyrhythmViewer } from "../PolyrhythmViewer.js";
 import type { TrackViewerCallbacks } from "./TrackViewer.js";
 
 export interface INoteLineProps extends IComponentProperties {
-    track: TrackView;
+    track: ITrackView;
     callbacks: TrackViewerCallbacks;
 }
 
 interface INoteLineState extends IComponentState {
-    notes: NoteView[];
-    polyrhythms: PolyrhythmView[];
+    notes: INoteView[];
+    polyrhythms: IPolyrhythmView[];
 }
 
 export class NoteLine extends ComponentBase<INoteLineProps, INoteLineState> {
@@ -99,7 +99,7 @@ export class NoteLine extends ComponentBase<INoteLineProps, INoteLineState> {
         });
     };
 
-    private repositionPolyrhythmViewer(polyrhythm: PolyrhythmView, polyrhythmViewer: HTMLDivElement) {
+    private repositionPolyrhythmViewer(polyrhythm: IPolyrhythmView, polyrhythmViewer: HTMLDivElement) {
         const startNoteViewer = document.getElementById(`note-${polyrhythm.start.id}`);
         const endNoteViewer = document.getElementById(`note-${polyrhythm.end.id}`);
 

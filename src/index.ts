@@ -4,11 +4,11 @@
  */
 
 import {
-    ArrangementSnapshot, createBananaDrum, deserialiseArrangement, getLibrary, getSerialisedArrangementFromParams,
+    ArrangementSnapshot, createAnimadaScoreBook, deserialiseArrangement, getLibrary, getSerialisedArrangementFromParams,
     SerialisedArrangement
 } from "./core/index.js";
-import { createBananaDrumPlayer } from "./player/BananaDrumPlayer.js";
-import { createBananaDrumUi } from "./ui/BananaDrumUi.js";
+import { createScoreBookPlayer } from "./player/ScoreBookPlayer.js";
+import { createScoreBookUi } from "./ui/BananaDrumUi.js";
 import { getSessionSnapshot, resetSessionVariables } from "./ui/session-recovery.js";
 import { bateriaInstruments } from "./bateria-instruments.js";
 import { demoSongString } from "./demo-song.js";
@@ -55,9 +55,9 @@ const load = (loadButtonWrapper: HTMLDivElement, arrangementToLoad: ArrangementS
         arrangementToLoad = deserialiseArrangement(arrangementToLoad);
     };
 
-    const bananaDrum = createBananaDrum(library, arrangementToLoad);
-    const bananaDrumPlayer = createBananaDrumPlayer(bananaDrum);
-    const bananaDrumUi = createBananaDrumUi(bananaDrumPlayer, document.getElementById("wrapper")!);
+    const bananaDrum = createAnimadaScoreBook(library, arrangementToLoad);
+    const bananaDrumPlayer = createScoreBookPlayer(bananaDrum);
+    const bananaDrumUi = createScoreBookUi(bananaDrumPlayer, document.getElementById("wrapper")!);
 
     // Expose some things for testing:
     const { arrangement } = bananaDrum;

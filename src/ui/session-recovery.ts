@@ -5,7 +5,7 @@
 
 /* eslint-disable prefer-arrow/prefer-arrow-functions, jsdoc/require-jsdoc */
 
-import type { BananaDrum, ArrangementSnapshot } from "../core/index.js";
+import type { IAnimadaScoreBook, ArrangementSnapshot } from "../core/index.js";
 
 // Tracking state all comes down to knowing the Session ID
 // This is either generated for a new session, or hopefully retrieved on page load
@@ -14,7 +14,7 @@ import type { BananaDrum, ArrangementSnapshot } from "../core/index.js";
 let sessionId: string, stateKey: string, startedAtKey: string;
 resetSessionVariables(getExistingSessionId());
 
-export function initSessionRecovery(bananadrum: BananaDrum) {
+export function initSessionRecovery(bananadrum: IAnimadaScoreBook) {
     const existingState = localStorage.getItem(stateKey);
 
     if (existingState) {
@@ -88,7 +88,7 @@ function generateSessionId(): string {
     return id;
 }
 
-function saveSession(bananadrum: BananaDrum): void {
+function saveSession(bananadrum: IAnimadaScoreBook): void {
     const updatedAt = Date.now();
     const state = bananadrum.currentState;
     localStorage.setItem(stateKey, JSON.stringify({ state, updatedAt }));

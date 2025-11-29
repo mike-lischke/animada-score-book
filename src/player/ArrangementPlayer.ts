@@ -3,13 +3,13 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import type { ArrangementView, RealTime, Timing, TrackView } from "../core/index.js";
+import type { IArrangementView, RealTime, ITiming, ITrackView } from "../core/index.js";
 import { createPublisher } from "../core/Publisher.js";
 import { createTimeCoordinator } from "./TimeCoordinator.js";
 import { createTrackPlayer } from "./TrackPlayer.js";
 import { ArrangementPlayer, CallbackEvent, Event, Interval, LoopInterval, TrackPlayer } from "./types.js";
 
-export const createArrangementPlayer = (arrangement: ArrangementView): ArrangementPlayer => {
+export const createArrangementPlayer = (arrangement: IArrangementView): ArrangementPlayer => {
     // The interval may be beyond the end of the arrangement
     // If we're looping we'll use TimeConverter to resolve it within loops
     const getEvents = (interval: Interval): Event[] => {
@@ -132,14 +132,14 @@ export const createArrangementPlayer = (arrangement: ArrangementView): Arrangeme
     const audibleTrackPlayersPublisher = createPublisher();
 
     // We need a TrackPlayer for each Track, and add/remove them when needed
-    const trackPlayers = new Map<TrackView, TrackPlayer>();
-    const audibleTrackPlayers = new Map<TrackView, TrackPlayer>();
+    const trackPlayers = new Map<ITrackView, TrackPlayer>();
+    const audibleTrackPlayers = new Map<ITrackView, TrackPlayer>();
     updateTrackPlayers();
     updateAudibleTrackPlayers();
     arrangement.subscribe(updateTrackPlayers);
 
     // currentTiming updates as we play, and ArrangementPlayer publishes when it does
-    let currentTiming: Timing | null = null;
+    let currentTiming: ITiming | null = null;
     let callbackEvents: CallbackEvent[] | null;
     updateCallbackEvents();
     arrangement.timeParams.subscribe(updateCallbackEvents);
@@ -166,7 +166,7 @@ export const createArrangementPlayer = (arrangement: ArrangementView): Arrangeme
 
 };
 
-const calculateAudibleTrackPlayers = (trackPlayers: Map<TrackView, TrackPlayer>): TrackPlayer[] => {
+const calculateAudibleTrackPlayers = (trackPlayers: Map<ITrackView, TrackPlayer>): TrackPlayer[] => {
     const soloedTracksPlayers: TrackPlayer[] = [];
     const unmutedTracksPlayers: TrackPlayer[] = [];
 

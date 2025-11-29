@@ -6,20 +6,20 @@
 import { createContext, createRef, type JSX } from "preact";
 import type { MutableRefObject } from "preact/compat";
 
-import type { RealTime, Subscription, TimeParamsView } from "../../../core/index.js";
+import type { RealTime, Subscription, ITimeParamsView } from "../../../core/index.js";
 import { createPublisher } from "../../../core/Publisher.js";
 import type { ArrangementPlayer } from "../../../player/types.js";
-import type { AnimationEngine } from "../../../ui/types.js";
 import { ServicesContext } from "../ScoreBookViewer.js";
 import { ComponentBase, type IComponentProperties, type IComponentState } from "../ComponentBase/ComponentBase.js";
-import { Guiderail } from "../guiderail/Guiderail.js";
+import { GuideRail } from "../GuideRail/GuideRail.js";
 import { InstrumentBrowser } from "../InstrumentBrowser.js";
-import { Overlay, toggleOverlay } from "../Overlay.js";
+import { Overlay } from "../Overlay.js";
 import { Scrollbar } from "../Scrollbar.js";
 import { Share } from "../Share.js";
 import { TrackViewer } from "../track/TrackViewer.js";
 import { ArrangementControlsBottom } from "./ArrangementControlsBottom.js";
 import { ArrangementControlsTop } from "./ArrangementControlsTop.js";
+import type { AnimationEngine } from "../../../ui/AnimationEngine.js";
 
 const baseNoteWidth = 55.5; // 54pt flex-basis + 1.5pt for border
 
@@ -117,7 +117,7 @@ export class ArrangementViewer extends ComponentBase<IArrangementViewerProps, IA
                                                     onScroll={this.updateScrollShadows}
                                                     onWheel={handleWheel}
                                                 >
-                                                    <Guiderail arrangement={arrangement} />
+                                                    <GuideRail arrangement={arrangement} />
                                                     {
                                                         arrangement.tracks.map((track) => {
                                                             return arrangementPlayer.trackPlayers.get(track)!;
@@ -134,12 +134,12 @@ export class ArrangementViewer extends ComponentBase<IArrangementViewerProps, IA
                                                     <Scrollbar
                                                         wrapperRef={this.viewerRef}
                                                         contentWidthPublisher={this.contentWidthPublisher}
-                                                        callbacks={{ onGrab: onScrollbarGrab }}
+                                                        onGrab={onScrollbarGrab}
                                                     />
                                                 </div>
                                                 <Overlay name="instrument_browser">
                                                     <InstrumentBrowser close={() => {
-                                                        toggleOverlay("instrument_browser", "hide");
+                                                        Overlay.toggleOverlay("instrument_browser", "hide");
                                                     }} />
                                                 </Overlay>
                                             </div>
@@ -159,7 +159,7 @@ export class ArrangementViewer extends ComponentBase<IArrangementViewerProps, IA
     }
 
     // Returns width in pt
-    private getNoteLineMinWidth = (timeParams: TimeParamsView): number => {
+    private getNoteLineMinWidth = (timeParams: ITimeParamsView): number => {
         const widthFromNotes = baseNoteWidth * timeParams.timings.length;
         const extraWidthBetweenBars = (timeParams.length - 1) * 4;
 
@@ -211,7 +211,7 @@ export class ArrangementViewer extends ComponentBase<IArrangementViewerProps, IA
         this.setState({ noteWidth: this.getNoteWidth(this.viewerRef.current) });
     };
 
-    private timeParamsSubscription = (timeParams: TimeParamsView) => {
+    private timeParamsSubscription = (timeParams: ITimeParamsView) => {
         return setTimeout(() => {
             this.updateScrollShadows();
             this.contentWidthPublisher.publish();

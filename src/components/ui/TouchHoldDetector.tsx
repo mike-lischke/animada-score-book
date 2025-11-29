@@ -3,41 +3,53 @@
 * Licensed under the MIT License. See License.txt in the project root for license information.
 */
 
-/* eslint-disable prefer-arrow/prefer-arrow-functions, @typescript-eslint/naming-convention, jsdoc/require-jsdoc */
-
-import { useCallback, useRef } from "preact/hooks";
-import type { JSX } from "preact/jsx-runtime";
+import { type ComponentChild } from "preact";
 
 import { isMobile } from "../../ui/isMobile.js";
+import { ComponentBase, type IComponentProperties } from "./ComponentBase/ComponentBase.js";
 
-export function TouchHoldDetector(
-    { callback, holdLength, children }: { callback: () => void, holdLength: number, children: JSX.Element; }
-): JSX.Element {
-    const timeoutIdRef = useRef<number>(null);
-    const onTouchStart = useCallback(() => {
-        return timeoutIdRef.current = setTimeout(callback, holdLength);
-    }, []);
-    const cancel = useCallback(() => {
-        clearTimeout(timeoutIdRef.current!);
-    }, []);
-
-    return (
-        <div
-            className="hold-detector"
-            onTouchStart={onTouchStart}
-            onTouchMove={cancel}
-            onTouchEnd={cancel}
-            onContextMenu={preventDefault}
-            // This may not work well in some cases. The approach can be changed if not.
-            style={{ width: "100%", height: "100%" }}
-        >
-            {children}
-        </div>
-    );
+export interface ITouchHoldDetectorProps extends IComponentProperties {
+    callback: () => void;
+    holdLength: number;
 }
 
-function preventDefault(event: MouseEvent) {
-    if (isMobile) {
-        event.preventDefault();
+export class TouchHoldDetector extends ComponentBase<ITouchHoldDetectorProps> {
+    private timeoutIdRef = 0;
+
+    public render(): ComponentChild {
+        const { children } = this.props;
+
+        return (
+            <div
+                className="hold-detector"
+                onTouchStart={this.onTouchStart}
+                onTouchMove={this.cancel}
+                onTouchEnd={this.cancel}
+                onContextMenu={(e) => {
+                    e.preventDefault();
+                }}
+                style={{ width: "100%", height: "100%" }}
+            >
+                {children}
+            </div>
+        );
     }
+
+    private onTouchStart = (event: TouchEvent) => {
+        const { callback, holdLength } = this.props;
+
+        this.timeoutIdRef = setTimeout(callback, holdLength);
+
+        if (isMobile) {
+            event.preventDefault();
+        }
+    };
+
+    private cancel = (event: TouchEvent) => {
+        clearTimeout(this.timeoutIdRef);
+
+        if (isMobile) {
+            event.preventDefault();
+        }
+    };
 }

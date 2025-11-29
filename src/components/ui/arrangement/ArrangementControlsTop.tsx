@@ -8,12 +8,12 @@ import pencilIcon from "../../../assets/images/icons/pencil_white.svg";
 import playIcon from "../../../assets/images/icons/play.svg";
 
 import type { ComponentChild, ContextType } from "preact";
-import type { ArrangementView, Subscription } from "../../../core/index.js";
+import type { IArrangementView, Subscription } from "../../../core/index.js";
 import { getEventEngine } from "../../../player/EventEngine.js";
 import { ServicesContext } from "../ScoreBookViewer.js";
 import { ComponentBase } from "../ComponentBase/ComponentBase.js";
 import { ExpandingSpacer } from "../ExpandingSpacer.js";
-import { Overlay, toggleOverlay } from "../Overlay.js";
+import { Overlay } from "../Overlay.js";
 import { SelectionControls } from "../SelectionControls.js";
 import { ShareButton } from "../ShareButton.js";
 import { SmallSpacer } from "../SmallSpacer.js";
@@ -49,7 +49,7 @@ export class ArrangementControlsTop extends ComponentBase<{}, IArrangementContro
 
     public override componentWillUnmount(): void {
         const arrangementPlayerContext = this.context as ContextType<typeof ArrangementPlayerContext>;
-        const arrangement: ArrangementView = arrangementPlayerContext!.arrangement;
+        const arrangement: IArrangementView = arrangementPlayerContext!.arrangement;
         const selectionManager = this.servicesContext!.selectionManager;
 
         arrangement.unsubscribe(this.titleChangeSubscription as Subscription);
@@ -67,7 +67,7 @@ export class ArrangementControlsTop extends ComponentBase<{}, IArrangementContro
                         <ServicesContext.Consumer>
                             {(servicesContext) => {
                                 this.useSubscriptions(arrangementPlayerContext, servicesContext);
-                                const arrangement: ArrangementView = arrangementPlayerContext!.arrangement;
+                                const arrangement = arrangementPlayerContext!.arrangement;
                                 const titleVisible = title.length > 0 || editingTitle;
 
                                 return (
@@ -168,6 +168,6 @@ export class ArrangementControlsTop extends ComponentBase<{}, IArrangementContro
 
     private onSelectionChange = () => {
         const selectionManager = this.servicesContext!.selectionManager;
-        toggleOverlay("selection_controls", selectionManager.selections.size ? "show" : "hide");
+        Overlay.toggleOverlay("selection_controls", selectionManager.selections.size ? "show" : "hide");
     };
 }

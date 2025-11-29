@@ -5,14 +5,14 @@
 
 import type { ComponentChild } from "preact";
 
-import { Timing, type TimeParamsView } from "../../../core/index.js";
+import type { ITiming, ITimeParamsView } from "../../../core/index.js";
 import { ArrangementPlayerContext } from "../arrangement/ArrangementViewer.js";
 import { ComponentBase, type IComponentProperties } from "../ComponentBase/ComponentBase.js";
 import { NoteViewer } from "../note/NoteViewer.js";
-import { BarDivisibilityContext, type BarDivisibility } from "./Guiderail.js";
+import { BarDivisibilityContext, type BarDivisibility } from "./GuideRail.js";
 
 export interface ITimingViewerProps extends IComponentProperties {
-    timing: Timing;
+    timing: ITiming;
 }
 
 export class TimingViewer extends ComponentBase<ITimingViewerProps> {
@@ -45,7 +45,7 @@ export class TimingViewer extends ComponentBase<ITimingViewerProps> {
         );
     }
 
-    private useClasses(timeParams: TimeParamsView, timing: Timing, isStartOfBar: boolean): string {
+    private useClasses(timeParams: ITimeParamsView, timing: ITiming, isStartOfBar: boolean): string {
         const { bar, step } = timing;
         const { timeSignature, stepResolution } = timeParams;
 
@@ -53,7 +53,7 @@ export class TimingViewer extends ComponentBase<ITimingViewerProps> {
             (isStartOfBar ? "start-of-bar" : "");
     }
 
-    private useTimingLabel(timeParams: TimeParamsView, barDivisibility: BarDivisibility, timing: Timing,
+    private useTimingLabel(timeParams: ITimeParamsView, barDivisibility: BarDivisibility, timing: ITiming,
         isStartOfBar: boolean): string {
         const { timeSignature, stepResolution } = timeParams;
 

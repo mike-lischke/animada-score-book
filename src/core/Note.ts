@@ -3,23 +3,23 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import type { Note, NoteStyle, Polyrhythm, Timing, Track } from "./types/general.js";
+import type { INote, INoteStyle, IPolyrhythm, ITiming, ITrack } from "./types/general.js";
 import { createPublisher } from "./Publisher.js";
 
 let noteCount = 0;
 
-export const createNote = (track: Track, timing: Timing, polyrhythm?: Polyrhythm): Note => {
+export const createNote = (track: ITrack, timing: ITiming, polyrhythm?: IPolyrhythm): INote => {
     const publisher = createPublisher();
     const id = `${++noteCount}`;
-    let noteStyle: NoteStyle | undefined;
+    let noteStyle: INoteStyle | undefined;
 
     return {
         id, timing, track, polyrhythm,
         subscribe: publisher.subscribe, unsubscribe: publisher.unsubscribe,
-        get noteStyle(): NoteStyle | undefined {
+        get noteStyle(): INoteStyle | undefined {
             return noteStyle;
         },
-        set noteStyle(newNoteStyle: NoteStyle) {
+        set noteStyle(newNoteStyle: INoteStyle) {
             noteStyle = newNoteStyle;
             publisher.publish();
         }

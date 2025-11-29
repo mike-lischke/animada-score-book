@@ -4,13 +4,13 @@
  */
 
 import { createPublisher } from "./Publisher.js";
-import type { TimeParams, Timing } from "./types/general.js";
+import type { ITimeParams, ITiming } from "./types/general.js";
 import { calculateStepsPerBar } from "./utils.js";
 
 export const createTimeParams = (
-    timeSignature: string, tempo: number, length: number, pulse: string, stepResolution: number): TimeParams => {
+    timeSignature: string, tempo: number, length: number, pulse: string, stepResolution: number): ITimeParams => {
     const publisher = createPublisher();
-    const timings: Timing[] = [];
+    const timings: ITiming[] = [];
 
     // Whenever any params change, we generate the list of timings from scratch again
     const regenerateTimings = () => {
@@ -100,7 +100,7 @@ export const createTimeParams = (
         subscribe: publisher.subscribe,
         unsubscribe: publisher.unsubscribe,
 
-        isValid: ({ bar, step }: Timing) => {
+        isValid: ({ bar, step }: ITiming) => {
             if (bar > length) {
                 return false;
             } // timing falls outside the arrangement entirely

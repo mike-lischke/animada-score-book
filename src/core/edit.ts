@@ -9,7 +9,7 @@ import type {
     EditCommand_TimeParamsLength, EditCommand_TimeParamsTempo, EditCommand_TimeParamsTimeSignature,
     EditCommand_Track
 } from "./types/edit_commands.js";
-import type { Arrangement, Note, TimeParams, Track } from "./types/general.js";
+import type { IArrangement, INote, ITimeParams, ITrack } from "./types/general.js";
 
 // Single edit function for all changes to the arrangement, so that we can maintain an undo stack
 // Returns a boolean indicating whether anything has changed
@@ -41,7 +41,7 @@ export const edit = (command: EditCommand): boolean => {
 };
 
 const editArrangement = (command: EditCommand_Arrangement): boolean => {
-    const arrangement = command.arrangement as Arrangement;
+    const arrangement = command.arrangement as IArrangement;
 
     const newTitle = (command as EditCommand_ArrangementTitle).newTitle;
     if (typeof newTitle === "string") {
@@ -63,7 +63,7 @@ const editArrangement = (command: EditCommand_Arrangement): boolean => {
     if (command.type === "EditCommand_ArrangementRemoveTrack") {
         try {
             // TODO: removeTrack is not derived from Track, so that cast is wrong.
-            arrangement.removeTrack(command.removeTrack as Track);
+            arrangement.removeTrack(command.removeTrack as ITrack);
 
             return true;
         } catch {
@@ -95,7 +95,7 @@ const editArrangement = (command: EditCommand_Arrangement): boolean => {
         command.clearSelection.forEach((trackSelection) => {
             trackSelection.selectedNotes.forEach((note) => {
                 if (note.noteStyle) {
-                    (note as Note).noteStyle = undefined;
+                    (note as INote).noteStyle = undefined;
                     changedAnyNotes = true;
                 }
             });
@@ -106,7 +106,7 @@ const editArrangement = (command: EditCommand_Arrangement): boolean => {
 
     if (command.type === "EditCommand_ArrangementAddPolyrhythms") {
         command.addPolyrhythms.selection.forEach(({ range }) => {
-            const [start, end] = (range as [Note, Note]);
+            const [start, end] = (range as [INote, INote]);
             const track = start.track;
             track.addPolyrhythm(start, end, command.addPolyrhythms.length);
         });
@@ -118,7 +118,7 @@ const editArrangement = (command: EditCommand_Arrangement): boolean => {
 };
 
 const editTrack = (command: EditCommand_Track): boolean => {
-    const track = command.track as Track;
+    const track = command.track as ITrack;
 
     if (command.type === "EditCommand_TrackRemovePolyrhythm") {
         if (track.polyrhythms.find((polyrhythm) => {
@@ -144,7 +144,7 @@ const editTrack = (command: EditCommand_Track): boolean => {
 };
 
 const editTimeParams = (command: EditCommand_TimeParams): boolean => {
-    const timeParams = command.timeParams as TimeParams;
+    const timeParams = command.timeParams as ITimeParams;
 
     const { timeSignature, pulse, stepResolution } = ((command as EditCommand_TimeParamsTimeSignature));
     if (timeSignature) {
@@ -183,7 +183,7 @@ const editTimeParams = (command: EditCommand_TimeParams): boolean => {
 };
 
 const editNote = (command: EditCommand_Note): boolean => {
-    const note = command.note as Note;
+    const note = command.note as INote;
 
     if (note.noteStyle !== command.noteStyle) {
         note.noteStyle = command.noteStyle;

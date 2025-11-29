@@ -4,16 +4,16 @@
  */
 
 import type {
-    BananaDrum, Subscribable, RealTime, NoteView, ArrangementView, TrackView, Timing
-} from "../core/index.js";
+    IAnimadaScoreBook, IArrangementView, INoteView, ISubscribable, ITiming, ITrackView, RealTime
+} from "../core/types/general.js";
 
-export interface BananaDrumPlayer {
-    bananaDrum: BananaDrum;
+export interface ScoreBookPlayer {
+    bananaDrum: IAnimadaScoreBook;
     eventEngine: EventEngine;
     arrangementPlayer: ArrangementPlayer;
 }
 
-export interface EventEngine extends Subscribable {
+export interface EventEngine extends ISubscribable {
     connect(eventSource: IEventSource): void;
     play(): Promise<void>;
     stop(): void;
@@ -29,7 +29,7 @@ export interface EventDetails {
 
 export interface AudioEvent extends EventDetails {
     audioBuffer: AudioBuffer;
-    note: NoteView; // In the future, this could be a more general "source" property
+    note: INoteView; // In the future, this could be a more general "source" property
 }
 
 export interface CallbackEvent extends EventDetails {
@@ -48,21 +48,21 @@ export interface IEventSource {
     onStop?: () => void;
 }
 
-export interface ArrangementPlayer extends IEventSource, Subscribable {
-    arrangement: ArrangementView;
-    trackPlayers: Map<TrackView, TrackPlayer>;
-    get currentTiming(): Timing | null;
-    currentTimingPublisher: Subscribable;
+export interface ArrangementPlayer extends IEventSource, ISubscribable {
+    arrangement: IArrangementView;
+    trackPlayers: Map<ITrackView, TrackPlayer>;
+    get currentTiming(): ITiming | null;
+    currentTimingPublisher: ISubscribable;
     convertToLoopProgress(realTime: RealTime): number;
-    audibleTrackPlayers: Map<TrackView, TrackPlayer>;
-    audibleTrackPlayersPublisher: Subscribable;
+    audibleTrackPlayers: Map<ITrackView, TrackPlayer>;
+    audibleTrackPlayersPublisher: ISubscribable;
 }
 
-export interface TrackPlayer extends IEventSource, Subscribable {
-    track: TrackView;
+export interface TrackPlayer extends IEventSource, ISubscribable {
+    track: ITrackView;
     soloMute: SoloMute;
-    currentPolyrhythmNotePublisher: Subscribable;
-    readonly currentPolyrhythmNote: NoteView | null;
+    currentPolyrhythmNotePublisher: ISubscribable;
+    readonly currentPolyrhythmNote: INoteView | null;
 }
 
 export type SoloMute = null | "solo" | "mute";
@@ -77,9 +77,9 @@ export interface LoopInterval extends Interval {
     loopNumber: number;
 }
 
-export interface TimeCoordinator extends Subscribable {
+export interface TimeCoordinator extends ISubscribable {
     readonly realTimeLength: RealTime;
-    convertToRealTime(timing: Timing): RealTime;
+    convertToRealTime(timing: ITiming): RealTime;
     convertToLoopIntervals(interval: Interval): LoopInterval[];
     convertToAudioTime(realTime: RealTime, loopNumber: number): RealTime;
     convertToLoopProgress(realTime: RealTime): number; //  distance through loop from 0 to 1

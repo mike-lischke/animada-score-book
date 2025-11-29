@@ -5,7 +5,7 @@
 
 import type { ComponentChild, ContextType } from "preact";
 
-import type { NoteStyle, NoteView, Subscribable } from "../../../core/index.js";
+import type { INoteStyle, INoteView, ISubscribable } from "../../../core/index.js";
 import { isSameTiming } from "../../../core/utils.js";
 import { createAudioBufferPlayer } from "../../../player/AudioBufferPlayer.js";
 import { getTrackColour } from "../../../ui/track-colour.js";
@@ -20,13 +20,13 @@ const audioContext = new AudioContext();
 const baseNoteClasses = "note-viewer note-width";
 
 export interface INoteViewerProps extends IComponentProperties {
-    note: NoteView;
+    note: INoteView;
 }
 
 interface INoteViewerState extends IComponentState {
     isCurrent: boolean;
     selected: boolean;
-    noteStyle?: NoteStyle;
+    noteStyle?: INoteStyle;
 }
 
 export class NoteViewer extends ComponentBase<INoteViewerProps, INoteViewerState> {
@@ -179,7 +179,7 @@ export class NoteViewer extends ComponentBase<INoteViewerProps, INoteViewerState
             const { note } = this.props;
 
             const { selectionManager } = this.servicesContext!;
-            const timingPublisher: Subscribable = note.polyrhythm
+            const timingPublisher: ISubscribable = note.polyrhythm
                 ? this.trackPlayerContext!.currentPolyrhythmNotePublisher
                 : this.arrangementPlayerContext!.currentTimingPublisher;
 
@@ -305,7 +305,7 @@ export class NoteViewer extends ComponentBase<INoteViewerProps, INoteViewerState
         }
     }
 
-    private getNextNoteStyle(note: NoteView): NoteStyle | undefined {
+    private getNextNoteStyle(note: INoteView): INoteStyle | undefined {
         const noteStyles = note.track.instrument.noteStyles;
         const noteStyleIds = Object.keys(noteStyles);
         if (!note.noteStyle) {

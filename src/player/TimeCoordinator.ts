@@ -4,7 +4,7 @@
  */
 
 import { createPublisher } from "../core/Publisher.js";
-import type { RealTime, TimeParamsView, Timing } from "../core/types/general.js";
+import type { RealTime, ITimeParamsView, ITiming } from "../core/types/general.js";
 import { getEventEngine } from "./EventEngine.js";
 import { Interval, LoopInterval, TimeCoordinator } from "./types.js";
 
@@ -14,10 +14,10 @@ const eventEngine = getEventEngine();
 // In the EventEngine, time always marches forward (except when paused)
 // In music-related objects, times are always between 0 and the length of the section
 // A TimeCoordinator adjust times from the EventEngine to make sense to music objects
-export const createTimeCoordinator = (timeParams: TimeParamsView): TimeCoordinator => {
+export const createTimeCoordinator = (timeParams: ITimeParamsView): TimeCoordinator => {
 
     // Converting is currently extremely easy, but will become more complicated with polyrhythms
-    const convertToRealTime = (timing: Timing): RealTime => {
+    const convertToRealTime = (timing: ITiming): RealTime => {
         return (secondsPerBar * (timing.bar - 1)) + (secondsPerStep * (timing.step - 1));
     };
 
@@ -153,7 +153,7 @@ export const createTimeCoordinator = (timeParams: TimeParamsView): TimeCoordinat
 
 };
 
-const calcNoteTimes = ({ timeSignature, tempo, pulse, stepResolution }: TimeParamsView) => {
+const calcNoteTimes = ({ timeSignature, tempo, pulse, stepResolution }: ITimeParamsView) => {
     const [beatsPerBar, beatUnit] = timeSignature.split("/").map(str => {
         return Number(str);
     });

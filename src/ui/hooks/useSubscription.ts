@@ -7,9 +7,9 @@
 
 import { useEffect } from "preact/hooks";
 
-import type { Subscribable } from "../../core/types/general.js";
+import type { ISubscribable } from "../../core/types/general.js";
 
-export function useSubscription(subscribable: Subscribable, callback: () => void,
+export function useSubscription(subscribable: ISubscribable, callback: () => void,
     dependencyList: unknown[] = []) {
     useEffect(() => {
         subscribable.subscribe(callback);

@@ -3,13 +3,13 @@
 * Licensed under the MIT License. See License.txt in the project root for license information.
 */
 
-import type { ArrangementView, Subscription, TrackView } from "../../../core/index.js";
+import type { IArrangementView, Subscription, ITrackView } from "../../../core/index.js";
 
 import { useEditCommand } from "../../../ui/hooks/useEditCommand.js";
 import { ServicesContext } from "../ScoreBookViewer.js";
 import { ComponentBase, type IComponentState } from "../ComponentBase/ComponentBase.js";
 import { ExpandingSpacer } from "../ExpandingSpacer.js";
-import { Overlay, toggleOverlay } from "../Overlay.js";
+import { Overlay } from "../Overlay.js";
 import { SmallSpacer } from "../SmallSpacer.js";
 import { ArrangementPlayerContext } from "./ArrangementViewer.js";
 import type { ContextType } from "preact";
@@ -20,7 +20,7 @@ interface IArrangementControlsBottomState extends IComponentState {
 
 export class ArrangementControlsBottom extends ComponentBase<{}, IArrangementControlsBottomState> {
     private arrangementSubscription?: Subscription;
-    private subscribedTracks = new Set<TrackView>();
+    private subscribedTracks = new Set<ITrackView>();
 
     private arrangementPlayerContext?: ContextType<typeof ArrangementPlayerContext>;
     private servicesContext?: ContextType<typeof ServicesContext>;
@@ -32,7 +32,7 @@ export class ArrangementControlsBottom extends ComponentBase<{}, IArrangementCon
     }
 
     public override componentWillUnmount(): void {
-        const arrangement: ArrangementView = this.arrangementPlayerContext!.arrangement;
+        const arrangement: IArrangementView = this.arrangementPlayerContext!.arrangement;
 
         arrangement.unsubscribe(this.arrangementCallback as Subscription);
         arrangement.unsubscribe(this.arrangementSubscription!);
@@ -73,7 +73,7 @@ export class ArrangementControlsBottom extends ComponentBase<{}, IArrangementCon
                                         <button
                                             className="push-button"
                                             onClick={() => {
-                                                toggleOverlay("instrument_browser", "show");
+                                                Overlay.toggleOverlay("instrument_browser", "show");
                                             }}
                                         >Add Instrument</button>
 
@@ -88,7 +88,7 @@ export class ArrangementControlsBottom extends ComponentBase<{}, IArrangementCon
                                                             className="push-button"
                                                             onClick={() => {
                                                                 modeManager.deletePolyrhythmMode = true;
-                                                                toggleOverlay("delete_polyrhythms", "show");
+                                                                Overlay.toggleOverlay("delete_polyrhythms", "show");
                                                             }}
                                                         >Delete polyrhythms...</button>
                                                         <SmallSpacer />
@@ -100,7 +100,7 @@ export class ArrangementControlsBottom extends ComponentBase<{}, IArrangementCon
                                         <button
                                             className="push-button"
                                             onClick={() => {
-                                                toggleOverlay("clear_tracks", "show");
+                                                Overlay.toggleOverlay("clear_tracks", "show");
                                             }}
                                         >Clear all sounds</button>
 
@@ -119,14 +119,14 @@ export class ArrangementControlsBottom extends ComponentBase<{}, IArrangementCon
                                                             type: "EditCommand_ArrangementClear", arrangement,
                                                             command: "clear all tracks"
                                                         });
-                                                        toggleOverlay("clear_tracks", "hide");
+                                                        Overlay.toggleOverlay("clear_tracks", "hide");
                                                     }}
                                                 >Really, clear sounds</button>
                                                 <SmallSpacer />
                                                 <button
                                                     className="push-button"
                                                     onClick={() => {
-                                                        toggleOverlay("clear_tracks", "hide");
+                                                        Overlay.toggleOverlay("clear_tracks", "hide");
                                                     }}
                                                 >No, go back</button>
                                             </div>
@@ -158,7 +158,7 @@ export class ArrangementControlsBottom extends ComponentBase<{}, IArrangementCon
         );
     }
 
-    private hasPolyrhythms(arrangement: ArrangementView): boolean {
+    private hasPolyrhythms(arrangement: IArrangementView): boolean {
         for (const track of arrangement.tracks) {
             if (track.polyrhythms.length) {
                 return true;
@@ -173,7 +173,7 @@ export class ArrangementControlsBottom extends ComponentBase<{}, IArrangementCon
 
         const arePolyrhythms = this.hasPolyrhythms(arrangement);
         if (!arePolyrhythms) {
-            toggleOverlay("delete_polyrhythms", "hide");
+            Overlay.toggleOverlay("delete_polyrhythms", "hide");
 
             const modeManager = this.servicesContext!.modeManager;
             modeManager.deletePolyrhythmMode = false;
@@ -189,7 +189,7 @@ export class ArrangementControlsBottom extends ComponentBase<{}, IArrangementCon
             this.arrangementPlayerContext = arrangementPlayerContext;
             this.servicesContext = servicesContext;
 
-            const arrangement: ArrangementView = arrangementPlayerContext!.arrangement;
+            const arrangement: IArrangementView = arrangementPlayerContext!.arrangement;
 
             arrangement.tracks.forEach((track) => {
                 track.subscribe(this.arrangementCallback as Subscription);
@@ -218,7 +218,7 @@ export class ArrangementControlsBottom extends ComponentBase<{}, IArrangementCon
             const modeManager = servicesContext!.modeManager;
             modeManager.subscribe(() => {
                 if (!modeManager.deletePolyrhythmMode) {
-                    toggleOverlay("delete_polyrhythms", "hide");
+                    Overlay.toggleOverlay("delete_polyrhythms", "hide");
                 }
             });
         }

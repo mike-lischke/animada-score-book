@@ -84,8 +84,8 @@ const eventEngine: EventEngine = (function () {
     };
 
     const scheduleEvents = (interval: Interval) => {
-        eventSources.forEach(eventSource => {
-            eventSource.getEvents(interval).forEach(event => {
+        eventSources.forEach((eventSource) => {
+            eventSource.getEvents(interval).forEach((event) => {
                 if ("audioBuffer" in event) {
                     scheduleAudioEvent(event);
                 }
@@ -184,7 +184,7 @@ const eventEngine: EventEngine = (function () {
 
     const muteUsingFilter = (muteFilter: MuteFilter) => {
         scheduledAudioEvents
-            .filter(audioEventReference => {
+            .filter((audioEventReference) => {
                 return hasStarted(audioEventReference) && muteFilter(audioEventReference.audioEvent);
             })
             .forEach(stopAudioAndUnschedule);

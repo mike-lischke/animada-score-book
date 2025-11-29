@@ -7,10 +7,11 @@
 
 import { useState } from "preact/hooks";
 
-import type { Subscribable } from "../../core/index.js";
+import type { ISubscribable } from "../../core/index.js";
 import { useSubscription } from "./useSubscription.js";
 
-export function useStateSubscription<T extends Subscribable, Y>(subscribable: T, extractState: (subscribable: T) => Y) {
+export function useStateSubscription<T extends ISubscribable, Y>(subscribable: T,
+    extractState: (subscribable: T) => Y) {
     const [state, setState] = useState(extractState(subscribable));
     useSubscription(subscribable, () => {
         setState(extractState(subscribable));

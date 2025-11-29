@@ -5,24 +5,24 @@
 
 import { createContext, type ComponentChild } from "preact";
 
-import { ArrangementView, TimeParamsView, type Subscription } from "../../../core/index.js";
+import type { IArrangementView, ITimeParamsView, Subscription } from "../../../core/index.js";
 import { ComponentBase, type IComponentProperties, type IComponentState } from "../ComponentBase/ComponentBase.js";
 import { TimingViewer } from "./TimingViewer.js";
 
 export type BarDivisibility = 1 | 2 | 4;
 export const BarDivisibilityContext = createContext<BarDivisibility | null>(null);
 
-export interface IGuiderailProps extends IComponentProperties {
-    arrangement: ArrangementView;
+export interface IGuideRailProps extends IComponentProperties {
+    arrangement: IArrangementView;
 }
 
-interface IGuiderailState extends IComponentState {
+interface IGuideRailState extends IComponentState {
     barDivisibility: BarDivisibility;
 }
 
-export class Guiderail extends ComponentBase<IGuiderailProps, IGuiderailState> {
+export class GuideRail extends ComponentBase<IGuideRailProps, IGuideRailState> {
 
-    public constructor(props: IGuiderailProps) {
+    public constructor(props: IGuideRailProps) {
         super(props);
 
         this.state = {
@@ -64,7 +64,7 @@ export class Guiderail extends ComponentBase<IGuiderailProps, IGuiderailState> {
         );
     }
 
-    private getBarDivisibility(timeParams: TimeParamsView): BarDivisibility {
+    private getBarDivisibility(timeParams: ITimeParamsView): BarDivisibility {
         const beatsPerBar = Number(timeParams.timeSignature.split("/")[0]);
         if (beatsPerBar % 4 === 0) {
             return 4;
@@ -77,7 +77,7 @@ export class Guiderail extends ComponentBase<IGuiderailProps, IGuiderailState> {
         return 1;
     }
 
-    private timeParamsSubscription = (timeParams: TimeParamsView) => {
+    private timeParamsSubscription = (timeParams: ITimeParamsView) => {
         this.setState({
             barDivisibility: this.getBarDivisibility(timeParams)
         });

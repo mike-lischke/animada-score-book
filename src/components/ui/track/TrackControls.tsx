@@ -4,13 +4,13 @@
 */
 
 import type { ComponentChild } from "preact";
-import type { TrackView } from "../../../core/index.js";
+import type { ITrackView } from "../../../core/index.js";
 import { BananaDrumContext } from "../ScoreBookViewer.js";
 import { ComponentBase, type IComponentProperties } from "../ComponentBase/ComponentBase.js";
-import { toggleOverlay } from "../Overlay.js";
+import { Overlay } from "../Overlay.js";
 
 export interface ITrackControlsProps extends IComponentProperties {
-    track: TrackView;
+    track: ITrackView;
     overlayName: string;
 }
 
@@ -39,12 +39,12 @@ export class TrackControls extends ComponentBase<ITrackControlsProps> {
                                         track,
                                         command: "clear"
                                     });
-                                    toggleOverlay(overlayName, "hide");
+                                    Overlay.toggleOverlay(overlayName, "hide");
                                 }}
                             >Clear track</button>
                             <button className="push-button gray"
                                 onClick={() => {
-                                    toggleOverlay(overlayName, "hide");
+                                    Overlay.toggleOverlay(overlayName, "hide");
                                 }}
                             >Cancel</button>
                         </div>

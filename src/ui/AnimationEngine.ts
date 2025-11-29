@@ -3,72 +3,70 @@
 * Licensed under the MIT License. See License.txt in the project root for license information.
 */
 
-/* eslint-disable prefer-arrow/prefer-arrow-functions, jsdoc/require-jsdoc */
-
 import type { RealTime } from "../core/index.js";
 import { createPublisher } from "../core/Publisher.js";
+import type { ISubscribable } from "../core/types/general.js";
 import type { EventEngine, EventEngineState } from "../player/types.js";
-import type { AnimationEngine } from "./types.js";
 
-// Currently this is just doing auto-scroll
-// Potentially, we could make an optimisation
-// We could toggle autofollow on and off by connecting and disconnecting the callback
-// If there are no registered callbacks, the engine can just do nothing
-// Instead, we are currently always running the callback, and the callback is deciding to do nothing
+export class AnimationEngine implements ISubscribable {
+    public state: EventEngineState = "stopped";
 
-export function getAnimationEngine(eventEngine: EventEngine): AnimationEngine {
-    const animations: Array<(realTime: RealTime) => void> = [];
-    let state: EventEngineState = "stopped";
-    let nextAnimationId: number;
-    const publisher = createPublisher();
+    private readonly animations: Array<(realTime: RealTime) => void> = [];
+    private nextAnimationId = 0;
+    private readonly publisher = createPublisher();
 
-    eventEngine.subscribe(() => {
-        if (eventEngine.state === "playing") {
-            start();
+    public constructor(private eventEngine: EventEngine) {
+        eventEngine.subscribe(() => {
+            if (eventEngine.state === "playing") {
+                this.start();
 
-            return;
-        }
-        stop();
-    });
-
-    return {
-        connect(animation) {
-            animations.push(animation);
-        },
-        disconnect(animation) {
-            const animationIndex = animations.indexOf(animation);
-            if (animationIndex !== -1) {
-                animations.splice(animationIndex, 1);
+                return;
             }
-        },
-        subscribe: publisher.subscribe, unsubscribe: publisher.unsubscribe,
-        get state() {
-            return state;
-        }
-    };
+            stop();
+        });
+    }
 
-    function start() {
-        if (state === "stopped") {
-            state = "playing";
-            publisher.publish();
-            loop();
+    public connect(animation: (realTime: number) => void) {
+        this.animations.push(animation);
+    }
+
+    public disconnect(animation: (realTime: number) => void) {
+        const animationIndex = this.animations.indexOf(animation);
+        if (animationIndex !== -1) {
+            this.animations.splice(animationIndex, 1);
         }
     }
 
-    function stop() {
-        if (state === "playing") {
-            cancelAnimationFrame(nextAnimationId);
-            state = "stopped";
-            publisher.publish();
+    public get subscribe() {
+        return this.publisher.subscribe;
+    }
+
+    public get unsubscribe() {
+        return this.publisher.unsubscribe;
+    }
+
+    private start() {
+        if (this.state === "stopped") {
+            this.state = "playing";
+            this.publisher.publish();
+            this.loop();
         }
     }
 
-    function loop() {
-        nextAnimationId = requestAnimationFrame(() => {
-            animations.forEach(animation => {
-                animation(eventEngine.getTime());
+    private stop() {
+        if (this.state === "playing") {
+            cancelAnimationFrame(this.nextAnimationId);
+            this.state = "stopped";
+            this.publisher.publish();
+        }
+    }
+
+    private loop() {
+        this.nextAnimationId = requestAnimationFrame(() => {
+            this.animations.forEach((animation) => {
+                animation(this.eventEngine.getTime());
             });
-            loop();
+            this.loop();
         });
     }
 }

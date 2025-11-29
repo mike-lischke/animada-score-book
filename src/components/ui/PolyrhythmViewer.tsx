@@ -3,79 +3,149 @@
 * Licensed under the MIT License. See License.txt in the project root for license information.
 */
 
-/* eslint-disable prefer-arrow/prefer-arrow-functions, @typescript-eslint/naming-convention, jsdoc/require-jsdoc */
+import type { ComponentChild, ContextType } from "preact";
 
-import { useContext, useState } from "preact/hooks";
-import type { JSX } from "preact/jsx-runtime";
-
-import type { PolyrhythmView } from "../../core/index.js";
-import { useEditCommand } from "../../ui/hooks/useEditCommand.js";
-import { useSubscription } from "../../ui/hooks/useSubscription.js";
-import { ServicesContext } from "./ScoreBookViewer.js";
+import type { IPolyrhythmView } from "../../core/index.js";
+import { ComponentBase, type IComponentProperties, type IComponentState } from "./ComponentBase/ComponentBase.js";
 import { NoteViewer } from "./note/NoteViewer.js";
+import { BananaDrumContext, ServicesContext } from "./ScoreBookViewer.js";
 
-export function PolyrhythmViewer({ polyrhythm }: { polyrhythm: PolyrhythmView; }): JSX.Element {
-    const track = polyrhythm.start.track;
-    const modeManager = useContext(ServicesContext)!.modeManager;
-    const edit = useEditCommand();
-
-    const [deleteMode, setDeleteMode] = useState(modeManager.deletePolyrhythmMode);
-    useSubscription(modeManager, () => {
-        setDeleteMode(modeManager.deletePolyrhythmMode);
-    });
-
-    const [isShrouded, setShrouded] = useState(checkShrouded(polyrhythm));
-    useSubscription(track, () => {
-        setShrouded(checkShrouded(polyrhythm));
-    });
-
-    return (
-        <div id={`polyrhythm-${polyrhythm.id}`} className="polyrhythm-viewer">
-            {
-                deleteMode
-                    ? (
-                        <div className={`delete-polyrhythm-wrapper ${isShrouded ? "shrouded" : ""}`}>
-                            {
-                                isShrouded
-                                    ? (<></>)
-                                    : (
-                                        <button
-                                            disabled={isShrouded}
-                                            className="push-button"
-                                            onClick={() => {
-                                                edit({
-                                                    type: "EditCommand_TrackRemovePolyrhythm",
-                                                    track,
-                                                    removePolyrhythm: polyrhythm
-                                                });
-                                            }}
-                                        >Delete</button>
-                                    )
-                            }
-                        </div>
-                    )
-                    : (<>
-                        <div className="polyrhythm-decoration" ></div>
-                        <div className="polyrhythm-notes-wrapper">
-                            {polyrhythm.notes.map(note => {
-                                return <NoteViewer note={note} key={note.id} />;
-                            })}
-                        </div>
-                    </>)
-            }
-        </div>
-    );
+export interface IPolyrhythmViewerProps extends IComponentProperties {
+    polyrhythm: IPolyrhythmView;
 }
 
-function checkShrouded(polyrhythm: PolyrhythmView) {
-    const track = polyrhythm.start.track;
-    for (const otherPolyrhythm of track.polyrhythms) {
-        if (otherPolyrhythm !== polyrhythm) {
-            if (otherPolyrhythm.start.polyrhythm === polyrhythm || otherPolyrhythm.end.polyrhythm === polyrhythm) {
-                return true;
-            }
-        }
+interface IPolyrhythmViewerState extends IComponentState {
+    deleteMode: boolean;
+    isShrouded: boolean;
+}
+
+export class PolyrhythmViewer extends ComponentBase<IPolyrhythmViewerProps, IPolyrhythmViewerState> {
+    private servicesContext: ContextType<typeof ServicesContext> | null = null;
+    private bananaDrumContext: ContextType<typeof BananaDrumContext> | null = null;
+
+    public constructor(props: IPolyrhythmViewerProps) {
+        super(props);
+
+        const { polyrhythm } = this.props;
+
+        this.state = {
+            deleteMode: false,
+            isShrouded: this.checkShrouded(polyrhythm)
+        };
     }
 
-    return false;
+    public override componentWillUnmount(): void {
+        const { polyrhythm } = this.props;
+
+        const modeManager = this.servicesContext?.modeManager;
+        modeManager?.unsubscribe(this.modeChanged);
+
+        const track = polyrhythm.start.track;
+        track.subscribe(this.trackChanged);
+    }
+
+    public override render(): ComponentChild {
+        const { polyrhythm } = this.props;
+        const { deleteMode, isShrouded } = this.state;
+
+        return (
+            <BananaDrumContext.Consumer>
+                {(bananaDrumContext) => {
+                    this.bananaDrumContext = bananaDrumContext;
+
+                    return (
+                        <ServicesContext.Consumer>
+                            {(services) => {
+                                if (!this.servicesContext) {
+                                    this.servicesContext = services;
+
+                                    const modeManager = services!.modeManager;
+                                    modeManager.subscribe(this.modeChanged);
+                                    this.modeChanged();
+
+                                    const track = polyrhythm.start.track;
+                                    track.subscribe(this.trackChanged);
+                                    this.trackChanged();
+
+                                    return null;
+                                }
+
+                                return (
+                                    <div id={`polyrhythm-${polyrhythm.id}`} className="polyrhythm-viewer" >
+                                        {
+                                            deleteMode
+                                                ? (
+                                                    <div
+                                                        className={`delete-polyrhythm-wrapper ${isShrouded
+                                                            ? "shrouded"
+                                                            : ""}`} >
+                                                        {
+                                                            isShrouded
+                                                                ? (<></>)
+                                                                : (
+                                                                    <button
+                                                                        disabled={isShrouded}
+                                                                        className="push-button"
+                                                                        onClick={this.deleteClicked}
+                                                                    >
+                                                                        Delete
+                                                                    </button>
+                                                                )
+                                                        }
+                                                    </div >
+                                                )
+                                                : (<>
+                                                    <div className="polyrhythm-decoration" ></div>
+                                                    <div className="polyrhythm-notes-wrapper">
+                                                        {polyrhythm.notes.map((note) => {
+                                                            return <NoteViewer note={note} key={note.id} />;
+                                                        })}
+                                                    </div>
+                                                </>)
+                                        }
+                                    </div >
+                                );
+                            }}
+                        </ServicesContext.Consumer>
+                    );
+                }}
+            </BananaDrumContext.Consumer>
+        );
+    }
+
+    private modeChanged = () => {
+        const modeManager = this.servicesContext!.modeManager;
+
+        this.setState({ deleteMode: modeManager.deletePolyrhythmMode });
+    };
+
+    private trackChanged = () => {
+        const { polyrhythm } = this.props;
+
+        this.setState({ isShrouded: this.checkShrouded(polyrhythm) });
+    };
+
+    private deleteClicked = () => {
+        const { polyrhythm } = this.props;
+        const track = polyrhythm.start.track;
+
+        this.bananaDrumContext?.edit({
+            type: "EditCommand_TrackRemovePolyrhythm",
+            track,
+            removePolyrhythm: polyrhythm
+        });
+    };
+
+    private checkShrouded(polyrhythm: IPolyrhythmView) {
+        const track = polyrhythm.start.track;
+        for (const otherPolyrhythm of track.polyrhythms) {
+            if (otherPolyrhythm !== polyrhythm) {
+                if (otherPolyrhythm.start.polyrhythm === polyrhythm || otherPolyrhythm.end.polyrhythm === polyrhythm) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
 }

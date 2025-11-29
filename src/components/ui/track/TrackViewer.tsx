@@ -8,7 +8,7 @@ import { createContext, type ComponentChild } from "preact";
 import type { ArrangementPlayer, TrackPlayer } from "../../../player/types.js";
 import { ArrangementPlayerContext } from "../arrangement/ArrangementViewer.js";
 import { ComponentBase, type IComponentProperties, type IComponentState } from "../ComponentBase/ComponentBase.js";
-import { Overlay, toggleOverlay } from "../Overlay.js";
+import { Overlay } from "../Overlay.js";
 import { NoteLine } from "./NoteLine.js";
 import { TrackControls } from "./TrackControls.js";
 import { TrackMeta } from "./TrackMeta.js";
@@ -96,7 +96,7 @@ export class TrackViewer extends ComponentBase<ITrackViewerProps, ITrackviewerSt
                                 <div className="scrollshadow left-scrollshadow" />
                                 <div className="scrollshadow right-scrollshadow" />
                                 <TrackMeta track={track} toggleControls={() => {
-                                    toggleOverlay(overlayName);
+                                    Overlay.toggleOverlay(overlayName);
                                 }} />
                             </div>
                         </TrackPlayerContext.Provider>

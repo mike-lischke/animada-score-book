@@ -4,71 +4,71 @@
 */
 
 import type {
-    ArrangementView, Instrument, NoteStyle, NoteView, PolyrhythmView, TimeParamsView, TrackView
+    IArrangementView, IInstrument, INoteStyle, INoteView, IPolyrhythmView, ITimeParamsView, ITrackView
 } from "./general.js";
 
 /* eslint-disable @typescript-eslint/naming-convention */
 
 export interface EditCommand_ArrangementTitle {
     type: "EditCommand_ArrangementTitle";
-    arrangement: ArrangementView;
+    arrangement: IArrangementView;
     newTitle: string;
 }
 
 export interface EditCommand_ArrangementAddTrack {
     type: "EditCommand_ArrangementAddTrack";
-    arrangement: ArrangementView;
-    addTrack: Instrument;
+    arrangement: IArrangementView;
+    addTrack: IInstrument;
 }
 
 export interface EditCommand_ArrangementRemoveTrack {
     type: "EditCommand_ArrangementRemoveTrack";
-    arrangement: ArrangementView;
-    removeTrack: TrackView;
+    arrangement: IArrangementView;
+    removeTrack: ITrackView;
 }
 
 export interface EditCommand_ArrangementClear {
     type: "EditCommand_ArrangementClear";
-    arrangement: ArrangementView;
+    arrangement: IArrangementView;
     command: "clear all tracks";
 }
 
 export interface EditCommand_ArrangementClearSelection {
     type: "EditCommand_ArrangementClearSelection";
-    arrangement: ArrangementView;
-    clearSelection: Map<TrackView, { selectedNotes: Set<NoteView>; }>;
+    arrangement: IArrangementView;
+    clearSelection: Map<ITrackView, { selectedNotes: Set<INoteView>; }>;
 }
 
 export interface EditCommand_ArrangementAddPolyrhythms {
     type: "EditCommand_ArrangementAddPolyrhythms";
-    arrangement: ArrangementView;
+    arrangement: IArrangementView;
     addPolyrhythms: {
         length: number;
-        selection: Map<TrackView, { range: [NoteView | null, NoteView | null]; }>;
+        selection: Map<ITrackView, { range: [INoteView | null, INoteView | null]; }>;
     };
 }
 
 export interface EditCommand_TrackRemovePolyrhythm {
     type: "EditCommand_TrackRemovePolyrhythm";
-    track: TrackView;
-    removePolyrhythm: PolyrhythmView;
+    track: ITrackView;
+    removePolyrhythm: IPolyrhythmView;
 }
 
 export interface EditCommand_TrackClear {
     type: "EditCommand_TrackClear";
-    track: TrackView;
+    track: ITrackView;
     command: "clear";
 }
 
 export interface EditCommand_Note {
     type: "EditCommand_Note";
-    note: NoteView;
-    noteStyle?: NoteStyle;
+    note: INoteView;
+    noteStyle?: INoteStyle;
 }
 
 export interface EditCommand_TimeParamsTimeSignature {
     type: "EditCommand_TimeParamsTimeSignature";
-    timeParams: TimeParamsView;
+    timeParams: ITimeParamsView;
     timeSignature: string;
     pulse: string;
     stepResolution: number;
@@ -76,13 +76,13 @@ export interface EditCommand_TimeParamsTimeSignature {
 
 export interface EditCommand_TimeParamsTempo {
     type: "EditCommand_TimeParamsTempo";
-    timeParams: TimeParamsView;
+    timeParams: ITimeParamsView;
     tempo: number;
 }
 
 export interface EditCommand_TimeParamsLength {
     type: "EditCommand_TimeParamsLength";
-    timeParams: TimeParamsView;
+    timeParams: ITimeParamsView;
     length: number;
 }
 

@@ -3,24 +3,24 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import type { Note, NoteStyle, Timing, Track } from "./types/general.js";
+import type { INote, INoteStyle, ITiming, ITrack } from "./types/general.js";
 import { isSameTiming } from "./utils.js";
 
 interface CopyRequest {
-    start: Timing,
-    end: Timing;
+    start: ITiming,
+    end: ITiming;
 }
 
 interface PasteRequest {
-    start: Timing,
-    end?: Timing;
+    start: ITiming,
+    end?: ITiming;
 }
 
 export class TrackClipboard {
-    private track: Track;
-    private buffer: NoteStyle[] = [];
+    private track: ITrack;
+    private buffer: INoteStyle[] = [];
 
-    public constructor(track: Track) {
+    public constructor(track: ITrack) {
         this.track = track;
 
         return this;
@@ -32,7 +32,7 @@ export class TrackClipboard {
 
     public copy({ start, end }: CopyRequest) {
         const notes = this.track.notes;
-        let note: Note | undefined = this.track.getNoteAt(start);
+        let note: INote | undefined = this.track.getNoteAt(start);
         let index = note === undefined ? -1 : notes.indexOf(note);
         this.buffer = [];
 

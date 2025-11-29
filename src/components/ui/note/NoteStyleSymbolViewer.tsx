@@ -5,11 +5,11 @@
 
 import type { ComponentChild } from "preact";
 
-import { NoteStyle } from "../../../core/index.js";
+import type { INoteStyle } from "../../../core/index.js";
 import { ComponentBase, type IComponentProperties } from "../ComponentBase/ComponentBase.js";
 
 export interface INoteStyleSymbolViewerProps extends IComponentProperties {
-    noteStyle?: NoteStyle;
+    noteStyle?: INoteStyle;
 }
 
 export class NoteStyleSymbolViewer extends ComponentBase<INoteStyleSymbolViewerProps> {

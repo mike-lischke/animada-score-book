@@ -5,20 +5,20 @@
 
 import { createContext, createRef, type ComponentChild } from "preact";
 
-import type { BananaDrum } from "../../core/index.js";
-import type { BananaDrumPlayer } from "../../player/types.js";
-import type { BananaDrumUiServices } from "../../ui/BananaDrumUi.js";
+import type { IAnimadaScoreBook } from "../../core/index.js";
+import type { ScoreBookPlayer } from "../../player/types.js";
+import type { ScoreBookUiServices } from "../../ui/BananaDrumUi.js";
 import { About } from "./About.js";
 import { ArrangementViewer } from "./arrangement/ArrangementViewer.js";
 import { ComponentBase, type IComponentProperties } from "./ComponentBase/ComponentBase.js";
 import { Popup } from "./Popup.js";
 
-export const ServicesContext = createContext<BananaDrumUiServices | null>(null);
-export const BananaDrumContext = createContext<BananaDrum | null>(null);
+export const ServicesContext = createContext<ScoreBookUiServices | null>(null);
+export const BananaDrumContext = createContext<IAnimadaScoreBook | null>(null);
 
 export interface IScoreBookViewerProps extends IComponentProperties {
-    bananaDrumPlayer: BananaDrumPlayer;
-    services: BananaDrumUiServices;
+    bananaDrumPlayer: ScoreBookPlayer;
+    services: ScoreBookUiServices;
 }
 
 export class ScoreBookViewer extends ComponentBase<IScoreBookViewerProps> {

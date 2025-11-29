@@ -3,5 +3,5 @@
 * Licensed under the MIT License. See License.txt in the project root for license information.
 */
 
-export { createBananaDrumUi } from "./BananaDrumUi.js";
+export { createScoreBookUi as createBananaDrumUi } from "./BananaDrumUi.js";
 export { getSessionSnapshot, resetSessionVariables } from "./session-recovery.js";

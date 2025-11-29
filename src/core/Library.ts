@@ -6,20 +6,20 @@
 import { loadAudio } from "./loadAudio.js";
 import { createPublisher } from "./Publisher.js";
 import type {
-    Instrument, InstrumentMeta, Library, NoteStyle, NoteStyleBase, PackedInstrument
+    IInstrument, IInstrumentMeta, ILibrary, INoteStyle, INoteStyleBase, IPackedInstrument
 } from "./types/general.js";
 
-const packedInstruments: Record<string, PackedInstrument | undefined> = {};
-const instruments: Record<string, Instrument | undefined> = {};
+const packedInstruments: Record<string, IPackedInstrument | undefined> = {};
+const instruments: Record<string, IInstrument | undefined> = {};
 
-const instrumentMetas: InstrumentMeta[] = [];
+const instrumentMetas: IInstrumentMeta[] = [];
 
-export const getLibrary = (): Library => {
+export const getLibrary = (): ILibrary => {
     return { instrumentMetas, load, getInstrument };
 };
 
-const load = (instrumentCollection: PackedInstrument[]): void => {
-    instrumentCollection.forEach(packedInstrument => {
+const load = (instrumentCollection: IPackedInstrument[]): void => {
+    instrumentCollection.forEach((packedInstrument) => {
         packedInstruments[packedInstrument.id] = packedInstrument;
         instrumentMetas.push({
             id: packedInstrument.id,
@@ -31,7 +31,7 @@ const load = (instrumentCollection: PackedInstrument[]): void => {
     });
 };
 
-const getInstrument = (id: string): Instrument => {
+const getInstrument = (id: string): IInstrument => {
     if (!instruments[id]) {
         if (!packedInstruments[id]) {
             throw new Error("Unknown instrument requested from Library");
@@ -42,8 +42,8 @@ const getInstrument = (id: string): Instrument => {
     return instruments[id];
 };
 
-const createNoteStyleBases = (packedInstrument: PackedInstrument): Record<string, NoteStyleBase> => {
-    const noteStyleBases: Record<string, NoteStyleBase> = {};
+const createNoteStyleBases = (packedInstrument: IPackedInstrument): Record<string, INoteStyleBase> => {
+    const noteStyleBases: Record<string, INoteStyleBase> = {};
     for (const [id, style] of Object.entries(packedInstrument.packedNoteStyles)) {
         noteStyleBases[id] = { id, symbol: style.symbol };
     }
@@ -53,15 +53,15 @@ const createNoteStyleBases = (packedInstrument: PackedInstrument): Record<string
 
 // This should be the only instance of an instrument
 // So if this is called, the instrument must start unloaded
-const createInstrument = (packedInstrument: PackedInstrument): Instrument => {
+const createInstrument = (packedInstrument: IPackedInstrument): IInstrument => {
     const { id, packedNoteStyles, displayOrder, displayName, colourGroup } = packedInstrument;
     const publisher = createPublisher();
 
     let loaded = false;
-    const noteStyles: Record<string, NoteStyle> = {};
+    const noteStyles: Record<string, INoteStyle> = {};
     const unpackPromises: Array<Promise<AudioBuffer>> = [];
 
-    const instrument: Instrument = {
+    const instrument: IInstrument = {
         id, noteStyles, displayOrder, displayName, colourGroup,
         get loaded() {
             return loaded;
@@ -73,7 +73,7 @@ const createInstrument = (packedInstrument: PackedInstrument): Instrument => {
         noteStyles[id] = { id, symbol, audioBuffer: null, instrument, muting };
         unpackPromises.push(
             loadAudio(file)
-                .then(audioBuffer => {
+                .then((audioBuffer) => {
                     return noteStyles[id].audioBuffer = audioBuffer;
                 })
         );

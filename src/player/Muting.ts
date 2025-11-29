@@ -3,27 +3,27 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import type { MutingRule, MutingRuleOtherInstrument, NoteView, RealTime } from "../core/index.js";
+import type { MutingRule, IMutingRuleOtherInstrument, INoteView, RealTime } from "../core/index.js";
 import { exists, isSameTiming } from "../core/utils.js";
 import type { AudioEvent, MuteEvent, MuteFilter } from "./types.js";
 
-export const getMuteEvents = (note: NoteView, realTime: RealTime): MuteEvent[] => {
+export const getMuteEvents = (note: INoteView, realTime: RealTime): MuteEvent[] => {
     const muteFilters = getMuteFilters(note);
 
-    return muteFilters.map(muteFilter => {
+    return muteFilters.map((muteFilter) => {
         // TODO: Handle undefined muteFilters.
         return { muteFilter: muteFilter!, realTime };
     });
 };
 
-const getMuteFilters = (note: NoteView): Array<MuteFilter | undefined> => {
+const getMuteFilters = (note: INoteView): Array<MuteFilter | undefined> => {
     const muting = note.noteStyle?.muting;
     if (!muting) {
         return [];
     }
 
     if (Array.isArray(muting)) {
-        return muting.map(muting => {
+        return muting.map((muting) => {
             return getMuteFilter(note, muting);
         }).filter(exists);
     }
@@ -31,17 +31,17 @@ const getMuteFilters = (note: NoteView): Array<MuteFilter | undefined> => {
     return [getMuteFilter(note, muting)];
 };
 
-const getMuteFilter = (note: NoteView, muting: MutingRule): MuteFilter | undefined => {
+const getMuteFilter = (note: INoteView, muting: MutingRule): MuteFilter | undefined => {
     const ruleName = typeof muting === "string" ? muting : muting.name;
     switch (ruleName) {
         case "sameTrack":
             return getSameTrackMuteFilter(note);
         case "otherInstrument":
-            return getOtherInstrumentMuteFilter(note, muting as MutingRuleOtherInstrument);
+            return getOtherInstrumentMuteFilter(note, muting as IMutingRuleOtherInstrument);
     }
 };
 
-const getSameTrackMuteFilter = (note: NoteView): MuteFilter | undefined => {
+const getSameTrackMuteFilter = (note: INoteView): MuteFilter | undefined => {
     const noteStyle = note.noteStyle;
     if (!noteStyle) {
         return;
@@ -55,7 +55,7 @@ const getSameTrackMuteFilter = (note: NoteView): MuteFilter | undefined => {
     };
 };
 
-const getOtherInstrumentMuteFilter = (note: NoteView, muting: MutingRuleOtherInstrument): MuteFilter | undefined => {
+const getOtherInstrumentMuteFilter = (note: INoteView, muting: IMutingRuleOtherInstrument): MuteFilter | undefined => {
     const noteStyle = note.noteStyle;
     if (!noteStyle) {
         return;

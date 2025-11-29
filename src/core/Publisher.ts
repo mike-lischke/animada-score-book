@@ -3,9 +3,9 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import type { Publisher, Subscription } from "./types/general.js";
+import type { IPublisher, Subscription } from "./types/general.js";
 
-export const createPublisher = (): Publisher => {
+export const createPublisher = (): IPublisher => {
     const subscriptions: Array<Subscription | null> = [];
 
     return {

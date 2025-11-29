@@ -3,12 +3,12 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import type { NoteView, PolyrhythmView, RealTime, TrackView } from "../core/index.js";
+import type { INoteView, IPolyrhythmView, RealTime, ITrackView } from "../core/index.js";
 import { createPublisher } from "../core/Publisher.js";
 import { getMuteEvents } from "./Muting.js";
 import { CallbackEvent, Event, Interval, SoloMute, TimeCoordinator, TrackPlayer } from "./types.js";
 
-export const createTrackPlayer = (track: TrackView, timeCoordinator: TimeCoordinator): TrackPlayer => {
+export const createTrackPlayer = (track: ITrackView, timeCoordinator: TimeCoordinator): TrackPlayer => {
     const fillInBasicNoteTimes = () => {
         const unmatchedNotes = track.notes.filter((note) => {
             return !noteTimes.get(note);
@@ -69,7 +69,7 @@ export const createTrackPlayer = (track: TrackView, timeCoordinator: TimeCoordin
         }
     };
 
-    const getAudioEvent = (note: NoteView, realTime: RealTime): Event => {
+    const getAudioEvent = (note: INoteView, realTime: RealTime): Event => {
         return {
             note, realTime,
             audioBuffer: note.noteStyle!.audioBuffer!
@@ -127,7 +127,7 @@ export const createTrackPlayer = (track: TrackView, timeCoordinator: TimeCoordin
         });
     };
 
-    const addNoteTimesForPolyrhythm = (polyrhythm: PolyrhythmView) => {
+    const addNoteTimesForPolyrhythm = (polyrhythm: IPolyrhythmView) => {
         const startTime = noteTimes.get(polyrhythm.start)!;
 
         // We need to find the note just after the polyrhythm ends to work out it's time-length
@@ -136,7 +136,7 @@ export const createTrackPlayer = (track: TrackView, timeCoordinator: TimeCoordin
         // So we exclude later polyrhythms from the iterator
         const laterPolyrhythms = track.polyrhythms.slice(track.polyrhythms.indexOf(polyrhythm) + 1);
         const noteIterator = track.getNoteIterator(laterPolyrhythms);
-        let nextNote: NoteView | undefined;
+        let nextNote: INoteView | undefined;
         let foundPolyrhythm = false;
         for (const note of noteIterator) {
             if (foundPolyrhythm) {
@@ -170,7 +170,7 @@ export const createTrackPlayer = (track: TrackView, timeCoordinator: TimeCoordin
         cachedPolyrhythms = [];
     };
 
-    const getCurrentPolyrhythmNoteEvent = (note: NoteView, realTime: RealTime): CallbackEvent => {
+    const getCurrentPolyrhythmNoteEvent = (note: INoteView, realTime: RealTime): CallbackEvent => {
         if (note.polyrhythm) {
             return {
                 realTime,
@@ -191,15 +191,15 @@ export const createTrackPlayer = (track: TrackView, timeCoordinator: TimeCoordin
     };
 
     const publisher = createPublisher();
-    const noteTimes = new Map<NoteView, RealTime>();
-    let cachedPolyrhythms: PolyrhythmView[] = [];
+    const noteTimes = new Map<INoteView, RealTime>();
+    let cachedPolyrhythms: IPolyrhythmView[] = [];
 
     // We are going to light up note-viewers in polyrhythms when they play, by simply publishing the playing note
     // Later we'll investigate whether we use this for all notes. It's pretty simple.
     const currentPolyrhythmNotePublisher = createPublisher();
 
     // It would be better to parameterise Publisher, but that's a chunk of work
-    let currentPolyrhythmNote: NoteView | null = null;
+    let currentPolyrhythmNote: INoteView | null = null;
 
     if (track.instrument.loaded) {
         fillInBasicNoteTimes();

@@ -3,120 +3,150 @@
 * Licensed under the MIT License. See License.txt in the project root for license information.
 */
 
-/* eslint-disable prefer-arrow/prefer-arrow-functions, @typescript-eslint/naming-convention, jsdoc/require-jsdoc */
+import type { ComponentChild, ContextType } from "preact";
 
-import { useCallback, useContext, useState } from "preact/hooks";
-import type { JSX } from "preact/jsx-runtime";
-
-import { getShareLink } from "../../core/index.js";
-import { useStateSubscription } from "../../ui/hooks/useStateSubscription.js";
+import { getShareLink } from "../../core/serialisation/url.js";
 import { ArrangementPlayerContext } from "./arrangement/ArrangementViewer.js";
+import { ComponentBase, type IComponentState } from "./ComponentBase/ComponentBase.js";
+import { Overlay } from "./Overlay.js";
 import { BananaDrumContext } from "./ScoreBookViewer.js";
-import { toggleOverlay } from "./Overlay.js";
 import { SmallSpacer } from "./SmallSpacer.js";
 
 const haveNativeSharing = "share" in navigator;
 const haveClipboardAccess = "clipboard" in navigator;
 
-export function Share(): JSX.Element {
-    const [url, setUrl] = useState("");
-    const bananaDrum = useContext(BananaDrumContext)!;
+interface IShareState extends IComponentState {
+    url: string;
+    copyText: string;
+    title: string;
+}
 
-    const close = () => {
-        toggleOverlay("share", "hide");
-        setUrl("");
+export class Share extends ComponentBase<{}, IShareState> {
+    private bananaDrumContext: ContextType<typeof BananaDrumContext> | null = null;
+
+    public constructor(props: {}) {
+        super(props);
+
+        this.state = {
+            url: "",
+            copyText: "copy",
+            title: "",
+        };
+    }
+
+    public render(): ComponentChild {
+        const { url, title, copyText } = this.state;
+
+        return (
+            <ArrangementPlayerContext.Consumer>
+                {(context) => {
+                    return (
+                        <BananaDrumContext.Consumer>
+                            {(bananaDrumContext) => {
+                                if (!this.bananaDrumContext) {
+                                    this.bananaDrumContext = bananaDrumContext;
+                                    const arrangement = context!.arrangement;
+                                    arrangement.subscribe(() => {
+                                        this.setState({ title: arrangement.title });
+                                    });
+                                }
+
+                                const sharedTitle = title
+                                    ? title + " - Banana Drum" : "Banana Drum - Samba Rhythms";
+
+                                return (
+                                    <div className="viewport-wrapper">
+                                        <div id="share">
+                                            <div className="share-content-wrapper">
+                                                <>
+                                                    {url ?
+                                                        (<>
+                                                            <h2>Here's your beat:</h2>
+                                                            <div className="beat-url">
+                                                                <p onClick={this.selectContent}>{url}</p>
+                                                                <div id="share-link-buttons"
+                                                                    style={{
+                                                                        display: "flex",
+                                                                        flexDirection: "row",
+                                                                        justifyContent: "center"
+                                                                    }}>
+                                                                    {haveNativeSharing &&
+                                                                        <button
+                                                                            className="push-button"
+                                                                            onClick={() => {
+                                                                                void navigator.share(
+                                                                                    { url, title: sharedTitle });
+                                                                            }}
+                                                                        >share</button>
+
+                                                                    }
+                                                                    {haveNativeSharing && haveClipboardAccess &&
+                                                                        <SmallSpacer />
+                                                                    }
+                                                                    {haveClipboardAccess &&
+                                                                        <button
+                                                                            className="push-button"
+                                                                            onClick={
+                                                                                this.copyButtonClick.bind(this, url)
+                                                                            }
+                                                                        >{copyText}</button>
+
+                                                                    }
+                                                                </div>
+
+                                                            </div>
+                                                        </>) :
+                                                        (<>
+                                                            <h2>Ready to share this beat?</h2>
+                                                            <button
+                                                                className="push-button shiny-link"
+                                                                onClick={this.showLink}>
+                                                                generate link!
+                                                            </button>
+                                                        </>)
+                                                    }
+                                                </>
+                                            </div>
+                                            <button
+                                                id="load-button"
+                                                className="push-button"
+                                                onClick={this.close}
+                                            >Back to my beat!</button>
+                                        </div>
+                                    </div>
+                                );
+                            }}
+                        </BananaDrumContext.Consumer>
+                    );
+                }}
+            </ArrangementPlayerContext.Consumer>
+        );
+    }
+
+    private close = () => {
+        Overlay.toggleOverlay("share", "hide");
+        this.setState({ url: "" });
     };
 
-    const showLink = () => {
-        setUrl(getShareLink(bananaDrum.currentState));
+    private showLink = () => {
+        this.setState({ url: getShareLink(this.bananaDrumContext!.currentState) });
     };
-    const selectContent = useCallback((event: MouseEvent) => {
+
+    private selectContent = (event: MouseEvent) => {
         window.getSelection()?.selectAllChildren(event.currentTarget as HTMLElement);
-    }, []);
+    };
 
-    return (
-        <div className="viewport-wrapper">
-            <div id="share">
-                <div className="share-content-wrapper">
-                    <>
-                        {url ?
-                            (<>
-                                <h2>Here's your beat:</h2>
-                                <div className="beat-url">
-                                    <p onClick={selectContent}>{url}</p>
-                                    <ShareOrCopyButton url={url} />
-                                </div>
-                            </>) :
-                            (<>
-                                <h2>Ready to share this beat?</h2>
-                                <button className="push-button shiny-link" onClick={showLink}>generate link!</button>
-                            </>)
-                        }
-                        <p>
-                            Send to your friends, save for yourself, or post it on
-                            <a href="https://www.facebook.com/bananadrum.net" target="_blank" rel="noreferrer">
-                                Banana Drum's Facebook page</a>!
-                        </p>
-                    </>
-                </div>
-                <button
-                    id="load-button"
-                    className="push-button"
-                    onClick={close}
-                >Back to my beat!</button>
-            </div>
-        </div>
-    );
-}
-
-function ShareOrCopyButton({ url }: { url: string; }): JSX.Element {
-    return (
-        <div id="share-link-buttons" style={{ display: "flex", flexDirection: "row", justifyContent: "center" }}>
-            {haveNativeSharing ? <NativeShareButton url={url} /> : null}
-            {haveNativeSharing && haveClipboardAccess ? <SmallSpacer /> : null}
-            {haveClipboardAccess ? <CopyUrlButton url={url} /> : null}
-        </div>
-    );
-}
-
-function NativeShareButton({ url }: { url: string; }): JSX.Element {
-    const arrangement = useContext(ArrangementPlayerContext)!.arrangement;
-    const arrangementTitle = useStateSubscription(arrangement, arrangement => {
-        return arrangement.title;
-    });
-    const sharedTitle = arrangementTitle ? arrangementTitle + " - Banana Drum" : "Banana Drum - Samba Rhythms";
-
-    return (
-        <button
-            className="push-button"
-            onClick={() => {
-                void navigator.share({ url, title: sharedTitle });
-            }}
-        >share</button>
-    );
-}
-
-function CopyUrlButton({ url }: { url: string; }): JSX.Element {
-    const [copyText, setCopyText] = useState("copy");
-
-    return (
-        <button
-            className="push-button"
-            onClick={
-                () => {
-                    void navigator.clipboard.writeText(url).catch(() => {
-                        setCopyText("That didn't work :(");
-                        setTimeout(() => {
-                            setCopyText("copy");
-                        }, 3000);
-                    }).then(() => {
-                        setCopyText("copied!");
-                        setTimeout(() => {
-                            setCopyText("copy");
-                        }, 3000);
-                    });
-                }
-            }
-        >{copyText}</button>
-    );
+    private copyButtonClick = (url: string): void => {
+        void navigator.clipboard.writeText(url).catch(() => {
+            this.setState({ copyText: "That didn't work :(" });
+            setTimeout(() => {
+                this.setState({ copyText: "copy" });
+            }, 3000);
+        }).then(() => {
+            this.setState({ copyText: "copied!" });
+            setTimeout(() => {
+                this.setState({ copyText: "copy" });
+            }, 3000);
+        });
+    };
 }

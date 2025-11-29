@@ -5,13 +5,13 @@
 
 import type { ComponentChild, ContextType } from "preact";
 
-import type { ArrangementView, EditCommand_TimeParamsTimeSignature } from "../../../core/index.js";
+import type { IArrangementView, EditCommand_TimeParamsTimeSignature } from "../../../core/index.js";
 import { BananaDrumContext } from "../ScoreBookViewer.js";
 import { ComponentBase, type IComponentProperties } from "../ComponentBase/ComponentBase.js";
 import { NumberInput } from "../NumberInput.js";
 
 export interface ITimeControlsProps extends IComponentProperties {
-    arrangement: ArrangementView;
+    arrangement: IArrangementView;
 }
 
 export class TimeControls extends ComponentBase<ITimeControlsProps> {

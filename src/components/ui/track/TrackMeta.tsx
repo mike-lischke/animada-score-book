@@ -7,13 +7,13 @@ import wrenchIcon from "../../../assets/images/icons/wrench.svg";
 
 import type { ComponentChild } from "preact";
 
-import type { TrackView } from "../../../core/index.js";
+import type { ITrackView } from "../../../core/index.js";
 import { getTrackColour } from "../../../ui/track-colour.js";
 import { ComponentBase, type IComponentProperties } from "../ComponentBase/ComponentBase.js";
 import { SoloMuteButtons } from "./SoloMuteButtons.js";
 
 export interface ITrackMetaProps extends IComponentProperties {
-    track: TrackView;
+    track: ITrackView;
     toggleControls: () => void;
 }
 

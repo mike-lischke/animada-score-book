@@ -4,7 +4,7 @@
  */
 
 import { createPublisher } from "./Publisher.js";
-import type { Publisher, Subscribable } from "./types/general.js";
+import type { IPublisher, ISubscribable } from "./types/general.js";
 
 // It's been very difficult to solve compatibility problems, since they are usually on an iPhone belonging to Nick
 // Guesswork has only gotten me so far, it's time to start trying to catch errors and make them reportable
@@ -13,7 +13,7 @@ import type { Publisher, Subscribable } from "./types/general.js";
 // We make the log subscribable so the React ui can make a button appear once there are errors to report
 
 const logEntries: LogEntry[] = [];
-const publisher: Publisher = createPublisher();
+const publisher: IPublisher = createPublisher();
 
 export const errorLog: ErrorLog = {
     getEntryCount: () => {
@@ -76,7 +76,7 @@ const errorReportPreamble = "Sorry to hear you had problems running Banana Drum!
     "and send it to James.\nDon't know James? Get in touch with Banana Drum on Facebook: " +
     "https://facebook.com/bananadrum.net/\n\nError Report:\n";
 
-interface ErrorLog extends Subscribable {
+interface ErrorLog extends ISubscribable {
     getEntryCount(): number;
     getMessage(): string;
 }

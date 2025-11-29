@@ -18,9 +18,9 @@ import oBigIcon from "./assets/images/icons/o_big.svg";
 import sunRaysIcon from "./assets/images/icons/sun_rays.svg";
 import oBigClosedIcon from "./assets/images/icons/o_big_closed.svg";
 
-import { PackedInstrument } from "./core/index.js";
+import { IPackedInstrument } from "./core/index.js";
 
-export const bateriaInstruments: PackedInstrument[] = [{
+export const bateriaInstruments: IPackedInstrument[] = [{
     id: "0",
     displayOrder: 0,
     displayName: "Agogo",

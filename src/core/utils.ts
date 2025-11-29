@@ -3,10 +3,10 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import type { Timing } from "./types/general.js";
+import type { ITiming } from "./types/general.js";
 
 // Comparing timings is easy, but long winded and mistake-prone
-export const isSameTiming = (timing1: Timing, timing2: Timing): boolean => {
+export const isSameTiming = (timing1: ITiming, timing2: ITiming): boolean => {
     return (timing1.bar === timing2.bar) && (timing1.step === timing2.step);
 };
 

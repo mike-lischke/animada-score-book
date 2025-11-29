@@ -4,7 +4,7 @@
  */
 
 import type { EditCommand, EditCommand_Note } from "./types/edit_commands.js";
-import type { NoteStyle } from "./types/general.js";
+import type { INoteStyle } from "./types/general.js";
 import type { HistoryState } from "./UndoRedoStack.js";
 
 interface NoteCycleStack {
@@ -16,7 +16,7 @@ const lookbackTime = 180_000; // 3 minutes
 const noteCycleTime = 2000; // 2 seconds
 
 // Currently the only purpose of this is to track what NoteStyle a Note had before the user cycled it
-export const extractOldValue = (command: EditCommand): NoteStyle | undefined => {
+export const extractOldValue = (command: EditCommand): INoteStyle | undefined => {
     const targetNote = command.type === "EditCommand_Note" ? command.note : undefined;
     if (targetNote) {
         return targetNote.noteStyle;

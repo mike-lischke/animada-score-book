@@ -5,25 +5,25 @@
 
 /* eslint-disable prefer-arrow/prefer-arrow-functions, jsdoc/require-jsdoc */
 
-import { closeAllOverlays } from "../components/ui/Overlay.js";
-import type { BananaDrum } from "../core/index.js";
+import { Overlay } from "../components/ui/Overlay.js";
+import type { IAnimadaScoreBook } from "../core/index.js";
 import type { EventEngine } from "../player/types.js";
 import { ModeManager } from "./ModeManager.js";
 import { SelectionManager } from "./SelectionManager.js";
 
-export function createKeyboardHandler(eventEngine: EventEngine, bananaDrum: BananaDrum,
+export function createKeyboardHandler(eventEngine: EventEngine, bananaDrum: IAnimadaScoreBook,
     selectionManager: SelectionManager, modeManager: ModeManager) {
-    window.addEventListener("keydown", event => {
+    window.addEventListener("keydown", (event) => {
         handleKeyDown(event);
     });
-    window.addEventListener("keyup", event => {
+    window.addEventListener("keyup", (event) => {
         handleKeyUp(event);
     });
 
     function handleKeyDown(event: KeyboardEvent): void {
         switch (event.key) {
             case "Escape":
-                closeAllOverlays();
+                Overlay.closeAllOverlays();
                 selectionManager.deselectAll();
                 modeManager.deletePolyrhythmMode = false;
                 break;

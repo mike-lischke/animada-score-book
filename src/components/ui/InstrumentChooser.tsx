@@ -5,14 +5,14 @@
 
 import type { ComponentChild, ContextType } from "preact";
 
-import type { ArrangementView, InstrumentMeta } from "../../core/index.js";
+import type { IArrangementView, IInstrumentMeta } from "../../core/index.js";
 import { getLibrary } from "../../core/Library.js";
 import { ArrangementPlayerContext } from "./arrangement/ArrangementViewer.js";
 import { ComponentBase, type IComponentProperties } from "./ComponentBase/ComponentBase.js";
 import { BananaDrumContext } from "./ScoreBookViewer.js";
 
 export interface IInstrumentChooserProps extends IComponentProperties {
-    instrumentMeta: InstrumentMeta;
+    instrumentMeta: IInstrumentMeta;
     close: () => void;
 }
 
@@ -30,7 +30,7 @@ export class InstrumentChooser extends ComponentBase<IInstrumentChooserProps> {
                     return (
                         <ArrangementPlayerContext.Consumer>
                             {(context) => {
-                                const arrangement: ArrangementView = context!.arrangement;
+                                const arrangement: IArrangementView = context!.arrangement;
 
                                 return (
                                     <button
@@ -48,7 +48,7 @@ export class InstrumentChooser extends ComponentBase<IInstrumentChooserProps> {
         );
     }
 
-    private buttonClick(arrangement: ArrangementView) {
+    private buttonClick(arrangement: IArrangementView) {
         const { instrumentMeta, close } = this.props;
 
         this.bananaDrumContext?.edit({

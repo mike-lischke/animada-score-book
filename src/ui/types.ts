@@ -3,16 +3,9 @@
 * Licensed under the MIT License. See License.txt in the project root for license information.
 */
 
-import type { RealTime, Subscribable } from "../core/index.js";
-import type { BananaDrumPlayer, EventEngineState } from "../player/types.js";
+import type { ScoreBookPlayer } from "../player/types.js";
 
-export interface BananaDrumUi {
-    bananaDrumPlayer: BananaDrumPlayer;
+export interface IScoreBookUi {
+    bananaDrumPlayer: ScoreBookPlayer;
     wrapper: HTMLElement;
-}
-
-export interface AnimationEngine extends Subscribable {
-    connect(animation: (realTime: RealTime) => void): void;
-    disconnect(animation: (realTime: RealTime) => void): void;
-    get state(): EventEngineState;
 }

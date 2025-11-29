@@ -5,7 +5,7 @@
 
 import "./App.css";
 
-import logo from "./assets/images/animada-logo.svg";
+import logo from "./assets/images/animada-logo2.svg";
 
 import { render } from "preact";
 

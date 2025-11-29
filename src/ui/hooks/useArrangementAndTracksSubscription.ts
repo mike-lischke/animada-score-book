@@ -7,29 +7,29 @@
 
 import { useEffect } from "preact/hooks";
 
-import type { ArrangementView, Subscription, TrackView } from "../../core/index.js";
+import type { IArrangementView, Subscription, ITrackView } from "../../core/index.js";
 import { useSubscription } from "./useSubscription.js";
 
-export function useArrangementAndTracksSubscription(arrangement: ArrangementView, callback: Subscription): void {
+export function useArrangementAndTracksSubscription(arrangement: IArrangementView, callback: Subscription): void {
     useSubscription(arrangement, callback);
 
     useEffect(() => {
-        const subscribedTracks = new Set<TrackView>();
+        const subscribedTracks = new Set<ITrackView>();
 
-        arrangement.tracks.forEach(track => {
+        arrangement.tracks.forEach((track) => {
             track.subscribe(callback);
             subscribedTracks.add(track);
         });
 
         const arrangementSubscription = () => {
-            subscribedTracks.forEach(track => {
+            subscribedTracks.forEach((track) => {
                 if (!arrangement.tracks.includes(track)) {
                     track.unsubscribe(callback);
                     subscribedTracks.delete(track);
                 }
             });
 
-            arrangement.tracks.forEach(track => {
+            arrangement.tracks.forEach((track) => {
                 if (!subscribedTracks.has(track)) {
                     track.subscribe(callback);
                     subscribedTracks.add(track);
@@ -40,7 +40,7 @@ export function useArrangementAndTracksSubscription(arrangement: ArrangementView
 
         return () => {
             arrangement.unsubscribe(arrangementSubscription);
-            subscribedTracks.forEach(track => {
+            subscribedTracks.forEach((track) => {
                 track.unsubscribe(callback);
             });
         };

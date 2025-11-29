@@ -7,7 +7,7 @@ import { createPublisher } from "./Publisher.js";
 import { getArrangementSnapshot } from "./serialisation/snapshots.js";
 import type { EditCommand, EditCommand_ArrangementTitle } from "./types/edit_commands.js";
 import type { ArrangementSnapshot } from "./types/snapshots.js";
-import type { ArrangementView, NoteStyle, Subscribable } from "./types/general.js";
+import type { IArrangementView, INoteStyle, ISubscribable } from "./types/general.js";
 import { squashRecentNoteCycling } from "./undo-redo-utils.js";
 import { exists } from "./utils.js";
 
@@ -15,24 +15,24 @@ interface UndoRedoStack {
     canUndo: boolean;
     canRedo: boolean;
     currentState: ArrangementSnapshot;
-    handleEdit(command: EditCommand, oldValue?: NoteStyle): void;
+    handleEdit(command: EditCommand, oldValue?: INoteStyle): void;
     goBack(): void;
     goForward(): void;
     topics: {
-        canUndo: Subscribable,
-        canRedo: Subscribable;
+        canUndo: ISubscribable,
+        canRedo: ISubscribable;
     };
 }
 
 export interface HistoryState {
     arrangementSnapshot: ArrangementSnapshot;
     lastCommand?: EditCommand;
-    oldValue?: NoteStyle;
+    oldValue?: INoteStyle;
     timestamp: number;
 }
 
-export const createUndoRedoStack = (arrangement: ArrangementView): UndoRedoStack => {
-    const handleEdit = (command: EditCommand, oldValue?: NoteStyle) => {
+export const createUndoRedoStack = (arrangement: IArrangementView): UndoRedoStack => {
+    const handleEdit = (command: EditCommand, oldValue?: INoteStyle) => {
         if (exists((command as EditCommand_ArrangementTitle).newTitle)) {
             return;
         } // Title is ignored in undo/redo, so we don't react to it changing at all
@@ -131,8 +131,8 @@ export const createUndoRedoStack = (arrangement: ArrangementView): UndoRedoStack
     };
 };
 
-const getNewHistoryState = (arrangement: ArrangementView, lastCommand?: EditCommand,
-    oldValue?: NoteStyle): HistoryState => {
+const getNewHistoryState = (arrangement: IArrangementView, lastCommand?: EditCommand,
+    oldValue?: INoteStyle): HistoryState => {
     return {
         arrangementSnapshot: getArrangementSnapshot(arrangement),
         lastCommand,
