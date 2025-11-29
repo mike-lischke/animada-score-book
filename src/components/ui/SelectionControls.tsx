@@ -14,7 +14,7 @@ import { useKeyboardEvent } from "../../ui/hooks/useKeyboardEvent.js";
 import { useSubscription } from "../../ui/hooks/useSubscription.js";
 import type { SelectionManager } from "../../ui/SelectionManager.js";
 import { ArrangementPlayerContext } from "./arrangement/ArrangementViewer.js";
-import { ServicesContext } from "./BananaDrumViewer.js";
+import { ServicesContext } from "./ScoreBookViewer.js";
 import { ExpandingSpacer } from "./ExpandingSpacer.js";
 import { OverlayStateContext } from "./Overlay.js";
 import { SmallSpacer } from "./SmallSpacer.js";
@@ -37,7 +37,7 @@ export function SelectionControls(): JSX.Element {
         }
     });
 
-    useKeyboardEvent(window, "keypress", event => {
+    useKeyboardEvent(window, "keypress", (event) => {
         if (!(event.target instanceof HTMLInputElement) && selectionManager.selections.size
             && polyrhythmInputRef.current && digitMatcher.test(event.key)) {
             polyrhythmInputRef.current.value = event.key;
@@ -92,7 +92,7 @@ export function SelectionControls(): JSX.Element {
                         type="text"
                         inputMode="numeric"
                         pattern="[0-9]*"
-                        onKeyPress={event => {
+                        onKeyPress={(event) => {
                             if (event.key === "Enter") {
                                 createPolyrhythm((event.target as HTMLInputElement).value, selectionManager,
                                     arrangement, edit);

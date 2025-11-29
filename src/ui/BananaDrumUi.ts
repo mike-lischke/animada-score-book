@@ -9,7 +9,7 @@ import { createElement } from "preact";
 import { StrictMode } from "preact/compat";
 import { createRoot } from "preact/compat/client";
 
-import { BananaDrumViewer } from "../components/ui/BananaDrumViewer.js";
+import { ScoreBookViewer } from "../components/ui/ScoreBookViewer.js";
 import type { BananaDrumPlayer } from "../player/types.js";
 import { getAnimationEngine } from "./AnimationEngine.js";
 import { createKeyboardHandler } from "./KeyboardHandler.js";
@@ -24,7 +24,7 @@ export function createBananaDrumUi(bananaDrumPlayer: BananaDrumPlayer, wrapper: 
 
     createRoot(wrapper).render(
         createElement(StrictMode, {},
-            createElement(BananaDrumViewer, { bananaDrumPlayer, services })
+            createElement(ScoreBookViewer, { bananaDrumPlayer, services })
         )
     );
 

@@ -10,7 +10,7 @@ import type { RealTime, Subscription, TimeParamsView } from "../../../core/index
 import { createPublisher } from "../../../core/Publisher.js";
 import type { ArrangementPlayer } from "../../../player/types.js";
 import type { AnimationEngine } from "../../../ui/types.js";
-import { ServicesContext } from "../BananaDrumViewer.js";
+import { ServicesContext } from "../ScoreBookViewer.js";
 import { ComponentBase, type IComponentProperties, type IComponentState } from "../ComponentBase/ComponentBase.js";
 import { Guiderail } from "../guiderail/Guiderail.js";
 import { InstrumentBrowser } from "../InstrumentBrowser.js";
@@ -41,24 +41,6 @@ interface IArrangementViewerState extends IComponentState {
 }
 
 export class ArrangementViewer extends ComponentBase<IArrangementViewerProps, IArrangementViewerState> {
-    /*
-
-    const { trackViewerCallbacks, handleWheel, onScrollbarGrab } =
-        useAutoFollow(animationEngine, arrangementPlayer, ref);
-
-    useSubscription(arrangementPlayer, () => {
-        setTrackPlayerCount(arrangementPlayer.trackPlayers.size);
-    });
-    useSubscription(arrangement.timeParams, () => {
-        return setTimeout(() => {
-            updateScrollShadows();
-            contentWidthPublisher.publish();
-            updateNoteWidth();
-        }, 0);
-    }); // timeout so DOM updates first
-
-*/
-
     private viewerRef = createRef<HTMLDivElement>();
     private contentWidthPublisher = createPublisher();
 

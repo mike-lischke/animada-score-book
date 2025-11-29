@@ -3,10 +3,11 @@
 * Licensed under the MIT License. See License.txt in the project root for license information.
 */
 
-/* eslint-disable prefer-arrow/prefer-arrow-functions, @typescript-eslint/naming-convention, jsdoc/require-jsdoc */
+import type { ComponentChild } from "preact";
+import { ComponentBase } from "./ComponentBase/ComponentBase.js";
 
-import type { JSX } from "preact/jsx-runtime";
-
-export function ExpandingSpacer(): JSX.Element {
-    return <div style={{ flexGrow: 1 }} />;
+export class ExpandingSpacer extends ComponentBase {
+    public override render(): ComponentChild {
+        return <div style={{ flexGrow: 1 }} />;
+    }
 }

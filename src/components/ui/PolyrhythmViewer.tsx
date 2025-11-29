@@ -11,7 +11,7 @@ import type { JSX } from "preact/jsx-runtime";
 import type { PolyrhythmView } from "../../core/index.js";
 import { useEditCommand } from "../../ui/hooks/useEditCommand.js";
 import { useSubscription } from "../../ui/hooks/useSubscription.js";
-import { ServicesContext } from "./BananaDrumViewer.js";
+import { ServicesContext } from "./ScoreBookViewer.js";
 import { NoteViewer } from "./note/NoteViewer.js";
 
 export function PolyrhythmViewer({ polyrhythm }: { polyrhythm: PolyrhythmView; }): JSX.Element {

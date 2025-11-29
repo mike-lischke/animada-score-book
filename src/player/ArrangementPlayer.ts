@@ -16,10 +16,10 @@ export const createArrangementPlayer = (arrangement: ArrangementView): Arrangeme
         const events: Event[] = [];
         const loopIntervals: LoopInterval[] = timeCoordinator.convertToLoopIntervals(interval);
 
-        loopIntervals.forEach(loopInterval => {
+        loopIntervals.forEach((loopInterval) => {
             const { loopNumber } = loopInterval;
-            audibleTrackPlayers.forEach(trackPlayer => {
-                trackPlayer.getEvents(loopInterval).forEach(event => {
+            audibleTrackPlayers.forEach((trackPlayer) => {
+                trackPlayer.getEvents(loopInterval).forEach((event) => {
                     return events.push({
                         ...event,
                         realTime: timeCoordinator.convertToAudioTime(event.realTime, loopNumber)
@@ -41,7 +41,7 @@ export const createArrangementPlayer = (arrangement: ArrangementView): Arrangeme
             callbackEvents?.filter(({ realTime }) => {
                 return realTime >= start && realTime < end;
             })
-                .forEach(audioEvent => {
+                .forEach((audioEvent) => {
                     return eventsInInterval.push({
                         ...audioEvent,
                         realTime: timeCoordinator.convertToAudioTime(audioEvent.realTime, loopNumber)
@@ -94,7 +94,7 @@ export const createArrangementPlayer = (arrangement: ArrangementView): Arrangeme
     };
 
     const updateCallbackEvents = () => {
-        callbackEvents = arrangement.timeParams.timings.map(timing => {
+        callbackEvents = arrangement.timeParams.timings.map((timing) => {
             return {
                 realTime: timeCoordinator.convertToRealTime(timing),
                 callback: () => {
@@ -170,7 +170,7 @@ const calculateAudibleTrackPlayers = (trackPlayers: Map<TrackView, TrackPlayer>)
     const soloedTracksPlayers: TrackPlayer[] = [];
     const unmutedTracksPlayers: TrackPlayer[] = [];
 
-    trackPlayers.forEach(trackPlayer => {
+    trackPlayers.forEach((trackPlayer) => {
         if (trackPlayer.soloMute === "solo") {
             soloedTracksPlayers.push(trackPlayer);
         } else if (trackPlayer.soloMute === null) {

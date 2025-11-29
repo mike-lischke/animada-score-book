@@ -3,25 +3,33 @@
 * Licensed under the MIT License. See License.txt in the project root for license information.
 */
 
-/* eslint-disable prefer-arrow/prefer-arrow-functions, @typescript-eslint/naming-convention, jsdoc/require-jsdoc */
+import type { ComponentChild } from "preact";
 
-import type { JSX } from "preact/jsx-runtime";
 import { NoteStyle } from "../../../core/index.js";
+import { ComponentBase, type IComponentProperties } from "../ComponentBase/ComponentBase.js";
 
-export function NoteStyleSymbolViewer({ noteStyle }: { noteStyle?: NoteStyle; }): JSX.Element | null {
-    if (!noteStyle) {
-        return null;
-    }
+export interface INoteStyleSymbolViewerProps extends IComponentProperties {
+    noteStyle?: NoteStyle;
+}
 
-    const { symbol } = noteStyle;
-    if (symbol) {
-        if (symbol.src) {
-            return <img className="note-style-symbol" src={symbol.src} alt={symbol.string} />;
+export class NoteStyleSymbolViewer extends ComponentBase<INoteStyleSymbolViewerProps> {
+    public override render(): ComponentChild {
+        const { noteStyle } = this.props;
+
+        if (!noteStyle) {
+            return null;
         }
-        if (symbol.string) {
-            return <span className="note-style-symbol">{symbol.string}</span>;
-        }
-    }
 
-    return <span className="note-style-symbol">{noteStyle.id}</span>;
+        const { symbol } = noteStyle;
+        if (symbol) {
+            if (symbol.src) {
+                return <img className="note-style-symbol" src={symbol.src} alt={symbol.string} />;
+            }
+            if (symbol.string) {
+                return <span className="note-style-symbol">{symbol.string}</span>;
+            }
+        }
+
+        return <span className="note-style-symbol">{noteStyle.id}</span>;
+    }
 }

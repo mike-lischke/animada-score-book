@@ -3,8 +3,9 @@
 * Licensed under the MIT License. See License.txt in the project root for license information.
 */
 
-import { createRef, type ComponentChild } from "preact";
-import { BananaDrumContext } from "../BananaDrumViewer.js";
+import { createRef, type ComponentChild, type ContextType } from "preact";
+
+import { BananaDrumContext } from "../ScoreBookViewer.js";
 import { ComponentBase, type IComponentProperties } from "../ComponentBase/ComponentBase.js";
 import { ArrangementPlayerContext } from "./ArrangementViewer.js";
 
@@ -20,8 +21,8 @@ interface IArrangementTitleState {
 
 export class ArrangementTitle extends ComponentBase<IArrangementTitleProps, IArrangementTitleState> {
 
-    private bananaDrumContext?: React.ContextType<typeof BananaDrumContext>;
-    private arrangementPlayerContext?: React.ContextType<typeof ArrangementPlayerContext>;
+    private bananaDrumContext?: ContextType<typeof BananaDrumContext>;
+    private arrangementPlayerContext?: ContextType<typeof ArrangementPlayerContext>;
     private inputRef = createRef<HTMLInputElement>();
 
     public constructor(props: IArrangementTitleProps) {
@@ -54,7 +55,6 @@ export class ArrangementTitle extends ComponentBase<IArrangementTitleProps, IArr
                     return (
                         <ArrangementPlayerContext.Consumer>
                             {(arrangementPlayerContext) => {
-
                                 this.useSubscriptions(arrangementPlayerContext, bananaDrumContext);
 
                                 return (
@@ -102,8 +102,8 @@ export class ArrangementTitle extends ComponentBase<IArrangementTitleProps, IArr
     }
 
     private useSubscriptions = (
-        arrangementPlayerContext: React.ContextType<typeof ArrangementPlayerContext>,
-        bananaDrumContext: React.ContextType<typeof BananaDrumContext>
+        arrangementPlayerContext: ContextType<typeof ArrangementPlayerContext>,
+        bananaDrumContext: ContextType<typeof BananaDrumContext>
     ): void => {
         if (this.arrangementPlayerContext !== arrangementPlayerContext) {
             this.arrangementPlayerContext = arrangementPlayerContext;

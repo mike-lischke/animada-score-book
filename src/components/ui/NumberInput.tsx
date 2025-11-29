@@ -3,44 +3,89 @@
 * Licensed under the MIT License. See License.txt in the project root for license information.
 */
 
-/* eslint-disable prefer-arrow/prefer-arrow-functions, @typescript-eslint/naming-convention, jsdoc/require-jsdoc */
-
-import { useState } from "preact/hooks";
-import type { JSX } from "preact/jsx-runtime";
+import type { ComponentChild } from "preact";
 import type { Subscribable } from "../../core/types/general.js";
-import { useSubscription } from "../../ui/hooks/useSubscription.js";
+import { ComponentBase, type IComponentProperties, type IComponentState } from "./ComponentBase/ComponentBase.js";
 
-export function NumberInput({ getValue, setValue, subscribable }: {
-    getValue: () => string,
-    setValue: (newValue: string) => void,
+export interface INumberInputProps extends IComponentProperties {
+    getValue: () => string;
+    setValue: (newValue: string) => void;
     subscribable: Subscribable;
-}): JSX.Element {
-    const [visibleValue, setVisibleValue] = useState(getValue());
+}
 
-    // If the model pushes a change to this value for some other reason, we'd better update
-    useSubscription(subscribable, () => {
-        setVisibleValue(getValue());
-    });
+interface INumberInputState extends IComponentState {
+    visibleValue: string;
+}
+
+export class NumberInput extends ComponentBase<INumberInputProps, INumberInputState> {
+
+    public constructor(props: INumberInputProps) {
+        super(props);
+
+        this.state = {
+            visibleValue: this.props.getValue()
+        };
+    }
+
+    public override componentDidMount(): void {
+        const { subscribable } = this.props;
+
+        subscribable.subscribe(this.handleChange);
+    }
+
+    public override componentWillUnmount(): void {
+        const { subscribable } = this.props;
+
+        subscribable.unsubscribe(this.handleChange);
+    }
+
+    public render(): ComponentChild {
+        const { visibleValue } = this.state;
+
+        return (
+            <input
+                className="short"
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                onChange={(event) => {
+                    this.attemptSetVisibleValue((event.target as HTMLInputElement).value);
+                }}
+                value={visibleValue}
+                onBlur={() => {
+                    this.attemptSet();
+                }}
+                onKeyPress={(event) => {
+                    if (event.key === "Enter") {
+                        this.attemptSet();
+                    }
+                }}
+            />
+        );
+    }
 
     // To update the input as you type, but not update the model
-    function attemptSetVisibleValue(inputValue: string) {
+    private attemptSetVisibleValue(inputValue: string) {
         if (inputValue.length === 0) {
-            setVisibleValue("");
+            this.setState({ visibleValue: "" });
 
             return;
         }
 
         if (!inputValue.charAt(inputValue.length - 1).match(/[0-9]/)) {
-            attemptSetVisibleValue(inputValue.substring(0, inputValue.length - 1));
+            this.attemptSetVisibleValue(inputValue.substring(0, inputValue.length - 1));
 
             return;
         }
 
-        setVisibleValue(inputValue);
+        this.setState({ visibleValue: inputValue });
     }
 
     // Try to set the model value, which may fail due to validation
-    function attemptSet() {
+    private attemptSet() {
+        const { getValue, setValue } = this.props;
+        const { visibleValue } = this.state;
+
         if (visibleValue === getValue()) {
             return;
         }
@@ -48,28 +93,13 @@ export function NumberInput({ getValue, setValue, subscribable }: {
         try {
             setValue(visibleValue);
         } catch {
-            setVisibleValue(getValue());
+            this.setState({ visibleValue: getValue() });
         }
     }
 
-    return (
-        <input
-            className="short"
-            type="text"
-            inputMode="numeric"
-            pattern="[0-9]*"
-            onChange={event => {
-                attemptSetVisibleValue((event.target as HTMLInputElement).value);
-            }}
-            value={visibleValue}
-            onBlur={() => {
-                attemptSet();
-            }}
-            onKeyPress={event => {
-                if (event.key === "Enter") {
-                    attemptSet();
-                }
-            }}
-        />
-    );
+    private handleChange = () => {
+        const { getValue } = this.props;
+
+        this.setState({ visibleValue: getValue() });
+    };
 }

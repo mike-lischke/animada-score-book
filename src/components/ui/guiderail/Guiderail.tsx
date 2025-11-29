@@ -3,55 +3,83 @@
 * Licensed under the MIT License. See License.txt in the project root for license information.
 */
 
-/* eslint-disable prefer-arrow/prefer-arrow-functions, @typescript-eslint/naming-convention, jsdoc/require-jsdoc */
+import { createContext, type ComponentChild } from "preact";
 
-import { createContext, type JSX } from "preact";
-
-import { ArrangementView, TimeParamsView } from "../../../core/index.js";
-import { useStateSubscription } from "../../../ui/hooks/useStateSubscription.js";
+import { ArrangementView, TimeParamsView, type Subscription } from "../../../core/index.js";
+import { ComponentBase, type IComponentProperties, type IComponentState } from "../ComponentBase/ComponentBase.js";
 import { TimingViewer } from "./TimingViewer.js";
 
 export type BarDivisibility = 1 | 2 | 4;
 export const BarDivisibilityContext = createContext<BarDivisibility | null>(null);
 
-export function Guiderail({ arrangement }: { arrangement: ArrangementView; }): JSX.Element {
-
-    // We don't actual use numNotes, but we know we need to render when it changes
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const numNotes = useStateSubscription(arrangement.timeParams, timeParams => {
-        return timeParams.timings.length;
-    });
-
-    // Because only time-param can change at a time, we know numBars only ever changes if numNotes also changes
-    const numBars = arrangement.timeParams.length;
-    const display = numBars > 1 ? "block" : "none";
-
-    const barDivisibility = useStateSubscription(arrangement.timeParams, getBarDivisibility);
-
-    return (
-        <BarDivisibilityContext.Provider value={barDivisibility}>
-            <div className='guiderail-wrapper' style={{ display }}>
-                <div className='guiderail-meta'></div>
-                <div className='guiderail'>
-                    {arrangement.timeParams.timings.map(timing => {
-                        return <TimingViewer timing={timing} key={`${timing.bar}.${timing.step}`} />;
-                    })}
-                </div>
-                <div className="scrollshadow left-scrollshadow" />
-                <div className="scrollshadow right-scrollshadow" />
-            </div>
-        </BarDivisibilityContext.Provider>
-    );
+export interface IGuiderailProps extends IComponentProperties {
+    arrangement: ArrangementView;
 }
 
-function getBarDivisibility(timeParams: TimeParamsView): BarDivisibility {
-    const beatsPerBar = Number(timeParams.timeSignature.split("/")[0]);
-    if (beatsPerBar % 4 === 0) {
-        return 4;
-    }
-    if (beatsPerBar % 2 === 0) {
-        return 2;
+interface IGuiderailState extends IComponentState {
+    barDivisibility: BarDivisibility;
+}
+
+export class Guiderail extends ComponentBase<IGuiderailProps, IGuiderailState> {
+
+    public constructor(props: IGuiderailProps) {
+        super(props);
+
+        this.state = {
+            barDivisibility: this.getBarDivisibility(props.arrangement.timeParams)
+        };
     }
 
-    return 1;
+    public override componentDidMount(): void {
+        const { arrangement } = this.props;
+        arrangement.timeParams.subscribe(this.timeParamsSubscription as Subscription);
+    }
+
+    public override componentWillUnmount(): void {
+        const { arrangement } = this.props;
+        arrangement.timeParams.unsubscribe(this.timeParamsSubscription as Subscription);
+    }
+
+    public override render(): ComponentChild {
+        const { arrangement } = this.props;
+        const { barDivisibility } = this.state;
+
+        // Because only time-param can change at a time, we know numBars only ever changes if numNotes also changes
+        const numBars = arrangement.timeParams.length;
+        const display = numBars > 1 ? "block" : "none";
+
+        return (
+            <BarDivisibilityContext.Provider value={barDivisibility} >
+                <div className='guiderail-wrapper' style={{ display }}>
+                    <div className='guiderail-meta'></div>
+                    <div className='guiderail'>
+                        {arrangement.timeParams.timings.map((timing) => {
+                            return <TimingViewer timing={timing} key={`${timing.bar}.${timing.step}`} />;
+                        })}
+                    </div>
+                    <div className="scrollshadow left-scrollshadow" />
+                    <div className="scrollshadow right-scrollshadow" />
+                </div>
+            </BarDivisibilityContext.Provider>
+        );
+    }
+
+    private getBarDivisibility(timeParams: TimeParamsView): BarDivisibility {
+        const beatsPerBar = Number(timeParams.timeSignature.split("/")[0]);
+        if (beatsPerBar % 4 === 0) {
+            return 4;
+        }
+
+        if (beatsPerBar % 2 === 0) {
+            return 2;
+        }
+
+        return 1;
+    }
+
+    private timeParamsSubscription = (timeParams: TimeParamsView) => {
+        this.setState({
+            barDivisibility: this.getBarDivisibility(timeParams)
+        });
+    };
 }

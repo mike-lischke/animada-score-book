@@ -3,50 +3,62 @@
 * Licensed under the MIT License. See License.txt in the project root for license information.
 */
 
-/* eslint-disable prefer-arrow/prefer-arrow-functions, @typescript-eslint/naming-convention, jsdoc/require-jsdoc */
+import type { ComponentChild } from "preact";
 
-import { useContext, useMemo } from "preact/hooks";
-import type { JSX } from "preact/jsx-runtime";
-
-import { Timing } from "../../../core/index.js";
+import { Timing, type TimeParamsView } from "../../../core/index.js";
 import { ArrangementPlayerContext } from "../arrangement/ArrangementViewer.js";
-import { getParityClass } from "../note/NoteViewer.js";
-import { BarDivisibilityContext } from "./Guiderail.js";
+import { ComponentBase, type IComponentProperties } from "../ComponentBase/ComponentBase.js";
+import { NoteViewer } from "../note/NoteViewer.js";
+import { BarDivisibilityContext, type BarDivisibility } from "./Guiderail.js";
 
-export function TimingViewer({ timing }: { timing: Timing; }): JSX.Element {
-    const isStartOfBar = timing.step === 1;
-
-    const classes = useClasses(timing, isStartOfBar);
-    const timingLabel = useTimingLabel(timing, isStartOfBar);
-
-    return (<div className={classes}>
-        <div className='guiderail-timing-content'>
-            {timingLabel}
-        </div>
-    </div>);
+export interface ITimingViewerProps extends IComponentProperties {
+    timing: Timing;
 }
 
-function useClasses(timing: Timing, isStartOfBar: boolean): string {
-    const { bar, step } = timing;
-    const { timeSignature, stepResolution } = useContext(ArrangementPlayerContext)!.arrangement.timeParams;
+export class TimingViewer extends ComponentBase<ITimingViewerProps> {
+    public override render(): ComponentChild {
+        const { timing } = this.props;
 
-    return useMemo(
-        () => {
-            return `guiderail-timing note-width ${getParityClass(bar, step, timeSignature, stepResolution)} ` +
-                (isStartOfBar ? "start-of-bar" : "");
-        },
-        [bar, step, timeSignature, stepResolution, isStartOfBar]
-    );
-}
+        const isStartOfBar = timing.step === 1;
 
-function useTimingLabel(timing: Timing, isStartOfBar: boolean): string {
-    const barDivisibility = useContext(BarDivisibilityContext);
-    const { arrangement } = useContext(ArrangementPlayerContext)!;
-    const { timeSignature, stepResolution } = arrangement.timeParams;
+        return (
+            <BarDivisibilityContext.Consumer>
+                {(barDivisibility) => {
+                    return (
+                        <ArrangementPlayerContext.Consumer>
+                            {(arrangementPlayerContext) => {
+                                const timeParams = arrangementPlayerContext!.arrangement.timeParams;
+                                const timingLabel = this.useTimingLabel(timeParams, barDivisibility!, timing,
+                                    isStartOfBar);
+                                const classes = this.useClasses(timeParams, timing, isStartOfBar);
 
-    const { bar, step } = timing;
+                                return (<div className={classes} >
+                                    <div className='guiderail-timing-content'>
+                                        {timingLabel}
+                                    </div>
+                                </div>);
+                            }}
+                        </ArrangementPlayerContext.Consumer>
+                    );
+                }}
+            </BarDivisibilityContext.Consumer>
+        );
+    }
 
-    return useMemo(() => {
+    private useClasses(timeParams: TimeParamsView, timing: Timing, isStartOfBar: boolean): string {
+        const { bar, step } = timing;
+        const { timeSignature, stepResolution } = timeParams;
+
+        return `guiderail-timing note-width ${NoteViewer.getParityClass(bar, step, timeSignature, stepResolution)} ` +
+            (isStartOfBar ? "start-of-bar" : "");
+    }
+
+    private useTimingLabel(timeParams: TimeParamsView, barDivisibility: BarDivisibility, timing: Timing,
+        isStartOfBar: boolean): string {
+        const { timeSignature, stepResolution } = timeParams;
+
+        const { bar, step } = timing;
+
         if (isStartOfBar) {
             return bar.toString();
         }
@@ -58,7 +70,7 @@ function useTimingLabel(timing: Timing, isStartOfBar: boolean): string {
         const stepFromZero = step - 1; // Steps count from 1, but we need to do math starting from 0 below
 
         if (barDivisibility === 2) {
-            const [beatsPerBar, beatUnit] = timeSignature.split("/").map(value => {
+            const [beatsPerBar, beatUnit] = timeSignature.split("/").map((value) => {
                 return Number(value);
             });
             const stepsPerBeat = stepResolution / beatUnit;
@@ -70,7 +82,7 @@ function useTimingLabel(timing: Timing, isStartOfBar: boolean): string {
         }
 
         if (barDivisibility === 4) {
-            const [beatsPerBar, beatUnit] = timeSignature.split("/").map(value => {
+            const [beatsPerBar, beatUnit] = timeSignature.split("/").map((value) => {
                 return Number(value);
             });
             const stepsPerBeat = stepResolution / beatUnit;
@@ -79,15 +91,16 @@ function useTimingLabel(timing: Timing, isStartOfBar: boolean): string {
             if ((stepFromZero % stepsPerBar) / stepsPerBar === 0.25) {
                 return `${bar}.2`;
             }
+
             if ((stepFromZero % stepsPerBar) / stepsPerBar === 0.5) {
                 return `${bar}.3`;
             }
+
             if ((stepFromZero % stepsPerBar) / stepsPerBar === 0.75) {
                 return `${bar}.4`;
             }
         }
 
         return "";
-    }, [barDivisibility, bar, step, isStartOfBar, timeSignature, stepResolution]
-    );
+    }
 }

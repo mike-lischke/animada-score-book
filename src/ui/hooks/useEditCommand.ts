@@ -7,7 +7,7 @@
 
 import { useCallback, useContext } from "preact/hooks";
 
-import { BananaDrumContext } from "../../components/ui/BananaDrumViewer.js";
+import { BananaDrumContext } from "../../components/ui/ScoreBookViewer.js";
 import type { EditCommand } from "../../core/index.js";
 
 export type EditFunction = (command: EditCommand) => void;

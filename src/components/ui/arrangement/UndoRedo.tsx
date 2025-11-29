@@ -6,8 +6,9 @@
 import redoIcon from "../../../assets/images/icons/redo_white.svg";
 import undoIcon from "../../../assets/images/icons/undo_white.svg";
 
-import type { ComponentChild } from "preact";
-import { BananaDrumContext } from "../BananaDrumViewer.js";
+import type { ComponentChild, ContextType } from "preact";
+
+import { BananaDrumContext } from "../ScoreBookViewer.js";
 import { ComponentBase, type IComponentState } from "../ComponentBase/ComponentBase.js";
 import { SmallSpacer } from "../SmallSpacer.js";
 
@@ -17,7 +18,7 @@ export interface IUndoRedoState extends IComponentState {
 }
 
 export class UndoRedo extends ComponentBase<{}, IUndoRedoState> {
-    private bananaDrumContext?: React.ContextType<typeof BananaDrumContext>;
+    private bananaDrumContext?: ContextType<typeof BananaDrumContext>;
 
     public constructor(props: {}) {
         super(props);
@@ -58,7 +59,7 @@ export class UndoRedo extends ComponentBase<{}, IUndoRedoState> {
         );
     }
 
-    private useSubscription(bananaDrumContext: React.ContextType<typeof BananaDrumContext>) {
+    private useSubscription(bananaDrumContext: ContextType<typeof BananaDrumContext>) {
         if (this.bananaDrumContext === bananaDrumContext) {
             return;
         }

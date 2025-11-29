@@ -11,7 +11,7 @@ import type { JSX } from "preact/jsx-runtime";
 import { getShareLink } from "../../core/index.js";
 import { useStateSubscription } from "../../ui/hooks/useStateSubscription.js";
 import { ArrangementPlayerContext } from "./arrangement/ArrangementViewer.js";
-import { BananaDrumContext } from "./BananaDrumViewer.js";
+import { BananaDrumContext } from "./ScoreBookViewer.js";
 import { toggleOverlay } from "./Overlay.js";
 import { SmallSpacer } from "./SmallSpacer.js";
 

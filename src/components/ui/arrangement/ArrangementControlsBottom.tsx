@@ -6,12 +6,13 @@
 import type { ArrangementView, Subscription, TrackView } from "../../../core/index.js";
 
 import { useEditCommand } from "../../../ui/hooks/useEditCommand.js";
-import { ServicesContext } from "../BananaDrumViewer.js";
+import { ServicesContext } from "../ScoreBookViewer.js";
 import { ComponentBase, type IComponentState } from "../ComponentBase/ComponentBase.js";
 import { ExpandingSpacer } from "../ExpandingSpacer.js";
 import { Overlay, toggleOverlay } from "../Overlay.js";
 import { SmallSpacer } from "../SmallSpacer.js";
 import { ArrangementPlayerContext } from "./ArrangementViewer.js";
+import type { ContextType } from "preact";
 
 interface IArrangementControlsBottomState extends IComponentState {
     arePolyrhythms?: boolean;
@@ -21,8 +22,8 @@ export class ArrangementControlsBottom extends ComponentBase<{}, IArrangementCon
     private arrangementSubscription?: Subscription;
     private subscribedTracks = new Set<TrackView>();
 
-    private arrangementPlayerContext?: React.ContextType<typeof ArrangementPlayerContext>;
-    private servicesContext?: React.ContextType<typeof ServicesContext>;
+    private arrangementPlayerContext?: ContextType<typeof ArrangementPlayerContext>;
+    private servicesContext?: ContextType<typeof ServicesContext>;
 
     public constructor(props: {}) {
         super(props);
@@ -181,8 +182,8 @@ export class ArrangementControlsBottom extends ComponentBase<{}, IArrangementCon
     };
 
     private useArrangementAndTrackSubscription = (
-        arrangementPlayerContext: React.ContextType<typeof ArrangementPlayerContext>,
-        servicesContext?: React.ContextType<typeof ServicesContext>
+        arrangementPlayerContext: ContextType<typeof ArrangementPlayerContext>,
+        servicesContext?: ContextType<typeof ServicesContext>
     ): void => {
         if (this.arrangementPlayerContext !== arrangementPlayerContext) {
             this.arrangementPlayerContext = arrangementPlayerContext;

@@ -3,37 +3,54 @@
 * Licensed under the MIT License. See License.txt in the project root for license information.
 */
 
-/* eslint-disable prefer-arrow/prefer-arrow-functions, @typescript-eslint/naming-convention, jsdoc/require-jsdoc */
-
-import type { JSX } from "preact/jsx-runtime";
-
+import type { ComponentChild } from "preact";
 import type { TrackView } from "../../../core/index.js";
-import { useEditCommand } from "../../../ui/hooks/useEditCommand.js";
+import { BananaDrumContext } from "../ScoreBookViewer.js";
+import { ComponentBase, type IComponentProperties } from "../ComponentBase/ComponentBase.js";
 import { toggleOverlay } from "../Overlay.js";
 
-export function TrackControls(
-    { track, overlayName }: { track: TrackView, overlayName: string; }): JSX.Element {
-    const arrangement = track.arrangement;
-    const edit = useEditCommand();
-
-    return (
-        <div className="track-controls">
-            <button className="push-button gray"
-                onClick={() => {
-                    edit({ type: "EditCommand_ArrangementRemoveTrack", arrangement, removeTrack: track });
-                }}
-            >Remove track</button>
-            <button className="push-button gray"
-                onClick={() => {
-                    edit({ type: "EditCommand_TrackClear", track, command: "clear" });
-                    toggleOverlay(overlayName, "hide");
-                }}
-            >Clear track</button>
-            <button className="push-button gray"
-                onClick={() => {
-                    toggleOverlay(overlayName, "hide");
-                }}
-            >Cancel</button>
-        </div>
-    );
+export interface ITrackControlsProps extends IComponentProperties {
+    track: TrackView;
+    overlayName: string;
 }
+
+export class TrackControls extends ComponentBase<ITrackControlsProps> {
+    public render(): ComponentChild {
+        const { track, overlayName } = this.props;
+
+        return (
+            <BananaDrumContext.Consumer>
+                {(bananaDrumContext) => {
+                    return (
+                        <div className="track-controls">
+                            <button className="push-button gray"
+                                onClick={() => {
+                                    bananaDrumContext?.edit({
+                                        type: "EditCommand_ArrangementRemoveTrack",
+                                        arrangement: track.arrangement,
+                                        removeTrack: track
+                                    });
+                                }}
+                            >Remove track</button>
+                            <button className="push-button gray"
+                                onClick={() => {
+                                    bananaDrumContext?.edit({
+                                        type: "EditCommand_TrackClear",
+                                        track,
+                                        command: "clear"
+                                    });
+                                    toggleOverlay(overlayName, "hide");
+                                }}
+                            >Clear track</button>
+                            <button className="push-button gray"
+                                onClick={() => {
+                                    toggleOverlay(overlayName, "hide");
+                                }}
+                            >Cancel</button>
+                        </div>
+                    );
+                }}
+            </BananaDrumContext.Consumer>
+        );
+    }
+};

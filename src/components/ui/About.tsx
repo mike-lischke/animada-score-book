@@ -3,7 +3,7 @@
 * Licensed under the MIT License. See License.txt in the project root for license information.
 */
 
-import logo from "../../assets/images/animada-logo.svg";
+import logo from "../../assets/images/animada-logo2.svg";
 import githubLogo from "../../assets/images/GitHub_Invertocat_Dark.svg";
 
 import type { ComponentChild } from "preact";

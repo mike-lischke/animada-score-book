@@ -3,10 +3,10 @@
 * Licensed under the MIT License. See License.txt in the project root for license information.
 */
 
-import type { ComponentChild } from "preact";
+import type { ComponentChild, ContextType } from "preact";
 
 import type { ArrangementView, EditCommand_TimeParamsTimeSignature } from "../../../core/index.js";
-import { BananaDrumContext } from "../BananaDrumViewer.js";
+import { BananaDrumContext } from "../ScoreBookViewer.js";
 import { ComponentBase, type IComponentProperties } from "../ComponentBase/ComponentBase.js";
 import { NumberInput } from "../NumberInput.js";
 
@@ -15,7 +15,7 @@ export interface ITimeControlsProps extends IComponentProperties {
 }
 
 export class TimeControls extends ComponentBase<ITimeControlsProps> {
-    private bananaDrumContext?: React.ContextType<typeof BananaDrumContext>;
+    private bananaDrumContext?: ContextType<typeof BananaDrumContext>;
 
     public override render(): ComponentChild {
         const { arrangement } = this.props;

@@ -3,147 +3,127 @@
 * Licensed under the MIT License. See License.txt in the project root for license information.
 */
 
-/* eslint-disable prefer-arrow/prefer-arrow-functions, @typescript-eslint/naming-convention, jsdoc/require-jsdoc */
+import { createContext, type ComponentChild } from "preact";
 
-import { createContext, type JSX } from "preact";
-import { useContext, useLayoutEffect, useRef, useState } from "preact/hooks";
-
-import type { PolyrhythmView, TrackView } from "../../../core/index.js";
-import type { TrackPlayer } from "../../../player/types.js";
-import { useSubscription } from "../../../ui/hooks/useSubscription.js";
-import { ArrangementPlayerContext, NoteLineMinWidth, NoteWidthContext } from "../arrangement/ArrangementViewer.js";
-import { NoteViewer } from "../note/NoteViewer.js";
+import type { ArrangementPlayer, TrackPlayer } from "../../../player/types.js";
+import { ArrangementPlayerContext } from "../arrangement/ArrangementViewer.js";
+import { ComponentBase, type IComponentProperties, type IComponentState } from "../ComponentBase/ComponentBase.js";
 import { Overlay, toggleOverlay } from "../Overlay.js";
-import { PolyrhythmViewer } from "../PolyrhythmViewer.js";
+import { NoteLine } from "./NoteLine.js";
 import { TrackControls } from "./TrackControls.js";
 import { TrackMeta } from "./TrackMeta.js";
 
-interface TrackViewerCallbacks {
+export interface TrackViewerCallbacks {
     noteLineTouchStart?: (event: TouchEvent) => void;
     noteLineTouchMove?: (event: TouchEvent) => void;
     noteLineTouchEnd?: () => void;
 };
 
+export interface ITrackViewerProps extends IComponentProperties {
+    trackPlayer: TrackPlayer;
+    callbacks: TrackViewerCallbacks;
+}
+
+interface ITrackviewerState extends IComponentState {
+    audible: boolean;
+    loaded: boolean;
+}
+
 export const TrackPlayerContext = createContext<TrackPlayer | null>(null);
 
-export function TrackViewer({ trackPlayer, callbacks }: {
-    trackPlayer: TrackPlayer, callbacks: TrackViewerCallbacks;
-}): JSX.Element {
-    const track = trackPlayer.track;
-    const overlayName = `track_overlay_${track.id}`;
+export class TrackViewer extends ComponentBase<ITrackViewerProps, ITrackviewerState> {
+    private arrangementPlayerContext: ArrangementPlayer | null = null;
 
-    const [loaded, setLoaded] = useState(track.instrument.loaded);
-    useSubscription(track.instrument, () => {
-        setLoaded(track.instrument.loaded);
-    });
+    public constructor(props: ITrackViewerProps) {
+        super(props);
 
-    const arrangementPlayer = useContext(ArrangementPlayerContext);
-    const { audibleTrackPlayers, audibleTrackPlayersPublisher } = arrangementPlayer!;
-    const [audible, setAudible] = useState(!!audibleTrackPlayers.get(track));
-    useSubscription(audibleTrackPlayersPublisher, () => {
-        setAudible(!!audibleTrackPlayers.get(track));
-    });
-
-    if (!loaded) {
-        return PendingTrackViewer();
+        const track = props.trackPlayer.track;
+        this.state = {
+            audible: false,
+            loaded: track.instrument.loaded,
+        };
     }
 
-    return (
-        <TrackPlayerContext.Provider value={trackPlayer}>
-            <div
-                className={`track-viewer ${audible ? "audible" : "inaudible"}`}
-                data-colour-group={track.instrument.colourGroup}
-            >
-                <div className="note-line-wrapper">
-                    <NoteLine track={track} callbacks={callbacks} />
-                    <Overlay name={overlayName}>
-                        <TrackControls track={track} overlayName={overlayName} />
-                    </Overlay>
+    public override componentDidMount(): void {
+        const { trackPlayer } = this.props;
+        const track = trackPlayer.track;
+
+        track.instrument.subscribe(this.instrumentsChanged);
+    }
+
+    public override componentWillUnmount(): void {
+        const { trackPlayer } = this.props;
+        const track = trackPlayer.track;
+
+        track.instrument.unsubscribe(this.instrumentsChanged);
+        this.arrangementPlayerContext?.unsubscribe(this.audibleChanged);
+    }
+
+    public render(): ComponentChild {
+        const { trackPlayer, callbacks } = this.props;
+        const { loaded } = this.state;
+
+        if (!loaded) {
+            return (
+                <div className="track-viewer pending-track">
+                    <div className="track-meta">Loading...</div>
+                    <div className="pending-note-line" />
                 </div>
-                <div className="scrollshadow left-scrollshadow" />
-                <div className="scrollshadow right-scrollshadow" />
-                <TrackMeta track={track} toggleControls={() => {
-                    toggleOverlay(overlayName);
-                }} />
-            </div>
-        </TrackPlayerContext.Provider>
-    );
-}
+            );
+        }
 
-function NoteLine({ track, callbacks }: { track: TrackView, callbacks: TrackViewerCallbacks; }): JSX.Element {
-    const noteLineRef = useRef<HTMLDivElement | null>(null);
-    const [notes, setNotes] = useState([...track.notes]);
-    const [polyrhythms, setPolyrhythms] = useState([...track.polyrhythms]);
+        const track = trackPlayer.track;
+        const overlayName = `track_overlay_${track.id}`;
 
-    useSubscription(track, () => {
-        setNotes([...track.notes]);
-        setPolyrhythms([...track.polyrhythms]);
-    });
+        return (
+            <ArrangementPlayerContext.Consumer>
+                {(arrangementPlayerContext) => {
+                    const { audible } = this.state;
+                    this.useContext(arrangementPlayerContext);
 
-    const minWidth = useContext(NoteLineMinWidth);
+                    return (
+                        <TrackPlayerContext.Provider value={trackPlayer} >
+                            <div
+                                className={`track-viewer ${audible ? "audible" : "inaudible"}`}
+                                data-colour-group={track.instrument.colourGroup}
+                            >
+                                <div className="note-line-wrapper">
+                                    <NoteLine track={track} callbacks={callbacks} />
+                                    <Overlay name={overlayName}>
+                                        <TrackControls track={track} overlayName={overlayName} />
+                                    </Overlay>
+                                </div>
+                                <div className="scrollshadow left-scrollshadow" />
+                                <div className="scrollshadow right-scrollshadow" />
+                                <TrackMeta track={track} toggleControls={() => {
+                                    toggleOverlay(overlayName);
+                                }} />
+                            </div>
+                        </TrackPlayerContext.Provider>
+                    );
+                }}
+            </ArrangementPlayerContext.Consumer>
+        );
+    }
 
-    // Polyrhythms need to reposition dynamically
-    useLayoutEffect(() => {
-        // Adjust polyrhythms in order, since nested polyrhythms will be repositioned based on earlier polyrhythms
-        polyrhythms.forEach(polyrhythm => {
-            const polyrhythmViewer = noteLineRef.current!
-                .querySelector<HTMLDivElement>(`#polyrhythm-${polyrhythm.id}`)!;
-            repositionPolyrhythmViewer(polyrhythm, polyrhythmViewer);
+    private instrumentsChanged = () => {
+        const { trackPlayer } = this.props;
+        const track = trackPlayer.track;
+        this.setState({ loaded: track.instrument.loaded });
+    };
+
+    private useContext = (arrangementPlayerContext: ArrangementPlayer | null) => {
+        if (this.arrangementPlayerContext !== arrangementPlayerContext) {
+            this.arrangementPlayerContext = arrangementPlayerContext;
+
+            arrangementPlayerContext?.subscribe(this.audibleChanged);
+            this.audibleChanged();
+        }
+    };
+
+    private audibleChanged = () => {
+        this.setState({
+            audible: this.arrangementPlayerContext!.audibleTrackPlayers.has(this.props.trackPlayer.track),
         });
-    }, [polyrhythms.length, useContext(NoteWidthContext)]);
-
-    return (
-        <div
-            className="note-line"
-            ref={noteLineRef}
-            style={{ minWidth: minWidth }}
-            onTouchStart={callbacks.noteLineTouchStart}
-            onTouchMove={callbacks.noteLineTouchMove}
-            onTouchEnd={callbacks.noteLineTouchEnd}
-        >
-            <div className="polyrhythms-wrapper">
-                {polyrhythms.map(polyrhythm => {
-                    return <PolyrhythmViewer polyrhythm={polyrhythm} key={polyrhythm.id} />;
-                })}
-            </div>
-            <div className="notes-wrapper">
-                {notes.map(note => {
-                    return <NoteViewer note={note} key={note.id} />;
-                })}
-            </div>
-        </div>
-    );
-}
-
-function repositionPolyrhythmViewer(polyrhythm: PolyrhythmView, polyrhythmViewer: HTMLDivElement) {
-    const startNoteViewer = document.getElementById(`note-${polyrhythm.start.id}`);
-    const endNoteViewer = document.getElementById(`note-${polyrhythm.end.id}`);
-
-    if (!startNoteViewer || !endNoteViewer) {
-        return;
-    }
-
-    let startLeft = startNoteViewer.offsetLeft;
-
-    // Start note is inside a polyrhythm, so the offset is likely only part of the picture
-    if (polyrhythm.start.polyrhythm) {
-        startLeft += (startNoteViewer.closest<HTMLDivElement>(".polyrhythm-viewer")!).offsetLeft;
-    }
-
-    let endLeft = endNoteViewer.offsetLeft + endNoteViewer.offsetWidth;
-    if (polyrhythm.end.polyrhythm) {
-        endLeft += (endNoteViewer.closest<HTMLDivElement>(".polyrhythm-viewer")!).offsetLeft;
-    }
-
-    polyrhythmViewer.style.left = `${startLeft}px`;
-    polyrhythmViewer.style.width = `calc(${endLeft - startLeft}px - var(--thick-border-width)`;
-}
-
-function PendingTrackViewer(): JSX.Element {
-    return (
-        <div className="track-viewer pending-track">
-            <div className="track-meta">Loading...</div>
-            <div className="pending-note-line" />
-        </div>
-    );
+    };
 }

@@ -3,51 +3,208 @@
 * Licensed under the MIT License. See License.txt in the project root for license information.
 */
 
-/* eslint-disable prefer-arrow/prefer-arrow-functions, @typescript-eslint/naming-convention, jsdoc/require-jsdoc */
+import type { ComponentChild, ContextType } from "preact";
 
-import { useCallback, useContext, useMemo, useState } from "preact/hooks";
-import type { JSX } from "preact/jsx-runtime";
-
-import type { EditCommand, NoteStyle, NoteView, Subscribable } from "../../../core/index.js";
+import type { NoteStyle, NoteView, Subscribable } from "../../../core/index.js";
 import { isSameTiming } from "../../../core/utils.js";
 import { createAudioBufferPlayer } from "../../../player/AudioBufferPlayer.js";
-import type { ArrangementPlayer, TrackPlayer } from "../../../player/types.js";
-import { useEditCommand } from "../../../ui/hooks/useEditCommand.js";
-import { useSubscription } from "../../../ui/hooks/useSubscription.js";
 import { getTrackColour } from "../../../ui/track-colour.js";
 import { ArrangementPlayerContext } from "../arrangement/ArrangementViewer.js";
-import { ServicesContext } from "../BananaDrumViewer.js";
+import { BananaDrumContext, ServicesContext } from "../ScoreBookViewer.js";
+import { ComponentBase, type IComponentProperties, type IComponentState } from "../ComponentBase/ComponentBase.js";
 import { TouchHoldDetector } from "../TouchHoldDetector.js";
 import { TrackPlayerContext } from "../track/TrackViewer.js";
 import { NoteStyleSymbolViewer } from "./NoteStyleSymbolViewer.js";
 
 const audioContext = new AudioContext();
+const baseNoteClasses = "note-viewer note-width";
 
-export function NoteViewer({ note }: { note: NoteView; }): JSX.Element {
-    const arrangementPlayer = useContext(ArrangementPlayerContext)!;
-    const trackPlayer = useContext(TrackPlayerContext)!;
-    const { selectionManager, modeManager } = useContext(ServicesContext)!;
-    const timingPublisher: Subscribable = note.polyrhythm
-        ? trackPlayer.currentPolyrhythmNotePublisher
-        : arrangementPlayer.currentTimingPublisher;
-    const edit = useEditCommand();
+export interface INoteViewerProps extends IComponentProperties {
+    note: NoteView;
+}
 
-    const [isCurrent, setIsCurrent] = useState(isCurrentlyPlaying(note, arrangementPlayer, trackPlayer));
-    const [selected, setSelected] = useState(selectionManager.isSelected(note));
+interface INoteViewerState extends IComponentState {
+    isCurrent: boolean;
+    selected: boolean;
+    noteStyle?: NoteStyle;
+}
 
-    useSubscription(timingPublisher, () => {
-        setIsCurrent(isCurrentlyPlaying(note, arrangementPlayer, trackPlayer));
-    });
-    useSubscription(selectionManager, () => {
-        setSelected(selectionManager.isSelected(note));
-    });
+export class NoteViewer extends ComponentBase<INoteViewerProps, INoteViewerState> {
+    private arrangementPlayerContext?: ContextType<typeof ArrangementPlayerContext>;
+    private trackPlayerContext?: ContextType<typeof TrackPlayerContext>;
+    private servicesContext?: ContextType<typeof ServicesContext>;
+    private bananaDrumContext?: ContextType<typeof BananaDrumContext>;
 
-    const [noteStyle, setNoteStyle] = useState(note.noteStyle);
-    useSubscription(note, () => {
-        setNoteStyle(note.noteStyle);
-    });
+    public constructor(props: INoteViewerProps) {
+        super(props);
 
-    const handleClick = useCallback((event: MouseEvent) => {
+        this.state = {
+            isCurrent: false,
+            selected: false,
+        };
+    }
+
+    public static getParityClass(bar: number, step: number, timeSignature: string,
+        stepResolution: number): string {
+        if (timeSignature === "4/4" && stepResolution === 16) {
+            const beat = Math.floor((step - 1) / 4) + 1;
+            const beatIsEven = beat % 2 === 0;
+
+            return beatIsEven ? "even-beat" : "odd-beat";
+        }
+
+        if (timeSignature === "6/8" && stepResolution === 8) {
+            const beat = Math.floor((step - 1) / 3) + 1;
+            const beatIsEven = beat % 2 === 0;
+
+            return beatIsEven ? "even-beat" : "odd-beat";
+        }
+
+        if (timeSignature === "5/4" && stepResolution === 8) {
+            const beat = Math.floor((step - 1) / 2) + 1;
+            let beatIsEven = beat % 2 === 0;
+            if (bar % 2 === 0) {
+                beatIsEven = !beatIsEven;
+            } // 5 groups in each bar, so swap every bar
+
+            return beatIsEven ? "even-beat" : "odd-beat";
+        }
+
+        if (timeSignature === "7/8" && stepResolution === 8) {
+            return (step === 1 || step === 3 || step === 5) ? "odd-beat" : "even-beat";
+        }
+
+        const [beatsPerBar, beatUnit] = timeSignature.split("/").map((str) => {
+            return Number(str);
+        });
+
+        const stepsPerBeat = stepResolution / beatUnit;
+        if (stepsPerBeat > 1) {
+            const beat = Math.floor((step - 1) / stepsPerBeat) + 1;
+            let beatIsEven = beat % 2 === 0;
+            if (beatsPerBar % 2 === 1 && bar % 2 === 0) {
+                beatIsEven = !beatIsEven;
+            } // odd number of groups in each bar, so swap every bar
+
+            return beatIsEven ? "even-beat" : "odd-beat";
+        }
+
+        // If all else fails, we just alternate each note
+        const stepsPerBar = stepsPerBeat * beatsPerBar;
+        const stepIsEven = (((bar - 1) * stepsPerBar) + step - 1) % 2 === 0;
+
+        return stepIsEven ? "even-beat" : "odd-beat";
+    }
+
+    public override componentWillUnmount(): void {
+        this.trackPlayerContext!.currentPolyrhythmNotePublisher.unsubscribe(this.timingChanged);
+        this.arrangementPlayerContext!.currentTimingPublisher.unsubscribe(this.timingChanged);
+
+        const { selectionManager } = this.servicesContext!;
+        selectionManager.unsubscribe(this.selectionChanged);
+    }
+
+    public override render(): ComponentChild {
+        const { note } = this.props;
+        const { isCurrent, selected, noteStyle } = this.state;
+
+        const classString = this.useClasses();
+        const backgroundColor = this.useBackgroundColor(isCurrent, selected);
+
+        return (
+            <BananaDrumContext.Consumer>
+                {(bananaDrumContext) => {
+                    return (
+                        <ArrangementPlayerContext.Consumer>
+                            {(arrangementPlayerContext) => {
+                                return (
+                                    <TrackPlayerContext.Consumer>
+                                        {(trackPlayerContext) => {
+                                            return (
+                                                <ServicesContext.Consumer>
+                                                    {(servicesContext) => {
+                                                        this.useContexts(arrangementPlayerContext, trackPlayerContext,
+                                                            servicesContext, bananaDrumContext);
+
+                                                        return (
+                                                            <div
+                                                                id={`note-${note.id}`}
+                                                                className={classString}
+                                                                onClick={this.handleClick}
+                                                                onMouseDown={this.handleMouseDown}
+                                                                onMouseMove={this.handleMouseMove}
+                                                                style={{ backgroundColor }}
+                                                            >
+                                                                <TouchHoldDetector
+                                                                    holdLength={1100}
+                                                                    callback={this.handleTouchHold}
+                                                                >
+                                                                    <div className="note-details-viewer" >
+                                                                        <NoteStyleSymbolViewer noteStyle={noteStyle} />
+                                                                    </div>
+                                                                </TouchHoldDetector>
+                                                            </div >
+                                                        );
+
+                                                    }}
+                                                </ServicesContext.Consumer>
+                                            );
+                                        }}
+                                    </TrackPlayerContext.Consumer>
+                                );
+                            }}
+                        </ArrangementPlayerContext.Consumer>
+                    );
+                }}
+            </BananaDrumContext.Consumer>
+        );
+    }
+
+    private useContexts(
+        arrangementPlayerContext?: ContextType<typeof ArrangementPlayerContext>,
+        trackPlayerContext?: ContextType<typeof TrackPlayerContext>,
+        servicesContext?: ContextType<typeof ServicesContext>,
+        bananaDrumContext?: ContextType<typeof BananaDrumContext>,
+    ): void {
+        if (this.arrangementPlayerContext !== arrangementPlayerContext) {
+            this.arrangementPlayerContext = arrangementPlayerContext;
+            this.trackPlayerContext = trackPlayerContext;
+            this.servicesContext = servicesContext;
+            this.bananaDrumContext = bananaDrumContext;
+
+            if (arrangementPlayerContext && trackPlayerContext) {
+                this.setState({ isCurrent: this.isCurrentlyPlaying() });
+            }
+
+            const { note } = this.props;
+
+            const { selectionManager } = this.servicesContext!;
+            const timingPublisher: Subscribable = note.polyrhythm
+                ? this.trackPlayerContext!.currentPolyrhythmNotePublisher
+                : this.arrangementPlayerContext!.currentTimingPublisher;
+
+            timingPublisher.subscribe(this.timingChanged);
+            selectionManager.subscribe(this.selectionChanged);
+
+            this.setState({ noteStyle: note.noteStyle });
+        }
+    }
+
+    private timingChanged = (): void => {
+        this.setState({ isCurrent: this.isCurrentlyPlaying() });
+    };
+
+    private selectionChanged = (): void => {
+        const { note } = this.props;
+        const { selectionManager } = this.servicesContext!;
+
+        this.setState({ selected: selectionManager.isSelected(note) });
+    };
+
+    private handleClick = (event: MouseEvent) => {
+        const { note } = this.props;
+        const { selectionManager, modeManager } = this.servicesContext!;
+
         if (event.shiftKey || modeManager.mobileSelectionMode) {
             selectionManager.handleClick(note);
         } else if (!modeManager.selectByMouseOverMode) {
@@ -55,195 +212,124 @@ export function NoteViewer({ note }: { note: NoteView; }): JSX.Element {
             if (selectionManager.selections.size) {
                 selectionManager.deselectAll();
             } else {
-                cycleNoteStyle(note, edit);
+                this.cycleNoteStyle();
             }
         }
 
         event.stopPropagation();
-    }, []);
+    };
 
-    const handleMouseMove = useCallback((event: MouseEvent) => {
-        if (
-            modeManager.selectByMouseOverMode
-            && event.buttons === 1 // Primary button, and no others, is held down
-        ) {
+    private handleMouseMove = (event: MouseEvent) => {
+        const { note } = this.props;
+        const { selectionManager, modeManager } = this.servicesContext!;
+
+        // Primary button, and no others, is held down
+        if (modeManager.selectByMouseOverMode && event.buttons === 1) {
             selectionManager.handleDragSelect(note);
         }
-    }, []);
+    };
 
-    const handleMouseDown = useCallback(() => {
+    private handleMouseDown = () => {
+        const { note } = this.props;
+        const { selectionManager } = this.servicesContext!;
         selectionManager.handleMouseDown(note);
-    }, []);
+    };
 
-    const handleTouchHold = useCallback(() => {
+    private handleTouchHold = () => {
+        const { note } = this.props;
+        const { selectionManager, modeManager } = this.servicesContext!;
         selectionManager.handleClick(note);
         modeManager.mobileSelectionMode = true;
-    }, []);
+    };
 
-    const idString = useMemo(() => {
-        return `note-${note.id}`;
-    }, []);
-    const classString = useClasses(note); // This is a hook because it calls useMemo
-    const backgroundColor = useBackgroundColor(note, isCurrent, selected);
+    private useClasses(): string {
+        const { note } = this.props;
 
-    return (
-        <div
-            id={idString}
-            className={classString}
-            onClick={handleClick}
-            onMouseDown={handleMouseDown}
-            onMouseMove={handleMouseMove}
-            style={{ backgroundColor }}
-        >
-            <TouchHoldDetector
-                holdLength={1100}
-                callback={handleTouchHold}
-            >
-                <div className="note-details-viewer" >
-                    <NoteStyleSymbolViewer noteStyle={noteStyle} />
-                </div>
-            </TouchHoldDetector>
-        </div>
-    );
-}
+        const inPolyrhythm = note.polyrhythm !== undefined;
+        const { bar, step } = note.timing;
+        const { timeSignature, stepResolution } = note.track.arrangement.timeParams;
 
-const baseNoteClasses = "note-viewer note-width";
-
-function useClasses(note: NoteView): string {
-    const inPolyrhythm = note.polyrhythm !== undefined;
-    const { bar, step } = note.timing;
-    const { timeSignature, stepResolution } = note.track.arrangement.timeParams;
-
-    return useMemo(() => {
         if (inPolyrhythm) {
             return baseNoteClasses;
         }
 
-        const classes: string[] = [baseNoteClasses];
-        const { step } = note.timing;
+        const classes = [baseNoteClasses];
 
-        classes.push(getParityClass(bar, step, timeSignature, stepResolution)!);
+        classes.push(NoteViewer.getParityClass(bar, step, timeSignature, stepResolution));
 
         if (step === 1) {
             classes.push("start-of-bar");
         }
 
         return classes.join(" ");
-    }, [inPolyrhythm, bar, step, timeSignature, stepResolution]);
-}
-
-export function getParityClass(bar: number, step: number, timeSignature: string,
-    stepResolution: number): string | null {
-    if (timeSignature === "4/4" && stepResolution === 16) {
-        const beat = Math.floor((step - 1) / 4) + 1;
-        const beatIsEven = beat % 2 === 0;
-
-        return beatIsEven ? "even-beat" : "odd-beat";
     }
 
-    if (timeSignature === "6/8" && stepResolution === 8) {
-        const beat = Math.floor((step - 1) / 3) + 1;
-        const beatIsEven = beat % 2 === 0;
+    private useBackgroundColor(isCurrent: boolean, selected: boolean) {
+        const { note } = this.props;
 
-        return beatIsEven ? "even-beat" : "odd-beat";
+        return isCurrent
+            ? "var(--light-yellow)"    // Light up notes as the music plays
+            : selected
+                ? this.getSelectedColour(note.track.instrument.colourGroup)
+                : note.noteStyle
+                    ? getTrackColour(note.track)  // Otherwise, give active notes the track colour
+                    : "";                         // Inactive notes have no inline background colour
     }
 
-    if (timeSignature === "5/4" && stepResolution === 8) {
-        const beat = Math.floor((step - 1) / 2) + 1;
-        let beatIsEven = beat % 2 === 0;
-        if (bar % 2 === 0) {
-            beatIsEven = !beatIsEven;
-        } // 5 groups in each bar, so swap every bar
+    private isCurrentlyPlaying(): boolean {
+        if (!this.arrangementPlayerContext || !this.trackPlayerContext) {
+            return false;
+        }
 
-        return beatIsEven ? "even-beat" : "odd-beat";
+        const { note } = this.props;
+
+        if (note.polyrhythm) {
+            return this.trackPlayerContext.currentPolyrhythmNote === note;
+        }
+
+        if (this.arrangementPlayerContext.currentTiming === null) {
+            return false;
+        }
+
+        return isSameTiming(this.arrangementPlayerContext.currentTiming, note.timing);
     }
 
-    if (timeSignature === "7/8" && stepResolution === 8) {
-        return (step === 1 || step === 3 || step === 5) ? "odd-beat" : "even-beat";
+    private cycleNoteStyle() {
+        const { note } = this.props;
+        const noteStyle = this.getNextNoteStyle(note);
+
+        this.bananaDrumContext?.edit({ type: "EditCommand_Note", note, noteStyle });
+        if (noteStyle?.audioBuffer) {
+            createAudioBufferPlayer(noteStyle.audioBuffer, audioContext);
+            void audioContext.resume();
+        }
     }
 
-    const [beatsPerBar, beatUnit] = timeSignature.split("/").map(str => {
-        return Number(str);
-    });
-    const stepsPerBeat = stepResolution / beatUnit;
-    if (stepsPerBeat > 1) {
-        const beat = Math.floor((step - 1) / stepsPerBeat) + 1;
-        let beatIsEven = beat % 2 === 0;
-        if (beatsPerBar % 2 === 1 && bar % 2 === 0) {
-            beatIsEven = !beatIsEven;
-        } // odd number of groups in each bar, so swap every bar
+    private getNextNoteStyle(note: NoteView): NoteStyle | undefined {
+        const noteStyles = note.track.instrument.noteStyles;
+        const noteStyleIds = Object.keys(noteStyles);
+        if (!note.noteStyle) {
+            // This happens when the note-style is null, meaning a rest
+            return noteStyles[noteStyleIds[0]];
+        }
 
-        return beatIsEven ? "even-beat" : "odd-beat";
+        const currentNoteStyleId = note.noteStyle.id;
+        const index = noteStyleIds.indexOf(currentNoteStyleId);
+        const nextNoteStyleId = noteStyleIds[index + 1];
+        if (nextNoteStyleId) {
+            return noteStyles[nextNoteStyleId];
+        }
+
+        return undefined; // Cycle back to rest after all note-styles
     }
 
-    // If all else fails, we just alternate each note
-    const stepsPerBar = stepsPerBeat * beatsPerBar;
-    const stepIsEven = (((bar - 1) * stepsPerBar) + step - 1) % 2 === 0;
-
-    return stepIsEven ? "even-beat" : "odd-beat";
-}
-
-function useBackgroundColor(note: NoteView, isCurrent: boolean, selected: boolean) {
-    const selectedColour = useMemo(() => {
-        return getSelectedColour(note.track.instrument.colourGroup);
-    }, []);
-
-    // We could memoise this next calculation, but I feel like with the memo dependencies,
-    // little or nothing will be gained.
-    return isCurrent
-        ? "var(--light-yellow)"    // Light up notes as the music plays
-        : selected
-            ? selectedColour
-            : note.noteStyle
-                ? getTrackColour(note.track)  // Otherwise, give active notes the track colour
-                : "";                         // Inactive notes have no inline background colour
-}
-
-function isCurrentlyPlaying(note: NoteView, arrangementPlayer: ArrangementPlayer, trackPlayer: TrackPlayer) {
-    if (note.polyrhythm) {
-        return trackPlayer.currentPolyrhythmNote === note;
-    }
-
-    if (arrangementPlayer.currentTiming === null) {
-        return false;
-    }
-
-    return isSameTiming(arrangementPlayer.currentTiming, note.timing);
-}
-
-function cycleNoteStyle(note: NoteView, edit: (command: EditCommand) => void) {
-    const noteStyle = getNextNoteStyle(note);
-    edit({ type: "EditCommand_Note", note, noteStyle });
-    if (noteStyle?.audioBuffer) {
-        createAudioBufferPlayer(noteStyle.audioBuffer, audioContext);
-        void audioContext.resume();
-    }
-}
-
-function getNextNoteStyle(note: NoteView): NoteStyle | undefined {
-    const noteStyles = note.track.instrument.noteStyles;
-    const noteStyleIds = Object.keys(noteStyles);
-    if (!note.noteStyle) {
-        // This happens when the note-style is null, meaning a rest
-        return noteStyles[noteStyleIds[0]];
-    }
-
-    const currentNoteStyleId = note.noteStyle.id;
-    const index = noteStyleIds.indexOf(currentNoteStyleId);
-    const nextNoteStyleId = noteStyleIds[index + 1];
-    if (nextNoteStyleId) {
-        return noteStyles[nextNoteStyleId];
-    }
-
-    return undefined; // Cycle back to rest after all note-styles
-}
-
-function getSelectedColour(colourGroup: string) {
-    switch (colourGroup) {
-        case "yellow": return `var(--secondary-purple)`;
-        case "orange": return `var(--secondary-blue)`;
-        case "green": return `var(--secondary-red)`;
-        case "blue": return `var(--secondary-orange)`;
-        case "purple": return `var(--secondary-green)`;
+    private getSelectedColour(colourGroup: string) {
+        switch (colourGroup) {
+            case "yellow": return `var(--secondary-purple)`;
+            case "orange": return `var(--secondary-blue)`;
+            case "green": return `var(--secondary-red)`;
+            case "blue": return `var(--secondary-orange)`;
+            case "purple": return `var(--secondary-green)`;
+        }
     }
 }
