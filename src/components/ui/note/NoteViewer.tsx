@@ -13,7 +13,7 @@ import { ArrangementPlayerContext } from "../Arrangement1/ArrangementViewer.js";
 import { ComponentBase, type IComponentProperties, type IComponentState } from "../ComponentBase/ComponentBase.js";
 import { AnimadaScoreBookContext, ServicesContext } from "../ScoreBookViewer.js";
 import { TouchHoldDetector } from "../TouchHoldDetector.js";
-import { TrackPlayerContext } from "../Track/TrackViewer.js";
+import { TrackPlayerContext } from "../Track1/TrackViewer.js";
 import { NoteStyleSymbolViewer } from "./NoteStyleSymbolViewer.js";
 
 const audioContext = new AudioContext();
