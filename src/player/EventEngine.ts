@@ -9,7 +9,7 @@ import type {
     AudioEvent, CallbackEvent, EventEngine, EventEngineState, IEventSource, Interval, MuteEvent, MuteFilter
 } from "./types.js";
 
-// The core of the Banana Drum Player is the EventEngine
+// The core of the Animada Score Book Player is the EventEngine
 // It plays audio and fires callbacks at the right time
 // Playing audio boils down to the WebAudio API, so we must warp our design around that
 
@@ -103,8 +103,8 @@ const eventEngine: EventEngine = (function () {
         const audioBufferPlayer = playSound(audioEvent.audioBuffer, audioEvent.realTime + offset);
         const audioEventReference: AudioEventReference = { audioEvent, audioBufferPlayer };
         scheduledAudioEvents.push(audioEventReference);
-        // Event listener will fire on context.suspend() as well as audiobuffer finishing
-        // The 'stop' button wants to clear audio that's in mid-play
+        // Event listener will fire on context.suspend() as well as audio buffer finishing.
+        // The 'stop' button wants to clear audio that's in mid-play.
         audioBufferPlayer.onEnded(() => {
             stopAudioAndUnschedule(audioEventReference);
         });

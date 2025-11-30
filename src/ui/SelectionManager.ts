@@ -5,8 +5,8 @@
 
 /* eslint-disable prefer-arrow/prefer-arrow-functions, jsdoc/require-jsdoc */
 
-import type { ISubscribable, INoteView, ITrackView } from "../core/index.js";
 import { createPublisher } from "../core/Publisher.js";
+import type { INoteView, ISubscribable, ITrackView } from "../core/types/general.js";
 
 export interface SelectionManager extends ISubscribable {
     isSelected(note: INoteView): boolean;
@@ -244,7 +244,7 @@ function deselectUntilMatch(trackSelection: TrackSelection, iterator: IterableIt
     matches: (note: INoteView) => boolean) {
 
     while (true) {
-        const note = iterator.next().value as INoteView | undefined;
+        const note = iterator.next().value;
         if (!note) {
             return; // No more notes
         }
@@ -269,7 +269,7 @@ function selectUntilMatch(trackSelection: TrackSelection, iterator: IterableIter
     matches: (note: INoteView) => boolean) {
 
     while (true) {
-        const note = iterator.next().value as INoteView | undefined;
+        const note = iterator.next().value;
         if (!note) {
             return; // No more notes
         }
@@ -291,7 +291,7 @@ function selectUntilNoMoreMatches(trackSelection: TrackSelection, iterator: Iter
     matches: (note: INoteView) => boolean) {
 
     while (true) {
-        const note = iterator.next().value as INoteView | undefined;
+        const note = iterator.next().value;
         if (!note) {
             return; // No more notes
         }
@@ -312,7 +312,7 @@ function selectUntilNoMoreMatches(trackSelection: TrackSelection, iterator: Iter
 // And finally we are after the new selection, removing any previously selected notes
 function deselectUntilNoMoreSelected(trackSelection: TrackSelection, iterator: IterableIterator<INoteView>) {
     while (true) {
-        const note = iterator.next().value as INoteView | undefined;
+        const note = iterator.next().value;
         if (!note) {
             return; // No more notes
         }

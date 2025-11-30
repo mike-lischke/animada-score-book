@@ -5,10 +5,10 @@
 
 import type { ComponentChild, ContextType } from "preact";
 
-import type { IPolyrhythmView } from "../../core/index.js";
+import type { IPolyrhythmView } from "../../core/types/general.js";
 import { ComponentBase, type IComponentProperties, type IComponentState } from "./ComponentBase/ComponentBase.js";
 import { NoteViewer } from "./note/NoteViewer.js";
-import { BananaDrumContext, ServicesContext } from "./ScoreBookViewer.js";
+import { AnimadaScoreBookContext, ServicesContext } from "./ScoreBookViewer.js";
 
 export interface IPolyrhythmViewerProps extends IComponentProperties {
     polyrhythm: IPolyrhythmView;
@@ -21,7 +21,7 @@ interface IPolyrhythmViewerState extends IComponentState {
 
 export class PolyrhythmViewer extends ComponentBase<IPolyrhythmViewerProps, IPolyrhythmViewerState> {
     private servicesContext: ContextType<typeof ServicesContext> | null = null;
-    private bananaDrumContext: ContextType<typeof BananaDrumContext> | null = null;
+    private scoreBookContext: ContextType<typeof AnimadaScoreBookContext> | null = null;
 
     public constructor(props: IPolyrhythmViewerProps) {
         super(props);
@@ -49,9 +49,9 @@ export class PolyrhythmViewer extends ComponentBase<IPolyrhythmViewerProps, IPol
         const { deleteMode, isShrouded } = this.state;
 
         return (
-            <BananaDrumContext.Consumer>
-                {(bananaDrumContext) => {
-                    this.bananaDrumContext = bananaDrumContext;
+            <AnimadaScoreBookContext.Consumer>
+                {(scoreBookContext) => {
+                    this.scoreBookContext = scoreBookContext;
 
                     return (
                         <ServicesContext.Consumer>
@@ -109,7 +109,7 @@ export class PolyrhythmViewer extends ComponentBase<IPolyrhythmViewerProps, IPol
                         </ServicesContext.Consumer>
                     );
                 }}
-            </BananaDrumContext.Consumer>
+            </AnimadaScoreBookContext.Consumer>
         );
     }
 
@@ -129,7 +129,7 @@ export class PolyrhythmViewer extends ComponentBase<IPolyrhythmViewerProps, IPol
         const { polyrhythm } = this.props;
         const track = polyrhythm.start.track;
 
-        this.bananaDrumContext?.edit({
+        this.scoreBookContext?.edit({
             type: "EditCommand_TrackRemovePolyrhythm",
             track,
             removePolyrhythm: polyrhythm

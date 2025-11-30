@@ -3,12 +3,12 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import type { ArrangementSnapshot, SerialisedArrangement } from "../types/snapshots.js";
+import type { IArrangementSnapshot, ISerialisedArrangement } from "../types/snapshots.js";
 import { baseUrl } from "./constants.js";
 import { serialiseArrangementSnapshot } from "./serialisers.js";
 
 // We generate a share link from a snapshot so we can generate it from the undo-redo stack
-export const getShareLink = (arrangementSnapshot: ArrangementSnapshot): string => {
+export const getShareLink = (arrangementSnapshot: IArrangementSnapshot): string => {
     const serialisedArrangement = serialiseArrangementSnapshot(arrangementSnapshot);
     const compositionParam = `a${serialisedArrangement.version}=${serialisedArrangement.composition}`;
 
@@ -20,7 +20,7 @@ export const getShareLink = (arrangementSnapshot: ArrangementSnapshot): string =
 };
 
 export const getSerialisedArrangementFromParams = (
-    searchParams: URLSearchParams): SerialisedArrangement | undefined => {
+    searchParams: URLSearchParams): ISerialisedArrangement | undefined => {
     const title = searchParams.get("t") ?? undefined;
 
     if (searchParams.get("a2")) {

@@ -3,8 +3,8 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import type { IArrangementView, RealTime, ITiming, ITrackView } from "../core/index.js";
 import { createPublisher } from "../core/Publisher.js";
+import type { IArrangementView, ITiming, ITrackView, RealTime } from "../core/types/general.js";
 import { createTimeCoordinator } from "./TimeCoordinator.js";
 import { createTrackPlayer } from "./TrackPlayer.js";
 import { ArrangementPlayer, CallbackEvent, Event, Interval, LoopInterval, TrackPlayer } from "./types.js";

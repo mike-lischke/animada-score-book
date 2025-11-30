@@ -5,9 +5,9 @@
 
 import { createContext, type ComponentChild } from "preact";
 
-import type { IArrangementView, ITimeParamsView, Subscription } from "../../../core/index.js";
 import { ComponentBase, type IComponentProperties, type IComponentState } from "../ComponentBase/ComponentBase.js";
 import { TimingViewer } from "./TimingViewer.js";
+import type { IArrangementView, Subscription, ITimeParamsView } from "../../../core/types/general.js";
 
 export type BarDivisibility = 1 | 2 | 4;
 export const BarDivisibilityContext = createContext<BarDivisibility | null>(null);

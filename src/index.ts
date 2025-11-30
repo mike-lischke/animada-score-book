@@ -3,15 +3,16 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import {
-    ArrangementSnapshot, createAnimadaScoreBook, deserialiseArrangement, getLibrary, getSerialisedArrangementFromParams,
-    SerialisedArrangement
-} from "./core/index.js";
+import { bateriaInstruments } from "./bateria-instruments.js";
+import { createAnimadaScoreBook } from "./core/AnimadaScoreBook.js";
+import { getLibrary } from "./core/Library.js";
+import { deserialiseArrangement } from "./core/serialisation/deserialisers.js";
+import { getSerialisedArrangementFromParams } from "./core/serialisation/url.js";
+import type { IArrangementSnapshot, ISerialisedArrangement } from "./core/types/snapshots.js";
+import { demoSongString } from "./demo-song.js";
 import { createScoreBookPlayer } from "./player/ScoreBookPlayer.js";
 import { createScoreBookUi } from "./ui/AnimadaScoreBookUi.js";
 import { getSessionSnapshot, resetSessionVariables } from "./ui/session-recovery.js";
-import { bateriaInstruments } from "./bateria-instruments.js";
-import { demoSongString } from "./demo-song.js";
 
 const createLoadingMessage = () => {
     const loadingMessage = document.createElement("div");
@@ -21,7 +22,7 @@ const createLoadingMessage = () => {
     return loadingMessage;
 };
 
-const getSharedArrangement = (): SerialisedArrangement | undefined => {
+const getSharedArrangement = (): ISerialisedArrangement | undefined => {
     const searchParams = new URLSearchParams(window.location.search);
     const serialisedArrangement = getSerialisedArrangementFromParams(searchParams);
 
@@ -45,7 +46,7 @@ const createButton = (innerText: string): HTMLButtonElement => {
     return button;
 };
 
-const load = (loadButtonWrapper: HTMLDivElement, arrangementToLoad: ArrangementSnapshot | SerialisedArrangement) => {
+const load = (loadButtonWrapper: HTMLDivElement, arrangementToLoad: IArrangementSnapshot | ISerialisedArrangement) => {
     loadButtonWrapper.replaceWith(createLoadingMessage());
 
     const library = getLibrary();
@@ -55,21 +56,21 @@ const load = (loadButtonWrapper: HTMLDivElement, arrangementToLoad: ArrangementS
         arrangementToLoad = deserialiseArrangement(arrangementToLoad);
     };
 
-    const bananaDrum = createAnimadaScoreBook(library, arrangementToLoad);
-    const bananaDrumPlayer = createScoreBookPlayer(bananaDrum);
-    const bananaDrumUi = createScoreBookUi(bananaDrumPlayer, document.getElementById("wrapper")!);
+    const scoreBook = createAnimadaScoreBook(library, arrangementToLoad);
+    const scoreBookPlayer = createScoreBookPlayer(scoreBook);
+    const scoreBookUi = createScoreBookUi(scoreBookPlayer, document.getElementById("wrapper")!);
 
     // Expose some things for testing:
-    const { arrangement } = bananaDrum;
-    const { arrangementPlayer } = bananaDrumPlayer;
-    Object.assign(window, { arrangement, arrangementPlayer, library, bananaDrum, bananaDrumPlayer, bananaDrumUi });
+    const { arrangement } = scoreBook;
+    const { arrangementPlayer } = scoreBookPlayer;
+    Object.assign(window, { arrangement, arrangementPlayer, library, scoreBook, scoreBookPlayer, scoreBookUi });
 
     if (arrangement.title) {
-        document.title = arrangement.title + " - Banana Drum";
+        document.title = arrangement.title + " - Animada Score Book";
     }
 
     arrangement.subscribe(() => {
-        return document.title = arrangement.title ? arrangement.title + " - Banana Drum" : "Banana Drum";
+        return document.title = arrangement.title ? arrangement.title + " - Animada Score Book" : "Animada Score Book";
     });
 };
 

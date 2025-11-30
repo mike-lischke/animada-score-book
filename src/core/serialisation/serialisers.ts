@@ -4,11 +4,11 @@
  */
 
 import { getNoteStyleCount } from "../Library.js";
-import type { ArrangementSnapshot, SerialisedArrangement, TrackSnapshot } from "../types/snapshots.js";
+import type { IArrangementSnapshot, ISerialisedArrangement, ITrackSnapshot } from "../types/snapshots.js";
 import { polyrhythmCharacterToNumber, serialisationVersion, urlCharacterToNumber } from "./constants.js";
 import { interpretAsBaseN, urlEncodeNumber } from "./numeric_functions.js";
 
-export const serialiseArrangementSnapshot = (arrangementSnapshot: ArrangementSnapshot): SerialisedArrangement => {
+export const serialiseArrangementSnapshot = (arrangementSnapshot: IArrangementSnapshot): ISerialisedArrangement => {
     const tp = arrangementSnapshot.timeParams;
     let serialisedArrangement = `${tp.timeSignature}.${tp.tempo}.${tp.length}.${tp.pulse}.${tp.stepResolution}`;
 
@@ -17,7 +17,7 @@ export const serialiseArrangementSnapshot = (arrangementSnapshot: ArrangementSna
 
     // First character is instrument-ID, with no separator after
     // We assume that more than 64 instruments is a long way off, and we can introduce a new serialisation version then
-    arrangementSnapshot.tracks.forEach(trackSnapshot => {
+    arrangementSnapshot.tracks.forEach((trackSnapshot) => {
         return serialisedArrangement += "." + serialiseTrackSnapshot(trackSnapshot);
     });
 
@@ -28,7 +28,7 @@ export const serialiseArrangementSnapshot = (arrangementSnapshot: ArrangementSna
     };
 };
 
-const serialiseTrackSnapshot = (trackSnapshot: TrackSnapshot): string => {
+const serialiseTrackSnapshot = (trackSnapshot: ITrackSnapshot): string => {
     const serialisedNotes = serialiseNotes(trackSnapshot);
     let serialisedTrack = trackSnapshot.instrumentId + serialisedNotes;
     if (trackSnapshot.polyrhythms.length) {
@@ -38,8 +38,8 @@ const serialiseTrackSnapshot = (trackSnapshot: TrackSnapshot): string => {
     return serialisedTrack;
 };
 
-const serialiseNotes = (trackSnapshot: TrackSnapshot): string => {
-    const notesStylesAsNumbers = trackSnapshot.notes.map(noteChar => {
+const serialiseNotes = (trackSnapshot: ITrackSnapshot): string => {
+    const notesStylesAsNumbers = trackSnapshot.notes.map((noteChar) => {
         return urlCharacterToNumber[noteChar];
     });
     const base = BigInt(getNoteStyleCount(trackSnapshot.instrumentId));
@@ -48,7 +48,7 @@ const serialiseNotes = (trackSnapshot: TrackSnapshot): string => {
     return urlEncodeNumber(notesAsNumber);
 };
 
-const serialisePolyrhythms = (trackSnapshot: TrackSnapshot): string => {
+const serialisePolyrhythms = (trackSnapshot: ITrackSnapshot): string => {
     const polyrhythmString = trackSnapshot.polyrhythms
         .map(({ start, end, length }) => {
             return `${start}-${end - start}-${length}`;

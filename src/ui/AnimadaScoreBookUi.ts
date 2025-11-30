@@ -19,16 +19,16 @@ import { createSelectionManager, SelectionManager } from "./SelectionManager.js"
 import { initSessionRecovery } from "./session-recovery.js";
 import { IScoreBookUi } from "./types.js";
 
-export function createScoreBookUi(bananaDrumPlayer: ScoreBookPlayer, wrapper: HTMLElement): IScoreBookUi {
-    const services = initServices(bananaDrumPlayer);
+export function createScoreBookUi(scoreBookPlayer: ScoreBookPlayer, wrapper: HTMLElement): IScoreBookUi {
+    const services = initServices(scoreBookPlayer);
 
     createRoot(wrapper).render(
         createElement(StrictMode, {},
-            createElement(ScoreBookViewer, { bananaDrumPlayer, services })
+            createElement(ScoreBookViewer, { scoreBookPlayer: scoreBookPlayer, services })
         )
     );
 
-    return { bananaDrumPlayer, wrapper };
+    return { scoreBookPlayer, wrapper };
 }
 
 export interface ScoreBookUiServices {
@@ -43,9 +43,9 @@ function initServices(scoreBookPlayer: ScoreBookPlayer): ScoreBookUiServices {
     const selectionManager = createSelectionManager();
     const modeManager = createModeManager(selectionManager);
 
-    createKeyboardHandler(scoreBookPlayer.eventEngine, scoreBookPlayer.bananaDrum, selectionManager, modeManager);
+    createKeyboardHandler(scoreBookPlayer.eventEngine, scoreBookPlayer.scoreBook, selectionManager, modeManager);
     createMouseHandler(modeManager, selectionManager);
-    initSessionRecovery(scoreBookPlayer.bananaDrum);
+    initSessionRecovery(scoreBookPlayer.scoreBook);
 
     return { animationEngine, selectionManager, modeManager };
 }

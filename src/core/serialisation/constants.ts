@@ -1,4 +1,4 @@
-export const baseUrl = "https://bananadrum.net/";
+export const baseUrl = "https://samba-chemnitz.de/";
 export const serialisationVersion = 2;
 
 // ==================================================================
@@ -6,7 +6,7 @@ export const serialisationVersion = 2;
 // ==================================================================
 
 // RFC3986 does not explicitly list valid characters, but it does highlight some as reserved/unreserved
-// Reserved: general delimiters: :/?#[]@, sub delimeters: !$&'()*+,;=
+// Reserved: general delimiters: :/?#[]@, sub delimiters: !$&'()*+,;=
 // Unreserved:  A-Za-z0-9-._~
 // Elsewhere, the internet tell us there are some "unwise" characters: {}|\^[]`. We aspire to be wise,
 // but may grow dumb later.

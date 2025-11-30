@@ -5,26 +5,27 @@
 
 import type { ComponentChild, ContextType } from "preact";
 
-import type { IArrangementView, EditCommand_TimeParamsTimeSignature } from "../../../core/index.js";
-import { BananaDrumContext } from "../ScoreBookViewer.js";
+import type { EditCommand_TimeParamsTimeSignature } from "../../../core/types/edit_commands.js";
+import type { IArrangementView } from "../../../core/types/general.js";
 import { ComponentBase, type IComponentProperties } from "../ComponentBase/ComponentBase.js";
 import { NumberInput } from "../NumberInput.js";
+import { AnimadaScoreBookContext } from "../ScoreBookViewer.js";
 
 export interface ITimeControlsProps extends IComponentProperties {
     arrangement: IArrangementView;
 }
 
 export class TimeControls extends ComponentBase<ITimeControlsProps> {
-    private bananaDrumContext?: ContextType<typeof BananaDrumContext>;
+    private scoreBookContext?: ContextType<typeof AnimadaScoreBookContext>;
 
     public override render(): ComponentChild {
         const { arrangement } = this.props;
         const pluralBars = arrangement.timeParams.length > 1;
 
         return (
-            <BananaDrumContext.Consumer>
-                {(bananaDrumContext) => {
-                    this.bananaDrumContext = bananaDrumContext;
+            <AnimadaScoreBookContext.Consumer>
+                {(scoreBookContext) => {
+                    this.scoreBookContext = scoreBookContext;
 
                     return (
                         <div className="time-controls-wrapper" >
@@ -45,7 +46,7 @@ export class TimeControls extends ComponentBase<ITimeControlsProps> {
                                         return String(arrangement.timeParams.tempo);
                                     }}
                                     setValue={(newValue: string) => {
-                                        bananaDrumContext?.edit({
+                                        scoreBookContext?.edit({
                                             type: "EditCommand_TimeParamsTempo",
                                             timeParams: arrangement.timeParams,
                                             tempo: Number(newValue)
@@ -60,7 +61,7 @@ export class TimeControls extends ComponentBase<ITimeControlsProps> {
                                         return String(arrangement.timeParams.length);
                                     }}
                                     setValue={(newValue: string) => {
-                                        bananaDrumContext?.edit({
+                                        scoreBookContext?.edit({
                                             type: "EditCommand_TimeParamsLength",
                                             timeParams: arrangement.timeParams,
                                             length: Number(newValue)
@@ -72,7 +73,7 @@ export class TimeControls extends ComponentBase<ITimeControlsProps> {
                         </div>
                     );
                 }}
-            </BananaDrumContext.Consumer>
+            </AnimadaScoreBookContext.Consumer>
         );
     }
 
@@ -103,7 +104,7 @@ export class TimeControls extends ComponentBase<ITimeControlsProps> {
                 break;
         }
 
-        this.bananaDrumContext?.edit(command as EditCommand_TimeParamsTimeSignature);
+        this.scoreBookContext?.edit(command as EditCommand_TimeParamsTimeSignature);
     };
 
 }

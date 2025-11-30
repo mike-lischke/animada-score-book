@@ -5,13 +5,13 @@
 
 import { getNoteStyleCount } from "../Library.js";
 import type {
-    ArrangementSnapshot, PolyrhythmSnapshot, SerialisedArrangement, TrackSnapshot
+    IArrangementSnapshot, IPolyrhythmSnapshot, ISerialisedArrangement, ITrackSnapshot
 } from "../types/snapshots.js";
 import { calculateStepsPerBar, getNewId } from "../utils.js";
 import { polyrhythmNumberToCharacter, urlNumberToCharacter } from "./constants.js";
 import { convertToBaseN, urlDecodeNumber } from "./numeric_functions.js";
 
-export const deserialiseArrangement = (serialisedArrangement: SerialisedArrangement): ArrangementSnapshot => {
+export const deserialiseArrangement = (serialisedArrangement: ISerialisedArrangement): IArrangementSnapshot => {
     const { title, composition } = serialisedArrangement;
     const chunks = composition.split(".");
 
@@ -25,14 +25,14 @@ export const deserialiseArrangement = (serialisedArrangement: SerialisedArrangem
 
     const baseNoteCount = calculateStepsPerBar(timeParams.timeSignature, timeParams.stepResolution) * timeParams.length;
     const tracks = chunks.slice(5)
-        .map(serialisedTrack => {
+        .map((serialisedTrack) => {
             return deserialiseTrack(serialisedTrack, baseNoteCount, serialisedArrangement.version);
         });
 
     return { title, timeParams, tracks };
 };
 
-const deserialiseTrack = (serialisedTrack: string, baseNoteCount: number, version: number): TrackSnapshot => {
+const deserialiseTrack = (serialisedTrack: string, baseNoteCount: number, version: number): ITrackSnapshot => {
     const instrumentId = serialisedTrack[0];
 
     let splitterIndex = serialisedTrack.indexOf("-");
@@ -53,7 +53,7 @@ const deserialiseTrack = (serialisedTrack: string, baseNoteCount: number, versio
 // In version 1, we shortened the numbers by expressing them in url-characters, so base 64
 // The full string looked like like 2-5-f-7-9b-3-4-9-1...
 // In version 2, we instead used normal numbers, and compacted the entire string the way we compact the serialised notes
-const deserialisePolyrhythms = (serialisedPolyrhythms: string, version: number): PolyrhythmSnapshot[] => {
+const deserialisePolyrhythms = (serialisedPolyrhythms: string, version: number): IPolyrhythmSnapshot[] => {
     if (serialisedPolyrhythms === "") {
         return [];
     }
@@ -72,7 +72,7 @@ const deserialisePolyrhythms = (serialisedPolyrhythms: string, version: number):
         };
 
     const chunks = serialisedPolyrhythms.split("-");
-    const polyrhythmSnapshots: PolyrhythmSnapshot[] = [];
+    const polyrhythmSnapshots: IPolyrhythmSnapshot[] = [];
 
     // Each polyrhythm is encoded in 3 chunks
     for (let chunkIndex = 0; chunkIndex < chunks.length; chunkIndex += 3) {
@@ -112,7 +112,7 @@ const unpackPolyrhythmString = (packedPolyrhythmsString: string): string => {
 // If you do them in order, we are just adding a modifier for each one
 // And since addition is abelian, that means we actually don't care about the order here
 // That said, I just used a mathematical term along with some hand-waving, so I could be wrong
-const getNoteCountWithPolyrhythms = (baseNoteCount: number, polyrhythmSnapshots: PolyrhythmSnapshot[]): number => {
+const getNoteCountWithPolyrhythms = (baseNoteCount: number, polyrhythmSnapshots: IPolyrhythmSnapshot[]): number => {
     return polyrhythmSnapshots
         .map(({ start, end, length }) => {
             return length + start - end - 1;
@@ -137,7 +137,7 @@ const deserialiseNotes = (serialisedNotes: string, instrumentId: string, trackNo
         return 0;
     }));
 
-    return musicInBaseN.map(noteStyleNumber => {
+    return musicInBaseN.map((noteStyleNumber) => {
         return urlNumberToCharacter[noteStyleNumber];
     });
 };

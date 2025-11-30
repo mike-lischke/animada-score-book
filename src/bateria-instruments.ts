@@ -17,8 +17,7 @@ import tripleSlashIcon from "./assets/images/icons/triple_slash.svg";
 import oBigIcon from "./assets/images/icons/o_big.svg";
 import sunRaysIcon from "./assets/images/icons/sun_rays.svg";
 import oBigClosedIcon from "./assets/images/icons/o_big_closed.svg";
-
-import { IPackedInstrument } from "./core/index.js";
+import type { IPackedInstrument } from "./core/types/general.js";
 
 export const bateriaInstruments: IPackedInstrument[] = [{
     id: "0",

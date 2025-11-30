@@ -4,12 +4,12 @@
  */
 
 import type { EditCommand } from "./edit_commands.js";
-import type { ArrangementSnapshot } from "./snapshots.js";
+import type { IArrangementSnapshot } from "./snapshots.js";
 
 export interface IAnimadaScoreBook {
     library: ILibrary;
     arrangement: IArrangementView;
-    currentState: ArrangementSnapshot;
+    currentState: IArrangementSnapshot;
     canUndo: boolean;
     canRedo: boolean;
     edit(command: EditCommand): void;

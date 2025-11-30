@@ -3,9 +3,8 @@
 * Licensed under the MIT License. See License.txt in the project root for license information.
 */
 
-import type { RealTime } from "../core/index.js";
 import { createPublisher } from "../core/Publisher.js";
-import type { ISubscribable } from "../core/types/general.js";
+import type { ISubscribable, RealTime } from "../core/types/general.js";
 import type { EventEngine, EventEngineState } from "../player/types.js";
 
 export class AnimationEngine implements ISubscribable {

@@ -8,12 +8,12 @@ import pencilIcon from "../../../assets/images/icons/pencil_white.svg";
 import playIcon from "../../../assets/images/icons/play.svg";
 
 import type { ComponentChild, ContextType } from "preact";
-import type { IArrangementView, Subscription } from "../../../core/index.js";
+import type { IArrangementView, Subscription } from "../../../core/types/general.js";
 import { getEventEngine } from "../../../player/EventEngine.js";
-import { ServicesContext } from "../ScoreBookViewer.js";
 import { ComponentBase } from "../ComponentBase/ComponentBase.js";
 import { ExpandingSpacer } from "../ExpandingSpacer.js";
 import { Overlay } from "../Overlay.js";
+import { ServicesContext } from "../ScoreBookViewer.js";
 import { SelectionControls } from "../SelectionControls.js";
 import { ShareButton } from "../ShareButton.js";
 import { SmallSpacer } from "../SmallSpacer.js";

@@ -5,7 +5,7 @@
 
 import { createContext, createRef, type ComponentChild } from "preact";
 
-import type { IAnimadaScoreBook } from "../../core/index.js";
+import type { IAnimadaScoreBook } from "../../core/types/general.js";
 import type { ScoreBookPlayer } from "../../player/types.js";
 import type { ScoreBookUiServices } from "../../ui/AnimadaScoreBookUi.js";
 import { About } from "./About.js";
@@ -14,10 +14,10 @@ import { ComponentBase, type IComponentProperties } from "./ComponentBase/Compon
 import { Popup } from "./Popup.js";
 
 export const ServicesContext = createContext<ScoreBookUiServices | null>(null);
-export const BananaDrumContext = createContext<IAnimadaScoreBook | null>(null);
+export const AnimadaScoreBookContext = createContext<IAnimadaScoreBook | null>(null);
 
 export interface IScoreBookViewerProps extends IComponentProperties {
-    bananaDrumPlayer: ScoreBookPlayer;
+    scoreBookPlayer: ScoreBookPlayer;
     services: ScoreBookUiServices;
 }
 
@@ -25,13 +25,13 @@ export class ScoreBookViewer extends ComponentBase<IScoreBookViewerProps> {
     private aboutBoxRef = createRef<HTMLDivElement>();
 
     public override render(): ComponentChild {
-        const { bananaDrumPlayer, services } = this.props;
+        const { scoreBookPlayer, services } = this.props;
 
         return (
-            <div id="banana-drum">
-                <BananaDrumContext.Provider value={bananaDrumPlayer.bananaDrum}>
+            <div id="score-book-viewer">
+                <AnimadaScoreBookContext.Provider value={scoreBookPlayer.scoreBook}>
                     <ServicesContext.Provider value={services}>
-                        <ArrangementViewer arrangementPlayer={bananaDrumPlayer.arrangementPlayer} />
+                        <ArrangementViewer arrangementPlayer={scoreBookPlayer.arrangementPlayer} />
                         <div id="footer">
                             <button className="anchor-button" onClick={() => {
                                 if (this.aboutBoxRef.current) {
@@ -47,7 +47,7 @@ export class ScoreBookViewer extends ComponentBase<IScoreBookViewerProps> {
                             <About />
                         </Popup>
                     </ServicesContext.Provider>
-                </BananaDrumContext.Provider>
+                </AnimadaScoreBookContext.Provider>
             </div>
         );
     }

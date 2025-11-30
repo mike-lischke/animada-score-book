@@ -6,7 +6,7 @@
 import { createPublisher } from "./Publisher.js";
 import { getArrangementSnapshot } from "./serialisation/snapshots.js";
 import type { EditCommand, EditCommand_ArrangementTitle } from "./types/edit_commands.js";
-import type { ArrangementSnapshot } from "./types/snapshots.js";
+import type { IArrangementSnapshot } from "./types/snapshots.js";
 import type { IArrangementView, INoteStyle, ISubscribable } from "./types/general.js";
 import { squashRecentNoteCycling } from "./undo-redo-utils.js";
 import { exists } from "./utils.js";
@@ -14,7 +14,7 @@ import { exists } from "./utils.js";
 interface UndoRedoStack {
     canUndo: boolean;
     canRedo: boolean;
-    currentState: ArrangementSnapshot;
+    currentState: IArrangementSnapshot;
     handleEdit(command: EditCommand, oldValue?: INoteStyle): void;
     goBack(): void;
     goForward(): void;
@@ -25,7 +25,7 @@ interface UndoRedoStack {
 }
 
 export interface HistoryState {
-    arrangementSnapshot: ArrangementSnapshot;
+    arrangementSnapshot: IArrangementSnapshot;
     lastCommand?: EditCommand;
     oldValue?: INoteStyle;
     timestamp: number;

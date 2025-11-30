@@ -5,7 +5,7 @@
 
 import { createRef, type ComponentChild, type ContextType } from "preact";
 
-import { BananaDrumContext } from "../ScoreBookViewer.js";
+import { AnimadaScoreBookContext } from "../ScoreBookViewer.js";
 import { ComponentBase, type IComponentProperties } from "../ComponentBase/ComponentBase.js";
 import { ArrangementPlayerContext } from "./ArrangementViewer.js";
 
@@ -21,7 +21,7 @@ interface IArrangementTitleState {
 
 export class ArrangementTitle extends ComponentBase<IArrangementTitleProps, IArrangementTitleState> {
 
-    private bananaDrumContext?: ContextType<typeof BananaDrumContext>;
+    private scoreBookContext?: ContextType<typeof AnimadaScoreBookContext>;
     private arrangementPlayerContext?: ContextType<typeof ArrangementPlayerContext>;
     private inputRef = createRef<HTMLInputElement>();
 
@@ -50,12 +50,12 @@ export class ArrangementTitle extends ComponentBase<IArrangementTitleProps, IArr
         const { title, inputValue } = this.state;
 
         return (
-            <BananaDrumContext.Consumer>
-                {(bananaDrumContext) => {
+            <AnimadaScoreBookContext.Consumer>
+                {(scoreBookContext) => {
                     return (
                         <ArrangementPlayerContext.Consumer>
                             {(arrangementPlayerContext) => {
-                                this.useSubscriptions(arrangementPlayerContext, bananaDrumContext);
+                                this.useSubscriptions(arrangementPlayerContext, scoreBookContext);
 
                                 return (
                                     <div id="title-wrapper" style={{ textAlign: "center" }}>
@@ -97,17 +97,17 @@ export class ArrangementTitle extends ComponentBase<IArrangementTitleProps, IArr
                         </ArrangementPlayerContext.Consumer>
                     );
                 }}
-            </BananaDrumContext.Consumer>
+            </AnimadaScoreBookContext.Consumer>
         );
     }
 
     private useSubscriptions = (
         arrangementPlayerContext: ContextType<typeof ArrangementPlayerContext>,
-        bananaDrumContext: ContextType<typeof BananaDrumContext>
+        scoreBookContext: ContextType<typeof AnimadaScoreBookContext>
     ): void => {
         if (this.arrangementPlayerContext !== arrangementPlayerContext) {
             this.arrangementPlayerContext = arrangementPlayerContext;
-            this.bananaDrumContext = bananaDrumContext;
+            this.scoreBookContext = scoreBookContext;
 
             this.setState({ inputValue: arrangementPlayerContext!.arrangement.title });
         }
@@ -117,7 +117,7 @@ export class ArrangementTitle extends ComponentBase<IArrangementTitleProps, IArr
         const { onEditEnd } = this.props;
 
         const arrangement = this.arrangementPlayerContext!.arrangement;
-        this.bananaDrumContext?.edit({
+        this.scoreBookContext?.edit({
             type: "EditCommand_ArrangementTitle", arrangement,
             newTitle: (event.target as HTMLInputElement).value
         });
@@ -129,7 +129,7 @@ export class ArrangementTitle extends ComponentBase<IArrangementTitleProps, IArr
 
         const arrangement = this.arrangementPlayerContext!.arrangement;
         if (event.key === "Enter") { // Enter means submit the changes and stop editing
-            this.bananaDrumContext?.edit({
+            this.scoreBookContext?.edit({
                 type: "EditCommand_ArrangementTitle",
                 arrangement,
                 newTitle: (event.target as HTMLInputElement).value

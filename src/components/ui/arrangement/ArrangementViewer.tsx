@@ -6,20 +6,20 @@
 import { createContext, createRef, type JSX } from "preact";
 import type { MutableRefObject } from "preact/compat";
 
-import type { RealTime, Subscription, ITimeParamsView } from "../../../core/index.js";
 import { createPublisher } from "../../../core/Publisher.js";
+import type { ITimeParamsView, RealTime, Subscription } from "../../../core/types/general.js";
 import type { ArrangementPlayer } from "../../../player/types.js";
-import { ServicesContext } from "../ScoreBookViewer.js";
+import type { AnimationEngine } from "../../../ui/AnimationEngine.js";
 import { ComponentBase, type IComponentProperties, type IComponentState } from "../ComponentBase/ComponentBase.js";
 import { GuideRail } from "../GuideRail/GuideRail.js";
 import { InstrumentBrowser } from "../InstrumentBrowser.js";
 import { Overlay } from "../Overlay.js";
+import { ServicesContext } from "../ScoreBookViewer.js";
 import { Scrollbar } from "../Scrollbar.js";
 import { Share } from "../Share.js";
 import { TrackViewer } from "../track/TrackViewer.js";
 import { ArrangementControlsBottom } from "./ArrangementControlsBottom.js";
 import { ArrangementControlsTop } from "./ArrangementControlsTop.js";
-import type { AnimationEngine } from "../../../ui/AnimationEngine.js";
 
 const baseNoteWidth = 55.5; // 54pt flex-basis + 1.5pt for border
 

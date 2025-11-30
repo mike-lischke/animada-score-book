@@ -72,9 +72,8 @@ const addToLog = (logEntry: LogEntry) => {
     publisher.publish();
 };
 
-const errorReportPreamble = "Sorry to hear you had problems running Banana Drum! Please copy this error report " +
-    "and send it to James.\nDon't know James? Get in touch with Banana Drum on Facebook: " +
-    "https://facebook.com/bananadrum.net/\n\nError Report:\n";
+const errorReportPreamble = "Sorry to hear you had problems running Animada Score Book! Please copy this error " +
+    "report and open an issue on Github (https://github.com/mike-lischke/animada-score-book/issues).";
 
 interface ErrorLog extends ISubscribable {
     getEntryCount(): number;

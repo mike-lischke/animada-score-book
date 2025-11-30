@@ -6,12 +6,12 @@
 /* eslint-disable prefer-arrow/prefer-arrow-functions, jsdoc/require-jsdoc */
 
 import { Overlay } from "../components/ui/Overlay.js";
-import type { IAnimadaScoreBook } from "../core/index.js";
+import type { IAnimadaScoreBook } from "../core/types/general.js";
 import type { EventEngine } from "../player/types.js";
 import { ModeManager } from "./ModeManager.js";
 import { SelectionManager } from "./SelectionManager.js";
 
-export function createKeyboardHandler(eventEngine: EventEngine, bananaDrum: IAnimadaScoreBook,
+export function createKeyboardHandler(eventEngine: EventEngine, scoreBook: IAnimadaScoreBook,
     selectionManager: SelectionManager, modeManager: ModeManager) {
     window.addEventListener("keydown", (event) => {
         handleKeyDown(event);
@@ -42,9 +42,9 @@ export function createKeyboardHandler(eventEngine: EventEngine, bananaDrum: IAni
             case "Backspace":
             case "Delete":
                 if (!(event.target instanceof HTMLInputElement)) {
-                    bananaDrum.edit({
+                    scoreBook.edit({
                         type: "EditCommand_ArrangementClearSelection",
-                        arrangement: bananaDrum.arrangement,
+                        arrangement: scoreBook.arrangement,
                         clearSelection: selectionManager.selections
                     });
                     selectionManager.deselectAll();
@@ -58,10 +58,10 @@ export function createKeyboardHandler(eventEngine: EventEngine, bananaDrum: IAni
             case "z":
                 if (event.ctrlKey || event.metaKey) {
                     if (event.shiftKey) {
-                        bananaDrum.redo();
+                        scoreBook.redo();
                     } else {
                         // Standard redo on Mac, and no problem to allow it on Windows
-                        bananaDrum.undo();
+                        scoreBook.undo();
                     } // With ctrl, this doesn't even trigger on Mac. Seems harmless to include it anyway.
                 }
                 break;
@@ -69,7 +69,7 @@ export function createKeyboardHandler(eventEngine: EventEngine, bananaDrum: IAni
                 // We do not allow command+y to redo on Mac
                 // On Chrome, Firefox, and Safari, it triggers browser things, and so is very confusing to also redo
                 if (event.ctrlKey) {
-                    bananaDrum.redo();
+                    scoreBook.redo();
                 }
                 break;
         }

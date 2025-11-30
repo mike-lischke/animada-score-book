@@ -5,13 +5,13 @@
 
 import { createRef, type ComponentChild, type ContextType } from "preact";
 
-import type { IArrangementView } from "../../core/index.js";
+import type { IArrangementView } from "../../core/types/general.js";
 import type { SelectionManager } from "../../ui/SelectionManager.js";
 import { ArrangementPlayerContext } from "./arrangement/ArrangementViewer.js";
 import { ComponentBase, type IComponentState } from "./ComponentBase/ComponentBase.js";
 import { ExpandingSpacer } from "./ExpandingSpacer.js";
 import { OverlayStateContext } from "./Overlay.js";
-import { BananaDrumContext, ServicesContext } from "./ScoreBookViewer.js";
+import { AnimadaScoreBookContext, ServicesContext } from "./ScoreBookViewer.js";
 import { SmallSpacer } from "./SmallSpacer.js";
 
 const digitMatcher = /^\d$/;
@@ -22,7 +22,7 @@ interface ISelectionControlsState extends IComponentState {
 
 export class SelectionControls extends ComponentBase<{}, ISelectionControlsState> {
     private polyrhythmInputRef = createRef<HTMLInputElement>();
-    private bananaDrumContext: ContextType<typeof BananaDrumContext> | null = null;
+    private scoreBookContext: ContextType<typeof AnimadaScoreBookContext> | null = null;
     private overlayStateContext: ContextType<typeof OverlayStateContext> | null = null;
     private servicesContext: ContextType<typeof ServicesContext> | null = null;
     private arrangementPlayerContext: ContextType<typeof ArrangementPlayerContext> | null = null;
@@ -46,8 +46,8 @@ export class SelectionControls extends ComponentBase<{}, ISelectionControlsState
 
     public render(): ComponentChild {
         return (
-            <BananaDrumContext.Consumer>
-                {(bananaDrumContext) => {
+            <AnimadaScoreBookContext.Consumer>
+                {(scoreBookContext) => {
                     return (
                         <OverlayStateContext.Consumer>
                             {(overlayState) => {
@@ -61,8 +61,8 @@ export class SelectionControls extends ComponentBase<{}, ISelectionControlsState
                                                         const arrangement: IArrangementView = context!.arrangement;
                                                         const selectionManager = services!.selectionManager;
 
-                                                        if (!this.bananaDrumContext) {
-                                                            this.bananaDrumContext = bananaDrumContext;
+                                                        if (!this.scoreBookContext) {
+                                                            this.scoreBookContext = scoreBookContext;
                                                             this.servicesContext = services;
                                                             this.arrangementPlayerContext = context;
 
@@ -160,7 +160,7 @@ export class SelectionControls extends ComponentBase<{}, ISelectionControlsState
                         </OverlayStateContext.Consumer >
                     );
                 }}
-            </BananaDrumContext.Consumer>
+            </AnimadaScoreBookContext.Consumer>
         );
     }
 
@@ -171,7 +171,7 @@ export class SelectionControls extends ComponentBase<{}, ISelectionControlsState
             return;
         }
 
-        this.bananaDrumContext?.edit({
+        this.scoreBookContext?.edit({
             type: "EditCommand_ArrangementAddPolyrhythms",
             arrangement,
             addPolyrhythms: { length, selection: selectionManager.selections }
@@ -184,7 +184,7 @@ export class SelectionControls extends ComponentBase<{}, ISelectionControlsState
         const selectionManager = this.servicesContext!.selectionManager;
         const arrangement = this.arrangementPlayerContext!.arrangement;
 
-        this.bananaDrumContext?.edit({
+        this.scoreBookContext?.edit({
             type: "EditCommand_ArrangementClearSelection",
             arrangement,
             clearSelection: selectionManager.selections

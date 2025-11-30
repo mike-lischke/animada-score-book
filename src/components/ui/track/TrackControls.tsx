@@ -4,10 +4,10 @@
 */
 
 import type { ComponentChild } from "preact";
-import type { ITrackView } from "../../../core/index.js";
-import { BananaDrumContext } from "../ScoreBookViewer.js";
+import { AnimadaScoreBookContext } from "../ScoreBookViewer.js";
 import { ComponentBase, type IComponentProperties } from "../ComponentBase/ComponentBase.js";
 import { Overlay } from "../Overlay.js";
+import type { ITrackView } from "../../../core/types/general.js";
 
 export interface ITrackControlsProps extends IComponentProperties {
     track: ITrackView;
@@ -19,13 +19,13 @@ export class TrackControls extends ComponentBase<ITrackControlsProps> {
         const { track, overlayName } = this.props;
 
         return (
-            <BananaDrumContext.Consumer>
-                {(bananaDrumContext) => {
+            <AnimadaScoreBookContext.Consumer>
+                {(scoreBookContext) => {
                     return (
                         <div className="track-controls">
                             <button className="push-button gray"
                                 onClick={() => {
-                                    bananaDrumContext?.edit({
+                                    scoreBookContext?.edit({
                                         type: "EditCommand_ArrangementRemoveTrack",
                                         arrangement: track.arrangement,
                                         removeTrack: track
@@ -34,7 +34,7 @@ export class TrackControls extends ComponentBase<ITrackControlsProps> {
                             >Remove track</button>
                             <button className="push-button gray"
                                 onClick={() => {
-                                    bananaDrumContext?.edit({
+                                    scoreBookContext?.edit({
                                         type: "EditCommand_TrackClear",
                                         track,
                                         command: "clear"
@@ -50,7 +50,7 @@ export class TrackControls extends ComponentBase<ITrackControlsProps> {
                         </div>
                     );
                 }}
-            </BananaDrumContext.Consumer>
+            </AnimadaScoreBookContext.Consumer>
         );
     }
 };

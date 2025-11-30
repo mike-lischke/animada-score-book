@@ -3,9 +3,10 @@
 * Licensed under the MIT License. See License.txt in the project root for license information.
 */
 
-/* eslint-disable prefer-arrow/prefer-arrow-functions, jsdoc/require-jsdoc */
+import type { IAnimadaScoreBook } from "../core/types/general.js";
+import type { IArrangementSnapshot } from "../core/types/snapshots.js";
 
-import type { IAnimadaScoreBook, ArrangementSnapshot } from "../core/index.js";
+/* eslint-disable prefer-arrow/prefer-arrow-functions, jsdoc/require-jsdoc */
 
 // Tracking state all comes down to knowing the Session ID
 // This is either generated for a new session, or hopefully retrieved on page load
@@ -14,14 +15,14 @@ import type { IAnimadaScoreBook, ArrangementSnapshot } from "../core/index.js";
 let sessionId: string, stateKey: string, startedAtKey: string;
 resetSessionVariables(getExistingSessionId());
 
-export function initSessionRecovery(bananadrum: IAnimadaScoreBook) {
+export function initSessionRecovery(scoreBook: IAnimadaScoreBook) {
     const existingState = localStorage.getItem(stateKey);
 
     if (existingState) {
         // If we're continuing previous work, we want to start tracking immediately
-        bananadrum.topics.currentState.subscribe(() => {
+        scoreBook.topics.currentState.subscribe(() => {
             return setTimeout(() => {
-                saveSession(bananadrum);
+                saveSession(scoreBook);
             }, 0);
         });
     } else {
@@ -33,27 +34,27 @@ export function initSessionRecovery(bananadrum: IAnimadaScoreBook) {
             changeCounter++;
             if (changeCounter === 5) {
                 localStorage.setItem(startedAtKey, String(Date.now()));
-                saveSession(bananadrum);
-                bananadrum.topics.currentState.unsubscribe(countDownToStartSaving);
-                bananadrum.topics.currentState.subscribe(() => {
+                saveSession(scoreBook);
+                scoreBook.topics.currentState.unsubscribe(countDownToStartSaving);
+                scoreBook.topics.currentState.subscribe(() => {
                     return setTimeout(() => {
-                        saveSession(bananadrum);
+                        saveSession(scoreBook);
                     }, 0);
                 });
             }
         };
 
-        bananadrum.topics.currentState.subscribe(countDownToStartSaving);
+        scoreBook.topics.currentState.subscribe(countDownToStartSaving);
     }
 }
 
-export function getSessionSnapshot(): ArrangementSnapshot | null {
+export function getSessionSnapshot(): IArrangementSnapshot | null {
     const stateString = localStorage.getItem(stateKey);
     if (stateString === null) {
         return null;
     }
 
-    const parsed = JSON.parse(stateString) as { state: ArrangementSnapshot; updatedAt: number; };
+    const parsed = JSON.parse(stateString) as { state: IArrangementSnapshot; updatedAt: number; };
 
     return parsed.state;
 }
@@ -88,8 +89,8 @@ function generateSessionId(): string {
     return id;
 }
 
-function saveSession(bananadrum: IAnimadaScoreBook): void {
+function saveSession(scoreBook: IAnimadaScoreBook): void {
     const updatedAt = Date.now();
-    const state = bananadrum.currentState;
+    const state = scoreBook.currentState;
     localStorage.setItem(stateKey, JSON.stringify({ state, updatedAt }));
 }

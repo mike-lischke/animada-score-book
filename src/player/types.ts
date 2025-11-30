@@ -8,7 +8,7 @@ import type {
 } from "../core/types/general.js";
 
 export interface ScoreBookPlayer {
-    bananaDrum: IAnimadaScoreBook;
+    scoreBook: IAnimadaScoreBook;
     eventEngine: EventEngine;
     arrangementPlayer: ArrangementPlayer;
 }

@@ -5,8 +5,8 @@
 
 import { createContext, type ComponentChild } from "preact";
 
-import type { ISubscribable } from "../../core/index.js";
 import { createPublisher } from "../../core/Publisher.js";
+import type { ISubscribable } from "../../core/types/general.js";
 import { ComponentBase, type IComponentProperties, type IComponentState } from "./ComponentBase/ComponentBase.js";
 
 export const OverlayStateContext = createContext<OverlayState | null>(null);

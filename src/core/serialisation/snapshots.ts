@@ -3,10 +3,10 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import type { ArrangementSnapshot, PolyrhythmSnapshot, TrackSnapshot } from "../types/snapshots.js";
+import type { IArrangementSnapshot, IPolyrhythmSnapshot, ITrackSnapshot } from "../types/snapshots.js";
 import type { IArrangementView, IPolyrhythmView, ITrackView } from "../types/general.js";
 
-export const getArrangementSnapshot = (arrangement: IArrangementView): ArrangementSnapshot => {
+export const getArrangementSnapshot = (arrangement: IArrangementView): IArrangementSnapshot => {
     const { timeSignature, tempo, length, pulse, stepResolution } = arrangement.timeParams;
 
     return {
@@ -16,7 +16,7 @@ export const getArrangementSnapshot = (arrangement: IArrangementView): Arrangeme
     };
 };
 
-const getTrackSnapshot = (track: ITrackView): TrackSnapshot => {
+const getTrackSnapshot = (track: ITrackView): ITrackSnapshot => {
     return {
         id: track.id,
         instrumentId: track.instrument.id,
@@ -27,13 +27,13 @@ const getTrackSnapshot = (track: ITrackView): TrackSnapshot => {
 
 const getNotesAsChars = (track: ITrackView): string[] => {
     return Array.from(track.getNoteIterator())
-        .map(note => {
+        .map((note) => {
             return note.noteStyle?.id ?? "0";
         }); // For rests, note.noteStyle is null, and '0' is reserved for this on all instruments
 };
 
-const getPolyrhythmSnapshots = (track: ITrackView): PolyrhythmSnapshot[] => {
-    const polyrhythmSnapshots: PolyrhythmSnapshot[] = [];
+const getPolyrhythmSnapshots = (track: ITrackView): IPolyrhythmSnapshot[] => {
+    const polyrhythmSnapshots: IPolyrhythmSnapshot[] = [];
     const polyrhythmsToIgnore: IPolyrhythmView[] = [];
 
     // We do polyrhythms in reverse order in order to support nested polyrhthms

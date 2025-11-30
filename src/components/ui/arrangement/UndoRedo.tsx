@@ -8,7 +8,7 @@ import undoIcon from "../../../assets/images/icons/undo_white.svg";
 
 import type { ComponentChild, ContextType } from "preact";
 
-import { BananaDrumContext } from "../ScoreBookViewer.js";
+import { AnimadaScoreBookContext } from "../ScoreBookViewer.js";
 import { ComponentBase, type IComponentState } from "../ComponentBase/ComponentBase.js";
 import { SmallSpacer } from "../SmallSpacer.js";
 
@@ -18,7 +18,7 @@ export interface IUndoRedoState extends IComponentState {
 }
 
 export class UndoRedo extends ComponentBase<{}, IUndoRedoState> {
-    private bananaDrumContext?: ContextType<typeof BananaDrumContext>;
+    private scoreBookContext?: ContextType<typeof AnimadaScoreBookContext>;
 
     public constructor(props: {}) {
         super(props);
@@ -33,15 +33,15 @@ export class UndoRedo extends ComponentBase<{}, IUndoRedoState> {
         const { canUndo, canRedo } = this.state;
 
         return (
-            <BananaDrumContext.Consumer>
-                {(bananaDrumContext) => {
-                    this.useSubscription(bananaDrumContext);
+            <AnimadaScoreBookContext.Consumer>
+                {(scoreBookContext) => {
+                    this.useSubscription(scoreBookContext);
 
                     return (<div className='undo-redo-wrapper'>
                         <button
                             className='push-button medium gray'
                             disabled={!canUndo}
-                            onClick={bananaDrumContext!.undo}
+                            onClick={scoreBookContext!.undo}
                         >
                             <img src={undoIcon} style={{ height: "0.78em" }} />
                         </button>
@@ -49,27 +49,27 @@ export class UndoRedo extends ComponentBase<{}, IUndoRedoState> {
                         <button
                             className='push-button medium gray'
                             disabled={!canRedo}
-                            onClick={bananaDrumContext!.redo}
+                            onClick={scoreBookContext!.redo}
                         >
                             <img src={redoIcon} style={{ height: "0.78em" }} />
                         </button>
                     </div>);
                 }}
-            </BananaDrumContext.Consumer >
+            </AnimadaScoreBookContext.Consumer >
         );
     }
 
-    private useSubscription(bananaDrumContext: ContextType<typeof BananaDrumContext>) {
-        if (this.bananaDrumContext === bananaDrumContext) {
+    private useSubscription(scoreBookContext: ContextType<typeof AnimadaScoreBookContext>) {
+        if (this.scoreBookContext === scoreBookContext) {
             return;
         }
 
-        this.bananaDrumContext = bananaDrumContext;
-        bananaDrumContext?.topics.canUndo.subscribe(() => {
-            this.setState({ canUndo: bananaDrumContext.canUndo });
+        this.scoreBookContext = scoreBookContext;
+        scoreBookContext?.topics.canUndo.subscribe(() => {
+            this.setState({ canUndo: scoreBookContext.canUndo });
         });
-        bananaDrumContext?.topics.canRedo.subscribe(() => {
-            this.setState({ canRedo: bananaDrumContext.canRedo });
+        scoreBookContext?.topics.canRedo.subscribe(() => {
+            this.setState({ canRedo: scoreBookContext.canRedo });
         });
     }
 }

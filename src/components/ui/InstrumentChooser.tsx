@@ -5,11 +5,11 @@
 
 import type { ComponentChild, ContextType } from "preact";
 
-import type { IArrangementView, IInstrumentMeta } from "../../core/index.js";
 import { getLibrary } from "../../core/Library.js";
+import type { IArrangementView, IInstrumentMeta } from "../../core/types/general.js";
 import { ArrangementPlayerContext } from "./arrangement/ArrangementViewer.js";
 import { ComponentBase, type IComponentProperties } from "./ComponentBase/ComponentBase.js";
-import { BananaDrumContext } from "./ScoreBookViewer.js";
+import { AnimadaScoreBookContext } from "./ScoreBookViewer.js";
 
 export interface IInstrumentChooserProps extends IComponentProperties {
     instrumentMeta: IInstrumentMeta;
@@ -17,15 +17,15 @@ export interface IInstrumentChooserProps extends IComponentProperties {
 }
 
 export class InstrumentChooser extends ComponentBase<IInstrumentChooserProps> {
-    private bananaDrumContext?: ContextType<typeof BananaDrumContext>;
+    private scoreBookContext?: ContextType<typeof AnimadaScoreBookContext>;
 
     public render(): ComponentChild {
         const { instrumentMeta } = this.props;
 
         return (
-            <BananaDrumContext.Consumer>
-                {(bananaDrumContext) => {
-                    this.bananaDrumContext = bananaDrumContext;
+            <AnimadaScoreBookContext.Consumer>
+                {(scoreBookContext) => {
+                    this.scoreBookContext = scoreBookContext;
 
                     return (
                         <ArrangementPlayerContext.Consumer>
@@ -44,14 +44,14 @@ export class InstrumentChooser extends ComponentBase<IInstrumentChooserProps> {
                         </ArrangementPlayerContext.Consumer>
                     );
                 }}
-            </BananaDrumContext.Consumer>
+            </AnimadaScoreBookContext.Consumer>
         );
     }
 
     private buttonClick(arrangement: IArrangementView) {
         const { instrumentMeta, close } = this.props;
 
-        this.bananaDrumContext?.edit({
+        this.scoreBookContext?.edit({
             type: "EditCommand_ArrangementAddTrack", arrangement, addTrack: getLibrary()
                 .getInstrument(instrumentMeta.id)
         });

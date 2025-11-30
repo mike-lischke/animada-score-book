@@ -9,7 +9,7 @@ import { getShareLink } from "../../core/serialisation/url.js";
 import { ArrangementPlayerContext } from "./arrangement/ArrangementViewer.js";
 import { ComponentBase, type IComponentState } from "./ComponentBase/ComponentBase.js";
 import { Overlay } from "./Overlay.js";
-import { BananaDrumContext } from "./ScoreBookViewer.js";
+import { AnimadaScoreBookContext } from "./ScoreBookViewer.js";
 import { SmallSpacer } from "./SmallSpacer.js";
 
 const haveNativeSharing = "share" in navigator;
@@ -22,7 +22,7 @@ interface IShareState extends IComponentState {
 }
 
 export class Share extends ComponentBase<{}, IShareState> {
-    private bananaDrumContext: ContextType<typeof BananaDrumContext> | null = null;
+    private scoreBookContext: ContextType<typeof AnimadaScoreBookContext> | null = null;
 
     public constructor(props: {}) {
         super(props);
@@ -41,10 +41,10 @@ export class Share extends ComponentBase<{}, IShareState> {
             <ArrangementPlayerContext.Consumer>
                 {(context) => {
                     return (
-                        <BananaDrumContext.Consumer>
-                            {(bananaDrumContext) => {
-                                if (!this.bananaDrumContext) {
-                                    this.bananaDrumContext = bananaDrumContext;
+                        <AnimadaScoreBookContext.Consumer>
+                            {(scoreBookContext) => {
+                                if (!this.scoreBookContext) {
+                                    this.scoreBookContext = scoreBookContext;
                                     const arrangement = context!.arrangement;
                                     arrangement.subscribe(() => {
                                         this.setState({ title: arrangement.title });
@@ -52,7 +52,7 @@ export class Share extends ComponentBase<{}, IShareState> {
                                 }
 
                                 const sharedTitle = title
-                                    ? title + " - Banana Drum" : "Banana Drum - Samba Rhythms";
+                                    ? title + " - Animada Score Book" : "Animada Score Book - Samba Rhythms";
 
                                 return (
                                     <div className="viewport-wrapper">
@@ -116,7 +116,7 @@ export class Share extends ComponentBase<{}, IShareState> {
                                     </div>
                                 );
                             }}
-                        </BananaDrumContext.Consumer>
+                        </AnimadaScoreBookContext.Consumer>
                     );
                 }}
             </ArrangementPlayerContext.Consumer>
@@ -129,7 +129,7 @@ export class Share extends ComponentBase<{}, IShareState> {
     };
 
     private showLink = () => {
-        this.setState({ url: getShareLink(this.bananaDrumContext!.currentState) });
+        this.setState({ url: getShareLink(this.scoreBookContext!.currentState) });
     };
 
     private selectContent = (event: MouseEvent) => {

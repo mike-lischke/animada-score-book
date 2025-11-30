@@ -5,13 +5,13 @@
 
 import type { ComponentChild, ContextType } from "preact";
 
-import type { INoteStyle, INoteView, ISubscribable } from "../../../core/index.js";
+import type { INoteStyle, INoteView, ISubscribable } from "../../../core/types/general.js";
 import { isSameTiming } from "../../../core/utils.js";
 import { createAudioBufferPlayer } from "../../../player/AudioBufferPlayer.js";
 import { getTrackColour } from "../../../ui/track-colour.js";
 import { ArrangementPlayerContext } from "../arrangement/ArrangementViewer.js";
-import { BananaDrumContext, ServicesContext } from "../ScoreBookViewer.js";
 import { ComponentBase, type IComponentProperties, type IComponentState } from "../ComponentBase/ComponentBase.js";
+import { AnimadaScoreBookContext, ServicesContext } from "../ScoreBookViewer.js";
 import { TouchHoldDetector } from "../TouchHoldDetector.js";
 import { TrackPlayerContext } from "../track/TrackViewer.js";
 import { NoteStyleSymbolViewer } from "./NoteStyleSymbolViewer.js";
@@ -33,7 +33,7 @@ export class NoteViewer extends ComponentBase<INoteViewerProps, INoteViewerState
     private arrangementPlayerContext?: ContextType<typeof ArrangementPlayerContext>;
     private trackPlayerContext?: ContextType<typeof TrackPlayerContext>;
     private servicesContext?: ContextType<typeof ServicesContext>;
-    private bananaDrumContext?: ContextType<typeof BananaDrumContext>;
+    private scoreBookContext?: ContextType<typeof AnimadaScoreBookContext>;
 
     public constructor(props: INoteViewerProps) {
         super(props);
@@ -112,8 +112,8 @@ export class NoteViewer extends ComponentBase<INoteViewerProps, INoteViewerState
         const backgroundColor = this.useBackgroundColor(isCurrent, selected);
 
         return (
-            <BananaDrumContext.Consumer>
-                {(bananaDrumContext) => {
+            <AnimadaScoreBookContext.Consumer>
+                {(scoreBookContext) => {
                     return (
                         <ArrangementPlayerContext.Consumer>
                             {(arrangementPlayerContext) => {
@@ -124,7 +124,7 @@ export class NoteViewer extends ComponentBase<INoteViewerProps, INoteViewerState
                                                 <ServicesContext.Consumer>
                                                     {(servicesContext) => {
                                                         this.useContexts(arrangementPlayerContext, trackPlayerContext,
-                                                            servicesContext, bananaDrumContext);
+                                                            servicesContext, scoreBookContext);
 
                                                         return (
                                                             <div
@@ -156,7 +156,7 @@ export class NoteViewer extends ComponentBase<INoteViewerProps, INoteViewerState
                         </ArrangementPlayerContext.Consumer>
                     );
                 }}
-            </BananaDrumContext.Consumer>
+            </AnimadaScoreBookContext.Consumer>
         );
     }
 
@@ -164,13 +164,13 @@ export class NoteViewer extends ComponentBase<INoteViewerProps, INoteViewerState
         arrangementPlayerContext?: ContextType<typeof ArrangementPlayerContext>,
         trackPlayerContext?: ContextType<typeof TrackPlayerContext>,
         servicesContext?: ContextType<typeof ServicesContext>,
-        bananaDrumContext?: ContextType<typeof BananaDrumContext>,
+        scoreBookContext?: ContextType<typeof AnimadaScoreBookContext>,
     ): void {
         if (this.arrangementPlayerContext !== arrangementPlayerContext) {
             this.arrangementPlayerContext = arrangementPlayerContext;
             this.trackPlayerContext = trackPlayerContext;
             this.servicesContext = servicesContext;
-            this.bananaDrumContext = bananaDrumContext;
+            this.scoreBookContext = scoreBookContext;
 
             if (arrangementPlayerContext && trackPlayerContext) {
                 this.setState({ isCurrent: this.isCurrentlyPlaying() });
@@ -298,7 +298,7 @@ export class NoteViewer extends ComponentBase<INoteViewerProps, INoteViewerState
         const { note } = this.props;
         const noteStyle = this.getNextNoteStyle(note);
 
-        this.bananaDrumContext?.edit({ type: "EditCommand_Note", note, noteStyle });
+        this.scoreBookContext?.edit({ type: "EditCommand_Note", note, noteStyle });
         if (noteStyle?.audioBuffer) {
             createAudioBufferPlayer(noteStyle.audioBuffer, audioContext);
             void audioContext.resume();

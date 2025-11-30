@@ -7,9 +7,11 @@ import { createArrangement } from "../Arrangement.js";
 import { getLibrary } from "../Library.js";
 import { createTimeParams } from "../TimeParams.js";
 import type { IArrangement, INote, IPolyrhythm, ITimeParams, ITrack } from "../types/general.js";
-import type { ArrangementSnapshot, PolyrhythmSnapshot, TimeParamsSnapshot, TrackSnapshot } from "../types/snapshots.js";
+import type {
+    IArrangementSnapshot, IPolyrhythmSnapshot, ITimeParamsSnapshot, ITrackSnapshot
+} from "../types/snapshots.js";
 
-export const createArrangementFromSnapshot = (arrangementSnapshot: ArrangementSnapshot): IArrangement => {
+export const createArrangementFromSnapshot = (arrangementSnapshot: IArrangementSnapshot): IArrangement => {
     const timeParams = createTimeParamsFromSnapshot(arrangementSnapshot.timeParams);
     const arrangement = createArrangement(timeParams);
 
@@ -18,15 +20,16 @@ export const createArrangementFromSnapshot = (arrangementSnapshot: ArrangementSn
     return arrangement;
 };
 
-const createTimeParamsFromSnapshot = (tps: TimeParamsSnapshot): ITimeParams => {
+const createTimeParamsFromSnapshot = (tps: ITimeParamsSnapshot): ITimeParams => {
     return createTimeParams(tps.timeSignature, tps.tempo, tps.length, tps.pulse, tps.stepResolution);
 };
 
-// Used when loading Banana Drum, or when using Undo/Redo
-export const applyArrangementSnapshot = (arrangement: IArrangement, arrangementSnapshot: ArrangementSnapshot): void => {
+// Used when loading Animada Score Book, or when using Undo/Redo
+export const applyArrangementSnapshot = (arrangement: IArrangement,
+    arrangementSnapshot: IArrangementSnapshot): void => {
 
-    // applyTimeParams is redundant when loading Banana Drum, since we just created the Arrangement with the same TPs
-    // However, applying the full snapshot is required for Undo/Redo
+    // applyTimeParams is redundant when loading Animada Score Book, since we just created the Arrangement with the
+    // same TPs. However, applying the full snapshot is required for Undo/Redo.
     applyTimeParams(arrangement, arrangementSnapshot);
     arrangement.title = arrangementSnapshot.title ?? "Untitled Arrangement";
 
@@ -53,7 +56,7 @@ export const applyArrangementSnapshot = (arrangement: IArrangement, arrangementS
 };
 
 // Apply all timeParams without checking if they've changed. TP does this check and won't publish redundantly
-const applyTimeParams = (arrangement: IArrangement, arrangementSnapshot: ArrangementSnapshot): void => {
+const applyTimeParams = (arrangement: IArrangement, arrangementSnapshot: IArrangementSnapshot): void => {
     arrangement.timeParams.timeSignature = arrangementSnapshot.timeParams.timeSignature;
     arrangement.timeParams.tempo = arrangementSnapshot.timeParams.tempo;
     arrangement.timeParams.length = arrangementSnapshot.timeParams.length;
@@ -61,7 +64,7 @@ const applyTimeParams = (arrangement: IArrangement, arrangementSnapshot: Arrange
     arrangement.timeParams.stepResolution = arrangementSnapshot.timeParams.stepResolution;
 };
 
-const applyTrackSnapshot = (track: ITrack, trackSnapshot: TrackSnapshot): void => {
+const applyTrackSnapshot = (track: ITrack, trackSnapshot: ITrackSnapshot): void => {
 
     // First we remove polyrhythms, since this won't affect indexing
     let polyrhythmIndex = 0;
@@ -98,7 +101,7 @@ const applyTrackSnapshot = (track: ITrack, trackSnapshot: TrackSnapshot): void =
 };
 
 // Return the start and end Note objects for a polyrhythm we want to add to a Track
-const getStartAndEndNotes = (track: ITrack, polyrhythmSnapshot: PolyrhythmSnapshot,
+const getStartAndEndNotes = (track: ITrack, polyrhythmSnapshot: IPolyrhythmSnapshot,
     polyrhythmIndex: number): [INote, INote] => {
 
     // We have to ignore later polyrhythms so that our start and end indexes are applied correctly

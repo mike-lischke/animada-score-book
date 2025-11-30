@@ -6,6 +6,6 @@
 import type { ScoreBookPlayer } from "../player/types.js";
 
 export interface IScoreBookUi {
-    bananaDrumPlayer: ScoreBookPlayer;
+    scoreBookPlayer: ScoreBookPlayer;
     wrapper: HTMLElement;
 }

@@ -7,15 +7,15 @@
 
 import { useCallback, useContext } from "preact/hooks";
 
-import { BananaDrumContext } from "../../components/ui/ScoreBookViewer.js";
-import type { EditCommand } from "../../core/index.js";
+import { AnimadaScoreBookContext } from "../../components/ui/ScoreBookViewer.js";
+import type { EditCommand } from "../../core/types/edit_commands.js";
 
 export type EditFunction = (command: EditCommand) => void;
 
 export function useEditCommand(): EditFunction {
-    const bananaDrum = useContext(BananaDrumContext)!;
+    const scoreBook = useContext(AnimadaScoreBookContext)!;
 
     return useCallback((command: EditCommand) => {
-        bananaDrum.edit(command);
+        scoreBook.edit(command);
     }, []);
 }
