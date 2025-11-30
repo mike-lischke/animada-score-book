@@ -3,11 +3,8 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import { loadAudio } from "./loadAudio.js";
-import { createPublisher } from "./Publisher.js";
-import type {
-    IInstrument, IInstrumentMeta, ILibrary, INoteStyle, INoteStyleBase, IPackedInstrument
-} from "./types/general.js";
+import { Instrument } from "./Instrument.js";
+import type { IInstrument, IInstrumentMeta, ILibrary, INoteStyleBase, IPackedInstrument } from "./types/general.js";
 
 const packedInstruments: Record<string, IPackedInstrument | undefined> = {};
 const instruments: Record<string, IInstrument | undefined> = {};
@@ -36,7 +33,7 @@ const getInstrument = (id: string): IInstrument => {
         if (!packedInstruments[id]) {
             throw new Error("Unknown instrument requested from Library");
         }
-        instruments[id] = createInstrument(packedInstruments[id]);
+        instruments[id] = new Instrument(packedInstruments[id]);
     }
 
     return instruments[id];
@@ -49,42 +46,6 @@ const createNoteStyleBases = (packedInstrument: IPackedInstrument): Record<strin
     }
 
     return noteStyleBases;
-};
-
-// This should be the only instance of an instrument
-// So if this is called, the instrument must start unloaded
-const createInstrument = (packedInstrument: IPackedInstrument): IInstrument => {
-    const { id, packedNoteStyles, displayOrder, displayName, colourGroup } = packedInstrument;
-    const publisher = createPublisher();
-
-    let loaded = false;
-    const noteStyles: Record<string, INoteStyle> = {};
-    const unpackPromises: Array<Promise<AudioBuffer>> = [];
-
-    const instrument: IInstrument = {
-        id, noteStyles, displayOrder, displayName, colourGroup,
-        get loaded() {
-            return loaded;
-        },
-        subscribe: publisher.subscribe, unsubscribe: publisher.unsubscribe
-    };
-
-    packedNoteStyles.forEach(({ id, file, symbol, muting }) => {
-        noteStyles[id] = { id, symbol, audioBuffer: null, instrument, muting };
-        unpackPromises.push(
-            loadAudio(file)
-                .then((audioBuffer) => {
-                    return noteStyles[id].audioBuffer = audioBuffer;
-                })
-        );
-    });
-
-    void Promise.all(unpackPromises).then(() => {
-        loaded = true;
-        publisher.publish();
-    });
-
-    return instrument;
 };
 
 export const getNoteStyleCount = (instrumentId: string): number => {

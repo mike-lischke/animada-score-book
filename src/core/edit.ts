@@ -36,8 +36,6 @@ export const edit = (command: EditCommand): boolean => {
         default:
             return false;
     }
-
-    return false;
 };
 
 const editArrangement = (command: EditCommand_Arrangement): boolean => {

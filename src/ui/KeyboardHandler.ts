@@ -7,11 +7,11 @@
 
 import { Overlay } from "../components/ui/Overlay.js";
 import type { IAnimadaScoreBook } from "../core/types/general.js";
-import type { EventEngine } from "../player/types.js";
+import type { IEventEngine } from "../player/types.js";
 import { ModeManager } from "./ModeManager.js";
 import { SelectionManager } from "./SelectionManager.js";
 
-export function createKeyboardHandler(eventEngine: EventEngine, scoreBook: IAnimadaScoreBook,
+export function createKeyboardHandler(eventEngine: IEventEngine, scoreBook: IAnimadaScoreBook,
     selectionManager: SelectionManager, modeManager: ModeManager) {
     window.addEventListener("keydown", (event) => {
         handleKeyDown(event);

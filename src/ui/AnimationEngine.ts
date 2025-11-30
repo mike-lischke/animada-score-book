@@ -3,18 +3,18 @@
 * Licensed under the MIT License. See License.txt in the project root for license information.
 */
 
-import { createPublisher } from "../core/Publisher.js";
+import { Publisher } from "../core/Publisher.js";
 import type { ISubscribable, RealTime } from "../core/types/general.js";
-import type { EventEngine, EventEngineState } from "../player/types.js";
+import type { IEventEngine, EventEngineState } from "../player/types.js";
 
 export class AnimationEngine implements ISubscribable {
     public state: EventEngineState = "stopped";
 
     private readonly animations: Array<(realTime: RealTime) => void> = [];
     private nextAnimationId = 0;
-    private readonly publisher = createPublisher();
+    private readonly publisher = new Publisher();
 
-    public constructor(private eventEngine: EventEngine) {
+    public constructor(private eventEngine: IEventEngine) {
         eventEngine.subscribe(() => {
             if (eventEngine.state === "playing") {
                 this.start();

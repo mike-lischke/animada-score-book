@@ -15,7 +15,7 @@ export function createMouseHandler(modeManager: ModeManager, selectionManager: S
     }
 
     // We want clicking anywhere to clear the selection, with some extra criteria...
-    window.addEventListener("click", event => {
+    window.addEventListener("click", (event) => {
         if (
             selectionManager.selections.size
             // mouseup might be the end of selecting notes, but will fire a click event

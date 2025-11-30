@@ -3,10 +3,10 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import { createPublisher } from "../core/Publisher.js";
+import { Publisher } from "../core/Publisher.js";
 import { AudioBufferPlayer, createAudioBufferPlayer } from "./AudioBufferPlayer.js";
 import type {
-    AudioEvent, CallbackEvent, EventEngine, EventEngineState, IEventSource, Interval, MuteEvent, MuteFilter
+    AudioEvent, ICallbackEvent, IEventEngine, EventEngineState, IEventSource, IInterval, IMuteEvent, MuteFilter
 } from "./types.js";
 
 // The core of the Animada Score Book Player is the EventEngine
@@ -16,12 +16,12 @@ import type {
 const lookahead = 0.25; // (s) Look 250ms ahead for events
 const loopFrequency = 125; // (ms) Check for upcoming events every 125ms
 
-export const getEventEngine = (): EventEngine => {
+export const getEventEngine = (): IEventEngine => {
     return eventEngine;
 };
 
 // eslint-disable-next-line prefer-arrow/prefer-arrow-functions
-const eventEngine: EventEngine = (function () {
+const eventEngine: IEventEngine = (function () {
     const connect = (eventSource: IEventSource) => {
         eventSources.push(eventSource);
     };
@@ -77,13 +77,13 @@ const eventEngine: EventEngine = (function () {
     // We make sure never to request any time we've requested before
     const loop = () => {
         const intervalEnd = getTime() + lookahead;
-        const interval: Interval = { start: timeCovered, end: intervalEnd };
+        const interval: IInterval = { start: timeCovered, end: intervalEnd };
         scheduleEvents(interval);
         nextIterationId = setTimeout(loop, loopFrequency);
         timeCovered = intervalEnd;
     };
 
-    const scheduleEvents = (interval: Interval) => {
+    const scheduleEvents = (interval: IInterval) => {
         eventSources.forEach((eventSource) => {
             eventSource.getEvents(interval).forEach((event) => {
                 if ("audioBuffer" in event) {
@@ -118,7 +118,7 @@ const eventEngine: EventEngine = (function () {
         }
     };
 
-    const scheduleCallbackEvent = (callbackEvent: CallbackEvent) => {
+    const scheduleCallbackEvent = (callbackEvent: ICallbackEvent) => {
         const callbackEventReference: CallbackEventReference = {
             callbackEvent,
             timeoutId: setTimeout(() => {
@@ -139,7 +139,7 @@ const eventEngine: EventEngine = (function () {
         // They are also getting unscheduled by clearScheduledEvents, which does clearTimeout
     };
 
-    const scheduleMuteEvent = (muteEvent: MuteEvent) => {
+    const scheduleMuteEvent = (muteEvent: IMuteEvent) => {
         const scheduledMuteEvent = {
             muteEvent,
             timeoutId: setTimeout(() => {
@@ -198,7 +198,7 @@ const eventEngine: EventEngine = (function () {
     const eventSources: IEventSource[] = [];
     let nextIterationId: number | null = null;
     let state: EventEngineState = "stopped";
-    const publisher = createPublisher();
+    const publisher = new Publisher();
 
     // We use the AudioContext to move forward in time
     // But it always moves forward, even when the EventEngine is stopped
@@ -212,10 +212,10 @@ const eventEngine: EventEngine = (function () {
     interface AudioEventReference { audioEvent: AudioEvent, audioBufferPlayer: AudioBufferPlayer; }
     const scheduledAudioEvents: AudioEventReference[] = [];
 
-    interface CallbackEventReference { callbackEvent: CallbackEvent, timeoutId: number; }
+    interface CallbackEventReference { callbackEvent: ICallbackEvent, timeoutId: number; }
     const scheduledCallbackEvents: CallbackEventReference[] = [];
 
-    interface MuteEventReference { muteEvent: MuteEvent, timeoutId: number; }
+    interface MuteEventReference { muteEvent: IMuteEvent, timeoutId: number; }
     const scheduledMuteEvents: MuteEventReference[] = [];
 
     return {

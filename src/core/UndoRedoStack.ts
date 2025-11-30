@@ -3,7 +3,7 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import { createPublisher } from "./Publisher.js";
+import { Publisher } from "./Publisher.js";
 import { getArrangementSnapshot } from "./serialisation/snapshots.js";
 import type { EditCommand, EditCommand_ArrangementTitle } from "./types/edit_commands.js";
 import type { IArrangementSnapshot } from "./types/snapshots.js";
@@ -99,8 +99,8 @@ export const createUndoRedoStack = (arrangement: IArrangementView): UndoRedoStac
         squashIsQueued = true;
     };
 
-    const canUndoPublisher = createPublisher();
-    const canRedoPublisher = createPublisher();
+    const canUndoPublisher = new Publisher();
+    const canRedoPublisher = new Publisher();
 
     // Past must always contain at least one element, which is the present state
     // We initialise it with edit-command {}, which is meant as an EditCommand_LoadPage

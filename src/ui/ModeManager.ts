@@ -5,7 +5,7 @@
 
 /* eslint-disable prefer-arrow/prefer-arrow-functions, jsdoc/require-jsdoc */
 
-import { createPublisher } from "../core/Publisher.js";
+import { Publisher } from "../core/Publisher.js";
 import type { ISubscribable } from "../core/types/general.js";
 import type { SelectionManager } from "./SelectionManager.js";
 
@@ -24,7 +24,7 @@ export interface ModeManager extends ISubscribable {
 // For now, since there's only two modes, not a priority. We just have to be meticulous about avoioding bugs.
 
 export function createModeManager(selectionManager: SelectionManager): ModeManager {
-    const publisher = createPublisher();
+    const publisher = new Publisher();
     let deletePolyrhythmMode = false;
     let mobileSelectionMode = false;
     let selectByMouseOverMode = false;

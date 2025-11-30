@@ -4,24 +4,24 @@
  */
 
 import type { INote, INoteStyle, IPolyrhythm, ITiming, ITrack } from "./types/general.js";
-import { createPublisher } from "./Publisher.js";
+import { Publisher } from "./Publisher.js";
 
 let noteCount = 0;
 
-export const createNote = (track: ITrack, timing: ITiming, polyrhythm?: IPolyrhythm): INote => {
-    const publisher = createPublisher();
-    const id = `${++noteCount}`;
-    let noteStyle: INoteStyle | undefined;
+export class Note extends Publisher implements INote {
+    public readonly id = `${++noteCount}`;
+    private style: INoteStyle | undefined;
 
-    return {
-        id, timing, track, polyrhythm,
-        subscribe: publisher.subscribe, unsubscribe: publisher.unsubscribe,
-        get noteStyle(): INoteStyle | undefined {
-            return noteStyle;
-        },
-        set noteStyle(newNoteStyle: INoteStyle) {
-            noteStyle = newNoteStyle;
-            publisher.publish();
-        }
-    };
+    public constructor(public track: ITrack, public timing: ITiming, public polyrhythm?: IPolyrhythm) {
+        super();
+    }
+
+    public get noteStyle(): INoteStyle | undefined {
+        return this.style;
+    }
+
+    public set noteStyle(newNoteStyle: INoteStyle | undefined) {
+        this.style = newNoteStyle;
+        this.publish();
+    }
 };

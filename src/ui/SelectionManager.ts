@@ -5,7 +5,7 @@
 
 /* eslint-disable prefer-arrow/prefer-arrow-functions, jsdoc/require-jsdoc */
 
-import { createPublisher } from "../core/Publisher.js";
+import { Publisher } from "../core/Publisher.js";
 import type { INoteView, ISubscribable, ITrackView } from "../core/types/general.js";
 
 export interface SelectionManager extends ISubscribable {
@@ -23,7 +23,7 @@ interface TrackSelection {
 }
 
 export function createSelectionManager(): SelectionManager {
-    const publisher = createPublisher();
+    const publisher = new Publisher();
     const trackSelections = new Map<ITrackView, TrackSelection>();
     let anchor: INoteView | null = null;
 
@@ -244,10 +244,12 @@ function deselectUntilMatch(trackSelection: TrackSelection, iterator: IterableIt
     matches: (note: INoteView) => boolean) {
 
     while (true) {
-        const note = iterator.next().value;
-        if (!note) {
+        const done = iterator.next().done;
+        if (done) {
             return; // No more notes
         }
+
+        const note = iterator.next().value as INoteView;
 
         // Once we find the start-note, we enter the new selection, so this function is done
         if (matches(note)) {
@@ -269,10 +271,12 @@ function selectUntilMatch(trackSelection: TrackSelection, iterator: IterableIter
     matches: (note: INoteView) => boolean) {
 
     while (true) {
-        const note = iterator.next().value;
-        if (!note) {
+        const done = iterator.next().done;
+        if (done) {
             return; // No more notes
         }
+
+        const note = iterator.next().value as INoteView;
 
         // Anything in here gets added to the selection
         trackSelection.selectedNotes.add(note);
@@ -291,10 +295,12 @@ function selectUntilNoMoreMatches(trackSelection: TrackSelection, iterator: Iter
     matches: (note: INoteView) => boolean) {
 
     while (true) {
-        const note = iterator.next().value;
-        if (!note) {
+        const done = iterator.next().done;
+        if (done) {
             return; // No more notes
         }
+
+        const note = iterator.next().value as INoteView;
 
         // Keep adding notes if they match
         if (matches(note)) {
@@ -312,10 +318,12 @@ function selectUntilNoMoreMatches(trackSelection: TrackSelection, iterator: Iter
 // And finally we are after the new selection, removing any previously selected notes
 function deselectUntilNoMoreSelected(trackSelection: TrackSelection, iterator: IterableIterator<INoteView>) {
     while (true) {
-        const note = iterator.next().value;
-        if (!note) {
+        const done = iterator.next().done;
+        if (done) {
             return; // No more notes
         }
+
+        const note = iterator.next().value as INoteView;
 
         if (trackSelection.selectedNotes.has(note)) {
             trackSelection.selectedNotes.delete(note);

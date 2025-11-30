@@ -5,8 +5,8 @@
 
 import { createContext, type ComponentChild } from "preact";
 
-import type { ArrangementPlayer, TrackPlayer } from "../../../player/types.js";
-import { ArrangementPlayerContext } from "../arrangement/ArrangementViewer.js";
+import type { IArrangementPlayer, ITrackPlayer } from "../../../player/types.js";
+import { ArrangementPlayerContext } from "../Arrangement/ArrangementViewer.js";
 import { ComponentBase, type IComponentProperties, type IComponentState } from "../ComponentBase/ComponentBase.js";
 import { Overlay } from "../Overlay.js";
 import { NoteLine } from "./NoteLine.js";
@@ -20,7 +20,7 @@ export interface TrackViewerCallbacks {
 };
 
 export interface ITrackViewerProps extends IComponentProperties {
-    trackPlayer: TrackPlayer;
+    trackPlayer: ITrackPlayer;
     callbacks: TrackViewerCallbacks;
 }
 
@@ -29,10 +29,10 @@ interface ITrackviewerState extends IComponentState {
     loaded: boolean;
 }
 
-export const TrackPlayerContext = createContext<TrackPlayer | null>(null);
+export const TrackPlayerContext = createContext<ITrackPlayer | null>(null);
 
 export class TrackViewer extends ComponentBase<ITrackViewerProps, ITrackviewerState> {
-    private arrangementPlayerContext: ArrangementPlayer | null = null;
+    private arrangementPlayerContext: IArrangementPlayer | null = null;
 
     public constructor(props: ITrackViewerProps) {
         super(props);
@@ -112,7 +112,7 @@ export class TrackViewer extends ComponentBase<ITrackViewerProps, ITrackviewerSt
         this.setState({ loaded: track.instrument.loaded });
     };
 
-    private useContext = (arrangementPlayerContext: ArrangementPlayer | null) => {
+    private useContext = (arrangementPlayerContext: IArrangementPlayer | null) => {
         if (this.arrangementPlayerContext !== arrangementPlayerContext) {
             this.arrangementPlayerContext = arrangementPlayerContext;
 

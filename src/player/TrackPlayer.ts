@@ -3,12 +3,12 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import { createPublisher } from "../core/Publisher.js";
+import { Publisher } from "../core/Publisher.js";
 import type { INoteView, IPolyrhythmView, ITrackView, RealTime } from "../core/types/general.js";
 import { getMuteEvents } from "./Muting.js";
-import { CallbackEvent, Event, Interval, SoloMute, TimeCoordinator, TrackPlayer } from "./types.js";
+import { ICallbackEvent, Event, IInterval, SoloMute, ITimeCoordinator, ITrackPlayer } from "./types.js";
 
-export const createTrackPlayer = (track: ITrackView, timeCoordinator: TimeCoordinator): TrackPlayer => {
+export const createTrackPlayer = (track: ITrackView, timeCoordinator: ITimeCoordinator): ITrackPlayer => {
     const fillInBasicNoteTimes = () => {
         const unmatchedNotes = track.notes.filter((note) => {
             return !noteTimes.get(note);
@@ -76,7 +76,7 @@ export const createTrackPlayer = (track: ITrackView, timeCoordinator: TimeCoordi
         };
     };
 
-    const getEvents = ({ start, end }: Interval): Event[] => {
+    const getEvents = ({ start, end }: IInterval): Event[] => {
         if (!track.instrument.loaded) {
             return [];
         }
@@ -170,7 +170,7 @@ export const createTrackPlayer = (track: ITrackView, timeCoordinator: TimeCoordi
         cachedPolyrhythms = [];
     };
 
-    const getCurrentPolyrhythmNoteEvent = (note: INoteView, realTime: RealTime): CallbackEvent => {
+    const getCurrentPolyrhythmNoteEvent = (note: INoteView, realTime: RealTime): ICallbackEvent => {
         if (note.polyrhythm) {
             return {
                 realTime,
@@ -190,13 +190,13 @@ export const createTrackPlayer = (track: ITrackView, timeCoordinator: TimeCoordi
         };
     };
 
-    const publisher = createPublisher();
+    const publisher = new Publisher();
     const noteTimes = new Map<INoteView, RealTime>();
     let cachedPolyrhythms: IPolyrhythmView[] = [];
 
     // We are going to light up note-viewers in polyrhythms when they play, by simply publishing the playing note
     // Later we'll investigate whether we use this for all notes. It's pretty simple.
-    const currentPolyrhythmNotePublisher = createPublisher();
+    const currentPolyrhythmNotePublisher = new Publisher();
 
     // It would be better to parameterise Publisher, but that's a chunk of work
     let currentPolyrhythmNote: INoteView | null = null;

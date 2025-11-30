@@ -29,7 +29,7 @@ export const createAudioBufferPlayer = (audioBuffer: AudioBuffer, audioContext: 
             gainNode.gain.setTargetAtTime(0, 0, 0.05);
         },
         // Higher up, we use this listener to do some cleanup when audio finishes playing
-        onEnded: callback => {
+        onEnded: (callback) => {
             sourceNode.addEventListener("ended", callback);
         }
     };

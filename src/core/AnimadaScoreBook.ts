@@ -4,7 +4,7 @@
  */
 
 import { edit } from "./edit.js";
-import { createPublisher } from "./Publisher.js";
+import { Publisher } from "./Publisher.js";
 import { applyArrangementSnapshot, createArrangementFromSnapshot } from "./serialisation/snapshot_appliers.js";
 import type { EditCommand } from "./types/edit_commands.js";
 import type { IAnimadaScoreBook, ILibrary } from "./types/general.js";
@@ -17,7 +17,7 @@ export const createAnimadaScoreBook = (library: ILibrary,
     const arrangement = createArrangementFromSnapshot(arrangementSnapshot);
     const undoRedoStack = createUndoRedoStack(arrangement);
 
-    const currentStatePublisher = createPublisher();
+    const currentStatePublisher = new Publisher();
 
     return {
         library, arrangement,

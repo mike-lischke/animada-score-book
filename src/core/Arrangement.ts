@@ -3,32 +3,42 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import type { ITimeParams, IArrangement, ITrack, IInstrument } from "./types/general.js";
-import { createTrack } from "./Track.js";
-import { createPublisher } from "./Publisher.js";
+import { Publisher } from "./Publisher.js";
+import { Track } from "./Track.js";
+import type { IArrangement, IInstrument, ITimeParams, ITrack } from "./types/general.js";
 
-export const createArrangement = (timeParams: ITimeParams, title?: string): IArrangement => {
+export class Arrangement extends Publisher implements IArrangement {
+
+    public readonly tracks: ITrack[] = [];
+
+    private titleString: string | undefined;
+
+    public constructor(public timeParams: ITimeParams, title?: string) {
+        super();
+        this.titleString = title;
+    }
+
     // We keep tracks in order right here, so the rest of the app doesn't have to fiddle around figuring this out
-    const addTrack = (instrument: IInstrument, id?: number): ITrack => {
-        const index = tracks.findIndex((track) => {
+    public addTrack(instrument: IInstrument, id?: number): ITrack {
+        const index = this.tracks.findIndex((track) => {
             return track.instrument.displayOrder > instrument.displayOrder;
         });
-        const track = createTrack(arrangement, instrument, id);
+        const track = new Track(this, instrument, id);
         if (index === -1) {
-            tracks.push(track);
+            this.tracks.push(track);
         } else {
-            tracks.splice(index, 0, track);
+            this.tracks.splice(index, 0, track);
         }
-        publisher.publish();
+        this.publish();
 
         return track;
     };
 
-    const removeTrack = (trackToRemove: ITrack) => {
-        const index = tracks.indexOf(trackToRemove);
+    public removeTrack(trackToRemove: ITrack): boolean {
+        const index = this.tracks.indexOf(trackToRemove);
         if (index !== -1) {
-            tracks.splice(index, 1);
-            publisher.publish();
+            this.tracks.splice(index, 1);
+            this.publish();
 
             return true;
         } else {
@@ -37,20 +47,13 @@ export const createArrangement = (timeParams: ITimeParams, title?: string): IArr
         }
     };
 
-    const publisher = createPublisher();
-    const tracks: ITrack[] = [];
-    const arrangement: IArrangement = {
-        timeParams, tracks, addTrack, removeTrack,
-        get title() {
-            return title ?? "Untitled Arrangement";
-        },
-        set title(newTitle: string) {
-            title = newTitle; publisher.publish();
-        },
-        subscribe: publisher.subscribe,
-        unsubscribe: publisher.unsubscribe
-    };
+    public get title() {
+        return this.titleString ?? "Untitled Arrangement";
+    }
 
-    return arrangement;
+    public set title(newTitle: string) {
+        this.titleString = newTitle;
+        this.publish();
+    }
 
 };

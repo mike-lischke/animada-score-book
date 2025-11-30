@@ -5,9 +5,9 @@
 
 import type { IMutingRuleOtherInstrument, INoteView, MutingRule, RealTime } from "../core/types/general.js";
 import { exists, isSameTiming } from "../core/utils.js";
-import type { AudioEvent, MuteEvent, MuteFilter } from "./types.js";
+import type { AudioEvent, IMuteEvent, MuteFilter } from "./types.js";
 
-export const getMuteEvents = (note: INoteView, realTime: RealTime): MuteEvent[] => {
+export const getMuteEvents = (note: INoteView, realTime: RealTime): IMuteEvent[] => {
     const muteFilters = getMuteFilters(note);
 
     return muteFilters.map((muteFilter) => {

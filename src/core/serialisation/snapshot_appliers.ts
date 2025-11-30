@@ -3,9 +3,9 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import { createArrangement } from "../Arrangement.js";
+import { Arrangement } from "../Arrangement.js";
 import { getLibrary } from "../Library.js";
-import { createTimeParams } from "../TimeParams.js";
+import { TimeParams } from "../TimeParams.js";
 import type { IArrangement, INote, IPolyrhythm, ITimeParams, ITrack } from "../types/general.js";
 import type {
     IArrangementSnapshot, IPolyrhythmSnapshot, ITimeParamsSnapshot, ITrackSnapshot
@@ -13,7 +13,7 @@ import type {
 
 export const createArrangementFromSnapshot = (arrangementSnapshot: IArrangementSnapshot): IArrangement => {
     const timeParams = createTimeParamsFromSnapshot(arrangementSnapshot.timeParams);
-    const arrangement = createArrangement(timeParams);
+    const arrangement = new Arrangement(timeParams);
 
     applyArrangementSnapshot(arrangement, arrangementSnapshot);
 
@@ -21,7 +21,7 @@ export const createArrangementFromSnapshot = (arrangementSnapshot: IArrangementS
 };
 
 const createTimeParamsFromSnapshot = (tps: ITimeParamsSnapshot): ITimeParams => {
-    return createTimeParams(tps.timeSignature, tps.tempo, tps.length, tps.pulse, tps.stepResolution);
+    return new TimeParams(tps.timeSignature, tps.tempo, tps.length, tps.pulse, tps.stepResolution);
 };
 
 // Used when loading Animada Score Book, or when using Undo/Redo

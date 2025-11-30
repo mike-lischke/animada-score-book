@@ -6,9 +6,9 @@
 import { createContext, createRef, type JSX } from "preact";
 import type { MutableRefObject } from "preact/compat";
 
-import { createPublisher } from "../../../core/Publisher.js";
+import { Publisher } from "../../../core/Publisher.js";
 import type { ITimeParamsView, RealTime, Subscription } from "../../../core/types/general.js";
-import type { ArrangementPlayer } from "../../../player/types.js";
+import type { IArrangementPlayer } from "../../../player/types.js";
 import type { AnimationEngine } from "../../../ui/AnimationEngine.js";
 import { ComponentBase, type IComponentProperties, type IComponentState } from "../ComponentBase/ComponentBase.js";
 import { GuideRail } from "../GuideRail/GuideRail.js";
@@ -17,18 +17,18 @@ import { Overlay } from "../Overlay.js";
 import { ServicesContext } from "../ScoreBookViewer.js";
 import { Scrollbar } from "../Scrollbar.js";
 import { Share } from "../Share.js";
-import { TrackViewer } from "../track/TrackViewer.js";
+import { TrackViewer } from "../Track/TrackViewer.js";
 import { ArrangementControlsBottom } from "./ArrangementControlsBottom.js";
 import { ArrangementControlsTop } from "./ArrangementControlsTop.js";
 
 const baseNoteWidth = 55.5; // 54pt flex-basis + 1.5pt for border
 
-export const ArrangementPlayerContext = createContext<ArrangementPlayer | null>(null);
+export const ArrangementPlayerContext = createContext<IArrangementPlayer | null>(null);
 export const NoteWidthContext = createContext<number | null>(null);
 export const NoteLineMinWidth = createContext<number | null>(null);
 
 export interface IArrangementViewerProps extends IComponentProperties {
-    arrangementPlayer: ArrangementPlayer;
+    arrangementPlayer: IArrangementPlayer;
 }
 
 interface IArrangementViewerState extends IComponentState {
@@ -42,7 +42,7 @@ interface IArrangementViewerState extends IComponentState {
 
 export class ArrangementViewer extends ComponentBase<IArrangementViewerProps, IArrangementViewerState> {
     private viewerRef = createRef<HTMLDivElement>();
-    private contentWidthPublisher = createPublisher();
+    private contentWidthPublisher = new Publisher();
 
     private animationEngine?: AnimationEngine;
     private resizeObserver: ResizeObserver;

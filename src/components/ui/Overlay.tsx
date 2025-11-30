@@ -5,13 +5,10 @@
 
 import { createContext, type ComponentChild } from "preact";
 
-import { createPublisher } from "../../core/Publisher.js";
-import type { ISubscribable } from "../../core/types/general.js";
 import { ComponentBase, type IComponentProperties, type IComponentState } from "./ComponentBase/ComponentBase.js";
+import { OverlayState } from "./OverlayState.js";
 
 export const OverlayStateContext = createContext<OverlayState | null>(null);
-
-type OverlayState = ISubscribable & { visible: boolean; };
 
 export interface IOverlayProps extends IComponentProperties {
     name: string;
@@ -25,7 +22,7 @@ interface IOverlayState extends IComponentState {
 export class Overlay extends ComponentBase<IOverlayProps, IOverlayState> {
     private static overlayStates: Record<string, OverlayState> = {};
 
-    private overlayState = this.createOverlayState();
+    private overlayState = new OverlayState();
 
     public constructor(props: IOverlayProps) {
         super(props);
@@ -85,25 +82,6 @@ export class Overlay extends ComponentBase<IOverlayProps, IOverlayState> {
                 </div>
             </OverlayStateContext.Provider>
         );
-    }
-
-    private createOverlayState(): OverlayState {
-        const publisher = createPublisher();
-        let visible = false;
-
-        return {
-            get visible() {
-                return visible;
-            },
-            set visible(newVisible) {
-                if (visible !== newVisible) {
-                    visible = newVisible;
-                    publisher.publish();
-                }
-            },
-            subscribe: publisher.subscribe,
-            unsubscribe: publisher.unsubscribe
-        };
     }
 
     private handleTransitionEnd = (event: TransitionEvent) => {
