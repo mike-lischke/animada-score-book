@@ -6,7 +6,7 @@
 import { createContext, type ComponentChild } from "preact";
 
 import type { IArrangementPlayer, ITrackPlayer } from "../../../player/types.js";
-import { ArrangementPlayerContext } from "../Arrangement/ArrangementViewer.js";
+import { ArrangementPlayerContext } from "../Arrangement1/ArrangementViewer.js";
 import { ComponentBase, type IComponentProperties, type IComponentState } from "../ComponentBase/ComponentBase.js";
 import { Overlay } from "../Overlay.js";
 import { NoteLine } from "./NoteLine.js";

@@ -9,7 +9,7 @@ import type { IAnimadaScoreBook } from "../../core/types/general.js";
 import type { ScoreBookPlayer } from "../../player/types.js";
 import type { ScoreBookUiServices } from "../../ui/AnimadaScoreBookUi.js";
 import { About } from "./About.js";
-import { ArrangementViewer } from "./Arrangement/ArrangementViewer.js";
+import { ArrangementViewer } from "./Arrangement1/ArrangementViewer.js";
 import { ComponentBase, type IComponentProperties } from "./ComponentBase/ComponentBase.js";
 import { Popup } from "./Popup.js";
 
