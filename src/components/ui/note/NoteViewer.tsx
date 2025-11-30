@@ -9,11 +9,11 @@ import type { INoteStyle, INoteView, ISubscribable } from "../../../core/types/g
 import { isSameTiming } from "../../../core/utils.js";
 import { createAudioBufferPlayer } from "../../../player/AudioBufferPlayer.js";
 import { getTrackColour } from "../../../ui/track-colour.js";
-import { ArrangementPlayerContext } from "../Arrangement1/ArrangementViewer.js";
+import { ArrangementPlayerContext } from "../Arrangement/ArrangementViewer.js";
 import { ComponentBase, type IComponentProperties, type IComponentState } from "../ComponentBase/ComponentBase.js";
 import { AnimadaScoreBookContext, ServicesContext } from "../ScoreBookViewer.js";
 import { TouchHoldDetector } from "../TouchHoldDetector.js";
-import { TrackPlayerContext } from "../Track1/TrackViewer.js";
+import { TrackPlayerContext } from "../Track/TrackViewer.js";
 import { NoteStyleSymbolViewer } from "./NoteStyleSymbolViewer.js";
 
 const audioContext = new AudioContext();

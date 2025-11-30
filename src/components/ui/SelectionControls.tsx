@@ -7,7 +7,7 @@ import { createRef, type ComponentChild, type ContextType } from "preact";
 
 import type { IArrangementView } from "../../core/types/general.js";
 import type { SelectionManager } from "../../ui/SelectionManager.js";
-import { ArrangementPlayerContext } from "./Arrangement1/ArrangementViewer.js";
+import { ArrangementPlayerContext } from "./Arrangement/ArrangementViewer.js";
 import { ComponentBase, type IComponentState } from "./ComponentBase/ComponentBase.js";
 import { ExpandingSpacer } from "./ExpandingSpacer.js";
 import { OverlayStateContext } from "./Overlay.js";

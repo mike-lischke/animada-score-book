@@ -5,7 +5,7 @@
 
 import type { ComponentChild } from "preact";
 
-import { ArrangementPlayerContext } from "../Arrangement1/ArrangementViewer.js";
+import { ArrangementPlayerContext } from "../Arrangement/ArrangementViewer.js";
 import { ComponentBase, type IComponentProperties } from "../ComponentBase/ComponentBase.js";
 import { NoteViewer } from "../Note/NoteViewer.js";
 import { BarDivisibilityContext, type BarDivisibility } from "./GuideRail.js";

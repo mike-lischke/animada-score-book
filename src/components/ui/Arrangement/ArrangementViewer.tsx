@@ -17,7 +17,7 @@ import { Overlay } from "../Overlay.js";
 import { ServicesContext } from "../ScoreBookViewer.js";
 import { Scrollbar } from "../Scrollbar.js";
 import { Share } from "../Share.js";
-import { TrackViewer } from "../Track1/TrackViewer.js";
+import { TrackViewer } from "../Track/TrackViewer.js";
 import { ArrangementControlsBottom } from "./ArrangementControlsBottom.js";
 import { ArrangementControlsTop } from "./ArrangementControlsTop.js";
 
