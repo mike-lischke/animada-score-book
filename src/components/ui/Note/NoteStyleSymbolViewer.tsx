@@ -5,7 +5,7 @@
 
 import type { ComponentChild } from "preact";
 
-import type { INoteStyle } from "../../../Core1/types/general.js";
+import type { INoteStyle } from "../../../core/types/general.js";
 import { ComponentBase, type IComponentProperties } from "../ComponentBase/ComponentBase.js";
 
 export interface INoteStyleSymbolViewerProps extends IComponentProperties {

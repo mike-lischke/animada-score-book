@@ -3,8 +3,8 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import type { IMutingRuleOtherInstrument, INoteView, MutingRule, RealTime } from "../Core1/types/general.js";
-import { exists, isSameTiming } from "../Core1/utils.js";
+import type { IMutingRuleOtherInstrument, INoteView, MutingRule, RealTime } from "../core/types/general.js";
+import { exists, isSameTiming } from "../core/utils.js";
 import type { AudioEvent, IMuteEvent, MuteFilter } from "./types.js";
 
 export const getMuteEvents = (note: INoteView, realTime: RealTime): IMuteEvent[] => {

@@ -4,7 +4,7 @@
 */
 
 import type { ComponentChild } from "preact";
-import { getLibrary } from "../../Core1/Library.js";
+import { getLibrary } from "../../core/Library.js";
 import { ComponentBase, type IComponentProperties } from "./ComponentBase/ComponentBase.js";
 import { InstrumentChooser } from "./InstrumentChooser.js";
 

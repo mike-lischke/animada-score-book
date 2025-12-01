@@ -5,7 +5,7 @@
 
 import type {
     IAnimadaScoreBook, IArrangementView, INoteView, ISubscribable, ITiming, ITrackView, RealTime
-} from "../Core1/types/general.js";
+} from "../core/types/general.js";
 
 export interface ScoreBookPlayer {
     scoreBook: IAnimadaScoreBook;

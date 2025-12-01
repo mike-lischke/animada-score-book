@@ -8,7 +8,7 @@ import githubLogo from "../../assets/images/GitHub_Invertocat_Dark.svg";
 
 import type { ComponentChild } from "preact";
 
-import { errorLog } from "../../Core1/ErrorLog.js";
+import { errorLog } from "../../core/ErrorLog.js";
 import { ComponentBase } from "./ComponentBase/ComponentBase.js";
 import { Container, ContentAlignment, Orientation } from "./Container/Container.js";
 import { Label } from "./Label/Label.js";

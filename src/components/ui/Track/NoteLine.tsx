@@ -5,7 +5,7 @@
 
 import { createRef, type ComponentChild } from "preact";
 
-import type { INoteView, IPolyrhythmView, ITrackView } from "../../../Core1/types/general.js";
+import type { INoteView, IPolyrhythmView, ITrackView } from "../../../core/types/general.js";
 import { NoteWidthContext } from "../Arrangement/ArrangementViewer.js";
 import { ComponentBase, type IComponentProperties, type IComponentState } from "../ComponentBase/ComponentBase.js";
 import { NoteViewer } from "../Note/NoteViewer.js";

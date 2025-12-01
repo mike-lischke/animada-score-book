@@ -5,7 +5,7 @@
 
 import type { ComponentChild, ContextType } from "preact";
 
-import type { IPolyrhythmView } from "../../Core1/types/general.js";
+import type { IPolyrhythmView } from "../../core/types/general.js";
 import { ComponentBase, type IComponentProperties, type IComponentState } from "./ComponentBase/ComponentBase.js";
 import { NoteViewer } from "./Note/NoteViewer.js";
 import { AnimadaScoreBookContext, ServicesContext } from "./ScoreBookViewer.js";

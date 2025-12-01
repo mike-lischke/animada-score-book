@@ -5,8 +5,8 @@
 
 /* eslint-disable prefer-arrow/prefer-arrow-functions, jsdoc/require-jsdoc */
 
-import { Publisher } from "../Core1/Publisher.js";
-import type { ISubscribable } from "../Core1/types/general.js";
+import { Publisher } from "../core/Publisher.js";
+import type { ISubscribable } from "../core/types/general.js";
 import type { SelectionManager } from "./SelectionManager.js";
 
 export interface ModeManager extends ISubscribable {

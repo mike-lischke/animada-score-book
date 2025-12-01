@@ -4,11 +4,11 @@
  */
 
 import { bateriaInstruments } from "./bateria-instruments.js";
-import { createAnimadaScoreBook } from "./Core1/AnimadaScoreBook.js";
-import { getLibrary } from "./Core1/Library.js";
-import { deserialiseArrangement } from "./Core1/serialisation/deserialisers.js";
-import { getSerialisedArrangementFromParams } from "./Core1/serialisation/url.js";
-import type { IArrangementSnapshot, ISerialisedArrangement } from "./Core1/types/snapshots.js";
+import { createAnimadaScoreBook } from "./core/AnimadaScoreBook.js";
+import { getLibrary } from "./core/Library.js";
+import { deserialiseArrangement } from "./core/serialisation/deserialisers.js";
+import { getSerialisedArrangementFromParams } from "./core/serialisation/url.js";
+import type { IArrangementSnapshot, ISerialisedArrangement } from "./core/types/snapshots.js";
 import { demoSongString } from "./demo-song.js";
 import { createScoreBookPlayer } from "./player/ScoreBookPlayer.js";
 import { createScoreBookUi } from "./ui/AnimadaScoreBookUi.js";
