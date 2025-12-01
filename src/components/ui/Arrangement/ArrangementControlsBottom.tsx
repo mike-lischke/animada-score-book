@@ -11,7 +11,7 @@ import { Overlay } from "../Overlay.js";
 import { SmallSpacer } from "../SmallSpacer.js";
 import { ArrangementPlayerContext } from "./ArrangementViewer.js";
 import type { ContextType } from "preact";
-import type { Subscription, ITrackView, IArrangementView } from "../../../Core/types/general.js";
+import type { Subscription, ITrackView, IArrangementView } from "../../../Core1/types/general.js";
 
 interface IArrangementControlsBottomState extends IComponentState {
     arePolyrhythms?: boolean;

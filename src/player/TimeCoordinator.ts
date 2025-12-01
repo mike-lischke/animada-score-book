@@ -3,8 +3,8 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import { Publisher } from "../Core/Publisher.js";
-import type { RealTime, ITimeParamsView, ITiming } from "../Core/types/general.js";
+import { Publisher } from "../Core1/Publisher.js";
+import type { RealTime, ITimeParamsView, ITiming } from "../Core1/types/general.js";
 import { getEventEngine } from "./EventEngine.js";
 import { IInterval, ILoopInterval, ITimeCoordinator } from "./types.js";
 

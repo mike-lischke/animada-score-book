@@ -7,7 +7,7 @@ import { createContext, type ComponentChild } from "preact";
 
 import { ComponentBase, type IComponentProperties, type IComponentState } from "../ComponentBase/ComponentBase.js";
 import { TimingViewer } from "./TimingViewer.js";
-import type { IArrangementView, Subscription, ITimeParamsView } from "../../../Core/types/general.js";
+import type { IArrangementView, Subscription, ITimeParamsView } from "../../../Core1/types/general.js";
 
 export type BarDivisibility = 1 | 2 | 4;
 export const BarDivisibilityContext = createContext<BarDivisibility | null>(null);

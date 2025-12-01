@@ -4,7 +4,7 @@
 */
 
 import type { ComponentChild } from "preact";
-import type { ISubscribable } from "../../Core/types/general.js";
+import type { ISubscribable } from "../../Core1/types/general.js";
 import { ComponentBase, type IComponentProperties, type IComponentState } from "./ComponentBase/ComponentBase.js";
 
 export interface INumberInputProps extends IComponentProperties {

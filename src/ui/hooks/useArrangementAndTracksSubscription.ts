@@ -7,7 +7,7 @@
 
 import { useEffect } from "preact/hooks";
 
-import type { IArrangementView, ITrackView, Subscription } from "../../Core/types/general.js";
+import type { IArrangementView, ITrackView, Subscription } from "../../Core1/types/general.js";
 import { useSubscription } from "./useSubscription.js";
 
 export function useArrangementAndTracksSubscription(arrangement: IArrangementView, callback: Subscription): void {

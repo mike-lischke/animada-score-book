@@ -3,7 +3,7 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import { Publisher } from "../../Core/Publisher.js";
+import { Publisher } from "../../Core1/Publisher.js";
 
 export class OverlayState extends Publisher {
     private isVisible = false;

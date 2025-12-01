@@ -10,7 +10,7 @@ import type { ComponentChild } from "preact";
 import { getTrackColour } from "../../../ui/track-colour.js";
 import { ComponentBase, type IComponentProperties } from "../ComponentBase/ComponentBase.js";
 import { SoloMuteButtons } from "./SoloMuteButtons.js";
-import type { ITrackView } from "../../../Core/types/general.js";
+import type { ITrackView } from "../../../Core1/types/general.js";
 
 export interface ITrackMetaProps extends IComponentProperties {
     track: ITrackView;

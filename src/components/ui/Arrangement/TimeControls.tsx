@@ -5,8 +5,8 @@
 
 import type { ComponentChild, ContextType } from "preact";
 
-import type { EditCommand_TimeParamsTimeSignature } from "../../../Core/types/edit_commands.js";
-import type { IArrangementView } from "../../../Core/types/general.js";
+import type { EditCommand_TimeParamsTimeSignature } from "../../../Core1/types/edit_commands.js";
+import type { IArrangementView } from "../../../Core1/types/general.js";
 import { ComponentBase, type IComponentProperties } from "../ComponentBase/ComponentBase.js";
 import { NumberInput } from "../NumberInput.js";
 import { AnimadaScoreBookContext } from "../ScoreBookViewer.js";
