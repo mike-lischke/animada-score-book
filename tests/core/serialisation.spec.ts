@@ -7,7 +7,7 @@ import { describe, it, expect } from "vitest";
 
 import {
     convertToBaseN, interpretAsBaseN, urlDecodeNumber, urlEncodeNumber
-} from "../../src/Core/serialisation/numeric_functions.js";
+} from "../../src/Core1/serialisation/numeric_functions.js";
 
 describe("URL encoding numbers", () => {
     it("decodes up to 100000 back to the same number", () => {
