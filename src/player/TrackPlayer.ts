@@ -3,8 +3,8 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import { Publisher } from "../core/Publisher.js";
-import type { INoteView, IPolyrhythmView, ITrackView, RealTime } from "../core/types/general.js";
+import { Publisher } from "../Core/Publisher.js";
+import type { INoteView, IPolyrhythmView, ITrackView, RealTime } from "../Core/types/general.js";
 import { getMuteEvents } from "./Muting.js";
 import { ICallbackEvent, Event, IInterval, SoloMute, ITimeCoordinator, ITrackPlayer } from "./types.js";
 

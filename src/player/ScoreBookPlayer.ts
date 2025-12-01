@@ -3,7 +3,7 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import type { IAnimadaScoreBook } from "../core/types/general.js";
+import type { IAnimadaScoreBook } from "../Core/types/general.js";
 import { createArrangementPlayer } from "./ArrangementPlayer.js";
 import { getEventEngine } from "./EventEngine.js";
 import type { ScoreBookPlayer } from "./types.js";

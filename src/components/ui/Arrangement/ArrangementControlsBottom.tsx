@@ -11,7 +11,7 @@ import { Overlay } from "../Overlay.js";
 import { SmallSpacer } from "../SmallSpacer.js";
 import { ArrangementPlayerContext } from "./ArrangementViewer.js";
 import type { ContextType } from "preact";
-import type { Subscription, ITrackView, IArrangementView } from "../../../core/types/general.js";
+import type { Subscription, ITrackView, IArrangementView } from "../../../Core/types/general.js";
 
 interface IArrangementControlsBottomState extends IComponentState {
     arePolyrhythms?: boolean;
@@ -31,7 +31,7 @@ export class ArrangementControlsBottom extends ComponentBase<{}, IArrangementCon
     }
 
     public override componentWillUnmount(): void {
-        const arrangement: IArrangementView = this.arrangementPlayerContext!.arrangement;
+        const arrangement = this.arrangementPlayerContext!.arrangement;
 
         arrangement.unsubscribe(this.arrangementCallback);
         arrangement.unsubscribe(this.arrangementSubscription!);

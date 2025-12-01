@@ -5,8 +5,8 @@
 
 import type { ComponentChild, ContextType } from "preact";
 
-import { getLibrary } from "../../core/Library.js";
-import type { IArrangementView, IInstrumentMeta } from "../../core/types/general.js";
+import { getLibrary } from "../../Core/Library.js";
+import type { IArrangementView, IInstrumentMeta } from "../../Core/types/general.js";
 import { ArrangementPlayerContext } from "./Arrangement/ArrangementViewer.js";
 import { ComponentBase, type IComponentProperties } from "./ComponentBase/ComponentBase.js";
 import { AnimadaScoreBookContext } from "./ScoreBookViewer.js";

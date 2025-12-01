@@ -5,7 +5,7 @@
 
 import type { ComponentChild, ContextType } from "preact";
 
-import { getShareLink } from "../../core/serialisation/url.js";
+import { getShareLink } from "../../Core/serialisation/url.js";
 import { ArrangementPlayerContext } from "./Arrangement/ArrangementViewer.js";
 import { ComponentBase, type IComponentState } from "./ComponentBase/ComponentBase.js";
 import { Overlay } from "./Overlay.js";

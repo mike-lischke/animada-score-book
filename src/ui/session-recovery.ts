@@ -3,8 +3,8 @@
 * Licensed under the MIT License. See License.txt in the project root for license information.
 */
 
-import type { IAnimadaScoreBook } from "../core/types/general.js";
-import type { IArrangementSnapshot } from "../core/types/snapshots.js";
+import type { IAnimadaScoreBook } from "../Core/types/general.js";
+import type { IArrangementSnapshot } from "../Core/types/snapshots.js";
 
 /* eslint-disable prefer-arrow/prefer-arrow-functions, jsdoc/require-jsdoc */
 

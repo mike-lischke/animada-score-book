@@ -8,7 +8,7 @@
 import { useCallback, useContext } from "preact/hooks";
 
 import { AnimadaScoreBookContext } from "../../components/ui/ScoreBookViewer.js";
-import type { EditCommand } from "../../core/types/edit_commands.js";
+import type { EditCommand } from "../../Core/types/edit_commands.js";
 
 export type EditFunction = (command: EditCommand) => void;
 

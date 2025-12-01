@@ -7,7 +7,7 @@ import type { ComponentChild } from "preact";
 import { AnimadaScoreBookContext } from "../ScoreBookViewer.js";
 import { ComponentBase, type IComponentProperties } from "../ComponentBase/ComponentBase.js";
 import { Overlay } from "../Overlay.js";
-import type { ITrackView } from "../../../core/types/general.js";
+import type { ITrackView } from "../../../Core/types/general.js";
 
 export interface ITrackControlsProps extends IComponentProperties {
     track: ITrackView;

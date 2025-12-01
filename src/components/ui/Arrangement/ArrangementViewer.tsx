@@ -6,8 +6,8 @@
 import { createContext, createRef, type JSX } from "preact";
 import type { MutableRefObject } from "preact/compat";
 
-import { Publisher } from "../../../core/Publisher.js";
-import type { ITimeParamsView, RealTime, Subscription } from "../../../core/types/general.js";
+import { Publisher } from "../../../Core/Publisher.js";
+import type { ITimeParamsView, RealTime, Subscription } from "../../../Core/types/general.js";
 import type { IArrangementPlayer } from "../../../player/types.js";
 import type { AnimationEngine } from "../../../ui/AnimationEngine.js";
 import { ComponentBase, type IComponentProperties, type IComponentState } from "../ComponentBase/ComponentBase.js";

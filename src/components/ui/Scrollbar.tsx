@@ -5,7 +5,7 @@
 
 import type { ComponentChild, RefObject } from "preact";
 
-import type { IPublisher } from "../../core/types/general.js";
+import type { IPublisher } from "../../Core/types/general.js";
 import { ComponentBase, type IComponentProperties, type IComponentState } from "./ComponentBase/ComponentBase.js";
 import { ScrollHandler } from "./ScrollHandler.js";
 

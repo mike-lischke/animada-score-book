@@ -5,8 +5,8 @@
 
 /* eslint-disable prefer-arrow/prefer-arrow-functions, jsdoc/require-jsdoc */
 
-import { Publisher } from "../core/Publisher.js";
-import type { INoteView, ISubscribable, ITrackView } from "../core/types/general.js";
+import { Publisher } from "../Core/Publisher.js";
+import type { INoteView, ISubscribable, ITrackView } from "../Core/types/general.js";
 
 export interface SelectionManager extends ISubscribable {
     isSelected(note: INoteView): boolean;

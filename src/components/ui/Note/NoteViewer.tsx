@@ -5,8 +5,8 @@
 
 import type { ComponentChild, ContextType } from "preact";
 
-import type { INoteStyle, INoteView, ISubscribable } from "../../../core/types/general.js";
-import { isSameTiming } from "../../../core/utils.js";
+import type { INoteStyle, INoteView, ISubscribable } from "../../../Core/types/general.js";
+import { isSameTiming } from "../../../Core/utils.js";
 import { createAudioBufferPlayer } from "../../../player/AudioBufferPlayer.js";
 import { getTrackColour } from "../../../ui/track-colour.js";
 import { ArrangementPlayerContext } from "../Arrangement/ArrangementViewer.js";

@@ -6,7 +6,7 @@
 /* eslint-disable prefer-arrow/prefer-arrow-functions, jsdoc/require-jsdoc */
 
 import { Overlay } from "../components/ui/Overlay.js";
-import type { IAnimadaScoreBook } from "../core/types/general.js";
+import type { IAnimadaScoreBook } from "../Core/types/general.js";
 import type { IEventEngine } from "../player/types.js";
 import { ModeManager } from "./ModeManager.js";
 import { SelectionManager } from "./SelectionManager.js";

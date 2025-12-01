@@ -8,7 +8,7 @@ import pencilIcon from "../../../assets/images/icons/pencil_white.svg";
 import playIcon from "../../../assets/images/icons/play.svg";
 
 import type { ComponentChild, ContextType } from "preact";
-import type { IArrangementView, Subscription } from "../../../core/types/general.js";
+import type { IArrangementView, Subscription } from "../../../Core/types/general.js";
 import { getEventEngine } from "../../../player/EventEngine.js";
 import { ComponentBase } from "../ComponentBase/ComponentBase.js";
 import { ExpandingSpacer } from "../ExpandingSpacer.js";
