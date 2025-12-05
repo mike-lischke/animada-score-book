@@ -5,22 +5,22 @@
 
 import { createContext, type ComponentChild } from "preact";
 
-import { ComponentBase, type IComponentProperties, type IComponentState } from "../ComponentBase/ComponentBase.js";
+import type { IArrangementView, ITimeParamsView, Subscription } from "../../../core/types/general.js";
+import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
 import { TimingViewer } from "./TimingViewer.js";
-import type { IArrangementView, Subscription, ITimeParamsView } from "../../../core/types/general.js";
 
 export type BarDivisibility = 1 | 2 | 4;
 export const BarDivisibilityContext = createContext<BarDivisibility | null>(null);
 
-export interface IGuideRailProps extends IComponentProperties {
+export interface IGuideRailProps extends ICommonUIProperties {
     arrangement: IArrangementView;
 }
 
-interface IGuideRailState extends IComponentState {
+interface IGuideRailState {
     barDivisibility: BarDivisibility;
 }
 
-export class GuideRail extends ComponentBase<IGuideRailProps, IGuideRailState> {
+export class GuideRail extends UIComponent<IGuideRailProps, IGuideRailState> {
 
     public constructor(props: IGuideRailProps) {
         super(props);
@@ -57,8 +57,8 @@ export class GuideRail extends ComponentBase<IGuideRailProps, IGuideRailState> {
                             return <TimingViewer timing={timing} key={`${timing.bar}.${timing.step}`} />;
                         })}
                     </div>
-                    <div className="scrollshadow left-scrollshadow" />
-                    <div className="scrollshadow right-scrollshadow" />
+                    <div className="scroll-shadow left-scroll-shadow" />
+                    <div className="scroll-shadow right-scroll-shadow" />
                 </div>
             </BarDivisibilityContext.Provider>
         );

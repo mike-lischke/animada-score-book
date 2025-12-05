@@ -5,7 +5,7 @@
 
 /* eslint-disable prefer-arrow/prefer-arrow-functions, jsdoc/require-jsdoc */
 
-import { isMobile } from "./isMobile.js";
+import { isMobile } from "./index.js";
 import type { ModeManager } from "./ModeManager.js";
 import type { SelectionManager } from "./SelectionManager.js";
 

@@ -7,22 +7,22 @@ import { createRef, type ComponentChild } from "preact";
 
 import type { INoteView, IPolyrhythmView, ITrackView } from "../../../core/types/general.js";
 import { NoteWidthContext } from "../Arrangement/ArrangementViewer.js";
-import { ComponentBase, type IComponentProperties, type IComponentState } from "../ComponentBase/ComponentBase.js";
+import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
 import { NoteViewer } from "../Note/NoteViewer.js";
 import { PolyrhythmViewer } from "../PolyrhythmViewer.js";
 import type { TrackViewerCallbacks } from "./TrackViewer.js";
 
-export interface INoteLineProps extends IComponentProperties {
+export interface INoteLineProps extends ICommonUIProperties {
     track: ITrackView;
     callbacks: TrackViewerCallbacks;
 }
 
-interface INoteLineState extends IComponentState {
+interface INoteLineState {
     notes: INoteView[];
     polyrhythms: IPolyrhythmView[];
 }
 
-export class NoteLine extends ComponentBase<INoteLineProps, INoteLineState> {
+export class NoteLine extends UIComponent<INoteLineProps, INoteLineState> {
     private noteLineRef = createRef<HTMLDivElement>();
 
     public constructor(props: INoteLineProps) {

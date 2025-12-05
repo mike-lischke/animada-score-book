@@ -8,7 +8,7 @@ import { createRef, type ComponentChild, type ContextType } from "preact";
 import type { IArrangementView } from "../../core/types/general.js";
 import type { SelectionManager } from "../../ui/SelectionManager.js";
 import { ArrangementPlayerContext } from "./Arrangement/ArrangementViewer.js";
-import { ComponentBase, type IComponentState } from "./ComponentBase/ComponentBase.js";
+import { UIComponent } from "./framework/UIComponent.js";
 import { ExpandingSpacer } from "./ExpandingSpacer.js";
 import { OverlayStateContext } from "./Overlay.js";
 import { AnimadaScoreBookContext, ServicesContext } from "./ScoreBookViewer.js";
@@ -16,11 +16,11 @@ import { SmallSpacer } from "./SmallSpacer.js";
 
 const digitMatcher = /^\d$/;
 
-interface ISelectionControlsState extends IComponentState {
+interface ISelectionControlsState {
     addingPolyrhythm: boolean;
 }
 
-export class SelectionControls extends ComponentBase<{}, ISelectionControlsState> {
+export class SelectionControls extends UIComponent<{}, ISelectionControlsState> {
     private polyrhythmInputRef = createRef<HTMLInputElement>();
     private scoreBookContext: ContextType<typeof AnimadaScoreBookContext> | null = null;
     private overlayStateContext: ContextType<typeof OverlayStateContext> | null = null;

@@ -7,7 +7,7 @@ import { createContext, type ComponentChild } from "preact";
 
 import type { IArrangementPlayer, ITrackPlayer } from "../../../player/types.js";
 import { ArrangementPlayerContext } from "../Arrangement/ArrangementViewer.js";
-import { ComponentBase, type IComponentProperties, type IComponentState } from "../ComponentBase/ComponentBase.js";
+import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
 import { Overlay } from "../Overlay.js";
 import { NoteLine } from "./NoteLine.js";
 import { TrackControls } from "./TrackControls.js";
@@ -19,19 +19,19 @@ export interface TrackViewerCallbacks {
     noteLineTouchEnd?: () => void;
 };
 
-export interface ITrackViewerProps extends IComponentProperties {
+export interface ITrackViewerProps extends ICommonUIProperties {
     trackPlayer: ITrackPlayer;
     callbacks: TrackViewerCallbacks;
 }
 
-interface ITrackviewerState extends IComponentState {
+interface ITrackviewerState {
     audible: boolean;
     loaded: boolean;
 }
 
 export const TrackPlayerContext = createContext<ITrackPlayer | null>(null);
 
-export class TrackViewer extends ComponentBase<ITrackViewerProps, ITrackviewerState> {
+export class TrackViewer extends UIComponent<ITrackViewerProps, ITrackviewerState> {
     private arrangementPlayerContext: IArrangementPlayer | null = null;
 
     public constructor(props: ITrackViewerProps) {
@@ -93,8 +93,8 @@ export class TrackViewer extends ComponentBase<ITrackViewerProps, ITrackviewerSt
                                         <TrackControls track={track} overlayName={overlayName} />
                                     </Overlay>
                                 </div>
-                                <div className="scrollshadow left-scrollshadow" />
-                                <div className="scrollshadow right-scrollshadow" />
+                                <div className="scroll-shadow left-scroll-shadow" />
+                                <div className="scroll-shadow right-scroll-shadow" />
                                 <TrackMeta track={track} toggleControls={() => {
                                     Overlay.toggleOverlay(overlayName);
                                 }} />

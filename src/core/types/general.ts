@@ -172,3 +172,9 @@ export interface INote extends INoteView {
     polyrhythm?: IPolyrhythm;
     noteStyle?: INoteStyle; // undefined means this is a rest
 }
+
+declare global {
+    /** Holds the dev server base URL. */
+    // eslint-disable-next-line @typescript-eslint/naming-convention
+    var BASE_URL: string;
+}

@@ -4,9 +4,9 @@
 */
 
 import type { ComponentChild } from "preact";
-import { ComponentBase } from "./ComponentBase/ComponentBase.js";
+import { UIComponent } from "./framework/UIComponent.js";
 
-export class SmallSpacer extends ComponentBase {
+export class SmallSpacer extends UIComponent {
     public render(): ComponentChild {
         return <div style={{ width: "8pt" }} />;
     }

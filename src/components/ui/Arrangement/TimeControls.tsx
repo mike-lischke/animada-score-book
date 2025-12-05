@@ -7,15 +7,15 @@ import type { ComponentChild, ContextType } from "preact";
 
 import type { EditCommand_TimeParamsTimeSignature } from "../../../core/types/edit_commands.js";
 import type { IArrangementView } from "../../../core/types/general.js";
-import { ComponentBase, type IComponentProperties } from "../ComponentBase/ComponentBase.js";
+import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
 import { NumberInput } from "../NumberInput.js";
 import { AnimadaScoreBookContext } from "../ScoreBookViewer.js";
 
-export interface ITimeControlsProps extends IComponentProperties {
+export interface ITimeControlsProps extends ICommonUIProperties {
     arrangement: IArrangementView;
 }
 
-export class TimeControls extends ComponentBase<ITimeControlsProps> {
+export class TimeControls extends UIComponent<ITimeControlsProps> {
     private scoreBookContext?: ContextType<typeof AnimadaScoreBookContext>;
 
     public override render(): ComponentChild {

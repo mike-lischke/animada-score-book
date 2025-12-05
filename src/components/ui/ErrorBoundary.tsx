@@ -5,11 +5,11 @@
 
 import { Component, type ComponentChild } from "preact";
 
-import { Label } from "./ui/Label/Label.js";
-import { Message } from "./ui/Message/Message.js";
+import { Label } from "./framework/Label.js";
+import { Message } from "./Message.js";
 
-import { MessageType } from "./general-types.js";
-import { Container, Orientation } from "./ui/Container/Container.js";
+import { Container } from "./framework/Container.js";
+import { MessageType, Orientation } from "./framework/ui-types.js";
 
 interface IErrorBoundaryState {
     error: string;

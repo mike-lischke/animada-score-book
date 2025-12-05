@@ -10,7 +10,7 @@ import playIcon from "../../../assets/images/icons/play.svg";
 import type { ComponentChild, ContextType } from "preact";
 import type { IArrangementView, Subscription } from "../../../core/types/general.js";
 import { getEventEngine } from "../../../player/EventEngine.js";
-import { ComponentBase } from "../ComponentBase/ComponentBase.js";
+import { UIComponent } from "../framework/UIComponent.js";
 import { ExpandingSpacer } from "../ExpandingSpacer.js";
 import { Overlay } from "../Overlay.js";
 import { ServicesContext } from "../ScoreBookViewer.js";
@@ -30,7 +30,7 @@ interface IArrangementControlsTopState {
     title: string;
 }
 
-export class ArrangementControlsTop extends ComponentBase<{}, IArrangementControlsTopState> {
+export class ArrangementControlsTop extends UIComponent<{}, IArrangementControlsTopState> {
 
     private arrangementPlayerContext?: ContextType<typeof ArrangementPlayerContext>;
     private servicesContext?: ContextType<typeof ServicesContext>;

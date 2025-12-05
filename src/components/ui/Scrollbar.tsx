@@ -6,21 +6,21 @@
 import type { ComponentChild, RefObject } from "preact";
 
 import type { IPublisher } from "../../core/types/general.js";
-import { ComponentBase, type IComponentProperties, type IComponentState } from "./ComponentBase/ComponentBase.js";
+import { UIComponent, type ICommonUIProperties } from "./framework/UIComponent.js";
 import { ScrollHandler } from "./ScrollHandler.js";
 
-export interface IScrollbarProps extends IComponentProperties {
+export interface IScrollbarProps extends ICommonUIProperties {
     wrapperRef: RefObject<HTMLDivElement | null>;
     contentWidthPublisher: IPublisher;
     onGrab?: () => void;
 }
 
-interface IScrollbarState extends IComponentState {
+interface IScrollbarState {
     thumbWidth: number;
     thumbLeft: number;
 }
 
-export class Scrollbar extends ComponentBase<IScrollbarProps, IScrollbarState> {
+export class Scrollbar extends UIComponent<IScrollbarProps, IScrollbarState> {
     private resizeObserver: ResizeObserver;
 
     public constructor(props: IScrollbarProps) {

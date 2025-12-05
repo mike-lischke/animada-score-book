@@ -9,6 +9,7 @@
         "Colours",
         "deserialise",
         "deserialisers",
+        "guiderail",
         "initialise",
         "Metas",
         "optimisation",
@@ -23,6 +24,7 @@
         "spacebar",
         "Surdo",
         "surdos",
+        "tabview",
         "Tamborim",
         "tamborims",
         "Timbau"

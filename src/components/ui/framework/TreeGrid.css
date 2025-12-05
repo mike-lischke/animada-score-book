@@ -1,0 +1,17 @@
+/*
+ * Copyright (c) Mike Lischke. All rights reserved.
+ * Licensed under the MIT License. See License.txt in the project root for license information.
+ */
+
+/** The styles for the tree grid. This can potentially grow large, so we keep that in an own css file. */
+
+.treeGrid.tabulator {
+    overflow: hidden;
+
+    font-size: 13px;
+    background: none;
+}
+
+.treeGrid.tabulator .tabulator-row {
+    border-bottom: none;
+}

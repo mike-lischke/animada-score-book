@@ -10,7 +10,7 @@ import { isSameTiming } from "../../../core/utils.js";
 import { createAudioBufferPlayer } from "../../../player/AudioBufferPlayer.js";
 import { getTrackColour } from "../../../ui/track-colour.js";
 import { ArrangementPlayerContext } from "../Arrangement/ArrangementViewer.js";
-import { ComponentBase, type IComponentProperties, type IComponentState } from "../ComponentBase/ComponentBase.js";
+import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
 import { AnimadaScoreBookContext, ServicesContext } from "../ScoreBookViewer.js";
 import { TouchHoldDetector } from "../TouchHoldDetector.js";
 import { TrackPlayerContext } from "../Track/TrackViewer.js";
@@ -19,17 +19,17 @@ import { NoteStyleSymbolViewer } from "./NoteStyleSymbolViewer.js";
 const audioContext = new AudioContext();
 const baseNoteClasses = "note-viewer note-width";
 
-export interface INoteViewerProps extends IComponentProperties {
+export interface INoteViewerProps extends ICommonUIProperties {
     note: INoteView;
 }
 
-interface INoteViewerState extends IComponentState {
+interface INoteViewerState {
     isCurrent: boolean;
     selected: boolean;
     noteStyle?: INoteStyle;
 }
 
-export class NoteViewer extends ComponentBase<INoteViewerProps, INoteViewerState> {
+export class NoteViewer extends UIComponent<INoteViewerProps, INoteViewerState> {
     private arrangementPlayerContext?: ContextType<typeof ArrangementPlayerContext>;
     private trackPlayerContext?: ContextType<typeof TrackPlayerContext>;
     private servicesContext?: ContextType<typeof ServicesContext>;

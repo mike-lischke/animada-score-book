@@ -5,21 +5,21 @@
 
 import { createContext, type ComponentChild } from "preact";
 
-import { ComponentBase, type IComponentProperties, type IComponentState } from "./ComponentBase/ComponentBase.js";
+import { UIComponent, type ICommonUIProperties } from "./framework/UIComponent.js";
 import { OverlayState } from "./OverlayState.js";
 
 export const OverlayStateContext = createContext<OverlayState | null>(null);
 
-export interface IOverlayProps extends IComponentProperties {
+export interface IOverlayProps extends ICommonUIProperties {
     name: string;
 }
 
-interface IOverlayState extends IComponentState {
+interface IOverlayState {
     visibilityClass: string;
     visible: boolean;
 }
 
-export class Overlay extends ComponentBase<IOverlayProps, IOverlayState> {
+export class Overlay extends UIComponent<IOverlayProps, IOverlayState> {
     private static overlayStates: Record<string, OverlayState> = {};
 
     private overlayState = new OverlayState();

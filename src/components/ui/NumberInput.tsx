@@ -5,19 +5,19 @@
 
 import type { ComponentChild } from "preact";
 import type { ISubscribable } from "../../core/types/general.js";
-import { ComponentBase, type IComponentProperties, type IComponentState } from "./ComponentBase/ComponentBase.js";
+import { UIComponent, type ICommonUIProperties } from "./framework/UIComponent.js";
 
-export interface INumberInputProps extends IComponentProperties {
+export interface INumberInputProps extends ICommonUIProperties {
     getValue: () => string;
     setValue: (newValue: string) => void;
     subscribable: ISubscribable;
 }
 
-interface INumberInputState extends IComponentState {
+interface INumberInputState {
     visibleValue: string;
 }
 
-export class NumberInput extends ComponentBase<INumberInputProps, INumberInputState> {
+export class NumberInput extends UIComponent<INumberInputProps, INumberInputState> {
 
     public constructor(props: INumberInputProps) {
         super(props);

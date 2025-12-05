@@ -5,15 +5,15 @@
 
 import { type ComponentChild } from "preact";
 
-import { isMobile } from "../../ui/isMobile.js";
-import { ComponentBase, type IComponentProperties } from "./ComponentBase/ComponentBase.js";
+import { isMobile } from "../../ui/index.js";
+import { UIComponent, type ICommonUIProperties } from "./framework/UIComponent.js";
 
-export interface ITouchHoldDetectorProps extends IComponentProperties {
+export interface ITouchHoldDetectorProps extends ICommonUIProperties {
     callback: () => void;
     holdLength: number;
 }
 
-export class TouchHoldDetector extends ComponentBase<ITouchHoldDetectorProps> {
+export class TouchHoldDetector extends UIComponent<ITouchHoldDetectorProps> {
     private timeoutIdRef = 0;
 
     public render(): ComponentChild {

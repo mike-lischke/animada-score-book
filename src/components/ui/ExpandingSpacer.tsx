@@ -4,9 +4,9 @@
 */
 
 import type { ComponentChild } from "preact";
-import { ComponentBase } from "./ComponentBase/ComponentBase.js";
+import { UIComponent } from "./framework/UIComponent.js";
 
-export class ExpandingSpacer extends ComponentBase {
+export class ExpandingSpacer extends UIComponent {
     public override render(): ComponentChild {
         return <div style={{ flexGrow: 1 }} />;
     }

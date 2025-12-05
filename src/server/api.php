@@ -1,5 +1,10 @@
 <?php
 
+//error_reporting(E_ALL);
+//ini_set('display_errors', '1');
+//ini_set('log_errors', '1');
+//ini_set('error_log', __DIR__ . '/php-error.log');
+
 // Configuration.
 $dbHost = 'localhost';
 $dbName = '<dbname>';
@@ -39,17 +44,6 @@ function get_json_body(): array {
     return $data;
 }
 
-// Database connection.
-try {
-    $dsn = "mysql:host=$dbHost;dbname=$dbName;charset=utf8mb4";
-    $pdo = new PDO($dsn, $dbUser, $dbPass, [
-        PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
-        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-    ]);
-} catch (PDOException $e) {
-    send_json(['error' => 'Database connection failed'], 500);
-}
-
 // Determine action.
 $method = $_SERVER['REQUEST_METHOD'];
 $action = $_GET['action'] ?? $_POST['action'] ?? null;
@@ -78,13 +72,39 @@ switch ($action) {
     case 'move':
         handle_move($pdo);
         break;
+    case 'listSoundLib':
+        list_soundlib();
+        break;
     default:
         send_json(['error' => 'Unknown action'], 400);
+}
+
+$pdo = null; // global
+
+function get_pdo(): PDO {
+    global $pdo, $dbHost, $dbName, $dbUser, $dbPass;
+
+    if ($pdo instanceof PDO) {
+        return $pdo;
+    }
+
+    try {
+        $dsn = "mysql:host=$dbHost;dbname=$dbName;charset=utf8mb4";
+        $pdo = new PDO($dsn, $dbUser, $dbPass, [
+            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+        ]);
+        return $pdo;
+    } catch (PDOException $e) {
+        send_json(['error' => 'Database connection failed'], 500);
+    }
 }
 
 // ------------------- Handlers -------------------
 
 function handle_list(PDO $pdo): void {
+    $pdo = get_pdo();
+    
     $parentId = isset($_GET['parentId']) ? (int)$_GET['parentId'] : -1;
 
     // Load folders.
@@ -104,6 +124,8 @@ function handle_list(PDO $pdo): void {
 }
 
 function handle_create(PDO $pdo): void {
+    $pdo = get_pdo();
+    
     global $rootParentId;
     $body = get_json_body();
 
@@ -154,6 +176,8 @@ function handle_create(PDO $pdo): void {
 }
 
 function handle_rename(PDO $pdo): void {
+    $pdo = get_pdo();
+    
     $body = get_json_body();
     $type = $body['type'] ?? null;
     $id   = isset($body['id']) ? (int)$body['id'] : null;
@@ -180,6 +204,8 @@ function handle_rename(PDO $pdo): void {
 }
 
 function handle_update_snippet(PDO $pdo): void {
+    $pdo = get_pdo();
+    
     $body = get_json_body();
     $id      = isset($body['id']) ? (int)$body['id'] : null;
     $content = $body['content'] ?? null;
@@ -198,6 +224,8 @@ function handle_update_snippet(PDO $pdo): void {
 }
 
 function handle_delete(PDO $pdo, int $rootParentId): void {
+    $pdo = get_pdo();
+    
     $body = get_json_body();
     $type = $body['type'] ?? null;
     $id   = isset($body['id']) ? (int)$body['id'] : null;
@@ -258,6 +286,8 @@ function handle_delete(PDO $pdo, int $rootParentId): void {
 }
 
 function handle_move(PDO $pdo): void {
+    $pdo = get_pdo();
+    
     $body = get_json_body();
     $type = $body['type'] ?? null;
     $id   = isset($body['id']) ? (int)$body['id'] : null;
@@ -292,6 +322,55 @@ function handle_move(PDO $pdo): void {
     }
 
     send_json(['error' => 'Invalid type (folder|snippet)'], 400);
+}
+
+function list_soundlib(): void {
+    $baseDir = __DIR__ . '/BrazillianPercussion_Wav_SP';
+
+    $realPath = realpath($baseDir);
+    if ($realPath === false) {
+        send_json(['error' => 'Base directory not found'], 500);
+    }
+
+    $result = scan_dir_tree($realPath, $baseDir);
+
+    send_json($result);
+}
+
+function scan_dir_tree(string $dir, string $root): array {
+    $items = [];
+
+    $entries = scandir($dir);
+    if ($entries === false) {
+        return $items;
+    }
+
+    foreach ($entries as $entry) {
+        if ($entry === '.' || $entry === '..') {
+            continue;
+        }
+
+        $fullPath  = $dir . DIRECTORY_SEPARATOR . $entry;
+        $relative  = ltrim(str_replace($root, '', $fullPath), DIRECTORY_SEPARATOR);
+        $isDir     = is_dir($fullPath);
+
+        $node = [
+            'name' => $entry,
+            'path' => $relative,
+            'isDir' => $isDir,
+        ];
+
+        if ($isDir) {
+            $node['children'] = scan_dir_tree($fullPath, $root);
+        }
+
+        $items[] = $node;
+    }
+
+    // Sort by name.
+    usort($items, fn($a, $b) => strcmp($a['name'], $b['name']));
+
+    return $items;
 }
 
 // - `GET api.php?action=list&parentId=-1`

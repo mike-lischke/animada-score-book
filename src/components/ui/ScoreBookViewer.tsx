@@ -10,18 +10,18 @@ import type { ScoreBookPlayer } from "../../player/types.js";
 import type { ScoreBookUiServices } from "../../ui/AnimadaScoreBookUi.js";
 import { About } from "./About.js";
 import { ArrangementViewer } from "./Arrangement/ArrangementViewer.js";
-import { ComponentBase, type IComponentProperties } from "./ComponentBase/ComponentBase.js";
+import { UIComponent, type ICommonUIProperties } from "./framework/UIComponent.js";
 import { Popup } from "./Popup.js";
 
 export const ServicesContext = createContext<ScoreBookUiServices | null>(null);
 export const AnimadaScoreBookContext = createContext<IAnimadaScoreBook | null>(null);
 
-export interface IScoreBookViewerProps extends IComponentProperties {
+export interface IScoreBookViewerProps extends ICommonUIProperties {
     scoreBookPlayer: ScoreBookPlayer;
     services: ScoreBookUiServices;
 }
 
-export class ScoreBookViewer extends ComponentBase<IScoreBookViewerProps> {
+export class ScoreBookViewer extends UIComponent<IScoreBookViewerProps> {
     private aboutBoxRef = createRef<HTMLDivElement>();
 
     public override render(): ComponentChild {

@@ -5,14 +5,14 @@
 
 import type { ComponentChild } from "preact";
 import { getLibrary } from "../../core/Library.js";
-import { ComponentBase, type IComponentProperties } from "./ComponentBase/ComponentBase.js";
+import { UIComponent, type ICommonUIProperties } from "./framework/UIComponent.js";
 import { InstrumentChooser } from "./InstrumentChooser.js";
 
-export interface IInstrumentBrowserProps extends IComponentProperties {
+export interface IInstrumentBrowserProps extends ICommonUIProperties {
     close: () => void;
 }
 
-export class InstrumentBrowser extends ComponentBase<IInstrumentBrowserProps> {
+export class InstrumentBrowser extends UIComponent<IInstrumentBrowserProps> {
     public render(): ComponentChild {
         return (
             <div className="viewport-wrapper">

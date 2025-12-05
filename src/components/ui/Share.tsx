@@ -7,7 +7,7 @@ import type { ComponentChild, ContextType } from "preact";
 
 import { getShareLink } from "../../core/serialisation/url.js";
 import { ArrangementPlayerContext } from "./Arrangement/ArrangementViewer.js";
-import { ComponentBase, type IComponentState } from "./ComponentBase/ComponentBase.js";
+import { UIComponent } from "./framework/UIComponent.js";
 import { Overlay } from "./Overlay.js";
 import { AnimadaScoreBookContext } from "./ScoreBookViewer.js";
 import { SmallSpacer } from "./SmallSpacer.js";
@@ -15,13 +15,13 @@ import { SmallSpacer } from "./SmallSpacer.js";
 const haveNativeSharing = "share" in navigator;
 const haveClipboardAccess = "clipboard" in navigator;
 
-interface IShareState extends IComponentState {
+interface IShareState {
     url: string;
     copyText: string;
     title: string;
 }
 
-export class Share extends ComponentBase<{}, IShareState> {
+export class Share extends UIComponent<{}, IShareState> {
     private scoreBookContext: ContextType<typeof AnimadaScoreBookContext> | null = null;
 
     public constructor(props: {}) {

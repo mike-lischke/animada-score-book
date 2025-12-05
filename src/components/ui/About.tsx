@@ -9,16 +9,17 @@ import githubLogo from "../../assets/images/GitHub_Invertocat_Dark.svg";
 import type { ComponentChild } from "preact";
 
 import { errorLog } from "../../core/ErrorLog.js";
-import { ComponentBase } from "./ComponentBase/ComponentBase.js";
-import { Container, ContentAlignment, Orientation } from "./Container/Container.js";
-import { Label } from "./Label/Label.js";
+import { UIComponent } from "./framework/UIComponent.js";
+import { Container } from "./framework/Container.js";
+import { Label } from "./framework/Label.js";
+import { ChildAlignment, Orientation } from "./framework/ui-types.js";
 
 interface AboutState {
     errorReportIsVisibile: boolean;
     errorCount: number;
 
 }
-export class About extends ComponentBase<{}, AboutState> {
+export class About extends UIComponent<{}, AboutState> {
     public constructor(props: {}) {
         super(props);
 
@@ -44,7 +45,7 @@ export class About extends ComponentBase<{}, AboutState> {
             <Container
                 className="aboutBox"
                 orientation={Orientation.TopDown}
-                crossAlignment={ContentAlignment.Center}
+                crossAlignment={ChildAlignment.Center}
                 onClick={this.handleClick}
             >
                 <img className="logo" src={logo} />

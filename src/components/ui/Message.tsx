@@ -3,18 +3,16 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import "./Message.css";
-
 import type { ComponentChild } from "preact";
 
-import { ComponentBase, type IComponentProperties } from "../ComponentBase/ComponentBase.js";
-import type { MessageType } from "../../general-types.js";
+import { UIComponent, type ICommonUIProperties } from "./framework/UIComponent.js";
+import type { MessageType } from "./framework/ui-types.js";
 
-interface IMessageProperties extends IComponentProperties {
+interface IMessageProperties extends ICommonUIProperties {
     type: MessageType;
 }
 
-export class Message extends ComponentBase<IMessageProperties> {
+export class Message extends UIComponent<IMessageProperties> {
 
     public constructor(props: IMessageProperties) {
         super(props);
@@ -22,7 +20,7 @@ export class Message extends ComponentBase<IMessageProperties> {
 
     public render(): ComponentChild {
         const { children, type } = this.props;
-        const className = this.getEffectiveClassNames([
+        const className = this.generateFinalClassName([
             "message",
             this.classFromProperty(type, ["error", "warning", "info", "response", "interactive"]),
         ]);

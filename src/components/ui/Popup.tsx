@@ -4,14 +4,16 @@
 */
 
 import { createRef } from "preact";
-import { ComponentBase, type IComponentProperties } from "./ComponentBase/ComponentBase.js";
-import { Container, Orientation } from "./Container/Container.js";
 
-export interface IPopupProps extends IComponentProperties {
+import { UIComponent, type ICommonUIProperties } from "./framework/UIComponent.js";
+import { Container } from "./framework/Container.js";
+import { Orientation } from "./framework/ui-types.js";
+
+export interface IPopupProps extends ICommonUIProperties {
     innerRef?: preact.RefObject<HTMLDivElement>;
 }
 
-export class Popup extends ComponentBase<IPopupProps> {
+export class Popup extends UIComponent<IPopupProps> {
     public constructor(props: IPopupProps) {
         super(props);
 

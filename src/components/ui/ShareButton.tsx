@@ -7,10 +7,10 @@ import paperPlaneIcon from "../../assets/images/icons/paper_plane_white.svg";
 
 import type { ComponentChild } from "preact";
 
-import { ComponentBase } from "./ComponentBase/ComponentBase.js";
+import { UIComponent } from "./framework/UIComponent.js";
 import { Overlay } from "./Overlay.js";
 
-export class ShareButton extends ComponentBase {
+export class ShareButton extends UIComponent {
     public render(): ComponentChild {
         return (
             <button id="share-button" className="push-button" onClick={() => {

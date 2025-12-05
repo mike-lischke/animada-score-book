@@ -5,17 +5,17 @@
 
 import { type ComponentChild, type ContextType } from "preact";
 
-import { ComponentBase, type IComponentState } from "../ComponentBase/ComponentBase.js";
+import { UIComponent } from "../framework/UIComponent.js";
 import { TrackPlayerContext } from "./TrackViewer.js";
 
 const smButtonClasses = "options-button push-button small solo-mute-button";
 
-interface ISoloMuteButtonsState extends IComponentState {
+interface ISoloMuteButtonsState {
     soloed: boolean;
     muted: boolean;
 }
 
-export class SoloMuteButtons extends ComponentBase<{}, ISoloMuteButtonsState> {
+export class SoloMuteButtons extends UIComponent<{}, ISoloMuteButtonsState> {
     private trackPlayerContext?: ContextType<typeof TrackPlayerContext>;
 
     public constructor(props: {}) {

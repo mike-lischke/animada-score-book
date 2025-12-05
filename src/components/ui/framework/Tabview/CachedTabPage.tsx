@@ -1,0 +1,60 @@
+/*
+ * Copyright (c) Mike Lischke. All rights reserved.
+ * Licensed under the MIT License. See License.txt in the project root for license information.
+ */
+
+import { ComponentChild } from "preact";
+
+import { UIComponent } from "../UIComponent.js";
+
+export interface ICachedTabPageProps {
+    id: string;
+    active: boolean;
+    content: ComponentChild;
+}
+
+interface ICachedTabPageState {
+    hasMountedOnce: boolean;
+}
+
+export class CachedTabPage extends UIComponent<ICachedTabPageProps, ICachedTabPageState> {
+    public constructor(props: ICachedTabPageProps) {
+        super(props);
+
+        this.state = {
+            hasMountedOnce: false,
+        };
+    }
+
+    public override componentDidMount() {
+        if (this.props.active && !this.state.hasMountedOnce) {
+            this.setState({ hasMountedOnce: true });
+        }
+    }
+
+    public override componentDidUpdate(prevProps: ICachedTabPageProps) {
+        if (this.props.active && !prevProps.active && !this.state.hasMountedOnce) {
+            this.setState({ hasMountedOnce: true });
+        }
+    }
+
+    public render() {
+        const { active, content } = this.props;
+        const { hasMountedOnce } = this.state;
+
+        if (!hasMountedOnce) {
+            // Tab has never been active, so don't render anything yet.
+            return null;
+        }
+
+        // After the first activation, always render the content, but hide it when inactive.
+        return (
+            <div
+                data-tab-id={this.props.id}
+                style={{ display: active ? "block" : "none", width: "100%", height: "100%" }}
+            >
+                {content}
+            </div>
+        );
+    }
+}

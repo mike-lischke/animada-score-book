@@ -8,16 +8,16 @@ import undoIcon from "../../../assets/images/icons/undo_white.svg";
 
 import type { ComponentChild, ContextType } from "preact";
 
+import { UIComponent } from "../framework/UIComponent.js";
 import { AnimadaScoreBookContext } from "../ScoreBookViewer.js";
-import { ComponentBase, type IComponentState } from "../ComponentBase/ComponentBase.js";
 import { SmallSpacer } from "../SmallSpacer.js";
 
-export interface IUndoRedoState extends IComponentState {
+export interface IUndoRedoState {
     canUndo: boolean;
     canRedo: boolean;
 }
 
-export class UndoRedo extends ComponentBase<{}, IUndoRedoState> {
+export class UndoRedo extends UIComponent<{}, IUndoRedoState> {
     private scoreBookContext?: ContextType<typeof AnimadaScoreBookContext>;
 
     public constructor(props: {}) {

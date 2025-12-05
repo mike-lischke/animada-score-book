@@ -3,21 +3,12 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import "./Label.css";
-
 import { createRef, type ComponentChild } from "preact";
 
-import type { MessageType } from "../../general-types.js";
-import { ComponentBase, type IComponentProperties } from "../ComponentBase/ComponentBase.js";
+import type { MessageType, TextAlignment } from "./ui-types.js";
+import { UIComponent, type ICommonUIProperties } from "./UIComponent.js";
 
-/** Semantically the same as ContentAlignment, but needs different values. */
-export enum TextAlignment {
-    Start = "start",
-    Center = "center",
-    End = "end",
-}
-
-export interface ILabelProperties extends IComponentProperties {
+export interface ILabelProperties extends ICommonUIProperties {
     /** The content of the label. Can alternatively be set via the children. This property takes precedence, though. */
     caption?: string;
 
@@ -46,7 +37,7 @@ export interface ILabelProperties extends IComponentProperties {
     innerRef?: preact.RefObject<HTMLLabelElement>;
 }
 
-export class Label extends ComponentBase<ILabelProperties> {
+export class Label extends UIComponent<ILabelProperties> {
 
     private labelRef: preact.RefObject<HTMLLabelElement>;
 
@@ -69,7 +60,7 @@ export class Label extends ComponentBase<ILabelProperties> {
 
         const content = caption ?? children;
 
-        const className = this.getEffectiveClassNames([
+        const className = this.generateFinalClassName([
             "label",
             this.classFromProperty(type, ["error", "warning", "info", "text", "response"]),
             this.classFromProperty(quoted, "quote"),

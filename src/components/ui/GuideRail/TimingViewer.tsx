@@ -6,16 +6,16 @@
 import type { ComponentChild } from "preact";
 
 import { ArrangementPlayerContext } from "../Arrangement/ArrangementViewer.js";
-import { ComponentBase, type IComponentProperties } from "../ComponentBase/ComponentBase.js";
+import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
 import { NoteViewer } from "../Note/NoteViewer.js";
 import { BarDivisibilityContext, type BarDivisibility } from "./GuideRail.js";
 import type { ITimeParamsView, ITiming } from "../../../core/types/general.js";
 
-export interface ITimingViewerProps extends IComponentProperties {
+export interface ITimingViewerProps extends ICommonUIProperties {
     timing: ITiming;
 }
 
-export class TimingViewer extends ComponentBase<ITimingViewerProps> {
+export class TimingViewer extends UIComponent<ITimingViewerProps> {
     public override render(): ComponentChild {
         const { timing } = this.props;
 

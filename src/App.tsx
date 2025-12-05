@@ -3,38 +3,100 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
+import "@vscode/codicons/dist/codicon.css";
 import "./App.css";
-import "./style.css";
 
 import logo from "./assets/images/animada-logo2.svg";
 
-import { ErrorBoundary } from "./components/ErrorBoundary.js";
-import { ComponentBase } from "./components/ui/ComponentBase/ComponentBase.js";
+import { ErrorBoundary } from "./components/ui/ErrorBoundary.js";
+import { Container } from "./components/ui/framework/Container.js";
+import { Label } from "./components/ui/framework/Label.js";
+import { Tabview, type ITabviewPage } from "./components/ui/framework/Tabview/Tabview.js";
+import { ChildAlignment, Orientation } from "./components/ui/framework/ui-types.js";
+import { UIComponent } from "./components/ui/framework/UIComponent.js";
+import { ScoreBookDataModel } from "./core/ScoreBookDataModel.js";
+import type { IArrangementSnapshot } from "./core/types/snapshots.js";
+import { ScoreBookUi } from "./ui/AnimadaScoreBookUi.js";
+import { AppContext } from "./ui/index.js";
+import { InstrumentManager } from "./ui/InstrumentManager.js";
+import { ScoreLibrary } from "./ui/ScoreLibrary.js";
 
-export class App extends ComponentBase {
+interface IAppState {
+    selectedPage: string;
+    sharedArrangement?: IArrangementSnapshot;
+}
 
-    public override componentDidMount(): void {
-        void import("./index.js");
+export class App extends UIComponent<{}, IAppState> {
+    private dataModel = new ScoreBookDataModel();
+
+    public constructor(props: {}) {
+        super(props);
+
+        this.state = {
+            selectedPage: "tab1",
+        };
     }
 
     public render() {
+        const { selectedPage, sharedArrangement } = this.state;
+
+        const tabPages: ITabviewPage[] = [{
+            id: "tab1",
+            caption: "Score Library",
+            content: (
+                <ScoreLibrary />
+            )
+
+        }, {
+            id: "tab2",
+            caption: "Arrangement Player",
+            content: (
+                <ScoreBookUi arrangementToLoad={sharedArrangement} />
+            )
+        }, {
+            id: "tab3",
+            caption: "Instruments",
+            content: (
+                <InstrumentManager />
+            )
+
+        }];
+
         return (
-            <ErrorBoundary>
-                <div id="wrapper">
-                    <div>
-                        <img src={logo} style="height:80pt;" />
-                        <h1>Welcome to Banda Animada de Samba Chemnitz!</h1>
-                        <div id="loading-message-wrapper">
-                            <div id="loading-message" style="min-height:76px">
-                                <p style="line-height: 76px">Loading app...</p>
-                            </div>
-                        </div>
-                        <h3>
-                            <a href="https://youtu.be/uGNWO5qGEF4" target="_blank">New feature! Triplets!</a>
-                        </h3>
-                    </div>
-                </div>
-            </ErrorBoundary>
+            <AppContext.Provider
+                value={{
+                    dataModel: this.dataModel
+                }}>
+                <ErrorBoundary>
+                    <Container
+                        id="appRoot"
+                        orientation={Orientation.TopDown}
+                        crossAlignment={ChildAlignment.Stretch}
+                    >
+                        <Container
+                            id="appHeader"
+                            orientation={Orientation.LeftToRight}
+                            crossAlignment={ChildAlignment.Center}
+                        >
+                            <img id="titleLogo" src={logo} />
+                            <Label id="appTitle" >Animada Score Book</Label>
+                        </Container>
+
+                        <Tabview
+                            id="appTabview"
+                            pages={tabPages}
+                            selectedId={selectedPage}
+                            stretchTabs={false}
+                            onSelectTab={this.selectPage}
+                        >
+                        </Tabview>
+                    </Container>
+                </ErrorBoundary>
+            </AppContext.Provider>
         );
     }
+
+    private selectPage = (id: string): void => {
+        this.setState({ selectedPage: id });
+    };
 }

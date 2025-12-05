@@ -5,16 +5,16 @@
 
 import type { ComponentChild } from "preact";
 import { AnimadaScoreBookContext } from "../ScoreBookViewer.js";
-import { ComponentBase, type IComponentProperties } from "../ComponentBase/ComponentBase.js";
+import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
 import { Overlay } from "../Overlay.js";
 import type { ITrackView } from "../../../core/types/general.js";
 
-export interface ITrackControlsProps extends IComponentProperties {
+export interface ITrackControlsProps extends ICommonUIProperties {
     track: ITrackView;
     overlayName: string;
 }
 
-export class TrackControls extends ComponentBase<ITrackControlsProps> {
+export class TrackControls extends UIComponent<ITrackControlsProps> {
     public render(): ComponentChild {
         const { track, overlayName } = this.props;
 

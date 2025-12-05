@@ -3,21 +3,22 @@
 * Licensed under the MIT License. See License.txt in the project root for license information.
 */
 
+import type { ContextType } from "preact";
+
+import type { IArrangementView, ITrackView, Subscription } from "../../../core/types/general.js";
 import { useEditCommand } from "../../../ui/hooks/useEditCommand.js";
-import { ServicesContext } from "../ScoreBookViewer.js";
-import { ComponentBase, type IComponentState } from "../ComponentBase/ComponentBase.js";
+import { UIComponent } from "../framework/UIComponent.js";
 import { ExpandingSpacer } from "../ExpandingSpacer.js";
 import { Overlay } from "../Overlay.js";
+import { ServicesContext } from "../ScoreBookViewer.js";
 import { SmallSpacer } from "../SmallSpacer.js";
 import { ArrangementPlayerContext } from "./ArrangementViewer.js";
-import type { ContextType } from "preact";
-import type { Subscription, ITrackView, IArrangementView } from "../../../core/types/general.js";
 
-interface IArrangementControlsBottomState extends IComponentState {
+interface IArrangementControlsBottomState {
     arePolyrhythms?: boolean;
 }
 
-export class ArrangementControlsBottom extends ComponentBase<{}, IArrangementControlsBottomState> {
+export class ArrangementControlsBottom extends UIComponent<{}, IArrangementControlsBottomState> {
     private arrangementSubscription?: Subscription;
     private subscribedTracks = new Set<ITrackView>();
 

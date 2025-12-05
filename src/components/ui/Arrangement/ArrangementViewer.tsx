@@ -10,7 +10,7 @@ import { Publisher } from "../../../core/Publisher.js";
 import type { ITimeParamsView, RealTime, Subscription } from "../../../core/types/general.js";
 import type { IArrangementPlayer } from "../../../player/types.js";
 import type { AnimationEngine } from "../../../ui/AnimationEngine.js";
-import { ComponentBase, type IComponentProperties, type IComponentState } from "../ComponentBase/ComponentBase.js";
+import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
 import { GuideRail } from "../GuideRail/GuideRail.js";
 import { InstrumentBrowser } from "../InstrumentBrowser.js";
 import { Overlay } from "../Overlay.js";
@@ -27,11 +27,11 @@ export const ArrangementPlayerContext = createContext<IArrangementPlayer | null>
 export const NoteWidthContext = createContext<number | null>(null);
 export const NoteLineMinWidth = createContext<number | null>(null);
 
-export interface IArrangementViewerProps extends IComponentProperties {
+export interface IArrangementViewerProps extends ICommonUIProperties {
     arrangementPlayer: IArrangementPlayer;
 }
 
-interface IArrangementViewerState extends IComponentState {
+interface IArrangementViewerState {
     noteWidth: number;
     trackPlayerCount: number;
     noteLineMinWidth: number;
@@ -40,7 +40,7 @@ interface IArrangementViewerState extends IComponentState {
     userMightBeTakingControl: boolean;
 }
 
-export class ArrangementViewer extends ComponentBase<IArrangementViewerProps, IArrangementViewerState> {
+export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArrangementViewerState> {
     private viewerRef = createRef<HTMLDivElement>();
     private contentWidthPublisher = new Publisher();
 

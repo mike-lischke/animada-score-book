@@ -21,6 +21,7 @@ export const createAudioBufferPlayer = (audioBuffer: AudioBuffer, audioContext: 
     // Maybe we should be doing this at the AudioContext level, rather than each sample...
     const gainNode = audioContext.createGain();
     gainNode.connect(audioContext.destination);
+    //gainNode.gain.value = 0.25;
     sourceNode.connect(gainNode);
     sourceNode.start(time);
 

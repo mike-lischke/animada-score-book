@@ -6,13 +6,13 @@
 import type { ComponentChild } from "preact";
 
 import type { INoteStyle } from "../../../core/types/general.js";
-import { ComponentBase, type IComponentProperties } from "../ComponentBase/ComponentBase.js";
+import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
 
-export interface INoteStyleSymbolViewerProps extends IComponentProperties {
+export interface INoteStyleSymbolViewerProps extends ICommonUIProperties {
     noteStyle?: INoteStyle;
 }
 
-export class NoteStyleSymbolViewer extends ComponentBase<INoteStyleSymbolViewerProps> {
+export class NoteStyleSymbolViewer extends UIComponent<INoteStyleSymbolViewerProps> {
     public override render(): ComponentChild {
         const { noteStyle } = this.props;
 

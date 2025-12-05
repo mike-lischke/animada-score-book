@@ -10,22 +10,22 @@ import logo from "./assets/images/animada-logo2.svg";
 import { render } from "preact";
 
 import { App } from "./App.js";
-import { Message } from "./components/ui/Message/Message.js";
-import { MessageType } from "./components/general-types.js";
-import { Container, ContentAlignment, Orientation } from "./components/ui/Container/Container.js";
+import { Message } from "./components/ui/Message.js";
+import { ChildAlignment, MessageType, Orientation } from "./components/ui/framework/ui-types.js";
+import { Container } from "./components/ui/framework/Container.js";
 
 try {
     if (/(iPad|iPhone|iPod)/g.test(navigator.userAgent)) {
         await navigator.mediaDevices.getUserMedia({ video: false, audio: true });
     }
 
-    render(<App />, document.getElementById("app")!);
+    render(<App />, document.body);
 } catch {
     render(
         <Message type={MessageType.Info}>
             <Container
                 orientation={Orientation.TopDown}
-                crossAlignment={ContentAlignment.Center}
+                crossAlignment={ChildAlignment.Center}
             >
                 <img
                     src={logo}

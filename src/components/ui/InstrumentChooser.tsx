@@ -8,15 +8,15 @@ import type { ComponentChild, ContextType } from "preact";
 import { getLibrary } from "../../core/Library.js";
 import type { IArrangementView, IInstrumentMeta } from "../../core/types/general.js";
 import { ArrangementPlayerContext } from "./Arrangement/ArrangementViewer.js";
-import { ComponentBase, type IComponentProperties } from "./ComponentBase/ComponentBase.js";
+import { UIComponent, type ICommonUIProperties } from "./framework/UIComponent.js";
 import { AnimadaScoreBookContext } from "./ScoreBookViewer.js";
 
-export interface IInstrumentChooserProps extends IComponentProperties {
+export interface IInstrumentChooserProps extends ICommonUIProperties {
     instrumentMeta: IInstrumentMeta;
     close: () => void;
 }
 
-export class InstrumentChooser extends ComponentBase<IInstrumentChooserProps> {
+export class InstrumentChooser extends UIComponent<IInstrumentChooserProps> {
     private scoreBookContext?: ContextType<typeof AnimadaScoreBookContext>;
 
     public render(): ComponentChild {

@@ -6,10 +6,10 @@
 import { createRef, type ComponentChild, type ContextType } from "preact";
 
 import { AnimadaScoreBookContext } from "../ScoreBookViewer.js";
-import { ComponentBase, type IComponentProperties } from "../ComponentBase/ComponentBase.js";
+import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
 import { ArrangementPlayerContext } from "./ArrangementViewer.js";
 
-export interface IArrangementTitleProps extends IComponentProperties {
+export interface IArrangementTitleProps extends ICommonUIProperties {
     editMode: boolean;
     onEditEnd: () => void;
 }
@@ -19,7 +19,7 @@ interface IArrangementTitleState {
     inputValue?: string;
 }
 
-export class ArrangementTitle extends ComponentBase<IArrangementTitleProps, IArrangementTitleState> {
+export class ArrangementTitle extends UIComponent<IArrangementTitleProps, IArrangementTitleState> {
 
     private scoreBookContext?: ContextType<typeof AnimadaScoreBookContext>;
     private arrangementPlayerContext?: ContextType<typeof ArrangementPlayerContext>;

@@ -3,8 +3,9 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import type { CSSProperties } from "preact";
-import { Component, type ComponentChildren } from "preact";
+import "./styles.css";
+
+import { Component, type ComponentChildren, type CSSProperties } from "preact";
 import cx from "classnames";
 
 // Click events can also be triggered using the keyboard.
@@ -14,10 +15,11 @@ export type KeyboardEventCallback = (e: KeyboardEvent) => void;
 export type PointerEventCallback = (e: PointerEvent) => void;
 export type DragEventCallback = (e: DragEvent) => void;
 
-export interface IComponentProperties {
+export interface ICommonUIProperties {
     children?: ComponentChildren;
 
-    /** Additional class names to apply for this component. */
+    /** Properties that are available on any HTML element: */
+
     className?: string;
     id?: string;
     style?: CSSProperties;
@@ -29,6 +31,8 @@ export interface IComponentProperties {
     /** For OS style tooltips. */
     title?: string;
 
+    /** Some often used input events: */
+
     /** Clicks can be triggered by both mouse and keyboard events. */
     onClick?: ClickEventCallback;
     onDoubleClick?: MouseEventCallback;
@@ -38,21 +42,17 @@ export interface IComponentProperties {
 
 }
 
-export interface IComponentState {
-    // Nothing in this base component.
-}
-
-export abstract class ComponentBase<P extends IComponentProperties = {}, S extends IComponentState = {}>
+export abstract class UIComponent<P extends ICommonUIProperties = {}, S = {}>
     extends Component<P, S> {
     /**
-     * Constructs a CSS class name value out of the given base names, the framework class name,
-     * some properties and any user supplied names.
+     * Takes the given base class names (CSS classe names) and combines them with the class name of the component.
+     * It automatically handles undefined values.
      *
      * @param base The base names for a given component.
      *
      * @returns A string with CSS class names derived from a default and the given names.
      */
-    protected getEffectiveClassNames(base: Array<string | undefined>): string {
+    protected generateFinalClassName(base: Array<string | undefined>): string {
         const { className } = this.props;
 
         return cx(
@@ -62,24 +62,30 @@ export abstract class ComponentBase<P extends IComponentProperties = {}, S exten
     }
 
     /**
-     * Conditionally returns a CSS class name from a list of names or a single name.
+     * @returns The class name or undefined, depending on the truthiness of the value.
      *
      * @param value A value that must be truthy to return a class name.
-     * @param c A single class name or a list of class names. If the value is a boolean, the list must have two entries.
-     *
-     * @returns The class name or undefined, depending on the truthiness of the value.
+     * @param c A single class name or a list of class names.
+     *          If a list is given and the value is a boolean then the first entry is used for false,
+     *         the second for true. If the value is a number then the entry at that index is used.
+     *         If the value is a string then it is returned only if it is contained in the list.
      */
-    protected classFromProperty(value: unknown, c: string | string[]): string | undefined {
-        if (value == null) {
+    protected classFromProperty(value: boolean | number | string | undefined,
+        c: string | string[]): string | undefined {
+        if (value === undefined) {
             return undefined;
         }
 
         if (c instanceof Array) {
+            if (typeof value === "string") {
+                return c.includes(value) ? value : undefined;
+            }
+
             if (typeof value === "boolean") {
                 return c[value ? 1 : 0];
             }
 
-            return c[value as number];
+            return c[value];
         } else if (value === false || value === 0 || value === "") {
             return undefined;
         }

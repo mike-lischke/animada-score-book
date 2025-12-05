@@ -6,20 +6,20 @@
 import type { ComponentChild, ContextType } from "preact";
 
 import type { IPolyrhythmView } from "../../core/types/general.js";
-import { ComponentBase, type IComponentProperties, type IComponentState } from "./ComponentBase/ComponentBase.js";
+import { UIComponent, type ICommonUIProperties } from "./framework/UIComponent.js";
 import { NoteViewer } from "./Note/NoteViewer.js";
 import { AnimadaScoreBookContext, ServicesContext } from "./ScoreBookViewer.js";
 
-export interface IPolyrhythmViewerProps extends IComponentProperties {
+export interface IPolyrhythmViewerProps extends ICommonUIProperties {
     polyrhythm: IPolyrhythmView;
 }
 
-interface IPolyrhythmViewerState extends IComponentState {
+interface IPolyrhythmViewerState {
     deleteMode: boolean;
     isShrouded: boolean;
 }
 
-export class PolyrhythmViewer extends ComponentBase<IPolyrhythmViewerProps, IPolyrhythmViewerState> {
+export class PolyrhythmViewer extends UIComponent<IPolyrhythmViewerProps, IPolyrhythmViewerState> {
     private servicesContext: ContextType<typeof ServicesContext> | null = null;
     private scoreBookContext: ContextType<typeof AnimadaScoreBookContext> | null = null;
 
