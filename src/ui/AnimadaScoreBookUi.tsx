@@ -16,8 +16,8 @@ import { getEventEngine } from "../player/EventEngine.js";
 import type { IArrangementPlayer } from "../player/types.js";
 import { AnimationEngine } from "./AnimationEngine.js";
 import { createModeManager, ModeManager } from "./ModeManager.js";
-import { createMouseHandler } from "./MouseHandler.js";
-import { createSelectionManager, SelectionManager } from "./SelectionManager.js";
+import { MouseHandler } from "./MouseHandler.js";
+import { SelectionManager } from "./SelectionManager.js";
 
 export interface ScoreBookUiServices {
     animationEngine: AnimationEngine;
@@ -48,6 +48,7 @@ export class AnimadaScoreBookUi extends UIComponent<IAnimadaScoreBookUiPropertie
     private animationEngine: AnimationEngine;
     private selectionManager: SelectionManager;
     private modeManager: ModeManager;
+    private mouseHandler?: MouseHandler;
 
     public constructor(props: IAnimadaScoreBookUiProperties) {
         super(props);
@@ -57,7 +58,7 @@ export class AnimadaScoreBookUi extends UIComponent<IAnimadaScoreBookUiPropertie
         };
 
         this.animationEngine = new AnimationEngine(this.eventEngine);
-        this.selectionManager = createSelectionManager();
+        this.selectionManager = new SelectionManager();
         this.modeManager = createModeManager(this.selectionManager);
 
         this.initServices();
@@ -132,7 +133,7 @@ export class AnimadaScoreBookUi extends UIComponent<IAnimadaScoreBookUiPropertie
             this.handleKeyUp(event);
         });
 
-        createMouseHandler(this.modeManager, this.selectionManager);
+        this.mouseHandler = new MouseHandler(this.modeManager, this.selectionManager);
     }
 
     private handleKeyDown(event: KeyboardEvent): void {
