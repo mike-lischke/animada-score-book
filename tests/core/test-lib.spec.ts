@@ -6,7 +6,7 @@
 import { describe, it, expect } from "vitest";
 
 import { getUniqueTiming } from "./lib/getUniqueTiming.js";
-import type { Timing } from "../../src/core/types/general.js";
+import type { ITiming } from "../../src/core/types/general.js";
 
 describe("Test lib", () => {
     it("getUniqueTiming creates sequential timings", () => {
@@ -61,7 +61,7 @@ describe("Test lib", () => {
     });
 });
 
-const compareTimings = (timing1: Timing, timing2: Timing) => {
+const compareTimings = (timing1: ITiming, timing2: ITiming) => {
     expect(timing1.bar).toEqual(timing2.bar);
     expect(timing1.step).toEqual(timing2.step);
 };

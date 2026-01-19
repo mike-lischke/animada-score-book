@@ -8,134 +8,277 @@ import type { INoteView, IPolyrhythmView, ITrackView, RealTime } from "../core/t
 import { getMuteEvents } from "./Muting.js";
 import { ICallbackEvent, Event, IInterval, SoloMute, ITimeCoordinator, ITrackPlayer } from "./types.js";
 
-export const createTrackPlayer = (track: ITrackView, timeCoordinator: ITimeCoordinator): ITrackPlayer => {
-    const fillInBasicNoteTimes = () => {
-        const unmatchedNotes = track.notes.filter((note) => {
-            return !noteTimes.get(note);
-        });
-        unmatchedNotes.forEach((note) => {
-            return noteTimes.set(note, timeCoordinator.convertToRealTime(note.timing));
-        });
-    };
+/**
+ * Coordinates playback for a single track (`ITrackView`).
+ *
+ * - Caches real-time positions for notes based on `timeCoordinator`.
+ * - Produces audio, mute, and callback events for time intervals.
+ * - Publishes the currently playing polyrhythm note for UI highlighting.
+ * - Keeps caches in sync with instrument load state, track edits, and timing changes.
+ * - Exposes `soloMute` to participate in arrangement-wide audible filtering.
+ * - Provides a robust lifecycle via `onStop()` and `dispose()`.
+ */
+export class TrackPlayer extends Publisher implements ITrackPlayer {
+    public readonly track: ITrackView;
+    /** Publishes when the current polyrhythm note changes (for UI highlighting). */
+    public readonly currentPolyrhythmNotePublisher: Publisher = new Publisher();
+    private readonly timeCoordinator: ITimeCoordinator;
 
-    const handleNewPolyrhythms = () => {
-        track.polyrhythms.forEach((polyrhythm) => {
-            if (!cachedPolyrhythms.includes(polyrhythm)) {
-                addNoteTimesForPolyrhythm(polyrhythm);
-                cachedPolyrhythms.push(polyrhythm);
-            }
-        });
-    };
+    private readonly noteTimes = new Map<INoteView, RealTime>();
+    private cachedPolyrhythms: IPolyrhythmView[] = [];
+    private _currentPolyrhythmNote: INoteView | null = null;
 
-    const handleTrackChange = () => {
-        const newNoteCount = track.notes.length;
-        if (newNoteCount > lastNoteCount) {
-            fillInBasicNoteTimes();
-        } else if (newNoteCount < lastNoteCount) {
-            removeNoteTimesOfDroppedNotes();
-        } else if (track.polyrhythms.length > lastPolyrhythmCount) {
-            handleNewPolyrhythms();
-        } else if (track.polyrhythms.length < lastPolyrhythmCount) {
-            handleDroppedPolyrhythms();
+    private currentSoloMute: SoloMute = null;
+    private disposed = false;
+
+    private setupNotes: (() => void) | null = null;
+
+    private lastNoteCount: number;
+    private lastPolyrhythmCount: number;
+    private lastLength: number;
+
+    /**
+     * Creates a player for the given track and sets up note timing caches and subscriptions.
+     *
+     * @param track The track view to observe and play.
+     * @param timeCoordinator Converts score timings to real-time and provides loop/length context.
+     */
+    public constructor(track: ITrackView, timeCoordinator: ITimeCoordinator) {
+        super();
+        this.track = track;
+        this.timeCoordinator = timeCoordinator;
+
+        // Initial note timing setup depending on instrument load state.
+        if (this.track.instrument.loaded) {
+            this.fillInBasicNoteTimes();
+            this.handleNewPolyrhythms();
+        } else {
+            this.setupNotes = () => {
+                this.fillInBasicNoteTimes();
+                this.handleNewPolyrhythms();
+                this.track.instrument.unsubscribe(this.setupNotes!);
+                this.setupNotes = null;
+            };
+            this.track.instrument.subscribe(this.setupNotes);
         }
 
-        lastNoteCount = newNoteCount;
-        lastPolyrhythmCount = track.polyrhythms.length;
-    };
+        // Subscriptions to keep internal caches in sync.
+        this.lastNoteCount = this.track.notes.length;
+        this.lastPolyrhythmCount = this.track.polyrhythms.length;
+        this.track.subscribe(this.handleTrackChange);
+        this.lastLength = this.track.arrangement.timeParams.length;
+        this.timeCoordinator.subscribe(this.handleTimeChange);
+        this.track.arrangement.subscribe(this.destroySelfIfNeeded);
+    }
 
-    const handleTimeChange = () => {
-        // Unnecessary to recalc note times when the length changes
-        if (track.arrangement.timeParams.length !== lastLength) {
-            lastLength = track.arrangement.timeParams.length;
+    /**
+     * Current solo/mute state used by the arrangement to determine audible tracks.
+     *
+     * @returns {SoloMute} The current solo/mute state.
+     */
+    public get soloMute(): SoloMute {
+        return this.currentSoloMute;
+    }
 
-            return;
+    /**
+     * Updates the solo/mute state and publishes a change to subscribers.
+     *
+     * @param newSoloMute The new state: `null` (normal), "solo", or "mute".
+     */
+    public set soloMute(newSoloMute: SoloMute) {
+        if (newSoloMute !== this.currentSoloMute) {
+            this.currentSoloMute = newSoloMute;
+            this.publish();
         }
+    }
 
-        for (const note of noteTimes.keys()) {
-            if (track.notes.includes(note)) {
-                noteTimes.set(note, timeCoordinator.convertToRealTime(note.timing));
-            }
-        }
+    /**
+     * The note currently playing inside a polyrhythm, or `null` if none.
+     *
+     * @returns {INoteView | null} The current polyrhythm note, if any.
+     */
+    public get currentPolyrhythmNote(): INoteView | null {
+        return this._currentPolyrhythmNote;
+    }
 
-        // Destroy and recreate polyrhythms for simplicity
-        destroyPolyrhythms();
-        handleNewPolyrhythms();
-    };
-
-    const destroySelfIfNeeded = () => {
-        if (!track.arrangement.tracks.includes(track)) {
-            timeCoordinator.unsubscribe(handleTimeChange);
-            track.arrangement.unsubscribe(destroySelfIfNeeded);
-        }
-    };
-
-    const getAudioEvent = (note: INoteView, realTime: RealTime): Event => {
-        return {
-            note, realTime,
-            audioBuffer: note.noteStyle!.audioBuffer!
-        };
-    };
-
-    const getEvents = ({ start, end }: IInterval): Event[] => {
-        if (!track.instrument.loaded) {
+    /**
+     * Builds all events (audio, mute, and callbacks) for the given real-time interval.
+     * Returns an empty list if the instrument is not loaded or the player is disposed.
+     *
+     * @param {{ start: RealTime, end: RealTime }} root0 The interval descriptor.
+     * @param {RealTime} root0.start Interval start (inclusive).
+     * @param {RealTime} root0.end Interval end (exclusive).
+     * @returns {Event[]} Events occurring within the interval, ordered by time.
+     */
+    public getEvents = ({ start, end }: IInterval): Event[] => {
+        if (this.disposed || !this.track.instrument.loaded) {
             return [];
         }
 
         const events: Event[] = [];
 
-        const noteIterator = track.getNoteIterator();
+        const noteIterator = this.track.getNoteIterator();
         for (const note of noteIterator) {
-            const time = noteTimes.get(note)!;
+            const time = this.noteTimes.get(note)!;
             if (time > end) {
                 break;
             }
 
             if (time >= start) {
                 if (note.noteStyle) {
-                    events.push(getAudioEvent(note, time));
+                    events.push(this.getAudioEvent(note, time));
                 }
                 events.push(...getMuteEvents(note, time));
-                events.push(getCurrentPolyrhythmNoteEvent(note, time));
+                events.push(this.getCurrentPolyrhythmNoteEvent(note, time));
             }
         }
 
         return events;
     };
 
-    const onStop = () => {
-        currentPolyrhythmNote = null;
-        currentPolyrhythmNotePublisher.publish();
+    /** Resets transient playback state and publishes UI updates. */
+    public onStop = (): void => {
+        this._currentPolyrhythmNote = null;
+        this.currentPolyrhythmNotePublisher.publish();
     };
 
-    const removeNoteTimesOfDroppedNotes = () => {
-        for (const note of noteTimes.keys()) {
-            if (!note.polyrhythm && !track.notes.includes(note)) {
-                noteTimes.delete(note);
+    /** Disposes all subscriptions and internal state. Safe to call multiple times. */
+    public dispose(): void {
+        if (this.disposed) {
+            return;
+        }
+        this.disposed = true;
+        this.onStop();
+
+        // Unsubscribe from all sources and clear any pending instrument setup subscription.
+        this.timeCoordinator.unsubscribe(this.handleTimeChange);
+        this.track.unsubscribe(this.handleTrackChange);
+        this.track.arrangement.unsubscribe(this.destroySelfIfNeeded);
+        if (this.setupNotes) {
+            this.track.instrument.unsubscribe(this.setupNotes);
+            this.setupNotes = null;
+        }
+    }
+
+    /** Populates `noteTimes` for notes missing cached real-time positions using `timeCoordinator`. */
+    private fillInBasicNoteTimes = (): void => {
+        const unmatchedNotes = this.track.notes.filter((note) => {
+            return !this.noteTimes.get(note);
+        });
+        unmatchedNotes.forEach((note) => {
+            return this.noteTimes.set(note, this.timeCoordinator.convertToRealTime(note.timing));
+        });
+    };
+
+    /** Adds real-time positions for notes in newly detected polyrhythms and caches them. */
+    private handleNewPolyrhythms = (): void => {
+        this.track.polyrhythms.forEach((polyrhythm) => {
+            if (!this.cachedPolyrhythms.includes(polyrhythm)) {
+                this.addNoteTimesForPolyrhythm(polyrhythm);
+                this.cachedPolyrhythms.push(polyrhythm);
+            }
+        });
+    };
+
+    /** Responds to structural changes in the track (notes/polyrhythms added or removed) by updating caches. */
+    private handleTrackChange = (): void => {
+        const newNoteCount = this.track.notes.length;
+        if (newNoteCount > this.lastNoteCount) {
+            this.fillInBasicNoteTimes();
+        } else if (newNoteCount < this.lastNoteCount) {
+            this.removeNoteTimesOfDroppedNotes();
+        } else if (this.track.polyrhythms.length > this.lastPolyrhythmCount) {
+            this.handleNewPolyrhythms();
+        } else if (this.track.polyrhythms.length < this.lastPolyrhythmCount) {
+            this.handleDroppedPolyrhythms();
+        }
+
+        this.lastNoteCount = newNoteCount;
+        this.lastPolyrhythmCount = this.track.polyrhythms.length;
+    };
+
+    /** Reacts to arrangement timing changes; recomputes note times and rebuilds polyrhythm caches. */
+    private handleTimeChange = (): void => {
+        // Unnecessary to recalc note times when the length changes
+        if (this.track.arrangement.timeParams.length !== this.lastLength) {
+            this.lastLength = this.track.arrangement.timeParams.length;
+
+            return;
+        }
+
+        for (const note of this.noteTimes.keys()) {
+            if (this.track.notes.includes(note)) {
+                this.noteTimes.set(note, this.timeCoordinator.convertToRealTime(note.timing));
+            }
+        }
+
+        // Destroy and recreate polyrhythms for simplicity
+        this.destroyPolyrhythms();
+        this.handleNewPolyrhythms();
+    };
+
+    /** Stops reacting if the track is removed from its arrangement (unsubscribes). */
+    private destroySelfIfNeeded = (): void => {
+        if (!this.track.arrangement.tracks.includes(this.track)) {
+            this.timeCoordinator.unsubscribe(this.handleTimeChange);
+            this.track.arrangement.unsubscribe(this.destroySelfIfNeeded);
+        }
+    };
+
+    /**
+     * Builds an audio event for a given note at the provided real-time position.
+     *
+     * @param {INoteView} note The note to play.
+     * @param {RealTime} realTime The real-time position of the note.
+     * @returns {Event} An audio event for the note.
+     */
+    private getAudioEvent = (note: INoteView, realTime: RealTime): Event => {
+        return {
+            note,
+            realTime,
+            audioBuffer: note.noteStyle!.audioBuffer!
+        };
+    };
+
+    /** Removes cached times for notes that no longer belong to the track and are not part of a polyrhythm. */
+    private removeNoteTimesOfDroppedNotes = (): void => {
+        for (const note of this.noteTimes.keys()) {
+            if (!note.polyrhythm && !this.track.notes.includes(note)) {
+                this.noteTimes.delete(note);
             }
         }
     };
 
-    const handleDroppedPolyrhythms = () => {
-        cachedPolyrhythms = cachedPolyrhythms.filter((cachedPolyrhythm) => {
-            if (track.polyrhythms.includes(cachedPolyrhythm)) {
+    /** Cleans up caches for polyrhythms that have been removed from the track. */
+    private handleDroppedPolyrhythms = (): void => {
+        this.cachedPolyrhythms = this.cachedPolyrhythms.filter((cachedPolyrhythm) => {
+            if (this.track.polyrhythms.includes(cachedPolyrhythm)) {
                 return true;
             }
 
             cachedPolyrhythm.notes.forEach((note) => {
-                return noteTimes.delete(note);
+                return this.noteTimes.delete(note);
             });
+
+            return false;
         });
     };
 
-    const addNoteTimesForPolyrhythm = (polyrhythm: IPolyrhythmView) => {
-        const startTime = noteTimes.get(polyrhythm.start)!;
+    /**
+     * Computes evenly distributed real-time positions for notes within a polyrhythm,
+     * inferred from the start note and the next note following the polyrhythm.
+     *
+     * @param polyrhythm The polyrhythm whose notes should receive real-time positions.
+     */
+    private addNoteTimesForPolyrhythm = (polyrhythm: IPolyrhythmView): void => {
+        const startTime = this.noteTimes.get(polyrhythm.start)!;
 
-        // We need to find the note just after the polyrhythm ends to work out it's time-length
+        // We need to find the note just after the polyrhythm ends to work out its time-length
         // It's possible the next note is the start of a polyrhythm in an equal-or-higher level,
         // which we don't have times for yet.
         // So we exclude later polyrhythms from the iterator
-        const laterPolyrhythms = track.polyrhythms.slice(track.polyrhythms.indexOf(polyrhythm) + 1);
-        const noteIterator = track.getNoteIterator(laterPolyrhythms);
+        const laterPolyrhythms = this.track.polyrhythms.slice(this.track.polyrhythms.indexOf(polyrhythm) + 1);
+        const noteIterator = this.track.getNoteIterator(laterPolyrhythms);
         let nextNote: INoteView | undefined;
         let foundPolyrhythm = false;
         for (const note of noteIterator) {
@@ -150,33 +293,41 @@ export const createTrackPlayer = (track: ITrackView, timeCoordinator: ITimeCoord
         }
 
         const endTime = nextNote
-            ? noteTimes.get(nextNote)!
-            : timeCoordinator.realTimeLength;
+            ? this.noteTimes.get(nextNote)!
+            : this.timeCoordinator.realTimeLength;
 
         const realTimeLength = endTime - startTime;
         const timePerNote = realTimeLength / polyrhythm.notes.length;
 
         polyrhythm.notes.forEach((note, index) => {
-            return noteTimes.set(note, startTime + (index * timePerNote));
+            return this.noteTimes.set(note, startTime + (index * timePerNote));
         });
     };
 
-    const destroyPolyrhythms = () => {
-        cachedPolyrhythms.forEach((polyrhythm) => {
+    /** Clears all polyrhythm-related cached note times and resets the polyrhythm cache. */
+    private destroyPolyrhythms = (): void => {
+        this.cachedPolyrhythms.forEach((polyrhythm) => {
             polyrhythm.notes.forEach((note) => {
-                return noteTimes.delete(note);
+                return this.noteTimes.delete(note);
             });
         });
-        cachedPolyrhythms = [];
+        this.cachedPolyrhythms = [];
     };
 
-    const getCurrentPolyrhythmNoteEvent = (note: INoteView, realTime: RealTime): ICallbackEvent => {
+    /**
+     * Produces a callback event that updates `currentPolyrhythmNote` when a note plays or resets to `null`.
+     *
+     * @param {INoteView} note The note whose play state triggers the callback.
+     * @param {RealTime} realTime The real-time position at which the callback occurs.
+     * @returns {ICallbackEvent} A callback event for updating UI state.
+     */
+    private getCurrentPolyrhythmNoteEvent = (note: INoteView, realTime: RealTime): ICallbackEvent => {
         if (note.polyrhythm) {
             return {
                 realTime,
                 callback: () => {
-                    currentPolyrhythmNote = note;
-                    currentPolyrhythmNotePublisher.publish();
+                    this._currentPolyrhythmNote = note;
+                    this.currentPolyrhythmNotePublisher.publish();
                 }
             };
         }
@@ -184,74 +335,9 @@ export const createTrackPlayer = (track: ITrackView, timeCoordinator: ITimeCoord
         return {
             realTime,
             callback: () => {
-                currentPolyrhythmNote = null;
-                currentPolyrhythmNotePublisher.publish();
+                this._currentPolyrhythmNote = null;
+                this.currentPolyrhythmNotePublisher.publish();
             }
         };
     };
-
-    const publisher = new Publisher();
-    const noteTimes = new Map<INoteView, RealTime>();
-    let cachedPolyrhythms: IPolyrhythmView[] = [];
-
-    // We are going to light up note-viewers in polyrhythms when they play, by simply publishing the playing note
-    // Later we'll investigate whether we use this for all notes. It's pretty simple.
-    const currentPolyrhythmNotePublisher = new Publisher();
-
-    // It would be better to parameterise Publisher, but that's a chunk of work
-    let currentPolyrhythmNote: INoteView | null = null;
-
-    let setupNotes: (() => void) | null = null;
-
-    if (track.instrument.loaded) {
-        fillInBasicNoteTimes();
-        handleNewPolyrhythms();
-    } else {
-        setupNotes = () => {
-            fillInBasicNoteTimes();
-            handleNewPolyrhythms();
-            track.instrument.unsubscribe(setupNotes!);
-            setupNotes = null;
-        };
-        track.instrument.subscribe(setupNotes);
-    }
-
-    let lastNoteCount = track.notes.length;
-    let lastPolyrhythmCount = track.polyrhythms.length;
-    track.subscribe(handleTrackChange);
-    let lastLength = track.arrangement.timeParams.length;
-    timeCoordinator.subscribe(handleTimeChange);
-    track.arrangement.subscribe(destroySelfIfNeeded);
-    let soloMute: SoloMute = null;
-
-    const dispose = (): void => {
-        // Unsubscribe from all sources and clear any pending instrument setup subscription.
-        timeCoordinator.unsubscribe(handleTimeChange);
-        track.unsubscribe(handleTrackChange);
-        track.arrangement.unsubscribe(destroySelfIfNeeded);
-        if (setupNotes) {
-            track.instrument.unsubscribe(setupNotes);
-            setupNotes = null;
-        }
-    };
-
-    return {
-        track, getEvents, onStop,
-        subscribe: publisher.subscribe, unsubscribe: publisher.unsubscribe,
-        get soloMute() {
-            return soloMute;
-        },
-        set soloMute(newSoloMute: SoloMute) {
-            if (newSoloMute !== soloMute) {
-                soloMute = newSoloMute;
-                publisher.publish();
-            }
-        },
-        currentPolyrhythmNotePublisher,
-        get currentPolyrhythmNote() {
-            return currentPolyrhythmNote;
-        },
-        dispose
-    };
-
-};
+}

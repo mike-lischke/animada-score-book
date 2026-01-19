@@ -3,20 +3,20 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import { Timing } from "../../../src/core/types/general.js";
+import { ITiming } from "../../../src/core/types/general.js";
 
-let lastTiming: null | Timing = null;
+let lastTiming: null | ITiming = null;
 
 // This is just going to sequentially return timings
 // 1:1, 1:2, ..., 1:16, 2:1, 2:2, ...
-export const getUniqueTiming = (): Timing => {
-    const newTiming: Timing = getNewTiming(lastTiming);
+export const getUniqueTiming = (): ITiming => {
+    const newTiming: ITiming = getNewTiming(lastTiming);
     lastTiming = newTiming;
 
     return newTiming;
 };
 
-const getNewTiming = (lastTiming: Timing | null): Timing => {
+const getNewTiming = (lastTiming: ITiming | null): ITiming => {
     if (lastTiming === null) {
         return { bar: 1, step: 1 };
     }

@@ -6,8 +6,8 @@
 import { Publisher } from "../core/Publisher.js";
 import type { IArrangementView, ITiming, ITrackView, RealTime } from "../core/types/general.js";
 import { TimeCoordinator } from "./TimeCoordinator.js";
-import { createTrackPlayer } from "./TrackPlayer.js";
-import { IArrangementPlayer, ICallbackEvent, Event, IInterval, ILoopInterval, ITrackPlayer } from "./types.js";
+import { TrackPlayer } from "./TrackPlayer.js";
+import { Event, IArrangementPlayer, ICallbackEvent, IInterval, ILoopInterval, ITrackPlayer } from "./types.js";
 
 /**
  * Coordinates playback for an `IArrangementView` by aggregating events from all `ITrackPlayer`s,
@@ -191,7 +191,7 @@ export class ArrangementPlayer extends Publisher implements IArrangementPlayer {
 
         for (const track of this.arrangement.tracks) {
             if (!this.trackPlayers.get(track)) {
-                const trackPlayer = createTrackPlayer(track, this.timeCoordinator);
+                const trackPlayer = new TrackPlayer(track, this.timeCoordinator);
                 this.trackPlayers.set(track, trackPlayer);
                 trackPlayer.subscribe(this.updateAudibleTrackPlayers);
                 somethingChanged = true;
