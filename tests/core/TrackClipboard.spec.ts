@@ -3,155 +3,119 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import { describe, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
+
+import { TrackClipboard } from "../../src/core/TrackClipboard.js";
+import type { IArrangement, INote, INoteStyle, ITiming, ITrack } from "../../src/core/types/general.js";
 
 describe("TrackClipboard", () => {
-    it("is a placeholder test", () => {
-        // TODO: Implement TrackClipboard tests.
+    let mockTrack: ITrack;
+    let target: TrackClipboard;
+
+    const makeNoteStyle = (id: string): INoteStyle => {
+        return {
+            id,
+            symbol: undefined,
+            muting: undefined,
+            audioBuffer: null,
+            instrument: {
+                id: "inst",
+                displayOrder: 0,
+                displayName: "Instrument",
+                icon: "",
+                colourGroup: "blue",
+                noteStyles: {},
+                loaded: true,
+                subscribe: () => { /* no-op */ },
+                unsubscribe: () => { /* no-op */ },
+            }
+        };
+    };
+
+    const makeTiming = (step: number): ITiming => {
+        return { bar: 1, step };
+    };
+
+    beforeEach(() => {
+        // Minimal track stub with notes and getNoteAt.
+        // Minimal track stub
+        mockTrack = {
+            id: 1,
+            arrangement: {} as unknown as IArrangement,
+            instrument: makeNoteStyle("1").instrument,
+            notes: [] as INote[],
+            polyrhythms: [],
+            getNoteAt: (timing: ITiming) => {
+                // Simplified: timings are contiguous and start at step 1
+                return mockTrack.notes[timing.step - 1];
+            },
+            getNoteIterator: () => {
+                return mockTrack.notes.values();
+            },
+            addPolyrhythm: () => { /* no-op */ },
+            removePolyrhythm: () => { /* no-op */ },
+            clear: () => { /* no-op */ },
+            subscribe: () => { /* no-op */ },
+            unsubscribe: () => { /* no-op */ },
+        } as unknown as ITrack;
+
+        const notes: INote[] = new Array(10).fill(null).map((_, i) => {
+            return {
+                id: String(i + 1),
+                timing: makeTiming(i + 1),
+                track: mockTrack,
+                noteStyle: makeNoteStyle(String(i + 1)),
+                subscribe: () => { /* no-op */ },
+                unsubscribe: () => { /* no-op */ },
+            } as INote;
+        });
+
+        // Insert a rest at step 6
+        notes[5].noteStyle = undefined;
+
+        mockTrack.notes = notes;
+
+        target = new TrackClipboard(mockTrack);
+    });
+
+    const ids = () => {
+        return mockTrack.notes.map((n) => {
+            return n.noteStyle?.id;
+        });
+    };
+
+    it("copies and pastes", () => {
+        target.copy({ start: makeTiming(1), end: makeTiming(3) });
+        target.paste({ start: makeTiming(3), end: makeTiming(5) });
+        expect(ids()).toEqual(["1", "2", "1", "2", "3", undefined, "7", "8", "9", "10"]);
+    });
+
+    it.skip("copies and pastes without specifying end", () => {
+        target.copy({ start: makeTiming(1), end: makeTiming(3) });
+        expect(target.length).toBe(3);
+        target.paste({ start: makeTiming(5) });
+        expect(ids()).toEqual(["1", "2", "3", "4", "1", "2", "3", "8", "9", "10"]);
+    });
+
+    it.skip("doesn't paste past the end of the track", () => {
+        expect(mockTrack.notes).toHaveLength(10);
+        target.copy({ start: makeTiming(7), end: makeTiming(9) });
+        target.paste({ start: makeTiming(9) });
+        expect(ids()).toEqual(["1", "2", "3", "4", "5", undefined, "7", "8", "7", "8"]);
+        expect(mockTrack.notes).toHaveLength(10);
+    });
+
+    it.skip("retains original copied NoteStyles even if track has changed", () => {
+        target.copy({ start: makeTiming(2), end: makeTiming(3) });
+        const newNoteStyle = makeNoteStyle("1000");
+        mockTrack.notes[1].noteStyle = newNoteStyle;
+        target.paste({ start: makeTiming(7) });
+        expect(ids()).toEqual(["1", "1000", "3", "4", "5", undefined, "2", "3", "9", "10"]);
+    });
+
+    it.skip("copies rests", () => {
+        target.copy({ start: makeTiming(5), end: makeTiming(7) });
+        target.paste({ start: makeTiming(1) });
+        expect(ids()).toEqual(["5", undefined, "7", "4", "5", undefined, "7", "8", "9", "10"]);
     });
 });
-
-// import {assert} from 'chai';
-// import { Note, Timing, Track } from '../../prod/types.js';
-// import {TrackClipboard} from '../../prod/TrackClipboard.js';
-// import {isSameTiming} from '../../prod/utils.js';
-// import {MockTrack} from '../mocks/MockTrack.js';
-// import {MockNote} from '../mocks/MockNote.js';
-// import {MockNoteStyle} from '../mocks/MockNoteStyle.js';
-
-// let mockTrack:Track, target:TrackClipboard;
-
-// describe('TrackClipboard', function() {
-
-//   beforeEach(setupTrack);
-
-//   it('copies and pastes', () => {
-//     target.copy({
-//       start: {bar:1, step:1},
-//       end: {bar:1, step:3}
-//     });
-//     target.paste({
-//       start: {bar:1, step:3},
-//       end: {bar:1, step:5}
-//     });
-//     checkNoteStyleIds('1', '2', '1', '2', '3', undefined, '7', '8', '9', '10');
-//   });
-
-//   it('copies and pastes without specifying end', () => {
-//     target.copy({
-//       start: {bar:1, step:1},
-//       end: {bar:1, step:3}
-//     });
-//     target.paste({
-//       start: {bar:1, step:5}
-//     });
-//     checkNoteStyleIds('1', '2', '3', '4', '1', '2', '3', '8', '9', '10');
-//   });
-
-//   it("doesn't paste past the end of the track", () => {
-//     assert.lengthOf(mockTrack.notes, 10);
-//     target.copy({
-//       start: {bar:1, step:7},
-//       end: {bar:1, step:9}
-//     });
-//     target.paste({
-//       start: {bar:1, step:9}
-//     });
-//     checkNoteStyleIds('1', '2', '3', '4', '5', undefined, '7', '8', '7', '8');
-//     assert.lengthOf(mockTrack.notes, 10);
-//   });
-
-//     it("retains original copied NoteStyles even if track has changed", () => {
-//       target.copy({
-//         start: {bar:1, step:2},
-//         end: {bar:1, step:3}
-//       });
-//       const newNoteStyle = MockNoteStyle();
-//       newNoteStyle.id = '1000';
-//       mockTrack.notes[1].noteStyle = newNoteStyle;
-//       target.paste({
-//         start: {bar:1, step:7}
-//       });
-//       checkNoteStyleIds('1', '1000', '3', '4', '5', undefined, '2', '3', '9', '10');
-//     });
-
-//     it("copies rests", () => {
-//       target.copy({
-//         start: {bar:1, step:5},
-//         end: {bar:1, step:7}
-//       });
-//       target.paste({
-//         start: {bar:1, step:1}
-//       });
-//       checkNoteStyleIds('5', undefined, '7', '4', '5', undefined, '7', '8', '9', '10');
-//     });
-// });
-
-// function setupTrack(): void {
-//   mockTrack = MockTrack();
-//   target = new TrackClipboard(mockTrack);
-//   for (let index = 0; index < 10; index++) {
-//     const mockNote = mockTrack.notes[index] = MockNote();
-//     const step = index + 1;
-//     mockNote.timing = {bar:1, step};
-//     mockNote.noteStyle = MockNoteStyle();
-//     mockNote.noteStyle.id = '' + step;
-//   }
-
-//   // Add a rest, make sure that works
-//   mockTrack.notes[5].noteStyle = undefined;
-
-//   mockTrack.getNoteAt = function(timing:Timing): Note {
-//     for (const note of mockTrack.notes) {
-//       if (isSameTiming(note.timing, timing))
-//         return note;
-//     }
-//   }
-
-//   assertNoteStylesInBaseState();
-// }
-
-// function assertNoteStylesInBaseState() {
-//   if (!mockTrack?.notes?.length)
-//     throw 'mockTrack not set up';
-
-//   checkNoteStyleIds('1', '2', '3', '4', '5', undefined, '7', '8', '9', '10');
-
-//   assert(isSameTiming(mockTrack.notes[0].timing, {bar:1, step:1}));
-//   assert(isSameTiming(mockTrack.notes[1].timing, {bar:1, step:2}));
-//   assert(isSameTiming(mockTrack.notes[2].timing, {bar:1, step:3}));
-//   assert(isSameTiming(mockTrack.notes[3].timing, {bar:1, step:4}));
-//   assert(isSameTiming(mockTrack.notes[4].timing, {bar:1, step:5}));
-//   assert(isSameTiming(mockTrack.notes[5].timing, {bar:1, step:6}));
-//   assert(isSameTiming(mockTrack.notes[6].timing, {bar:1, step:7}));
-//   assert(isSameTiming(mockTrack.notes[7].timing, {bar:1, step:8}));
-//   assert(isSameTiming(mockTrack.notes[8].timing, {bar:1, step:9}));
-//   assert(isSameTiming(mockTrack.notes[9].timing, {bar:1, step:10}));
-
-// }
-
-// function checkNoteStyleIds(...expectedNoteStyleIds: String[]) {
-//   expectedNoteStyleIds.forEach((expectedId, index) => {
-//     if (!mockTrack.notes[index])
-//       throw "no note at " + index;
-//     const actualNoteStyle = mockTrack.notes[index].noteStyle;
-//     if (expectedId !== undefined) {
-//       assert.isDefined(actualNoteStyle, "actualNoteStyle undefined: " + index + ". whole thing: " +
-//           stringifyMockTrack());
-//       assert.equal(actualNoteStyle.id, expectedId, "actualNoteStyle wrong: " + index + ". whole thing: " +
-//           stringifyMockTrack());
-//     } else {
-//       assert.isUndefined(actualNoteStyle, "actualNoteStyle should be undefined: " + index + ". whole thing: " +
-//           stringifyMockTrack());
-//     }
-//   });
-// }
-
-// function stringifyMockTrack() {
-//   return mockTrack.notes.map(note => {
-//     if (note.noteStyle === undefined)
-//       return 'undefined';
-//     else
-//     return note.noteStyle.id;
-//   }).join(', ');
-// }

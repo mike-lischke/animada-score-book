@@ -8,17 +8,29 @@ import { Track } from "./Track.js";
 import type { IArrangement, IInstrument, ITimeParams, ITrack } from "./types/general.js";
 
 export class Arrangement extends Publisher implements IArrangement {
-
+    /** All tracks in display order for the arrangement. */
     public readonly tracks: ITrack[] = [];
 
     private titleString: string | undefined;
 
+    /**
+     * Creates a new arrangement with the given time parameters and optional title.
+     *
+     * @param timeParams The timing configuration used by this arrangement.
+     * @param title Optional initial title for the arrangement.
+     */
     public constructor(public timeParams: ITimeParams, title?: string) {
         super();
         this.titleString = title;
     }
 
-    // We keep tracks in order right here, so the rest of the app doesn't have to fiddle around figuring this out
+    /**
+     * Adds a track for the given instrument, maintaining display-order sorting.
+     *
+     * @param instrument The instrument to create a track for.
+     * @param id Optional explicit track id; if omitted a new id is generated.
+     * @returns The newly created track.
+     */
     public addTrack(instrument: IInstrument, id?: number): ITrack {
         const index = this.tracks.findIndex((track) => {
             return track.instrument.displayOrder > instrument.displayOrder;
@@ -34,6 +46,12 @@ export class Arrangement extends Publisher implements IArrangement {
         return track;
     };
 
+    /**
+     * Removes the specified track.
+     *
+     * @param trackToRemove The track to remove.
+     * @returns True if the track was found and removed; throws otherwise.
+     */
     public removeTrack(trackToRemove: ITrack): boolean {
         const index = this.tracks.indexOf(trackToRemove);
         if (index !== -1) {
@@ -47,10 +65,20 @@ export class Arrangement extends Publisher implements IArrangement {
         }
     };
 
+    /**
+     * Current arrangement title.
+     *
+     * @returns The title string, defaulting to "Untitled Arrangement" if not set.
+     */
     public get title() {
         return this.titleString ?? "Untitled Arrangement";
     }
 
+    /**
+     * Updates the arrangement title and publishes the change.
+     *
+     * @param newTitle The new title string.
+     */
     public set title(newTitle: string) {
         this.titleString = newTitle;
         this.publish();

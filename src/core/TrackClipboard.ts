@@ -6,19 +6,19 @@
 import type { INote, INoteStyle, ITiming, ITrack } from "./types/general.js";
 import { isSameTiming } from "./utils.js";
 
-interface CopyRequest {
+interface ICopyRequest {
     start: ITiming,
     end: ITiming;
 }
 
-interface PasteRequest {
+interface IPasteRequest {
     start: ITiming,
     end?: ITiming;
 }
 
 export class TrackClipboard {
     private track: ITrack;
-    private buffer: INoteStyle[] = [];
+    private buffer: Array<INoteStyle | undefined> = [];
 
     public constructor(track: ITrack) {
         this.track = track;
@@ -30,55 +30,47 @@ export class TrackClipboard {
         return this.buffer.length;
     }
 
-    public copy({ start, end }: CopyRequest) {
+    public copy({ start, end }: ICopyRequest) {
         const notes = this.track.notes;
-        let note: INote | undefined = this.track.getNoteAt(start);
-        let index = note === undefined ? -1 : notes.indexOf(note);
+        const startIndex = notes.findIndex((n) => {
+            return isSameTiming(n.timing, start);
+        });
+        const endIndex = notes.findIndex((n) => {
+            return isSameTiming(n.timing, end);
+        });
+
         this.buffer = [];
 
-        while (true) {
-            if (note?.noteStyle) {
-                this.buffer.push(note.noteStyle);
-                if (isSameTiming(note.timing, end)) {
-                    // Reached end of region to copy.
-                    return;
-                }
-            }
-            index++;
-            if (index >= notes.length) {
-                // Reached end of track.
-                return;
-            }
-            note = notes[index];
+        if (startIndex < 0) {
+            return;
+        }
+
+        const lastIndex = endIndex >= 0 ? endIndex : notes.length - 1;
+        for (let i = startIndex; i <= lastIndex && i < notes.length; i++) {
+            this.buffer.push(notes[i].noteStyle);
         }
     }
 
-    public paste({ start, end }: PasteRequest) {
+    public paste({ start, end }: IPasteRequest) {
         const notes = this.track.notes;
-        let note = this.track.getNoteAt(start);
-        let trackIndex = note === undefined ? -1 : notes.indexOf(note);
-        let bufferIndex = 0;
-        let noteStyleToPaste = this.buffer[0];
+        const startIndex = notes.findIndex((n) => {
+            return isSameTiming(n.timing, start);
+        });
 
-        while (true) {
-            if (note) {
-                note.noteStyle = noteStyleToPaste;
-                if (end && isSameTiming(note.timing, end)) {
-                    return;
-                }
+        if (startIndex < 0) {
+            return;
+        }
+
+        for (let i = 0; i < this.buffer.length; i++) {
+            const trackPos = startIndex + i;
+            if (trackPos >= notes.length) {
+                break;
             }
-
-            bufferIndex++;
-            if (bufferIndex >= this.buffer.length) {
-                return;
-            } // Reached end of clipboard
-            noteStyleToPaste = this.buffer[bufferIndex];
-
-            trackIndex++;
-            if (trackIndex >= notes.length) {
-                return;
-            } // Reached end of track
-            note = notes[trackIndex];
+            const note = notes[trackPos];
+            note.noteStyle = this.buffer[i];
+            if (end && isSameTiming(note.timing, end)) {
+                break;
+            }
         }
     }
 }

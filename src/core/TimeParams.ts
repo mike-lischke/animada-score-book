@@ -7,7 +7,14 @@ import { Publisher } from "./Publisher.js";
 import type { ITimeParams, ITiming } from "./types/general.js";
 import { calculateStepsPerBar } from "./utils.js";
 
+/**
+ * Encapsulates timing parameters for an arrangement and publishes changes.
+ *
+ * Maintains a derived list of `timings` covering every step of every bar,
+ * updated whenever any parameter changes (time signature, tempo, length, pulse, resolution).
+ */
 export class TimeParams extends Publisher implements ITimeParams {
+    /** All valid timings for the current configuration (bar/step pairs). */
     public readonly timings: ITiming[] = [];
 
     private resolution: number;
@@ -16,6 +23,15 @@ export class TimeParams extends Publisher implements ITimeParams {
     private usedLength: number;
     private usedPulse: string;
 
+    /**
+     * Creates a new `TimeParams` instance.
+     *
+     * @param timeSignature The meter in the form "beatsPerBar/beatUnit" (e.g., "4/4").
+     * @param tempo The tempo in BPM.
+     * @param length The number of bars in the arrangement.
+     * @param pulse The rhythmic pulse as "count/unit" (e.g., "1/4" or "3/8").
+     * @param stepResolution The granularity per whole note (power of two), e.g., 8 for sixteenths.
+     */
     public constructor(timeSignature: string, tempo: number, length: number, pulse: string, stepResolution: number) {
         super();
 
@@ -27,7 +43,10 @@ export class TimeParams extends Publisher implements ITimeParams {
         this.regenerateTimings();
     }
 
-    // Whenever any params change, we generate the list of timings from scratch again
+    /**
+     * Rebuilds the `timings` list from the current parameters.
+     * Called whenever any parameter changes to keep derived state consistent.
+     */
     public regenerateTimings() {
         this.timings.length = 0;
         const stepsPerBar = calculateStepsPerBar(this.timeSignature, this.resolution);
@@ -39,10 +58,20 @@ export class TimeParams extends Publisher implements ITimeParams {
         }
     };
 
+    /**
+     * Current time signature.
+     *
+     * @returns The time signature string, e.g., "4/4".
+     */
     public get timeSignature() {
         return this.signature;
     };
 
+    /**
+     * Updates the time signature and regenerates timings.
+     *
+     * @param newTimeSignature The new time signature string.
+     */
     public set timeSignature(newTimeSignature: string) {
         if (!this.validateTimeSignature(newTimeSignature)) {
             throw new Error("Invalid time signature");
@@ -54,10 +83,20 @@ export class TimeParams extends Publisher implements ITimeParams {
         }
     }
 
+    /**
+     * Current tempo in BPM.
+     *
+     * @returns The tempo value.
+     */
     public get tempo() {
         return this.usedTempo;
     }
 
+    /**
+     * Updates the tempo and regenerates timings.
+     *
+     * @param newTempo The new tempo in BPM.
+     */
     public set tempo(newTempo: number) {
         if (!this.validateTempo(newTempo)) {
             throw new Error("Invalid tempo");
@@ -69,10 +108,20 @@ export class TimeParams extends Publisher implements ITimeParams {
         }
     }
 
+    /**
+     * Current arrangement length in bars.
+     *
+     * @returns The total bar count.
+     */
     public get length() {
         return this.usedLength;
     }
 
+    /**
+     * Updates the arrangement length and regenerates timings.
+     *
+     * @param newLength The new number of bars.
+     */
     public set length(newLength: number) {
         if (!this.validateLength(newLength)) {
             throw new Error("Invalid length");
@@ -85,10 +134,20 @@ export class TimeParams extends Publisher implements ITimeParams {
         }
     }
 
+    /**
+     * Current rhythmic pulse, e.g., "1/4" or "3/8".
+     *
+     * @returns The pulse string.
+     */
     public get pulse() {
         return this.usedPulse;
     }
 
+    /**
+     * Updates the pulse and regenerates timings.
+     *
+     * @param newPulse The new pulse string.
+     */
     public set pulse(newPulse: string) {
         if (!this.validatePulse(newPulse)) {
             throw new Error("Invalid pulse");
@@ -100,13 +159,23 @@ export class TimeParams extends Publisher implements ITimeParams {
         }
     }
 
+    /**
+     * Current step resolution (granularity per whole note).
+     *
+     * @returns The resolution value.
+     */
     public get stepResolution() {
         return this.resolution;
     }
 
+    /**
+     * Updates the step resolution and regenerates timings.
+     *
+     * @param newStepResolution The new resolution (power of two).
+     */
     public set stepResolution(newStepResolution: number) {
         if (!this.validateNoteValue(newStepResolution)) {
-            throw new Error("Invalid pulse");
+            throw new Error("Invalid step resolution");
         }
 
         if (newStepResolution !== this.resolution) {
@@ -116,6 +185,14 @@ export class TimeParams extends Publisher implements ITimeParams {
         }
     }
 
+    /**
+     * Validates whether a timing falls within the current arrangement.
+     *
+     * @param timing The timing to validate.
+     * @param timing.bar 1-based bar index.
+     * @param timing.step 1-based step index within the bar.
+     * @returns True if the timing is within bounds for the current configuration.
+     */
     public isValid({ bar, step }: ITiming) {
         if (bar > this.usedLength) {
             return false;
@@ -133,6 +210,12 @@ export class TimeParams extends Publisher implements ITimeParams {
         return true;
     }
 
+    /**
+     * Checks that a time signature string is valid.
+     *
+     * @param timeSignature The signature to check (e.g., "4/4").
+     * @returns True if valid.
+     */
     private validateTimeSignature = (timeSignature: string): boolean => {
         const [beatsPerBar, beatUnit] = timeSignature.split("/").map((value: string) => {
             return Number(value);
@@ -147,32 +230,51 @@ export class TimeParams extends Publisher implements ITimeParams {
         return true;
     };
 
-    // The only invalid tempos are negative... unless we want to play backwards!
-    // That's an idea for another time
+    /**
+     * Validates tempo.
+     *
+     * The only invalid tempos are non-numeric or less than 1.
+     *
+     * @param tempo The tempo in BPM.
+     * @returns True if valid.
+     */
     private validateTempo(tempo: number) {
-        if (isNaN(this.usedTempo) || tempo < 1) {
+        if (isNaN(tempo) || tempo < 1) {
             return false;
         }
 
         return true;
     };
 
-    // Lengths must be natural numbers for now
-    // Later we may want half-bar breaks, etc
+    /**
+     * Validates arrangement length (bars).
+     *
+     * Must be a natural number greater than 0. Later we may allow partial bars.
+     *
+     * @param length The bar count.
+     * @returns True if valid.
+     */
     private validateLength(length: number) {
-        if (isNaN(this.usedLength) || this.usedLength <= 0) {
+        if (isNaN(length) || length <= 0) {
             return false;
         }
 
-        if (this.usedLength != Math.floor(this.usedLength)) {
+        if (length !== Math.floor(length)) {
             return false;
         }
 
         return true;
     };
 
-    // Pulses are natural numbers of kinds of notes (often 8ths)
-    // For example, 4/4 is usually beat = 8ths, 6/8 is beat = 3/8ths
+    /**
+     * Validates the rhythmic pulse (e.g., "1/4" or "3/8").
+     *
+     * Pulses are natural counts of a note value (often 8ths).
+     * For example, 4/4 often has beat = 1/4, 6/8 often has beat = 3/8.
+     *
+     * @param pulse The pulse string.
+     * @returns True if valid.
+     */
     private validatePulse(pulse: string): boolean {
         const [noteCount, noteResolution] = pulse.split("/").map((str) => {
             return Number(str);
@@ -189,6 +291,12 @@ export class TimeParams extends Publisher implements ITimeParams {
         return true;
     };
 
+    /**
+     * Validates that a value is a natural number (1, 2, 3, ...).
+     *
+     * @param number The value to check.
+     * @returns True if the value is a natural number.
+     */
     private validateNaturalNumber(number: number): boolean {
         if (isNaN(number)) {
             return false;
@@ -205,7 +313,12 @@ export class TimeParams extends Publisher implements ITimeParams {
         return true;
     };
 
-    // Note values are always powers of 2, meaning crotchets, quavers, minums... all that jazz
+    /**
+     * Validates note values (powers of two), e.g., 1, 2, 4, 8, ...
+     *
+     * @param noteValue The note value to check.
+     * @returns True if valid.
+     */
     private validateNoteValue(noteValue: number): boolean {
         if (!this.validateNaturalNumber(noteValue)) {
             return false;

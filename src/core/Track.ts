@@ -13,6 +13,16 @@ export class Track extends Publisher implements ITrack {
     public readonly notes: INote[] = [];
     public readonly polyrhythms: IPolyrhythm[] = [];
 
+    /**
+     * Creates a new `Track` bound to an arrangement and instrument.
+     *
+     * - Initializes notes for all timings in the arrangement as rests.
+     * - Subscribes to arrangement and time parameter changes to keep notes/polyrhythms in sync.
+     *
+     * @param arrangement The owning arrangement.
+     * @param instrument The instrument assigned to this track.
+     * @param id Optional explicit track id; if omitted a new id is generated.
+     */
     public constructor(public readonly arrangement: IArrangement, public readonly instrument: IInstrument,
         public readonly id = getNewId()) {
         super();
@@ -21,13 +31,19 @@ export class Track extends Publisher implements ITrack {
 
         // Initialise all Notes as rests
         this.arrangement.timeParams.timings.forEach((timing) => {
-            return this.notes.push(new Note(this, timing));
+            this.notes.push(new Note(this, timing));
         });
 
         this.arrangement.timeParams.subscribe(this.handleTimeParamsChange);
         this.arrangement.subscribe(this.destroySelfIfNeeded);
     }
 
+    /**
+     * Finds the note at the given timing.
+     *
+     * @param timing The timing to search for.
+     * @returns The note at the timing or undefined if none exists.
+     */
     public getNoteAt(timing: ITiming): INote | undefined {
         for (const note of this.notes) {
             if (isSameTiming(note.timing, timing)) {
@@ -36,29 +52,37 @@ export class Track extends Publisher implements ITrack {
         }
     };
 
+    /**
+     * Clears all notes and polyrhythm notes to rests (undefined note-style).
+     * Publishes a change after completion.
+     */
     public clear() {
         this.notes.forEach((note) => {
-            return note.noteStyle = undefined;
+            note.noteStyle = undefined;
         });
 
         this.polyrhythms.forEach(({ notes }) => {
             notes.forEach((note) => {
-                return note.noteStyle = undefined;
+                note.noteStyle = undefined;
             });
         });
     };
 
+    /**
+     * Adds a polyrhythm to this track.
+     *
+     * @param start The starting note of the polyrhythm.
+     * @param end The ending note of the polyrhythm.
+     * @param length The number of notes inside the polyrhythm (must be >= 1).
+     * @param id Optional explicit polyrhythm id, otherwise a new id is generated.
+     * @param index Optional insertion index; if omitted the polyrhythm is appended.
+     */
     public addPolyrhythm(start: INote, end: INote, length: number, id: number = getNewId(), index?: number) {
         if (length < 1) {
             return;
         }
 
         const polyrhythm: IPolyrhythm = { start, end, id, notes: [] };
-
-        /*for (let i = 0; i < length; ++i) {
-            const t = createNote(track, { bar: 1, step: i }, polyrhythm);
-            polyrhythm.notes.push(t);
-        }*/
 
         polyrhythm.notes = Array.from(Array(length))
             .map((_, index) => {
@@ -74,11 +98,20 @@ export class Track extends Publisher implements ITrack {
         this.publish();
     };
 
+    /**
+     * Removes a polyrhythm from this track and publishes a change.
+     *
+     * @param polyrhythm The polyrhythm to remove.
+     */
     public removePolyrhythm = (polyrhythm: IPolyrhythm) => {
         this.polyrhythms.splice(this.polyrhythms.indexOf(polyrhythm), 1);
         this.publish();
     };
 
+    /**
+     * Ensures the track contains notes for all timings, inserting rests where missing.
+     * Keeps `notes` sorted by timing.
+     */
     public fillInRests = (): void => {
         const timingsWithNoNotes = this.arrangement.timeParams.timings.filter((timing) => {
             return !this.notes.some((note) => {
@@ -88,7 +121,7 @@ export class Track extends Publisher implements ITrack {
 
         if (timingsWithNoNotes.length) {
             timingsWithNoNotes.forEach((timing) => {
-                return this.notes.push(new Note(this, timing));
+                this.notes.push(new Note(this, timing));
             });
 
             this.notes.sort((a, b) => {
@@ -97,6 +130,12 @@ export class Track extends Publisher implements ITrack {
         }
     };
 
+    /**
+     * Copies the initial composition (first `originalNoteCount` notes) and repeats it
+     * to fill the track. Uses `TrackClipboard` to respect rests and note-styles.
+     *
+     * @param originalNoteCount The number of notes that form the base composition.
+     */
     public copyComposition(originalNoteCount: number): void {
         const lastTiming = this.notes[originalNoteCount - 1].timing;
 
@@ -115,6 +154,10 @@ export class Track extends Publisher implements ITrack {
         }
     };
 
+    /**
+     * Removes polyrhythms that reference notes no longer present or nested polyrhythms
+     * that have been deleted. Publishes if any were removed.
+     */
     public removeBrokenPolyrhythms = () => {
         if (!this.polyrhythms.length) {
             return;
@@ -159,6 +202,13 @@ export class Track extends Publisher implements ITrack {
 
     // The note-iterator is what makes polyrhythms work
     // polyrhythmsToIgnore is for serialising, so we can walk the notes as if the polyrhythm hasn't been crated yet
+    /**
+     * Iterates notes in playback/serialization order, traversing into polyrhythms where present.
+     * Use `polyrhythmsToIgnore` to skip traversal into specific polyrhythms (e.g., during serialization).
+     *
+     * @param polyrhythmsToIgnore Optional list of polyrhythms to treat as plain notes.
+     * @yields {INote} The next note in iteration order.
+     */
     public *getNoteIterator(polyrhythmsToIgnore: IPolyrhythm[] = []) {
         let index = 0;
         let currentNoteSource = this.notes;
@@ -168,12 +218,12 @@ export class Track extends Publisher implements ITrack {
             // First, ascend polyrhythms until we reach a visible note
             // Could speed this up with a map
             // eslint-disable-next-line no-loop-func
-            const linkedPolyrhyhmUp = this.polyrhythms.find((polyrhythm) => {
+            const linkedPolyrhythmUp = this.polyrhythms.find((polyrhythm) => {
                 return polyrhythm.start === note;
             });
 
-            if (linkedPolyrhyhmUp && !polyrhythmsToIgnore.includes(linkedPolyrhyhmUp)) {
-                currentNoteSource = linkedPolyrhyhmUp.notes;
+            if (linkedPolyrhythmUp && !polyrhythmsToIgnore.includes(linkedPolyrhythmUp)) {
+                currentNoteSource = linkedPolyrhythmUp.notes;
                 index = 0;
             } else {
                 yield note;
@@ -192,6 +242,11 @@ export class Track extends Publisher implements ITrack {
         }
     }
 
+    /**
+     * Handles changes in time parameters: removes invalid notes, inserts new rests, and
+     * replicates composition when the arrangement length increases. Also cleans up broken polyrhythms.
+     * Publishes changes when the note set changes.
+     */
     private handleTimeParamsChange = () => {
         const originalNoteCount = this.notes.length;
 
@@ -217,6 +272,9 @@ export class Track extends Publisher implements ITrack {
         this.removeBrokenPolyrhythms();
     };
 
+    /**
+     * Unsubscribes when the track is removed from the arrangement.
+     */
     private destroySelfIfNeeded = () => {
         // Check track still exists
         if (this.arrangement.tracks.includes(this)) {

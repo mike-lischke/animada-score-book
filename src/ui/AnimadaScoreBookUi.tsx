@@ -6,7 +6,7 @@
 import { UIComponent, type ICommonUIProperties } from "../components/ui/framework/UIComponent.js";
 import { Overlay } from "../components/ui/Overlay.js";
 import { ScoreBookViewer } from "../components/ui/ScoreBookViewer.js";
-import { createAnimadaScoreBook } from "../core/AnimadaScoreBook.js";
+import { AnimadaScoreBook } from "../core/AnimadaScoreBook.js";
 import { deserialiseArrangement } from "../core/serialisation/deserialisers.js";
 import type { IAnimadaScoreBook } from "../core/types/general.js";
 import type { IArrangementSnapshot } from "../core/types/snapshots.js";
@@ -115,7 +115,7 @@ export class AnimadaScoreBookUi extends UIComponent<IAnimadaScoreBookUiPropertie
         currentArrangementSnapshot ??= deserialiseArrangement(
             { composition: demoSongString, version: 2, title: "Demo Song" });
 
-        this.scoreBook = createAnimadaScoreBook(currentArrangementSnapshot);
+        this.scoreBook = new AnimadaScoreBook(currentArrangementSnapshot);
         this.arrangementPlayer = new ArrangementPlayer(this.scoreBook.arrangement);
         this.eventEngine.connect(this.arrangementPlayer);
 
