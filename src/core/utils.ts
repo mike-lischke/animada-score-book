@@ -68,7 +68,7 @@ export const getApiBase = (): string => {
 
     // For local development use the test server.
     if (origin.includes("localhost") || origin.includes("127.0.0.1")) {
-        return "http://samba.soft-gems.net";
+        return import.meta.env.VITE_BASE_URL;
     }
 
     // In production: use the same server as the app is served from.

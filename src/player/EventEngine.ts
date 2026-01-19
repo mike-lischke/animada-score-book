@@ -6,7 +6,7 @@
 import { Publisher } from "../core/Publisher.js";
 import { AudioBufferPlayer } from "./AudioBufferPlayer.js";
 import type {
-    AudioEvent, ICallbackEvent, IEventEngine, EventEngineState, IEventSource, IInterval, IMuteEvent, MuteFilter
+    IAudioEvent, ICallbackEvent, IEventEngine, EventEngineState, IEventSource, IInterval, IMuteEvent, MuteFilter
 } from "./types.js";
 
 // The core of the Animada Score Book Player is the EventEngine
@@ -32,7 +32,7 @@ export class EventEngine extends Publisher implements IEventEngine {
     // We ask for events in time-intervals, but never ask for time we've already covered
     private timeCovered = 0;
 
-    private scheduledAudioEvents: Array<{ audioEvent: AudioEvent, audioBufferPlayer: AudioBufferPlayer; }> = [];
+    private scheduledAudioEvents: Array<{ audioEvent: IAudioEvent, audioBufferPlayer: AudioBufferPlayer; }> = [];
     private scheduledCallbackEvents: Array<{ callbackEvent: ICallbackEvent, timeoutId: number; }> = [];
     private scheduledMuteEvents: Array<{ muteEvent: IMuteEvent, timeoutId: number; }> = [];
 
@@ -131,7 +131,7 @@ export class EventEngine extends Publisher implements IEventEngine {
         });
     }
 
-    private scheduleAudioEvent(audioEvent: AudioEvent): void {
+    private scheduleAudioEvent(audioEvent: IAudioEvent): void {
         const audioBufferPlayer = this.playSound(audioEvent.audioBuffer, audioEvent.realTime + this.offset);
         const audioEventReference = { audioEvent, audioBufferPlayer };
         this.scheduledAudioEvents.push(audioEventReference);
@@ -144,7 +144,7 @@ export class EventEngine extends Publisher implements IEventEngine {
     }
 
     private stopAudioAndUnschedule(
-        audioEventReference: { audioEvent: AudioEvent, audioBufferPlayer: AudioBufferPlayer; }
+        audioEventReference: { audioEvent: IAudioEvent, audioBufferPlayer: AudioBufferPlayer; }
     ): void {
         audioEventReference.audioBufferPlayer.stop();
         const scheduleIndex = this.scheduledAudioEvents.indexOf(audioEventReference);
@@ -232,7 +232,7 @@ export class EventEngine extends Publisher implements IEventEngine {
     }
 
     private hasStarted(
-        audioEventReference: { audioEvent: AudioEvent, audioBufferPlayer: AudioBufferPlayer; }
+        audioEventReference: { audioEvent: IAudioEvent, audioBufferPlayer: AudioBufferPlayer; }
     ): boolean {
         return audioEventReference.audioEvent.realTime <= this.getTime();
     }

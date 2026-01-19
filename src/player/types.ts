@@ -22,7 +22,7 @@ export interface IEventDetails {
     realTime: RealTime;
 }
 
-export interface AudioEvent extends IEventDetails {
+export interface IAudioEvent extends IEventDetails {
     audioBuffer: AudioBuffer;
     note: INoteView; // In the future, this could be a more general "source" property
 }
@@ -31,12 +31,12 @@ export interface ICallbackEvent extends IEventDetails {
     callback(): void;
 }
 
-export type MuteFilter = (audioEvent: AudioEvent) => boolean;
+export type MuteFilter = (audioEvent: IAudioEvent) => boolean;
 export interface IMuteEvent extends IEventDetails {
     muteFilter: MuteFilter;
 }
 
-export type Event = ICallbackEvent | AudioEvent | IMuteEvent;
+export type Event = ICallbackEvent | IAudioEvent | IMuteEvent;
 
 export interface IEventSource {
     getEvents(interval: IInterval): Event[];

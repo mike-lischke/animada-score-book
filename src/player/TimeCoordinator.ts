@@ -4,16 +4,18 @@
  */
 
 import { Publisher } from "../core/Publisher.js";
-import type { RealTime, ITimeParamsView, ITiming } from "../core/types/general.js";
+import type { ITimeParamsView, ITiming, RealTime } from "../core/types/general.js";
 import { getEventEngine } from "./EventEngine.js";
 import { IInterval, ILoopInterval, ITimeCoordinator } from "./types.js";
 
 const eventEngine = getEventEngine();
 
-// TimeCoordinator handles all maths that need to be done with TimeParams
-// In the EventEngine, time always marches forward (except when paused)
-// In music-related objects, times are always between 0 and the length of the section
-// A TimeCoordinator adjust times from the EventEngine to make sense to music objects
+/**
+ * TimeCoordinator handles all maths that need to be done with TimeParams.
+ * In the EventEngine, time always marches forward (except when paused).
+ * In music-related objects, times are always between 0 and the length of the section.
+ * A TimeCoordinator adjust times from the EventEngine to make sense to music objects.
+ */
 export class TimeCoordinator extends Publisher implements ITimeCoordinator {
 
     public realTimeLength!: number;
@@ -38,14 +40,28 @@ export class TimeCoordinator extends Publisher implements ITimeCoordinator {
         eventEngine.subscribe(this.handlePlaybackChange);
     }
 
-    // Converting is currently extremely easy, but will become more complicated with polyrhythms
+    /**
+     * Converting is currently extremely easy, but will become more complicated with polyrhythms
+     * and tempo changes.
+     *
+     * @param timing The timing to convert.
+     * @returns The real time.
+     */
     public convertToRealTime(timing: ITiming): RealTime {
         return (this.secondsPerBar * (timing.bar - 1)) + (this.secondsPerStep * (timing.step - 1));
     };
 
-    // Takes an interval whose times may be beyond the end of the loop
-    // And returns up to two intervals with times within the loop
-    // The two new intervals will cover the same total amount of time
+    /**
+     * Takes an interval whose times may be beyond the end of the loop
+     * and returns up to two intervals with times within the loop.
+     * The two new intervals will cover the same total amount of time.
+     *
+     * @param param0 The interval to convert.
+     * @param param0.start The start time.
+     * @param param0.end The end time.
+     *
+     * @returns The converted intervals.
+     */
     public convertToLoopIntervals({ start, end }: IInterval): ILoopInterval[] {
         const offsetStart = start + this.offset;
         const offsetEnd = end + this.offset;
@@ -89,7 +105,9 @@ export class TimeCoordinator extends Publisher implements ITimeCoordinator {
         this.realTimeLength = this.convertToRealTime({ bar: this.timeParams.length + 1, step: 1 });
     };
 
-    // We must only ever have one timeParam change at a time
+    /**
+     * We must only ever have one timeParam change at a time.
+     */
     public handleTimeParamsChange = () => {
         if (this.timeParams.tempo !== this.cachedTempo) {
             this.handleTempoChange();
@@ -101,9 +119,10 @@ export class TimeCoordinator extends Publisher implements ITimeCoordinator {
         this.publish();
     };
 
-    // A tempo change shrinks or stretches the whole piece across real time
-    // The audio-time does not change, so we are jumped to a different point in the music
-    // We use offset to move back to the correct point in the music
+    /**
+     * The audio-time does not change, so we are jumped to a different point in the music.
+     * We use offset to move back to the correct point in the music.
+     */
     public handleTempoChange() {
         this.setInternalParams();
         const oldTempo = this.cachedTempo;
@@ -115,8 +134,15 @@ export class TimeCoordinator extends Publisher implements ITimeCoordinator {
         this.cachedTempo = newTempo;
     };
 
-    // Take a time relative to the start of a particular loop
-    // And return a time relative to time zero
+    /**
+     * Take a time relative to the start of a particular loop
+     * And return a time relative to time zero
+     *
+     * @param realTime The time within the loop.
+     * @param loopNumber The loop number.
+     *
+     * @returns The audio time.
+     */
     public convertToAudioTime(realTime: number, loopNumber: number) {
         return realTime + (loopNumber * this.realTimeLength) - this.offset;
     };
@@ -131,8 +157,10 @@ export class TimeCoordinator extends Publisher implements ITimeCoordinator {
         }
     };
 
-    // A length change means that audio time no longer lines up with the same loop, or bar within the loop
-    // We use offset to move back to the correct loop and bar within it
+    /**
+     * A length change means that audio time no longer lines up with the same loop, or bar within the loop.
+     * We use offset to move back to the correct loop and bar within it.
+     */
     private handleLengthChange() {
         const oldRealTimeLength = this.realTimeLength;
         this.setInternalParams();
@@ -144,7 +172,7 @@ export class TimeCoordinator extends Publisher implements ITimeCoordinator {
         const targetTimeWithinLoop = oldTimeWithinLoop % this.realTimeLength;
         let loopsFinished = Math.floor(oldOffsetTime / oldRealTimeLength);
 
-        // Prevent moving earlier into the same loop, which, musically, we've already played
+        // Prevent moving earlier into the same loop, which, musically, we've already played.
         if (targetTimeWithinLoop < oldTimeWithinLoop) {
             loopsFinished++;
         }
@@ -170,7 +198,7 @@ export class TimeCoordinator extends Publisher implements ITimeCoordinator {
         const stepsPerPulse = stepResolution * pulseFrequency / pulseResolution;
         const secondsPerPulse = 60 / tempo;
 
-        // And produce our actually useful values
+        // And produce our actually useful values.
         const secondsPerStep = secondsPerPulse / stepsPerPulse;
         const secondsPerBar = secondsPerStep * stepsPerBar;
 

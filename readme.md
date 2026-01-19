@@ -12,3 +12,11 @@
 Score management and arrangement app for our **Banda Animada de Samba** group – tailored for Samba ensembles.
 
 Originally based on [BananaDrum](https://github.com/mooseling/BananaDrum).
+
+## Development Setup
+
+- Base API URL: Configure the backend base path used in development.
+	- Create a `.env.local` (preferred) or edit `.env` and set `VITE_BASE_URL`.
+	- Example: `VITE_BASE_URL="http://samba.<your-domain>.net"`
+	- This value is read by the app via `import.meta.env.VITE_BASE_URL` when running on `localhost` or `127.0.0.1`.
+	- In production builds, the app uses the same origin as the served app (empty base).

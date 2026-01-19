@@ -5,7 +5,7 @@
 
 import type { IMutingRuleOtherInstrument, INoteView, MutingRule, RealTime } from "../core/types/general.js";
 import { exists, isSameTiming } from "../core/utils.js";
-import type { AudioEvent, IMuteEvent, MuteFilter } from "./types.js";
+import type { IAudioEvent, IMuteEvent, MuteFilter } from "./types.js";
 
 export const getMuteEvents = (note: INoteView, realTime: RealTime): IMuteEvent[] => {
     const muteFilters = getMuteFilters(note);
@@ -49,7 +49,7 @@ const getSameTrackMuteFilter = (note: INoteView): MuteFilter | undefined => {
 
     const track = note.track;
 
-    return (audioEvent: AudioEvent) => {
+    return (audioEvent: IAudioEvent) => {
         return audioEvent.note.track === track
             && audioEvent.note !== note;
     };
@@ -63,7 +63,7 @@ const getOtherInstrumentMuteFilter = (note: INoteView, muting: IMutingRuleOtherI
 
     const otherInstrumentId = muting.id;
 
-    return (audioEvent: AudioEvent) => {
+    return (audioEvent: IAudioEvent) => {
         return audioEvent.note.track.instrument.id === otherInstrumentId
             && !isSameTiming(audioEvent.note.timing, note.timing);
     }; // Don't cross-mute when played together

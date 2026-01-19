@@ -9,7 +9,7 @@ import type {
     IArrangementView, IInstrument, INoteView, ITimeParamsView, ITiming, ITrackView
 } from "../../src/core/types/general.js";
 import { EventEngine } from "../../src/player/EventEngine.js";
-import type { AudioEvent, ICallbackEvent, IEventSource, IInterval, IMuteEvent } from "../../src/player/types.js";
+import type { IAudioEvent, ICallbackEvent, IEventSource, IInterval, IMuteEvent } from "../../src/player/types.js";
 
 // Minimal stubs for required types
 const stubTiming: ITiming = { bar: 1, step: 1 };
@@ -130,7 +130,7 @@ describe("EventEngine (class)", () => {
     it.skip("schedules events within lookahead and wires audio/callback/mute", async () => {
         const engine = new EventEngine();
         const callbackSpy = vi.fn();
-        const audioEvent: AudioEvent = { audioBuffer: {} as AudioBuffer, realTime: 0.1, note: stubNote };
+        const audioEvent: IAudioEvent = { audioBuffer: {} as AudioBuffer, realTime: 0.1, note: stubNote };
         const callbackEvent: ICallbackEvent = { realTime: 0.1, callback: callbackSpy };
         const muteEvent: IMuteEvent = {
             realTime: 0.1, muteFilter: () => {
