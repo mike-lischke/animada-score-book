@@ -3,23 +3,21 @@
 * Licensed under the MIT License. See License.txt in the project root for license information.
 */
 
-import { bateriaInstruments } from "../bateria-instruments.js";
 import { UIComponent, type ICommonUIProperties } from "../components/ui/framework/UIComponent.js";
+import { Overlay } from "../components/ui/Overlay.js";
 import { ScoreBookViewer } from "../components/ui/ScoreBookViewer.js";
 import { createAnimadaScoreBook } from "../core/AnimadaScoreBook.js";
-import { getLibrary } from "../core/Library.js";
 import { deserialiseArrangement } from "../core/serialisation/deserialisers.js";
 import type { IAnimadaScoreBook } from "../core/types/general.js";
 import type { IArrangementSnapshot } from "../core/types/snapshots.js";
 import { demoSongString } from "../demo-song.js";
-import { createScoreBookPlayer } from "../player/ScoreBookPlayer.js";
-import type { ScoreBookPlayer } from "../player/types.js";
+import { ArrangementPlayer } from "../player/ArrangementPlayer.js";
+import { getEventEngine } from "../player/EventEngine.js";
+import type { IArrangementPlayer } from "../player/types.js";
 import { AnimationEngine } from "./AnimationEngine.js";
-import { createKeyboardHandler } from "./KeyboardHandler.js";
 import { createModeManager, ModeManager } from "./ModeManager.js";
 import { createMouseHandler } from "./MouseHandler.js";
 import { createSelectionManager, SelectionManager } from "./SelectionManager.js";
-import { initSessionRecovery } from "./session-recovery.js";
 
 export interface ScoreBookUiServices {
     animationEngine: AnimationEngine;
@@ -27,60 +25,175 @@ export interface ScoreBookUiServices {
     modeManager: ModeManager;
 }
 
-export interface IScoreBookUiProps extends ICommonUIProperties {
-    arrangementToLoad?: IArrangementSnapshot;
+export interface IAnimadaScoreBookUiProperties extends ICommonUIProperties {
+    currentArrangementSnapshot?: IArrangementSnapshot;
 }
 
-export class ScoreBookUi extends UIComponent<IScoreBookUiProps> {
-    private services: ScoreBookUiServices;
-    private scoreBook: IAnimadaScoreBook;
-    private scoreBookPlayer: ScoreBookPlayer;
+interface IAnimadaScoreBookUiState {
+    needUpdate: boolean;
+    currentArrangementSnapshot?: IArrangementSnapshot;
+}
 
-    public constructor(props: IScoreBookUiProps) {
+/**
+ * The main UI component for the Animada Score Book. It's supposed to exist only once per application and for the
+ * entire lifetime of the application.
+ * So we set up certain global services here like the Animation Engine, Keyboard and Mouse Handlers, Selection and
+ * Mode Managers.
+ */
+export class AnimadaScoreBookUi extends UIComponent<IAnimadaScoreBookUiProperties, IAnimadaScoreBookUiState> {
+    private scoreBook!: IAnimadaScoreBook;
+    private arrangementPlayer!: IArrangementPlayer;
+
+    private eventEngine = getEventEngine();
+    private animationEngine: AnimationEngine;
+    private selectionManager: SelectionManager;
+    private modeManager: ModeManager;
+
+    public constructor(props: IAnimadaScoreBookUiProperties) {
         super(props);
 
-        const library = getLibrary();
-        library.load(bateriaInstruments);
+        this.state = {
+            needUpdate: true
+        };
 
-        let arrangementToLoad = props.arrangementToLoad;
-        arrangementToLoad ??= deserialiseArrangement({ composition: demoSongString, version: 2, title: "Demo Song" });
+        this.animationEngine = new AnimationEngine(this.eventEngine);
+        this.selectionManager = createSelectionManager();
+        this.modeManager = createModeManager(this.selectionManager);
 
-        this.scoreBook = createAnimadaScoreBook(library, arrangementToLoad);
-        this.scoreBookPlayer = createScoreBookPlayer(this.scoreBook);
-        this.services = this.initServices(this.scoreBookPlayer);
+        this.initServices();
 
-        const { arrangement } = this.scoreBook;
-        if (arrangement.title) {
-            document.title = arrangement.title + " - Animada Score Book";
+        // Load the initial arrangement to have a player ready.
+        this.loadScorebook();
+        //initSessionRecovery(this.scoreBook);
+    }
+
+    public static override getDerivedStateFromProps(nextProps: IAnimadaScoreBookUiProperties,
+        previousState: IAnimadaScoreBookUiState
+    ): IAnimadaScoreBookUiState | null {
+        if (nextProps.currentArrangementSnapshot !== previousState.currentArrangementSnapshot) {
+            // Recreate the arrangement player when the arrangement changes.
+            return {
+                needUpdate: true,
+                currentArrangementSnapshot: nextProps.currentArrangementSnapshot
+            };
         }
 
-        arrangement.subscribe(() => {
-            return document.title = arrangement.title
-                ? arrangement.title + " - Animada Score Book"
-                : "Animada Score Book";
-        });
-
+        return {
+            needUpdate: false
+        };
     }
 
     public render() {
+        const { needUpdate } = this.state;
+
+        if (needUpdate) {
+            this.eventEngine.disconnect(this.arrangementPlayer);
+            this.arrangementPlayer.dispose();
+            this.loadScorebook();
+
+            this.setState({
+                needUpdate: false
+            });
+        }
+
         return (
             <ScoreBookViewer
-                scoreBookPlayer={this.scoreBookPlayer}
-                services={this.services}
+                scoreBook={this.scoreBook}
+                arrangementPlayer={this.arrangementPlayer}
+                services={{
+                    animationEngine: this.animationEngine,
+                    selectionManager: this.selectionManager,
+                    modeManager: this.modeManager
+                }}
             />
         );
     }
 
-    private initServices(scoreBookPlayer: ScoreBookPlayer): ScoreBookUiServices {
-        const animationEngine = new AnimationEngine(scoreBookPlayer.eventEngine);
-        const selectionManager = createSelectionManager();
-        const modeManager = createModeManager(selectionManager);
+    private loadScorebook() {
+        let { currentArrangementSnapshot } = this.props;
 
-        createKeyboardHandler(scoreBookPlayer.eventEngine, scoreBookPlayer.scoreBook, selectionManager, modeManager);
-        createMouseHandler(modeManager, selectionManager);
-        initSessionRecovery(scoreBookPlayer.scoreBook);
+        currentArrangementSnapshot ??= deserialiseArrangement(
+            { composition: demoSongString, version: 2, title: "Demo Song" });
 
-        return { animationEngine, selectionManager, modeManager };
+        this.scoreBook = createAnimadaScoreBook(currentArrangementSnapshot);
+        this.arrangementPlayer = new ArrangementPlayer(this.scoreBook.arrangement);
+        this.eventEngine.connect(this.arrangementPlayer);
+
+        if (this.scoreBook.arrangement.title) {
+            document.title = this.scoreBook.arrangement.title + " - Animada Score Book";
+        }
+    }
+
+    private initServices(): void {
+        window.addEventListener("keydown", (event) => {
+            this.handleKeyDown(event);
+        });
+        window.addEventListener("keyup", (event) => {
+            this.handleKeyUp(event);
+        });
+
+        createMouseHandler(this.modeManager, this.selectionManager);
+    }
+
+    private handleKeyDown(event: KeyboardEvent): void {
+        switch (event.key) {
+            case "Escape":
+                Overlay.closeAllOverlays();
+                this.selectionManager.deselectAll();
+                this.modeManager.deletePolyrhythmMode = false;
+                break;
+            case " ":
+                if (this.eventEngine.state === "stopped") {
+                    void this.eventEngine.play();
+                } else {
+                    this.eventEngine.stop();
+                }
+                event.preventDefault(); // This is to prevent spaces getting written in number inputs
+                break;
+            case "Alt":
+                this.modeManager.deletePolyrhythmMode = true;
+                event.preventDefault();
+                break;
+            case "Backspace":
+            case "Delete":
+                if (!(event.target instanceof HTMLInputElement)) {
+                    this.scoreBook.edit({
+                        type: "EditCommand_ArrangementClearSelection",
+                        arrangement: this.scoreBook.arrangement,
+                        clearSelection: this.selectionManager.selections
+                    });
+                    this.selectionManager.deselectAll();
+                }
+                break;
+
+            // Undo/Redo: We have different conventions between Mac and Windows
+            // Windows: ctrl+z / ctrl+y
+            // Mac: command+z / command+shift+z
+            // We allow overlap for maximum cross-browser consistency, except where it actually causes confusion
+            case "z":
+                if (event.ctrlKey || event.metaKey) {
+                    if (event.shiftKey) {
+                        this.scoreBook.redo();
+                    } else {
+                        // Standard redo on Mac, and no problem to allow it on Windows
+                        this.scoreBook.undo();
+                    } // With ctrl, this doesn't even trigger on Mac. Seems harmless to include it anyway.
+                }
+                break;
+            case "y":
+                // We do not allow command+y to redo on Mac
+                // On Chrome, Firefox, and Safari, it triggers browser things, and so is very confusing to also redo
+                if (event.ctrlKey) {
+                    this.scoreBook.redo();
+                }
+                break;
+        }
+    }
+
+    private handleKeyUp(event: KeyboardEvent): void {
+        if (event.key === "Alt") {
+            this.modeManager.deletePolyrhythmMode = false;
+        }
     }
 
 }

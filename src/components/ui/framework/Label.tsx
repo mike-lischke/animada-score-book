@@ -28,7 +28,7 @@ export interface ILabelProperties extends ICommonUIProperties {
     heading?: boolean;
 
     /** When set applies special colors to the text. This should be used only with plain text. */
-    type?: MessageType;
+    messageType?: MessageType;
 
     /** When set to true the text will wrap. */
     wrap?: boolean;
@@ -50,7 +50,7 @@ export class Label extends UIComponent<ILabelProperties> {
 
     public render(): ComponentChild {
         const {
-            id, children, caption, textAlignment, quoted, code, heading, type, style, wrap,
+            id, children, caption, textAlignment, quoted, code, heading, messageType: type, style, wrap,
         } = this.props;
 
         const actualStyle = { ...style };

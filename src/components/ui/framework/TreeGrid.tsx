@@ -96,7 +96,7 @@ export interface ITreeGridOptions {
     scrollToFirstSelected?: boolean;
 }
 
-interface ITreeGridProperties extends ICommonUIProperties {
+interface ITreeGridProperties<TRow extends object> extends ICommonUIProperties {
     /**
      * The height for the grid. Can be given as number of pixels or a CSS property.
      * If not specified, the grid will act according to its CSS rules.
@@ -111,7 +111,7 @@ interface ITreeGridProperties extends ICommonUIProperties {
      * Most of the time you want to use `setColumns` and `setData` instead.
      */
     columns?: ColumnDefinition[];
-    tableData?: Array<Record<string, unknown>>;
+    tableData?: TRow[];
 
     /**
      * A list of rows that should be selected initially. If a list of strings is given then the strings are
@@ -166,7 +166,7 @@ interface ITreeGridProperties extends ICommonUIProperties {
  * It differs in the way data is added from other controls. Data (columns, rows) can be passed in as properties and
  * can also be added on demand using the methods `setColumns` and `setRows`.
  */
-export class TreeGrid extends UIComponent<ITreeGridProperties> {
+export class TreeGrid<TRow extends object = {}> extends UIComponent<ITreeGridProperties<TRow>> {
 
     /** A counter to manage redraw blocks (public for testing). */
     public updateLockCount = 0;
@@ -270,7 +270,7 @@ export class TreeGrid extends UIComponent<ITreeGridProperties> {
         }
     }
 
-    public override componentDidUpdate(prevProps: ITreeGridProperties): void {
+    public override componentDidUpdate(prevProps: ITreeGridProperties<TRow>): void {
         if (this.tabulator && this.tableReady) {
             const { selectedRows, columns, tableData } = this.props;
 

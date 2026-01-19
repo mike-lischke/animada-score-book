@@ -6,49 +6,46 @@
 import { createContext, createRef, type ComponentChild } from "preact";
 
 import type { IAnimadaScoreBook } from "../../core/types/general.js";
-import type { ScoreBookPlayer } from "../../player/types.js";
+import type { IArrangementPlayer } from "../../player/types.js";
 import type { ScoreBookUiServices } from "../../ui/AnimadaScoreBookUi.js";
 import { About } from "./About.js";
 import { ArrangementViewer } from "./Arrangement/ArrangementViewer.js";
+import { Dialog } from "./framework/Dialog/Dialog.js";
 import { UIComponent, type ICommonUIProperties } from "./framework/UIComponent.js";
-import { Popup } from "./Popup.js";
 
 export const ServicesContext = createContext<ScoreBookUiServices | null>(null);
 export const AnimadaScoreBookContext = createContext<IAnimadaScoreBook | null>(null);
 
 export interface IScoreBookViewerProps extends ICommonUIProperties {
-    scoreBookPlayer: ScoreBookPlayer;
+    scoreBook: IAnimadaScoreBook;
+    arrangementPlayer: IArrangementPlayer;
     services: ScoreBookUiServices;
 }
 
 export class ScoreBookViewer extends UIComponent<IScoreBookViewerProps> {
-    private aboutBoxRef = createRef<HTMLDivElement>();
+    private aboutBoxRef = createRef<Dialog>();
 
     public override render(): ComponentChild {
-        const { scoreBookPlayer, services } = this.props;
+        const { scoreBook, arrangementPlayer, services } = this.props;
 
         return (
             <div id="score-book-viewer">
-                <AnimadaScoreBookContext.Provider value={scoreBookPlayer.scoreBook}>
+                <AnimadaScoreBookContext.Provider value={scoreBook}>
                     <ServicesContext.Provider value={services}>
-                        <ArrangementViewer arrangementPlayer={scoreBookPlayer.arrangementPlayer} />
+                        <ArrangementViewer arrangementPlayer={arrangementPlayer} />
                         <div id="footer">
-                            <button className="anchor-button" onClick={() => {
-                                if (this.aboutBoxRef.current) {
-                                    if (this.aboutBoxRef.current.classList.contains("visible")) {
-                                        this.aboutBoxRef.current.classList.remove("visible");
-                                    } else {
-                                        this.aboutBoxRef.current.classList.add("visible");
-                                    }
-                                }
-                            }}>About</button>
+                            <button className="anchor-button" onClick={this.handleAboutClick}>About</button>
                         </div>
-                        <Popup innerRef={this.aboutBoxRef} >
+                        <Dialog ref={this.aboutBoxRef} >
                             <About />
-                        </Popup>
+                        </Dialog>
                     </ServicesContext.Provider>
                 </AnimadaScoreBookContext.Provider>
             </div>
         );
     }
+
+    private handleAboutClick = () => {
+        this.aboutBoxRef.current?.open();
+    };
 }

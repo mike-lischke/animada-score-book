@@ -4,20 +4,21 @@
  */
 
 import { edit } from "./edit.js";
+import { getLibrary } from "./Library.js";
 import { Publisher } from "./Publisher.js";
 import { applyArrangementSnapshot, createArrangementFromSnapshot } from "./serialisation/snapshot_appliers.js";
 import type { EditCommand } from "./types/edit_commands.js";
-import type { IAnimadaScoreBook, ILibrary } from "./types/general.js";
+import type { IAnimadaScoreBook } from "./types/general.js";
 import type { IArrangementSnapshot } from "./types/snapshots.js";
 import { extractOldValue } from "./undo-redo-utils.js";
 import { createUndoRedoStack } from "./UndoRedoStack.js";
 
-export const createAnimadaScoreBook = (library: ILibrary,
-    arrangementSnapshot: IArrangementSnapshot): IAnimadaScoreBook => {
+export const createAnimadaScoreBook = (arrangementSnapshot: IArrangementSnapshot): IAnimadaScoreBook => {
     const arrangement = createArrangementFromSnapshot(arrangementSnapshot);
     const undoRedoStack = createUndoRedoStack(arrangement);
 
     const currentStatePublisher = new Publisher();
+    const library = getLibrary();
 
     return {
         library, arrangement,

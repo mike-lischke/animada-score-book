@@ -9,7 +9,7 @@ import { UIComponent, type ICommonUIProperties } from "./framework/UIComponent.j
 import type { MessageType } from "./framework/ui-types.js";
 
 interface IMessageProperties extends ICommonUIProperties {
-    type: MessageType;
+    messageType: MessageType;
 }
 
 export class Message extends UIComponent<IMessageProperties> {
@@ -19,16 +19,14 @@ export class Message extends UIComponent<IMessageProperties> {
     }
 
     public render(): ComponentChild {
-        const { children, type } = this.props;
+        const { children, messageType } = this.props;
         const className = this.generateFinalClassName([
             "message",
-            this.classFromProperty(type, ["error", "warning", "info", "response", "interactive"]),
+            this.classFromProperty(messageType, ["error", "warning", "info", "response", "interactive"]),
         ]);
 
         return (
-            <div
-                className={className}
-            >
+            <div className={className}>
                 {children}
             </div>
         );

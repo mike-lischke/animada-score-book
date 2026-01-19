@@ -1,15 +1,16 @@
 <?php
 
-//error_reporting(E_ALL);
-//ini_set('display_errors', '1');
-//ini_set('log_errors', '1');
-//ini_set('error_log', __DIR__ . '/php-error.log');
+/*
+ * Copyright (c) Mike Lischke. All rights reserved.
+ * Licensed under the MIT License. See License.txt in the project root for license information.
+ */
 
-// Configuration.
-$dbHost = 'localhost';
-$dbName = '<dbname>';
-$dbUser = '<username>';
-$dbPass = '<password>';
+error_reporting(E_ALL);
+ini_set('display_errors', '1');
+ini_set('log_errors', '1');
+ini_set('error_log', __DIR__ . '/php-error.log');
+
+require __DIR__ . '/db.php';
 
 $rootParentId = -1; // The id we use for the (invisble) root folder.
 
@@ -52,86 +53,123 @@ if ($action === null) {
     send_json(['error' => 'Missing action'], 400);
 }
 
+$pdo = null; // global
+
 // Dispatcher
 switch ($action) {
-    case 'list':
-        handle_list($pdo);
+    case 'listScoreFolderContent':
+        listScoreFolderContent();
         break;
-    case 'create':
-        handle_create($pdo);
+    case 'addScoreFolder':
+        addScoreFolder();
         break;
-    case 'rename':
-        handle_rename($pdo);
+    case 'addScore':
+        addScore();
         break;
-    case 'updateSnippet':
-        handle_update_snippet($pdo);
+    case 'renameScore':
+        renameScore();
+        break;
+    case 'updateScore':
+        updateScore();
         break;
     case 'delete':
-        handle_delete($pdo, $rootParentId);
+        handle_delete();
         break;
     case 'move':
-        handle_move($pdo);
+        handle_move();
         break;
     case 'listSoundLib':
-        list_soundlib();
+        listSoundlib();
         break;
     default:
         send_json(['error' => 'Unknown action'], 400);
 }
 
-$pdo = null; // global
-
-function get_pdo(): PDO {
-    global $pdo, $dbHost, $dbName, $dbUser, $dbPass;
-
-    if ($pdo instanceof PDO) {
-        return $pdo;
-    }
-
-    try {
-        $dsn = "mysql:host=$dbHost;dbname=$dbName;charset=utf8mb4";
-        $pdo = new PDO($dsn, $dbUser, $dbPass, [
-            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-        ]);
-        return $pdo;
-    } catch (PDOException $e) {
-        send_json(['error' => 'Database connection failed'], 500);
-    }
-}
-
 // ------------------- Handlers -------------------
 
-function handle_list(PDO $pdo): void {
-    $pdo = get_pdo();
-    
-    $parentId = isset($_GET['parentId']) ? (int)$_GET['parentId'] : -1;
+function listScoreFolderContent(): void {
+    global $rootParentId;
+    $pdo = getPdo();
+
+    $body = get_json_body();
+    $parentId = isset($body['parentid']) ? (int)$body['parentid'] : $rootParentId;
+    $dbParent = ($parentId === $rootParentId) ? null : $parentId;
 
     // Load folders.
-    $stmt = $pdo->prepare('SELECT id, name FROM folders WHERE parentid = :parentId ORDER BY name');
-    $stmt->execute([':parentId' => $parentId]);
-    $folders = $stmt->fetchAll();
+    $stmt = $pdo->prepare('
+        SELECT
+            f.*,
+            (
+                EXISTS(
+                    SELECT 1 FROM folders cf
+                    WHERE cf.parentid = f.id
+                    LIMIT 1
+                )
+                OR EXISTS(
+                    SELECT 1 FROM scores cs
+                    WHERE cs.folderid = f.id
+                    LIMIT 1
+                )
+            ) AS hasChildren
+        FROM folders f
+        WHERE
+            (f.parentid IS NULL AND :parentId1 IS NULL)
+            OR f.parentid = :parentId2
+        ORDER BY f.name
+    ');
+    $stmt->execute([':parentId1' => $dbParent, ':parentId2' => $dbParent]);
+    $folders = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    // Load snippets.
-    $stmt = $pdo->prepare('SELECT id, name FROM snippets WHERE folderid = :parentId ORDER BY name');
-    $stmt->execute([':parentId' => $parentId]);
-    $snippets = $stmt->fetchAll();
+    foreach ($folders as &$f) {
+        if ($f['parentid'] === null) {
+            $f['parentid'] = $rootParentId;
+        }
+        $f['hasChildren'] = (bool)$f['hasChildren'];
+    }
+    unset($f);
+
+    // Load scores in this folder.
+    $stmt = $pdo->prepare('SELECT * FROM scores WHERE folderid = :parentId ORDER BY name');
+    $stmt->execute([':parentId' => $dbParent]);
+    $scores = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
     send_json([
         'folders'  => $folders,
-        'snippets' => $snippets,
+        'scores' => $scores,
     ]);
 }
 
-function handle_create(PDO $pdo): void {
-    $pdo = get_pdo();
-    
+function addScoreFolder(): void {
+    $pdo = getPdo();
+
+    global $rootParentId;
+    $body = get_json_body();
+
+    $name     = trim($body['name'] ?? '');
+    $dbParent = array_key_exists('parentid', $body) ? (int)$body['parentid'] : null;
+    if ($name === '') {
+        send_json(['error' => 'Name required'], 400);
+    }
+
+    $stmt = $pdo->prepare('INSERT INTO folders (parentid, name) VALUES (:parentId, :name)');
+    $stmt->execute([
+        ':parentId' => $dbParent,
+        ':name'     => $name,
+    ]);
+    $id = (int)$pdo->lastInsertId();
+
+    send_json(['success' => true, 'id' => $id]);
+}
+
+function addScore(): void {
+    $pdo = getPdo();
+
     global $rootParentId;
     $body = get_json_body();
 
     $type = $body['type'] ?? null;
     if ($type === 'folder') {
-        $parentId = isset($body['parentId']) ? (int)$body['parentId'] : $rootParentId;
+        $parentId = isset($body['parentid']) ? (int)$body['parentid'] : $rootParentId;
         $name     = trim($body['name'] ?? '');
         if ($name === '') {
             send_json(['error' => 'Name required'], 400);
@@ -146,7 +184,7 @@ function handle_create(PDO $pdo): void {
 
         send_json(['success' => true, 'id' => $id]);
 
-    } elseif ($type === 'snippet') {
+    } elseif ($type === 'score') {
         if (!isset($body['folderId'])) {
             send_json(['error' => 'folderId required'], 400);
         }
@@ -159,7 +197,7 @@ function handle_create(PDO $pdo): void {
         }
 
         $stmt = $pdo->prepare(
-            'INSERT INTO snippets (folderid, name, content) VALUES (:folderId, :name, :content)'
+            'INSERT INTO scores (folderid, name, content) VALUES (:folderId, :name, :content)'
         );
         $stmt->execute([
             ':folderId' => $folderId,
@@ -171,13 +209,13 @@ function handle_create(PDO $pdo): void {
         send_json(['success' => true, 'id' => $id]);
 
     } else {
-        send_json(['error' => 'Invalid type (folder|snippet)'], 400);
+        send_json(['error' => 'Invalid type (folder|score)'], 400);
     }
 }
 
-function handle_rename(PDO $pdo): void {
-    $pdo = get_pdo();
-    
+function renameScore(): void {
+    $pdo = getPdo();
+
     $body = get_json_body();
     $type = $body['type'] ?? null;
     $id   = isset($body['id']) ? (int)$body['id'] : null;
@@ -189,10 +227,10 @@ function handle_rename(PDO $pdo): void {
 
     if ($type === 'folder') {
         $stmt = $pdo->prepare('UPDATE folders SET name = :name WHERE id = :id');
-    } elseif ($type === 'snippet') {
-        $stmt = $pdo->prepare('UPDATE snippets SET name = :name WHERE id = :id');
+    } elseif ($type === 'score') {
+        $stmt = $pdo->prepare('UPDATE scores SET name = :name WHERE id = :id');
     } else {
-        send_json(['error' => 'Invalid type (folder|snippet)'], 400);
+        send_json(['error' => 'Invalid type (folder|score)'], 400);
     }
 
     $stmt->execute([
@@ -203,9 +241,9 @@ function handle_rename(PDO $pdo): void {
     send_json(['success' => true]);
 }
 
-function handle_update_snippet(PDO $pdo): void {
-    $pdo = get_pdo();
-    
+function updateScore(): void {
+    $pdo = getPdo();
+
     $body = get_json_body();
     $id      = isset($body['id']) ? (int)$body['id'] : null;
     $content = $body['content'] ?? null;
@@ -214,7 +252,7 @@ function handle_update_snippet(PDO $pdo): void {
         send_json(['error' => 'id and content required'], 400);
     }
 
-    $stmt = $pdo->prepare('UPDATE snippets SET content = :content WHERE id = :id');
+    $stmt = $pdo->prepare('UPDATE scores SET content = :content WHERE id = :id');
     $stmt->execute([
         ':content' => $content,
         ':id'      => $id,
@@ -223,9 +261,9 @@ function handle_update_snippet(PDO $pdo): void {
     send_json(['success' => true]);
 }
 
-function handle_delete(PDO $pdo, int $rootParentId): void {
-    $pdo = get_pdo();
-    
+function handle_delete(): void {
+    $pdo = getPdo();
+
     $body = get_json_body();
     $type = $body['type'] ?? null;
     $id   = isset($body['id']) ? (int)$body['id'] : null;
@@ -234,8 +272,8 @@ function handle_delete(PDO $pdo, int $rootParentId): void {
         send_json(['error' => 'type and id required'], 400);
     }
 
-    if ($type === 'snippet') {
-        $stmt = $pdo->prepare('DELETE FROM snippets WHERE id = :id');
+    if ($type === 'score') {
+        $stmt = $pdo->prepare('DELETE FROM scores WHERE id = :id');
         $stmt->execute([':id' => $id]);
         send_json(['success' => true]);
     }
@@ -257,9 +295,9 @@ function handle_delete(PDO $pdo, int $rootParentId): void {
             send_json(['error' => 'Cannot delete root folder'], 400);
         }
 
-        // Move all snippets of this folder into its parent.
+        // Move all scores of this folder into its parent.
         $stmt = $pdo->prepare(
-            'UPDATE snippets SET folderid = :newFolderId WHERE folderid = :oldFolderId'
+            'UPDATE scores SET folderid = :newFolderId WHERE folderid = :oldFolderId'
         );
         $stmt->execute([
             ':newFolderId' => $parentId,
@@ -282,12 +320,12 @@ function handle_delete(PDO $pdo, int $rootParentId): void {
         send_json(['success' => true]);
     }
 
-    send_json(['error' => 'Invalid type (folder|snippet)'], 400);
+    send_json(['error' => 'Invalid type (folder|score)'], 400);
 }
 
-function handle_move(PDO $pdo): void {
-    $pdo = get_pdo();
-    
+function handle_move(): void {
+    $pdo = getPdo();
+
     $body = get_json_body();
     $type = $body['type'] ?? null;
     $id   = isset($body['id']) ? (int)$body['id'] : null;
@@ -306,13 +344,13 @@ function handle_move(PDO $pdo): void {
 
         send_json(['success' => true]);
 
-    } elseif ($type === 'snippet') {
+    } elseif ($type === 'score') {
         $newFolderId = isset($body['newFolderId']) ? (int)$body['newFolderId'] : null;
         if (!$id || $newFolderId === null) {
             send_json(['error' => 'id and newFolderId required'], 400);
         }
 
-        $stmt = $pdo->prepare('UPDATE snippets SET folderid = :folderId WHERE id = :id');
+        $stmt = $pdo->prepare('UPDATE scores SET folderid = :folderId WHERE id = :id');
         $stmt->execute([
             ':folderId' => $newFolderId,
             ':id'       => $id,
@@ -321,11 +359,11 @@ function handle_move(PDO $pdo): void {
         send_json(['success' => true]);
     }
 
-    send_json(['error' => 'Invalid type (folder|snippet)'], 400);
+    send_json(['error' => 'Invalid type (folder|score)'], 400);
 }
 
-function list_soundlib(): void {
-    $baseDir = __DIR__ . '/BrazillianPercussion_Wav_SP';
+function listSoundlib(): void {
+    $baseDir = __DIR__ . '/soundLib';
 
     $realPath = realpath($baseDir);
     if ($realPath === false) {
@@ -346,7 +384,7 @@ function scan_dir_tree(string $dir, string $root): array {
     }
 
     foreach ($entries as $entry) {
-        if ($entry === '.' || $entry === '..') {
+        if ($entry === '' || $entry[0] === '.') {
             continue;
         }
 
@@ -372,12 +410,3 @@ function scan_dir_tree(string $dir, string $root): array {
 
     return $items;
 }
-
-// - `GET api.php?action=list&parentId=-1`
-// - `POST api.php?action=create` (JSON: `type: folder|snippet`)
-// - `POST api.php?action=rename`
-// - `POST api.php?action=updateSnippet`
-// - `POST api.php?action=delete`
-// - `POST api.php?action=move`
-
-// `fetch('/api.php?action=…', { method, body: JSON.stringify(...) })`

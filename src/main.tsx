@@ -22,7 +22,7 @@ try {
     render(<App />, document.body);
 } catch {
     render(
-        <Message type={MessageType.Info}>
+        <Message messageType={MessageType.Info}>
             <Container
                 orientation={Orientation.TopDown}
                 crossAlignment={ChildAlignment.Center}

@@ -6,61 +6,79 @@
 import "@vscode/codicons/dist/codicon.css";
 import "./App.css";
 
-import logo from "./assets/images/animada-logo2.svg";
+import titleImage from "./assets/images/Animada.svg";
+
+import { createRef } from "preact";
+
+import { bateriaInstruments } from "./bateria-instruments.js";
 
 import { ErrorBoundary } from "./components/ui/ErrorBoundary.js";
+import { Button } from "./components/ui/framework/Button.js";
 import { Container } from "./components/ui/framework/Container.js";
+import { Image } from "./components/ui/framework/Image.js";
 import { Label } from "./components/ui/framework/Label.js";
-import { Tabview, type ITabviewPage } from "./components/ui/framework/Tabview/Tabview.js";
+import { ProgressIndicator } from "./components/ui/framework/ProgressIndicator.js";
 import { ChildAlignment, Orientation } from "./components/ui/framework/ui-types.js";
 import { UIComponent } from "./components/ui/framework/UIComponent.js";
-import { ScoreBookDataModel } from "./core/ScoreBookDataModel.js";
+
+import { Codicon } from "./components/ui/framework/Codicon.js";
+import { Dialog } from "./components/ui/framework/Dialog/Dialog.js";
+import { Icon } from "./components/ui/framework/Icon.js";
+import { CheckState, Switch } from "./components/ui/framework/Switch/Switch.js";
+import { getLibrary } from "./core/Library.js";
+import {
+    SbDmEntityType, ScoreBookDataModel, type ISbDmScore, type ISbDmScoreFolder
+} from "./core/ScoreBookDataModel.js";
+import { deserialiseArrangement } from "./core/serialisation/deserialisers.js";
+import { getSerialisedArrangementFromParams } from "./core/serialisation/url.js";
 import type { IArrangementSnapshot } from "./core/types/snapshots.js";
-import { ScoreBookUi } from "./ui/AnimadaScoreBookUi.js";
+import { AnimadaScoreBookUi } from "./ui/AnimadaScoreBookUi.js";
 import { AppContext } from "./ui/index.js";
-import { InstrumentManager } from "./ui/InstrumentManager.js";
 import { ScoreLibrary } from "./ui/ScoreLibrary.js";
+import { TooltipProvider } from "./components/ui/framework/Tooltip.js";
 
 interface IAppState {
-    selectedPage: string;
+    ready: boolean;
     sharedArrangement?: IArrangementSnapshot;
+
+    theme: "light" | "dark";
 }
 
 export class App extends UIComponent<{}, IAppState> {
+    private scoreLibraryRef = createRef<Dialog>();
     private dataModel = new ScoreBookDataModel();
 
     public constructor(props: {}) {
         super(props);
 
         this.state = {
-            selectedPage: "tab1",
+            ready: false,
+            theme: "light",
         };
+
+        const library = getLibrary();
+        library.load(bateriaInstruments);
+    }
+
+    public override componentDidMount() {
+        void this.dataModel.initialize().then(() => {
+            const sharedArrangement = getSerialisedArrangementFromParams(new URL(window.location.href).searchParams);
+            this.setState({
+                ready: true,
+                sharedArrangement: sharedArrangement ? deserialiseArrangement(sharedArrangement) : undefined,
+            }, () => {
+                const { theme } = this.state;
+                document.body.setAttribute("data-theme", theme);
+            });
+        });
     }
 
     public render() {
-        const { selectedPage, sharedArrangement } = this.state;
+        const { ready, sharedArrangement, theme } = this.state;
 
-        const tabPages: ITabviewPage[] = [{
-            id: "tab1",
-            caption: "Score Library",
-            content: (
-                <ScoreLibrary />
-            )
-
-        }, {
-            id: "tab2",
-            caption: "Arrangement Player",
-            content: (
-                <ScoreBookUi arrangementToLoad={sharedArrangement} />
-            )
-        }, {
-            id: "tab3",
-            caption: "Instruments",
-            content: (
-                <InstrumentManager />
-            )
-
-        }];
+        if (!ready) {
+            return <ProgressIndicator />;
+        }
 
         return (
             <AppContext.Provider
@@ -78,25 +96,106 @@ export class App extends UIComponent<{}, IAppState> {
                             orientation={Orientation.LeftToRight}
                             crossAlignment={ChildAlignment.Center}
                         >
-                            <img id="titleLogo" src={logo} />
-                            <Label id="appTitle" >Animada Score Book</Label>
+                            <Image id="titleLogo" src={titleImage} />
+                            <Label id="appTitle">Score Book</Label>
+                            <Switch
+                                id="themeSwitch"
+                                type="switch"
+                                title="Switch to dark mode"
+                                checkState={theme === "dark" ? CheckState.Checked : CheckState.Unchecked}
+                                onChange={this.handleThemeChange}
+                            />
+                            <Button
+                                id="githubLink"
+                                title="View on GitHub"
+                                imageOnly={true}
+                                role="switch"
+                                onClick={this.handleGithubClick}
+                            >
+                                <Icon src={Codicon.GithubInverted} />
+                            </Button>
                         </Container>
 
-                        <Tabview
-                            id="appTabview"
-                            pages={tabPages}
-                            selectedId={selectedPage}
-                            stretchTabs={false}
-                            onSelectTab={this.selectPage}
-                        >
-                        </Tabview>
+                        <Container id="toolbar" orientation={Orientation.LeftToRight}>
+                            <Button
+                                id="scoreLibraryButton"
+                                caption="Score Library"
+                                onClick={this.handleScoreLibraryClick}
+                            />
+                            <Button
+                                id="instrumentEditor"
+                                caption="Instrument Editor"
+                                onClick={this.handleInstrumentEditorClick}
+                            />
+                        </Container>
+                        <AnimadaScoreBookUi currentArrangementSnapshot={sharedArrangement} />
                     </Container>
+                    <Dialog
+                        ref={this.scoreLibraryRef}
+                    >
+                        <AppContext.Provider
+                            value={{
+                                dataModel: this.dataModel
+                            }}>
+
+                            <ScoreLibrary
+                                onAction={this.handleScoreLibraryAction}
+                            />
+                        </AppContext.Provider>
+                    </Dialog>
+                    <TooltipProvider />
                 </ErrorBoundary>
             </AppContext.Provider>
         );
     }
 
-    private selectPage = (id: string): void => {
-        this.setState({ selectedPage: id });
+    private handleGithubClick = () => {
+        window.open("https://github.com/mike-lischke/animada-score-book", "_blank");
+    };
+
+    private handleThemeChange = (e: InputEvent, checkState: CheckState) => {
+        this.setState({
+            theme: checkState === CheckState.Checked ? "dark" : "light",
+        }, () => {
+            const { theme } = this.state;
+            document.body.setAttribute("data-theme", theme);
+        });
+    };
+
+    private handleScoreLibraryClick = () => {
+        this.scoreLibraryRef.current?.open();
+    };
+
+    private handleInstrumentEditorClick = () => {
+        alert("Instrument Editor is not yet implemented.");
+    };
+
+    private handleScoreLibraryAction = (action: string, data: ISbDmScoreFolder | ISbDmScore) => {
+        switch (action) {
+            case "edit": {
+                this.scoreLibraryRef.current?.close(false);
+                //this.dataModel.loadArrangementIntoEditor(data);
+
+                break;
+            }
+
+            case "play": {
+                this.scoreLibraryRef.current?.close(false);
+
+                if (data.type === SbDmEntityType.Score) {
+                    const params = new URLSearchParams(data.content);
+                    const serialisedArrangement = getSerialisedArrangementFromParams(params);
+                    if (serialisedArrangement) {
+                        const arrangement = deserialiseArrangement(serialisedArrangement);
+                        arrangement.title = data.name;
+                        this.setState({ sharedArrangement: arrangement });
+
+                        return;
+                    }
+                }
+
+                break;
+            }
+        }
     };
 }

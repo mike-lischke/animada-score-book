@@ -43,7 +43,7 @@ export class About extends UIComponent<{}, AboutState> {
 
         return (
             <Container
-                className="aboutBox"
+                id="aboutBox"
                 orientation={Orientation.TopDown}
                 crossAlignment={ChildAlignment.Center}
                 onClick={this.handleClick}
@@ -56,7 +56,13 @@ export class About extends UIComponent<{}, AboutState> {
                         target="_blank" href="https://github.com/mike-lischke/animada-score-book"
                         rel="noreferrer">
                         Check out the code:
-                        <img src={githubLogo} id="githubLogo" />
+                        <img src={githubLogo} className="githubLogo" />
+                    </a>
+                    <a
+                        target="_blank" href="https://github.com/mooseling/BananaDrum"
+                        rel="noreferrer">
+                        With thanks to BananaDrum:
+                        <img src={githubLogo} className="githubLogo" />
                     </a>
                 </Container>
                 <div className={errorButtonVisibilityClass}>
@@ -82,7 +88,7 @@ export class About extends UIComponent<{}, AboutState> {
     };
 
     private handleClick = (e: MouseEvent | KeyboardEvent) => {
-        // Don't let clicks inside the about box close the popup.
+        // Don't let clicks inside the about box close the dialog.
         e.stopPropagation();
     };
 }

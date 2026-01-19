@@ -26,6 +26,13 @@ const eventEngine: IEventEngine = (function () {
         eventSources.push(eventSource);
     };
 
+    const disconnect = (eventSource: IEventSource) => {
+        const index = eventSources.indexOf(eventSource);
+        if (index !== -1) {
+            eventSources.splice(index, 1);
+        }
+    };
+
     const play = async () => {
         await ensureContextIsRunning();
         if (nextIterationId === null) {
@@ -219,7 +226,8 @@ const eventEngine: IEventEngine = (function () {
     const scheduledMuteEvents: MuteEventReference[] = [];
 
     return {
-        connect, play, stop, getTime,
+        connect, disconnect,
+        play, stop, getTime,
         subscribe: publisher.subscribe, unsubscribe: publisher.unsubscribe,
         get state(): EventEngineState {
             return state;

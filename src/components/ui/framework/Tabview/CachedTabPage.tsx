@@ -6,6 +6,8 @@
 import { ComponentChild } from "preact";
 
 import { UIComponent } from "../UIComponent.js";
+import { Container } from "../Container.js";
+import { Orientation } from "../ui-types.js";
 
 export interface ICachedTabPageProps {
     id: string;
@@ -49,12 +51,14 @@ export class CachedTabPage extends UIComponent<ICachedTabPageProps, ICachedTabPa
 
         // After the first activation, always render the content, but hide it when inactive.
         return (
-            <div
+            <Container
+                className="cachedTabPage"
+                orientation={Orientation.TopDown}
                 data-tab-id={this.props.id}
-                style={{ display: active ? "block" : "none", width: "100%", height: "100%" }}
+                style={{ display: active ? "flex" : "none", width: "100%", height: "100%" }}
             >
                 {content}
-            </div>
+            </Container>
         );
     }
 }

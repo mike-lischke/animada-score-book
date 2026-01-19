@@ -3,9 +3,9 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import "./styles.css";
+import "./component-styles.css";
 
-import { Component, type ComponentChildren, type CSSProperties } from "preact";
+import { Component, type AriaRole, type ComponentChildren, type CSSProperties } from "preact";
 import cx from "classnames";
 
 // Click events can also be triggered using the keyboard.
@@ -14,6 +14,48 @@ export type MouseEventCallback = (e: MouseEvent) => void;
 export type KeyboardEventCallback = (e: KeyboardEvent) => void;
 export type PointerEventCallback = (e: PointerEvent) => void;
 export type DragEventCallback = (e: DragEvent) => void;
+
+/**
+ * The component placement determines at which of the 12 places relative to a given target rectangle or position
+ * a floating HTML element is located.
+ *```
+ *                      ┌───────────────┐ ┌───────────────┐ ┌───────────────┐
+ *                      │   Top Left    │ │  Top Center   │ │   Top Right   │
+ *                      └───────────────┘ └───────────────┘ └───────────────┘
+ *   ┌───────────────┐  ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓  ┌───────────────┐
+ *   │   Left Top    │  ┃                                                   ┃  │  Right Top    │
+ *   └───────────────┘  ┃                                                   ┃  └───────────────┘
+ *   ┌───────────────┐  ┃                                                   ┃  ┌───────────────┐
+ *   │  Left Center  │  ┃                    target rect                    ┃  │  Right Center │
+ *   └───────────────┘  ┃                                                   ┃  └───────────────┘
+ *   ┌───────────────┐  ┃                                                   ┃  ┌───────────────┐
+ *   │  Left Bottom  │  ┃                                                   ┃  │  Right Bottom │
+ *   └───────────────┘  ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛  └───────────────┘
+ *                      ┌───────────────┐ ┌───────────────┐ ┌───────────────┐
+ *                      │  Bottom Left  │ │ Bottom Center │ │ Bottom Right  │
+ *                      └───────────────┘ └───────────────┘ └───────────────┘
+ *```
+ * Additionally, content is also aligned depending on the target place, like shown in the ASCII art. That means it is
+ * not possible to get mixed positions, like content element in the bottom right corner, but with its center instead
+ * of the right side.
+ */
+export enum ComponentPlacement {
+    TopLeft = "top-start",
+    TopCenter = "top",
+    TopRight = "top-end",
+
+    RightTop = "right-start",
+    RightCenter = "right",
+    RightBottom = "right-end",
+
+    BottomLeft = "bottom-start",
+    BottomCenter = "bottom",
+    BottomRight = "bottom-end",
+
+    LeftTop = "left-start",
+    LeftCenter = "left",
+    LeftBottom = "left-end",
+}
 
 export interface ICommonUIProperties {
     children?: ComponentChildren;
@@ -26,10 +68,14 @@ export interface ICommonUIProperties {
     tabIndex?: number;
     draggable?: boolean;
     disabled?: boolean;
-    role?: string;
+    role?: AriaRole;
+    type?: string;
 
     /** For OS style tooltips. */
     title?: string;
+
+    /** Tooltip text to show a custom tooltip. */
+    "data-tooltip"?: string;
 
     /** Some often used input events: */
 

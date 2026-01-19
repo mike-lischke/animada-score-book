@@ -16,6 +16,7 @@ export class Instrument extends Publisher implements IInstrument {
     public id: string;
     public displayOrder: number;
     public displayName: string;
+    public icon: string;
     public colourGroup: string;
 
     public readonly noteStyles: Record<string, INoteStyle> = {};
@@ -28,6 +29,7 @@ export class Instrument extends Publisher implements IInstrument {
         this.id = id;
         this.displayOrder = displayOrder;
         this.displayName = displayName;
+        this.icon = packedInstrument.icon;
         this.colourGroup = colourGroup;
 
         packedNoteStyles.forEach(({ id, file, symbol, muting }) => {

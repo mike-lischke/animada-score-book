@@ -22,6 +22,7 @@ const load = (instrumentCollection: IPackedInstrument[]): void => {
             id: packedInstrument.id,
             displayOrder: packedInstrument.displayOrder,
             displayName: packedInstrument.displayName,
+            icon: packedInstrument.icon,
             colourGroup: packedInstrument.colourGroup,
             noteStyles: createNoteStyleBases(packedInstrument)
         });

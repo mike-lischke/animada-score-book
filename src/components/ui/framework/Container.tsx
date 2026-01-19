@@ -34,10 +34,7 @@ export class Container extends UIComponent<IContainerProperties> {
     }
 
     public render(): ComponentChild {
-        const {
-            id, className, children, style, orientation, mainAlignment, crossAlignment, wrap, innerRef,
-            onClick
-        } = this.props;
+        const { id, children, style, orientation, mainAlignment, crossAlignment, wrap, innerRef, onClick } = this.props;
 
         const newStyle = {
             flexDirection: orientation,
@@ -47,12 +44,16 @@ export class Container extends UIComponent<IContainerProperties> {
             ...style,
         };
 
+        const className = this.generateFinalClassName([
+            "container",
+        ]);
+
         return (
             <div
                 id={id}
                 ref={innerRef}
                 style={newStyle}
-                className={(className ?? "") + " container"}
+                className={className}
                 onClick={onClick}
             >
                 {children}

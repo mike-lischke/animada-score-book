@@ -12,7 +12,10 @@ import type { IArrangementSnapshot } from "../core/types/snapshots.js";
 // This is either generated for a new session, or hopefully retrieved on page load
 // Once the Session ID is known, it can be used as a key to save things in localStorage
 
-let sessionId: string, stateKey: string, startedAtKey: string;
+let sessionId: string;
+let stateKey: string;
+let startedAtKey: string;
+
 resetSessionVariables(getExistingSessionId());
 
 export function initSessionRecovery(scoreBook: IAnimadaScoreBook) {

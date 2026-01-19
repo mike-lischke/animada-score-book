@@ -4,17 +4,12 @@
  */
 
 import type {
-    IAnimadaScoreBook, IArrangementView, INoteView, ISubscribable, ITiming, ITrackView, RealTime
+    IArrangementView, INoteView, ISubscribable, ITiming, ITrackView, RealTime
 } from "../core/types/general.js";
-
-export interface ScoreBookPlayer {
-    scoreBook: IAnimadaScoreBook;
-    eventEngine: IEventEngine;
-    arrangementPlayer: IArrangementPlayer;
-}
 
 export interface IEventEngine extends ISubscribable {
     connect(eventSource: IEventSource): void;
+    disconnect(eventSource: IEventSource): void;
     play(): Promise<void>;
     stop(): void;
     getTime(): RealTime;
@@ -56,6 +51,7 @@ export interface IArrangementPlayer extends IEventSource, ISubscribable {
     convertToLoopProgress(realTime: RealTime): number;
     audibleTrackPlayers: Map<ITrackView, ITrackPlayer>;
     audibleTrackPlayersPublisher: ISubscribable;
+    dispose(): void;
 }
 
 export interface ITrackPlayer extends IEventSource, ISubscribable {
@@ -63,6 +59,7 @@ export interface ITrackPlayer extends IEventSource, ISubscribable {
     soloMute: SoloMute;
     currentPolyrhythmNotePublisher: ISubscribable;
     readonly currentPolyrhythmNote: INoteView | null;
+    dispose(): void;
 }
 
 export type SoloMute = null | "solo" | "mute";

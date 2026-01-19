@@ -12,13 +12,14 @@ CREATE TABLE folders (
     ON DELETE SET NULL
 ) ENGINE=InnoDB;
 
-CREATE TABLE snippets (
+CREATE TABLE scores (
   id       INT UNSIGNED NOT NULL AUTO_INCREMENT,
   folderid INT UNSIGNED NOT NULL,
   name     VARCHAR(255) NOT NULL,
   content  MEDIUMTEXT    NOT NULL,
+  notes    TEXT          NULL,
   PRIMARY KEY (id),
-  CONSTRAINT fk_snippets_folder
+  CONSTRAINT fk_scores_folder
     FOREIGN KEY (folderid)
     REFERENCES folders(id)
     ON UPDATE CASCADE
@@ -29,6 +30,21 @@ CREATE TABLE instruments (
   id          INT UNSIGNED NOT NULL AUTO_INCREMENT,
   name        VARCHAR(255) NOT NULL,
   description TEXT,
+  imageurl    VARCHAR(512),
   articulations JSON NOT NULL,
   PRIMARY KEY (id)
 ) ENGINE=InnoDB, AUTO_INCREMENT = 20000;
+
+CREATE TABLE instrument_images (
+  id             INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  instrumentid   INT UNSIGNED NOT NULL,
+  filepath       VARCHAR(255) NOT NULL,  -- e.g. /uploads/instruments/abc123.webp
+  alttext        VARCHAR(255) NULL,
+  mimetype       VARCHAR(100) NOT NULL,
+  width          INT NULL,
+  height         INT NULL,
+  filesize      INT NULL,                -- Bytes
+  CONSTRAINT fk_instrument_images_instrument
+    FOREIGN KEY (instrumentid) REFERENCES instruments(id)
+    ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT AUTO_INCREMENT = 30000;

@@ -12,7 +12,6 @@ import type { IArrangementPlayer } from "../../../player/types.js";
 import type { AnimationEngine } from "../../../ui/AnimationEngine.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
 import { GuideRail } from "../GuideRail/GuideRail.js";
-import { InstrumentBrowser } from "../InstrumentBrowser.js";
 import { Overlay } from "../Overlay.js";
 import { ServicesContext } from "../ScoreBookViewer.js";
 import { Scrollbar } from "../Scrollbar.js";
@@ -138,9 +137,6 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
                                                     />
                                                 </div>
                                                 <Overlay name="instrument_browser">
-                                                    <InstrumentBrowser close={() => {
-                                                        Overlay.toggleOverlay("instrument_browser", "hide");
-                                                    }} />
                                                 </Overlay>
                                             </div>
                                         </div>

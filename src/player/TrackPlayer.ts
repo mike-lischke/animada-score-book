@@ -201,14 +201,17 @@ export const createTrackPlayer = (track: ITrackView, timeCoordinator: ITimeCoord
     // It would be better to parameterise Publisher, but that's a chunk of work
     let currentPolyrhythmNote: INoteView | null = null;
 
+    let setupNotes: (() => void) | null = null;
+
     if (track.instrument.loaded) {
         fillInBasicNoteTimes();
         handleNewPolyrhythms();
     } else {
-        const setupNotes = () => {
+        setupNotes = () => {
             fillInBasicNoteTimes();
             handleNewPolyrhythms();
-            track.instrument.unsubscribe(setupNotes);
+            track.instrument.unsubscribe(setupNotes!);
+            setupNotes = null;
         };
         track.instrument.subscribe(setupNotes);
     }
@@ -220,6 +223,17 @@ export const createTrackPlayer = (track: ITrackView, timeCoordinator: ITimeCoord
     timeCoordinator.subscribe(handleTimeChange);
     track.arrangement.subscribe(destroySelfIfNeeded);
     let soloMute: SoloMute = null;
+
+    const dispose = (): void => {
+        // Unsubscribe from all sources and clear any pending instrument setup subscription.
+        timeCoordinator.unsubscribe(handleTimeChange);
+        track.unsubscribe(handleTrackChange);
+        track.arrangement.unsubscribe(destroySelfIfNeeded);
+        if (setupNotes) {
+            track.instrument.unsubscribe(setupNotes);
+            setupNotes = null;
+        }
+    };
 
     return {
         track, getEvents, onStop,
@@ -236,7 +250,8 @@ export const createTrackPlayer = (track: ITrackView, timeCoordinator: ITimeCoord
         currentPolyrhythmNotePublisher,
         get currentPolyrhythmNote() {
             return currentPolyrhythmNote;
-        }
+        },
+        dispose
     };
 
 };

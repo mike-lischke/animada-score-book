@@ -17,10 +17,24 @@ import tripleSlashIcon from "./assets/images/icons/triple_slash.svg";
 import oBigIcon from "./assets/images/icons/o_big.svg";
 import sunRaysIcon from "./assets/images/icons/sun_rays.svg";
 import oBigClosedIcon from "./assets/images/icons/o_big_closed.svg";
+
+import agogo2Icon from "./assets/images/instrument-icons/agogo-2.svg";
+import agogo4Icon from "./assets/images/instrument-icons/agogo-4.svg";
+import caixaIcon from "./assets/images/instrument-icons/caixa.svg";
+import chocalhoIcon from "./assets/images/instrument-icons/chocalho.svg";
+import tamborimIcon from "./assets/images/instrument-icons/tamborim.svg";
+import repiStickIcon from "./assets/images/instrument-icons/repi with stick.svg";
+import repiWithWhippiesIcon from "./assets/images/instrument-icons/repi with whippies.svg";
+import timbauIcon from "./assets/images/instrument-icons/timbau.svg";
+import lowSurdoIcon from "./assets/images/instrument-icons/low surdo.svg";
+import midSurdoIcon from "./assets/images/instrument-icons/mid surdo.svg";
+import highSurdoIcon from "./assets/images/instrument-icons/high surdo.svg";
+
 import type { IPackedInstrument } from "./core/types/general.js";
 
 export const bateriaInstruments: IPackedInstrument[] = [{
     id: "0",
+    icon: agogo2Icon,
     displayOrder: 0,
     displayName: "Agogo",
     packedNoteStyles: [
@@ -44,6 +58,7 @@ export const bateriaInstruments: IPackedInstrument[] = [{
     colourGroup: "yellow"
 }, {
     id: "a",
+    icon: agogo4Icon,
     displayOrder: 1,
     displayName: "4-Bell Agogo",
     packedNoteStyles: [
@@ -83,6 +98,7 @@ export const bateriaInstruments: IPackedInstrument[] = [{
     colourGroup: "yellow"
 }, {
     id: "1",
+    icon: chocalhoIcon,
     displayOrder: 2,
     displayName: "Chocalho",
     packedNoteStyles: [
@@ -106,6 +122,7 @@ export const bateriaInstruments: IPackedInstrument[] = [{
     colourGroup: "yellow"
 }, {
     id: "2",
+    icon: tamborimIcon,
     displayOrder: 3,
     displayName: "Tamborim",
     packedNoteStyles: [
@@ -129,6 +146,7 @@ export const bateriaInstruments: IPackedInstrument[] = [{
     colourGroup: "orange"
 }, {
     id: "3",
+    icon: repiStickIcon,
     displayOrder: 4,
     displayName: "Repinique",
     packedNoteStyles: [
@@ -192,6 +210,7 @@ export const bateriaInstruments: IPackedInstrument[] = [{
     colourGroup: "orange"
 }, {
     id: "4",
+    icon: repiWithWhippiesIcon,
     displayOrder: 5,
     displayName: "Repinique (Whippy Sticks)",
     packedNoteStyles: [
@@ -215,6 +234,7 @@ export const bateriaInstruments: IPackedInstrument[] = [{
     colourGroup: "orange"
 }, {
     id: "5",
+    icon: caixaIcon,
     displayOrder: 6,
     displayName: "Caixa",
     packedNoteStyles: [
@@ -254,6 +274,7 @@ export const bateriaInstruments: IPackedInstrument[] = [{
     colourGroup: "green"
 }, {
     id: "6",
+    icon: timbauIcon,
     displayOrder: 7,
     displayName: "Timbau",
     packedNoteStyles: [
@@ -285,6 +306,7 @@ export const bateriaInstruments: IPackedInstrument[] = [{
     colourGroup: "blue"
 }, {
     id: "7",
+    icon: highSurdoIcon,
     displayOrder: 8,
     displayName: "High Surdo",
     packedNoteStyles: [
@@ -310,6 +332,7 @@ export const bateriaInstruments: IPackedInstrument[] = [{
     colourGroup: "purple"
 }, {
     id: "8",
+    icon: midSurdoIcon,
     displayOrder: 9,
     displayName: "Mid Surdo",
     packedNoteStyles: [
@@ -335,6 +358,7 @@ export const bateriaInstruments: IPackedInstrument[] = [{
     colourGroup: "purple"
 }, {
     id: "9",
+    icon: lowSurdoIcon,
     displayOrder: 10,
     displayName: "Low Surdo",
     packedNoteStyles: [

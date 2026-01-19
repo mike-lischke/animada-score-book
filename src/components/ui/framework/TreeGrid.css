@@ -15,3 +15,8 @@
 .treeGrid.tabulator .tabulator-row {
     border-bottom: none;
 }
+
+.treeGrid.tabulator .tabulator-tree-branch-empty {
+    /* Prevent the placeholder from compressing in the flex container. */
+    flex: 0;
+}

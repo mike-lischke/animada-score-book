@@ -42,7 +42,10 @@ export class Button extends UIComponent<IButtonProperties> {
     }
 
     public render(): ComponentChild {
-        const { id, children, caption, style, orientation, round, imageOnly, disabled, isDefault } = this.props;
+        const {
+            id, children, caption, style, orientation, round, imageOnly, disabled, isDefault, title, role,
+            "data-tooltip": dataTooltip,
+        } = this.props;
         const className = this.generateFinalClassName([
             "button",
             this.classFromProperty(round, "round"),
@@ -63,6 +66,10 @@ export class Button extends UIComponent<IButtonProperties> {
                 ref={this.buttonRef}
                 style={newStyle}
                 className={className}
+                title={title}
+                disabled={disabled}
+                role={role}
+                data-tooltip={dataTooltip}
                 onClick={this.props.onClick}
             >
                 {content}

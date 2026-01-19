@@ -11,17 +11,13 @@ import { Label } from "../components/ui/framework/Label.js";
 import {
     SplitContainer, type ISplitterPane, type ISplitterPaneSizeInfo
 } from "../components/ui/framework/SplitContainer.js";
-import { MessageType, Orientation } from "../components/ui/framework/ui-types.js";
+import { Orientation } from "../components/ui/framework/ui-types.js";
 import { UIComponent } from "../components/ui/framework/UIComponent.js";
-import { Message } from "../components/ui/Message.js";
-import { SbDmEntityType, type ISbDmFolder, type ISbDmSoundFile } from "../core/ScoreBookDataModel.js";
+import { SbDmEntityType, type ISbDmSoundFile, type ISbDmSoundFolder } from "../core/ScoreBookDataModel.js";
 import { getApiBase } from "../core/utils.js";
 import { AppContext } from "./index.js";
 
 interface IInstrumentManagerState {
-    loaded: boolean;
-    error?: string;
-
     /** The URL of the audio/video currently being loaded in the transcriber. */
     selectedUrl?: string;
 
@@ -42,103 +38,77 @@ export class InstrumentManager extends UIComponent<{}, IInstrumentManagerState> 
         super(props);
 
         this.state = {
-            loaded: false,
             currentSplitterPosition: 350,
             selectedUrl: this.getSoundUrl("70bpm 01 Capoeira/70_01_Atabaque_End.wav"),
         };
     }
 
-    public override componentDidMount(): void {
-        const { loaded } = this.state;
-
-        // Make sure instruments are loaded.
-        if (!loaded) {
-            this.context.dataModel.loadSoundLib()
-                .then(() => {
-                    this.setState({ loaded: true });
-                })
-                .catch((err: unknown) => {
-                    this.setState({ error: "Couldn't load instruments: " + String(err) });
-                });
-        }
-    }
-
     public render(): ComponentChild {
-        const { loaded, error, selectedUrl, currentSplitterPosition } = this.state;
+        const { selectedUrl, currentSplitterPosition } = this.state;
 
-        if (error) {
-            return (
-                <Message type={MessageType.Error}>Error: {error}</Message>
-            );
-        } else if (!loaded) {
-            return (
-                <Message type={MessageType.Info}>Loading file tree...</Message>
-            );
-        } else {
-            const fsEntries = this.context.dataModel.soundLib;
+        const fsEntries = this.context.dataModel.soundLib;
 
-            const panes: ISplitterPane[] = [{
-                minSize: 350,
-                initialSize: currentSplitterPosition,
-                resizable: true,
-                content: (
+        const panes: ISplitterPane[] = [{
+            minSize: 350,
+            initialSize: currentSplitterPosition,
+            resizable: true,
+            content: (
+                <Container
+                    orientation={Orientation.TopDown}
+                    style={{ flex: 1, height: "100%", marginRight: "16px" }}
+                >
+                    <Label heading={true} caption="Sound Library Files" />
                     <Container
+                        id="fileTreeHost"
                         orientation={Orientation.TopDown}
-                        style={{ flex: 1, height: "100%", marginRight: "16px" }}
                     >
-                        <Label heading={true} caption="Sound Library Files" />
+                        <ul class="file-tree">
+                            {fsEntries.map((entry) => {
+                                return this.renderEntry(entry);
+                            })}
+                        </ul>
+
+                    </Container>
+                </Container>
+            )
+        }, {
+            minSize: 300,
+            content: (
+                <Container
+                    orientation={Orientation.TopDown}
+                    style={{ flex: 1, height: "100%", marginLeft: "16px" }}>
+                    <Label heading={true} caption="Replay and Range Selection" />
+                    {selectedUrl && (
                         <Container
-                            id="fileTreeHost"
+                            className="waveform-panel"
                             orientation={Orientation.TopDown}
                         >
-                            <ul class="file-tree">
-                                {fsEntries.map((entry) => {
-                                    return this.renderEntry(entry);
-                                })}
-                            </ul>
-
+                            <WaveformPlayer url={selectedUrl} />
                         </Container>
-                    </Container>
-                )
-            }, {
-                minSize: 300,
-                content: (
-                    <Container
-                        orientation={Orientation.TopDown}
-                        style={{ flex: 1, height: "100%", marginLeft: "16px" }}>
-                        <Label heading={true} caption="Replay and Range Selection" />
-                        {selectedUrl && (
-                            <Container
-                                className="waveform-panel"
-                                orientation={Orientation.TopDown}
-                            >
-                                <WaveformPlayer url={selectedUrl} />
-                            </Container>
-                        )}
-                    </Container>
-                )
-            }];
+                    )}
+                </Container>
+            )
+        }];
 
-            return (
-                <AppContext.Consumer>
-                    {({ dataModel }) => {
+        return (
+            <AppContext.Consumer>
+                {({ dataModel }) => {
 
-                        return (
-                            <SplitContainer
-                                id="instrumentManagerSplitter"
-                                orientation={Orientation.LeftToRight}
-                                panes={panes}
-                                onPaneResized={this.handleSplitterResize}
-                            />
-                        );
-                    }}
-                </AppContext.Consumer>
-            );
-        }
+                    return (
+                        <SplitContainer
+                            id="instrumentManagerSplitter"
+                            orientation={Orientation.LeftToRight}
+                            panes={panes}
+                            onPaneResized={this.handleSplitterResize}
+                        />
+                    );
+                }}
+            </AppContext.Consumer>
+        );
     }
 
-    private renderEntry = (entry: ISbDmFolder | ISbDmSoundFile) => {
-        if (entry.type === SbDmEntityType.Folder) {
+    private renderEntry = (entry: ISbDmSoundFolder | ISbDmSoundFile) => {
+        if (entry.type === SbDmEntityType.SoundFolder) {
             return (
                 <li key={entry.id}>
                     <div
@@ -171,7 +141,7 @@ export class InstrumentManager extends UIComponent<{}, IInstrumentManagerState> 
         );
     };
 
-    private toggle(entry: ISbDmFolder) {
+    private toggle(entry: ISbDmSoundFolder) {
         entry.state.expanded = !entry.state.expanded;
         this.forceUpdate();
     };

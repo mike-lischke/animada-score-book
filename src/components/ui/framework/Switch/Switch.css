@@ -1,0 +1,88 @@
+/*
+ * Copyright (c) Mike Lischke. All rights reserved.
+ * Licensed under the MIT License. See License.txt in the project root for license information.
+ */
+
+.switch {
+    --switch-border-width: 1px;
+    --switch-background: #F0F0F3;
+    --switch-border-color: #C2C2C4;
+}
+
+input.switch {
+    display: none;
+}
+
+label.switch {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+
+    width: max-content;
+    position: relative;
+
+    --switch-color: 217, 0%, 31%;
+    --switch-handle-color: #fff;
+    --switch-checked-color: 217, 65%, 51%;
+}
+
+label.switch[disabled] {
+    color: var(--disabledForeground);
+}
+
+/* The switch background. */
+label.switch::before {
+    display: block;
+    content: "";
+    height: 20px;
+    width: 40px;
+
+    border-radius: 2px;
+    border: var(--switch-border-width) solid var(--switch-border-color);
+    background-color: var(--switch-background);
+    margin-right: 4px;
+
+    transition: border 0.25s, background-color 0.25s;
+}
+
+label.switch.round::before {
+    border-radius: 25pt;
+}
+
+input:checked + label.switch::before {
+    border: var(--switch-border-width) solid hsla(var(--switch-checked-color), 1);
+    background-color: hsla(var(--switch-checked-color), 0.75);
+
+    transition: border 0.25s, background-color 0.25s;
+}
+
+/* The circle (handle) in the switch - unchecked. */
+input + label.switch::after {
+    align-self: center;
+    content: "☀︎";
+
+    font-size: 10pt;
+    position: absolute;
+    width: 16px;
+    height: 18px;
+    padding-left: 2px;
+    left: calc(var(--switch-border-width) + 1px);
+
+    background-color: var(--switch-handle-color);
+    border-radius: 2px;
+    transition: left 0.25s;
+}
+
+input:checked + label.switch::after {
+    content: "☾";
+    width: 13px;
+    padding-left: 5px;
+}
+
+label.switch.round::after {
+    border-radius: 50%;
+}
+
+input:checked.switch + label::after {
+    left: calc(21px + var(--switch-border-width));
+}

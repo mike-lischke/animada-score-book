@@ -4,6 +4,16 @@
  */
 
 :root {
+    /* TODO: Export all the colors to a theme file. */
+    --background: #ffffff;
+    --foreground: #303030;
+
+    --dialog-background: white;
+    --dialog-foreground: var(--foreground);
+
+    --card-border: #E8EAED;
+    --card-background: #F7F7F9;
+
     --yellow: #FFDE00;
     --light-yellow: #FFE739;
     --lighter-yellow: #FFEB64;
@@ -41,7 +51,42 @@
     --secondary-blue: hsl(205, 80%, 63%);
     --secondary-purple: hsl(232, 100%, 72%);
 
-    --selection-background: #add6ff
+    --selection-background: #add6ff;
+
+    --input-background-color: #3c4048;
+    --input-foreground-color: #f0f0f0;
+    --input-border-color: #555a66;
+
+    --button-background: #005fb8;
+    --button-border: #0000001a;
+    --button-foreground: #ffffff;
+    --button-hoverBackground: #0258a8;
+    --button-secondaryBackground: #e5e5e5;
+    --button-secondaryForeground: #3b3b3b;
+    --button-secondaryHoverBackground: #cccccc;
+    --button-separator: #ffffff66;
+
+    --input-background: #ffffff;
+    --input-border: #cecece;
+    --input-foreground: #3b3b3b;
+    --input-placeholderForeground: #767676;
+    --inputOption-activeBackground: #bed6ed;
+    --inputOption-activeBorder: #005fb8;
+    --inputOption-activeForeground: #000000;
+    --inputOption-hoverBackground: #b8b8b850;
+
+    --dropdown-background: #ffffff;
+    --dropdown-border: #cecece;
+    --dropdown-foreground: #3b3b3b;
+    --dropdown-listBackground: #ffffff;
+
+    --tooltip-background: #FFFFFF;
+    --tooltip-border: #CECECE;
+    --tooltip-foreground: #3b3b3b;
+
+    --text-captionForeground: #565657;
+
+    /* Values that should probably be in the component styles. */
 }
 
 body {
@@ -49,7 +94,8 @@ body {
     width: 100vw;
     height: 100vh;
 
-    font-family: Helvetica Neue, Helvetica, Arial, sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen,
+        Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
     line-height: 1.5;
     font-weight: 400;
 
@@ -59,37 +105,9 @@ body {
     text-rendering: optimizeLegibility;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-}
 
-a {
-    font-weight: 500;
-    color: #646cff;
-    text-decoration: inherit;
-}
-
-a:hover {
-    color: #535bf2;
-}
-
-button {
-    border-radius: 8px;
-    border: 1px solid transparent;
-    padding: 0.6em 1.2em;
-    font-size: 1em;
-    font-weight: 500;
-    font-family: inherit;
-    background-color: #1a1a1a;
-    cursor: pointer;
-    transition: border-color 0.25s;
-}
-
-button:hover {
-    border-color: #646cff;
-}
-
-button:focus,
-button:focus-visible {
-    outline: 4px auto -webkit-focus-ring-color;
+    color: var(--foreground);
+    background-color: var(--background);
 }
 
 @media (prefers-color-scheme: light) {
@@ -107,6 +125,9 @@ button:focus-visible {
     }
 }
 
+.button#githubLink {
+    background-color: black;
+}
 
 .hidden {
     display: none !important;
@@ -116,31 +137,14 @@ button:focus-visible {
     white-space: pre-line;
 }
 
-a {
-    text-decoration: none;
-    color: var(--a-color);
-}
-
-a:active {
-    color: var(--a-color-active);
-}
-
-a:hover {
-    text-decoration: underline;
-    color: var(--a-color-hover);
-}
-
-a:visited {
-    color: var(--a-color)
-}
-
 #wrapper {
     height: 100%;
 }
 
 #score-book-viewer {
-    height: 100%;
-    width: 100%;
+    padding: 40px;
+
+    flex: 1 1 auto;
     display: flex;
     flex-direction: column;
 }
@@ -249,14 +253,6 @@ select.long {
 
 .other-controls-wrapper {
     display: flex;
-}
-
-button.push-button.edit-title-button {
-    font-size: 20.5pt;
-    font-family: serif;
-    text-transform: capitalize;
-    /* .push-button normally lower-cases contents */
-    line-height: 1em;
 }
 
 .undo-redo-wrapper {
@@ -675,8 +671,6 @@ button.push-button.edit-title-button {
 }
 
 @keyframes shinyLink {
-
-    /* Colours from colours.ts */
     0% {
         background-color: hsl(268, 61%, 69%);
     }
@@ -698,25 +692,7 @@ button.push-button.edit-title-button {
     animation: shinyLink 3s infinite alternate;
 }
 
-.popup {
-    width: 100%;
-    height: 100%;
-    pointer-events: auto;
-    z-index: 200;
-    background: rgba(0, 0, 0, 50%);
-}
-
-.popup.container {
-    display: none;
-    position: absolute;
-    overflow: hidden;
-}
-
-.popup.container.visible {
-    display: flex;
-}
-
-.popup .aboutBox {
+.dialog #aboutBox {
     min-width: 800px;
     min-height: 600px;
     position: absolute;
@@ -725,7 +701,7 @@ button.push-button.edit-title-button {
     left: 50%;
     transform: translate(-50%, -50%);
 
-    background: white;
+    background: var(--dialog-background);
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2), 0 6px 20px rgba(0, 0, 0, 0.19);
     border-radius: 16px;
 
@@ -768,10 +744,6 @@ button.push-button.edit-title-button {
     overflow: scroll;
 }
 
-/* =============================================================== */
-/*                         Custom Scrollbars                       */
-/* =============================================================== */
-
 .custom-scrollbar {
     position: absolute;
     width: 100%;
@@ -798,107 +770,22 @@ button.push-button.edit-title-button {
     border-radius: 4pt;
 }
 
-/* =============================================================== */
-/*                             Buttons                             */
-/* =============================================================== */
-
-button.push-button {
-    box-sizing: border-box;
-    display: inline-block;
-    border: none;
-    box-shadow: inset 0 0 2px 0 rgba(0, 0, 0, .2), inset 0 -3px 0 0 rgba(0, 0, 0, .32);
-    padding: 9.75pt 12pt;
-    border-radius: 11pt;
-    transition: all .2s;
-    cursor: pointer;
-    background-color: var(--blue);
-    color: white;
-    text-shadow: 0 1px 1px rgba(0, 0, 0, .2);
-    font-weight: bold;
-    position: relative;
-    outline: none;
-    text-transform: lowercase;
-    -webkit-user-select: none;
-    user-select: none;
-}
-
-button.push-button.small {
-    font-size: 10pt;
-    padding: 1.5pt 4pt 3pt;
-    font-weight: 400;
-    border-radius: 5pt;
-    line-height: 13pt;
-}
-
-button.push-button.medium {
-    /* These properties are incomplete, because currently we only have use and it has its own particular font-size, etc */
-    padding: 1.5pt 4pt 3pt;
-    font-weight: 400;
-    border-radius: 5pt;
-}
-
-button.push-button.green {
-    background-color: var(--green);
-}
-
-button.push-button.lighter-green {
-    background-color: var(--lighter-green);
-}
-
-button.push-button.gray {
-    background-color: var(--light-gray);
-}
-
-button.push-button.yellow {
-    background-color: var(--yellow);
-}
-
-button.push-button.dark-blue {
-    background-color: var(--dark-blue);
-}
-
-button.push-button:not(:disabled):active {
-    top: 2px;
-    box-shadow: inset 0 2px 1px 0 rgba(0, 0, 0, .1);
-}
-
-button.push-button:disabled {
-    cursor: auto;
-    filter: brightness(0.5);
-}
-
-/* anchor buttons are just meant to look like anchors */
-button.anchor-button {
-    all: unset;
-    cursor: pointer;
-    color: var(--a-color);
-}
-
-button.anchor-button:active {
-    color: var(--a-color-active);
-}
-
-button.anchor-button:hover {
-    text-decoration: underline;
-    color: var(--a-color-hover);
-}
-
-.aboutBox #headingLabel {
+#aboutBox #headingLabel {
     margin: 15px auto;
     font-size: 25pt;
     font-weight: 100;
     overflow: hidden;
 }
 
-.popup .logo {
+.dialog .logo {
     height: 160pt;
     display: block;
     margin: 40px auto;
 }
 
-#githubLogo {
-    height: 32pt;
-    margin-left: 8pt;
+.githubLogo {
+    height: 24pt;
+    margin: 0 8pt;
     vertical-align: middle;
 }
 
@@ -909,34 +796,26 @@ button.anchor-button:hover {
 
 #appRoot {
     height: 100vh;
-    border: 1px solid #E0E0E0;
 }
 
 #appHeader {
-    flex: 0 0 80px;
-    color: white;
-    padding-left: 20px;
-
-    /* Bild + Verlauf von links Farbe zu rechts transparent */
-    background:
-        linear-gradient(to right,
-            rgb(192, 46, 61) 0%,
-            rgba(192, 46, 61) 40%,
-            rgba(192, 46, 61, 0) 90%),
-        url("./assets/images/samba-drums.jpg");
-
-    background-size: auto 100%, 60% auto;
-    background-position: 100% 20%;
-    background-repeat: no-repeat;
+    flex: 0 0 70px;
+    padding: 12px 12px 0 12px;
 }
 
 #appTitle {
-    margin-left: 30px;
-    font-size: 18pt;
+    margin-left: 16px;
+    font-size: 24pt;
+    font-weight: 400;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 }
 
 #titleLogo {
-    height: 60px;
+    height: 50px;
+}
+
+#themeSwitch {
+    margin-left: auto;
 }
 
 #appTabview {
@@ -974,6 +853,12 @@ button.anchor-button:hover {
 
 #appTabview .tabContent #instrumentManagerSplitter {
     height: 100%;
+}
+
+#appTabview .tabContent #scoreTrackSplitter {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
 }
 
 #instrumentManagerSplitter .splitHost {
@@ -1025,13 +910,65 @@ button.anchor-button:hover {
     background-color: #F9F9F9;
 }
 
+.dialog #scoreLibraryRoot {
+    min-width: 1000px;
+    min-height: 700px;
+    z-index: 100;
+
+    gap: 20px;
+
+    background: var(--dialog-background);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2), 0 6px 20px rgba(0, 0, 0, 0.19);
+    border-radius: 16px;
+
+    padding: 20pt;
+    transition: opacity 0.2s;
+}
+
+#scoreTreeHost .scoreTreeEntry > .actionBox {
+    display: none;
+    flex: 1;
+    justify-content: flex-end;
+    overflow: hidden;
+    min-width: fit-content;
+}
+
+#scoreTreeHost .tabulator-row:hover .actionBox {
+    display: flex;
+}
+
+#scoreTreeHost .scoreTreeEntry > .actionBox > .actionButton {
+    top: 1px;
+    right: 0;
+    width: 20px;
+    min-width: 0;
+    height: 20px;
+    min-height: 0;
+    margin: 0;
+    border: none;
+
+    color: var(--button-secondaryForeground);
+    background-color: transparent;
+}
+
+#scoreTreeHost .scoreTreeEntry:hover > .actionBox > .actionButton:hover {
+    color: var(--button-foreground);
+    background-color: var(--button-hoverBackground);
+}
+
+#scoreTreeHost .scoreTreeEntry > .actionBox > .actionButton:first-of-type {
+    margin-left: auto;
+}
+
 #scoreLibrarySplitter {
-    height: 100%;
+    flex: 1 1 auto;
 }
 
 #libraryPaneContent {
     flex: 1;
     margin-right: 10px;
+
+    padding: 8px;
 }
 
 #scoreTreeHost .tabulator .tabulator-cell {
@@ -1039,18 +976,115 @@ button.anchor-button:hover {
     align-items: center;
 }
 
+#scoreTreeHost .tabulator .tabulator-tableholder .tabulator-table .tabulator-row,
+#scoreTreeHost .tabulator .tabulator-tableholder .tabulator-table {
+    background: none;
+}
+
+#scoreTreeHost .tabulator .tabulator-tableholder .tabulator-table .tabulator-row.tabulator-selected {
+    background-color: var(--selection-background);
+}
+
 #instrumentManagerSplitter .divider.vertical,
 #scoreLibrarySplitter .divider.vertical {
     background-image: linear-gradient(to bottom,
-            rgba(200, 200, 200, 0) 0%,
-            rgba(200, 200, 200, 1) 50%,
-            rgba(200, 200, 200, 0) 100%);
+            rgba(100, 100, 100, 0) 0%,
+            rgba(150, 150, 150, 1) 50%,
+            rgba(100, 100, 100, 0) 100%);
     background-repeat: no-repeat;
     background-size: 1px 100%;
     background-position: center center;
 }
 
+.scoreTreeIcon {
+    font-size: 24px;
+    margin-right: 8px;
+}
+
+.scoreTreeEntry {
+    display: flex;
+    align-items: center;
+    flex: 1 1 auto;
+}
+
 #transcriptionPaneContent {
     flex: 1;
     margin-left: 16px;
+}
+
+#scoreDetailsPaneContent,
+#scoreDetailsPaneContent > .grid {
+    height: 100%;
+}
+
+#scoreDetailsGrid {
+    grid-template-rows: auto min-content min-content 1fr auto;
+}
+
+#scoreDetailsDescription {
+    border: 1px solid var(--light-gray);
+    border-radius: 8px;
+    padding: 12px;
+}
+
+.scoreDetailsPropertyName {
+    font-weight: bold;
+    margin-right: 4px;
+}
+
+#scoreLibraryRoot .card#tracksCard {
+    flex: 0 0 100px;
+    overflow: auto;
+}
+
+.card#tracksCard {
+    align-items: center;
+}
+
+.button.trackEditButton {
+    margin: 8px;
+    padding: 8px;
+    flex-direction: column;
+    align-items: center;
+    width: 80px;
+    height: 80px;
+    border-radius: 16px;
+    border: 1px solid var(--lighter-gray);
+}
+
+.trackEditButton.inner {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    border: 1px dashed var(--light-gray);
+    color: var(--light-gray);
+    position: relative;
+}
+
+.trackEditButton.inner > .icon {
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    position: absolute;
+}
+
+#transcriptionEditor {
+    min-width: 800px;
+    min-height: 600px;
+    position: absolute;
+    z-index: 100;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+
+    background: var(--dialog-background);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2), 0 6px 20px rgba(0, 0, 0, 0.19);
+    border-radius: 16px;
+
+    padding: 20pt;
+    transition: opacity 0.2s;
+}
+
+#scoreNotes {
+    max-height: 150px;
 }

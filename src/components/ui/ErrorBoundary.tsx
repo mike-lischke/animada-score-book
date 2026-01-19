@@ -55,8 +55,8 @@ export class ErrorBoundary extends Component<{}, IErrorBoundaryState> {
                 <Container className="errorBoundary" style={{ padding: "30px" }} orientation={Orientation.TopDown}>
                     <Label className="heading">Sorry to hear you had problems running the Animada Score Book!
                         An unexpected error occurred:</Label><br />
-                    <Message type={MessageType.Error}>{this.state.error}</Message><br />
-                    <Message className="stack" type={MessageType.Info}>{this.state.stack}</Message><br />
+                    <Message messageType={MessageType.Error}>{this.state.error}</Message><br />
+                    <Message className="stack" messageType={MessageType.Info}>{this.state.stack}</Message><br />
                     <span>
                         If you think this is a bug in the application then please file a bug report at
                         &nbsp;the <a href="https://github.com/mike-lischke/animada-score-book/issues">
