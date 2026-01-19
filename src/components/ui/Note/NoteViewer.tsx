@@ -7,7 +7,7 @@ import type { ComponentChild, ContextType } from "preact";
 
 import type { INoteStyle, INoteView, ISubscribable } from "../../../core/types/general.js";
 import { isSameTiming } from "../../../core/utils.js";
-import { createAudioBufferPlayer } from "../../../player/AudioBufferPlayer.js";
+import { AudioBufferPlayer } from "../../../player/AudioBufferPlayer.js";
 import { getTrackColour } from "../../../ui/track-colour.js";
 import { ArrangementPlayerContext } from "../Arrangement/ArrangementViewer.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
@@ -300,7 +300,10 @@ export class NoteViewer extends UIComponent<INoteViewerProps, INoteViewerState> 
 
         this.scoreBookContext?.edit({ type: "EditCommand_Note", note, noteStyle });
         if (noteStyle?.audioBuffer) {
-            createAudioBufferPlayer(noteStyle.audioBuffer, audioContext);
+            // Play a preview of the selected note style.
+            // Default start time (0) is fine here.
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
+            const _player = new AudioBufferPlayer(noteStyle.audioBuffer, audioContext);
             void audioContext.resume();
         }
     }

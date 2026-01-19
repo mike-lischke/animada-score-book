@@ -4,7 +4,7 @@
  */
 
 import { Publisher } from "../core/Publisher.js";
-import { AudioBufferPlayer, createAudioBufferPlayer } from "./AudioBufferPlayer.js";
+import { AudioBufferPlayer } from "./AudioBufferPlayer.js";
 import type {
     AudioEvent, ICallbackEvent, IEventEngine, EventEngineState, IEventSource, IInterval, IMuteEvent, MuteFilter
 } from "./types.js";
@@ -16,222 +16,232 @@ import type {
 const lookahead = 0.25; // (s) Look 250ms ahead for events
 const loopFrequency = 125; // (ms) Check for upcoming events every 125ms
 
-export const getEventEngine = (): IEventEngine => {
-    return eventEngine;
-};
+export class EventEngine extends Publisher implements IEventEngine {
+    private readonly audioContext: AudioContext;
 
-// eslint-disable-next-line prefer-arrow/prefer-arrow-functions
-const eventEngine: IEventEngine = (function () {
-    const connect = (eventSource: IEventSource) => {
-        eventSources.push(eventSource);
-    };
-
-    const disconnect = (eventSource: IEventSource) => {
-        const index = eventSources.indexOf(eventSource);
-        if (index !== -1) {
-            eventSources.splice(index, 1);
-        }
-    };
-
-    const play = async () => {
-        await ensureContextIsRunning();
-        if (nextIterationId === null) {
-            offset = audioContext.currentTime; // should always have timeCovered = 0 at this point
-            loop();
-            state = "playing";
-            publisher.publish();
-        }
-    };
-
-    const stop = () => {
-        if (nextIterationId !== null) {
-            clearScheduledEvents();
-            clearTimeout(nextIterationId);
-            nextIterationId = null;
-            timeCovered = 0;
-            state = "stopped";
-            callOnStopCallbacks();
-            publisher.publish();
-        }
-    };
-
-    const getTime = () => {
-        if (state === "playing") {
-            return audioContext.currentTime - offset;
-        }
-
-        return 0;
-    };
-
-    const playSound = (audioBuffer: AudioBuffer, time = 0): AudioBufferPlayer => {
-        const audioBufferPlayer = createAudioBufferPlayer(audioBuffer, audioContext, time);
-
-        return audioBufferPlayer;
-    };
-
-    const ensureContextIsRunning = async () => {
-        if (audioContext.state !== "running") {
-            await audioContext.resume();
-        }
-
-        if (audioContext.state !== "running") {
-            throw new Error("Couldn't start the AudioContext");
-        }
-    };
-
-    // The loop is a setTimeout loop
-    // It gets and schedules events in an upcoming time interval
-    // We make sure never to request any time we've requested before
-    const loop = () => {
-        const intervalEnd = getTime() + lookahead;
-        const interval: IInterval = { start: timeCovered, end: intervalEnd };
-        scheduleEvents(interval);
-        nextIterationId = setTimeout(loop, loopFrequency);
-        timeCovered = intervalEnd;
-    };
-
-    const scheduleEvents = (interval: IInterval) => {
-        eventSources.forEach((eventSource) => {
-            eventSource.getEvents(interval).forEach((event) => {
-                if ("audioBuffer" in event) {
-                    scheduleAudioEvent(event);
-                }
-                if ("callback" in event) {
-                    scheduleCallbackEvent(event);
-                }
-                if ("muteFilter" in event) {
-                    scheduleMuteEvent(event);
-                }
-            });
-        });
-    };
-
-    const scheduleAudioEvent = (audioEvent: AudioEvent) => {
-        const audioBufferPlayer = playSound(audioEvent.audioBuffer, audioEvent.realTime + offset);
-        const audioEventReference: AudioEventReference = { audioEvent, audioBufferPlayer };
-        scheduledAudioEvents.push(audioEventReference);
-        // Event listener will fire on context.suspend() as well as audio buffer finishing.
-        // The 'stop' button wants to clear audio that's in mid-play.
-        audioBufferPlayer.onEnded(() => {
-            stopAudioAndUnschedule(audioEventReference);
-        });
-    };
-
-    const stopAudioAndUnschedule = (audioEventReference: AudioEventReference) => {
-        audioEventReference.audioBufferPlayer.stop();
-        const scheduleIndex = scheduledAudioEvents.indexOf(audioEventReference);
-        if (scheduleIndex !== -1) {
-            scheduledAudioEvents.splice(scheduleIndex, 1);
-        }
-    };
-
-    const scheduleCallbackEvent = (callbackEvent: ICallbackEvent) => {
-        const callbackEventReference: CallbackEventReference = {
-            callbackEvent,
-            timeoutId: setTimeout(() => {
-                callbackEvent.callback();
-                removeFromCallbackSchedule(callbackEventReference);
-            }, getMsFromNow(callbackEvent.realTime))
-        };
-        scheduledCallbackEvents.push(callbackEventReference);
-    };
-
-    const removeFromCallbackSchedule = (callbackEventReference: CallbackEventReference) => {
-        const scheduleIndex = scheduledCallbackEvents.indexOf(callbackEventReference);
-        if (scheduleIndex !== -1) {
-            scheduledCallbackEvents.splice(scheduleIndex, 1);
-        }
-        // Currently no need to clearTimeout on callback events
-        // They are only getting unscheduled by this function after they fire
-        // They are also getting unscheduled by clearScheduledEvents, which does clearTimeout
-    };
-
-    const scheduleMuteEvent = (muteEvent: IMuteEvent) => {
-        const scheduledMuteEvent = {
-            muteEvent,
-            timeoutId: setTimeout(() => {
-                muteUsingFilter(muteEvent.muteFilter);
-                removeFromMuteSchedule(scheduledMuteEvent);
-            }, getMsFromNow(muteEvent.realTime))
-        };
-        scheduledMuteEvents.push(scheduledMuteEvent);
-    };
-
-    const removeFromMuteSchedule = (muteEventReference: MuteEventReference) => {
-        const scheduleIndex = scheduledMuteEvents.indexOf(muteEventReference);
-        if (scheduleIndex !== -1) {
-            scheduledMuteEvents.splice(scheduleIndex, 1);
-        }
-    };
-
-    const clearScheduledEvents = (): void => {
-        scheduledAudioEvents.forEach(({ audioBufferPlayer }) => {
-            audioBufferPlayer.stop();
-        });
-        scheduledCallbackEvents.forEach(({ timeoutId }) => {
-            clearTimeout(timeoutId);
-        });
-        scheduledMuteEvents.forEach(({ timeoutId }) => {
-            clearTimeout(timeoutId);
-        });
-        scheduledAudioEvents.splice(0);
-        scheduledCallbackEvents.splice(0);
-        scheduledMuteEvents.splice(0);
-    };
-
-    const callOnStopCallbacks = () => {
-        eventSources.forEach(({ onStop }) => {
-            return (onStop?.());
-        });
-    };
-
-    const getMsFromNow = (time: number) => {
-        return (time - getTime()) * 1000;
-    };
-
-    const muteUsingFilter = (muteFilter: MuteFilter) => {
-        scheduledAudioEvents
-            .filter((audioEventReference) => {
-                return hasStarted(audioEventReference) && muteFilter(audioEventReference.audioEvent);
-            })
-            .forEach(stopAudioAndUnschedule);
-    };
-
-    const hasStarted = (audioEventReference: AudioEventReference): boolean => {
-        return audioEventReference.audioEvent.realTime <= getTime();
-    };
-
-    const audioContext: AudioContext = new AudioContext();
-    const eventSources: IEventSource[] = [];
-    let nextIterationId: number | null = null;
-    let state: EventEngineState = "stopped";
-    const publisher = new Publisher();
+    private eventSources: IEventSource[] = [];
+    private nextIterationId: number | null = null;
+    private _state: EventEngineState = "stopped";
 
     // We use the AudioContext to move forward in time
     // But it always moves forward, even when the EventEngine is stopped
     // This means the AudioContext is way ahead in time
     // So we maintain an offset to calculate EventEngine time from AudioContext time
-    let offset = 0;
+    private offset = 0;
 
     // We ask for events in time-intervals, but never ask for time we've already covered
-    let timeCovered = 0;
+    private timeCovered = 0;
 
-    interface AudioEventReference { audioEvent: AudioEvent, audioBufferPlayer: AudioBufferPlayer; }
-    const scheduledAudioEvents: AudioEventReference[] = [];
+    private scheduledAudioEvents: Array<{ audioEvent: AudioEvent, audioBufferPlayer: AudioBufferPlayer; }> = [];
+    private scheduledCallbackEvents: Array<{ callbackEvent: ICallbackEvent, timeoutId: number; }> = [];
+    private scheduledMuteEvents: Array<{ muteEvent: IMuteEvent, timeoutId: number; }> = [];
 
-    interface CallbackEventReference { callbackEvent: ICallbackEvent, timeoutId: number; }
-    const scheduledCallbackEvents: CallbackEventReference[] = [];
+    public constructor() {
+        super();
+        this.audioContext = new AudioContext();
+    }
 
-    interface MuteEventReference { muteEvent: IMuteEvent, timeoutId: number; }
-    const scheduledMuteEvents: MuteEventReference[] = [];
+    public connect(eventSource: IEventSource): void {
+        this.eventSources.push(eventSource);
+    }
 
-    return {
-        connect, disconnect,
-        play, stop, getTime,
-        subscribe: publisher.subscribe, unsubscribe: publisher.unsubscribe,
-        get state(): EventEngineState {
-            return state;
+    public disconnect(eventSource: IEventSource): void {
+        const index = this.eventSources.indexOf(eventSource);
+        if (index !== -1) {
+            this.eventSources.splice(index, 1);
         }
-    };
+    }
 
-})();
+    public async play(): Promise<void> {
+        await this.ensureContextIsRunning();
+        if (this.nextIterationId === null) {
+            this.offset = this.audioContext.currentTime; // should always have timeCovered = 0 at this point
+            this.loop();
+            this._state = "playing";
+            this.publish();
+        }
+    }
+
+    public stop(): void {
+        if (this.nextIterationId !== null) {
+            this.clearScheduledEvents();
+            clearTimeout(this.nextIterationId);
+            this.nextIterationId = null;
+            this.timeCovered = 0;
+            this._state = "stopped";
+            this.callOnStopCallbacks();
+            this.publish();
+        }
+    }
+
+    public getTime(): number {
+        if (this._state === "playing") {
+            return this.audioContext.currentTime - this.offset;
+        }
+
+        return 0;
+    }
+
+    public get state(): EventEngineState {
+        return this._state;
+    }
+
+    private playSound(audioBuffer: AudioBuffer, time = 0): AudioBufferPlayer {
+        const audioBufferPlayer = new AudioBufferPlayer(audioBuffer, this.audioContext, time);
+
+        return audioBufferPlayer;
+    }
+
+    private async ensureContextIsRunning(): Promise<void> {
+        if (this.audioContext.state !== "running") {
+            await this.audioContext.resume();
+        }
+
+        if (this.audioContext.state !== "running") {
+            throw new Error("Couldn't start the AudioContext");
+        }
+    }
+
+    // The loop is a setTimeout loop
+    // It gets and schedules events in an upcoming time interval
+    // We make sure never to request any time we've requested before
+    private loop(): void {
+        const intervalEnd = this.getTime() + lookahead;
+        const interval: IInterval = { start: this.timeCovered, end: intervalEnd };
+        this.scheduleEvents(interval);
+        this.nextIterationId = setTimeout(() => {
+            this.loop();
+        }, loopFrequency);
+        this.timeCovered = intervalEnd;
+    }
+
+    private scheduleEvents(interval: IInterval): void {
+        this.eventSources.forEach((eventSource) => {
+            eventSource.getEvents(interval).forEach((event) => {
+                if ("audioBuffer" in event) {
+                    this.scheduleAudioEvent(event);
+                }
+                if ("callback" in event) {
+                    this.scheduleCallbackEvent(event);
+                }
+                if ("muteFilter" in event) {
+                    this.scheduleMuteEvent(event);
+                }
+            });
+        });
+    }
+
+    private scheduleAudioEvent(audioEvent: AudioEvent): void {
+        const audioBufferPlayer = this.playSound(audioEvent.audioBuffer, audioEvent.realTime + this.offset);
+        const audioEventReference = { audioEvent, audioBufferPlayer };
+        this.scheduledAudioEvents.push(audioEventReference);
+
+        // Event listener will fire on context.suspend() as well as audio buffer finishing.
+        // The 'stop' button wants to clear audio that's in mid-play.
+        audioBufferPlayer.onEnded(() => {
+            this.stopAudioAndUnschedule(audioEventReference);
+        });
+    }
+
+    private stopAudioAndUnschedule(
+        audioEventReference: { audioEvent: AudioEvent, audioBufferPlayer: AudioBufferPlayer; }
+    ): void {
+        audioEventReference.audioBufferPlayer.stop();
+        const scheduleIndex = this.scheduledAudioEvents.indexOf(audioEventReference);
+        if (scheduleIndex !== -1) {
+            this.scheduledAudioEvents.splice(scheduleIndex, 1);
+        }
+    }
+
+    private scheduleCallbackEvent(callbackEvent: ICallbackEvent): void {
+        const callbackEventReference = {
+            callbackEvent,
+            timeoutId: setTimeout(() => {
+                callbackEvent.callback();
+                this.removeFromCallbackSchedule(callbackEventReference);
+            }, this.getMsFromNow(callbackEvent.realTime))
+        };
+
+        this.scheduledCallbackEvents.push(callbackEventReference);
+    }
+
+    private removeFromCallbackSchedule(
+        callbackEventReference: { callbackEvent: ICallbackEvent, timeoutId: number; }
+    ): void {
+        const scheduleIndex = this.scheduledCallbackEvents.indexOf(callbackEventReference);
+        if (scheduleIndex !== -1) {
+            this.scheduledCallbackEvents.splice(scheduleIndex, 1);
+        }
+        // Currently no need to clearTimeout on callback events
+        // They are only getting unscheduled by this function after they fire
+        // They are also getting unscheduled by clearScheduledEvents, which does clearTimeout
+    }
+
+    private scheduleMuteEvent(muteEvent: IMuteEvent): void {
+        const scheduledMuteEvent = {
+            muteEvent,
+            timeoutId: setTimeout(() => {
+                this.muteUsingFilter(muteEvent.muteFilter);
+                this.removeFromMuteSchedule(scheduledMuteEvent);
+            }, this.getMsFromNow(muteEvent.realTime))
+        };
+
+        this.scheduledMuteEvents.push(scheduledMuteEvent);
+    }
+
+    private removeFromMuteSchedule(muteEventReference: { muteEvent: IMuteEvent, timeoutId: number; }): void {
+        const scheduleIndex = this.scheduledMuteEvents.indexOf(muteEventReference);
+        if (scheduleIndex !== -1) {
+            this.scheduledMuteEvents.splice(scheduleIndex, 1);
+        }
+    }
+
+    private clearScheduledEvents(): void {
+        this.scheduledAudioEvents.forEach(({ audioBufferPlayer }) => {
+            audioBufferPlayer.stop();
+        });
+        this.scheduledCallbackEvents.forEach(({ timeoutId }) => {
+            clearTimeout(timeoutId);
+        });
+        this.scheduledMuteEvents.forEach(({ timeoutId }) => {
+            clearTimeout(timeoutId);
+        });
+        this.scheduledAudioEvents.splice(0);
+        this.scheduledCallbackEvents.splice(0);
+        this.scheduledMuteEvents.splice(0);
+    }
+
+    private callOnStopCallbacks(): void {
+        this.eventSources.forEach(({ onStop }) => {
+            return (onStop?.());
+        });
+    }
+
+    private getMsFromNow(time: number): number {
+        return (time - this.getTime()) * 1000;
+    }
+
+    private muteUsingFilter(muteFilter: MuteFilter): void {
+        this.scheduledAudioEvents
+            .filter((audioEventReference) => {
+                return this.hasStarted(audioEventReference) && muteFilter(audioEventReference.audioEvent);
+            })
+            .forEach((ref) => {
+                this.stopAudioAndUnschedule(ref);
+            });
+    }
+
+    private hasStarted(
+        audioEventReference: { audioEvent: AudioEvent, audioBufferPlayer: AudioBufferPlayer; }
+    ): boolean {
+        return audioEventReference.audioEvent.realTime <= this.getTime();
+    }
+}
+
+let singletonEventEngine: IEventEngine | null = null;
+
+export const getEventEngine = (): IEventEngine => {
+    singletonEventEngine ??= new EventEngine();
+
+    return singletonEventEngine;
+};
