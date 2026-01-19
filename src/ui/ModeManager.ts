@@ -3,17 +3,8 @@
 * Licensed under the MIT License. See License.txt in the project root for license information.
 */
 
-/* eslint-disable prefer-arrow/prefer-arrow-functions, jsdoc/require-jsdoc */
-
 import { Publisher } from "../core/Publisher.js";
-import type { ISubscribable } from "../core/types/general.js";
 import type { SelectionManager } from "./SelectionManager.js";
-
-export interface ModeManager extends ISubscribable {
-    deletePolyrhythmMode: boolean;
-    mobileSelectionMode: boolean;
-    selectByMouseOverMode: boolean;
-}
 
 // The really useful thing about a mode-manager would be the ability enforce mutual exclusivity of different modes
 // We can avoid UI bugs just by having delete-polyrhythm-mode and select-mode never simultaneous
@@ -23,51 +14,84 @@ export interface ModeManager extends ISubscribable {
 // to `selectionManager.selections.size`.
 // For now, since there's only two modes, not a priority. We just have to be meticulous about avoioding bugs.
 
-export function createModeManager(selectionManager: SelectionManager): ModeManager {
-    const publisher = new Publisher();
-    let deletePolyrhythmMode = false;
-    let mobileSelectionMode = false;
-    let selectByMouseOverMode = false;
+/**
+ * Tracks UI modes and publishes changes so the UI can react.
+ *
+ * Modes are currently:
+ * - deletePolyrhythmMode: toggles polyrhythm deletion affordances
+ * - mobileSelectionMode: shows selection UI optimized for touch
+ * - selectByMouseOverMode: enables selection via mouseover during drag
+ *
+ * The manager subscribes to `SelectionManager` to enforce mutual exclusivity where needed: when a selection exists
+ * it disables delete-polyrhythm mode; when the selection is cleared it disables mobile selection mode.
+ */
+export class ModeManager extends Publisher {
+    private _deletePolyrhythmMode = false;
+    private _mobileSelectionMode = false;
+    private _selectByMouseOverMode = false;
 
-    const modeManager = {
-        get deletePolyrhythmMode() {
-            return deletePolyrhythmMode;
-        },
-        set deletePolyrhythmMode(newValue: boolean) {
-            if (newValue !== deletePolyrhythmMode) {
-                deletePolyrhythmMode = newValue;
-                publisher.publish();
-            }
-        },
-        get mobileSelectionMode() {
-            return mobileSelectionMode;
-        },
-        set mobileSelectionMode(newValue: boolean) {
-            if (newValue !== mobileSelectionMode) {
-                mobileSelectionMode = newValue;
-                publisher.publish();
-            }
-        },
-        get selectByMouseOverMode() {
-            return selectByMouseOverMode;
-        },
-        set selectByMouseOverMode(newValue: boolean) {
-            if (newValue !== selectByMouseOverMode) {
-                selectByMouseOverMode = newValue;
-                publisher.publish();
-            }
-        },
-        subscribe: publisher.subscribe,
-        unsubscribe: publisher.unsubscribe
-    };
+    /**
+     * Creates a new mode manager and wires selection interactions.
+     *
+     * @param selectionManager The selection manager to observe for state changes.
+     */
+    public constructor(selectionManager: SelectionManager) {
+        super();
 
-    selectionManager.subscribe(() => {
-        if (selectionManager.selections.size) {
-            modeManager.deletePolyrhythmMode = false;
-        } else {
-            modeManager.mobileSelectionMode = false;
+        selectionManager.subscribe(() => {
+            if (selectionManager.selections.size) {
+                this.deletePolyrhythmMode = false;
+            } else {
+                this.mobileSelectionMode = false;
+            }
+        });
+    }
+
+    /**
+     * Whether polyrhythm delete mode is active.
+     *
+     * @returns True when delete mode is enabled.
+     */
+    public get deletePolyrhythmMode(): boolean {
+        return this._deletePolyrhythmMode;
+    }
+
+    public set deletePolyrhythmMode(newValue: boolean) {
+        if (newValue !== this._deletePolyrhythmMode) {
+            this._deletePolyrhythmMode = newValue;
+            this.publish();
         }
-    });
+    }
 
-    return modeManager;
+    /**
+     * Whether mobile selection mode is active.
+     *
+     * @returns True when mobile selection mode is enabled.
+     */
+    public get mobileSelectionMode(): boolean {
+        return this._mobileSelectionMode;
+    }
+
+    public set mobileSelectionMode(newValue: boolean) {
+        if (newValue !== this._mobileSelectionMode) {
+            this._mobileSelectionMode = newValue;
+            this.publish();
+        }
+    }
+
+    /**
+     * Whether select-by-mouseover mode is active.
+     *
+     * @returns True when select-by-mouseover mode is enabled.
+     */
+    public get selectByMouseOverMode(): boolean {
+        return this._selectByMouseOverMode;
+    }
+
+    public set selectByMouseOverMode(newValue: boolean) {
+        if (newValue !== this._selectByMouseOverMode) {
+            this._selectByMouseOverMode = newValue;
+            this.publish();
+        }
+    }
 }

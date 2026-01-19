@@ -15,7 +15,7 @@ import { ArrangementPlayer } from "../player/ArrangementPlayer.js";
 import { getEventEngine } from "../player/EventEngine.js";
 import type { IArrangementPlayer } from "../player/types.js";
 import { AnimationEngine } from "./AnimationEngine.js";
-import { createModeManager, ModeManager } from "./ModeManager.js";
+import { ModeManager } from "./ModeManager.js";
 import { MouseHandler } from "./MouseHandler.js";
 import { SelectionManager } from "./SelectionManager.js";
 
@@ -59,7 +59,7 @@ export class AnimadaScoreBookUi extends UIComponent<IAnimadaScoreBookUiPropertie
 
         this.animationEngine = new AnimationEngine(this.eventEngine);
         this.selectionManager = new SelectionManager();
-        this.modeManager = createModeManager(this.selectionManager);
+        this.modeManager = new ModeManager(this.selectionManager);
 
         this.initServices();
 

@@ -3,8 +3,6 @@
 * Licensed under the MIT License. See License.txt in the project root for license information.
 */
 
-/* no file-level eslint disables required */
-
 import { isMobile } from "./index.js";
 import type { ModeManager } from "./ModeManager.js";
 import type { SelectionManager } from "./SelectionManager.js";

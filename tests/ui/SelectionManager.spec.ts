@@ -3,9 +3,10 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import { describe, it, expect, beforeEach, vi } from "vitest";
-import type { INoteView, ITrackView, IArrangementView } from "../../src/core/types/general.js";
-import { SelectionManager, createSelectionManager } from "../../src/ui/SelectionManager.js";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+import type { IArrangementView, INoteView, ITrackView } from "../../src/core/types/general.js";
+import { SelectionManager } from "../../src/ui/SelectionManager.js";
 
 const makeArrangement = (tracks: ITrackView[]): IArrangementView => {
     const arrangement: IArrangementView = {
