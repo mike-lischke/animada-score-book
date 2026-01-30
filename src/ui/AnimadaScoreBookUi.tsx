@@ -3,18 +3,20 @@
 * Licensed under the MIT License. See License.txt in the project root for license information.
 */
 
+import type { ContextType } from "preact";
+
 import { UIComponent, type ICommonUIProperties } from "../components/ui/framework/UIComponent.js";
 import { Overlay } from "../components/ui/Overlay.js";
 import { ScoreBookViewer } from "../components/ui/ScoreBookViewer.js";
-import { AnimadaScoreBook } from "../core/AnimadaScoreBook.js";
-import { deserialiseArrangement } from "../core/serialisation/deserialisers.js";
+import type { ISbDmInstrument } from "../core/ScoreBookDataModel.js";
 import type { IAnimadaScoreBook } from "../core/types/general.js";
-import type { IArrangementSnapshot } from "../core/types/snapshots.js";
-import { demoSongString } from "../demo-song.js";
+import type { ISerialisedArrangement } from "../core/types/snapshots.js";
+import { UndoManager } from "../core/UndoManager.js";
 import { ArrangementPlayer } from "../player/ArrangementPlayer.js";
 import { getEventEngine } from "../player/EventEngine.js";
 import type { IArrangementPlayer } from "../player/types.js";
 import { AnimationEngine } from "./AnimationEngine.js";
+import { AppContext } from "./index.js";
 import { ModeManager } from "./ModeManager.js";
 import { MouseHandler } from "./MouseHandler.js";
 import { SelectionManager } from "./SelectionManager.js";
@@ -26,12 +28,12 @@ export interface ScoreBookUiServices {
 }
 
 export interface IAnimadaScoreBookUiProperties extends ICommonUIProperties {
-    currentArrangementSnapshot?: IArrangementSnapshot;
+    serializedArrangement?: ISerialisedArrangement;
 }
 
 interface IAnimadaScoreBookUiState {
     needUpdate: boolean;
-    currentArrangementSnapshot?: IArrangementSnapshot;
+    serializedArrangement?: ISerialisedArrangement;
 }
 
 /**
@@ -41,8 +43,11 @@ interface IAnimadaScoreBookUiState {
  * Mode Managers.
  */
 export class AnimadaScoreBookUi extends UIComponent<IAnimadaScoreBookUiProperties, IAnimadaScoreBookUiState> {
+    public static override contextType = AppContext;
+    declare public context: ContextType<typeof AppContext>;
+
     private scoreBook!: IAnimadaScoreBook;
-    private arrangementPlayer!: IArrangementPlayer;
+    private arrangementPlayer?: IArrangementPlayer;
 
     private eventEngine = getEventEngine();
     private animationEngine: AnimationEngine;
@@ -64,23 +69,23 @@ export class AnimadaScoreBookUi extends UIComponent<IAnimadaScoreBookUiPropertie
         this.initServices();
 
         // Load the initial arrangement to have a player ready.
-        this.loadScorebook();
+        //this.loadScorebook([]);
         //initSessionRecovery(this.scoreBook);
     }
 
     public static override getDerivedStateFromProps(nextProps: IAnimadaScoreBookUiProperties,
         previousState: IAnimadaScoreBookUiState
     ): IAnimadaScoreBookUiState | null {
-        if (nextProps.currentArrangementSnapshot !== previousState.currentArrangementSnapshot) {
+        if (nextProps.serializedArrangement !== previousState.serializedArrangement) {
             // Recreate the arrangement player when the arrangement changes.
             return {
                 needUpdate: true,
-                currentArrangementSnapshot: nextProps.currentArrangementSnapshot
+                serializedArrangement: nextProps.serializedArrangement
             };
         }
 
         return {
-            needUpdate: false
+            needUpdate: !nextProps.serializedArrangement
         };
     }
 
@@ -88,9 +93,11 @@ export class AnimadaScoreBookUi extends UIComponent<IAnimadaScoreBookUiPropertie
         const { needUpdate } = this.state;
 
         if (needUpdate) {
-            this.eventEngine.disconnect(this.arrangementPlayer);
-            this.arrangementPlayer.dispose();
-            this.loadScorebook();
+            if (this.arrangementPlayer) {
+                this.eventEngine.disconnect(this.arrangementPlayer);
+                this.arrangementPlayer.dispose();
+            }
+            this.loadScorebook(this.context.dataModel.instruments);
 
             this.setState({
                 needUpdate: false
@@ -100,7 +107,7 @@ export class AnimadaScoreBookUi extends UIComponent<IAnimadaScoreBookUiPropertie
         return (
             <ScoreBookViewer
                 scoreBook={this.scoreBook}
-                arrangementPlayer={this.arrangementPlayer}
+                arrangementPlayer={this.arrangementPlayer!}
                 services={{
                     animationEngine: this.animationEngine,
                     selectionManager: this.selectionManager,
@@ -110,13 +117,15 @@ export class AnimadaScoreBookUi extends UIComponent<IAnimadaScoreBookUiPropertie
         );
     }
 
-    private loadScorebook() {
-        let { currentArrangementSnapshot } = this.props;
+    private loadScorebook(instruments: ISbDmInstrument[]) {
+        const { serializedArrangement } = this.props;
+        if (!serializedArrangement) {
+            return;
+        }
 
-        currentArrangementSnapshot ??= deserialiseArrangement(
-            { composition: demoSongString, version: 2, title: "Demo Song" });
-
-        this.scoreBook = new AnimadaScoreBook(currentArrangementSnapshot);
+        const dataModel = this.context.dataModel;
+        const arrangement = dataModel.loadArrangement(serializedArrangement);
+        this.scoreBook = new UndoManager(arrangement, instruments);
         this.arrangementPlayer = new ArrangementPlayer(this.scoreBook.arrangement);
         this.eventEngine.connect(this.arrangementPlayer);
 

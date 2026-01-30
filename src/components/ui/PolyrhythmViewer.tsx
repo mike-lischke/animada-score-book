@@ -5,13 +5,13 @@
 
 import type { ComponentChild, ContextType } from "preact";
 
-import type { IPolyrhythmView } from "../../core/types/general.js";
+import type { IPolyrhythm } from "../../core/types/general.js";
 import { UIComponent, type ICommonUIProperties } from "./framework/UIComponent.js";
 import { NoteViewer } from "./Note/NoteViewer.js";
 import { AnimadaScoreBookContext, ServicesContext } from "./ScoreBookViewer.js";
 
 export interface IPolyrhythmViewerProps extends ICommonUIProperties {
-    polyrhythm: IPolyrhythmView;
+    polyrhythm: IPolyrhythm;
 }
 
 interface IPolyrhythmViewerState {
@@ -136,7 +136,7 @@ export class PolyrhythmViewer extends UIComponent<IPolyrhythmViewerProps, IPolyr
         });
     };
 
-    private checkShrouded(polyrhythm: IPolyrhythmView) {
+    private checkShrouded(polyrhythm: IPolyrhythm) {
         const track = polyrhythm.start.track;
         for (const otherPolyrhythm of track.polyrhythms) {
             if (otherPolyrhythm !== polyrhythm) {

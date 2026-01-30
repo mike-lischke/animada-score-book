@@ -4,7 +4,8 @@
  */
 
 import type { IArrangementSnapshot, IPolyrhythmSnapshot, ITrackSnapshot } from "../types/snapshots.js";
-import type { IArrangementView, IPolyrhythmView, ITrackView } from "../types/general.js";
+import type { IArrangementView, IPolyrhythm } from "../types/general.js";
+import type { ISbDmTrack } from "../ScoreBookDataModel.js";
 
 export const getArrangementSnapshot = (arrangement: IArrangementView): IArrangementSnapshot => {
     const { timeSignature, tempo, length, pulse, stepResolution } = arrangement.timeParams;
@@ -16,25 +17,25 @@ export const getArrangementSnapshot = (arrangement: IArrangementView): IArrangem
     };
 };
 
-const getTrackSnapshot = (track: ITrackView): ITrackSnapshot => {
+const getTrackSnapshot = (track: ISbDmTrack): ITrackSnapshot => {
     return {
         id: track.id,
-        instrumentId: track.instrument.id,
+        instrumentId: track.instrument.typeId,
         notes: getNotesAsChars(track),
         polyrhythms: getPolyrhythmSnapshots(track)
     };
 };
 
-const getNotesAsChars = (track: ITrackView): string[] => {
+const getNotesAsChars = (track: ISbDmTrack): string[] => {
     return Array.from(track.getNoteIterator())
         .map((note) => {
             return note.noteStyle?.id ?? "0";
         }); // For rests, note.noteStyle is null, and '0' is reserved for this on all instruments
 };
 
-const getPolyrhythmSnapshots = (track: ITrackView): IPolyrhythmSnapshot[] => {
+const getPolyrhythmSnapshots = (track: ISbDmTrack): IPolyrhythmSnapshot[] => {
     const polyrhythmSnapshots: IPolyrhythmSnapshot[] = [];
-    const polyrhythmsToIgnore: IPolyrhythmView[] = [];
+    const polyrhythmsToIgnore: IPolyrhythm[] = [];
 
     // We do polyrhythms in reverse order in order to support nested polyrhthms
     // When we rebuild the polyrhythms one-by-one, the note-iterator is going to change after each one

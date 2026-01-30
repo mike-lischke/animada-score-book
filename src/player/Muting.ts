@@ -3,11 +3,12 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import type { IMutingRuleOtherInstrument, INoteView, MutingRule, RealTime } from "../core/types/general.js";
+import type { ISbDmNote, RealTime } from "../core/ScoreBookDataModel.js";
+import type { IMutingRuleOtherInstrument, MutingRule } from "../core/types/general.js";
 import { exists, isSameTiming } from "../core/utils.js";
 import type { IAudioEvent, IMuteEvent, MuteFilter } from "./types.js";
 
-export const getMuteEvents = (note: INoteView, realTime: RealTime): IMuteEvent[] => {
+export const getMuteEvents = (note: ISbDmNote, realTime: RealTime): IMuteEvent[] => {
     const muteFilters = getMuteFilters(note);
 
     return muteFilters.map((muteFilter) => {
@@ -16,7 +17,7 @@ export const getMuteEvents = (note: INoteView, realTime: RealTime): IMuteEvent[]
     });
 };
 
-const getMuteFilters = (note: INoteView): Array<MuteFilter | undefined> => {
+const getMuteFilters = (note: ISbDmNote): Array<MuteFilter | undefined> => {
     const muting = note.noteStyle?.muting;
     if (!muting) {
         return [];
@@ -31,7 +32,7 @@ const getMuteFilters = (note: INoteView): Array<MuteFilter | undefined> => {
     return [getMuteFilter(note, muting)];
 };
 
-const getMuteFilter = (note: INoteView, muting: MutingRule): MuteFilter | undefined => {
+const getMuteFilter = (note: ISbDmNote, muting: MutingRule): MuteFilter | undefined => {
     const ruleName = typeof muting === "string" ? muting : muting.name;
     switch (ruleName) {
         case "sameTrack":
@@ -41,7 +42,7 @@ const getMuteFilter = (note: INoteView, muting: MutingRule): MuteFilter | undefi
     }
 };
 
-const getSameTrackMuteFilter = (note: INoteView): MuteFilter | undefined => {
+const getSameTrackMuteFilter = (note: ISbDmNote): MuteFilter | undefined => {
     const noteStyle = note.noteStyle;
     if (!noteStyle) {
         return;
@@ -55,7 +56,7 @@ const getSameTrackMuteFilter = (note: INoteView): MuteFilter | undefined => {
     };
 };
 
-const getOtherInstrumentMuteFilter = (note: INoteView, muting: IMutingRuleOtherInstrument): MuteFilter | undefined => {
+const getOtherInstrumentMuteFilter = (note: ISbDmNote, muting: IMutingRuleOtherInstrument): MuteFilter | undefined => {
     const noteStyle = note.noteStyle;
     if (!noteStyle) {
         return;
@@ -64,7 +65,7 @@ const getOtherInstrumentMuteFilter = (note: INoteView, muting: IMutingRuleOtherI
     const otherInstrumentId = muting.id;
 
     return (audioEvent: IAudioEvent) => {
-        return audioEvent.note.track.instrument.id === otherInstrumentId
+        return audioEvent.note.track.instrument.typeId === otherInstrumentId
             && !isSameTiming(audioEvent.note.timing, note.timing);
     }; // Don't cross-mute when played together
 };

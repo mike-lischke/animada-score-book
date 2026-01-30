@@ -4,13 +4,14 @@
 */
 
 import type { ComponentChild } from "preact";
-import { AnimadaScoreBookContext } from "../ScoreBookViewer.js";
+
+import type { ISbDmTrack } from "../../../core/ScoreBookDataModel.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
 import { Overlay } from "../Overlay.js";
-import type { ITrackView } from "../../../core/types/general.js";
+import { AnimadaScoreBookContext } from "../ScoreBookViewer.js";
 
 export interface ITrackControlsProps extends ICommonUIProperties {
-    track: ITrackView;
+    track: ISbDmTrack;
     overlayName: string;
 }
 

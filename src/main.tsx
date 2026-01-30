@@ -10,7 +10,7 @@ import logo from "./assets/images/animada-logo2.svg";
 import { render } from "preact";
 
 import { App } from "./App.js";
-import { Message } from "./components/ui/Message.js";
+import { Message } from "./components/ui/framework/Message.js";
 import { ChildAlignment, MessageType, Orientation } from "./components/ui/framework/ui-types.js";
 import { Container } from "./components/ui/framework/Container.js";
 

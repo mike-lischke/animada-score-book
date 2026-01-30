@@ -93,7 +93,6 @@ export class InstrumentManager extends UIComponent<{}, IInstrumentManagerState> 
         return (
             <AppContext.Consumer>
                 {({ dataModel }) => {
-
                     return (
                         <SplitContainer
                             id="instrumentManagerSplitter"

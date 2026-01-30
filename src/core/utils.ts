@@ -3,7 +3,7 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import type { ITiming } from "./types/general.js";
+import type { ITiming } from "./ScoreBookDataModel.js";
 
 // Comparing timings is easy, but long winded and mistake-prone
 export const isSameTiming = (timing1: ITiming, timing2: ITiming): boolean => {
@@ -21,12 +21,11 @@ export const rangeArray = <T>(itemCount: number, mapIndexToItem: (index: number)
     });
 };
 
-let id = 0;
+let nextId = 1;
 
+/** @returns a new unique id for components, data entries etc. */
 export const getNewId = (): number => {
-    id++;
-
-    return id;
+    return nextId++;
 };
 
 export const calculateStepsPerBar = (timeSignature: string, stepResolution: number): number => {

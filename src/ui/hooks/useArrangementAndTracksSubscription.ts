@@ -7,14 +7,15 @@
 
 import { useEffect } from "preact/hooks";
 
-import type { IArrangementView, ITrackView, Subscription } from "../../core/types/general.js";
+import type { ISbDmTrack } from "../../core/ScoreBookDataModel.js";
+import type { IArrangementView, Subscription } from "../../core/types/general.js";
 import { useSubscription } from "./useSubscription.js";
 
 export function useArrangementAndTracksSubscription(arrangement: IArrangementView, callback: Subscription): void {
     useSubscription(arrangement, callback);
 
     useEffect(() => {
-        const subscribedTracks = new Set<ITrackView>();
+        const subscribedTracks = new Set<ISbDmTrack>();
 
         arrangement.tracks.forEach((track) => {
             track.subscribe(callback);

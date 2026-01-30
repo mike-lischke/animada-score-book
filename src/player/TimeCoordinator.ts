@@ -4,7 +4,8 @@
  */
 
 import { Publisher } from "../core/Publisher.js";
-import type { ITimeParamsView, ITiming, RealTime } from "../core/types/general.js";
+import type { ITiming, RealTime } from "../core/ScoreBookDataModel.js";
+import type { ITimeParamsView } from "../core/types/general.js";
 import { getEventEngine } from "./EventEngine.js";
 import { IInterval, ILoopInterval, ITimeCoordinator } from "./types.js";
 

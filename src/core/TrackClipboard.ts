@@ -3,7 +3,8 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import type { INote, INoteStyle, ITiming, ITrack } from "./types/general.js";
+import type { ISbDmTrack, ITiming } from "./ScoreBookDataModel.js";
+import type { INoteStyle } from "./types/general.js";
 import { isSameTiming } from "./utils.js";
 
 interface ICopyRequest {
@@ -17,13 +18,9 @@ interface IPasteRequest {
 }
 
 export class TrackClipboard {
-    private track: ITrack;
     private buffer: Array<INoteStyle | undefined> = [];
 
-    public constructor(track: ITrack) {
-        this.track = track;
-
-        return this;
+    public constructor(private track: ISbDmTrack) {
     }
 
     public get length() {

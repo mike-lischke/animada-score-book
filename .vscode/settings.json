@@ -29,5 +29,9 @@
         "Tamborim",
         "tamborims",
         "Timbau"
+    ],
+    "cSpell.ignoreWords": [
+        "folderid",
+        "parentid"
     ]
 }

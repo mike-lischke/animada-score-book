@@ -4,37 +4,52 @@
  */
 
 import { Publisher } from "./Publisher.js";
-import type { IInstrument, INoteStyle, IPackedInstrument } from "./types/general.js";
+import { SbDmEntityType, type ISbDmInstrument, type ISbDmInstrumentImage } from "./ScoreBookDataModel.js";
+import type { INoteStyle, IPackedInstrument } from "./types/general.js";
+import { getNewId } from "./utils.js";
 
 /**
  * This should be the only instance of an instrument.
  * So if this is called, the instrument must start unloaded.
  */
-export class Instrument extends Publisher implements IInstrument {
-    /** Base folder for audio files under the public assets. */
-    private static readonly soundBasePath = "sounds";
-    /** Shared audio context used to decode instrument audio buffers. */
-    private static readonly audioCtx: AudioContext = new AudioContext();
+export class Instrument extends Publisher implements ISbDmInstrument {
+    public readonly type = SbDmEntityType.Instrument;
+    public readonly id: number;
+    public readonly typeId: string;
+    public readonly displayOrder: number;
+    public readonly displayName: string;
+    public readonly image: ISbDmInstrumentImage;
+    public readonly colourGroup: string;
 
-    public loaded = false;
-    public id: string;
-    public displayOrder: number;
-    public displayName: string;
-    public icon: string;
-    public colourGroup: string;
+    public readonly audioPath: string;
+    public readonly range: [number, number] = [0, 127];
+    public readonly state = {
+        initialized: false,
+        isLeaf: true,
+        expanded: false,
+        expandedOnce: false,
+    };
 
     public readonly noteStyles: Record<string, INoteStyle> = {};
     public readonly unpackPromises: Array<Promise<AudioBuffer>> = [];
 
+    /** Base folder for audio files under the public assets. */
+    private static readonly soundBasePath = "sounds";
+
+    /** Shared audio context used to decode instrument audio buffers. */
+    private static readonly audioCtx: AudioContext = new AudioContext();
+
     public constructor(packedInstrument: IPackedInstrument) {
         super();
 
-        const { id, packedNoteStyles, displayOrder, displayName, colourGroup } = packedInstrument;
+        const { id, packedNoteStyles, displayOrder, displayName, colourGroup, typeId } = packedInstrument;
         this.id = id;
+        this.typeId = typeId;
         this.displayOrder = displayOrder;
         this.displayName = displayName;
-        this.icon = packedInstrument.icon;
+        this.image = { type: SbDmEntityType.InstrumentImage, id: getNewId(), filePath: packedInstrument.icon };
         this.colourGroup = colourGroup;
+        this.audioPath = `${Instrument.soundBasePath}/instrument_${typeId}/`;
 
         packedNoteStyles.forEach(({ id, file, symbol, muting }) => {
             this.noteStyles[id] = { id, symbol, audioBuffer: null, instrument: this, muting };
@@ -46,7 +61,7 @@ export class Instrument extends Publisher implements IInstrument {
         });
 
         void Promise.all(this.unpackPromises).then(() => {
-            this.loaded = true;
+            this.state.initialized = true;
             this.publish();
         });
     }
@@ -64,4 +79,9 @@ export class Instrument extends Publisher implements IInstrument {
 
         return Instrument.audioCtx.decodeAudioData(arrayBuffer);
     }
+
+    public get noteStyleCount(): number {
+        return Object.keys(this.noteStyles).length + 1; // + 1 for rests
+    };
+
 }

@@ -4,33 +4,24 @@
  */
 
 import { edit } from "./edit.js";
-import { getLibrary } from "./Library.js";
 import { Publisher } from "./Publisher.js";
-import { applyArrangementSnapshot, createArrangementFromSnapshot } from "./serialisation/snapshot_appliers.js";
+import type { ISbDmArrangement, ISbDmInstrument } from "./ScoreBookDataModel.js";
 import type { EditCommand } from "./types/edit_commands.js";
 import type { IAnimadaScoreBook, INoteStyle } from "./types/general.js";
-import type { IArrangementSnapshot } from "./types/snapshots.js";
 import { UndoRedoStack } from "./UndoRedoStack.js";
 
-/**
- * Encapsulates the application-level score book state and operations:
- * - Holds the arrangement and instrument library
- * - Manages edit history via `UndoRedoStack`
- * - Publishes current-state changes for UI updates
- */
-export class AnimadaScoreBook implements IAnimadaScoreBook {
-    public readonly library = getLibrary();
-    public readonly arrangement;
+/** Encapsulates the application-level undo/redo management. */
+export class UndoManager implements IAnimadaScoreBook {
     private readonly undoRedoStack;
     private readonly currentStatePublisher = new Publisher();
 
     /**
      * Creates a new score book from an arrangement snapshot.
      *
-     * @param arrangementSnapshot The snapshot to initialise the arrangement from.
+     * @param arrangement The arrangement to use.
+     * @param instruments The available instruments.
      */
-    public constructor(arrangementSnapshot: IArrangementSnapshot) {
-        this.arrangement = createArrangementFromSnapshot(arrangementSnapshot);
+    public constructor(public arrangement: ISbDmArrangement, private instruments: ISbDmInstrument[]) {
         this.undoRedoStack = new UndoRedoStack(this.arrangement);
     }
 
@@ -85,7 +76,7 @@ export class AnimadaScoreBook implements IAnimadaScoreBook {
         }
 
         this.undoRedoStack.goBack();
-        applyArrangementSnapshot(this.arrangement, this.undoRedoStack.currentState);
+        this.arrangement.applyArrangementSnapshot(this.undoRedoStack.currentState, this.instruments);
         this.currentStatePublisher.publish();
     }
 
@@ -98,7 +89,7 @@ export class AnimadaScoreBook implements IAnimadaScoreBook {
         }
 
         this.undoRedoStack.goForward();
-        applyArrangementSnapshot(this.arrangement, this.undoRedoStack.currentState);
+        this.arrangement.applyArrangementSnapshot(this.undoRedoStack.currentState, this.instruments);
         this.currentStatePublisher.publish();
     }
 

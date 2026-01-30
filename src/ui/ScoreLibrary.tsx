@@ -7,7 +7,6 @@ import { createRef, render, type ComponentChild, type ContextType } from "preact
 
 import type { CellComponent, ColumnDefinition, RowComponent } from "tabulator-tables";
 import { TrackEditButton } from "../TrackEditButton.js";
-import { bateriaInstruments } from "../bateria-instruments.js";
 import { Button } from "../components/ui/framework/Button.js";
 import { Card } from "../components/ui/framework/Card.js";
 import { Codicon } from "../components/ui/framework/Codicon.js";
@@ -24,11 +23,11 @@ import {
 import { TreeGrid, type ITreeGridOptions } from "../components/ui/framework/TreeGrid.js";
 import { UIComponent, type ICommonUIProperties } from "../components/ui/framework/UIComponent.js";
 import { Orientation, SelectionType } from "../components/ui/framework/ui-types.js";
-import { getLibrary } from "../core/Library.js";
-import { SbDmEntityType, type ISbDmScore, type ISbDmScoreFolder } from "../core/ScoreBookDataModel.js";
-import { deserialiseArrangement } from "../core/serialisation/deserialisers.js";
+import { Arrangement } from "../core/Arrangement.js";
+import {
+    SbDmEntityType, type ISbDmArrangement, type ISbDmScore, type ISbDmScoreFolder, type ScoreBookDataModel
+} from "../core/ScoreBookDataModel.js";
 import { getSerialisedArrangementFromParams } from "../core/serialisation/url.js";
-import type { IArrangementSnapshot } from "../core/types/snapshots.js";
 import { TranscriptionEditor } from "./TranscriptionEditor.js";
 import { AppContext } from "./index.js";
 
@@ -40,7 +39,7 @@ interface IScoreLibraryState {
     /** The URL of an audio or video file. */
     url?: string;
 
-    selectedArrangement?: IArrangementSnapshot;
+    selectedArrangement?: ISbDmArrangement;
     currentScore?: ISbDmScore;
 }
 
@@ -60,8 +59,6 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
     public constructor(props: IScoreLibraryProperties) {
         super(props);
         this.state = {};
-
-        getLibrary().load(bateriaInstruments);
     }
 
     public render(): ComponentChild {
@@ -132,11 +129,8 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
         }, {
             id: "scoreDetailsPane",
             content: (
-                <Container
-                    id="scoreDetailsPaneContent"
-                    orientation={Orientation.TopDown}
-                >
-                    {this.renderSelectedScoreDetails()}
+                <Container id="scoreDetailsPaneContent" orientation={Orientation.TopDown} >
+                    {this.renderSelectedScoreDetails(this.context.dataModel)}
                 </Container>
             ),
             minSize: 400,
@@ -194,7 +188,7 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
         );
     }
 
-    private renderSelectedScoreDetails(): import("preact").ComponentChildren {
+    private renderSelectedScoreDetails(dataModel: ScoreBookDataModel): import("preact").ComponentChildren {
         const { selectedArrangement, currentScore } = this.state;
 
         let title = "--";
@@ -205,14 +199,14 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
 
         let instrumentImages: Array<[string, string]> = [];
         if (selectedArrangement && currentScore) {
-            title = selectedArrangement.title ?? "(Untitled)";
+            title = selectedArrangement.title;
             tempo = selectedArrangement.timeParams.tempo.toString();
             timeSignature = selectedArrangement.timeParams.timeSignature;
             length = selectedArrangement.timeParams.length.toString();
             instrumentImages = selectedArrangement.tracks.map((track) => {
-                const instrument = getLibrary().getInstrument(track.instrumentId);
+                const instrument = track.instrument;
 
-                return [instrument.icon, instrument.displayName];
+                return [instrument.image.filePath, instrument.displayName];
             });
 
             description = currentScore.description;
@@ -372,7 +366,8 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
             const params = new URLSearchParams(entry.content);
             const serialisedArrangement = getSerialisedArrangementFromParams(params);
             if (serialisedArrangement) {
-                const arrangement = deserialiseArrangement(serialisedArrangement);
+                const instruments = this.context.dataModel.instruments;
+                const arrangement = Arrangement.fromSerialized(serialisedArrangement, instruments);
                 arrangement.title = entry.name;
                 this.setState({ selectedArrangement: arrangement, currentScore: entry });
 

@@ -18,10 +18,3 @@ export interface AppContextType {
 
 /** All shared data is here. */
 export const AppContext = createContext<AppContextType>({} as AppContextType);
-
-let nextId = 1;
-
-/** @returns a new unique id for components, data entries etc. */
-export const getNextId = (): number => {
-    return nextId++;
-};

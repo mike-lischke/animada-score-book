@@ -31,7 +31,7 @@ export class InstrumentEditor extends UIComponent<IInstrumentEditorProps> {
                     className="instrument-image"
                 //src={instrument.image}
                 />
-                <Label className="instrument-name" caption={instrument.name} />
+                <Label className="instrument-name" caption={instrument.displayName} />
                 <Container
                     className="instrument-waveform-panel"
                     orientation={Orientation.TopDown}

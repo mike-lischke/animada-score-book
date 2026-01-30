@@ -3,9 +3,8 @@
 * Licensed under the MIT License. See License.txt in the project root for license information.
 */
 
-import type {
-    IArrangementView, IInstrument, INoteStyle, INoteView, IPolyrhythmView, ITimeParamsView, ITrackView
-} from "./general.js";
+import type { ISbDmInstrument, ISbDmNote, ISbDmTrack } from "../ScoreBookDataModel.js";
+import type { IArrangementView, INoteStyle, IPolyrhythm, ITimeParamsView } from "./general.js";
 
 /* eslint-disable @typescript-eslint/naming-convention */
 
@@ -18,13 +17,13 @@ export interface EditCommand_ArrangementTitle {
 export interface EditCommand_ArrangementAddTrack {
     type: "EditCommand_ArrangementAddTrack";
     arrangement: IArrangementView;
-    addTrack: IInstrument;
+    addTrack: ISbDmInstrument;
 }
 
 export interface EditCommand_ArrangementRemoveTrack {
     type: "EditCommand_ArrangementRemoveTrack";
     arrangement: IArrangementView;
-    removeTrack: ITrackView;
+    removeTrack: ISbDmTrack;
 }
 
 export interface EditCommand_ArrangementClear {
@@ -36,7 +35,7 @@ export interface EditCommand_ArrangementClear {
 export interface EditCommand_ArrangementClearSelection {
     type: "EditCommand_ArrangementClearSelection";
     arrangement: IArrangementView;
-    clearSelection: Map<ITrackView, { selectedNotes: Set<INoteView>; }>;
+    clearSelection: Map<ISbDmTrack, { selectedNotes: Set<ISbDmNote>; }>;
 }
 
 export interface EditCommand_ArrangementAddPolyrhythms {
@@ -44,25 +43,25 @@ export interface EditCommand_ArrangementAddPolyrhythms {
     arrangement: IArrangementView;
     addPolyrhythms: {
         length: number;
-        selection: Map<ITrackView, { range: [INoteView | null, INoteView | null]; }>;
+        selection: Map<ISbDmTrack, { range: [ISbDmNote | null, ISbDmNote | null]; }>;
     };
 }
 
 export interface EditCommand_TrackRemovePolyrhythm {
     type: "EditCommand_TrackRemovePolyrhythm";
-    track: ITrackView;
-    removePolyrhythm: IPolyrhythmView;
+    track: ISbDmTrack;
+    removePolyrhythm: IPolyrhythm;
 }
 
 export interface EditCommand_TrackClear {
     type: "EditCommand_TrackClear";
-    track: ITrackView;
+    track: ISbDmTrack;
     command: "clear";
 }
 
 export interface EditCommand_Note {
     type: "EditCommand_Note";
-    note: INoteView;
+    note: ISbDmNote;
     noteStyle?: INoteStyle;
 }
 

@@ -6,7 +6,7 @@
 import { Component, type ComponentChild } from "preact";
 
 import { Label } from "./framework/Label.js";
-import { Message } from "./Message.js";
+import { Message } from "./framework/Message.js";
 
 import { Container } from "./framework/Container.js";
 import { MessageType, Orientation } from "./framework/ui-types.js";

@@ -3,8 +3,33 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import { getNextId } from "../ui/index.js";
+// Temporarily load instruments from bateria-instruments until we have a proper backend.
+import { bateriaInstruments } from "../bateria-instruments.js";
+import { Arrangement } from "./Arrangement.js";
+
 import type { IScoreDBEntry, ISoundLibFsNode } from "./DatabaseTypes.js";
+import { Instrument } from "./Instrument.js";
+import { Publisher } from "./Publisher.js";
+import type { INoteStyle, IPolyrhythm, ISubscribable } from "./types/general.js";
+import type { IArrangementSnapshot, ISerialisedArrangement } from "./types/snapshots.js";
+import { getNewId } from "./utils.js";
+
+// steps are currently always sixteenths
+// When we bring in polyrhythms that will change
+// It may also change for other time signatures but I'm not sure yet
+export interface ITiming { readonly bar: number, readonly step: number; };
+
+export type RealTime = number;
+
+export interface ITimeParamsView extends ISubscribable {
+    readonly timeSignature: string;
+    readonly tempo: number;
+    readonly length: number;
+    readonly pulse: string;
+    readonly stepResolution: number;
+    isValid(timing: ITiming): boolean;
+    readonly timings: ITiming[];
+}
 
 /**
  * The signature of a callback, which can be passed to any `initialize()` method.
@@ -43,11 +68,13 @@ export enum SbDmEntityType {
 
 export interface ISbDmCommon {
     readonly id: number;
-    name: string;
 
     /** The type of the entry. This is used a discriminator for the individual entries. */
     readonly type: SbDmEntityType;
+}
 
+/** A special form of a datamodel item. It's used in the UI. */
+export interface ISbDmVisual extends ISbDmCommon {
     /** Transient state information. */
     readonly state: ISbDmEntityState;
 
@@ -66,9 +93,10 @@ export interface ISbDmCommon {
     getChildren?(): ScoreBookDataModelEntry[];
 }
 
-export interface ISbDmSoundFolder extends ISbDmCommon {
+export interface ISbDmSoundFolder extends ISbDmVisual {
     readonly type: SbDmEntityType.SoundFolder;
     readonly parentId: number | null;
+    readonly name: string;
     readonly path: string;
     readonly children?: Array<ISbDmSoundFolder | ISbDmSoundFile>;
 }
@@ -79,35 +107,47 @@ export interface ISbDmSoundFile {
     readonly name: string;
 }
 
-export interface ISbDmScoreFolder extends ISbDmCommon {
+export interface ISbDmScoreFolder extends ISbDmVisual {
     readonly type: SbDmEntityType.ScoreFolder;
     readonly parentId: number;
     readonly children: Array<ISbDmScoreFolder | ISbDmScore>;
+
+    readonly name: string;
 }
 
-export interface ISbDmScore extends ISbDmCommon {
+export interface ISbDmScore extends ISbDmVisual {
     readonly type: SbDmEntityType.Score;
     readonly parentId: number;
+    readonly name: string;
     readonly content: string;
     readonly description?: string;
 }
 
-export interface ISbDmTrack extends ISbDmCommon {
+export interface ISbDmTrack extends ISbDmCommon, ISubscribable {
     readonly type: SbDmEntityType.Track;
+    readonly name: string;
+
+    readonly arrangement: ISbDmArrangement;
     readonly instrument: ISbDmInstrument;
     readonly volume: number;
     readonly notes: ISbDmNote[];
+    readonly polyrhythms: IPolyrhythm[];
+
+    getNoteAt(timing: ITiming): ISbDmNote | undefined;
+    getNoteIterator(polyrhythmsToIgnore?: IPolyrhythm[]): IterableIterator<ISbDmNote>;
+    addPolyrhythm(start: ISbDmNote, end: ISbDmNote, length: number, id?: number, index?: number): void;
+    removePolyrhythm(polyrhythm: IPolyrhythm): void;
+    clear(): void;
 }
 
-export interface ISbDmNote {
+export interface ISbDmNote extends ISbDmCommon, ISubscribable {
     readonly type: SbDmEntityType.Note;
-    readonly timing: {
-        readonly bar: number;
-        readonly step: number;
-    };
-    readonly duration: number;
-    readonly pitch: number;
-    readonly velocity: number;
+    readonly timing: ITiming;
+    readonly track: ISbDmTrack;
+    polyrhythm?: IPolyrhythm;
+
+    /** Reference to related structures. If unassigned it means this note is a rest. */
+    noteStyle?: INoteStyle;
 }
 
 export interface ISbDmInstrumentImage {
@@ -115,29 +155,68 @@ export interface ISbDmInstrumentImage {
 
     readonly id: number;
     readonly filePath: string;
-    readonly mimeType: string;
-    readonly width?: number;
-    readonly height?: number;
-    readonly fileSize?: number;
 }
 
-export interface ISbDmInstrument extends ISbDmCommon {
+export interface ISbDmInstrument extends ISbDmVisual, ISubscribable {
     readonly type: SbDmEntityType.Instrument;
+
+    /** The type identifier of this instrument. It corresponds to a specific instrument class (Agogo, Repinique etc). */
+    readonly typeId: string;
+
+    /** The relative URL path to the image associated with this instrument. */
     readonly image: ISbDmInstrumentImage;
+
+    /** A number indicating the display order of this instrument. */
+    readonly displayOrder: number;
+
+    /** The display name of this instrument. */
+    readonly displayName: string;
+
+    /**
+     * The colour group of this instrument.
+     * TODO: the group should be described by an own entity.
+     */
+    readonly colourGroup: string; // blue, purple, green, orange, or yellow
+
+    /** The relative URL path to the audio file associated with this instrument. */
     readonly audioPath: string;
+
+    /** Start end and position in the audio file. */
     readonly range: [number, number];
+
+    /** Note styles available for this instrument. */
+    readonly noteStyles: Record<string, INoteStyle>;
+
+    readonly noteStyleCount: number;
 }
 
-export interface ISbDmArrangement extends ISbDmCommon {
+export interface ISbDmTimeParams extends ITimeParamsView {
+    timeSignature: string;
+    tempo: number;
+    length: number;
+    pulse: string;
+    stepResolution: number;
+}
+
+export interface ISbDmArrangement extends ISbDmCommon, ISubscribable {
     readonly type: SbDmEntityType.Arrangement;
-    tracks: ISbDmTrack[];
+    readonly title: string;
+    readonly timeParams: ISbDmTimeParams;
+    readonly tracks: ISbDmTrack[];
+
+    addTrack(instrument: ISbDmInstrument, id?: number): ISbDmTrack;
+    removeTrack(track: ISbDmTrack): void;
+
+    applyArrangementSnapshot(arrangementSnapshot: IArrangementSnapshot, instruments: ISbDmInstrument[]): void;
 }
 
 interface IScoreBookDataModelData {
     soundLib: Array<ISbDmSoundFolder | ISbDmSoundFile>;
     scoreLib: Array<ISbDmScoreFolder | ISbDmScore>;
-    tracks: ISbDmTrack[];
     instruments: ISbDmInstrument[];
+
+    /** The current arrangement being edited or viewed. */
+    arrangement?: ISbDmArrangement;
 }
 
 /** All possible data model entry types. */
@@ -148,23 +227,27 @@ export type ScoreBookDataModelEntry =
     | ISbDmScore
     | ISbDmTrack
     | ISbDmInstrument
+    | ISbDmArrangement
+    | ISbDmNote
+    | ISbDmInstrumentImage
     ;
 
 /**
  * A data model to share score book data between components.
  */
-export class ScoreBookDataModel {
+export class ScoreBookDataModel extends Publisher {
     private data: IScoreBookDataModelData = {
         soundLib: [],
         scoreLib: [],
-        tracks: [],
         instruments: [],
+        arrangement: undefined,
     };
 
     public async initialize(): Promise<void> {
         const promises: Array<Promise<void>> = [
             this.loadSoundLib(),
-            this.updateScoreLibFolder(this.data.scoreLib, -1)
+            this.loadInstruments(),
+            this.updateScoreLibFolder(this.data.scoreLib, -1),
         ];
 
         await Promise.all(promises);
@@ -178,6 +261,24 @@ export class ScoreBookDataModel {
 
     public get scoreLib(): Array<ISbDmScoreFolder | ISbDmScore> {
         return this.data.scoreLib;
+    }
+
+    public get instruments(): ISbDmInstrument[] {
+        return this.data.instruments;
+    }
+
+    public get arrangement(): ISbDmArrangement | undefined {
+        return this.data.arrangement;
+    }
+
+    public loadArrangement(serializedArrangement: ISerialisedArrangement): ISbDmArrangement {
+        this.data.arrangement = Arrangement.fromSerialized(
+            serializedArrangement,
+            this.data.instruments
+        );
+        this.publish();
+
+        return this.data.arrangement;
     }
 
     /**
@@ -224,6 +325,18 @@ export class ScoreBookDataModel {
     }
 
     /**
+     * Retrieves an instrument by its ID.
+     *
+     * @param id The ID of the instrument.
+     * @returns The instrument if found, otherwise undefined.
+     */
+    public getInstrument(id: number | string): ISbDmInstrument | undefined {
+        return this.data.instruments.find((inst) => {
+            return inst.id === id;
+        });
+    }
+
+    /**
      * Loads the entire sound library from the server and populates the sound lib data model part.
      *
      * @returns A promise that resolves once loading is complete.
@@ -251,7 +364,7 @@ export class ScoreBookDataModel {
                 nodes.forEach((node) => {
                     if (node.isDir) {
                         const folder: ISbDmSoundFolder = {
-                            id: getNextId(),
+                            id: getNewId(),
                             name: node.name,
                             type: SbDmEntityType.SoundFolder,
                             parentId,
@@ -272,7 +385,7 @@ export class ScoreBookDataModel {
                     } else {
                         const soundFile: ISbDmSoundFile = {
                             type: SbDmEntityType.SoundFile,
-                            id: getNextId(),
+                            id: getNewId(),
                             name: node.name,
                         };
                         parentList.push(soundFile);
@@ -280,11 +393,21 @@ export class ScoreBookDataModel {
                 });
             };
 
-            processNodes(data, this.data.soundLib, getNextId());
+            processNodes(data, this.data.soundLib, getNewId());
 
             resolve();
         });
     }
+
+    private loadInstruments(): Promise<void> {
+        this.data.instruments = [];
+
+        bateriaInstruments.forEach((packedInstrument) => {
+            this.data.instruments.push(new Instrument(packedInstrument));
+        });
+
+        return Promise.resolve();
+    };
 
     private async updateScoreLibFolder(list: Array<ISbDmScoreFolder | ISbDmScore>, folderId: number): Promise<void> {
         const res = await fetch(`${this.getApiBase()}/api.php?action=listScoreFolderContent`, {
@@ -338,7 +461,6 @@ export class ScoreBookDataModel {
     }
 
     private getSoundUrl(path: string): string {
-        // Pfad anpassen, falls nötig
         const base = this.getApiBase();
 
         return `${base}/soundLib/${path}`;
@@ -359,5 +481,4 @@ export class ScoreBookDataModel {
         // In production: use the same server as the app is served from.
         return "";
     };
-
 }

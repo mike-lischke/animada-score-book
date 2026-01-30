@@ -5,10 +5,11 @@
 
 import type { ContextType } from "preact";
 
-import type { IArrangementView, ITrackView, Subscription } from "../../../core/types/general.js";
+import type { ISbDmTrack } from "../../../core/ScoreBookDataModel.js";
+import type { IArrangementView, Subscription } from "../../../core/types/general.js";
 import { useEditCommand } from "../../../ui/hooks/useEditCommand.js";
-import { UIComponent } from "../framework/UIComponent.js";
 import { ExpandingSpacer } from "../ExpandingSpacer.js";
+import { UIComponent } from "../framework/UIComponent.js";
 import { Overlay } from "../Overlay.js";
 import { ServicesContext } from "../ScoreBookViewer.js";
 import { SmallSpacer } from "../SmallSpacer.js";
@@ -20,7 +21,7 @@ interface IArrangementControlsBottomState {
 
 export class ArrangementControlsBottom extends UIComponent<{}, IArrangementControlsBottomState> {
     private arrangementSubscription?: Subscription;
-    private subscribedTracks = new Set<ITrackView>();
+    private subscribedTracks = new Set<ISbDmTrack>();
 
     private arrangementPlayerContext?: ContextType<typeof ArrangementPlayerContext>;
     private servicesContext?: ContextType<typeof ServicesContext>;

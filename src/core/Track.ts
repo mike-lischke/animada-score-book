@@ -5,13 +5,20 @@
 
 import { Note } from "./Note.js";
 import { Publisher } from "./Publisher.js";
+import {
+    SbDmEntityType, type ISbDmArrangement, type ISbDmInstrument, type ISbDmNote, type ISbDmTrack,
+    type ITiming
+} from "./ScoreBookDataModel.js";
 import { TrackClipboard } from "./TrackClipboard.js";
-import type { IArrangement, IInstrument, INote, IPolyrhythm, ITiming, ITrack } from "./types/general.js";
+import type { IPolyrhythm } from "./types/general.js";
 import { exists, getNewId, isSameTiming } from "./utils.js";
 
-export class Track extends Publisher implements ITrack {
-    public readonly notes: INote[] = [];
+export class Track extends Publisher implements ISbDmTrack {
+    public readonly type = SbDmEntityType.Track;
+    public readonly notes: ISbDmNote[] = [];
     public readonly polyrhythms: IPolyrhythm[] = [];
+    public name = "";
+    public volume = 1.0;
 
     /**
      * Creates a new `Track` bound to an arrangement and instrument.
@@ -23,13 +30,13 @@ export class Track extends Publisher implements ITrack {
      * @param instrument The instrument assigned to this track.
      * @param id Optional explicit track id; if omitted a new id is generated.
      */
-    public constructor(public readonly arrangement: IArrangement, public readonly instrument: IInstrument,
+    public constructor(public readonly arrangement: ISbDmArrangement, public readonly instrument: ISbDmInstrument,
         public readonly id = getNewId()) {
         super();
 
         this.arrangement = arrangement;
 
-        // Initialise all Notes as rests
+        // Initialise all Notes as rests.
         this.arrangement.timeParams.timings.forEach((timing) => {
             this.notes.push(new Note(this, timing));
         });
@@ -44,7 +51,7 @@ export class Track extends Publisher implements ITrack {
      * @param timing The timing to search for.
      * @returns The note at the timing or undefined if none exists.
      */
-    public getNoteAt(timing: ITiming): INote | undefined {
+    public getNoteAt(timing: ITiming): ISbDmNote | undefined {
         for (const note of this.notes) {
             if (isSameTiming(note.timing, timing)) {
                 return note;
@@ -77,7 +84,7 @@ export class Track extends Publisher implements ITrack {
      * @param id Optional explicit polyrhythm id, otherwise a new id is generated.
      * @param index Optional insertion index; if omitted the polyrhythm is appended.
      */
-    public addPolyrhythm(start: INote, end: INote, length: number, id: number = getNewId(), index?: number) {
+    public addPolyrhythm(start: ISbDmNote, end: ISbDmNote, length: number, id: number = getNewId(), index?: number) {
         if (length < 1) {
             return;
         }
@@ -212,7 +219,7 @@ export class Track extends Publisher implements ITrack {
     public *getNoteIterator(polyrhythmsToIgnore: IPolyrhythm[] = []) {
         let index = 0;
         let currentNoteSource = this.notes;
-        let note = currentNoteSource[index] as (INote | undefined);
+        let note = currentNoteSource[index] as (ISbDmNote | undefined);
 
         while (note) {
             // First, ascend polyrhythms until we reach a visible note

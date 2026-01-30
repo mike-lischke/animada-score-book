@@ -4,9 +4,10 @@
  */
 
 import { Publisher } from "../core/Publisher.js";
-import type { INoteView, IPolyrhythmView, ITrackView, RealTime } from "../core/types/general.js";
+import type { ISbDmNote, ISbDmTrack, RealTime } from "../core/ScoreBookDataModel.js";
+import type { IPolyrhythm } from "../core/types/general.js";
 import { getMuteEvents } from "./Muting.js";
-import { ICallbackEvent, Event, IInterval, SoloMute, ITimeCoordinator, ITrackPlayer } from "./types.js";
+import { Event, ICallbackEvent, IInterval, ITimeCoordinator, ITrackPlayer, SoloMute } from "./types.js";
 
 /**
  * Coordinates playback for a single track (`ITrackView`).
@@ -19,14 +20,14 @@ import { ICallbackEvent, Event, IInterval, SoloMute, ITimeCoordinator, ITrackPla
  * - Provides a robust lifecycle via `onStop()` and `dispose()`.
  */
 export class TrackPlayer extends Publisher implements ITrackPlayer {
-    public readonly track: ITrackView;
+    public readonly track: ISbDmTrack;
     /** Publishes when the current polyrhythm note changes (for UI highlighting). */
     public readonly currentPolyrhythmNotePublisher: Publisher = new Publisher();
     private readonly timeCoordinator: ITimeCoordinator;
 
-    private readonly noteTimes = new Map<INoteView, RealTime>();
-    private cachedPolyrhythms: IPolyrhythmView[] = [];
-    private _currentPolyrhythmNote: INoteView | null = null;
+    private readonly noteTimes = new Map<ISbDmNote, RealTime>();
+    private cachedPolyrhythms: IPolyrhythm[] = [];
+    private _currentPolyrhythmNote: ISbDmNote | null = null;
 
     private currentSoloMute: SoloMute = null;
     private disposed = false;
@@ -43,13 +44,13 @@ export class TrackPlayer extends Publisher implements ITrackPlayer {
      * @param track The track view to observe and play.
      * @param timeCoordinator Converts score timings to real-time and provides loop/length context.
      */
-    public constructor(track: ITrackView, timeCoordinator: ITimeCoordinator) {
+    public constructor(track: ISbDmTrack, timeCoordinator: ITimeCoordinator) {
         super();
         this.track = track;
         this.timeCoordinator = timeCoordinator;
 
         // Initial note timing setup depending on instrument load state.
-        if (this.track.instrument.loaded) {
+        if (this.track.instrument.state.initialized) {
             this.fillInBasicNoteTimes();
             this.handleNewPolyrhythms();
         } else {
@@ -95,9 +96,9 @@ export class TrackPlayer extends Publisher implements ITrackPlayer {
     /**
      * The note currently playing inside a polyrhythm, or `null` if none.
      *
-     * @returns {INoteView | null} The current polyrhythm note, if any.
+     * @returns The current polyrhythm note, if any.
      */
-    public get currentPolyrhythmNote(): INoteView | null {
+    public get currentPolyrhythmNote(): ISbDmNote | null {
         return this._currentPolyrhythmNote;
     }
 
@@ -111,7 +112,7 @@ export class TrackPlayer extends Publisher implements ITrackPlayer {
      * @returns {Event[]} Events occurring within the interval, ordered by time.
      */
     public getEvents = ({ start, end }: IInterval): Event[] => {
-        if (this.disposed || !this.track.instrument.loaded) {
+        if (this.disposed || !this.track.instrument.state.initialized) {
             return [];
         }
 
@@ -228,11 +229,11 @@ export class TrackPlayer extends Publisher implements ITrackPlayer {
     /**
      * Builds an audio event for a given note at the provided real-time position.
      *
-     * @param {INoteView} note The note to play.
-     * @param {RealTime} realTime The real-time position of the note.
-     * @returns {Event} An audio event for the note.
+     * @param note The note to play.
+     * @param realTime The real-time position of the note.
+     * @returns An audio event for the note.
      */
-    private getAudioEvent = (note: INoteView, realTime: RealTime): Event => {
+    private getAudioEvent = (note: ISbDmNote, realTime: RealTime): Event => {
         return {
             note,
             realTime,
@@ -270,7 +271,7 @@ export class TrackPlayer extends Publisher implements ITrackPlayer {
      *
      * @param polyrhythm The polyrhythm whose notes should receive real-time positions.
      */
-    private addNoteTimesForPolyrhythm = (polyrhythm: IPolyrhythmView): void => {
+    private addNoteTimesForPolyrhythm = (polyrhythm: IPolyrhythm): void => {
         const startTime = this.noteTimes.get(polyrhythm.start)!;
 
         // We need to find the note just after the polyrhythm ends to work out its time-length
@@ -279,7 +280,7 @@ export class TrackPlayer extends Publisher implements ITrackPlayer {
         // So we exclude later polyrhythms from the iterator
         const laterPolyrhythms = this.track.polyrhythms.slice(this.track.polyrhythms.indexOf(polyrhythm) + 1);
         const noteIterator = this.track.getNoteIterator(laterPolyrhythms);
-        let nextNote: INoteView | undefined;
+        let nextNote: ISbDmNote | undefined;
         let foundPolyrhythm = false;
         for (const note of noteIterator) {
             if (foundPolyrhythm) {
@@ -321,7 +322,7 @@ export class TrackPlayer extends Publisher implements ITrackPlayer {
      * @param {RealTime} realTime The real-time position at which the callback occurs.
      * @returns {ICallbackEvent} A callback event for updating UI state.
      */
-    private getCurrentPolyrhythmNoteEvent = (note: INoteView, realTime: RealTime): ICallbackEvent => {
+    private getCurrentPolyrhythmNoteEvent = (note: ISbDmNote, realTime: RealTime): ICallbackEvent => {
         if (note.polyrhythm) {
             return {
                 realTime,

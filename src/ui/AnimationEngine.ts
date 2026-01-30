@@ -4,7 +4,8 @@
 */
 
 import { Publisher } from "../core/Publisher.js";
-import type { ISubscribable, RealTime } from "../core/types/general.js";
+import type { RealTime } from "../core/ScoreBookDataModel.js";
+import type { ISubscribable } from "../core/types/general.js";
 import type { IEventEngine, EventEngineState } from "../player/types.js";
 
 export class AnimationEngine implements ISubscribable {

@@ -5,7 +5,8 @@
 
 import type { ComponentChild, ContextType } from "preact";
 
-import type { INoteStyle, INoteView, ISubscribable } from "../../../core/types/general.js";
+import type { ISbDmNote } from "../../../core/ScoreBookDataModel.js";
+import type { INoteStyle, ISubscribable } from "../../../core/types/general.js";
 import { isSameTiming } from "../../../core/utils.js";
 import { AudioBufferPlayer } from "../../../player/AudioBufferPlayer.js";
 import { getTrackColour } from "../../../ui/track-colour.js";
@@ -20,7 +21,7 @@ const audioContext = new AudioContext();
 const baseNoteClasses = "note-viewer note-width";
 
 export interface INoteViewerProps extends ICommonUIProperties {
-    note: INoteView;
+    note: ISbDmNote;
 }
 
 interface INoteViewerState {
@@ -302,13 +303,13 @@ export class NoteViewer extends UIComponent<INoteViewerProps, INoteViewerState> 
         if (noteStyle?.audioBuffer) {
             // Play a preview of the selected note style.
             // Default start time (0) is fine here.
-            // eslint-disable-next-line @typescript-eslint/no-unused-vars
+            // eslint-disable-next-line @typescript-eslint/naming-convention
             const _player = new AudioBufferPlayer(noteStyle.audioBuffer, audioContext);
             void audioContext.resume();
         }
     }
 
-    private getNextNoteStyle(note: INoteView): INoteStyle | undefined {
+    private getNextNoteStyle(note: ISbDmNote): INoteStyle | undefined {
         const noteStyles = note.track.instrument.noteStyles;
         const noteStyleIds = Object.keys(noteStyles);
         if (!note.noteStyle) {

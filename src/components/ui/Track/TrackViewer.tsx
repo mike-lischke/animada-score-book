@@ -13,7 +13,7 @@ import { NoteLine } from "./NoteLine.js";
 import { TrackControls } from "./TrackControls.js";
 import { TrackMeta } from "./TrackMeta.js";
 
-export interface TrackViewerCallbacks {
+export interface ITrackViewerCallbacks {
     noteLineTouchStart?: (event: TouchEvent) => void;
     noteLineTouchMove?: (event: TouchEvent) => void;
     noteLineTouchEnd?: () => void;
@@ -21,7 +21,7 @@ export interface TrackViewerCallbacks {
 
 export interface ITrackViewerProps extends ICommonUIProperties {
     trackPlayer: ITrackPlayer;
-    callbacks: TrackViewerCallbacks;
+    callbacks: ITrackViewerCallbacks;
 }
 
 interface ITrackviewerState {
@@ -40,7 +40,7 @@ export class TrackViewer extends UIComponent<ITrackViewerProps, ITrackviewerStat
         const track = props.trackPlayer.track;
         this.state = {
             audible: false,
-            loaded: track.instrument.loaded,
+            loaded: track.instrument.state.initialized,
         };
     }
 
@@ -109,7 +109,7 @@ export class TrackViewer extends UIComponent<ITrackViewerProps, ITrackviewerStat
     private instrumentsChanged = () => {
         const { trackPlayer } = this.props;
         const track = trackPlayer.track;
-        this.setState({ loaded: track.instrument.loaded });
+        this.setState({ loaded: track.instrument.state.initialized });
     };
 
     private useContext = (arrangementPlayerContext: IArrangementPlayer | null) => {

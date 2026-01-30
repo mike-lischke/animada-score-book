@@ -5,11 +5,12 @@
 
 import type { ComponentChild } from "preact";
 
+import type { ITiming } from "../../../core/ScoreBookDataModel.js";
+import type { ITimeParamsView } from "../../../core/types/general.js";
 import { ArrangementPlayerContext } from "../Arrangement/ArrangementViewer.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
 import { NoteViewer } from "../Note/NoteViewer.js";
 import { BarDivisibilityContext, type BarDivisibility } from "./GuideRail.js";
-import type { ITimeParamsView, ITiming } from "../../../core/types/general.js";
 
 export interface ITimingViewerProps extends ICommonUIProperties {
     timing: ITiming;

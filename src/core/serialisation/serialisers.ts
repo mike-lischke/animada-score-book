@@ -3,7 +3,6 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import { getNoteStyleCount } from "../Library.js";
 import type { IArrangementSnapshot, ISerialisedArrangement, ITrackSnapshot } from "../types/snapshots.js";
 import { polyrhythmCharacterToNumber, serialisationVersion, urlCharacterToNumber } from "./constants.js";
 import { interpretAsBaseN, urlEncodeNumber } from "./numeric_functions.js";
@@ -42,7 +41,7 @@ const serialiseNotes = (trackSnapshot: ITrackSnapshot): string => {
     const notesStylesAsNumbers = trackSnapshot.notes.map((noteChar) => {
         return urlCharacterToNumber[noteChar];
     });
-    const base = BigInt(getNoteStyleCount(trackSnapshot.instrumentId));
+    const base = 2n; // XXX BigInt(getNoteStyleCount(trackSnapshot.instrumentId));
     const notesAsNumber = interpretAsBaseN(notesStylesAsNumbers, base);
 
     return urlEncodeNumber(notesAsNumber);

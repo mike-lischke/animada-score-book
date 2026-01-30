@@ -3,7 +3,7 @@
 * Licensed under the MIT License. See License.txt in the project root for license information.
 */
 
-import type { ITrackView } from "../core/types/general.js";
+import type { ISbDmTrack } from "../core/ScoreBookDataModel.js";
 
 /* eslint-disable prefer-arrow/prefer-arrow-functions, jsdoc/require-jsdoc */
 
@@ -13,7 +13,7 @@ const colourCount: Record<ColourGroup, number> = { blue: 0, purple: 0, green: 0,
 const trackColourMap: Record<number, string> = {};
 
 // Return a hsl() colour value
-export function getTrackColour(track: ITrackView): string {
+export function getTrackColour(track: ISbDmTrack): string {
     if (!trackColourMap[track.id]) {
         const colourGroup = track.instrument.colourGroup as ColourGroup;
         trackColourMap[track.id] = allColours[colourGroup][colourCount[colourGroup] % allColours[colourGroup].length];

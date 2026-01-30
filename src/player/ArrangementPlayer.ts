@@ -4,7 +4,8 @@
  */
 
 import { Publisher } from "../core/Publisher.js";
-import type { IArrangementView, ITiming, ITrackView, RealTime } from "../core/types/general.js";
+import type { ISbDmTrack, ITiming, RealTime } from "../core/ScoreBookDataModel.js";
+import type { IArrangementView } from "../core/types/general.js";
 import { TimeCoordinator } from "./TimeCoordinator.js";
 import { TrackPlayer } from "./TrackPlayer.js";
 import { Event, IArrangementPlayer, ICallbackEvent, IInterval, ILoopInterval, ITrackPlayer } from "./types.js";
@@ -21,8 +22,8 @@ import { Event, IArrangementPlayer, ICallbackEvent, IInterval, ILoopInterval, IT
 export class ArrangementPlayer extends Publisher implements IArrangementPlayer {
     public readonly arrangement: IArrangementView;
 
-    public readonly trackPlayers: Map<ITrackView, ITrackPlayer> = new Map<ITrackView, ITrackPlayer>();
-    public readonly audibleTrackPlayers: Map<ITrackView, ITrackPlayer> = new Map<ITrackView, ITrackPlayer>();
+    public readonly trackPlayers: Map<ISbDmTrack, ITrackPlayer> = new Map<ISbDmTrack, ITrackPlayer>();
+    public readonly audibleTrackPlayers: Map<ISbDmTrack, ITrackPlayer> = new Map<ISbDmTrack, ITrackPlayer>();
 
     public readonly currentTimingPublisher: Publisher = new Publisher();
     public readonly audibleTrackPlayersPublisher: Publisher = new Publisher();
@@ -256,7 +257,7 @@ export class ArrangementPlayer extends Publisher implements IArrangementPlayer {
      * @param trackPlayers The complete set of track players to consider.
      * @returns The list of audible track players in their current state.
      */
-    private calculateAudibleTrackPlayers(trackPlayers: Map<ITrackView, ITrackPlayer>): ITrackPlayer[] {
+    private calculateAudibleTrackPlayers(trackPlayers: Map<ISbDmTrack, ITrackPlayer>): ITrackPlayer[] {
         const soloedTracksPlayers: ITrackPlayer[] = [];
         const unmutedTracksPlayers: ITrackPlayer[] = [];
 

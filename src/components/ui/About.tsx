@@ -14,12 +14,12 @@ import { Container } from "./framework/Container.js";
 import { Label } from "./framework/Label.js";
 import { ChildAlignment, Orientation } from "./framework/ui-types.js";
 
-interface AboutState {
+interface IAboutState {
     errorReportIsVisibile: boolean;
     errorCount: number;
 
 }
-export class About extends UIComponent<{}, AboutState> {
+export class About extends UIComponent<{}, IAboutState> {
     public constructor(props: {}) {
         super(props);
 

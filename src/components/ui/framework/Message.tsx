@@ -5,8 +5,8 @@
 
 import type { ComponentChild } from "preact";
 
-import { UIComponent, type ICommonUIProperties } from "./framework/UIComponent.js";
-import type { MessageType } from "./framework/ui-types.js";
+import { UIComponent, type ICommonUIProperties } from "./UIComponent.js";
+import type { MessageType } from "./ui-types.js";
 
 interface IMessageProperties extends ICommonUIProperties {
     messageType: MessageType;

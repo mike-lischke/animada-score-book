@@ -4,7 +4,7 @@
  */
 
 import { Publisher } from "./Publisher.js";
-import type { ITimeParams, ITiming } from "./types/general.js";
+import type { ISbDmTimeParams, ITiming } from "./ScoreBookDataModel.js";
 import { calculateStepsPerBar } from "./utils.js";
 
 /**
@@ -13,7 +13,7 @@ import { calculateStepsPerBar } from "./utils.js";
  * Maintains a derived list of `timings` covering every step of every bar,
  * updated whenever any parameter changes (time signature, tempo, length, pulse, resolution).
  */
-export class TimeParams extends Publisher implements ITimeParams {
+export class TimeParams extends Publisher implements ISbDmTimeParams {
     /** All valid timings for the current configuration (bar/step pairs). */
     public readonly timings: ITiming[] = [];
 

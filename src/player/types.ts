@@ -3,9 +3,8 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import type {
-    IArrangementView, INoteView, ISubscribable, ITiming, ITrackView, RealTime
-} from "../core/types/general.js";
+import type { ISbDmNote, ISbDmTrack, ITiming, RealTime } from "../core/ScoreBookDataModel.js";
+import type { IArrangementView, ISubscribable } from "../core/types/general.js";
 
 export interface IEventEngine extends ISubscribable {
     connect(eventSource: IEventSource): void;
@@ -24,7 +23,7 @@ export interface IEventDetails {
 
 export interface IAudioEvent extends IEventDetails {
     audioBuffer: AudioBuffer;
-    note: INoteView; // In the future, this could be a more general "source" property
+    note: ISbDmNote; // In the future, this could be a more general "source" property
 }
 
 export interface ICallbackEvent extends IEventDetails {
@@ -45,20 +44,20 @@ export interface IEventSource {
 
 export interface IArrangementPlayer extends IEventSource, ISubscribable {
     arrangement: IArrangementView;
-    trackPlayers: Map<ITrackView, ITrackPlayer>;
+    trackPlayers: Map<ISbDmTrack, ITrackPlayer>;
     get currentTiming(): ITiming | null;
     currentTimingPublisher: ISubscribable;
     convertToLoopProgress(realTime: RealTime): number;
-    audibleTrackPlayers: Map<ITrackView, ITrackPlayer>;
+    audibleTrackPlayers: Map<ISbDmTrack, ITrackPlayer>;
     audibleTrackPlayersPublisher: ISubscribable;
     dispose(): void;
 }
 
 export interface ITrackPlayer extends IEventSource, ISubscribable {
-    track: ITrackView;
+    track: ISbDmTrack;
     soloMute: SoloMute;
     currentPolyrhythmNotePublisher: ISubscribable;
-    readonly currentPolyrhythmNote: INoteView | null;
+    readonly currentPolyrhythmNote: ISbDmNote | null;
     dispose(): void;
 }
 

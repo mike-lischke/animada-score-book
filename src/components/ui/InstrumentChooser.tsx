@@ -5,14 +5,14 @@
 
 import type { ComponentChild, ContextType } from "preact";
 
-import { getLibrary } from "../../core/Library.js";
-import type { IArrangementView, IInstrumentMeta } from "../../core/types/general.js";
+import type { ISbDmInstrument } from "../../core/ScoreBookDataModel.js";
+import type { IArrangementView } from "../../core/types/general.js";
 import { ArrangementPlayerContext } from "./Arrangement/ArrangementViewer.js";
 import { UIComponent, type ICommonUIProperties } from "./framework/UIComponent.js";
 import { AnimadaScoreBookContext } from "./ScoreBookViewer.js";
 
 export interface IInstrumentChooserProps extends ICommonUIProperties {
-    instrumentMeta: IInstrumentMeta;
+    instrument: ISbDmInstrument;
     close: () => void;
 }
 
@@ -20,7 +20,7 @@ export class InstrumentChooser extends UIComponent<IInstrumentChooserProps> {
     private scoreBookContext?: ContextType<typeof AnimadaScoreBookContext>;
 
     public render(): ComponentChild {
-        const { instrumentMeta } = this.props;
+        const { instrument } = this.props;
 
         return (
             <AnimadaScoreBookContext.Consumer>
@@ -37,7 +37,7 @@ export class InstrumentChooser extends UIComponent<IInstrumentChooserProps> {
                                         className="instrument-chooser push-button"
                                         onClick={this.buttonClick.bind(this, arrangement)}
                                     >
-                                        {instrumentMeta.displayName}
+                                        {instrument.displayName}
                                     </button>
                                 );
                             }}
@@ -49,11 +49,12 @@ export class InstrumentChooser extends UIComponent<IInstrumentChooserProps> {
     }
 
     private buttonClick(arrangement: IArrangementView) {
-        const { instrumentMeta, close } = this.props;
+        const { instrument, close } = this.props;
 
         this.scoreBookContext?.edit({
-            type: "EditCommand_ArrangementAddTrack", arrangement, addTrack: getLibrary()
-                .getInstrument(instrumentMeta.id)
+            type: "EditCommand_ArrangementAddTrack",
+            arrangement,
+            addTrack: instrument,
         });
 
         close();

@@ -3,16 +3,24 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import type { INote, INoteStyle, IPolyrhythm, ITiming, ITrack } from "./types/general.js";
 import { Publisher } from "./Publisher.js";
+import { SbDmEntityType, type ISbDmNote, type ISbDmTrack, type ITiming } from "./ScoreBookDataModel.js";
+import type { INoteStyle, IPolyrhythm } from "./types/general.js";
+import { getNewId } from "./utils.js";
 
-let noteCount = 0;
+export class Note extends Publisher implements ISbDmNote {
+    public readonly type = SbDmEntityType.Note;
+    public readonly id = getNewId();
+    public readonly state = {
+        initialized: true,
+        isLeaf: true,
+        expanded: false,
+        expandedOnce: false,
+    };
 
-export class Note extends Publisher implements INote {
-    public readonly id = `${++noteCount}`;
-    private style: INoteStyle | undefined;
+    private style?: INoteStyle;
 
-    public constructor(public track: ITrack, public timing: ITiming, public polyrhythm?: IPolyrhythm) {
+    public constructor(public track: ISbDmTrack, public timing: ITiming, public polyrhythm?: IPolyrhythm) {
         super();
     }
 

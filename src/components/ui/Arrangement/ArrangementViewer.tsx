@@ -7,7 +7,7 @@ import { createContext, createRef, type JSX } from "preact";
 import type { MutableRefObject } from "preact/compat";
 
 import { Publisher } from "../../../core/Publisher.js";
-import type { ITimeParamsView, RealTime, Subscription } from "../../../core/types/general.js";
+import type { ITimeParamsView, Subscription } from "../../../core/types/general.js";
 import type { IArrangementPlayer } from "../../../player/types.js";
 import type { AnimationEngine } from "../../../ui/AnimationEngine.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
@@ -19,6 +19,7 @@ import { Share } from "../Share.js";
 import { TrackViewer } from "../Track/TrackViewer.js";
 import { ArrangementControlsBottom } from "./ArrangementControlsBottom.js";
 import { ArrangementControlsTop } from "./ArrangementControlsTop.js";
+import type { RealTime } from "../../../core/ScoreBookDataModel.js";
 
 const baseNoteWidth = 55.5; // 54pt flex-basis + 1.5pt for border
 

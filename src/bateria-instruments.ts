@@ -33,7 +33,8 @@ import highSurdoIcon from "./assets/images/instrument-icons/high surdo.svg";
 import type { IPackedInstrument } from "./core/types/general.js";
 
 export const bateriaInstruments: IPackedInstrument[] = [{
-    id: "0",
+    id: 0,
+    typeId: "0",
     icon: agogo2Icon,
     displayOrder: 0,
     displayName: "Agogo",
@@ -57,7 +58,8 @@ export const bateriaInstruments: IPackedInstrument[] = [{
     ],
     colourGroup: "yellow"
 }, {
-    id: "a",
+    id: 10,
+    typeId: "a",
     icon: agogo4Icon,
     displayOrder: 1,
     displayName: "4-Bell Agogo",
@@ -97,7 +99,8 @@ export const bateriaInstruments: IPackedInstrument[] = [{
     ],
     colourGroup: "yellow"
 }, {
-    id: "1",
+    id: 1,
+    typeId: "1",
     icon: chocalhoIcon,
     displayOrder: 2,
     displayName: "Chocalho",
@@ -121,7 +124,8 @@ export const bateriaInstruments: IPackedInstrument[] = [{
     ],
     colourGroup: "yellow"
 }, {
-    id: "2",
+    id: 2,
+    typeId: "2",
     icon: tamborimIcon,
     displayOrder: 3,
     displayName: "Tamborim",
@@ -145,7 +149,8 @@ export const bateriaInstruments: IPackedInstrument[] = [{
     ],
     colourGroup: "orange"
 }, {
-    id: "3",
+    id: 3,
+    typeId: "3",
     icon: repiStickIcon,
     displayOrder: 4,
     displayName: "Repinique",
@@ -209,7 +214,8 @@ export const bateriaInstruments: IPackedInstrument[] = [{
     ],
     colourGroup: "orange"
 }, {
-    id: "4",
+    id: 4,
+    typeId: "4",
     icon: repiWithWhippiesIcon,
     displayOrder: 5,
     displayName: "Repinique (Whippy Sticks)",
@@ -233,7 +239,8 @@ export const bateriaInstruments: IPackedInstrument[] = [{
     ],
     colourGroup: "orange"
 }, {
-    id: "5",
+    id: 5,
+    typeId: "5",
     icon: caixaIcon,
     displayOrder: 6,
     displayName: "Caixa",
@@ -273,7 +280,8 @@ export const bateriaInstruments: IPackedInstrument[] = [{
     ],
     colourGroup: "green"
 }, {
-    id: "6",
+    id: 6,
+    typeId: "6",
     icon: timbauIcon,
     displayOrder: 7,
     displayName: "Timbau",
@@ -305,7 +313,8 @@ export const bateriaInstruments: IPackedInstrument[] = [{
     ],
     colourGroup: "blue"
 }, {
-    id: "7",
+    id: 7,
+    typeId: "7",
     icon: highSurdoIcon,
     displayOrder: 8,
     displayName: "High Surdo",
@@ -331,7 +340,8 @@ export const bateriaInstruments: IPackedInstrument[] = [{
     ],
     colourGroup: "purple"
 }, {
-    id: "8",
+    id: 8,
+    typeId: "8",
     icon: midSurdoIcon,
     displayOrder: 9,
     displayName: "Mid Surdo",
@@ -357,7 +367,8 @@ export const bateriaInstruments: IPackedInstrument[] = [{
     ],
     colourGroup: "purple"
 }, {
-    id: "9",
+    id: 9,
+    typeId: "9",
     icon: lowSurdoIcon,
     displayOrder: 10,
     displayName: "Low Surdo",

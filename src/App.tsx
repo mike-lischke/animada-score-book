@@ -10,8 +10,6 @@ import titleImage from "./assets/images/Animada.svg";
 
 import { createRef } from "preact";
 
-import { bateriaInstruments } from "./bateria-instruments.js";
-
 import { ErrorBoundary } from "./components/ui/ErrorBoundary.js";
 import { Button } from "./components/ui/framework/Button.js";
 import { Container } from "./components/ui/framework/Container.js";
@@ -25,21 +23,20 @@ import { Codicon } from "./components/ui/framework/Codicon.js";
 import { Dialog } from "./components/ui/framework/Dialog/Dialog.js";
 import { Icon } from "./components/ui/framework/Icon.js";
 import { CheckState, Switch } from "./components/ui/framework/Switch/Switch.js";
-import { getLibrary } from "./core/Library.js";
+import { TooltipProvider } from "./components/ui/framework/Tooltip.js";
 import {
     SbDmEntityType, ScoreBookDataModel, type ISbDmScore, type ISbDmScoreFolder
 } from "./core/ScoreBookDataModel.js";
-import { deserialiseArrangement } from "./core/serialisation/deserialisers.js";
 import { getSerialisedArrangementFromParams } from "./core/serialisation/url.js";
-import type { IArrangementSnapshot } from "./core/types/snapshots.js";
+import type { ISerialisedArrangement } from "./core/types/snapshots.js";
 import { AnimadaScoreBookUi } from "./ui/AnimadaScoreBookUi.js";
 import { AppContext } from "./ui/index.js";
 import { ScoreLibrary } from "./ui/ScoreLibrary.js";
-import { TooltipProvider } from "./components/ui/framework/Tooltip.js";
+import { demoSongString } from "./demo-song.js";
 
 interface IAppState {
     ready: boolean;
-    sharedArrangement?: IArrangementSnapshot;
+    serializedArrangement?: ISerialisedArrangement;
 
     theme: "light" | "dark";
 }
@@ -56,16 +53,17 @@ export class App extends UIComponent<{}, IAppState> {
             theme: "light",
         };
 
-        const library = getLibrary();
-        library.load(bateriaInstruments);
+        //const library = getLibrary();
+        //library.load();
     }
 
     public override componentDidMount() {
         void this.dataModel.initialize().then(() => {
-            const sharedArrangement = getSerialisedArrangementFromParams(new URL(window.location.href).searchParams);
+            const serializedArrangement =
+                getSerialisedArrangementFromParams(new URL(window.location.href).searchParams);
             this.setState({
                 ready: true,
-                sharedArrangement: sharedArrangement ? deserialiseArrangement(sharedArrangement) : undefined,
+                serializedArrangement,
             }, () => {
                 const { theme } = this.state;
                 document.body.setAttribute("data-theme", theme);
@@ -74,11 +72,13 @@ export class App extends UIComponent<{}, IAppState> {
     }
 
     public render() {
-        const { ready, sharedArrangement, theme } = this.state;
+        const { ready, serializedArrangement, theme } = this.state;
 
         if (!ready) {
             return <ProgressIndicator />;
         }
+
+        const arrangement = serializedArrangement ?? { composition: demoSongString, version: 2, title: "Demo Song" };
 
         return (
             <AppContext.Provider
@@ -128,7 +128,7 @@ export class App extends UIComponent<{}, IAppState> {
                                 onClick={this.handleInstrumentEditorClick}
                             />
                         </Container>
-                        <AnimadaScoreBookUi currentArrangementSnapshot={sharedArrangement} />
+                        <AnimadaScoreBookUi serializedArrangement={arrangement} />
                     </Container>
                     <Dialog
                         ref={this.scoreLibraryRef}
@@ -184,18 +184,14 @@ export class App extends UIComponent<{}, IAppState> {
 
                 if (data.type === SbDmEntityType.Score) {
                     const params = new URLSearchParams(data.content);
-                    const serialisedArrangement = getSerialisedArrangementFromParams(params);
-                    if (serialisedArrangement) {
-                        const arrangement = deserialiseArrangement(serialisedArrangement);
-                        arrangement.title = data.name;
-                        this.setState({ sharedArrangement: arrangement });
+                    const serializedArrangement = getSerialisedArrangementFromParams(params);
+                    this.setState({ serializedArrangement });
 
-                        return;
-                    }
+                    return;
                 }
 
                 break;
             }
-        }
+        };
     };
 }
