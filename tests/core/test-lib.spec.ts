@@ -6,7 +6,7 @@
 import { describe, it, expect } from "vitest";
 
 import { getUniqueTiming } from "./lib/getUniqueTiming.js";
-import type { ITiming } from "../../src/core/types/general.js";
+import type { ITiming } from "../../src/core/ScoreBookDataModel.js";
 
 describe("Test lib", () => {
     it("getUniqueTiming creates sequential timings", () => {

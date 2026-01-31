@@ -48,6 +48,24 @@ export class Arrangement extends Publisher implements ISbDmArrangement {
     }
 
     /**
+     * For testing only.
+     *
+     * @param snapshot The arrangement snapshot to create the arrangement from.
+     * @param instruments The available instruments.
+     * @returns The created arrangement.
+     */
+    public static fromSnapshot(snapshot: IArrangementSnapshot, instruments: ISbDmInstrument[]): Arrangement {
+        const tps = snapshot.timeParams;
+        const timeParams = new TimeParams(tps.timeSignature, tps.tempo, tps.length, tps.pulse, tps.stepResolution);
+        const arrangement = new Arrangement();
+        arrangement.timeParams = timeParams;
+
+        arrangement.applyArrangementSnapshot(snapshot, instruments);
+
+        return arrangement;
+    }
+
+    /**
      * Adds a track for the given instrument, maintaining display-order sorting.
      *
      * @param instrument The instrument to create a track for.

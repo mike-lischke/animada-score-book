@@ -37,7 +37,7 @@ export class Instrument extends Publisher implements ISbDmInstrument {
     private static readonly soundBasePath = "sounds";
 
     /** Shared audio context used to decode instrument audio buffers. */
-    private static readonly audioCtx: AudioContext = new AudioContext();
+    private static readonly audioCtx = new AudioContext();
 
     public constructor(packedInstrument: IPackedInstrument) {
         super();

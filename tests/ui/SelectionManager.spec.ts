@@ -5,11 +5,16 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { IArrangementView, INoteView, ITrackView } from "../../src/core/types/general.js";
+import {
+    SbDmEntityType, type ISbDmArrangement, type ISbDmNote, type ISbDmTrack
+} from "../../src/core/ScoreBookDataModel.js";
+import type { Mutable } from "../../src/core/types/general.js";
 import { SelectionManager } from "../../src/ui/SelectionManager.js";
 
-const makeArrangement = (tracks: ITrackView[]): IArrangementView => {
-    const arrangement: IArrangementView = {
+const makeArrangement = (tracks: ISbDmTrack[]): ISbDmArrangement => {
+    const arrangement: ISbDmArrangement = {
+        type: SbDmEntityType.Arrangement,
+        id: 1,
         title: "arr",
         tracks,
         timeParams: {
@@ -22,51 +27,58 @@ const makeArrangement = (tracks: ITrackView[]): IArrangementView => {
             isValid: () => {
                 return true;
             },
-            subscribe: () => {
-                /* no-op */
-            },
-            unsubscribe: () => {
-                /* no-op */
-            },
+            subscribe: vi.fn(),
+            unsubscribe: vi.fn(),
         },
-        subscribe: () => {
-            /* no-op */
-        },
-        unsubscribe: () => {
-            /* no-op */
-        },
+        addTrack: vi.fn(),
+        removeTrack: vi.fn(),
+        applyArrangementSnapshot: vi.fn(),
+        subscribe: vi.fn(),
+        unsubscribe: vi.fn(),
     };
 
     return arrangement;
 };
 
-const makeTrack = (notes: INoteView[], arrangement: IArrangementView): ITrackView => {
-    const track: ITrackView = {
+const makeTrack = (notes: Array<Mutable<ISbDmNote>>, arrangement: ISbDmArrangement): ISbDmTrack => {
+    const track: ISbDmTrack = {
+        type: SbDmEntityType.Track,
         id: Math.floor(Math.random() * 1000),
+        name: "track",
+        volume: 1,
         arrangement,
         instrument: {
-            id: "i1",
+            type: SbDmEntityType.Instrument,
+            id: 1,
+            typeId: "inst",
             displayOrder: 0,
             displayName: "inst",
-            icon: "",
+            image: {
+                type: SbDmEntityType.InstrumentImage,
+                id: 1,
+                filePath: "path/to/image.png",
+            },
             colourGroup: "blue",
-            loaded: true,
+            state: {
+                initialized: true,
+                isLeaf: true,
+                expanded: false,
+                expandedOnce: false,
+            },
             noteStyles: {},
-            subscribe: () => {
-                /* no-op */
-            },
-            unsubscribe: () => {
-                /* no-op */
-            },
+            subscribe: vi.fn(),
+            unsubscribe: vi.fn(),
+            audioPath: "path/to/audio",
+            range: [21, 108],
+            noteStyleCount: 1,
         },
         notes,
         polyrhythms: [],
-        subscribe: () => {
-            /* no-op */
-        },
-        unsubscribe: () => {
-            /* no-op */
-        },
+        subscribe: vi.fn(),
+        unsubscribe: vi.fn(),
+        addPolyrhythm: vi.fn(),
+        removePolyrhythm: vi.fn(),
+        clear: vi.fn(),
         getNoteAt: () => {
             return undefined;
         },
@@ -75,7 +87,7 @@ const makeTrack = (notes: INoteView[], arrangement: IArrangementView): ITrackVie
                 yield n;
             }
         }
-    } as unknown as ITrackView;
+    };
 
     notes.forEach((n) => {
         n.track = track;
@@ -84,30 +96,27 @@ const makeTrack = (notes: INoteView[], arrangement: IArrangementView): ITrackVie
     return track;
 };
 
-const makeNote = (id: string): INoteView => {
+const makeNote = (id: number): Mutable<ISbDmNote> => {
     return {
+        type: SbDmEntityType.Note,
         id,
         timing: { bar: 1, step: 1 },
-        track: undefined as unknown as ITrackView,
-        subscribe: () => {
-            /* no-op */
-        },
-        unsubscribe: () => {
-            /* no-op */
-        },
-    } as unknown as INoteView;
+        track: undefined as unknown as ISbDmTrack,
+        subscribe: vi.fn(),
+        unsubscribe: vi.fn(),
+    };
 };
 
 describe("SelectionManager (class)", () => {
     let manager: SelectionManager;
-    let track: ITrackView;
-    let noteA: INoteView;
-    let noteB: INoteView;
+    let track: ISbDmTrack;
+    let noteA: Mutable<ISbDmNote>;
+    let noteB: Mutable<ISbDmNote>;
 
     beforeEach(() => {
-        noteA = makeNote("A");
-        noteB = makeNote("B");
-        const arrangement = makeArrangement([] as ITrackView[]);
+        noteA = makeNote(1);
+        noteB = makeNote(2);
+        const arrangement = makeArrangement([] as ISbDmTrack[]);
         track = makeTrack([noteA, noteB], arrangement);
         arrangement.tracks.push(track);
         manager = new SelectionManager();

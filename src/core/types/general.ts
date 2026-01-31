@@ -121,6 +121,11 @@ export interface IPolyrhythm {
     notes: ISbDmNote[];
 }
 
+/** Make all entries in type T mutable. */
+export type Mutable<T> = {
+    -readonly [P in keyof T]: T[P]
+};
+
 declare global {
     /** Holds the dev server base URL. */
     // eslint-disable-next-line @typescript-eslint/naming-convention

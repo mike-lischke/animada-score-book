@@ -3,7 +3,7 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import { ITiming } from "../../../src/core/types/general.js";
+import type { ITiming } from "../../../src/core/ScoreBookDataModel.js";
 
 let lastTiming: null | ITiming = null;
 

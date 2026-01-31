@@ -3,14 +3,13 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import { describe, it, expect } from "vitest";
-import { vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import type {
-    IArrangementView, INoteStyle, INoteView, IPolyrhythmView, ITrackView, ITiming, RealTime, ITimeParamsView
+    INoteStyle, IPolyrhythm, ITimeParamsView, Mutable
 } from "../../src/core/types/general.js";
 import type {
-    ICallbackEvent, IInterval, ILoopInterval, ITrackPlayer, ITimeCoordinator
+    ICallbackEvent, IInterval, ILoopInterval, ITimeCoordinator, ITrackPlayer
 } from "../../src/player/types.js";
 
 // Simple subscribable helper with publish capability for tests
@@ -98,9 +97,9 @@ vi.mock("../../src/player/TrackPlayer.js", () => {
         public readonly currentPolyrhythmNotePublisher = makeSubscribable();
         public stopped = false;
         private readonly subs = makeSubscribable();
-        public constructor(public track: ITrackView, _tc: ITimeCoordinator) { }
+        public constructor(public track: ISbDmTrack, _tc: ITimeCoordinator) { }
 
-        public get currentPolyrhythmNote(): INoteView | null {
+        public get currentPolyrhythmNote(): ISbDmNote | null {
             return null;
         }
 
@@ -144,10 +143,11 @@ vi.mock("../../src/player/TrackPlayer.js", () => {
 });
 
 // Build simple track/arrangement factories
-const makeNote = (track: ITrackView, timing: ITiming, noteStyle?: INoteStyle,
-    polyrhythm?: IPolyrhythmView): INoteView => {
+const makeNote = (track: ISbDmTrack, timing: ITiming, noteStyle?: INoteStyle,
+    polyrhythm?: IPolyrhythm): ISbDmNote => {
     return {
-        id: `${timing.bar}:${timing.step}`,
+        type: SbDmEntityType.Note,
+        id: getNewId(),
         timing,
         track,
         noteStyle,
@@ -156,7 +156,7 @@ const makeNote = (track: ITrackView, timing: ITiming, noteStyle?: INoteStyle,
     };
 };
 
-const makeArrangement = (trackCount: number): IArrangementView & { _publish: () => void; } => {
+const makeArrangement = (trackCount: number): ISbDmArrangement & { _publish: () => void; } => {
     const arrangementSubs = makeSubscribable();
     const timeParamsSubs = makeSubscribable();
     const timeParams: ITimeParamsView & { _publish: () => void; } = {
@@ -179,22 +179,40 @@ const makeArrangement = (trackCount: number): IArrangementView & { _publish: () 
         }
     };
 
-    const tracks: ITrackView[] = [];
+    const tracks: Array<Mutable<ISbDmTrack>> = [];
     for (let i = 0; i < trackCount; i++) {
         const trackSubs = makeSubscribable();
-        const instrument = {
-            id: `inst-${i}`,
-            loaded: true,
+        const instrument: ISbDmInstrument = {
+            type: SbDmEntityType.Instrument,
+            id: i,
+            state: {
+                initialized: true,
+                isLeaf: true,
+                expanded: false,
+                expandedOnce: false,
+            },
+            noteStyleCount: 0,
+            audioPath: "",
+            range: [21, 108],
+            typeId: `inst${i}`,
             displayOrder: i + 1,
             displayName: `Inst ${i}`,
-            icon: "",
+            image: {
+                type: SbDmEntityType.InstrumentImage,
+                id: i,
+                filePath: `path/to/image${i}.png`,
+            },
             colourGroup: "blue",
             noteStyles: {},
             ...makeSubscribable()
-        } as unknown as ITrackView["instrument"];
-        const track: ITrackView = {
+        };
+
+        const track: ISbDmTrack = {
+            type: SbDmEntityType.Track,
             id: i + 1,
-            arrangement: undefined as unknown as IArrangementView,
+            name: `Track ${i + 1}`,
+            volume: 1,
+            arrangement: undefined as unknown as ISbDmArrangement,
             instrument,
             notes: [],
             polyrhythms: [],
@@ -204,6 +222,9 @@ const makeArrangement = (trackCount: number): IArrangementView & { _publish: () 
             getNoteIterator: function* () {
                 yield* this.notes;
             },
+            addPolyrhythm: vi.fn(),
+            removePolyrhythm: vi.fn(),
+            clear: vi.fn(),
             ...trackSubs
         };
         const noteStyle: INoteStyle = {
@@ -215,10 +236,15 @@ const makeArrangement = (trackCount: number): IArrangementView & { _publish: () 
         tracks.push(track);
     }
 
-    const arrangement: IArrangementView & { _publish: () => void; } = {
+    const arrangement: ISbDmArrangement & { _publish: () => void; } = {
+        type: SbDmEntityType.Arrangement,
+        id: 1,
         title: "Test",
         timeParams,
         tracks,
+        addTrack: vi.fn(),
+        removeTrack: vi.fn(),
+        applyArrangementSnapshot: vi.fn(),
         subscribe: arrangementSubs.subscribe,
         unsubscribe: arrangementSubs.unsubscribe,
         _publish: () => {
@@ -233,7 +259,12 @@ const makeArrangement = (trackCount: number): IArrangementView & { _publish: () 
 };
 
 // Import after mocks
+import {
+    SbDmEntityType, type ISbDmArrangement, type ISbDmInstrument, type ISbDmNote, type ISbDmTrack, type ITiming,
+    type RealTime
+} from "../../src/core/ScoreBookDataModel.js";
 import { ArrangementPlayer } from "../../src/player/ArrangementPlayer.js";
+import { getNewId } from "../../src/core/utils.js";
 
 describe("ArrangementPlayer", () => {
     it("creates track players and computes audible set (no solo)", () => {
@@ -270,8 +301,11 @@ describe("ArrangementPlayer", () => {
 
         // Add a new track and publish arrangement
         const currentInstrument = arrangement.tracks[0].instrument;
-        const newTrack: ITrackView = {
+        const newTrack: ISbDmTrack = {
+            type: SbDmEntityType.Track,
             id: 99,
+            name: "New Track",
+            volume: 1,
             arrangement,
             instrument: currentInstrument,
             notes: arrangement.tracks[0].notes,
@@ -282,6 +316,9 @@ describe("ArrangementPlayer", () => {
             getNoteIterator: function* () {
                 yield* this.notes;
             },
+            addPolyrhythm: vi.fn(),
+            removePolyrhythm: vi.fn(),
+            clear: vi.fn(),
             ...makeSubscribable()
         };
         arrangement.tracks.push(newTrack);

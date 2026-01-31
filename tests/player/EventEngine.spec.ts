@@ -5,11 +5,13 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type {
-    IArrangementView, IInstrument, INoteView, ITimeParamsView, ITiming, ITrackView
-} from "../../src/core/types/general.js";
+import {
+    SbDmEntityType, type ISbDmArrangement, type ISbDmInstrument, type ISbDmNote, type ISbDmTrack, type ITiming
+} from "../../src/core/ScoreBookDataModel.js";
+import type { ITimeParamsView } from "../../src/core/types/general.js";
 import { EventEngine } from "../../src/player/EventEngine.js";
 import type { IAudioEvent, ICallbackEvent, IEventSource, IInterval, IMuteEvent } from "../../src/player/types.js";
+import { AudioContextMock } from "../setup.js";
 
 // Minimal stubs for required types
 const stubTiming: ITiming = { bar: 1, step: 1 };
@@ -28,40 +30,66 @@ const stubTimeParams: ITimeParamsView = {
     unsubscribe: vi.fn(),
 };
 
-const stubArrangement: IArrangementView = {
+const stubArrangement: ISbDmArrangement = {
+    type: SbDmEntityType.Arrangement,
+    id: 1,
     timeParams: stubTimeParams,
     subscribe: vi.fn(),
     unsubscribe: vi.fn(),
     title: "arr",
-    tracks: [] as ITrackView[],
+    tracks: [],
+    addTrack: vi.fn(),
+    removeTrack: vi.fn(),
+    applyArrangementSnapshot: vi.fn(),
 };
 
-const stubInstrument: IInstrument = {
-    id: "1",
+const stubInstrument: ISbDmInstrument = {
+    type: SbDmEntityType.Instrument,
+    id: 1,
+    typeId: "1",
     displayOrder: 0,
     displayName: "instr",
-    icon: "",
+    image: {
+        type: SbDmEntityType.InstrumentImage,
+        id: 1,
+        filePath: "",
+    },
     colourGroup: "blue",
-    loaded: true,
+    state: {
+        initialized: true,
+        isLeaf: true,
+        expanded: false,
+        expandedOnce: false,
+    },
+    audioPath: "",
+    range: [0, 127],
     noteStyles: {},
     subscribe: vi.fn(),
     unsubscribe: vi.fn(),
+    noteStyleCount: 0,
 };
 
-const stubTrack: ITrackView = {
+const stubTrack: ISbDmTrack = {
+    type: SbDmEntityType.Track,
     id: 1,
+    name: "track",
+    volume: 1,
     arrangement: stubArrangement,
     instrument: stubInstrument,
-    notes: [] as INoteView[],
+    notes: [],
     polyrhythms: [],
     subscribe: vi.fn(),
     unsubscribe: vi.fn(),
     getNoteAt: vi.fn(),
     getNoteIterator: vi.fn(),
+    addPolyrhythm: vi.fn(),
+    removePolyrhythm: vi.fn(),
+    clear: vi.fn(),
 };
 
-const stubNote: INoteView = {
-    id: "n1",
+const stubNote: ISbDmNote = {
+    type: SbDmEntityType.Note,
+    id: 1,
     timing: stubTiming,
     track: stubTrack,
     subscribe: vi.fn(),
@@ -88,23 +116,6 @@ vi.mock("../../src/player/AudioBufferPlayer.js", () => {
         }
     };
 });
-
-// Replace global AudioContext with a controllable stub
-class StubAudioContext {
-    public static now = 0;
-    public state: AudioContextState = "suspended";
-    public destination: AudioNode = {} as AudioNode;
-    public get currentTime(): number {
-        return StubAudioContext.now;
-    }
-    public resume = vi.fn(() => {
-        return Promise.resolve().then(() => {
-            this.state = "running";
-        });
-    });
-}
-
-vi.stubGlobal("AudioContext", StubAudioContext);
 
 // Use fake timers to control scheduling
 beforeEach(() => {
@@ -192,11 +203,11 @@ describe("EventEngine (class)", () => {
         expect(engine.getTime()).toBe(0);
 
         // Use static now to simulate time progression across all instances.
-        StubAudioContext.now = 0;
+        AudioContextMock.now = 0;
         const engine2 = new EventEngine();
         await engine2.play();
-        const startOffset = StubAudioContext.now;
-        StubAudioContext.now = startOffset + 0.5;
+        const startOffset = AudioContextMock.now;
+        AudioContextMock.now = startOffset + 0.5;
         expect(engine2.getTime()).toBeCloseTo(0.5, 5);
     });
 });

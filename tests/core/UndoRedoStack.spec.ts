@@ -6,7 +6,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 import { UndoRedoStack } from "../../src/core/UndoRedoStack.js";
-import type { IArrangementView, ITimeParamsView, ITrackView } from "../../src/core/types/general.js";
+import type { IArrangementView, ITimeParamsView } from "../../src/core/types/general.js";
 import type { EditCommand, EditCommand_ArrangementTitle } from "../../src/core/types/edit_commands.js";
 
 // Mock getArrangementSnapshot to return a simple snapshot
@@ -46,7 +46,7 @@ const makeArrangement = (title: string): IArrangementView => {
     return {
         title,
         timeParams: stubTimeParams,
-        tracks: [] as ITrackView[],
+        tracks: [],
         subscribe: vi.fn(),
         unsubscribe: vi.fn(),
     };

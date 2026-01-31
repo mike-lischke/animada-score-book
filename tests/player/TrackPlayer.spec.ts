@@ -3,11 +3,12 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
-import type {
-    INoteStyle, INoteView, IPolyrhythmView, ITimeParamsView, ITiming, ITrackView, RealTime
-} from "../../src/core/types/general.js";
+import {
+    SbDmEntityType, type ISbDmArrangement, type ISbDmNote, type ISbDmTrack, type ITiming, type RealTime
+} from "../../src/core/ScoreBookDataModel.js";
+import type { INoteStyle, IPolyrhythm, ITimeParams, Mutable } from "../../src/core/types/general.js";
 import { TrackPlayer } from "../../src/player/TrackPlayer.js";
 import type { ILoopInterval, ITimeCoordinator } from "../../src/player/types.js";
 
@@ -55,13 +56,15 @@ const makeTimeCoordinator = (realTimeLength: RealTime = 4): ITimeCoordinator => 
 };
 
 const makeNote = (
-    track: ITrackView,
+    track: ISbDmTrack,
     timing: ITiming,
     noteStyle?: INoteStyle,
-    polyrhythm?: IPolyrhythmView
-): INoteView => {
+    polyrhythm?: IPolyrhythm
+): ISbDmNote => {
     return {
-        id: `${timing.bar}:${timing.step}`,
+        type: SbDmEntityType.Note,
+        //id: `${timing.bar}:${timing.step}`,
+        id: Math.floor(Math.random() * 100000),
         timing,
         track,
         noteStyle,
@@ -70,13 +73,10 @@ const makeNote = (
     };
 };
 
-import type { IArrangementView, IInstrument } from "../../src/core/types/general.js";
-
 const makeTrack = (
-    opts?: { instrumentLoaded?: boolean; withPolyrhythmNote?: boolean; }
-): ITrackView & { _notes: INoteView[]; } => {
+    opts?: { instrumentLoaded?: boolean; withPolyrhythmNote?: boolean; }): ISbDmTrack & { _notes: ISbDmNote[]; } => {
     const instrumentLoaded = opts?.instrumentLoaded ?? true;
-    const timeParams: ITimeParamsView = {
+    const timeParams: ITimeParams = {
         timeSignature: "4/4",
         tempo: 120,
         length: 1,
@@ -86,30 +86,52 @@ const makeTrack = (
         isValid: () => {
             return true;
         },
-        ...makeSubscribable()
+        ...makeSubscribable(),
     };
-    const arrangement: IArrangementView = {
+    const arrangement: ISbDmArrangement = {
+        id: 1,
+        type: SbDmEntityType.Arrangement,
         title: "Test",
         timeParams,
-        tracks: [] as ITrackView[],
-        ...makeSubscribable()
+        tracks: [] as ISbDmTrack[],
+        ...makeSubscribable(),
+        addTrack: vi.fn(),
+        removeTrack: vi.fn(),
+        applyArrangementSnapshot: vi.fn(),
     };
 
-    const track: ITrackView & { _notes: INoteView[]; } = {
+    const track: Mutable<ISbDmTrack> & { _notes: ISbDmNote[]; } = {
+        type: SbDmEntityType.Track,
         id: 1,
+        name: "Track 1",
+        volume: 1,
         arrangement,
         instrument: {
-            id: "inst",
-            loaded: instrumentLoaded,
+            type: SbDmEntityType.Instrument,
+            id: 99,
+            typeId: "inst",
+            state: {
+                initialized: instrumentLoaded,
+                expanded: false,
+                expandedOnce: false,
+                isLeaf: true,
+            },
+            audioPath: "",
+            range: [0, 10],
             displayOrder: 1,
             displayName: "Test",
-            icon: "",
+            image: {
+                type: SbDmEntityType.InstrumentImage,
+                id: 1,
+                filePath: "",
+            },
             colourGroup: "blue",
             noteStyles: {},
+            noteStyleCount: 0,
             ...makeSubscribable()
-        } as IInstrument,
-        notes: [] as INoteView[],
-        polyrhythms: [] as IPolyrhythmView[],
+        },
+        notes: [],
+        polyrhythms: [],
         getNoteAt: () => {
             return undefined;
         },
@@ -117,7 +139,10 @@ const makeTrack = (
             yield* this._notes;
         },
         ...makeSubscribable(),
-        _notes: [] as INoteView[],
+        _notes: [],
+        addPolyrhythm: vi.fn(),
+        removePolyrhythm: vi.fn(),
+        clear: vi.fn(),
     };
 
     arrangement.tracks.push(track);
@@ -134,10 +159,10 @@ const makeTrack = (
 
     if (opts?.withPolyrhythmNote) {
         // Minimal polyrhythm view object
-        const poly: IPolyrhythmView = {
+        const poly: IPolyrhythm = {
             id: 1,
-            start: undefined as unknown as INoteView,
-            end: undefined as unknown as INoteView,
+            start: undefined as unknown as ISbDmNote,
+            end: undefined as unknown as ISbDmNote,
             notes: []
         };
         const polyNote = makeNote(track, { bar: 1, step: 2 }, noteStyle, poly);

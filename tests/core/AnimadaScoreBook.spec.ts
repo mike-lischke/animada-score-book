@@ -3,44 +3,13 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { AnimadaScoreBook } from "../../src/core/AnimadaScoreBook.js";
-import type { IArrangementSnapshot } from "../../src/core/types/snapshots.js";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+import { Arrangement } from "../../src/core/Arrangement.js";
+import type { ISbDmInstrument, ISbDmNote } from "../../src/core/ScoreBookDataModel.js";
 import type { EditCommand } from "../../src/core/types/edit_commands.js";
-
-// Mocks for dependencies used inside AnimadaScoreBook
-vi.mock("../../src/core/serialisation/snapshot_appliers.js", () => {
-    const applyCalls: unknown[][] = [];
-
-    const applyArrangementSnapshot = vi.fn((arr, snap) => {
-        applyCalls.push([arr, snap]);
-    });
-
-    const createArrangementFromSnapshot = vi.fn((_snap: IArrangementSnapshot) => {
-        return {
-            title: "Initial",
-            timeParams: {
-                subscribe: () => {
-                    /* no-op */
-                },
-                unsubscribe: () => {
-                    /* no-op */
-                },
-                isValid: () => {
-                    return true;
-                },
-                timings: [],
-                timeSignature: "4/4",
-                tempo: 120,
-                length: 1,
-                pulse: "1/4",
-                stepResolution: 8,
-            }
-        } as unknown as object;
-    });
-
-    return { applyArrangementSnapshot, createArrangementFromSnapshot, __applyCalls: applyCalls };
-});
+import type { IArrangementSnapshot } from "../../src/core/types/snapshots.js";
+import { UndoManager } from "../../src/core/UndoManager.js";
 
 vi.mock("../../src/core/edit.js", () => {
     const edit = vi.fn(() => {
@@ -96,22 +65,6 @@ vi.mock("../../src/core/UndoRedoStack.js", () => {
     return { UndoRedoStack: MockUndoRedoStack, stackRef };
 });
 
-vi.mock("../../src/core/Library.js", () => {
-    const getLibrary = vi.fn(() => {
-        return { instrumentMetas: [], getInstrument: vi.fn(), load: vi.fn() };
-    });
-
-    return { getLibrary };
-});
-
-// Use mocked exports with static imports
-// Bring in the mock internals for assertions via dynamic imports to access test-only exports
-interface SnapshotAppliersMock {
-    applyArrangementSnapshot: ReturnType<typeof vi.fn>;
-    createArrangementFromSnapshot: ReturnType<typeof vi.fn>;
-    applyCalls: unknown[][];
-}
-
 interface UndoRedoMock {
     stackRef: {
         instance?: {
@@ -126,9 +79,6 @@ interface UndoRedoMock {
 
 interface EditModuleMock { edit: ReturnType<typeof vi.fn>; }
 
-const snapshotAppliers = (
-    await import("../../src/core/serialisation/snapshot_appliers.js")
-) as unknown as SnapshotAppliersMock;
 const undoRedo = (
     await import("../../src/core/UndoRedoStack.js")
 ) as unknown as UndoRedoMock;
@@ -138,7 +88,7 @@ const editModule = (
 
 describe("AnimadaScoreBook", () => {
     const snapshot: IArrangementSnapshot = {
-        title: "Test",
+        title: "Initial",
         timeParams: {
             timeSignature: "4/4",
             tempo: 120,
@@ -147,11 +97,14 @@ describe("AnimadaScoreBook", () => {
             stepResolution: 8
         },
         tracks: []
-    } as unknown as IArrangementSnapshot;
+    };
 
-    let book: AnimadaScoreBook;
+    const arrangement = Arrangement.fromSnapshot(snapshot, []);
+    arrangement.applyArrangementSnapshot = vi.fn();
+
+    let manager: UndoManager;
     beforeEach(() => {
-        book = new AnimadaScoreBook(snapshot);
+        manager = new UndoManager(arrangement, []);
         // reset mocks
         vi.clearAllMocks();
         if (undoRedo.stackRef.instance) {
@@ -164,22 +117,21 @@ describe("AnimadaScoreBook", () => {
     });
 
     it("initialises with arrangement and library", () => {
-        expect(book.arrangement.title).toBe("Initial");
-        expect(book.library).toBeDefined();
-        expect(book.canUndo).toBe(false);
-        expect(book.canRedo).toBe(false);
-        expect(book.currentState.title).toBe("Snapshot");
+        expect(manager.arrangement.title).toBe("Initial");
+        expect(manager.canUndo).toBe(false);
+        expect(manager.canRedo).toBe(false);
+        expect(manager.currentState.title).toBe("Snapshot");
     });
 
     it("records edits that cause changes and publishes current state", () => {
         const publishSpy = vi.fn();
-        book.topics.currentState.subscribe(publishSpy);
+        manager.topics.currentState.subscribe(publishSpy);
         // Use a note edit to exercise oldValue extraction.
-        const cmd = {
+        const cmd: EditCommand = {
             type: "EditCommand_Note",
-            note: { noteStyle: { id: "ns", audioBuffer: null, instrument: {} } }
-        } as unknown as EditCommand;
-        book.edit(cmd);
+            note: { noteStyle: { id: "ns", audioBuffer: null, instrument: {} as ISbDmInstrument } } as ISbDmNote,
+        };
+        manager.edit(cmd);
         expect(editModule.edit).toHaveBeenCalledOnce();
         const stack1 = undoRedo.stackRef.instance;
         expect(stack1).toBeDefined();
@@ -190,29 +142,31 @@ describe("AnimadaScoreBook", () => {
     it("does not record when no changes happen", () => {
         editModule.edit.mockReturnValueOnce(false);
         const publishSpy = vi.fn();
-        book.topics.currentState.subscribe(publishSpy);
-        const cmd = {
+        manager.topics.currentState.subscribe(publishSpy);
+        const cmd: EditCommand = {
             type: "EditCommand_ArrangementTitle",
-            arrangement: book.arrangement,
+            arrangement: manager.arrangement,
             newTitle: "X"
-        } as unknown as EditCommand;
-        book.edit(cmd);
+        };
+        manager.edit(cmd);
         expect(publishSpy).not.toHaveBeenCalled();
     });
 
     it("undo applies snapshot when available", () => {
-        book.undo();
+        manager.undo();
         const stack3 = undoRedo.stackRef.instance;
         expect(stack3).toBeDefined();
         expect(stack3!.goBack).toHaveBeenCalled();
-        expect(snapshotAppliers.applyArrangementSnapshot).toHaveBeenCalled();
+        // eslint-disable-next-line @typescript-eslint/unbound-method
+        expect(arrangement.applyArrangementSnapshot).toHaveBeenCalled();
     });
 
     it("redo applies snapshot when available", () => {
-        book.redo();
+        manager.redo();
         const stack4 = undoRedo.stackRef.instance;
         expect(stack4).toBeDefined();
         expect(stack4!.goForward).toHaveBeenCalled();
-        expect(snapshotAppliers.applyArrangementSnapshot).toHaveBeenCalled();
+        // eslint-disable-next-line @typescript-eslint/unbound-method
+        expect(arrangement.applyArrangementSnapshot).toHaveBeenCalled();
     });
 });

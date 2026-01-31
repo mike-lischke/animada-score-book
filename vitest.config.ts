@@ -4,7 +4,6 @@ export default defineConfig({
     test: {
         logHeapUsage: true,
         isolate: false,
-        environment: "node",
         pool: "threads",
         reporters: [["default", { summary: false }]],
         slowTestThreshold: 5000,
@@ -12,6 +11,7 @@ export default defineConfig({
             concurrent: true,
         },
         testTimeout: 10000,
-        //setupFiles: ["./tests/setup.ts"],
+        setupFiles: ["./tests/setup.ts"],
+        environment: "jsdom",
     }
 });
