@@ -7,18 +7,19 @@ import paperPlaneIcon from "../../assets/images/icons/paper_plane_white.svg";
 
 import type { ComponentChild } from "preact";
 
+import { Button } from "./framework/Button.js";
 import { UIComponent } from "./framework/UIComponent.js";
 import { Overlay } from "./Overlay.js";
 
 export class ShareButton extends UIComponent {
     public render(): ComponentChild {
         return (
-            <button id="share-button" className="push-button" onClick={() => {
+            <Button id="share-button" className="push-button" onClick={() => {
                 Overlay.toggleOverlay("share", "show");
             }}>
                 <span>Share this beat!</span>
                 <img style={{ width: "18pt", height: "18pt" }} src={paperPlaneIcon} />
-            </button >
+            </Button >
         );
     }
 }

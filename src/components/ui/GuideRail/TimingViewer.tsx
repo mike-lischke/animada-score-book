@@ -28,7 +28,7 @@ export class TimingViewer extends UIComponent<ITimingViewerProps> {
                     return (
                         <ArrangementPlayerContext.Consumer>
                             {(arrangementPlayerContext) => {
-                                const timeParams = arrangementPlayerContext!.arrangement.timeParams;
+                                const timeParams = arrangementPlayerContext!.arrangementView.timeParams;
                                 const timingLabel = this.useTimingLabel(timeParams, barDivisibility!, timing,
                                     isStartOfBar);
                                 const classes = this.useClasses(timeParams, timing, isStartOfBar);

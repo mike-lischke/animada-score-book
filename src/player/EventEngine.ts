@@ -6,7 +6,7 @@
 import { Publisher } from "../core/Publisher.js";
 import { AudioBufferPlayer } from "./AudioBufferPlayer.js";
 import type {
-    IAudioEvent, ICallbackEvent, IEventEngine, EventEngineState, IEventSource, IInterval, IMuteEvent, MuteFilter
+    IAudioEvent, ICallbackEvent, EventEngineState, IEventSource, IInterval, IMuteEvent, MuteFilter
 } from "./types.js";
 
 // The core of the Animada Score Book Player is the EventEngine
@@ -16,7 +16,8 @@ import type {
 const lookahead = 0.25; // (s) Look 250ms ahead for events
 const loopFrequency = 125; // (ms) Check for upcoming events every 125ms
 
-export class EventEngine extends Publisher implements IEventEngine {
+export class EventEngine extends Publisher {
+
     private readonly audioContext: AudioContext;
 
     private eventSources: IEventSource[] = [];
@@ -36,9 +37,19 @@ export class EventEngine extends Publisher implements IEventEngine {
     private scheduledCallbackEvents: Array<{ callbackEvent: ICallbackEvent, timeoutId: number; }> = [];
     private scheduledMuteEvents: Array<{ muteEvent: IMuteEvent, timeoutId: number; }> = [];
 
-    public constructor() {
+    static #instance?: EventEngine;
+
+    private constructor() {
         super();
         this.audioContext = new AudioContext();
+    }
+
+    public static get instance(): EventEngine {
+        if (!EventEngine.#instance) {
+            EventEngine.#instance = new EventEngine();
+        }
+
+        return EventEngine.#instance;
     }
 
     public connect(eventSource: IEventSource): void {
@@ -237,11 +248,3 @@ export class EventEngine extends Publisher implements IEventEngine {
         return audioEventReference.audioEvent.realTime <= this.getTime();
     }
 }
-
-let singletonEventEngine: IEventEngine | null = null;
-
-export const getEventEngine = (): IEventEngine => {
-    singletonEventEngine ??= new EventEngine();
-
-    return singletonEventEngine;
-};

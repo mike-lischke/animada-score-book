@@ -6,9 +6,10 @@
 import type { ComponentChild } from "preact";
 
 import type { ISbDmTrack } from "../../../core/ScoreBookDataModel.js";
+import { Button } from "../framework/Button.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
 import { Overlay } from "../Overlay.js";
-import { AnimadaScoreBookContext } from "../ScoreBookViewer.js";
+import { UndoManagerContext } from "../ScoreBookViewer.js";
 
 export interface ITrackControlsProps extends ICommonUIProperties {
     track: ISbDmTrack;
@@ -20,11 +21,11 @@ export class TrackControls extends UIComponent<ITrackControlsProps> {
         const { track, overlayName } = this.props;
 
         return (
-            <AnimadaScoreBookContext.Consumer>
+            <UndoManagerContext.Consumer>
                 {(scoreBookContext) => {
                     return (
                         <div className="track-controls">
-                            <button className="push-button gray"
+                            <Button className="push-button gray"
                                 onClick={() => {
                                     scoreBookContext?.edit({
                                         type: "EditCommand_ArrangementRemoveTrack",
@@ -32,8 +33,8 @@ export class TrackControls extends UIComponent<ITrackControlsProps> {
                                         removeTrack: track
                                     });
                                 }}
-                            >Remove track</button>
-                            <button className="push-button gray"
+                            >Remove track</Button>
+                            <Button className="push-button gray"
                                 onClick={() => {
                                     scoreBookContext?.edit({
                                         type: "EditCommand_TrackClear",
@@ -42,16 +43,16 @@ export class TrackControls extends UIComponent<ITrackControlsProps> {
                                     });
                                     Overlay.toggleOverlay(overlayName, "hide");
                                 }}
-                            >Clear track</button>
-                            <button className="push-button gray"
+                            >Clear track</Button>
+                            <Button className="push-button gray"
                                 onClick={() => {
                                     Overlay.toggleOverlay(overlayName, "hide");
                                 }}
-                            >Cancel</button>
+                            >Cancel</Button>
                         </div>
                     );
                 }}
-            </AnimadaScoreBookContext.Consumer>
+            </UndoManagerContext.Consumer>
         );
     }
 };

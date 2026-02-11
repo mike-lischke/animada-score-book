@@ -10,6 +10,7 @@
 
     --dialog-background: white;
     --dialog-foreground: var(--foreground);
+    --dialog-inactiveBorder: #B0B0B0;
 
     --card-border: #E8EAED;
     --card-background: #F7F7F9;
@@ -142,6 +143,7 @@ body {
 }
 
 #score-book-viewer {
+    position: relative;
     padding: 40px;
 
     flex: 1 1 auto;
@@ -173,6 +175,7 @@ body {
 }
 
 .arrangement-controls {
+    position: relative;
     display: flex;
     padding: 20pt;
     border-bottom: var(--thick-border);
@@ -188,8 +191,9 @@ body {
 }
 
 .playback-control img {
-    height: 18pt;
-    width: 18pt;
+    margin: 4px;
+    height: 12pt;
+    width: 12pt;
 }
 
 .time-controls-wrapper {
@@ -197,7 +201,11 @@ body {
 }
 
 .time-control {
-    padding: 9.75pt 12pt;
+    padding: 9pt 12pt;
+}
+
+.time-control > span {
+    margin-left: 4px;
 }
 
 #share-button img {
@@ -416,6 +424,16 @@ select.long {
     width: 8pt;
 }
 
+.track-meta .options-button.small {
+    width: 12pt;
+    height: 12pt;
+    min-height: 0;
+    min-width: 0;
+    border-radius: 4px;
+    padding: 2px;
+    margin: 0 2px;
+}
+
 .guiderail-wrapper {
     flex-grow: 1;
 }
@@ -470,6 +488,7 @@ select.long {
 }
 
 .note-line-wrapper {
+    position: relative;
     flex-grow: 1;
     margin-left: calc(var(--track-meta-width) + var(--thick-border-width));
     border-bottom: var(--thick-border);
@@ -660,6 +679,11 @@ select.long {
 
 .arrangement-viewer-body > .overlay {
     padding: 5pt;
+}
+
+.arrangement-viewer,
+.arrangement-viewer-body {
+    position: relative;
 }
 
 .instrument-chooser {
@@ -919,15 +943,18 @@ select.long {
 
     background: var(--dialog-background);
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2), 0 6px 20px rgba(0, 0, 0, 0.19);
-    border-radius: 16px;
 
     padding: 20pt;
     transition: opacity 0.2s;
 }
 
+#scoreTreeHost {
+    height: 100%;
+    min-height: 0;
+}
+
 #scoreTreeHost .scoreTreeEntry > .actionBox {
     display: none;
-    flex: 1;
     justify-content: flex-end;
     overflow: hidden;
     min-width: fit-content;
@@ -965,7 +992,9 @@ select.long {
 }
 
 #libraryPaneContent {
-    flex: 1;
+    flex: 1 1 auto;
+    min-height: 0;
+    height: 100%;
     margin-right: 10px;
 
     padding: 8px;
@@ -1001,10 +1030,23 @@ select.long {
     margin-right: 8px;
 }
 
+.scoreTreeIcon.score {
+    color: cornflowerblue;
+}
+
 .scoreTreeEntry {
     display: flex;
     align-items: center;
+    min-width: 0;
+    width: 100%;
+}
+
+.scoreTreeEntry > .label {
     flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 #transcriptionPaneContent {

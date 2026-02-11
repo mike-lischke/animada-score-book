@@ -6,25 +6,29 @@
 import type { IPublisher, Subscription } from "./types/general.js";
 
 export class Publisher implements IPublisher {
-    private subscriptions: Array<Subscription | null> = [];
+    private subscriptions: Subscription[] = [];
 
-    public subscribe = (callback: Subscription): void => {
-        this.subscriptions.push(callback);
+    public subscribe = (callback: Subscription): () => void => {
+        const index = this.subscriptions.indexOf(callback);
+        if (index === -1) {
+            this.subscriptions.push(callback);
+        }
+
+        return () => {
+            this.unsubscribe(callback);
+        };
     };
 
     public unsubscribe = (callbackToRemove: Subscription): void => {
-        this.subscriptions.some((subscription, index) => {
-            if (callbackToRemove === subscription) {
-                this.subscriptions[index] = null;
-
-                return true;
-            }
-        });
+        const index = this.subscriptions.indexOf(callbackToRemove);
+        if (index !== -1) {
+            this.subscriptions.splice(index, 1);
+        }
     };
 
     public publish(): void {
         this.subscriptions.forEach((callback) => {
-            callback?.();
+            callback();
         });
     }
 };

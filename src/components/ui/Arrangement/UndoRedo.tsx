@@ -9,8 +9,9 @@ import undoIcon from "../../../assets/images/icons/undo_white.svg";
 import type { ComponentChild, ContextType } from "preact";
 
 import { UIComponent } from "../framework/UIComponent.js";
-import { AnimadaScoreBookContext } from "../ScoreBookViewer.js";
+import { UndoManagerContext } from "../ScoreBookViewer.js";
 import { SmallSpacer } from "../SmallSpacer.js";
+import { Button } from "../framework/Button.js";
 
 export interface IUndoRedoState {
     canUndo: boolean;
@@ -18,7 +19,7 @@ export interface IUndoRedoState {
 }
 
 export class UndoRedo extends UIComponent<{}, IUndoRedoState> {
-    private scoreBookContext?: ContextType<typeof AnimadaScoreBookContext>;
+    private scoreBookContext?: ContextType<typeof UndoManagerContext>;
 
     public constructor(props: {}) {
         super(props);
@@ -33,33 +34,33 @@ export class UndoRedo extends UIComponent<{}, IUndoRedoState> {
         const { canUndo, canRedo } = this.state;
 
         return (
-            <AnimadaScoreBookContext.Consumer>
+            <UndoManagerContext.Consumer>
                 {(scoreBookContext) => {
                     this.useSubscription(scoreBookContext);
 
                     return (<div className='undo-redo-wrapper'>
-                        <button
+                        <Button
                             className='push-button medium gray'
                             disabled={!canUndo}
-                            onClick={scoreBookContext!.undo}
+                            onClick={scoreBookContext?.undo}
                         >
                             <img src={undoIcon} style={{ height: "0.78em" }} />
-                        </button>
+                        </Button>
                         <SmallSpacer />
-                        <button
+                        <Button
                             className='push-button medium gray'
                             disabled={!canRedo}
-                            onClick={scoreBookContext!.redo}
+                            onClick={scoreBookContext?.redo}
                         >
                             <img src={redoIcon} style={{ height: "0.78em" }} />
-                        </button>
+                        </Button>
                     </div>);
                 }}
-            </AnimadaScoreBookContext.Consumer >
+            </UndoManagerContext.Consumer >
         );
     }
 
-    private useSubscription(scoreBookContext: ContextType<typeof AnimadaScoreBookContext>) {
+    private useSubscription(scoreBookContext: ContextType<typeof UndoManagerContext>) {
         if (this.scoreBookContext === scoreBookContext) {
             return;
         }

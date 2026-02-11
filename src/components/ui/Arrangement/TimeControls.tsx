@@ -6,79 +6,92 @@
 import type { ComponentChild, ContextType } from "preact";
 
 import type { EditCommand_TimeParamsTimeSignature } from "../../../core/types/edit_commands.js";
-import type { IArrangementView } from "../../../core/types/general.js";
+import type { IArrangement } from "../../../core/types/general.js";
+import { Container } from "../framework/Container.js";
+import { ChildAlignment } from "../framework/ui-types.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
-import { NumberInput } from "../NumberInput.js";
-import { AnimadaScoreBookContext } from "../ScoreBookViewer.js";
+import { UpDown } from "../framework/UpDown.js";
+import { UndoManagerContext } from "../ScoreBookViewer.js";
 
 export interface ITimeControlsProps extends ICommonUIProperties {
-    arrangement: IArrangementView;
+    arrangementView: Readonly<IArrangement>;
 }
 
 export class TimeControls extends UIComponent<ITimeControlsProps> {
-    private scoreBookContext?: ContextType<typeof AnimadaScoreBookContext>;
+    private undoManagerContext?: ContextType<typeof UndoManagerContext>;
 
     public override render(): ComponentChild {
-        const { arrangement } = this.props;
-        const pluralBars = arrangement.timeParams.length > 1;
+        const { arrangementView } = this.props;
+        const pluralBars = arrangementView.timeParams.length > 1;
 
         return (
-            <AnimadaScoreBookContext.Consumer>
-                {(scoreBookContext) => {
-                    this.scoreBookContext = scoreBookContext;
+            <UndoManagerContext.Consumer>
+                {(undoManager) => {
+                    this.undoManagerContext = undoManager;
 
                     return (
                         <div className="time-controls-wrapper" >
-                            <div className="time-control">
+                            <Container className="time-control" crossAlignment={ChildAlignment.Center}>
                                 <select
+                                    id="time-signature-select"
                                     className="short"
                                     onInput={this.changeTimeSignature}
-                                    value={arrangement.timeParams.timeSignature}>
+                                    value={arrangementView.timeParams.timeSignature}>
                                     <option>4/4</option>
                                     <option>6/8</option>
                                     <option>5/4</option>
                                     <option>7/8</option>
-                                </select> time
-                            </div>
-                            <div className="time-control">
-                                <NumberInput
-                                    getValue={() => {
-                                        return String(arrangement.timeParams.tempo);
-                                    }}
-                                    setValue={(newValue: string) => {
-                                        scoreBookContext?.edit({
+                                </select><span>time</span>
+                            </Container>
+                            <Container className="time-control" crossAlignment={ChildAlignment.Center}>
+                                <UpDown
+                                    id="tempo-input"
+                                    value={arrangementView.timeParams.tempo}
+                                    min={40}
+                                    step={10}
+                                    onChange={(newValue) => {
+                                        undoManager?.edit({
                                             type: "EditCommand_TimeParamsTempo",
-                                            timeParams: arrangement.timeParams,
-                                            tempo: Number(newValue)
+                                            timeParams: arrangementView.timeParams,
+                                            tempo: newValue
                                         });
                                     }}
-                                    subscribable={arrangement.timeParams}
-                                /> bpm
-                            </div>
-                            <div className="time-control">
-                                <NumberInput
-                                    getValue={() => {
-                                        return String(arrangement.timeParams.length);
-                                    }}
-                                    setValue={(newValue: string) => {
-                                        scoreBookContext?.edit({
-                                            type: "EditCommand_TimeParamsLength",
-                                            timeParams: arrangement.timeParams,
-                                            length: Number(newValue)
-                                        });
-                                    }}
-                                    subscribable={arrangement.timeParams}
-                                /> {pluralBars ? "bars" : "bar"}
-                            </div>
+                                >
+                                </UpDown>
+                                <span>bpm</span>
+                            </Container>
+                            <Container className="time-control" crossAlignment={ChildAlignment.Center}>
+                                <UpDown
+                                    id="length-input"
+                                    value={arrangementView.timeParams.length}
+                                    min={1}
+                                    step={1}
+                                    onConfirm={this.handleLengthChange}
+                                >
+                                </UpDown>
+                                <span>{pluralBars ? "bars" : "bar"}</span>
+                            </Container>
                         </div>
                     );
                 }}
-            </AnimadaScoreBookContext.Consumer>
+            </UndoManagerContext.Consumer>
         );
     }
 
+    private handleLengthChange = (newValue: number) => {
+        const { arrangementView } = this.props;
+
+        if (!isNaN(newValue)) {
+            this.undoManagerContext?.edit({
+                type: "EditCommand_TimeParamsLength",
+                timeParams: arrangementView.timeParams,
+                length: newValue
+            });
+        }
+    };
+
     private changeTimeSignature = (event: InputEvent) => {
-        const { arrangement } = this.props;
+        const { arrangementView: arrangement } = this.props;
 
         const command: Partial<EditCommand_TimeParamsTimeSignature> = {
             type: "EditCommand_TimeParamsTimeSignature", timeParams: arrangement.timeParams
@@ -104,7 +117,7 @@ export class TimeControls extends UIComponent<ITimeControlsProps> {
                 break;
         }
 
-        this.scoreBookContext?.edit(command as EditCommand_TimeParamsTimeSignature);
+        this.undoManagerContext?.edit(command as EditCommand_TimeParamsTimeSignature);
     };
 
 }

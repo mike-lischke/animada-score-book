@@ -6,6 +6,7 @@
 import type { ComponentChild, ContextType } from "preact";
 
 import { AppContext } from "../../ui/index.js";
+import { Button } from "./framework/Button.js";
 import { UIComponent, type ICommonUIProperties } from "./framework/UIComponent.js";
 import { InstrumentChooser } from "./InstrumentChooser.js";
 
@@ -33,7 +34,7 @@ export class InstrumentBrowser extends UIComponent<IInstrumentBrowserProps> {
                                 })}
                                 <br />
                                 <br />
-                                <button className="push-button" onClick={close}>Back</button>
+                                <Button className="push-button" onClick={close}>Back</Button>
                             </div>
                         </div>
                     );

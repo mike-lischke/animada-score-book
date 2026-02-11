@@ -7,22 +7,9 @@ import { Publisher } from "./Publisher.js";
 import { getArrangementSnapshot } from "./serialisation/snapshots.js";
 import type { EditCommand, EditCommand_ArrangementTitle, EditCommand_Note } from "./types/edit_commands.js";
 import type { IArrangementSnapshot } from "./types/snapshots.js";
-import type { IArrangementView, INoteStyle, ISubscribable } from "./types/general.js";
+import type { IArrangement, INoteStyle, ISubscribable } from "./types/general.js";
 // Note cycling squash logic is implemented as private methods inside the stack.
 import { exists } from "./utils.js";
-
-interface IUndoRedoStack {
-    canUndo: boolean;
-    canRedo: boolean;
-    currentState: IArrangementSnapshot;
-    handleEdit(command: EditCommand, oldValue?: INoteStyle): void;
-    goBack(): void;
-    goForward(): void;
-    topics: {
-        canUndo: ISubscribable,
-        canRedo: ISubscribable;
-    };
-}
 
 export interface IHistoryState {
     arrangementSnapshot: IArrangementSnapshot;
@@ -39,8 +26,7 @@ export interface IHistoryState {
  * - Ignores `EditCommand_ArrangementTitle` changes (title is always read live).
  * - Squashes rapid note-style cycling via a deferred timeout to keep history clean.
  */
-export class UndoRedoStack implements IUndoRedoStack {
-    private readonly arrangement: IArrangementView;
+export class UndoRedoStack {
     private readonly canUndoPublisher = new Publisher();
     private readonly canRedoPublisher = new Publisher();
 
@@ -55,13 +41,12 @@ export class UndoRedoStack implements IUndoRedoStack {
      * Creates a new undo/redo stack bound to an arrangement.
      * Initializes history with the current arrangement snapshot as the present state.
      *
-     * @param arrangement The arrangement to track and snapshot.
+     * @param arrangementView The arrangement to track and snapshot.
      */
-    public constructor(arrangement: IArrangementView) {
-        this.arrangement = arrangement;
+    public constructor(private readonly arrangementView: Readonly<IArrangement>) {
         // Past must always contain at least one element, which is the present state
         // We initialise it with edit-command {}, which is meant as an EditCommand_LoadPage
-        this.past = [this.getNewHistoryState(this.arrangement)];
+        this.past = [this.getNewHistoryState(this.arrangementView)];
     }
 
     /**
@@ -91,7 +76,7 @@ export class UndoRedoStack implements IUndoRedoStack {
     public get currentState(): IArrangementSnapshot {
         return {
             ...this.past[this.past.length - 1].arrangementSnapshot,
-            title: this.arrangement.title // Title is ignored in undo/redo, so we just pull the current title
+            title: this.arrangementView.title // Title is ignored in undo/redo, so we just pull the current title
         };
     }
 
@@ -108,7 +93,7 @@ export class UndoRedoStack implements IUndoRedoStack {
             return; // Title is ignored in undo/redo, so we don't react to it changing at all
         }
 
-        this.past.push(this.getNewHistoryState(this.arrangement, command, oldValue));
+        this.past.push(this.getNewHistoryState(this.arrangementView, command, oldValue));
 
         if (this.future.length) {
             this.future.splice(0);
@@ -197,10 +182,10 @@ export class UndoRedoStack implements IUndoRedoStack {
         return !!command && command.type === "EditCommand_Note";
     }
 
-    private getNewHistoryState(arrangement: IArrangementView, lastCommand?: EditCommand,
+    private getNewHistoryState(arrangementView: Readonly<IArrangement>, lastCommand?: EditCommand,
         oldValue?: INoteStyle): IHistoryState {
         return {
-            arrangementSnapshot: getArrangementSnapshot(arrangement),
+            arrangementSnapshot: getArrangementSnapshot(arrangementView),
             lastCommand,
             oldValue,
             timestamp: Date.now()

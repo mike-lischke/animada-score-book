@@ -7,6 +7,7 @@ import "./component-styles.css";
 
 import { Component, type AriaRole, type ComponentChildren, type CSSProperties } from "preact";
 import cx from "classnames";
+import type { ISubscribable, Subscription } from "../../../core/types/general.js";
 
 // Click events can also be triggered using the keyboard.
 export type ClickEventCallback = (e: MouseEvent | KeyboardEvent) => void;
@@ -90,6 +91,26 @@ export interface ICommonUIProperties {
 
 export abstract class UIComponent<P extends ICommonUIProperties = {}, S = {}>
     extends Component<P, S> {
+
+    private unsubscribers: Array<() => void> = [];
+
+    public override componentWillUnmount(): void {
+        this.unsubscribers.forEach((unsubscribe) => {
+            unsubscribe();
+        });
+        this.unsubscribers = [];
+    }
+
+    /**
+     * Adds a new subscription to a subscribable and automatically unsubscribes it when the component is unmounted.
+     *
+     * @param subscribable The subscribable to subscribe to.
+     * @param subscription  The subscription callback to subscribe.
+     */
+    public addSubscription(subscribable: ISubscribable, subscription: Subscription): void {
+        this.unsubscribers.push(subscribable.subscribe(subscription));
+    }
+
     /**
      * Takes the given base class names (CSS classe names) and combines them with the class name of the component.
      * It automatically handles undefined values.

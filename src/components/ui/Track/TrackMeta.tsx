@@ -9,6 +9,7 @@ import type { ComponentChild } from "preact";
 
 import type { ISbDmTrack } from "../../../core/ScoreBookDataModel.js";
 import { getTrackColour } from "../../../ui/track-colour.js";
+import { Button } from "../framework/Button.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
 import { SoloMuteButtons } from "./SoloMuteButtons.js";
 
@@ -31,9 +32,9 @@ export class TrackMeta extends UIComponent<ITrackMetaProps> {
                 {instrumentName}
                 <div className="buttons-wrapper">
                     <SoloMuteButtons />
-                    <button className="options-button push-button small gray" onClick={toggleControls}>
+                    <Button className="options-button push-button small gray" onClick={toggleControls}>
                         <img src={wrenchIcon} alt="options" />
-                    </button>
+                    </Button>
                 </div>
             </div>
         );

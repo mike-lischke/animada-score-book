@@ -66,17 +66,17 @@ switch ($action) {
     case 'addScore':
         addScore();
         break;
-    case 'renameScore':
-        renameScore();
+    case 'renameEntry':
+        renameEntry();
         break;
     case 'updateScore':
         updateScore();
         break;
     case 'delete':
-        handle_delete();
+        handleDelete();
         break;
     case 'move':
-        handle_move();
+        handleMove();
         break;
     case 'listSoundLib':
         listSoundlib();
@@ -167,53 +167,31 @@ function addScore(): void {
     global $rootParentId;
     $body = get_json_body();
 
-    $type = $body['type'] ?? null;
-    if ($type === 'folder') {
-        $parentId = isset($body['parentid']) ? (int)$body['parentid'] : $rootParentId;
-        $name     = trim($body['name'] ?? '');
-        if ($name === '') {
-            send_json(['error' => 'Name required'], 400);
-        }
-
-        $stmt = $pdo->prepare('INSERT INTO folders (parentid, name) VALUES (:parentId, :name)');
-        $stmt->execute([
-            ':parentId' => $parentId,
-            ':name'     => $name,
-        ]);
-        $id = (int)$pdo->lastInsertId();
-
-        send_json(['success' => true, 'id' => $id]);
-
-    } elseif ($type === 'score') {
-        if (!isset($body['folderId'])) {
-            send_json(['error' => 'folderId required'], 400);
-        }
-        $folderId = (int)$body['folderId'];
-        $name     = trim($body['name'] ?? '');
-        $content  = $body['content'] ?? '';
-
-        if ($name === '') {
-            send_json(['error' => 'Name required'], 400);
-        }
-
-        $stmt = $pdo->prepare(
-            'INSERT INTO scores (folderid, name, content) VALUES (:folderId, :name, :content)'
-        );
-        $stmt->execute([
-            ':folderId' => $folderId,
-            ':name'     => $name,
-            ':content'  => $content,
-        ]);
-        $id = (int)$pdo->lastInsertId();
-
-        send_json(['success' => true, 'id' => $id]);
-
-    } else {
-        send_json(['error' => 'Invalid type (folder|score)'], 400);
+    if (!isset($body['folderId'])) {
+        send_json(['error' => 'folderId required'], 400);
     }
+    $folderId = (int)$body['folderId'];
+    $name     = trim($body['name'] ?? '');
+    $content  = $body['content'] ?? '';
+
+    if ($name === '') {
+        send_json(['error' => 'Name required'], 400);
+    }
+
+    $stmt = $pdo->prepare(
+        'INSERT INTO scores (folderid, name, content) VALUES (:folderId, :name, :content)'
+    );
+    $stmt->execute([
+        ':folderId' => $folderId,
+        ':name'     => $name,
+        ':content'  => $content,
+    ]);
+    $id = (int)$pdo->lastInsertId();
+
+    send_json(['success' => true, 'id' => $id]);
 }
 
-function renameScore(): void {
+function renameEntry(): void {
     $pdo = getPdo();
 
     $body = get_json_body();
@@ -261,7 +239,7 @@ function updateScore(): void {
     send_json(['success' => true]);
 }
 
-function handle_delete(): void {
+function handleDelete(): void {
     $pdo = getPdo();
 
     $body = get_json_body();
@@ -323,7 +301,7 @@ function handle_delete(): void {
     send_json(['error' => 'Invalid type (folder|score)'], 400);
 }
 
-function handle_move(): void {
+function handleMove(): void {
     $pdo = getPdo();
 
     $body = get_json_body();

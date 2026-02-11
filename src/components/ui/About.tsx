@@ -13,6 +13,7 @@ import { UIComponent } from "./framework/UIComponent.js";
 import { Container } from "./framework/Container.js";
 import { Label } from "./framework/Label.js";
 import { ChildAlignment, Orientation } from "./framework/ui-types.js";
+import { Button } from "./framework/Button.js";
 
 interface IAboutState {
     errorReportIsVisibile: boolean;
@@ -66,13 +67,14 @@ export class About extends UIComponent<{}, IAboutState> {
                     </a>
                 </Container>
                 <div className={errorButtonVisibilityClass}>
-                    <button
+                    <Button
                         id="report-error"
                         className='push-button'
                         onClick={() => {
                             this.setState({ errorReportIsVisibile: true });
                         }}
-                    >There were errors! Click to view error report.</button>
+                    >There were errors! Click to view error report.
+                    </Button>
                     <br /><br />
                     <div className={`display-linebreak ${errorReportIsVisibile ? "" : "hidden"}`}>
                         <p>{errorLog.getMessage()}</p>

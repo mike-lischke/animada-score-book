@@ -7,9 +7,10 @@ import type { ComponentChild, ContextType } from "preact";
 
 import { getShareLink } from "../../core/serialisation/url.js";
 import { ArrangementPlayerContext } from "./Arrangement/ArrangementViewer.js";
+import { Button } from "./framework/Button.js";
 import { UIComponent } from "./framework/UIComponent.js";
 import { Overlay } from "./Overlay.js";
-import { AnimadaScoreBookContext } from "./ScoreBookViewer.js";
+import { UndoManagerContext } from "./ScoreBookViewer.js";
 import { SmallSpacer } from "./SmallSpacer.js";
 
 const haveNativeSharing = "share" in navigator;
@@ -22,7 +23,7 @@ interface IShareState {
 }
 
 export class Share extends UIComponent<{}, IShareState> {
-    private scoreBookContext: ContextType<typeof AnimadaScoreBookContext> | null = null;
+    private scoreBookContext: ContextType<typeof UndoManagerContext> | null = null;
 
     public constructor(props: {}) {
         super(props);
@@ -41,11 +42,11 @@ export class Share extends UIComponent<{}, IShareState> {
             <ArrangementPlayerContext.Consumer>
                 {(context) => {
                     return (
-                        <AnimadaScoreBookContext.Consumer>
+                        <UndoManagerContext.Consumer>
                             {(scoreBookContext) => {
                                 if (!this.scoreBookContext) {
                                     this.scoreBookContext = scoreBookContext;
-                                    const arrangement = context!.arrangement;
+                                    const arrangement = context!.arrangementView;
                                     arrangement.subscribe(() => {
                                         this.setState({ title: arrangement.title });
                                     });
@@ -71,25 +72,25 @@ export class Share extends UIComponent<{}, IShareState> {
                                                                         justifyContent: "center"
                                                                     }}>
                                                                     {haveNativeSharing &&
-                                                                        <button
+                                                                        <Button
                                                                             className="push-button"
                                                                             onClick={() => {
                                                                                 void navigator.share(
                                                                                     { url, title: sharedTitle });
                                                                             }}
-                                                                        >share</button>
+                                                                        >share</Button>
 
                                                                     }
                                                                     {haveNativeSharing && haveClipboardAccess &&
                                                                         <SmallSpacer />
                                                                     }
                                                                     {haveClipboardAccess &&
-                                                                        <button
+                                                                        <Button
                                                                             className="push-button"
                                                                             onClick={
                                                                                 this.copyButtonClick.bind(this, url)
                                                                             }
-                                                                        >{copyText}</button>
+                                                                        >{copyText}</Button>
 
                                                                     }
                                                                 </div>
@@ -98,25 +99,27 @@ export class Share extends UIComponent<{}, IShareState> {
                                                         </>) :
                                                         (<>
                                                             <h2>Ready to share this beat?</h2>
-                                                            <button
+                                                            <Button
                                                                 className="push-button shiny-link"
                                                                 onClick={this.showLink}>
                                                                 generate link!
-                                                            </button>
+                                                            </Button>
                                                         </>)
                                                     }
                                                 </>
                                             </div>
-                                            <button
+                                            <Button
                                                 id="load-button"
                                                 className="push-button"
                                                 onClick={this.close}
-                                            >Back to my beat!</button>
+                                            >
+                                                Back to my beat!
+                                            </Button>
                                         </div>
                                     </div>
                                 );
                             }}
-                        </AnimadaScoreBookContext.Consumer>
+                        </UndoManagerContext.Consumer>
                     );
                 }}
             </ArrangementPlayerContext.Consumer>

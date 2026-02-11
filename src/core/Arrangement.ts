@@ -210,7 +210,7 @@ export class Arrangement extends Publisher implements ISbDmArrangement {
      * @param serialisedPolyrhythms The serialised polyrhythms string.
      * @param version The serialisation version.
      *
-     * @returns The deserialised polyrhythm snapshots.
+     * @returns The deserialized polyrhythm snapshots.
      */
     private static deserialisePolyrhythms(serialisedPolyrhythms: string, version: number): IPolyrhythmSnapshot[] {
         if (serialisedPolyrhythms === "") {
@@ -302,7 +302,7 @@ export class Arrangement extends Publisher implements ISbDmArrangement {
         const base = BigInt(Object.keys(instrument.noteStyles).length + 1); // + 1 for rests
         const musicInBaseN = convertToBaseN(notesAsNumber, base);
 
-        // Since the notes are "concatted" into a number, any rests at the start become leading zeroes, and disappear
+        // Since the notes are concatenated into a number, any rests at the start become leading zeroes, and disappear
         // We have to work out how many there were, and put them back
         const leadingZeroesRequired = trackNoteCount - musicInBaseN.length;
         musicInBaseN.unshift(...Array.from(new Array(leadingZeroesRequired)).map(() => {

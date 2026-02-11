@@ -4,16 +4,16 @@
  */
 
 import type { IArrangementSnapshot, IPolyrhythmSnapshot, ITrackSnapshot } from "../types/snapshots.js";
-import type { IArrangementView, IPolyrhythm } from "../types/general.js";
+import type { IArrangement, IPolyrhythm } from "../types/general.js";
 import type { ISbDmTrack } from "../ScoreBookDataModel.js";
 
-export const getArrangementSnapshot = (arrangement: IArrangementView): IArrangementSnapshot => {
-    const { timeSignature, tempo, length, pulse, stepResolution } = arrangement.timeParams;
+export const getArrangementSnapshot = (arrangementView: Readonly<IArrangement>): IArrangementSnapshot => {
+    const { timeSignature, tempo, length, pulse, stepResolution } = arrangementView.timeParams;
 
     return {
-        title: arrangement.title,
+        title: arrangementView.title,
         timeParams: { timeSignature, tempo, length, pulse, stepResolution },
-        tracks: arrangement.tracks.map(getTrackSnapshot)
+        tracks: arrangementView.tracks.map(getTrackSnapshot)
     };
 };
 

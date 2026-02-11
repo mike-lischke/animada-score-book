@@ -4,23 +4,6 @@
  */
 
 import type { ISbDmInstrument, ISbDmNote, ISbDmTrack, ITiming } from "../ScoreBookDataModel.js";
-import type { EditCommand } from "./edit_commands.js";
-import type { IArrangementSnapshot } from "./snapshots.js";
-
-export interface IAnimadaScoreBook {
-    arrangement: IArrangementView;
-    currentState: IArrangementSnapshot;
-    canUndo: boolean;
-    canRedo: boolean;
-    edit(command: EditCommand): void;
-    undo: () => void;
-    redo: () => void;
-    topics: {
-        canUndo: ISubscribable;
-        canRedo: ISubscribable;
-        currentState: ISubscribable;
-    };
-}
 
 export interface IInstrumentMeta {
     id: number;
@@ -73,7 +56,7 @@ export type MutingRuleSimple = string;
 export type Subscription = (...args: unknown[]) => void;
 
 export interface ISubscribable {
-    subscribe: (callback: Subscription) => void;
+    subscribe: (callback: Subscription) => () => void;
     unsubscribe: (callback: Subscription) => void;
 }
 
@@ -81,13 +64,7 @@ export interface IPublisher extends ISubscribable {
     publish(): void;
 }
 
-export interface IArrangementView extends ISubscribable {
-    readonly title: string;
-    timeParams: ITimeParamsView;
-    tracks: ISbDmTrack[];
-}
-
-export interface IArrangement extends IArrangementView {
+export interface IArrangement extends ISubscribable {
     title: string;
     timeParams: ITimeParams;
     tracks: ISbDmTrack[];

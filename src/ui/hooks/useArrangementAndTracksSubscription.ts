@@ -8,39 +8,40 @@
 import { useEffect } from "preact/hooks";
 
 import type { ISbDmTrack } from "../../core/ScoreBookDataModel.js";
-import type { IArrangementView, Subscription } from "../../core/types/general.js";
+import type { IArrangement, Subscription } from "../../core/types/general.js";
 import { useSubscription } from "./useSubscription.js";
 
-export function useArrangementAndTracksSubscription(arrangement: IArrangementView, callback: Subscription): void {
-    useSubscription(arrangement, callback);
+export function useArrangementAndTracksSubscription(arrangementView: Readonly<IArrangement>,
+    callback: Subscription): void {
+    useSubscription(arrangementView, callback);
 
     useEffect(() => {
         const subscribedTracks = new Set<ISbDmTrack>();
 
-        arrangement.tracks.forEach((track) => {
+        arrangementView.tracks.forEach((track) => {
             track.subscribe(callback);
             subscribedTracks.add(track);
         });
 
         const arrangementSubscription = () => {
             subscribedTracks.forEach((track) => {
-                if (!arrangement.tracks.includes(track)) {
+                if (!arrangementView.tracks.includes(track)) {
                     track.unsubscribe(callback);
                     subscribedTracks.delete(track);
                 }
             });
 
-            arrangement.tracks.forEach((track) => {
+            arrangementView.tracks.forEach((track) => {
                 if (!subscribedTracks.has(track)) {
                     track.subscribe(callback);
                     subscribedTracks.add(track);
                 }
             });
         };
-        arrangement.subscribe(arrangementSubscription);
+        arrangementView.subscribe(arrangementSubscription);
 
         return () => {
-            arrangement.unsubscribe(arrangementSubscription);
+            arrangementView.unsubscribe(arrangementSubscription);
             subscribedTracks.forEach((track) => {
                 track.unsubscribe(callback);
             });

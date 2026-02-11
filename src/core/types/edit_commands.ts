@@ -4,43 +4,43 @@
 */
 
 import type { ISbDmInstrument, ISbDmNote, ISbDmTrack } from "../ScoreBookDataModel.js";
-import type { IArrangementView, INoteStyle, IPolyrhythm, ITimeParamsView } from "./general.js";
+import type { IArrangement, INoteStyle, IPolyrhythm, ITimeParamsView } from "./general.js";
 
 /* eslint-disable @typescript-eslint/naming-convention */
 
 export interface EditCommand_ArrangementTitle {
     type: "EditCommand_ArrangementTitle";
-    arrangement: IArrangementView;
+    arrangement: Readonly<IArrangement>;
     newTitle: string;
 }
 
 export interface EditCommand_ArrangementAddTrack {
     type: "EditCommand_ArrangementAddTrack";
-    arrangement: IArrangementView;
+    arrangement: Readonly<IArrangement>;
     addTrack: ISbDmInstrument;
 }
 
 export interface EditCommand_ArrangementRemoveTrack {
     type: "EditCommand_ArrangementRemoveTrack";
-    arrangement: IArrangementView;
+    arrangement: Readonly<IArrangement>;
     removeTrack: ISbDmTrack;
 }
 
 export interface EditCommand_ArrangementClear {
     type: "EditCommand_ArrangementClear";
-    arrangement: IArrangementView;
+    arrangement: Readonly<IArrangement>;
     command: "clear all tracks";
 }
 
 export interface EditCommand_ArrangementClearSelection {
     type: "EditCommand_ArrangementClearSelection";
-    arrangement: IArrangementView;
+    arrangement: Readonly<IArrangement>;
     clearSelection: Map<ISbDmTrack, { selectedNotes: Set<ISbDmNote>; }>;
 }
 
 export interface EditCommand_ArrangementAddPolyrhythms {
     type: "EditCommand_ArrangementAddPolyrhythms";
-    arrangement: IArrangementView;
+    arrangement: Readonly<IArrangement>;
     addPolyrhythms: {
         length: number;
         selection: Map<ISbDmTrack, { range: [ISbDmNote | null, ISbDmNote | null]; }>;

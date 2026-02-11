@@ -7,11 +7,11 @@ import { edit } from "./edit.js";
 import { Publisher } from "./Publisher.js";
 import type { ISbDmArrangement, ISbDmInstrument } from "./ScoreBookDataModel.js";
 import type { EditCommand } from "./types/edit_commands.js";
-import type { IAnimadaScoreBook, INoteStyle } from "./types/general.js";
+import type { INoteStyle } from "./types/general.js";
 import { UndoRedoStack } from "./UndoRedoStack.js";
 
 /** Encapsulates the application-level undo/redo management. */
-export class UndoManager implements IAnimadaScoreBook {
+export class UndoManager {
     private readonly undoRedoStack;
     private readonly currentStatePublisher = new Publisher();
 
@@ -70,7 +70,7 @@ export class UndoManager implements IAnimadaScoreBook {
     /**
      * Reverts the most recent change if possible and publishes a current-state change.
      */
-    public undo(): void {
+    public undo = (): void => {
         if (!this.undoRedoStack.canUndo) {
             return;
         }
@@ -78,12 +78,12 @@ export class UndoManager implements IAnimadaScoreBook {
         this.undoRedoStack.goBack();
         this.arrangement.applyArrangementSnapshot(this.undoRedoStack.currentState, this.instruments);
         this.currentStatePublisher.publish();
-    }
+    };
 
     /**
      * Reapplies the next change if possible and publishes a current-state change.
      */
-    public redo(): void {
+    public redo = (): void => {
         if (!this.undoRedoStack.canRedo) {
             return;
         }
@@ -91,7 +91,7 @@ export class UndoManager implements IAnimadaScoreBook {
         this.undoRedoStack.goForward();
         this.arrangement.applyArrangementSnapshot(this.undoRedoStack.currentState, this.instruments);
         this.currentStatePublisher.publish();
-    }
+    };
 
     /**
      * Publishers for UI subscriptions to state changes.

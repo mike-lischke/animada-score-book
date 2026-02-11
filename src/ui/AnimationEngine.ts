@@ -6,7 +6,8 @@
 import { Publisher } from "../core/Publisher.js";
 import type { RealTime } from "../core/ScoreBookDataModel.js";
 import type { ISubscribable } from "../core/types/general.js";
-import type { IEventEngine, EventEngineState } from "../player/types.js";
+import type { EventEngine } from "../player/EventEngine.js";
+import type { EventEngineState } from "../player/types.js";
 
 export class AnimationEngine implements ISubscribable {
     public state: EventEngineState = "stopped";
@@ -15,14 +16,14 @@ export class AnimationEngine implements ISubscribable {
     private nextAnimationId = 0;
     private readonly publisher = new Publisher();
 
-    public constructor(private eventEngine: IEventEngine) {
+    public constructor(private eventEngine: EventEngine) {
         eventEngine.subscribe(() => {
             if (eventEngine.state === "playing") {
                 this.start();
 
                 return;
             }
-            stop();
+            this.stop();
         });
     }
 

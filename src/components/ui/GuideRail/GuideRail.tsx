@@ -5,7 +5,7 @@
 
 import { createContext, type ComponentChild } from "preact";
 
-import type { IArrangementView, ITimeParamsView, Subscription } from "../../../core/types/general.js";
+import type { IArrangement, ITimeParamsView, Subscription } from "../../../core/types/general.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
 import { TimingViewer } from "./TimingViewer.js";
 
@@ -13,7 +13,7 @@ export type BarDivisibility = 1 | 2 | 4;
 export const BarDivisibilityContext = createContext<BarDivisibility | null>(null);
 
 export interface IGuideRailProps extends ICommonUIProperties {
-    arrangement: IArrangementView;
+    arrangementView: Readonly<IArrangement>;
 }
 
 interface IGuideRailState {
@@ -26,26 +26,26 @@ export class GuideRail extends UIComponent<IGuideRailProps, IGuideRailState> {
         super(props);
 
         this.state = {
-            barDivisibility: this.getBarDivisibility(props.arrangement.timeParams)
+            barDivisibility: this.getBarDivisibility(props.arrangementView.timeParams)
         };
     }
 
     public override componentDidMount(): void {
-        const { arrangement } = this.props;
-        arrangement.timeParams.subscribe(this.timeParamsSubscription as Subscription);
+        const { arrangementView } = this.props;
+        arrangementView.timeParams.subscribe(this.timeParamsSubscription as Subscription);
     }
 
     public override componentWillUnmount(): void {
-        const { arrangement } = this.props;
-        arrangement.timeParams.unsubscribe(this.timeParamsSubscription as Subscription);
+        const { arrangementView } = this.props;
+        arrangementView.timeParams.unsubscribe(this.timeParamsSubscription as Subscription);
     }
 
     public override render(): ComponentChild {
-        const { arrangement } = this.props;
+        const { arrangementView } = this.props;
         const { barDivisibility } = this.state;
 
         // Because only time-param can change at a time, we know numBars only ever changes if numNotes also changes
-        const numBars = arrangement.timeParams.length;
+        const numBars = arrangementView.timeParams.length;
         const display = numBars > 1 ? "block" : "none";
 
         return (
@@ -53,7 +53,7 @@ export class GuideRail extends UIComponent<IGuideRailProps, IGuideRailState> {
                 <div className='guiderail-wrapper' style={{ display }}>
                     <div className='guiderail-meta'></div>
                     <div className='guiderail'>
-                        {arrangement.timeParams.timings.map((timing) => {
+                        {arrangementView.timeParams.timings.map((timing) => {
                             return <TimingViewer timing={timing} key={`${timing.bar}.${timing.step}`} />;
                         })}
                     </div>
@@ -77,9 +77,11 @@ export class GuideRail extends UIComponent<IGuideRailProps, IGuideRailState> {
         return 1;
     }
 
-    private timeParamsSubscription = (timeParams: ITimeParamsView) => {
+    private timeParamsSubscription = () => {
+        const { arrangementView } = this.props;
+
         this.setState({
-            barDivisibility: this.getBarDivisibility(timeParams)
+            barDivisibility: this.getBarDivisibility(arrangementView.timeParams)
         });
     };
 }

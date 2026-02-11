@@ -231,10 +231,6 @@ export class TreeGrid<TRow extends object = {}> extends UIComponent<ITreeGridPro
                         }
                     }
 
-                    // Assign the table holder class our fixed scrollbar class too.
-                    const lastChild = this.hostRef.current?.lastChild as HTMLElement | null;
-                    lastChild?.classList.add("fixedScrollbar");
-
                     if (topRowIndex != null) {
                         const topRow = this.tabulator!.getRowFromPosition(topRowIndex);
                         void this.tabulator!.scrollToRow(topRow, "top", false);

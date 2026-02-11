@@ -11,7 +11,7 @@ import { Button } from "../components/ui/framework/Button.js";
 import { Card } from "../components/ui/framework/Card.js";
 import { Codicon } from "../components/ui/framework/Codicon.js";
 import { Container } from "../components/ui/framework/Container.js";
-import { Dialog } from "../components/ui/framework/Dialog/Dialog.js";
+import { Dialog } from "../components/ui/framework/Dialogs/Dialog.js";
 import { Grid } from "../components/ui/framework/Grid.js";
 import { GridCell } from "../components/ui/framework/GridCell.js";
 import { Icon } from "../components/ui/framework/Icon.js";
@@ -20,7 +20,7 @@ import { Label } from "../components/ui/framework/Label.js";
 import {
     SplitContainer, type ISplitterPane, type ISplitterPaneSizeInfo
 } from "../components/ui/framework/SplitContainer.js";
-import { TreeGrid, type ITreeGridOptions } from "../components/ui/framework/TreeGrid.js";
+import { SetDataAction, TreeGrid, type ITreeGridOptions } from "../components/ui/framework/TreeGrid.js";
 import { UIComponent, type ICommonUIProperties } from "../components/ui/framework/UIComponent.js";
 import { Orientation, SelectionType } from "../components/ui/framework/ui-types.js";
 import { Arrangement } from "../core/Arrangement.js";
@@ -32,7 +32,8 @@ import { TranscriptionEditor } from "./TranscriptionEditor.js";
 import { AppContext } from "./index.js";
 
 export interface IScoreLibraryProperties extends ICommonUIProperties {
-    onAction?: (action: string, dataModelEntry: ISbDmScoreFolder | ISbDmScore) => void;
+    onAction?: (action: string, dataModelEntry?: ISbDmScoreFolder | ISbDmScore,
+        parent?: ISbDmScoreFolder) => Promise<boolean>;
 }
 
 interface IScoreLibraryState {
@@ -70,7 +71,6 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
             resizable: false,
             hozAlign: "left",
             formatter: this.scoreTreeCellFormatter,
-            cellDblClick: this.handleScoreTreeDoubleClick,
         }];
 
         const scoreTreeOptions: ITreeGridOptions = {
@@ -98,7 +98,9 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
                             imageOnly={true}
                             style={{ marginLeft: "auto", marginTop: "auto" }}
                             title="Add New Folder"
-                            onClick={this.handleFolderAddClick}
+                            onClick={(e) => {
+                                this.handleActionClick(e, "addFolder");
+                            }}
                         >
                             <Icon src={Codicon.NewFolder} />
                         </Button>
@@ -280,6 +282,7 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
     }
 
     private scoreTreeCellFormatter = (cell: CellComponent): string | HTMLElement => {
+        const row = cell.getRow();
         const data = cell.getData() as ISbDmScoreFolder | ISbDmScore;
 
         const host = document.createElement("div");
@@ -287,19 +290,76 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
 
         let actionBox;
         let iconSrc: Codicon;
+        let iconClass = "";
         if (data.type === SbDmEntityType.ScoreFolder) {
-            iconSrc = data.state.expanded ? Codicon.FolderOpened : Codicon.Folder;
-        } else {
-            const { onAction } = this.props;
+            // Use the row's expanded state to determine the icon. Our internal state is not updated yet.
+            iconSrc = row.isTreeExpanded() ? Codicon.FolderOpened : Codicon.Folder;
 
+            const importScoreButton = <Button
+                id="importScoreButton"
+                className="actionButton"
+                data-tooltip="Import Banandrum Score into Folder"
+                imageOnly
+                onClick={(e) => {
+                    this.handleActionClick(e, "import", undefined, data);
+                }}
+            >
+                <Icon src={Codicon.CloudDownload} data-tooltip="inherit" />
+            </Button>;
+
+            const addFolderButton = <Button
+                id="addFolderButton"
+                className="actionButton"
+                data-tooltip="Add New Sub Folder"
+                imageOnly
+                onClick={(e) => {
+                    this.handleActionClick(e, "addFolder", undefined, data);
+                }}
+            >
+                <Icon src={Codicon.NewFolder} data-tooltip="inherit" />
+            </Button>;
+
+            const editButton = <Button
+                id="editButton"
+                className="actionButton"
+                data-tooltip="Rename Folder"
+                imageOnly
+                onClick={(e) => {
+                    this.handleActionClick(e, "edit", data);
+                }}
+            >
+                <Icon src={Codicon.Edit} data-tooltip="inherit" />
+            </Button>;
+
+            const removeFolderButton = <Button
+                id="removeFolderButton"
+                className="actionButton"
+                data-tooltip="Remove Folder"
+                imageOnly
+                onClick={(e) => {
+                    this.handleActionClick(e, "remove", data);
+                }}
+            >
+                <Icon src={Codicon.Trash} data-tooltip="inherit" />
+            </Button>;
+
+            actionBox = <Container className="actionBox" orientation={Orientation.LeftToRight}>
+                {importScoreButton}
+                {addFolderButton}
+                {editButton}
+                {removeFolderButton}
+            </Container>;
+
+        } else {
             iconSrc = Codicon.Music;
+            iconClass = "score";
 
             const playButton = <Button
                 className="playButton actionButton"
                 data-tooltip="Play Score"
                 imageOnly
-                onClick={() => {
-                    onAction?.("play", data);
+                onClick={(e) => {
+                    this.handleActionClick(e, "play", data);
                 }}
             >
                 <Icon src={Codicon.Play} data-tooltip="inherit" />
@@ -309,8 +369,8 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
                 className="editButton actionButton"
                 data-tooltip="Edit Score"
                 imageOnly
-                onClick={() => {
-                    onAction?.("edit", data);
+                onClick={(e) => {
+                    this.handleActionClick(e, "edit", data);
                 }}
             >
                 <Icon src={Codicon.Edit} data-tooltip="inherit" />
@@ -320,8 +380,8 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
                 className="removeButton actionButton"
                 data-tooltip="Remove Score"
                 imageOnly
-                onClick={() => {
-                    onAction?.("remove", data);
+                onClick={(e) => {
+                    this.handleActionClick(e, "remove", data);
                 }}
             >
                 <Icon src={Codicon.Trash} data-tooltip="inherit" />
@@ -332,7 +392,6 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
                 {editButton}
                 {removeButton}
             </Container>;
-
         }
 
         let subCaption;
@@ -343,7 +402,7 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
         const content = <>
             <Icon
                 src={iconSrc}
-                className={"scoreTreeIcon"}
+                className={iconClass + " scoreTreeIcon"}
             />
             <Label caption={data.name} />
             {subCaption}
@@ -355,8 +414,64 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
         return host;
     };
 
-    private handleScoreTreeDoubleClick = (e: Event, cell: CellComponent): void => {
-        //const item = cell.getData() as ISbDmScoreFolder | ISbDmScore;
+    private handleActionClick = (e: MouseEvent | KeyboardEvent, action: string,
+        data?: ISbDmScoreFolder | ISbDmScore, parent?: ISbDmScoreFolder): void => {
+        const { onAction } = this.props;
+
+        e.stopPropagation();
+        void onAction?.(action, data, parent).then((handled) => {
+            if (handled) {
+                const updateRowsById = (id: number, data: ISbDmScoreFolder | ISbDmScore): void => {
+                    const tree = this.scoreTableRef.current;
+                    const rows = tree?.searchAllRows("id", id);
+                    rows?.forEach((row) => {
+                        void row.update(data);
+                    });
+                };
+
+                switch (action) {
+                    case "addFolder": {
+                        if (parent) {
+                            updateRowsById(parent.id, parent);
+                        } else {
+                            const scores = this.context.dataModel.scoreLib;
+                            const tree = this.scoreTableRef.current;
+                            void tree?.setData(scores, SetDataAction.Replace);
+                        }
+
+                        break;
+                    }
+
+                    case "import": {
+                        if (parent) {
+                            updateRowsById(parent.id, parent);
+                        }
+
+                        break;
+                    }
+
+                    case "remove": {
+                        const tree = this.scoreTableRef.current;
+                        const scores = this.context.dataModel.scoreLib;
+                        void tree?.setData(scores, SetDataAction.Replace);
+
+                        this.setState({ selectedArrangement: undefined, currentScore: undefined });
+                        break;
+                    }
+
+                    case "edit": {
+                        const tree = this.scoreTableRef.current;
+                        if (tree && data && data.type === SbDmEntityType.ScoreFolder) {
+                            updateRowsById(data.id, data);
+                        }
+
+                        break;
+                    }
+
+                    default:
+                }
+            }
+        });
 
     };
 
@@ -380,6 +495,7 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
 
     private handleScoreTreeRowExpanded = (row: RowComponent): void => {
         const entry = row.getData() as ISbDmScoreFolder;
+        entry.state.expanded = true;
         if (entry.state.expandedOnce) {
             return;
         }
@@ -393,7 +509,8 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
     };
 
     private handleScoreTreeRowCollapsed = (row: RowComponent): void => {
-        //const entry = row.getData() as IScoreNode;
+        const entry = row.getData() as ISbDmScoreFolder;
+        entry.state.expanded = false;
     };
 
     private handleScoreTreeRowContext = (event: Event, row: RowComponent): void => {
@@ -404,18 +521,6 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
         const entry = row.getData() as ISbDmScoreFolder;
 
         return entry.state.expanded;
-    };
-
-    private handleFolderAddClick = (): void => {
-        const folderName = prompt("Enter the name of the new folder:");
-
-        if (!folderName) {
-            return;
-        }
-
-        void this.context.dataModel.addScoreFolder(folderName).then(() => {
-            this.forceUpdate();
-        });
     };
 
     private handleTrackEditButtonClick = (): void => {

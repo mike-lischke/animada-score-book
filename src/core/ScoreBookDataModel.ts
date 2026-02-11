@@ -10,7 +10,7 @@ import { Arrangement } from "./Arrangement.js";
 import type { IScoreDBEntry, ISoundLibFsNode } from "./DatabaseTypes.js";
 import { Instrument } from "./Instrument.js";
 import { Publisher } from "./Publisher.js";
-import type { INoteStyle, IPolyrhythm, ISubscribable } from "./types/general.js";
+import type { INoteStyle, IPolyrhythm, ISubscribable, Mutable } from "./types/general.js";
 import type { IArrangementSnapshot, ISerialisedArrangement } from "./types/snapshots.js";
 import { getNewId } from "./utils.js";
 
@@ -109,16 +109,16 @@ export interface ISbDmSoundFile {
 
 export interface ISbDmScoreFolder extends ISbDmVisual {
     readonly type: SbDmEntityType.ScoreFolder;
-    readonly parentId: number;
+    readonly parent?: ISbDmScoreFolder;
     readonly children: Array<ISbDmScoreFolder | ISbDmScore>;
 
-    readonly name: string;
+    name: string;
 }
 
 export interface ISbDmScore extends ISbDmVisual {
     readonly type: SbDmEntityType.Score;
-    readonly parentId: number;
-    readonly name: string;
+    readonly parent?: ISbDmScoreFolder;
+    name: string;
     readonly content: string;
     readonly description?: string;
 }
@@ -247,7 +247,7 @@ export class ScoreBookDataModel extends Publisher {
         const promises: Array<Promise<void>> = [
             this.loadSoundLib(),
             this.loadInstruments(),
-            this.updateScoreLibFolder(this.data.scoreLib, -1),
+            this.updateScoreLibFolder(this.data.scoreLib),
         ];
 
         await Promise.all(promises);
@@ -288,6 +288,16 @@ export class ScoreBookDataModel extends Publisher {
      * @param parent The parent folder to add the new folder to. If not given, the new folder is added to the root.
      */
     public async addScoreFolder(name: string, parent?: ISbDmScoreFolder): Promise<void> {
+        // Before adding the new folder check if a folder with the same name already exists.
+        const siblings = parent ? parent.children : this.data.scoreLib;
+        const existing = siblings.find((entry) => {
+            return entry.type === SbDmEntityType.ScoreFolder && entry.name === name;
+        });
+
+        if (existing) {
+            throw new Error(`A folder named '${name}' already exists in the target location.`);
+        }
+
         const res = await fetch(`${this.getApiBase()}/api.php?action=addScoreFolder`, {
             method: "POST",
             headers: { Accept: "application/json" },
@@ -304,7 +314,7 @@ export class ScoreBookDataModel extends Publisher {
                 type: SbDmEntityType.ScoreFolder,
                 id,
                 name,
-                parentId: parent?.id ?? -1,
+                parent,
                 state: {
                     initialized: true,
                     isLeaf: true,
@@ -321,6 +331,94 @@ export class ScoreBookDataModel extends Publisher {
             }
 
             parent.children.push(newFolder);
+
+            this.publish();
+        }
+    }
+
+    public async addScore(name: string, content: string, parent?: ISbDmScoreFolder): Promise<void> {
+        const res = await fetch(`${this.getApiBase()}/api.php?action=addScore`, {
+            method: "POST",
+            headers: { Accept: "application/json" },
+            body: JSON.stringify({ name, content, folderId: parent?.id }),
+        });
+
+        if (!res.ok) {
+            throw new Error(`HTTP ${res.statusText} (${res.status})`);
+        }
+
+        const { success, id } = await res.json() as { success: boolean; id: number; };
+        if (success) {
+            const newScore: ISbDmScore = {
+                type: SbDmEntityType.Score,
+                id,
+                name,
+                content,
+                parent,
+                state: {
+                    initialized: true,
+                    isLeaf: true,
+                    expanded: true,
+                    expandedOnce: true,
+                },
+            };
+
+            if (!parent) {
+                this.data.scoreLib.push(newScore);
+            } else {
+                parent.children.push(newScore);
+            }
+
+            this.publish();
+        }
+    }
+
+    public async renameEntry(entry: ISbDmScoreFolder | ISbDmScore, newName: string): Promise<void> {
+        const res = await fetch(`${this.getApiBase()}/api.php?action=renameEntry`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                type: entry.type === SbDmEntityType.ScoreFolder ? "folder" : "score",
+                id: entry.id,
+                name: newName,
+            }),
+        });
+
+        if (!res.ok) {
+            throw new Error(`HTTP ${res.status}`);
+        }
+
+        entry.name = newName;
+        this.publish();
+    }
+
+    public async deleteEntry(entry: ISbDmScoreFolder | ISbDmScore): Promise<void> {
+        // Check if the entry has children.
+        if (entry.type === SbDmEntityType.ScoreFolder && entry.children.length > 0) {
+            throw new Error("Cannot delete a folder that still has children.");
+        }
+
+        const res = await fetch(`${this.getApiBase()}/api.php?action=delete`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                type: entry.type === SbDmEntityType.ScoreFolder ? "folder" : "score",
+                id: entry.id,
+            }),
+        });
+
+        if (!res.ok) {
+            throw new Error(`HTTP ${res.status}`);
+        }
+
+        const parentChildren = entry.parent ? entry.parent.children : this.data.scoreLib;
+        const index = parentChildren.findIndex((e) => {
+            return e.id === entry.id;
+        });
+
+        if (index >= 0) {
+            parentChildren.splice(index, 1);
+            this.publish();
         }
     }
 
@@ -409,24 +507,26 @@ export class ScoreBookDataModel extends Publisher {
         return Promise.resolve();
     };
 
-    private async updateScoreLibFolder(list: Array<ISbDmScoreFolder | ISbDmScore>, folderId: number): Promise<void> {
+    private async updateScoreLibFolder(list: Array<ISbDmScoreFolder | ISbDmScore>,
+        parent?: ISbDmScoreFolder): Promise<void> {
         const res = await fetch(`${this.getApiBase()}/api.php?action=listScoreFolderContent`, {
             method: "POST",
             headers: { Accept: "application/json" },
-            body: JSON.stringify({ parentid: folderId }),
+            body: JSON.stringify({ parentid: parent?.id ?? -1 }),
         });
 
         if (!res.ok) {
             throw new Error(`HTTP ${res.status}`);
         }
 
+        list.length = 0;
         const data = (await res.json()) as IScoreDBEntry;
         data.folders.forEach((folder) => {
             const entry: ISbDmScoreFolder = {
                 type: SbDmEntityType.ScoreFolder,
                 id: folder.id,
                 name: folder.name,
-                parentId: folder.parentid,
+                parent,
                 state: {
                     expanded: false,
                     expandedOnce: false,
@@ -435,7 +535,9 @@ export class ScoreBookDataModel extends Publisher {
                 },
                 children: [],
                 refresh: (cb?: ProgressCallback) => {
-                    return this.updateScoreLibFolder(entry.children, folder.id);
+                    (entry.state as Mutable<ISbDmEntityState>).initialized = true;
+
+                    return this.updateScoreLibFolder(entry.children, entry);
                 },
             };
             list.push(entry);
@@ -452,7 +554,7 @@ export class ScoreBookDataModel extends Publisher {
                     expandedOnce: true,
                     isLeaf: true,
                 },
-                parentId: score.folderid,
+                parent,
                 content: score.content,
             });
         });

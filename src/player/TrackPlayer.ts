@@ -75,7 +75,7 @@ export class TrackPlayer extends Publisher implements ITrackPlayer {
     /**
      * Current solo/mute state used by the arrangement to determine audible tracks.
      *
-     * @returns {SoloMute} The current solo/mute state.
+     * @returns The current solo/mute state.
      */
     public get soloMute(): SoloMute {
         return this.currentSoloMute;

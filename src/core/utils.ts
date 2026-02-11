@@ -5,12 +5,25 @@
 
 import type { ITiming } from "./ScoreBookDataModel.js";
 
-// Comparing timings is easy, but long winded and mistake-prone
+/**
+ * Comparing timings is easy, but long winded and mistake-prone
+ *
+ * @param timing1 The first timing to compare.
+ * @param timing2 The second timing to compare.
+ *
+ * @returns true if the timings are the same, false otherwise.
+ */
 export const isSameTiming = (timing1: ITiming, timing2: ITiming): boolean => {
     return (timing1.bar === timing2.bar) && (timing1.step === timing2.step);
 };
 
-// Returns false for null, undefined
+/**
+ * Checks if a value exists (is not null or undefined).
+ *
+ * @param value The value to check.
+ *
+ * @returns true if the value exists, false otherwise.
+ */
 export const exists = <T>(value: T | undefined | null): value is T => {
     return value === (value ?? !value);
 };
@@ -56,6 +69,71 @@ export const convertPropValue = (value?: number | string, numericUnit = "px"): s
     }
 
     return value;
+};
+
+/**
+ * Converts an unknown error to a string representation, including nested causes if present.
+ *
+ * @param error The error to convert.
+ * @returns The string representation.
+ */
+export const convertErrorToString = (error: unknown): string => {
+    if (!(error instanceof Error)) {
+        return String(error);
+    }
+
+    const e = error;
+    let result = e.message;
+    if (e.cause) {
+        result += "\n" + convertErrorToString(e.cause);
+    }
+
+    return result;
+};
+
+/**
+ * Ensures a value is within a given range.
+ *
+ * @param value The value to check.
+ * @param min The smallest value that is possible.
+ * @param max The largest value that is possible.
+ *
+ * @returns The given value, trimmed to the min and max bounds.
+ */
+export const clampValue = <T extends number | bigint>(value: T, min?: T, max?: T): T => {
+    if (min != null && value < min) {
+        return min;
+    }
+
+    if (max != null && value > max) {
+        return max;
+    }
+
+    return value;
+};
+
+/**
+ * Same as Math.min, but supports bigint too.
+ *
+ * @param a The first value.
+ * @param b The second value.
+ *
+ * @returns The smaller of the two values.
+ */
+export const minValue = <T extends number | bigint>(a: T, b: T): T => {
+    return a < b ? a : b;
+};
+
+/**
+ * Same as Math.max, but supports bigint too.
+ *
+ * @param a The first value.
+ * @param b The second value.
+ *
+ * @returns The bigger of the two values.
+ */
+export const maxValue = <T extends number | bigint>(a: T, b: T): T => {
+    return a > b ? a : b;
 };
 
 /**

@@ -3,8 +3,8 @@
 * Licensed under the MIT License. See License.txt in the project root for license information.
 */
 
-import type { IAnimadaScoreBook } from "../core/types/general.js";
 import type { IArrangementSnapshot } from "../core/types/snapshots.js";
+import type { UndoManager } from "../core/UndoManager.js";
 
 /* eslint-disable prefer-arrow/prefer-arrow-functions, jsdoc/require-jsdoc */
 
@@ -18,14 +18,14 @@ let startedAtKey: string;
 
 resetSessionVariables(getExistingSessionId());
 
-export function initSessionRecovery(scoreBook: IAnimadaScoreBook) {
+export function initSessionRecovery(undoManager: UndoManager): void {
     const existingState = localStorage.getItem(stateKey);
 
     if (existingState) {
         // If we're continuing previous work, we want to start tracking immediately
-        scoreBook.topics.currentState.subscribe(() => {
+        undoManager.topics.currentState.subscribe(() => {
             return setTimeout(() => {
-                saveSession(scoreBook);
+                saveSession(undoManager);
             }, 0);
         });
     } else {
@@ -37,17 +37,17 @@ export function initSessionRecovery(scoreBook: IAnimadaScoreBook) {
             changeCounter++;
             if (changeCounter === 5) {
                 localStorage.setItem(startedAtKey, String(Date.now()));
-                saveSession(scoreBook);
-                scoreBook.topics.currentState.unsubscribe(countDownToStartSaving);
-                scoreBook.topics.currentState.subscribe(() => {
+                saveSession(undoManager);
+                undoManager.topics.currentState.unsubscribe(countDownToStartSaving);
+                undoManager.topics.currentState.subscribe(() => {
                     return setTimeout(() => {
-                        saveSession(scoreBook);
+                        saveSession(undoManager);
                     }, 0);
                 });
             }
         };
 
-        scoreBook.topics.currentState.subscribe(countDownToStartSaving);
+        undoManager.topics.currentState.subscribe(countDownToStartSaving);
     }
 }
 
@@ -92,8 +92,8 @@ function generateSessionId(): string {
     return id;
 }
 
-function saveSession(scoreBook: IAnimadaScoreBook): void {
+function saveSession(undoManager: UndoManager): void {
     const updatedAt = Date.now();
-    const state = scoreBook.currentState;
+    const state = undoManager.currentState;
     localStorage.setItem(stateKey, JSON.stringify({ state, updatedAt }));
 }

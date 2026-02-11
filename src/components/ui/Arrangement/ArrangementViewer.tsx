@@ -7,6 +7,7 @@ import { createContext, createRef, type JSX } from "preact";
 import type { MutableRefObject } from "preact/compat";
 
 import { Publisher } from "../../../core/Publisher.js";
+import type { RealTime } from "../../../core/ScoreBookDataModel.js";
 import type { ITimeParamsView, Subscription } from "../../../core/types/general.js";
 import type { IArrangementPlayer } from "../../../player/types.js";
 import type { AnimationEngine } from "../../../ui/AnimationEngine.js";
@@ -17,9 +18,8 @@ import { ServicesContext } from "../ScoreBookViewer.js";
 import { Scrollbar } from "../Scrollbar.js";
 import { Share } from "../Share.js";
 import { TrackViewer } from "../Track/TrackViewer.js";
-import { ArrangementControlsBottom } from "./ArrangementControlsBottom.js";
-import { ArrangementControlsTop } from "./ArrangementControlsTop.js";
-import type { RealTime } from "../../../core/ScoreBookDataModel.js";
+import { ArrangementControlsBottomWithContexts } from "./ArrangementControlsBottomWithContext.js";
+import { ArrangementControlsTopWithContexts } from "./ArrangementControlsTopWithContexts.js";
 
 const baseNoteWidth = 55.5; // 54pt flex-basis + 1.5pt for border
 
@@ -57,7 +57,7 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         this.state = {
             noteWidth: 0,
             trackPlayerCount: props.arrangementPlayer.trackPlayers.size,
-            noteLineMinWidth: this.getNoteLineMinWidth(props.arrangementPlayer.arrangement.timeParams),
+            noteLineMinWidth: this.getNoteLineMinWidth(props.arrangementPlayer.arrangementView.timeParams),
             scrollShadowClasses: "",
             autoFollowIsOn: true,
             userMightBeTakingControl: false
@@ -72,16 +72,16 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         setTimeout(this.handleResize, 0);
         this.resizeObserver.observe(this.viewerRef.current!);
 
-        const arrangement = arrangementPlayer.arrangement;
-        arrangement.subscribe(this.timeParamsSubscription as Subscription);
+        const arrangement = arrangementPlayer.arrangementView;
+        arrangement.timeParams.subscribe(this.timeParamsSubscription as Subscription);
     }
 
     public override componentWillUnmount(): void {
         const { arrangementPlayer } = this.props;
         this.resizeObserver.disconnect();
 
-        const arrangement = arrangementPlayer.arrangement;
-        arrangement.unsubscribe(this.timeParamsSubscription as Subscription);
+        const arrangement = arrangementPlayer.arrangementView;
+        arrangement.timeParams.unsubscribe(this.timeParamsSubscription as Subscription);
 
         // Actually only one of these is active at a time.
         this.animationEngine?.disconnect(this.autoFollowAnimation);
@@ -92,7 +92,7 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         const { arrangementPlayer } = this.props;
         const { noteWidth, noteLineMinWidth, scrollShadowClasses } = this.state;
 
-        const arrangement = arrangementPlayer.arrangement;
+        const arrangement = arrangementPlayer.arrangementView;
 
         return (
             <ServicesContext.Consumer>
@@ -107,7 +107,7 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
                                 <NoteLineMinWidth.Provider value={noteLineMinWidth}>
                                     <div className="arrangement-viewer">
                                         <div className="arrangement-viewer-head">
-                                            <ArrangementControlsTop />
+                                            <ArrangementControlsTopWithContexts />
                                         </div>
                                         <div className="arrangement-viewer-body">
                                             <div>
@@ -117,7 +117,7 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
                                                     onScroll={this.updateScrollShadows}
                                                     onWheel={handleWheel}
                                                 >
-                                                    <GuideRail arrangement={arrangement} />
+                                                    <GuideRail arrangementView={arrangement} />
                                                     {
                                                         arrangement.tracks.map((track) => {
                                                             return arrangementPlayer.trackPlayers.get(track)!;
@@ -141,7 +141,7 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
                                                 </Overlay>
                                             </div>
                                         </div>
-                                        <ArrangementControlsBottom />
+                                        <ArrangementControlsBottomWithContexts />
                                         <Overlay name="share">
                                             <Share />
                                         </Overlay>
@@ -163,9 +163,8 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         return widthFromNotes + extraWidthBetweenBars;
     };
 
-    private handleResize = () => {
+    private handleResize = (entries: ResizeObserverEntry[], observer: ResizeObserver) => {
         this.updateScrollShadows();
-
         this.updateNoteWidth();
     };
 

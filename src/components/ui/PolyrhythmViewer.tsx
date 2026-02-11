@@ -6,9 +6,10 @@
 import type { ComponentChild, ContextType } from "preact";
 
 import type { IPolyrhythm } from "../../core/types/general.js";
+import { Button } from "./framework/Button.js";
 import { UIComponent, type ICommonUIProperties } from "./framework/UIComponent.js";
-import { NoteViewer } from "./Note/NoteViewer.js";
-import { AnimadaScoreBookContext, ServicesContext } from "./ScoreBookViewer.js";
+import { NoteViewerWithContexts } from "./Note/NoteViewerWithContexts.js";
+import { ServicesContext, UndoManagerContext } from "./ScoreBookViewer.js";
 
 export interface IPolyrhythmViewerProps extends ICommonUIProperties {
     polyrhythm: IPolyrhythm;
@@ -21,7 +22,7 @@ interface IPolyrhythmViewerState {
 
 export class PolyrhythmViewer extends UIComponent<IPolyrhythmViewerProps, IPolyrhythmViewerState> {
     private servicesContext: ContextType<typeof ServicesContext> | null = null;
-    private scoreBookContext: ContextType<typeof AnimadaScoreBookContext> | null = null;
+    private scoreBookContext: ContextType<typeof UndoManagerContext> | null = null;
 
     public constructor(props: IPolyrhythmViewerProps) {
         super(props);
@@ -49,7 +50,7 @@ export class PolyrhythmViewer extends UIComponent<IPolyrhythmViewerProps, IPolyr
         const { deleteMode, isShrouded } = this.state;
 
         return (
-            <AnimadaScoreBookContext.Consumer>
+            <UndoManagerContext.Consumer>
                 {(scoreBookContext) => {
                     this.scoreBookContext = scoreBookContext;
 
@@ -83,13 +84,13 @@ export class PolyrhythmViewer extends UIComponent<IPolyrhythmViewerProps, IPolyr
                                                             isShrouded
                                                                 ? (<></>)
                                                                 : (
-                                                                    <button
+                                                                    <Button
                                                                         disabled={isShrouded}
                                                                         className="push-button"
                                                                         onClick={this.deleteClicked}
                                                                     >
                                                                         Delete
-                                                                    </button>
+                                                                    </Button>
                                                                 )
                                                         }
                                                     </div >
@@ -98,7 +99,7 @@ export class PolyrhythmViewer extends UIComponent<IPolyrhythmViewerProps, IPolyr
                                                     <div className="polyrhythm-decoration" ></div>
                                                     <div className="polyrhythm-notes-wrapper">
                                                         {polyrhythm.notes.map((note) => {
-                                                            return <NoteViewer note={note} key={note.id} />;
+                                                            return <NoteViewerWithContexts note={note} key={note.id} />;
                                                         })}
                                                     </div>
                                                 </>)
@@ -109,7 +110,7 @@ export class PolyrhythmViewer extends UIComponent<IPolyrhythmViewerProps, IPolyr
                         </ServicesContext.Consumer>
                     );
                 }}
-            </AnimadaScoreBookContext.Consumer>
+            </UndoManagerContext.Consumer>
         );
     }
 

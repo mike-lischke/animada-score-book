@@ -13,7 +13,8 @@
         "dev": "vite",
         "build": "vite build",
         "test": "vitest --no-watch",
-        "lint": "eslint 'src/**/*.{ts,tsx}'"
+        "lint": "eslint 'src/**/*.{ts,tsx}'",
+        "watch": "tsc --noEmit --watch"
     },
     "dependencies": {
         "@vscode/codicons": "0.0.43",

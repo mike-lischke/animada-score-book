@@ -24,13 +24,13 @@ export interface IInputProperties extends ICommonUIProperties {
     autoComplete?: boolean;
     spellCheck?: boolean;
     readOnly?: boolean;
+    pattern?: string;
 
     innerRef?: preact.RefObject<HTMLElement>;
 
     onChange?: (e: InputEvent, props: IInputChangeProperties) => void;
     onConfirm?: (e: KeyboardEvent, props: IInputChangeProperties) => void;
     onCancel?: (e: KeyboardEvent, props: IInputProperties) => void;
-    onCustomKeyDown?: (e: KeyboardEvent, props: IInputChangeProperties) => boolean;
 }
 
 export interface IInputChangeProperties extends IInputProperties {
@@ -71,7 +71,7 @@ export class Input extends UIComponent<IInputProperties> {
     public render(): ComponentChild {
         const {
             id, password, textAlignment, value, multiLine, multiLineCount, spellCheck, readOnly, style,
-            placeholder,
+            placeholder, pattern
         } = this.props;
 
         const className = this.generateFinalClassName(["input"]);
@@ -108,6 +108,7 @@ export class Input extends UIComponent<IInputProperties> {
                     className={className}
                     type={password ? "password" : "text"}
                     value={value}
+                    pattern={pattern}
                     spellcheck={spellCheck}
                     style={newStyle}
                     readOnly={readOnly}
@@ -125,16 +126,7 @@ export class Input extends UIComponent<IInputProperties> {
     };
 
     private handleKeyDown = (e: KeyboardEvent): void => {
-        const { multiLine, multiLineSwitchEnterKeyBehavior, onConfirm, onCancel, onCustomKeyDown } = this.props;
-
-        // If there is a custom onKeyDown method defined in the properties, call it. If the function returns true
-        // it will prevent the internal key handling.
-        if (onCustomKeyDown) {
-            const element = e.target as HTMLInputElement;
-            if (onCustomKeyDown(e, { ...this.props, value: element.value })) {
-                return;
-            }
-        }
+        const { multiLine, multiLineSwitchEnterKeyBehavior, onConfirm, onCancel } = this.props;
 
         switch (e.key) {
             case KeyboardKeys.Enter: {

@@ -1,5 +1,6 @@
 {
     "cSpell.words": [
+        "abelian",
         "Agogo",
         "animada",
         "bateria",
@@ -19,6 +20,7 @@
         "Repinique",
         "repiniques",
         "Rimshot",
+        "Scorebook",
         "serialisation",
         "serialise",
         "Serialised",
@@ -32,6 +34,7 @@
     ],
     "cSpell.ignoreWords": [
         "folderid",
-        "parentid"
+        "parentid",
+        "tableholder"
     ]
 }

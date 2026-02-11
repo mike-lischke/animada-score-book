@@ -4,16 +4,7 @@
  */
 
 import type { ISbDmNote, ISbDmTrack, ITiming, RealTime } from "../core/ScoreBookDataModel.js";
-import type { IArrangementView, ISubscribable } from "../core/types/general.js";
-
-export interface IEventEngine extends ISubscribable {
-    connect(eventSource: IEventSource): void;
-    disconnect(eventSource: IEventSource): void;
-    play(): Promise<void>;
-    stop(): void;
-    getTime(): RealTime;
-    state: EventEngineState;
-}
+import type { IArrangement, ISubscribable } from "../core/types/general.js";
 
 export type EventEngineState = "stopped" | "playing";
 
@@ -43,7 +34,7 @@ export interface IEventSource {
 }
 
 export interface IArrangementPlayer extends IEventSource, ISubscribable {
-    arrangement: IArrangementView;
+    arrangementView: Readonly<IArrangement>;
     trackPlayers: Map<ISbDmTrack, ITrackPlayer>;
     get currentTiming(): ITiming | null;
     currentTimingPublisher: ISubscribable;

@@ -9,7 +9,7 @@ import type { ISbDmNote, ISbDmTrack } from "../../../core/ScoreBookDataModel.js"
 import type { IPolyrhythm } from "../../../core/types/general.js";
 import { NoteWidthContext } from "../Arrangement/ArrangementViewer.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
-import { NoteViewer } from "../Note/NoteViewer.js";
+import { NoteViewerWithContexts } from "../Note/NoteViewerWithContexts.js";
 import { PolyrhythmViewer } from "../PolyrhythmViewer.js";
 import type { ITrackViewerCallbacks } from "./TrackViewer.js";
 
@@ -82,7 +82,7 @@ export class NoteLine extends UIComponent<INoteLineProps, INoteLineState> {
                             </div>
                             <div className="notes-wrapper">
                                 {notes.map((note) => {
-                                    return <NoteViewer note={note} key={note.id} />;
+                                    return <NoteViewerWithContexts note={note} key={note.id} />;
                                 })}
                             </div>
                         </div >

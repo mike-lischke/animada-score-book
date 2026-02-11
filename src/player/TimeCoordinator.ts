@@ -6,10 +6,8 @@
 import { Publisher } from "../core/Publisher.js";
 import type { ITiming, RealTime } from "../core/ScoreBookDataModel.js";
 import type { ITimeParamsView } from "../core/types/general.js";
-import { getEventEngine } from "./EventEngine.js";
+import { EventEngine } from "./EventEngine.js";
 import { IInterval, ILoopInterval, ITimeCoordinator } from "./types.js";
-
-const eventEngine = getEventEngine();
 
 /**
  * TimeCoordinator handles all maths that need to be done with TimeParams.
@@ -38,7 +36,7 @@ export class TimeCoordinator extends Publisher implements ITimeCoordinator {
         this.cachedLength = timeParams.length;
 
         timeParams.subscribe(this.handleTimeParamsChange);
-        eventEngine.subscribe(this.handlePlaybackChange);
+        EventEngine.instance.subscribe(this.handlePlaybackChange);
     }
 
     /**
@@ -128,7 +126,7 @@ export class TimeCoordinator extends Publisher implements ITimeCoordinator {
         this.setInternalParams();
         const oldTempo = this.cachedTempo;
         const newTempo = this.timeParams.tempo;
-        const audioTime = eventEngine.getTime();
+        const audioTime = EventEngine.instance.getTime();
         const oldOffsetTime = audioTime + this.offset;
         const newOffsetTime = oldOffsetTime * (oldTempo / newTempo);
         this.offset = newOffsetTime - audioTime;
@@ -153,7 +151,7 @@ export class TimeCoordinator extends Publisher implements ITimeCoordinator {
     };
 
     public handlePlaybackChange = () => {
-        if (eventEngine.state !== "playing") {
+        if (EventEngine.instance.state !== "playing") {
             this.offset = 0;
         }
     };
@@ -166,7 +164,7 @@ export class TimeCoordinator extends Publisher implements ITimeCoordinator {
         const oldRealTimeLength = this.realTimeLength;
         this.setInternalParams();
 
-        const audioTime = eventEngine.getTime();
+        const audioTime = EventEngine.instance.getTime();
         const oldOffsetTime = audioTime + this.offset;
 
         const oldTimeWithinLoop = oldOffsetTime % oldRealTimeLength;

@@ -5,7 +5,7 @@
 
 import { Publisher } from "../core/Publisher.js";
 import type { ISbDmTrack, ITiming, RealTime } from "../core/ScoreBookDataModel.js";
-import type { IArrangementView } from "../core/types/general.js";
+import type { IArrangement } from "../core/types/general.js";
 import { TimeCoordinator } from "./TimeCoordinator.js";
 import { TrackPlayer } from "./TrackPlayer.js";
 import { Event, IArrangementPlayer, ICallbackEvent, IInterval, ILoopInterval, ITrackPlayer } from "./types.js";
@@ -20,7 +20,7 @@ import { Event, IArrangementPlayer, ICallbackEvent, IInterval, ILoopInterval, IT
  * - Call `dispose()` when replacing the arrangement to clean up subscriptions.
  */
 export class ArrangementPlayer extends Publisher implements IArrangementPlayer {
-    public readonly arrangement: IArrangementView;
+    public readonly arrangementView: Readonly<IArrangement>;
 
     public readonly trackPlayers: Map<ISbDmTrack, ITrackPlayer> = new Map<ISbDmTrack, ITrackPlayer>();
     public readonly audibleTrackPlayers: Map<ISbDmTrack, ITrackPlayer> = new Map<ISbDmTrack, ITrackPlayer>();
@@ -39,18 +39,18 @@ export class ArrangementPlayer extends Publisher implements IArrangementPlayer {
      *
      * @param arrangement The arrangement context to observe and play.
      */
-    public constructor(arrangement: IArrangementView) {
+    public constructor(arrangement: Readonly<IArrangement>) {
         super();
-        this.arrangement = arrangement;
+        this.arrangementView = arrangement;
 
-        this.timeCoordinator = new TimeCoordinator(this.arrangement.timeParams);
+        this.timeCoordinator = new TimeCoordinator(this.arrangementView.timeParams);
 
         this.updateTrackPlayers();
         this.updateAudibleTrackPlayers();
-        this.arrangement.subscribe(this.updateTrackPlayers);
+        this.arrangementView.subscribe(this.updateTrackPlayers);
 
         this.updateCallbackEvents();
-        this.arrangement.timeParams.subscribe(this.updateCallbackEvents);
+        this.arrangementView.timeParams.subscribe(this.updateCallbackEvents);
     }
 
     /**
@@ -98,12 +98,13 @@ export class ArrangementPlayer extends Publisher implements IArrangementPlayer {
             return;
         }
         this.disposed = true;
+
         // Stop any ongoing play state.
         this.onStop();
 
         // Unsubscribe from arrangement changes.
-        this.arrangement.unsubscribe(this.updateTrackPlayers);
-        this.arrangement.timeParams.unsubscribe(this.updateCallbackEvents);
+        this.arrangementView.unsubscribe(this.updateTrackPlayers);
+        this.arrangementView.timeParams.unsubscribe(this.updateCallbackEvents);
 
         // Unsubscribe from all track players and clear references.
         for (const player of this.trackPlayers.values()) {
@@ -182,7 +183,8 @@ export class ArrangementPlayer extends Publisher implements IArrangementPlayer {
         let somethingChanged = false;
 
         for (const trackPlayer of this.trackPlayers.values()) {
-            if (!this.arrangement.tracks.includes(trackPlayer.track)) {
+            if (!this.arrangementView.tracks.includes(trackPlayer.track)) {
+                trackPlayer.dispose();
                 trackPlayer.unsubscribe(this.updateAudibleTrackPlayers);
                 this.trackPlayers.delete(trackPlayer.track);
                 this.audibleTrackPlayers.delete(trackPlayer.track);
@@ -190,7 +192,7 @@ export class ArrangementPlayer extends Publisher implements IArrangementPlayer {
             }
         }
 
-        for (const track of this.arrangement.tracks) {
+        for (const track of this.arrangementView.tracks) {
             if (!this.trackPlayers.get(track)) {
                 const trackPlayer = new TrackPlayer(track, this.timeCoordinator);
                 this.trackPlayers.set(track, trackPlayer);
@@ -210,7 +212,7 @@ export class ArrangementPlayer extends Publisher implements IArrangementPlayer {
      * Publishing `currentTiming` occurs when those callbacks fire during playback.
      */
     private updateCallbackEvents = (): void => {
-        this.callbackEvents = this.arrangement.timeParams.timings.map((timing) => {
+        this.callbackEvents = this.arrangementView.timeParams.timings.map((timing) => {
             return {
                 realTime: this.timeCoordinator.convertToRealTime(timing),
                 callback: () => {

@@ -5,7 +5,7 @@
 
 import { createRef, type ComponentChild, type ContextType } from "preact";
 
-import { AnimadaScoreBookContext } from "../ScoreBookViewer.js";
+import { UndoManagerContext } from "../ScoreBookViewer.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
 import { ArrangementPlayerContext } from "./ArrangementViewer.js";
 
@@ -21,7 +21,7 @@ interface IArrangementTitleState {
 
 export class ArrangementTitle extends UIComponent<IArrangementTitleProps, IArrangementTitleState> {
 
-    private scoreBookContext?: ContextType<typeof AnimadaScoreBookContext>;
+    private scoreBookContext?: ContextType<typeof UndoManagerContext>;
     private arrangementPlayerContext?: ContextType<typeof ArrangementPlayerContext>;
     private inputRef = createRef<HTMLInputElement>();
 
@@ -39,7 +39,7 @@ export class ArrangementTitle extends UIComponent<IArrangementTitleProps, IArran
             this.inputRef.current?.focus();
         }
 
-        const arrangement = this.arrangementPlayerContext?.arrangement;
+        const arrangement = this.arrangementPlayerContext?.arrangementView;
         if (arrangement) {
             this.setState({ title: arrangement.title, inputValue: arrangement.title });
         }
@@ -50,7 +50,7 @@ export class ArrangementTitle extends UIComponent<IArrangementTitleProps, IArran
         const { title, inputValue } = this.state;
 
         return (
-            <AnimadaScoreBookContext.Consumer>
+            <UndoManagerContext.Consumer>
                 {(scoreBookContext) => {
                     return (
                         <ArrangementPlayerContext.Consumer>
@@ -97,26 +97,26 @@ export class ArrangementTitle extends UIComponent<IArrangementTitleProps, IArran
                         </ArrangementPlayerContext.Consumer>
                     );
                 }}
-            </AnimadaScoreBookContext.Consumer>
+            </UndoManagerContext.Consumer>
         );
     }
 
     private useSubscriptions = (
         arrangementPlayerContext: ContextType<typeof ArrangementPlayerContext>,
-        scoreBookContext: ContextType<typeof AnimadaScoreBookContext>
+        scoreBookContext: ContextType<typeof UndoManagerContext>
     ): void => {
         if (this.arrangementPlayerContext !== arrangementPlayerContext) {
             this.arrangementPlayerContext = arrangementPlayerContext;
             this.scoreBookContext = scoreBookContext;
 
-            this.setState({ inputValue: arrangementPlayerContext!.arrangement.title });
+            this.setState({ inputValue: arrangementPlayerContext!.arrangementView.title });
         }
     };
 
     private onBlur = (event: FocusEvent) => {
         const { onEditEnd } = this.props;
 
-        const arrangement = this.arrangementPlayerContext!.arrangement;
+        const arrangement = this.arrangementPlayerContext!.arrangementView;
         this.scoreBookContext?.edit({
             type: "EditCommand_ArrangementTitle", arrangement,
             newTitle: (event.target as HTMLInputElement).value
@@ -127,7 +127,7 @@ export class ArrangementTitle extends UIComponent<IArrangementTitleProps, IArran
     private onKeyUp = (event: KeyboardEvent) => {
         const { onEditEnd } = this.props;
 
-        const arrangement = this.arrangementPlayerContext!.arrangement;
+        const arrangement = this.arrangementPlayerContext!.arrangementView;
         if (event.key === "Enter") { // Enter means submit the changes and stop editing
             this.scoreBookContext?.edit({
                 type: "EditCommand_ArrangementTitle",

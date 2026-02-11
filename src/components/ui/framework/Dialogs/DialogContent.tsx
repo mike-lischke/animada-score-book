@@ -10,7 +10,7 @@ import { UIComponent, type ICommonUIProperties } from "../UIComponent.js";
 import { Button } from "../Button.js";
 import { Container } from "../Container.js";
 import { Icon } from "../Icon.js";
-import { Orientation } from "../ui-types.js";
+import { ChildAlignment, Orientation } from "../ui-types.js";
 import { Codicon } from "../Codicon.js";
 
 interface IDialogContentProperties extends ICommonUIProperties {
@@ -43,7 +43,11 @@ export class DialogContent extends UIComponent<IDialogContentProperties> {
         } else {
             dialogContent = (
                 <>
-                    {caption && <div className="title verticalCenterContent">
+                    {caption && <Container
+                        className="title"
+                        orientation={Orientation.LeftToRight}
+                        crossAlignment={ChildAlignment.Center}
+                    >
                         {caption}
                         <Button id="closeButton"
                             imageOnly
@@ -51,10 +55,10 @@ export class DialogContent extends UIComponent<IDialogContentProperties> {
                         >
                             <Icon src={Codicon.Close} />
                         </Button>
-                    </div>
+                    </Container>
                     }
                     {header && <div className="header">{header}</div>}
-                    {content && <div ref={this.contentRef} className="content fixedScrollbar">{content}</div>}
+                    {content && <div ref={this.contentRef} className="content">{content}</div>}
                     {actions &&
                         <div className="footer verticalCenterContent">
                             <Container

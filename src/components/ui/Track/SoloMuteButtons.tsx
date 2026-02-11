@@ -5,6 +5,7 @@
 
 import { type ComponentChild, type ContextType } from "preact";
 
+import { Button } from "../framework/Button.js";
 import { UIComponent } from "../framework/UIComponent.js";
 import { TrackPlayerContext } from "./TrackViewer.js";
 
@@ -44,12 +45,16 @@ export class SoloMuteButtons extends UIComponent<{}, ISoloMuteButtonsState> {
 
                     return (
                         <>
-                            <button className={`${smButtonClasses} ${soloButtonColour}`} onClick={this.solo}>
+                            <Button
+                                className={`${smButtonClasses} ${soloButtonColour}`}
+                                onClick={this.solo}>
                                 S
-                            </button>
-                            <button className={`${smButtonClasses} ${muteButtonColour}`} onClick={this.mute}>
+                            </Button>
+                            <Button
+                                className={`${smButtonClasses} ${muteButtonColour}`}
+                                onClick={this.mute}>
                                 M
-                            </button>
+                            </Button>
                         </>
                     );
                 }}

@@ -67,7 +67,7 @@ export class Scrollbar extends UIComponent<IScrollbarProps, IScrollbarState> {
                     }}
                 />
                 <div className="thumb"
-                    style={{ width: `${thumbWidth} px}`, left: `${thumbLeft} px` }}
+                    style={{ width: `${thumbWidth}px`, left: `${thumbLeft}px` }}
                     onMouseDown={(event) => {
                         this.handleThumbMouseDown(event, wrapperRef.current, thumbWidth);
                     }}
@@ -116,7 +116,9 @@ export class Scrollbar extends UIComponent<IScrollbarProps, IScrollbarState> {
         const scrollLeft = wrapper.scrollLeft;
         const scrollbarWidth = wrapper.getElementsByClassName("custom-scrollbar")[0].clientWidth;
 
-        return (scrollLeft * scrollbarWidth) / wrapper.scrollWidth;
+        const result = (scrollLeft * scrollbarWidth) / wrapper.scrollWidth;
+
+        return result;
     }
 
     private handleThumbTouchStart(event: TouchEvent, wrapper: HTMLElement | null, thumbWidth: number,

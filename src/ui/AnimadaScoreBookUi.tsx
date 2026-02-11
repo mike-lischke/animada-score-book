@@ -9,11 +9,10 @@ import { UIComponent, type ICommonUIProperties } from "../components/ui/framewor
 import { Overlay } from "../components/ui/Overlay.js";
 import { ScoreBookViewer } from "../components/ui/ScoreBookViewer.js";
 import type { ISbDmInstrument } from "../core/ScoreBookDataModel.js";
-import type { IAnimadaScoreBook } from "../core/types/general.js";
 import type { ISerialisedArrangement } from "../core/types/snapshots.js";
 import { UndoManager } from "../core/UndoManager.js";
 import { ArrangementPlayer } from "../player/ArrangementPlayer.js";
-import { getEventEngine } from "../player/EventEngine.js";
+import { EventEngine } from "../player/EventEngine.js";
 import type { IArrangementPlayer } from "../player/types.js";
 import { AnimationEngine } from "./AnimationEngine.js";
 import { AppContext } from "./index.js";
@@ -46,10 +45,9 @@ export class AnimadaScoreBookUi extends UIComponent<IAnimadaScoreBookUiPropertie
     public static override contextType = AppContext;
     declare public context: ContextType<typeof AppContext>;
 
-    private scoreBook!: IAnimadaScoreBook;
+    private undoManager!: UndoManager;
     private arrangementPlayer?: IArrangementPlayer;
 
-    private eventEngine = getEventEngine();
     private animationEngine: AnimationEngine;
     private selectionManager: SelectionManager;
     private modeManager: ModeManager;
@@ -62,7 +60,7 @@ export class AnimadaScoreBookUi extends UIComponent<IAnimadaScoreBookUiPropertie
             needUpdate: true
         };
 
-        this.animationEngine = new AnimationEngine(this.eventEngine);
+        this.animationEngine = new AnimationEngine(EventEngine.instance);
         this.selectionManager = new SelectionManager();
         this.modeManager = new ModeManager(this.selectionManager);
 
@@ -94,7 +92,7 @@ export class AnimadaScoreBookUi extends UIComponent<IAnimadaScoreBookUiPropertie
 
         if (needUpdate) {
             if (this.arrangementPlayer) {
-                this.eventEngine.disconnect(this.arrangementPlayer);
+                EventEngine.instance.disconnect(this.arrangementPlayer);
                 this.arrangementPlayer.dispose();
             }
             this.loadScorebook(this.context.dataModel.instruments);
@@ -106,7 +104,7 @@ export class AnimadaScoreBookUi extends UIComponent<IAnimadaScoreBookUiPropertie
 
         return (
             <ScoreBookViewer
-                scoreBook={this.scoreBook}
+                undoManager={this.undoManager}
                 arrangementPlayer={this.arrangementPlayer!}
                 services={{
                     animationEngine: this.animationEngine,
@@ -125,12 +123,12 @@ export class AnimadaScoreBookUi extends UIComponent<IAnimadaScoreBookUiPropertie
 
         const dataModel = this.context.dataModel;
         const arrangement = dataModel.loadArrangement(serializedArrangement);
-        this.scoreBook = new UndoManager(arrangement, instruments);
-        this.arrangementPlayer = new ArrangementPlayer(this.scoreBook.arrangement);
-        this.eventEngine.connect(this.arrangementPlayer);
+        this.undoManager = new UndoManager(arrangement, instruments);
+        this.arrangementPlayer = new ArrangementPlayer(arrangement);
+        EventEngine.instance.connect(this.arrangementPlayer);
 
-        if (this.scoreBook.arrangement.title) {
-            document.title = this.scoreBook.arrangement.title + " - Animada Score Book";
+        if (arrangement.title) {
+            document.title = arrangement.title + " - Animada Score Book";
         }
     }
 
@@ -153,10 +151,10 @@ export class AnimadaScoreBookUi extends UIComponent<IAnimadaScoreBookUiPropertie
                 this.modeManager.deletePolyrhythmMode = false;
                 break;
             case " ":
-                if (this.eventEngine.state === "stopped") {
-                    void this.eventEngine.play();
+                if (EventEngine.instance.state === "stopped") {
+                    void EventEngine.instance.play();
                 } else {
-                    this.eventEngine.stop();
+                    EventEngine.instance.stop();
                 }
                 event.preventDefault(); // This is to prevent spaces getting written in number inputs
                 break;
@@ -167,9 +165,9 @@ export class AnimadaScoreBookUi extends UIComponent<IAnimadaScoreBookUiPropertie
             case "Backspace":
             case "Delete":
                 if (!(event.target instanceof HTMLInputElement)) {
-                    this.scoreBook.edit({
+                    this.undoManager.edit({
                         type: "EditCommand_ArrangementClearSelection",
-                        arrangement: this.scoreBook.arrangement,
+                        arrangement: this.undoManager.arrangement,
                         clearSelection: this.selectionManager.selections
                     });
                     this.selectionManager.deselectAll();
@@ -183,10 +181,10 @@ export class AnimadaScoreBookUi extends UIComponent<IAnimadaScoreBookUiPropertie
             case "z":
                 if (event.ctrlKey || event.metaKey) {
                     if (event.shiftKey) {
-                        this.scoreBook.redo();
+                        this.undoManager.redo();
                     } else {
                         // Standard redo on Mac, and no problem to allow it on Windows
-                        this.scoreBook.undo();
+                        this.undoManager.undo();
                     } // With ctrl, this doesn't even trigger on Mac. Seems harmless to include it anyway.
                 }
                 break;
@@ -194,7 +192,7 @@ export class AnimadaScoreBookUi extends UIComponent<IAnimadaScoreBookUiPropertie
                 // We do not allow command+y to redo on Mac
                 // On Chrome, Firefox, and Safari, it triggers browser things, and so is very confusing to also redo
                 if (event.ctrlKey) {
-                    this.scoreBook.redo();
+                    this.undoManager.redo();
                 }
                 break;
         }

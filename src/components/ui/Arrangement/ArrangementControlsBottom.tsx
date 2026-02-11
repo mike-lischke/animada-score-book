@@ -6,160 +6,172 @@
 import type { ContextType } from "preact";
 
 import type { ISbDmTrack } from "../../../core/ScoreBookDataModel.js";
-import type { IArrangementView, Subscription } from "../../../core/types/general.js";
-import { useEditCommand } from "../../../ui/hooks/useEditCommand.js";
+import type { IArrangement } from "../../../core/types/general.js";
 import { ExpandingSpacer } from "../ExpandingSpacer.js";
-import { UIComponent } from "../framework/UIComponent.js";
+import { Button } from "../framework/Button.js";
+import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
 import { Overlay } from "../Overlay.js";
-import { ServicesContext } from "../ScoreBookViewer.js";
+import { ServicesContext, type UndoManagerContext } from "../ScoreBookViewer.js";
 import { SmallSpacer } from "../SmallSpacer.js";
 import { ArrangementPlayerContext } from "./ArrangementViewer.js";
+
+export interface IArrangementControlsBottomProps extends ICommonUIProperties {
+    arrangementPlayer?: ContextType<typeof ArrangementPlayerContext>,
+    services?: ContextType<typeof ServicesContext>,
+    undoManager?: ContextType<typeof UndoManagerContext>,
+}
 
 interface IArrangementControlsBottomState {
     arePolyrhythms?: boolean;
 }
 
-export class ArrangementControlsBottom extends UIComponent<{}, IArrangementControlsBottomState> {
-    private arrangementSubscription?: Subscription;
+export class ArrangementControlsBottom
+    extends UIComponent<IArrangementControlsBottomProps, IArrangementControlsBottomState> {
+
     private subscribedTracks = new Set<ISbDmTrack>();
 
-    private arrangementPlayerContext?: ContextType<typeof ArrangementPlayerContext>;
-    private servicesContext?: ContextType<typeof ServicesContext>;
-
-    public constructor(props: {}) {
+    public constructor(props: IArrangementControlsBottomProps) {
         super(props);
 
         this.state = {};
     }
 
-    public override componentWillUnmount(): void {
-        const arrangement = this.arrangementPlayerContext!.arrangement;
+    public override componentDidMount(): void {
+        const { arrangementPlayer, services } = this.props;
+        const { arePolyrhythms } = this.state;
 
-        arrangement.unsubscribe(this.arrangementCallback);
-        arrangement.unsubscribe(this.arrangementSubscription!);
+        const arrangement = arrangementPlayer!.arrangementView;
+        this.addSubscription(arrangement, this.arrangementCallback);
+        this.addSubscription(arrangement, this.trackUpdate);
+
+        arrangement.tracks.forEach((track) => {
+            track.subscribe(this.arrangementCallback);
+            this.subscribedTracks.add(track);
+        });
+
+        const hasPolyrhythms = this.hasPolyrhythms(arrangement);
+        if (!hasPolyrhythms && services) {
+            Overlay.toggleOverlay("delete_polyrhythms", "hide");
+            services.modeManager.deletePolyrhythmMode = false;
+        }
+
+        if (arePolyrhythms !== hasPolyrhythms) {
+            this.setState({ arePolyrhythms: hasPolyrhythms });
+        }
+    }
+
+    public override componentWillUnmount(): void {
         this.subscribedTracks.forEach((track) => {
-            track.unsubscribe(this.arrangementCallback as Subscription);
+            track.unsubscribe(this.arrangementCallback);
         });
 
         this.subscribedTracks.clear();
-        this.arrangementPlayerContext = undefined;
-        this.servicesContext = undefined;
     }
 
     public render() {
+        const { arrangementPlayer, services, undoManager } = this.props;
         const { arePolyrhythms } = this.state;
 
-        const edit = useEditCommand();
+        if (!arrangementPlayer || !services) {
+            return <></>;
+        }
+
+        const arrangement = arrangementPlayer.arrangementView;
+        const modeManager = services.modeManager;
 
         return (
-            <ArrangementPlayerContext.Consumer>
-                {(arrangementPlayerContext) => {
-                    return (
-                        <ServicesContext.Consumer>
-                            {(servicesContext) => {
-                                this.useArrangementAndTrackSubscription(arrangementPlayerContext, servicesContext);
-                                const arrangement = arrangementPlayerContext!.arrangement;
-                                if (arePolyrhythms === undefined) {
-                                    this.setState({
-                                        arePolyrhythms: this.hasPolyrhythms(arrangement),
-                                    });
+            <div className="arrangement-controls arrangement-controls-bottom">
+                <Button
+                    className="push-button"
+                    onClick={() => {
+                        Overlay.toggleOverlay("instrument_browser", "show");
+                    }}
+                >Add Instrument</Button>
 
-                                    return null;
-                                }
+                <SmallSpacer />
+                <ExpandingSpacer />
 
-                                const modeManager = servicesContext!.modeManager;
+                {
+                    arePolyrhythms
+                        ? (
+                            <>
+                                <Button
+                                    className="push-button"
+                                    onClick={() => {
+                                        modeManager.deletePolyrhythmMode = true;
+                                        Overlay.toggleOverlay("delete_polyrhythms", "show");
+                                    }}
+                                >Delete polyrhythms...</Button>
+                                <SmallSpacer />
+                            </>
+                        )
+                        : (<></>)
+                }
 
-                                return (
-                                    <div className="arrangement-controls arrangement-controls-bottom">
-                                        <button
-                                            className="push-button"
-                                            onClick={() => {
-                                                Overlay.toggleOverlay("instrument_browser", "show");
-                                            }}
-                                        >Add Instrument</button>
+                <Button
+                    className="push-button"
+                    onClick={() => {
+                        Overlay.toggleOverlay("clear_tracks", "show");
+                    }}
+                >
+                    Clear all sounds
+                </Button>
 
-                                        <SmallSpacer />
-                                        <ExpandingSpacer />
-
-                                        {
-                                            arePolyrhythms
-                                                ? (
-                                                    <>
-                                                        <button
-                                                            className="push-button"
-                                                            onClick={() => {
-                                                                modeManager.deletePolyrhythmMode = true;
-                                                                Overlay.toggleOverlay("delete_polyrhythms", "show");
-                                                            }}
-                                                        >Delete polyrhythms...</button>
-                                                        <SmallSpacer />
-                                                    </>
-                                                )
-                                                : (<></>)
-                                        }
-
-                                        <button
-                                            className="push-button"
-                                            onClick={() => {
-                                                Overlay.toggleOverlay("clear_tracks", "show");
-                                            }}
-                                        >Clear all sounds</button>
-
-                                        <Overlay name="clear_tracks">
-                                            <div style={{
-                                                display: "flex",
-                                                height: "100%",
-                                                width: "100%",
-                                                boxSizing: "border-box"
-                                            }}>
-                                                <ExpandingSpacer />
-                                                <button
-                                                    className="push-button"
-                                                    onClick={() => {
-                                                        edit({
-                                                            type: "EditCommand_ArrangementClear", arrangement,
-                                                            command: "clear all tracks"
-                                                        });
-                                                        Overlay.toggleOverlay("clear_tracks", "hide");
-                                                    }}
-                                                >Really, clear sounds</button>
-                                                <SmallSpacer />
-                                                <button
-                                                    className="push-button"
-                                                    onClick={() => {
-                                                        Overlay.toggleOverlay("clear_tracks", "hide");
-                                                    }}
-                                                >No, go back</button>
-                                            </div>
-                                        </Overlay>
-
-                                        <Overlay name="delete_polyrhythms">
-                                            <div style={{
-                                                display: "flex",
-                                                height: "100%",
-                                                width: "100%",
-                                                boxSizing: "border-box"
-                                            }}>
-                                                <ExpandingSpacer />
-                                                <button
-                                                    className="push-button"
-                                                    onClick={() => {
-                                                        return modeManager.deletePolyrhythmMode = false;
-                                                    }}
-                                                >Done</button>
-                                            </div>
-                                        </Overlay>
-                                    </div>
-                                );
+                <Overlay name="clear_tracks">
+                    <div style={{
+                        display: "flex",
+                        height: "100%",
+                        width: "100%",
+                        boxSizing: "border-box"
+                    }}>
+                        <ExpandingSpacer />
+                        <Button
+                            className="push-button"
+                            onClick={() => {
+                                undoManager?.edit({
+                                    type: "EditCommand_ArrangementClear", arrangement,
+                                    command: "clear all tracks"
+                                });
+                                Overlay.toggleOverlay("clear_tracks", "hide");
                             }}
-                        </ServicesContext.Consumer>
-                    );
-                }}
-            </ArrangementPlayerContext.Consumer>
+                        >
+                            Really, clear sounds
+                        </Button>
+                        <SmallSpacer />
+                        <Button
+                            className="push-button"
+                            onClick={() => {
+                                Overlay.toggleOverlay("clear_tracks", "hide");
+                            }}
+                        >
+                            No, go back
+                        </Button>
+                    </div>
+                </Overlay>
+
+                <Overlay name="delete_polyrhythms">
+                    <div style={{
+                        display: "flex",
+                        height: "100%",
+                        width: "100%",
+                        boxSizing: "border-box"
+                    }}>
+                        <ExpandingSpacer />
+                        <Button
+                            className="push-button"
+                            onClick={() => {
+                                return modeManager.deletePolyrhythmMode = false;
+                            }}
+                        >
+                            Done
+                        </Button>
+                    </div>
+                </Overlay>
+            </div>
         );
     }
 
-    private hasPolyrhythms(arrangement: IArrangementView): boolean {
+    private hasPolyrhythms(arrangement: IArrangement): boolean {
         for (const track of arrangement.tracks) {
             if (track.polyrhythms.length) {
                 return true;
@@ -170,58 +182,40 @@ export class ArrangementControlsBottom extends UIComponent<{}, IArrangementContr
     }
 
     private arrangementCallback = () => {
-        const arrangement = this.arrangementPlayerContext!.arrangement;
+        const { arrangementPlayer: arrangementPlayerContext, services: servicesContext } = this.props;
 
-        const arePolyrhythms = this.hasPolyrhythms(arrangement);
-        if (!arePolyrhythms) {
-            Overlay.toggleOverlay("delete_polyrhythms", "hide");
+        if (arrangementPlayerContext) {
+            const arrangement = arrangementPlayerContext.arrangementView;
 
-            const modeManager = this.servicesContext!.modeManager;
-            modeManager.deletePolyrhythmMode = false;
+            const arePolyrhythms = this.hasPolyrhythms(arrangement);
+            if (!arePolyrhythms) {
+                Overlay.toggleOverlay("delete_polyrhythms", "hide");
+
+                const modeManager = servicesContext?.modeManager;
+                if (modeManager) {
+                    modeManager.deletePolyrhythmMode = false;
+                }
+            }
+            this.setState({ arePolyrhythms: arePolyrhythms });
         }
-        this.setState({ arePolyrhythms: arePolyrhythms });
     };
 
-    private useArrangementAndTrackSubscription = (
-        arrangementPlayerContext: ContextType<typeof ArrangementPlayerContext>,
-        servicesContext?: ContextType<typeof ServicesContext>
-    ): void => {
-        if (this.arrangementPlayerContext !== arrangementPlayerContext) {
-            this.arrangementPlayerContext = arrangementPlayerContext;
-            this.servicesContext = servicesContext;
+    private trackUpdate = (): void => {
+        const { arrangementPlayer: arrangementPlayerContext } = this.props;
+        const arrangement = arrangementPlayerContext!.arrangementView;
 
-            const arrangement: IArrangementView = arrangementPlayerContext!.arrangement;
+        this.subscribedTracks.forEach((track) => {
+            if (!arrangement.tracks.includes(track)) {
+                track.unsubscribe(this.arrangementCallback);
+                this.subscribedTracks.delete(track);
+            }
+        });
 
-            arrangement.tracks.forEach((track) => {
-                track.subscribe(this.arrangementCallback as Subscription);
+        arrangement.tracks.forEach((track) => {
+            if (!this.subscribedTracks.has(track)) {
+                track.subscribe(this.arrangementCallback);
                 this.subscribedTracks.add(track);
-            });
-
-            const arrangementSubscription = () => {
-                this.subscribedTracks.forEach((track) => {
-                    if (!arrangement.tracks.includes(track)) {
-                        track.unsubscribe(this.arrangementCallback as Subscription);
-                        this.subscribedTracks.delete(track);
-                    }
-                });
-
-                arrangement.tracks.forEach((track) => {
-                    if (!this.subscribedTracks.has(track)) {
-                        track.subscribe(this.arrangementCallback as Subscription);
-                        this.subscribedTracks.add(track);
-                    }
-                });
-            };
-
-            arrangement.subscribe(arrangementSubscription);
-            this.arrangementSubscription = arrangementSubscription;
-
-            const modeManager = servicesContext!.modeManager;
-            modeManager.subscribe(() => {
-                if (!modeManager.deletePolyrhythmMode) {
-                    Overlay.toggleOverlay("delete_polyrhythms", "hide");
-                }
-            });
-        }
+            }
+        });
     };
 };
