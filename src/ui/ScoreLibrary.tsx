@@ -3,7 +3,7 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import { createRef, render, type ComponentChild, type ContextType } from "preact";
+import { createRef, render, type ComponentChild } from "preact";
 
 import type { CellComponent, ColumnDefinition, RowComponent } from "tabulator-tables";
 import { TrackEditButton } from "../TrackEditButton.js";
@@ -29,9 +29,9 @@ import {
 } from "../core/ScoreBookDataModel.js";
 import { getSerialisedArrangementFromParams } from "../core/serialisation/url.js";
 import { TranscriptionEditor } from "./TranscriptionEditor.js";
-import { AppContext } from "./index.js";
 
 export interface IScoreLibraryProperties extends ICommonUIProperties {
+    dataModel: ScoreBookDataModel;
     onAction?: (action: string, dataModelEntry?: ISbDmScoreFolder | ISbDmScore,
         parent?: ISbDmScoreFolder) => Promise<boolean>;
 }
@@ -49,9 +49,6 @@ interface IScoreLibraryState {
  * The user can select one score to load it into the player/editor.
  */
 export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLibraryState> {
-    public static override contextType = AppContext;
-    declare public context: ContextType<typeof AppContext>;
-
     private scoreTableRef = createRef<TreeGrid>();
     private transcriptionEditorRef = createRef<Dialog>();
 
@@ -63,6 +60,7 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
     }
 
     public render(): ComponentChild {
+        const { dataModel } = this.props;
         const { url } = this.state;
 
         const scoreTreeColumns: ColumnDefinition[] = [{
@@ -82,7 +80,7 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
             verticalGridLines: false,
         };
 
-        const scores = this.context.dataModel.scoreLib;
+        const scores = dataModel.scoreLib;
 
         const upperPanes: ISplitterPane[] = [{
             id: "libraryPane",
@@ -132,7 +130,7 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
             id: "scoreDetailsPane",
             content: (
                 <Container id="scoreDetailsPaneContent" orientation={Orientation.TopDown} >
-                    {this.renderSelectedScoreDetails(this.context.dataModel)}
+                    {this.renderSelectedScoreDetails(dataModel)}
                 </Container>
             ),
             minSize: 400,
@@ -416,7 +414,7 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
 
     private handleActionClick = (e: MouseEvent | KeyboardEvent, action: string,
         data?: ISbDmScoreFolder | ISbDmScore, parent?: ISbDmScoreFolder): void => {
-        const { onAction } = this.props;
+        const { onAction, dataModel } = this.props;
 
         e.stopPropagation();
         void onAction?.(action, data, parent).then((handled) => {
@@ -434,7 +432,7 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
                         if (parent) {
                             updateRowsById(parent.id, parent);
                         } else {
-                            const scores = this.context.dataModel.scoreLib;
+                            const scores = dataModel.scoreLib;
                             const tree = this.scoreTableRef.current;
                             void tree?.setData(scores, SetDataAction.Replace);
                         }
@@ -452,7 +450,7 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
 
                     case "remove": {
                         const tree = this.scoreTableRef.current;
-                        const scores = this.context.dataModel.scoreLib;
+                        const scores = dataModel.scoreLib;
                         void tree?.setData(scores, SetDataAction.Replace);
 
                         this.setState({ selectedArrangement: undefined, currentScore: undefined });
@@ -481,7 +479,9 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
             const params = new URLSearchParams(entry.content);
             const serialisedArrangement = getSerialisedArrangementFromParams(params);
             if (serialisedArrangement) {
-                const instruments = this.context.dataModel.instruments;
+                const { dataModel } = this.props;
+
+                const instruments = dataModel.instruments;
                 const arrangement = Arrangement.fromSerialized(serialisedArrangement, instruments);
                 arrangement.title = entry.name;
                 this.setState({ selectedArrangement: arrangement, currentScore: entry });

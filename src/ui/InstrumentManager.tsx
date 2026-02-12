@@ -3,7 +3,7 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import type { ComponentChild, ContextType } from "preact";
+import type { ComponentChild } from "preact";
 
 import { WaveformPlayer } from "../components/ui/composites/WaveformPlayer.js";
 import { Container } from "../components/ui/framework/Container.js";
@@ -12,10 +12,15 @@ import {
     SplitContainer, type ISplitterPane, type ISplitterPaneSizeInfo
 } from "../components/ui/framework/SplitContainer.js";
 import { Orientation } from "../components/ui/framework/ui-types.js";
-import { UIComponent } from "../components/ui/framework/UIComponent.js";
-import { SbDmEntityType, type ISbDmSoundFile, type ISbDmSoundFolder } from "../core/ScoreBookDataModel.js";
+import { UIComponent, type ICommonUIProperties } from "../components/ui/framework/UIComponent.js";
+import {
+    SbDmEntityType, type ISbDmSoundFile, type ISbDmSoundFolder, type ScoreBookDataModel
+} from "../core/ScoreBookDataModel.js";
 import { getApiBase } from "../core/utils.js";
-import { AppContext } from "./index.js";
+
+export interface IInstrumentManagerProperties extends ICommonUIProperties {
+    dataModel: ScoreBookDataModel;
+}
 
 interface IInstrumentManagerState {
     /** The URL of the audio/video currently being loaded in the transcriber. */
@@ -27,14 +32,10 @@ interface IInstrumentManagerState {
     currentSplitterPosition: number;
 }
 
-/** A component to load a tree of sound files from the server, which represend */
-export class InstrumentManager extends UIComponent<{}, IInstrumentManagerState> {
-    public static override contextType = AppContext;
-    declare public context: ContextType<typeof AppContext>;
-
+export class InstrumentManager extends UIComponent<IInstrumentManagerProperties, IInstrumentManagerState> {
     private audio?: HTMLAudioElement;
 
-    public constructor(props: {}) {
+    public constructor(props: IInstrumentManagerProperties) {
         super(props);
 
         this.state = {
@@ -44,9 +45,11 @@ export class InstrumentManager extends UIComponent<{}, IInstrumentManagerState> 
     }
 
     public render(): ComponentChild {
+        const { dataModel } = this.props;
+
         const { selectedUrl, currentSplitterPosition } = this.state;
 
-        const fsEntries = this.context.dataModel.soundLib;
+        const fsEntries = dataModel.soundLib;
 
         const panes: ISplitterPane[] = [{
             minSize: 350,
@@ -91,18 +94,12 @@ export class InstrumentManager extends UIComponent<{}, IInstrumentManagerState> 
         }];
 
         return (
-            <AppContext.Consumer>
-                {({ dataModel }) => {
-                    return (
-                        <SplitContainer
-                            id="instrumentManagerSplitter"
-                            orientation={Orientation.LeftToRight}
-                            panes={panes}
-                            onPaneResized={this.handleSplitterResize}
-                        />
-                    );
-                }}
-            </AppContext.Consumer>
+            <SplitContainer
+                id="instrumentManagerSplitter"
+                orientation={Orientation.LeftToRight}
+                panes={panes}
+                onPaneResized={this.handleSplitterResize}
+            />
         );
     }
 
@@ -146,7 +143,6 @@ export class InstrumentManager extends UIComponent<{}, IInstrumentManagerState> 
     };
 
     private getSoundUrl(path: string): string {
-        // Pfad anpassen, falls nötig
         const base = getApiBase();
 
         return `${base}/soundLib/${path}`;

@@ -3,22 +3,21 @@
 * Licensed under the MIT License. See License.txt in the project root for license information.
 */
 
-import type { ContextType } from "preact";
-
 import type { ISbDmTrack } from "../../../core/ScoreBookDataModel.js";
 import type { IArrangement } from "../../../core/types/general.js";
+import type { UndoManager } from "../../../core/UndoManager.js";
+import type { ArrangementPlayer } from "../../../player/ArrangementPlayer.js";
+import type { ScoreBookUiServices } from "../../../ui/AnimadaScoreBookUi.js";
 import { ExpandingSpacer } from "../ExpandingSpacer.js";
 import { Button } from "../framework/Button.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
 import { Overlay } from "../Overlay.js";
-import { ServicesContext, type UndoManagerContext } from "../ScoreBookViewer.js";
 import { SmallSpacer } from "../SmallSpacer.js";
-import { ArrangementPlayerContext } from "./ArrangementViewer.js";
 
 export interface IArrangementControlsBottomProps extends ICommonUIProperties {
-    arrangementPlayer?: ContextType<typeof ArrangementPlayerContext>,
-    services?: ContextType<typeof ServicesContext>,
-    undoManager?: ContextType<typeof UndoManagerContext>,
+    arrangementPlayer: ArrangementPlayer,
+    services: ScoreBookUiServices,
+    undoManager: UndoManager;
 }
 
 interface IArrangementControlsBottomState {
@@ -40,7 +39,7 @@ export class ArrangementControlsBottom
         const { arrangementPlayer, services } = this.props;
         const { arePolyrhythms } = this.state;
 
-        const arrangement = arrangementPlayer!.arrangementView;
+        const arrangement = arrangementPlayer.arrangementView;
         this.addSubscription(arrangement, this.arrangementCallback);
         this.addSubscription(arrangement, this.trackUpdate);
 
@@ -50,7 +49,7 @@ export class ArrangementControlsBottom
         });
 
         const hasPolyrhythms = this.hasPolyrhythms(arrangement);
-        if (!hasPolyrhythms && services) {
+        if (!hasPolyrhythms) {
             Overlay.toggleOverlay("delete_polyrhythms", "hide");
             services.modeManager.deletePolyrhythmMode = false;
         }
@@ -71,10 +70,6 @@ export class ArrangementControlsBottom
     public render() {
         const { arrangementPlayer, services, undoManager } = this.props;
         const { arePolyrhythms } = this.state;
-
-        if (!arrangementPlayer || !services) {
-            return <></>;
-        }
 
         const arrangement = arrangementPlayer.arrangementView;
         const modeManager = services.modeManager;
@@ -128,7 +123,7 @@ export class ArrangementControlsBottom
                         <Button
                             className="push-button"
                             onClick={() => {
-                                undoManager?.edit({
+                                undoManager.edit({
                                     type: "EditCommand_ArrangementClear", arrangement,
                                     command: "clear all tracks"
                                 });
@@ -182,27 +177,22 @@ export class ArrangementControlsBottom
     }
 
     private arrangementCallback = () => {
-        const { arrangementPlayer: arrangementPlayerContext, services: servicesContext } = this.props;
+        const { arrangementPlayer, services } = this.props;
 
-        if (arrangementPlayerContext) {
-            const arrangement = arrangementPlayerContext.arrangementView;
+        const arrangement = arrangementPlayer.arrangementView;
 
-            const arePolyrhythms = this.hasPolyrhythms(arrangement);
-            if (!arePolyrhythms) {
-                Overlay.toggleOverlay("delete_polyrhythms", "hide");
+        const arePolyrhythms = this.hasPolyrhythms(arrangement);
+        if (!arePolyrhythms) {
+            Overlay.toggleOverlay("delete_polyrhythms", "hide");
 
-                const modeManager = servicesContext?.modeManager;
-                if (modeManager) {
-                    modeManager.deletePolyrhythmMode = false;
-                }
-            }
-            this.setState({ arePolyrhythms: arePolyrhythms });
+            services.modeManager.deletePolyrhythmMode = false;
         }
+        this.setState({ arePolyrhythms: arePolyrhythms });
     };
 
     private trackUpdate = (): void => {
         const { arrangementPlayer: arrangementPlayerContext } = this.props;
-        const arrangement = arrangementPlayerContext!.arrangementView;
+        const arrangement = arrangementPlayerContext.arrangementView;
 
         this.subscribedTracks.forEach((track) => {
             if (!arrangement.tracks.includes(track)) {

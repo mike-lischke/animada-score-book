@@ -3,10 +3,12 @@
 * Licensed under the MIT License. See License.txt in the project root for license information.
 */
 
-import { createContext, type ComponentChild } from "preact";
+import { type ComponentChild } from "preact";
 
-import type { IArrangementPlayer, ITrackPlayer } from "../../../player/types.js";
-import { ArrangementPlayerContext } from "../Arrangement/ArrangementViewer.js";
+import type { UndoManager } from "../../../core/UndoManager.js";
+import type { ArrangementPlayer } from "../../../player/ArrangementPlayer.js";
+import type { TrackPlayer } from "../../../player/TrackPlayer.js";
+import type { ScoreBookUiServices } from "../../../ui/AnimadaScoreBookUi.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
 import { Overlay } from "../Overlay.js";
 import { NoteLine } from "./NoteLine.js";
@@ -19,22 +21,24 @@ export interface ITrackViewerCallbacks {
     noteLineTouchEnd?: () => void;
 };
 
-export interface ITrackViewerProps extends ICommonUIProperties {
-    trackPlayer: ITrackPlayer;
+export interface ITrackViewerProperties extends ICommonUIProperties {
+    trackPlayer: TrackPlayer;
     callbacks: ITrackViewerCallbacks;
+
+    arrangementPlayer: ArrangementPlayer;
+    services: ScoreBookUiServices;
+    undoManager: UndoManager;
+
+    noteLineMinWidth: number;
 }
 
-interface ITrackviewerState {
+interface ITrackViewerState {
     audible: boolean;
     loaded: boolean;
 }
 
-export const TrackPlayerContext = createContext<ITrackPlayer | null>(null);
-
-export class TrackViewer extends UIComponent<ITrackViewerProps, ITrackviewerState> {
-    private arrangementPlayerContext: IArrangementPlayer | null = null;
-
-    public constructor(props: ITrackViewerProps) {
+export class TrackViewer extends UIComponent<ITrackViewerProperties, ITrackViewerState> {
+    public constructor(props: ITrackViewerProperties) {
         super(props);
 
         const track = props.trackPlayer.track;
@@ -45,22 +49,16 @@ export class TrackViewer extends UIComponent<ITrackViewerProps, ITrackviewerStat
     }
 
     public override componentDidMount(): void {
-        const { trackPlayer } = this.props;
+        const { trackPlayer, arrangementPlayer } = this.props;
         const track = trackPlayer.track;
 
-        track.instrument.subscribe(this.instrumentsChanged);
-    }
-
-    public override componentWillUnmount(): void {
-        const { trackPlayer } = this.props;
-        const track = trackPlayer.track;
-
-        track.instrument.unsubscribe(this.instrumentsChanged);
-        this.arrangementPlayerContext?.unsubscribe(this.audibleChanged);
+        this.addSubscription(track.instrument, this.instrumentsChanged);
+        this.addSubscription(arrangementPlayer, this.audibleChanged);
+        this.audibleChanged();
     }
 
     public render(): ComponentChild {
-        const { trackPlayer, callbacks } = this.props;
+        const { trackPlayer, arrangementPlayer, callbacks, services, undoManager, noteLineMinWidth } = this.props;
         const { loaded } = this.state;
 
         if (!loaded) {
@@ -75,34 +73,40 @@ export class TrackViewer extends UIComponent<ITrackViewerProps, ITrackviewerStat
         const track = trackPlayer.track;
         const overlayName = `track_overlay_${track.id}`;
 
-        return (
-            <ArrangementPlayerContext.Consumer>
-                {(arrangementPlayerContext) => {
-                    const { audible } = this.state;
-                    this.useContext(arrangementPlayerContext);
+        const { audible } = this.state;
 
-                    return (
-                        <TrackPlayerContext.Provider value={trackPlayer} >
-                            <div
-                                className={`track-viewer ${audible ? "audible" : "inaudible"}`}
-                                data-colour-group={track.instrument.colourGroup}
-                            >
-                                <div className="note-line-wrapper">
-                                    <NoteLine track={track} callbacks={callbacks} />
-                                    <Overlay name={overlayName}>
-                                        <TrackControls track={track} overlayName={overlayName} />
-                                    </Overlay>
-                                </div>
-                                <div className="scroll-shadow left-scroll-shadow" />
-                                <div className="scroll-shadow right-scroll-shadow" />
-                                <TrackMeta track={track} toggleControls={() => {
-                                    Overlay.toggleOverlay(overlayName);
-                                }} />
-                            </div>
-                        </TrackPlayerContext.Provider>
-                    );
-                }}
-            </ArrangementPlayerContext.Consumer>
+        return (
+            <div
+                className={`track-viewer ${audible ? "audible" : "inaudible"}`}
+                data-colour-group={track.instrument.colourGroup}
+            >
+                <div className="note-line-wrapper">
+                    <NoteLine
+                        track={track}
+                        callbacks={callbacks}
+                        trackPlayer={trackPlayer}
+                        arrangementPlayer={arrangementPlayer}
+                        services={services}
+                        undoManager={undoManager}
+                        noteLineMinWidth={noteLineMinWidth}
+                    />
+                    <Overlay name={overlayName}>
+                        <TrackControls
+                            track={track}
+                            overlayName={overlayName}
+                            undoManager={undoManager}
+                        />
+                    </Overlay>
+                </div>
+                <div className="scroll-shadow left-scroll-shadow" />
+                <div className="scroll-shadow right-scroll-shadow" />
+                <TrackMeta
+                    track={track}
+                    trackPlayer={trackPlayer}
+                    toggleControls={() => {
+                        Overlay.toggleOverlay(overlayName);
+                    }} />
+            </div>
         );
     }
 
@@ -112,18 +116,11 @@ export class TrackViewer extends UIComponent<ITrackViewerProps, ITrackviewerStat
         this.setState({ loaded: track.instrument.state.initialized });
     };
 
-    private useContext = (arrangementPlayerContext: IArrangementPlayer | null) => {
-        if (this.arrangementPlayerContext !== arrangementPlayerContext) {
-            this.arrangementPlayerContext = arrangementPlayerContext;
-
-            arrangementPlayerContext?.subscribe(this.audibleChanged);
-            this.audibleChanged();
-        }
-    };
-
     private audibleChanged = () => {
+        const { trackPlayer, arrangementPlayer } = this.props;
+
         this.setState({
-            audible: this.arrangementPlayerContext!.audibleTrackPlayers.has(this.props.trackPlayer.track),
+            audible: arrangementPlayer.audibleTrackPlayers.has(trackPlayer.track),
         });
     };
 }

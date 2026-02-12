@@ -3,18 +3,19 @@
 * Licensed under the MIT License. See License.txt in the project root for license information.
 */
 
-import type { ComponentChild, ContextType } from "preact";
+import type { ComponentChild } from "preact";
 
 import type { ISbDmNote } from "../../../core/ScoreBookDataModel.js";
 import type { INoteStyle, ISubscribable } from "../../../core/types/general.js";
+import type { UndoManager } from "../../../core/UndoManager.js";
 import { isSameTiming } from "../../../core/utils.js";
+import type { ArrangementPlayer } from "../../../player/ArrangementPlayer.js";
 import { AudioBufferPlayer } from "../../../player/AudioBufferPlayer.js";
+import type { TrackPlayer } from "../../../player/TrackPlayer.js";
+import type { ScoreBookUiServices } from "../../../ui/AnimadaScoreBookUi.js";
 import { getTrackColour } from "../../../ui/track-colour.js";
-import { ArrangementPlayerContext } from "../Arrangement/ArrangementViewer.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
-import { UndoManagerContext, ServicesContext } from "../ScoreBookViewer.js";
 import { TouchHoldDetector } from "../TouchHoldDetector.js";
-import { TrackPlayerContext } from "../Track/TrackViewer.js";
 import { NoteStyleSymbolViewer } from "./NoteStyleSymbolViewer.js";
 
 const audioContext = new AudioContext();
@@ -23,10 +24,10 @@ const baseNoteClasses = "note-viewer note-width";
 export interface INoteViewerProps extends ICommonUIProperties {
     note: ISbDmNote;
 
-    arrangementPlayerContext?: ContextType<typeof ArrangementPlayerContext>,
-    trackPlayerContext?: ContextType<typeof TrackPlayerContext>,
-    servicesContext?: ContextType<typeof ServicesContext>,
-    undoManagerContext?: ContextType<typeof UndoManagerContext>,
+    trackPlayer: TrackPlayer,
+    services: ScoreBookUiServices;
+    undoManager: UndoManager;
+    arrangementPlayer: ArrangementPlayer;
 }
 
 interface INoteViewerState {
@@ -108,27 +109,25 @@ export class NoteViewer extends UIComponent<INoteViewerProps, INoteViewerState> 
     }
 
     public override componentDidUpdate(): void {
-        const { note, servicesContext, trackPlayerContext, arrangementPlayerContext } = this.props;
-        const { selectionManager } = servicesContext!;
+        const { note, services, trackPlayer, arrangementPlayer } = this.props;
+        const { selectionManager } = services;
 
         this.timingChangeUnsubscribe?.();
         this.selectionChangeUnsubscribe?.();
         this.noteStyleChangeUnsubscribe?.();
 
         const timingPublisher: ISubscribable = note.polyrhythm
-            ? trackPlayerContext!.currentPolyrhythmNotePublisher
-            : arrangementPlayerContext!.currentTimingPublisher;
+            ? trackPlayer.currentPolyrhythmNotePublisher
+            : arrangementPlayer.currentTimingPublisher;
 
         this.timingChangeUnsubscribe = timingPublisher.subscribe(this.timingChanged);
         this.selectionChangeUnsubscribe = selectionManager.subscribe(this.selectionChanged);
 
         const { isCurrent, noteStyle } = this.state;
 
-        if (arrangementPlayerContext && trackPlayerContext) {
-            const isPlaying = this.isCurrentlyPlaying();
-            if (isPlaying !== isCurrent) {
-                this.setState({ isCurrent: isPlaying });
-            }
+        const isPlaying = this.isCurrentlyPlaying();
+        if (isPlaying !== isCurrent) {
+            this.setState({ isCurrent: isPlaying });
         }
 
         if (noteStyle !== note.noteStyle) {
@@ -176,15 +175,15 @@ export class NoteViewer extends UIComponent<INoteViewerProps, INoteViewerState> 
     };
 
     private selectionChanged = (): void => {
-        const { note, servicesContext } = this.props;
-        const { selectionManager } = servicesContext!;
+        const { note, services } = this.props;
+        const { selectionManager } = services;
 
         this.setState({ selected: selectionManager.isSelected(note) });
     };
 
     private handleClick = (event: MouseEvent) => {
-        const { note, servicesContext } = this.props;
-        const { selectionManager, modeManager } = servicesContext!;
+        const { note, services } = this.props;
+        const { selectionManager, modeManager } = services;
 
         if (event.shiftKey || modeManager.mobileSelectionMode) {
             selectionManager.handleClick(note);
@@ -201,8 +200,8 @@ export class NoteViewer extends UIComponent<INoteViewerProps, INoteViewerState> 
     };
 
     private handleMouseMove = (event: MouseEvent) => {
-        const { note, servicesContext } = this.props;
-        const { selectionManager, modeManager } = servicesContext!;
+        const { note, services } = this.props;
+        const { selectionManager, modeManager } = services;
 
         // Primary button, and no others, is held down
         if (modeManager.selectByMouseOverMode && event.buttons === 1) {
@@ -211,14 +210,14 @@ export class NoteViewer extends UIComponent<INoteViewerProps, INoteViewerState> 
     };
 
     private handleMouseDown = () => {
-        const { note, servicesContext } = this.props;
-        const { selectionManager } = servicesContext!;
+        const { note, services } = this.props;
+        const { selectionManager } = services;
         selectionManager.handleMouseDown(note);
     };
 
     private handleTouchHold = () => {
-        const { note, servicesContext } = this.props;
-        const { selectionManager, modeManager } = servicesContext!;
+        const { note, services } = this.props;
+        const { selectionManager, modeManager } = services;
         selectionManager.handleClick(note);
         modeManager.mobileSelectionMode = true;
     };
@@ -258,29 +257,25 @@ export class NoteViewer extends UIComponent<INoteViewerProps, INoteViewerState> 
     }
 
     private isCurrentlyPlaying(): boolean {
-        const { arrangementPlayerContext, trackPlayerContext } = this.props;
-        if (!arrangementPlayerContext || !trackPlayerContext) {
-            return false;
-        }
-
+        const { arrangementPlayer, trackPlayer } = this.props;
         const { note } = this.props;
 
         if (note.polyrhythm) {
-            return trackPlayerContext.currentPolyrhythmNote === note;
+            return trackPlayer.currentPolyrhythmNote === note;
         }
 
-        if (arrangementPlayerContext.currentTiming === null) {
+        if (arrangementPlayer.currentTiming === null) {
             return false;
         }
 
-        return isSameTiming(arrangementPlayerContext.currentTiming, note.timing);
+        return isSameTiming(arrangementPlayer.currentTiming, note.timing);
     }
 
     private cycleNoteStyle() {
-        const { note, undoManagerContext } = this.props;
+        const { note, undoManager } = this.props;
         const noteStyle = this.getNextNoteStyle(note);
 
-        undoManagerContext?.edit({ type: "EditCommand_Note", note, noteStyle });
+        undoManager.edit({ type: "EditCommand_Note", note, noteStyle });
         if (noteStyle?.audioBuffer) {
             // Play a preview of the selected note style.
             // Default start time (0) is fine here.

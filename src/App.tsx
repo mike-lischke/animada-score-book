@@ -31,7 +31,7 @@ import { getSerialisedArrangementFromParams } from "./core/serialisation/url.js"
 import type { ISerialisedArrangement } from "./core/types/snapshots.js";
 import { convertErrorToString } from "./core/utils.js";
 import { AnimadaScoreBookUi } from "./ui/AnimadaScoreBookUi.js";
-import { AppContext, emptySongString } from "./ui/index.js";
+import { emptySongString } from "./ui/index.js";
 import { ScoreLibrary } from "./ui/ScoreLibrary.js";
 import { DialogHost } from "./ui/DialogHost.js";
 import { ValueEditorEntryType, type IValueEditorValueEntry } from "./components/ui/composites/ValueDialog.js";
@@ -80,72 +80,62 @@ export class App extends UIComponent<{}, IAppState> {
         const arrangement = serializedArrangement ?? { composition: emptySongString, version: 2, title: "New Song" };
 
         return (
-            <AppContext.Provider
-                value={{
-                    dataModel: this.dataModel
-                }}>
-                <ErrorBoundary>
+            <ErrorBoundary>
+                <Container
+                    id="appRoot"
+                    orientation={Orientation.TopDown}
+                    crossAlignment={ChildAlignment.Stretch}
+                >
                     <Container
-                        id="appRoot"
-                        orientation={Orientation.TopDown}
-                        crossAlignment={ChildAlignment.Stretch}
+                        id="appHeader"
+                        orientation={Orientation.LeftToRight}
+                        crossAlignment={ChildAlignment.Center}
                     >
-                        <Container
-                            id="appHeader"
-                            orientation={Orientation.LeftToRight}
-                            crossAlignment={ChildAlignment.Center}
+                        <Image id="titleLogo" src={titleImage} />
+                        <Label id="appTitle">Score Book</Label>
+                        <Switch
+                            id="themeSwitch"
+                            type="switch"
+                            title="Switch to dark mode"
+                            checkState={theme === "dark" ? CheckState.Checked : CheckState.Unchecked}
+                            onChange={this.handleThemeChange}
+                        />
+                        <Button
+                            id="githubLink"
+                            title="View on GitHub"
+                            imageOnly={true}
+                            role="switch"
+                            onClick={this.handleGithubClick}
                         >
-                            <Image id="titleLogo" src={titleImage} />
-                            <Label id="appTitle">Score Book</Label>
-                            <Switch
-                                id="themeSwitch"
-                                type="switch"
-                                title="Switch to dark mode"
-                                checkState={theme === "dark" ? CheckState.Checked : CheckState.Unchecked}
-                                onChange={this.handleThemeChange}
-                            />
-                            <Button
-                                id="githubLink"
-                                title="View on GitHub"
-                                imageOnly={true}
-                                role="switch"
-                                onClick={this.handleGithubClick}
-                            >
-                                <Icon src={Codicon.GithubInverted} />
-                            </Button>
-                        </Container>
-
-                        <Container id="toolbar" orientation={Orientation.LeftToRight}>
-                            <Button
-                                id="scoreLibraryButton"
-                                caption="Score Library"
-                                onClick={this.handleScoreLibraryClick}
-                            />
-                            <Button
-                                id="instrumentEditor"
-                                caption="Instrument Editor"
-                                onClick={this.handleInstrumentEditorClick}
-                            />
-                        </Container>
-                        <AnimadaScoreBookUi serializedArrangement={arrangement} />
+                            <Icon src={Codicon.GithubInverted} />
+                        </Button>
                     </Container>
-                    <Dialog
-                        ref={this.scoreLibraryRef}
-                    >
-                        <AppContext.Provider
-                            value={{
-                                dataModel: this.dataModel
-                            }}>
 
-                            <ScoreLibrary
-                                onAction={this.handleScoreLibraryAction}
-                            />
-                        </AppContext.Provider>
-                    </Dialog>
-                    <TooltipProvider />
-                    <DialogHost />
-                </ErrorBoundary>
-            </AppContext.Provider>
+                    <Container id="toolbar" orientation={Orientation.LeftToRight}>
+                        <Button
+                            id="scoreLibraryButton"
+                            caption="Score Library"
+                            onClick={this.handleScoreLibraryClick}
+                        />
+                        <Button
+                            id="instrumentEditor"
+                            caption="Instrument Editor"
+                            onClick={this.handleInstrumentEditorClick}
+                        />
+                    </Container>
+                    <AnimadaScoreBookUi serializedArrangement={arrangement} dataModel={this.dataModel} />
+                </Container>
+                <Dialog
+                    ref={this.scoreLibraryRef}
+                >
+                    <ScoreLibrary
+                        onAction={this.handleScoreLibraryAction}
+                        dataModel={this.dataModel}
+                    />
+                </Dialog>
+                <TooltipProvider />
+                <DialogHost />
+            </ErrorBoundary>
         );
     }
 

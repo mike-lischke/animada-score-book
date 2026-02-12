@@ -3,23 +3,25 @@
 * Licensed under the MIT License. See License.txt in the project root for license information.
 */
 
-import { type ComponentChild, type ContextType } from "preact";
+import { type ComponentChild } from "preact";
 
+import type { TrackPlayer } from "../../../player/TrackPlayer.js";
 import { Button } from "../framework/Button.js";
-import { UIComponent } from "../framework/UIComponent.js";
-import { TrackPlayerContext } from "./TrackViewer.js";
+import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
 
 const smButtonClasses = "options-button push-button small solo-mute-button";
+
+export interface ISoloMuteButtonsProps extends ICommonUIProperties {
+    trackPlayer: TrackPlayer;
+}
 
 interface ISoloMuteButtonsState {
     soloed: boolean;
     muted: boolean;
 }
 
-export class SoloMuteButtons extends UIComponent<{}, ISoloMuteButtonsState> {
-    private trackPlayerContext?: ContextType<typeof TrackPlayerContext>;
-
-    public constructor(props: {}) {
+export class SoloMuteButtons extends UIComponent<ISoloMuteButtonsProps, ISoloMuteButtonsState> {
+    public constructor(props: ISoloMuteButtonsProps) {
         super(props);
 
         this.state = {
@@ -28,65 +30,65 @@ export class SoloMuteButtons extends UIComponent<{}, ISoloMuteButtonsState> {
         };
     }
 
+    public static override getDerivedStateFromProps(props: ISoloMuteButtonsProps): Partial<ISoloMuteButtonsState> {
+        const soloMute = props.trackPlayer.soloMute;
+
+        return {
+            soloed: soloMute === "solo",
+            muted: soloMute === "mute",
+        };
+    }
+
+    public override componentDidMount(): void {
+        const { trackPlayer } = this.props;
+        trackPlayer.subscribe(this.muteChanged);
+    }
+
     public override componentWillUnmount(): void {
-        this.trackPlayerContext?.unsubscribe(this.muteChanged);
+        const { trackPlayer } = this.props;
+        trackPlayer.unsubscribe(this.muteChanged);
     }
 
     public render(): ComponentChild {
+        const { soloed, muted } = this.state;
+
+        const soloButtonColour = soloed ? "lighter-green" : "gray";
+        const muteButtonColour = muted ? "dark-blue" : "gray";
+
         return (
-            <TrackPlayerContext.Consumer>
-                {(trackPlayer) => {
-                    this.useContext(trackPlayer);
-
-                    const { soloed, muted } = this.state;
-
-                    const soloButtonColour = soloed ? "lighter-green" : "gray";
-                    const muteButtonColour = muted ? "dark-blue" : "gray";
-
-                    return (
-                        <>
-                            <Button
-                                className={`${smButtonClasses} ${soloButtonColour}`}
-                                onClick={this.solo}>
-                                S
-                            </Button>
-                            <Button
-                                className={`${smButtonClasses} ${muteButtonColour}`}
-                                onClick={this.mute}>
-                                M
-                            </Button>
-                        </>
-                    );
-                }}
-            </TrackPlayerContext.Consumer>
+            <>
+                <Button
+                    className={`${smButtonClasses} ${soloButtonColour}`}
+                    onClick={this.solo}>
+                    S
+                </Button>
+                <Button
+                    className={`${smButtonClasses} ${muteButtonColour}`}
+                    onClick={this.mute}>
+                    M
+                </Button>
+            </>
         );
     }
 
     private solo = () => {
-        return this.trackPlayerContext!.soloMute = (this.trackPlayerContext!.soloMute === "solo" ? null : "solo");
+        const { trackPlayer } = this.props;
+
+        return trackPlayer.soloMute = (trackPlayer.soloMute === "solo" ? null : "solo");
     };
 
     private mute = () => {
-        this.trackPlayerContext!.soloMute = (this.trackPlayerContext!.soloMute === "mute" ? null : "mute");
+        const { trackPlayer } = this.props;
+
+        return trackPlayer.soloMute = (trackPlayer.soloMute === "mute" ? null : "mute");
     };
 
-    private useContext(trackPlayerContext?: ContextType<typeof TrackPlayerContext>) {
-        if (this.trackPlayerContext !== trackPlayerContext) {
-            this.trackPlayerContext = trackPlayerContext;
-
-            trackPlayerContext?.subscribe(this.muteChanged);
-
-            this.setState({
-                soloed: trackPlayerContext!.soloMute === "solo",
-                muted: trackPlayerContext!.soloMute === "mute",
-            });
-        }
-    }
-
     private muteChanged = () => {
+        const { trackPlayer } = this.props;
+
         this.setState({
-            soloed: this.trackPlayerContext!.soloMute === "solo",
-            muted: this.trackPlayerContext!.soloMute === "mute",
+            soloed: trackPlayer.soloMute === "solo",
+            muted: trackPlayer.soloMute === "mute",
         });
     };
 }

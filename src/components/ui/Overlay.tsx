@@ -77,7 +77,11 @@ export class Overlay extends UIComponent<IOverlayProps, IOverlayState> {
 
         return (
             <OverlayStateContext.Provider value={this.overlayState} >
-                <div className={className} data-overlay-name={name} onTransitionEnd={this.handleTransitionEnd}>
+                <div
+                    className={className}
+                    data-overlay-name={name}
+                    onTransitionEnd={this.handleTransitionEnd}
+                >
                     {children}
                 </div>
             </OverlayStateContext.Provider>

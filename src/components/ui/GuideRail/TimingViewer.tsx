@@ -6,55 +6,41 @@
 import type { ComponentChild } from "preact";
 
 import type { ITiming } from "../../../core/ScoreBookDataModel.js";
-import type { ITimeParamsView } from "../../../core/types/general.js";
-import { ArrangementPlayerContext } from "../Arrangement/ArrangementViewer.js";
+import type { ITimeParams, ITimeParamsView } from "../../../core/types/general.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
 import { NoteViewer } from "../Note/NoteViewer.js";
-import { BarDivisibilityContext, type BarDivisibility } from "./GuideRail.js";
+import { type BarDivisibility } from "./GuideRail.js";
 
-export interface ITimingViewerProps extends ICommonUIProperties {
+export interface ITimingViewerProperties extends ICommonUIProperties {
     timing: ITiming;
+    timeParams: ITimeParams;
+    barDivisibility: BarDivisibility;
 }
 
-export class TimingViewer extends UIComponent<ITimingViewerProps> {
+export class TimingViewer extends UIComponent<ITimingViewerProperties> {
     public override render(): ComponentChild {
-        const { timing } = this.props;
+        const { timing, timeParams, barDivisibility } = this.props;
 
         const isStartOfBar = timing.step === 1;
 
-        return (
-            <BarDivisibilityContext.Consumer>
-                {(barDivisibility) => {
-                    return (
-                        <ArrangementPlayerContext.Consumer>
-                            {(arrangementPlayerContext) => {
-                                const timeParams = arrangementPlayerContext!.arrangementView.timeParams;
-                                const timingLabel = this.useTimingLabel(timeParams, barDivisibility!, timing,
-                                    isStartOfBar);
-                                const classes = this.useClasses(timeParams, timing, isStartOfBar);
+        const timingLabel = this.getTimingText(timeParams, barDivisibility, timing, isStartOfBar);
 
-                                return (<div className={classes} >
-                                    <div className='guiderail-timing-content'>
-                                        {timingLabel}
-                                    </div>
-                                </div>);
-                            }}
-                        </ArrangementPlayerContext.Consumer>
-                    );
-                }}
-            </BarDivisibilityContext.Consumer>
+        const { bar, step } = timing;
+        const { timeSignature, stepResolution } = timeParams;
+        const className = `guiderail-timing note-width ` +
+            `${NoteViewer.getParityClass(bar, step, timeSignature, stepResolution)} ` +
+            (isStartOfBar ? "start-of-bar" : "");
+
+        return (
+            <div className={className} >
+                <div className='guiderail-timing-content'>
+                    {timingLabel}
+                </div>
+            </div>
         );
     }
 
-    private useClasses(timeParams: ITimeParamsView, timing: ITiming, isStartOfBar: boolean): string {
-        const { bar, step } = timing;
-        const { timeSignature, stepResolution } = timeParams;
-
-        return `guiderail-timing note-width ${NoteViewer.getParityClass(bar, step, timeSignature, stepResolution)} ` +
-            (isStartOfBar ? "start-of-bar" : "");
-    }
-
-    private useTimingLabel(timeParams: ITimeParamsView, barDivisibility: BarDivisibility, timing: ITiming,
+    private getTimingText(timeParams: ITimeParamsView, barDivisibility: BarDivisibility, timing: ITiming,
         isStartOfBar: boolean): string {
         const { timeSignature, stepResolution } = timeParams;
 

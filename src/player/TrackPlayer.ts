@@ -7,7 +7,7 @@ import { Publisher } from "../core/Publisher.js";
 import type { ISbDmNote, ISbDmTrack, RealTime } from "../core/ScoreBookDataModel.js";
 import type { IPolyrhythm } from "../core/types/general.js";
 import { getMuteEvents } from "./Muting.js";
-import { Event, ICallbackEvent, IInterval, ITimeCoordinator, ITrackPlayer, SoloMute } from "./types.js";
+import { Event, ICallbackEvent, IInterval, ITimeCoordinator, SoloMute } from "./types.js";
 
 /**
  * Coordinates playback for a single track (`ITrackView`).
@@ -19,7 +19,7 @@ import { Event, ICallbackEvent, IInterval, ITimeCoordinator, ITrackPlayer, SoloM
  * - Exposes `soloMute` to participate in arrangement-wide audible filtering.
  * - Provides a robust lifecycle via `onStop()` and `dispose()`.
  */
-export class TrackPlayer extends Publisher implements ITrackPlayer {
+export class TrackPlayer extends Publisher {
     public readonly track: ISbDmTrack;
     /** Publishes when the current polyrhythm note changes (for UI highlighting). */
     public readonly currentPolyrhythmNotePublisher: Publisher = new Publisher();

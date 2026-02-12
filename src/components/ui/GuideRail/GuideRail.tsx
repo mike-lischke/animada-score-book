@@ -3,14 +3,13 @@
 * Licensed under the MIT License. See License.txt in the project root for license information.
 */
 
-import { createContext, type ComponentChild } from "preact";
+import { type ComponentChild } from "preact";
 
 import type { IArrangement, ITimeParamsView, Subscription } from "../../../core/types/general.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
 import { TimingViewer } from "./TimingViewer.js";
 
 export type BarDivisibility = 1 | 2 | 4;
-export const BarDivisibilityContext = createContext<BarDivisibility | null>(null);
 
 export interface IGuideRailProps extends ICommonUIProperties {
     arrangementView: Readonly<IArrangement>;
@@ -49,18 +48,21 @@ export class GuideRail extends UIComponent<IGuideRailProps, IGuideRailState> {
         const display = numBars > 1 ? "block" : "none";
 
         return (
-            <BarDivisibilityContext.Provider value={barDivisibility} >
-                <div className='guiderail-wrapper' style={{ display }}>
-                    <div className='guiderail-meta'></div>
-                    <div className='guiderail'>
-                        {arrangementView.timeParams.timings.map((timing) => {
-                            return <TimingViewer timing={timing} key={`${timing.bar}.${timing.step}`} />;
-                        })}
-                    </div>
-                    <div className="scroll-shadow left-scroll-shadow" />
-                    <div className="scroll-shadow right-scroll-shadow" />
+            <div className='guiderail-wrapper' style={{ display }}>
+                <div className='guiderail-meta'></div>
+                <div className='guiderail'>
+                    {arrangementView.timeParams.timings.map((timing) => {
+                        return <TimingViewer
+                            timing={timing}
+                            key={`${timing.bar}.${timing.step}`}
+                            timeParams={arrangementView.timeParams}
+                            barDivisibility={barDivisibility}
+                        />;
+                    })}
                 </div>
-            </BarDivisibilityContext.Provider>
+                <div className="scroll-shadow left-scroll-shadow" />
+                <div className="scroll-shadow right-scroll-shadow" />
+            </div>
         );
     }
 

@@ -3,86 +3,77 @@
 * Licensed under the MIT License. See License.txt in the project root for license information.
 */
 
-import type { ComponentChild, ContextType } from "preact";
+import type { ComponentChild } from "preact";
 
 import type { EditCommand_TimeParamsTimeSignature } from "../../../core/types/edit_commands.js";
 import type { IArrangement } from "../../../core/types/general.js";
+import type { UndoManager } from "../../../core/UndoManager.js";
 import { Container } from "../framework/Container.js";
 import { ChildAlignment } from "../framework/ui-types.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
 import { UpDown } from "../framework/UpDown.js";
-import { UndoManagerContext } from "../ScoreBookViewer.js";
 
 export interface ITimeControlsProps extends ICommonUIProperties {
     arrangementView: Readonly<IArrangement>;
+    undoManager: UndoManager;
 }
 
 export class TimeControls extends UIComponent<ITimeControlsProps> {
-    private undoManagerContext?: ContextType<typeof UndoManagerContext>;
-
     public override render(): ComponentChild {
-        const { arrangementView } = this.props;
+        const { arrangementView, undoManager } = this.props;
         const pluralBars = arrangementView.timeParams.length > 1;
 
         return (
-            <UndoManagerContext.Consumer>
-                {(undoManager) => {
-                    this.undoManagerContext = undoManager;
-
-                    return (
-                        <div className="time-controls-wrapper" >
-                            <Container className="time-control" crossAlignment={ChildAlignment.Center}>
-                                <select
-                                    id="time-signature-select"
-                                    className="short"
-                                    onInput={this.changeTimeSignature}
-                                    value={arrangementView.timeParams.timeSignature}>
-                                    <option>4/4</option>
-                                    <option>6/8</option>
-                                    <option>5/4</option>
-                                    <option>7/8</option>
-                                </select><span>time</span>
-                            </Container>
-                            <Container className="time-control" crossAlignment={ChildAlignment.Center}>
-                                <UpDown
-                                    id="tempo-input"
-                                    value={arrangementView.timeParams.tempo}
-                                    min={40}
-                                    step={10}
-                                    onChange={(newValue) => {
-                                        undoManager?.edit({
-                                            type: "EditCommand_TimeParamsTempo",
-                                            timeParams: arrangementView.timeParams,
-                                            tempo: newValue
-                                        });
-                                    }}
-                                >
-                                </UpDown>
-                                <span>bpm</span>
-                            </Container>
-                            <Container className="time-control" crossAlignment={ChildAlignment.Center}>
-                                <UpDown
-                                    id="length-input"
-                                    value={arrangementView.timeParams.length}
-                                    min={1}
-                                    step={1}
-                                    onConfirm={this.handleLengthChange}
-                                >
-                                </UpDown>
-                                <span>{pluralBars ? "bars" : "bar"}</span>
-                            </Container>
-                        </div>
-                    );
-                }}
-            </UndoManagerContext.Consumer>
+            <div className="time-controls-wrapper" >
+                <Container className="time-control" crossAlignment={ChildAlignment.Center}>
+                    <select
+                        id="time-signature-select"
+                        className="short"
+                        onInput={this.changeTimeSignature}
+                        value={arrangementView.timeParams.timeSignature}>
+                        <option>4/4</option>
+                        <option>6/8</option>
+                        <option>5/4</option>
+                        <option>7/8</option>
+                    </select><span>time</span>
+                </Container>
+                <Container className="time-control" crossAlignment={ChildAlignment.Center}>
+                    <UpDown
+                        id="tempo-input"
+                        value={arrangementView.timeParams.tempo}
+                        min={40}
+                        step={10}
+                        onChange={(newValue) => {
+                            undoManager.edit({
+                                type: "EditCommand_TimeParamsTempo",
+                                timeParams: arrangementView.timeParams,
+                                tempo: newValue
+                            });
+                        }}
+                    >
+                    </UpDown>
+                    <span>bpm</span>
+                </Container>
+                <Container className="time-control" crossAlignment={ChildAlignment.Center}>
+                    <UpDown
+                        id="length-input"
+                        value={arrangementView.timeParams.length}
+                        min={1}
+                        step={1}
+                        onConfirm={this.handleLengthChange}
+                    >
+                    </UpDown>
+                    <span>{pluralBars ? "bars" : "bar"}</span>
+                </Container>
+            </div>
         );
     }
 
     private handleLengthChange = (newValue: number) => {
-        const { arrangementView } = this.props;
+        const { arrangementView, undoManager } = this.props;
 
         if (!isNaN(newValue)) {
-            this.undoManagerContext?.edit({
+            undoManager.edit({
                 type: "EditCommand_TimeParamsLength",
                 timeParams: arrangementView.timeParams,
                 length: newValue
@@ -91,7 +82,7 @@ export class TimeControls extends UIComponent<ITimeControlsProps> {
     };
 
     private changeTimeSignature = (event: InputEvent) => {
-        const { arrangementView: arrangement } = this.props;
+        const { arrangementView: arrangement, undoManager } = this.props;
 
         const command: Partial<EditCommand_TimeParamsTimeSignature> = {
             type: "EditCommand_TimeParamsTimeSignature", timeParams: arrangement.timeParams
@@ -117,7 +108,7 @@ export class TimeControls extends UIComponent<ITimeControlsProps> {
                 break;
         }
 
-        this.undoManagerContext?.edit(command as EditCommand_TimeParamsTimeSignature);
+        undoManager.edit(command as EditCommand_TimeParamsTimeSignature);
     };
 
 }

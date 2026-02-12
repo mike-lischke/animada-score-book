@@ -3,23 +3,20 @@
 * Licensed under the MIT License. See License.txt in the project root for license information.
 */
 
-import type { ContextType } from "preact";
-
 import { UIComponent, type ICommonUIProperties } from "../components/ui/framework/UIComponent.js";
 import { Overlay } from "../components/ui/Overlay.js";
 import { ScoreBookViewer } from "../components/ui/ScoreBookViewer.js";
-import type { ISbDmInstrument } from "../core/ScoreBookDataModel.js";
+import type { ScoreBookDataModel } from "../core/ScoreBookDataModel.js";
 import type { ISerialisedArrangement } from "../core/types/snapshots.js";
 import { UndoManager } from "../core/UndoManager.js";
 import { ArrangementPlayer } from "../player/ArrangementPlayer.js";
 import { EventEngine } from "../player/EventEngine.js";
-import type { IArrangementPlayer } from "../player/types.js";
 import { AnimationEngine } from "./AnimationEngine.js";
-import { AppContext } from "./index.js";
 import { ModeManager } from "./ModeManager.js";
 import { MouseHandler } from "./MouseHandler.js";
 import { SelectionManager } from "./SelectionManager.js";
 
+/** Stuff which is created once for the entire lifetime of the app. */
 export interface ScoreBookUiServices {
     animationEngine: AnimationEngine;
     selectionManager: SelectionManager;
@@ -28,6 +25,7 @@ export interface ScoreBookUiServices {
 
 export interface IAnimadaScoreBookUiProperties extends ICommonUIProperties {
     serializedArrangement?: ISerialisedArrangement;
+    dataModel: ScoreBookDataModel;
 }
 
 interface IAnimadaScoreBookUiState {
@@ -40,17 +38,14 @@ interface IAnimadaScoreBookUiState {
  * entire lifetime of the application.
  * So we set up certain global services here like the Animation Engine, Keyboard and Mouse Handlers, Selection and
  * Mode Managers.
+ *
+ * It also manages the player and undo manager for the currently loaded arrangement.
  */
 export class AnimadaScoreBookUi extends UIComponent<IAnimadaScoreBookUiProperties, IAnimadaScoreBookUiState> {
-    public static override contextType = AppContext;
-    declare public context: ContextType<typeof AppContext>;
+    private services: ScoreBookUiServices;
+    private arrangementPlayer?: ArrangementPlayer;
+    private undoManager?: UndoManager;
 
-    private undoManager!: UndoManager;
-    private arrangementPlayer?: IArrangementPlayer;
-
-    private animationEngine: AnimationEngine;
-    private selectionManager: SelectionManager;
-    private modeManager: ModeManager;
     private mouseHandler?: MouseHandler;
 
     public constructor(props: IAnimadaScoreBookUiProperties) {
@@ -60,11 +55,14 @@ export class AnimadaScoreBookUi extends UIComponent<IAnimadaScoreBookUiPropertie
             needUpdate: true
         };
 
-        this.animationEngine = new AnimationEngine(EventEngine.instance);
-        this.selectionManager = new SelectionManager();
-        this.modeManager = new ModeManager(this.selectionManager);
+        const selectionManager = new SelectionManager();
+        this.services = {
+            animationEngine: new AnimationEngine(EventEngine.instance),
+            selectionManager,
+            modeManager: new ModeManager(selectionManager),
+        };
 
-        this.initServices();
+        this.initEventHandlers();
 
         // Load the initial arrangement to have a player ready.
         //this.loadScorebook([]);
@@ -95,7 +93,7 @@ export class AnimadaScoreBookUi extends UIComponent<IAnimadaScoreBookUiPropertie
                 EventEngine.instance.disconnect(this.arrangementPlayer);
                 this.arrangementPlayer.dispose();
             }
-            this.loadScorebook(this.context.dataModel.instruments);
+            this.loadScorebook();
 
             this.setState({
                 needUpdate: false
@@ -104,26 +102,21 @@ export class AnimadaScoreBookUi extends UIComponent<IAnimadaScoreBookUiPropertie
 
         return (
             <ScoreBookViewer
-                undoManager={this.undoManager}
                 arrangementPlayer={this.arrangementPlayer!}
-                services={{
-                    animationEngine: this.animationEngine,
-                    selectionManager: this.selectionManager,
-                    modeManager: this.modeManager
-                }}
+                services={this.services}
+                undoManager={this.undoManager!}
             />
         );
     }
 
-    private loadScorebook(instruments: ISbDmInstrument[]) {
-        const { serializedArrangement } = this.props;
+    private loadScorebook() {
+        const { serializedArrangement, dataModel } = this.props;
         if (!serializedArrangement) {
             return;
         }
 
-        const dataModel = this.context.dataModel;
         const arrangement = dataModel.loadArrangement(serializedArrangement);
-        this.undoManager = new UndoManager(arrangement, instruments);
+        this.undoManager = new UndoManager(arrangement, dataModel.instruments);
         this.arrangementPlayer = new ArrangementPlayer(arrangement);
         EventEngine.instance.connect(this.arrangementPlayer);
 
@@ -132,7 +125,7 @@ export class AnimadaScoreBookUi extends UIComponent<IAnimadaScoreBookUiPropertie
         }
     }
 
-    private initServices(): void {
+    private initEventHandlers(): void {
         window.addEventListener("keydown", (event) => {
             this.handleKeyDown(event);
         });
@@ -140,15 +133,15 @@ export class AnimadaScoreBookUi extends UIComponent<IAnimadaScoreBookUiPropertie
             this.handleKeyUp(event);
         });
 
-        this.mouseHandler = new MouseHandler(this.modeManager, this.selectionManager);
+        this.mouseHandler = new MouseHandler(this.services.modeManager, this.services.selectionManager);
     }
 
     private handleKeyDown(event: KeyboardEvent): void {
         switch (event.key) {
             case "Escape":
                 Overlay.closeAllOverlays();
-                this.selectionManager.deselectAll();
-                this.modeManager.deletePolyrhythmMode = false;
+                this.services.selectionManager.deselectAll();
+                this.services.modeManager.deletePolyrhythmMode = false;
                 break;
             case " ":
                 if (EventEngine.instance.state === "stopped") {
@@ -159,19 +152,20 @@ export class AnimadaScoreBookUi extends UIComponent<IAnimadaScoreBookUiPropertie
                 event.preventDefault(); // This is to prevent spaces getting written in number inputs
                 break;
             case "Alt":
-                this.modeManager.deletePolyrhythmMode = true;
+                this.services.modeManager.deletePolyrhythmMode = true;
                 event.preventDefault();
                 break;
             case "Backspace":
             case "Delete":
                 if (!(event.target instanceof HTMLInputElement)) {
-                    this.undoManager.edit({
+                    this.undoManager?.edit({
                         type: "EditCommand_ArrangementClearSelection",
                         arrangement: this.undoManager.arrangement,
-                        clearSelection: this.selectionManager.selections
+                        clearSelection: this.services.selectionManager.selections
                     });
-                    this.selectionManager.deselectAll();
+                    this.services.selectionManager.deselectAll();
                 }
+
                 break;
 
             // Undo/Redo: We have different conventions between Mac and Windows
@@ -181,10 +175,10 @@ export class AnimadaScoreBookUi extends UIComponent<IAnimadaScoreBookUiPropertie
             case "z":
                 if (event.ctrlKey || event.metaKey) {
                     if (event.shiftKey) {
-                        this.undoManager.redo();
+                        this.undoManager?.redo();
                     } else {
                         // Standard redo on Mac, and no problem to allow it on Windows
-                        this.undoManager.undo();
+                        this.undoManager?.undo();
                     } // With ctrl, this doesn't even trigger on Mac. Seems harmless to include it anyway.
                 }
                 break;
@@ -192,7 +186,7 @@ export class AnimadaScoreBookUi extends UIComponent<IAnimadaScoreBookUiPropertie
                 // We do not allow command+y to redo on Mac
                 // On Chrome, Firefox, and Safari, it triggers browser things, and so is very confusing to also redo
                 if (event.ctrlKey) {
-                    this.undoManager.redo();
+                    this.undoManager?.redo();
                 }
                 break;
         }
@@ -200,7 +194,7 @@ export class AnimadaScoreBookUi extends UIComponent<IAnimadaScoreBookUiPropertie
 
     private handleKeyUp(event: KeyboardEvent): void {
         if (event.key === "Alt") {
-            this.modeManager.deletePolyrhythmMode = false;
+            this.services.modeManager.deletePolyrhythmMode = false;
         }
     }
 

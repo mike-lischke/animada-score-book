@@ -3,16 +3,24 @@
 * Licensed under the MIT License. See License.txt in the project root for license information.
 */
 
-import type { ComponentChild, ContextType } from "preact";
+import type { ComponentChild } from "preact";
 
 import type { IPolyrhythm } from "../../core/types/general.js";
+import type { UndoManager } from "../../core/UndoManager.js";
+import type { ArrangementPlayer } from "../../player/ArrangementPlayer.js";
+import type { TrackPlayer } from "../../player/TrackPlayer.js";
+import type { ScoreBookUiServices } from "../../ui/AnimadaScoreBookUi.js";
 import { Button } from "./framework/Button.js";
 import { UIComponent, type ICommonUIProperties } from "./framework/UIComponent.js";
-import { NoteViewerWithContexts } from "./Note/NoteViewerWithContexts.js";
-import { ServicesContext, UndoManagerContext } from "./ScoreBookViewer.js";
+import { NoteViewer } from "./Note/NoteViewer.js";
 
 export interface IPolyrhythmViewerProps extends ICommonUIProperties {
+    trackPlayer: TrackPlayer;
     polyrhythm: IPolyrhythm;
+
+    arrangementPlayer: ArrangementPlayer;
+    services: ScoreBookUiServices;
+    undoManager: UndoManager;
 }
 
 interface IPolyrhythmViewerState {
@@ -21,9 +29,6 @@ interface IPolyrhythmViewerState {
 }
 
 export class PolyrhythmViewer extends UIComponent<IPolyrhythmViewerProps, IPolyrhythmViewerState> {
-    private servicesContext: ContextType<typeof ServicesContext> | null = null;
-    private scoreBookContext: ContextType<typeof UndoManagerContext> | null = null;
-
     public constructor(props: IPolyrhythmViewerProps) {
         super(props);
 
@@ -35,87 +40,69 @@ export class PolyrhythmViewer extends UIComponent<IPolyrhythmViewerProps, IPolyr
         };
     }
 
-    public override componentWillUnmount(): void {
-        const { polyrhythm } = this.props;
+    public override componentDidMount(): void {
+        const { polyrhythm, services } = this.props;
 
-        const modeManager = this.servicesContext?.modeManager;
-        modeManager?.unsubscribe(this.modeChanged);
+        const modeManager = services.modeManager;
+        this.addSubscription(modeManager, this.modeChanged);
 
         const track = polyrhythm.start.track;
-        track.subscribe(this.trackChanged);
+        this.addSubscription(track, this.trackChanged);
+
+        this.trackChanged();
     }
 
     public override render(): ComponentChild {
-        const { polyrhythm } = this.props;
+        const { polyrhythm, trackPlayer, arrangementPlayer, services, undoManager } = this.props;
         const { deleteMode, isShrouded } = this.state;
 
         return (
-            <UndoManagerContext.Consumer>
-                {(scoreBookContext) => {
-                    this.scoreBookContext = scoreBookContext;
-
-                    return (
-                        <ServicesContext.Consumer>
-                            {(services) => {
-                                if (!this.servicesContext) {
-                                    this.servicesContext = services;
-
-                                    const modeManager = services!.modeManager;
-                                    modeManager.subscribe(this.modeChanged);
-                                    this.modeChanged();
-
-                                    const track = polyrhythm.start.track;
-                                    track.subscribe(this.trackChanged);
-                                    this.trackChanged();
-
-                                    return null;
+            <div id={`polyrhythm-${polyrhythm.id}`} className="polyrhythm-viewer" >
+                {
+                    deleteMode
+                        ? (
+                            <div
+                                className={`delete-polyrhythm-wrapper ${isShrouded
+                                    ? "shrouded"
+                                    : ""}`} >
+                                {
+                                    isShrouded
+                                        ? (<></>)
+                                        : (
+                                            <Button
+                                                disabled={isShrouded}
+                                                className="push-button"
+                                                onClick={this.deleteClicked}
+                                            >
+                                                Delete
+                                            </Button>
+                                        )
                                 }
-
-                                return (
-                                    <div id={`polyrhythm-${polyrhythm.id}`} className="polyrhythm-viewer" >
-                                        {
-                                            deleteMode
-                                                ? (
-                                                    <div
-                                                        className={`delete-polyrhythm-wrapper ${isShrouded
-                                                            ? "shrouded"
-                                                            : ""}`} >
-                                                        {
-                                                            isShrouded
-                                                                ? (<></>)
-                                                                : (
-                                                                    <Button
-                                                                        disabled={isShrouded}
-                                                                        className="push-button"
-                                                                        onClick={this.deleteClicked}
-                                                                    >
-                                                                        Delete
-                                                                    </Button>
-                                                                )
-                                                        }
-                                                    </div >
-                                                )
-                                                : (<>
-                                                    <div className="polyrhythm-decoration" ></div>
-                                                    <div className="polyrhythm-notes-wrapper">
-                                                        {polyrhythm.notes.map((note) => {
-                                                            return <NoteViewerWithContexts note={note} key={note.id} />;
-                                                        })}
-                                                    </div>
-                                                </>)
-                                        }
-                                    </div >
-                                );
-                            }}
-                        </ServicesContext.Consumer>
-                    );
-                }}
-            </UndoManagerContext.Consumer>
+                            </div >
+                        )
+                        : (<>
+                            <div className="polyrhythm-decoration" ></div>
+                            <div className="polyrhythm-notes-wrapper">
+                                {polyrhythm.notes.map((note) => {
+                                    return <NoteViewer
+                                        note={note}
+                                        key={note.id}
+                                        trackPlayer={trackPlayer}
+                                        arrangementPlayer={arrangementPlayer}
+                                        services={services}
+                                        undoManager={undoManager}
+                                    />;
+                                })}
+                            </div>
+                        </>)
+                }
+            </div >
         );
     }
 
     private modeChanged = () => {
-        const modeManager = this.servicesContext!.modeManager;
+        const { services } = this.props;
+        const modeManager = services.modeManager;
 
         this.setState({ deleteMode: modeManager.deletePolyrhythmMode });
     };
@@ -127,10 +114,10 @@ export class PolyrhythmViewer extends UIComponent<IPolyrhythmViewerProps, IPolyr
     };
 
     private deleteClicked = () => {
-        const { polyrhythm } = this.props;
+        const { polyrhythm, undoManager } = this.props;
         const track = polyrhythm.start.track;
 
-        this.scoreBookContext?.edit({
+        undoManager.edit({
             type: "EditCommand_TrackRemovePolyrhythm",
             track,
             removePolyrhythm: polyrhythm

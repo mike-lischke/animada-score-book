@@ -7,25 +7,27 @@ import pauseIcon from "../../../assets/images/icons/pause.svg";
 import pencilIcon from "../../../assets/images/icons/pencil_white.svg";
 import playIcon from "../../../assets/images/icons/play.svg";
 
-import type { ComponentChild, ContextType } from "preact";
+import type { ComponentChild } from "preact";
 
+import type { UndoManager } from "../../../core/UndoManager.js";
+import type { ArrangementPlayer } from "../../../player/ArrangementPlayer.js";
 import { EventEngine } from "../../../player/EventEngine.js";
+import type { ScoreBookUiServices } from "../../../ui/AnimadaScoreBookUi.js";
 import { ExpandingSpacer } from "../ExpandingSpacer.js";
 import { Button } from "../framework/Button.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
 import { Overlay } from "../Overlay.js";
-import { ServicesContext } from "../ScoreBookViewer.js";
 import { SelectionControls } from "../SelectionControls.js";
 import { ShareButton } from "../ShareButton.js";
 import { SmallSpacer } from "../SmallSpacer.js";
 import { ArrangementTitle } from "./ArrangementTitle.js";
-import { ArrangementPlayerContext } from "./ArrangementViewer.js";
 import { TimeControls } from "./TimeControls.js";
-import { UndoRedo } from "./UndoRedo.js";
+import { UndoRedoControls } from "./UndoRedoControls.js";
 
 export interface IArrangementControlsTopProps extends ICommonUIProperties {
-    arrangementPlayerContext?: ContextType<typeof ArrangementPlayerContext>,
-    servicesContext?: ContextType<typeof ServicesContext>,
+    arrangementPlayer: ArrangementPlayer,
+    services: ScoreBookUiServices;
+    undoManager: UndoManager;
 }
 
 interface IArrangementControlsTopState {
@@ -55,14 +57,14 @@ export class ArrangementControlsTop extends UIComponent<IArrangementControlsTopP
     }
 
     public override componentDidUpdate(): void {
-        const { arrangementPlayerContext, servicesContext } = this.props;
+        const { arrangementPlayer: arrangementPlayerContext, services } = this.props;
 
         this.selectionChangeUnsubscribe?.();
         this.arrangementUnsubscribe?.();
 
-        const arrangement = arrangementPlayerContext?.arrangementView;
-        this.arrangementUnsubscribe = arrangement?.subscribe(this.titleChangeSubscription);
-        this.selectionChangeUnsubscribe = servicesContext?.selectionManager.subscribe(this.onSelectionChange);
+        const arrangement = arrangementPlayerContext.arrangementView;
+        this.arrangementUnsubscribe = arrangement.subscribe(this.titleChangeSubscription);
+        this.selectionChangeUnsubscribe = services.selectionManager.subscribe(this.onSelectionChange);
     }
 
     public override componentWillUnmount(): void {
@@ -72,16 +74,22 @@ export class ArrangementControlsTop extends UIComponent<IArrangementControlsTopP
     }
 
     public override render(): ComponentChild {
-        const { arrangementPlayerContext } = this.props;
+        const { arrangementPlayer, services, undoManager } = this.props;
         const { playing, editingTitle, title } = this.state;
 
-        const arrangement = arrangementPlayerContext!.arrangementView;
+        const arrangement = arrangementPlayer.arrangementView;
         const titleVisible = title.length > 0 || editingTitle;
 
         return (
             <>
                 <div className={titleVisible ? "" : "hidden"}>
-                    <ArrangementTitle editMode={editingTitle} onEditEnd={this.onEditEnd} />
+                    <ArrangementTitle
+                        editMode={editingTitle}
+                        onEditEnd={this.onEditEnd}
+                        arrangementPlayer={arrangementPlayer}
+                        services={services}
+                        undoManager={undoManager}
+                    />
                 </div>
                 <div className="arrangement-controls arrangement-controls-top">
                     {
@@ -106,7 +114,7 @@ export class ArrangementControlsTop extends UIComponent<IArrangementControlsTopP
                         )
                     }
                     <SmallSpacer />
-                    <TimeControls arrangementView={arrangement} />
+                    <TimeControls arrangementView={arrangement} undoManager={undoManager} />
                     <SmallSpacer />
 
                     <div className='other-controls-wrapper'>
@@ -117,7 +125,7 @@ export class ArrangementControlsTop extends UIComponent<IArrangementControlsTopP
                             T&nbsp;<img src={pencilIcon} style={{ height: "0.78em" }} />
                         </Button>
                         <SmallSpacer />
-                        <UndoRedo />
+                        <UndoRedoControls undoManager={undoManager} />
                     </div>
 
                     <SmallSpacer />
@@ -125,7 +133,11 @@ export class ArrangementControlsTop extends UIComponent<IArrangementControlsTopP
 
                     <ShareButton />
                     <Overlay name="selection_controls">
-                        <SelectionControls />
+                        <SelectionControls
+                            arrangementPlayer={arrangementPlayer}
+                            services={services}
+                            undoManager={undoManager}
+                        />
                     </Overlay>
                 </div>
             </>
@@ -147,8 +159,9 @@ export class ArrangementControlsTop extends UIComponent<IArrangementControlsTopP
     };
 
     private titleChangeSubscription = () => {
-        const { arrangementPlayerContext } = this.props;
-        const arrangement = arrangementPlayerContext!.arrangementView;
+        const { arrangementPlayer: arrangementPlayerContext } = this.props;
+
+        const arrangement = arrangementPlayerContext.arrangementView;
         this.setState({ title: arrangement.title });
     };
 
@@ -157,8 +170,9 @@ export class ArrangementControlsTop extends UIComponent<IArrangementControlsTopP
     };
 
     private onSelectionChange = () => {
-        const { servicesContext } = this.props;
-        const selectionManager = servicesContext!.selectionManager;
+        const { services } = this.props;
+
+        const selectionManager = services.selectionManager;
         Overlay.toggleOverlay("selection_controls", selectionManager.selections.size ? "show" : "hide");
     };
 };

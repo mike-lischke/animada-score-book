@@ -3,32 +3,29 @@
 * Licensed under the MIT License. See License.txt in the project root for license information.
 */
 
-import { createContext, createRef, type JSX } from "preact";
-import type { MutableRefObject } from "preact/compat";
+import { createRef, type JSX } from "preact";
 
 import { Publisher } from "../../../core/Publisher.js";
 import type { RealTime } from "../../../core/ScoreBookDataModel.js";
-import type { ITimeParamsView, Subscription } from "../../../core/types/general.js";
-import type { IArrangementPlayer } from "../../../player/types.js";
-import type { AnimationEngine } from "../../../ui/AnimationEngine.js";
+import type { ITimeParamsView } from "../../../core/types/general.js";
+import type { UndoManager } from "../../../core/UndoManager.js";
+import type { ArrangementPlayer } from "../../../player/ArrangementPlayer.js";
+import type { ScoreBookUiServices } from "../../../ui/AnimadaScoreBookUi.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
 import { GuideRail } from "../GuideRail/GuideRail.js";
 import { Overlay } from "../Overlay.js";
-import { ServicesContext } from "../ScoreBookViewer.js";
 import { Scrollbar } from "../Scrollbar.js";
 import { Share } from "../Share.js";
-import { TrackViewer } from "../Track/TrackViewer.js";
-import { ArrangementControlsBottomWithContexts } from "./ArrangementControlsBottomWithContext.js";
-import { ArrangementControlsTopWithContexts } from "./ArrangementControlsTopWithContexts.js";
+import { TrackViewer, type ITrackViewerCallbacks } from "../Track/TrackViewer.js";
+import { ArrangementControlsBottom } from "./ArrangementControlsBottom.js";
+import { ArrangementControlsTop } from "./ArrangementControlsTop.js";
 
 const baseNoteWidth = 55.5; // 54pt flex-basis + 1.5pt for border
 
-export const ArrangementPlayerContext = createContext<IArrangementPlayer | null>(null);
-export const NoteWidthContext = createContext<number | null>(null);
-export const NoteLineMinWidth = createContext<number | null>(null);
-
 export interface IArrangementViewerProps extends ICommonUIProperties {
-    arrangementPlayer: IArrangementPlayer;
+    arrangementPlayer: ArrangementPlayer;
+    services: ScoreBookUiServices;
+    undoManager: UndoManager;
 }
 
 interface IArrangementViewerState {
@@ -44,7 +41,7 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
     private viewerRef = createRef<HTMLDivElement>();
     private contentWidthPublisher = new Publisher();
 
-    private animationEngine?: AnimationEngine;
+    //private animationEngine?: AnimationEngine;
     private resizeObserver: ResizeObserver;
 
     private lastY = 0;
@@ -67,91 +64,94 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
     }
 
     public override componentDidMount(): void {
-        const { arrangementPlayer } = this.props;
+        const { arrangementPlayer, services } = this.props;
+        const { autoFollowIsOn } = this.state;
 
         setTimeout(this.handleResize, 0);
         this.resizeObserver.observe(this.viewerRef.current!);
 
         const arrangement = arrangementPlayer.arrangementView;
-        arrangement.timeParams.subscribe(this.timeParamsSubscription as Subscription);
+        this.addSubscription(arrangement.timeParams, this.timeParamsSubscription);
+
+        // If desired, turn on auto-follow like so.
+        if (autoFollowIsOn) {
+            services.animationEngine.connect(this.autoFollowAnimation);
+        } else {
+            // Otherwise, set up the subscription which will turn it on again.
+            this.addSubscription(services.animationEngine, this.animationEngineSubscription);
+        }
     }
 
     public override componentWillUnmount(): void {
-        const { arrangementPlayer } = this.props;
+        const { services } = this.props;
+
         this.resizeObserver.disconnect();
-
-        const arrangement = arrangementPlayer.arrangementView;
-        arrangement.timeParams.unsubscribe(this.timeParamsSubscription as Subscription);
-
-        // Actually only one of these is active at a time.
-        this.animationEngine?.disconnect(this.autoFollowAnimation);
-        this.animationEngine?.unsubscribe(this.animationEngineSubscription);
+        services.animationEngine.disconnect(this.autoFollowAnimation);
     }
 
     public override render(): JSX.Element {
-        const { arrangementPlayer } = this.props;
-        const { noteWidth, noteLineMinWidth, scrollShadowClasses } = this.state;
+        const { arrangementPlayer, services, undoManager } = this.props;
+        const { noteLineMinWidth, scrollShadowClasses, autoFollowIsOn } = this.state;
 
         const arrangement = arrangementPlayer.arrangementView;
 
         return (
-            <ServicesContext.Consumer>
-                {(servicesContext) => {
-                    this.useAutoFollow(servicesContext!.animationEngine, this.viewerRef);
-                    const { trackViewerCallbacks, handleWheel, onScrollbarGrab } =
-                        this.useAutoFollow(servicesContext!.animationEngine, this.viewerRef) ?? {};
-
-                    return (
-                        <ArrangementPlayerContext.Provider value={arrangementPlayer}>
-                            <NoteWidthContext.Provider value={noteWidth}>
-                                <NoteLineMinWidth.Provider value={noteLineMinWidth}>
-                                    <div className="arrangement-viewer">
-                                        <div className="arrangement-viewer-head">
-                                            <ArrangementControlsTopWithContexts />
-                                        </div>
-                                        <div className="arrangement-viewer-body">
-                                            <div>
-                                                <div
-                                                    className={`track-viewers-wrapper ${scrollShadowClasses}`}
-                                                    ref={this.viewerRef}
-                                                    onScroll={this.updateScrollShadows}
-                                                    onWheel={handleWheel}
-                                                >
-                                                    <GuideRail arrangementView={arrangement} />
-                                                    {
-                                                        arrangement.tracks.map((track) => {
-                                                            return arrangementPlayer.trackPlayers.get(track)!;
-                                                        }).map((trackPlayer) => {
-                                                            return (
-                                                                <TrackViewer
-                                                                    trackPlayer={trackPlayer}
-                                                                    callbacks={trackViewerCallbacks ?? {}}
-                                                                    key={trackPlayer.track.id}
-                                                                />
-                                                            );
-                                                        })
-                                                    }
-                                                    <Scrollbar
-                                                        wrapperRef={this.viewerRef}
-                                                        contentWidthPublisher={this.contentWidthPublisher}
-                                                        onGrab={onScrollbarGrab}
-                                                    />
-                                                </div>
-                                                <Overlay name="instrument_browser">
-                                                </Overlay>
-                                            </div>
-                                        </div>
-                                        <ArrangementControlsBottomWithContexts />
-                                        <Overlay name="share">
-                                            <Share />
-                                        </Overlay>
-                                    </div>
-                                </NoteLineMinWidth.Provider>
-                            </NoteWidthContext.Provider>
-                        </ArrangementPlayerContext.Provider>
-                    );
-                }}
-            </ServicesContext.Consumer>
+            <div className="arrangement-viewer">
+                <div className="arrangement-viewer-head">
+                    <ArrangementControlsTop
+                        arrangementPlayer={arrangementPlayer}
+                        services={services}
+                        undoManager={undoManager}
+                    />
+                </div>
+                <div className="arrangement-viewer-body">
+                    <div>
+                        <div
+                            className={`track-viewers-wrapper ${scrollShadowClasses}`}
+                            ref={this.viewerRef}
+                            onScroll={this.updateScrollShadows}
+                            onWheel={autoFollowIsOn ? this.handleWheel : undefined}
+                        >
+                            <GuideRail arrangementView={arrangement} />
+                            {
+                                arrangement.tracks.map((track) => {
+                                    return arrangementPlayer.trackPlayers.get(track)!;
+                                }).map((trackPlayer) => {
+                                    return (
+                                        <TrackViewer
+                                            trackPlayer={trackPlayer}
+                                            callbacks={this.useTrackViewerTouchInterpretation()}
+                                            key={trackPlayer.track.id}
+                                            arrangementPlayer={arrangementPlayer}
+                                            services={services}
+                                            undoManager={undoManager}
+                                            noteLineMinWidth={noteLineMinWidth}
+                                        />
+                                    );
+                                })
+                            }
+                            <Scrollbar
+                                wrapperRef={this.viewerRef}
+                                contentWidthPublisher={this.contentWidthPublisher}
+                                onGrab={autoFollowIsOn ? this.onScrollbarGrab : undefined}
+                            />
+                        </div>
+                        <Overlay name="instrument_browser">
+                        </Overlay>
+                    </div>
+                </div>
+                <ArrangementControlsBottom
+                    arrangementPlayer={arrangementPlayer}
+                    services={services}
+                    undoManager={undoManager}
+                />
+                <Overlay name="share">
+                    <Share
+                        arrangementPlayer={arrangementPlayer}
+                        undoManager={undoManager}
+                    />
+                </Overlay>
+            </div>
         );
     }
 
@@ -207,7 +207,7 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         this.setState({ noteWidth: this.getNoteWidth(this.viewerRef.current) });
     };
 
-    private timeParamsSubscription = (timeParams: ITimeParamsView) => {
+    private timeParamsSubscription = () => {
         return setTimeout(() => {
             this.updateScrollShadows();
             this.contentWidthPublisher.publish();
@@ -238,43 +238,23 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
     };
 
     private animationEngineSubscription = () => {
-        if (this.animationEngine?.state === "playing") {
+        const { services } = this.props;
+        if (services.animationEngine.state === "playing") {
             this.setState({ autoFollowIsOn: true });
         }
     };
 
-    private useAutoFollow(animationEngine: AnimationEngine, wrapperRef: MutableRefObject<HTMLDivElement | null>) {
-        if (this.animationEngine === animationEngine) {
-            return;
+    private handleWheel = (event: WheelEvent) => {
+        if (event.deltaX > 6) {
+            this.setState({ autoFollowIsOn: false });
         }
+    };
 
-        const { autoFollowIsOn } = this.state;
+    private onScrollbarGrab = () => {
+        this.setState({ autoFollowIsOn: false });
+    };
 
-        this.animationEngine = animationEngine;
-
-        // If desired, turn on auto-follow like so
-        if (autoFollowIsOn) {
-            animationEngine.connect(this.autoFollowAnimation);
-        } else {
-            // Otherwise, set up the subscription which will turn it on again
-            animationEngine.subscribe(this.animationEngineSubscription);
-
-        }
-
-        return {
-            handleWheel: autoFollowIsOn ? (event: WheelEvent) => {
-                if (event.deltaX > 6) {
-                    this.setState({ autoFollowIsOn: false });
-                }
-            } : undefined,
-            onScrollbarGrab: autoFollowIsOn ? () => {
-                this.setState({ autoFollowIsOn: false });
-            } : undefined,
-            trackViewerCallbacks: this.useTrackViewerTouchInterpretation()
-        };
-    }
-
-    private useTrackViewerTouchInterpretation() {
+    private useTrackViewerTouchInterpretation(): ITrackViewerCallbacks {
         // Touchscreens:
         // If user touches the tracks while we're auto-following
         // If they are scrolling up or down, we do nothing
@@ -331,5 +311,5 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
                 noteLineTouchEnd: undefined
             };
         }
-    }
+    };
 }

@@ -7,15 +7,25 @@ import { createRef, type ComponentChild } from "preact";
 
 import type { ISbDmNote, ISbDmTrack } from "../../../core/ScoreBookDataModel.js";
 import type { IPolyrhythm } from "../../../core/types/general.js";
-import { NoteWidthContext } from "../Arrangement/ArrangementViewer.js";
+import type { UndoManager } from "../../../core/UndoManager.js";
+import type { TrackPlayer } from "../../../player/TrackPlayer.js";
+import type { ScoreBookUiServices } from "../../../ui/AnimadaScoreBookUi.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
-import { NoteViewerWithContexts } from "../Note/NoteViewerWithContexts.js";
 import { PolyrhythmViewer } from "../PolyrhythmViewer.js";
 import type { ITrackViewerCallbacks } from "./TrackViewer.js";
+import { NoteViewer } from "../Note/NoteViewer.js";
+import type { ArrangementPlayer } from "../../../player/ArrangementPlayer.js";
 
-export interface INoteLineProps extends ICommonUIProperties {
+export interface INoteLineProperties extends ICommonUIProperties {
+    trackPlayer: TrackPlayer;
     track: ISbDmTrack;
     callbacks: ITrackViewerCallbacks;
+
+    arrangementPlayer: ArrangementPlayer;
+    services: ScoreBookUiServices;
+    undoManager: UndoManager;
+
+    noteLineMinWidth: number;
 }
 
 interface INoteLineState {
@@ -23,10 +33,10 @@ interface INoteLineState {
     polyrhythms: IPolyrhythm[];
 }
 
-export class NoteLine extends UIComponent<INoteLineProps, INoteLineState> {
+export class NoteLine extends UIComponent<INoteLineProperties, INoteLineState> {
     private noteLineRef = createRef<HTMLDivElement>();
 
-    public constructor(props: INoteLineProps) {
+    public constructor(props: INoteLineProperties) {
         super(props);
 
         const { track } = props;
@@ -60,35 +70,45 @@ export class NoteLine extends UIComponent<INoteLineProps, INoteLineState> {
     }
 
     public override render(): ComponentChild {
-        return (
-            <NoteWidthContext.Consumer>
-                {(minWidth) => {
-                    const { track, callbacks } = this.props;
-                    const { notes } = this.state;
+        const { trackPlayer, arrangementPlayer, services, undoManager, noteLineMinWidth } = this.props;
 
-                    return (
-                        <div
-                            className="note-line"
-                            ref={this.noteLineRef}
-                            style={{ minWidth: minWidth }}
-                            onTouchStart={callbacks.noteLineTouchStart}
-                            onTouchMove={callbacks.noteLineTouchMove}
-                            onTouchEnd={callbacks.noteLineTouchEnd}
-                        >
-                            <div className="polyrhythms-wrapper">
-                                {track.polyrhythms.map((polyrhythm) => {
-                                    return <PolyrhythmViewer polyrhythm={polyrhythm} key={polyrhythm.id} />;
-                                })}
-                            </div>
-                            <div className="notes-wrapper">
-                                {notes.map((note) => {
-                                    return <NoteViewerWithContexts note={note} key={note.id} />;
-                                })}
-                            </div>
-                        </div >
-                    );
-                }}
-            </NoteWidthContext.Consumer >
+        const { track, callbacks } = this.props;
+        const { notes } = this.state;
+
+        return (
+            <div
+                className="note-line"
+                ref={this.noteLineRef}
+                style={{ minWidth: `${noteLineMinWidth}px` }}
+                onTouchStart={callbacks.noteLineTouchStart}
+                onTouchMove={callbacks.noteLineTouchMove}
+                onTouchEnd={callbacks.noteLineTouchEnd}
+            >
+                <div className="polyrhythms-wrapper">
+                    {track.polyrhythms.map((polyrhythm) => {
+                        return <PolyrhythmViewer
+                            polyrhythm={polyrhythm}
+                            key={polyrhythm.id}
+                            trackPlayer={trackPlayer}
+                            arrangementPlayer={arrangementPlayer}
+                            services={services}
+                            undoManager={undoManager}
+                        />;
+                    })}
+                </div>
+                <div className="notes-wrapper">
+                    {notes.map((note) => {
+                        return <NoteViewer
+                            note={note}
+                            key={note.id}
+                            trackPlayer={trackPlayer}
+                            arrangementPlayer={arrangementPlayer}
+                            services={services}
+                            undoManager={undoManager}
+                        />;
+                    })}
+                </div>
+            </div >
         );
     }
 

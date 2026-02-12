@@ -5,6 +5,7 @@
 
 import type { ISbDmNote, ISbDmTrack, ITiming, RealTime } from "../core/ScoreBookDataModel.js";
 import type { IArrangement, ISubscribable } from "../core/types/general.js";
+import type { TrackPlayer } from "./TrackPlayer.js";
 
 export type EventEngineState = "stopped" | "playing";
 
@@ -35,20 +36,12 @@ export interface IEventSource {
 
 export interface IArrangementPlayer extends IEventSource, ISubscribable {
     arrangementView: Readonly<IArrangement>;
-    trackPlayers: Map<ISbDmTrack, ITrackPlayer>;
+    trackPlayers: Map<ISbDmTrack, TrackPlayer>;
     get currentTiming(): ITiming | null;
     currentTimingPublisher: ISubscribable;
     convertToLoopProgress(realTime: RealTime): number;
-    audibleTrackPlayers: Map<ISbDmTrack, ITrackPlayer>;
+    audibleTrackPlayers: Map<ISbDmTrack, TrackPlayer>;
     audibleTrackPlayersPublisher: ISubscribable;
-    dispose(): void;
-}
-
-export interface ITrackPlayer extends IEventSource, ISubscribable {
-    track: ISbDmTrack;
-    soloMute: SoloMute;
-    currentPolyrhythmNotePublisher: ISubscribable;
-    readonly currentPolyrhythmNote: ISbDmNote | null;
     dispose(): void;
 }
 

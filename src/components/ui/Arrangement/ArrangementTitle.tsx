@@ -3,13 +3,17 @@
 * Licensed under the MIT License. See License.txt in the project root for license information.
 */
 
-import { createRef, type ComponentChild, type ContextType } from "preact";
+import { createRef, type ComponentChild } from "preact";
 
-import { UndoManagerContext } from "../ScoreBookViewer.js";
+import type { UndoManager } from "../../../core/UndoManager.js";
+import type { ArrangementPlayer } from "../../../player/ArrangementPlayer.js";
+import type { ScoreBookUiServices } from "../../../ui/AnimadaScoreBookUi.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
-import { ArrangementPlayerContext } from "./ArrangementViewer.js";
 
 export interface IArrangementTitleProps extends ICommonUIProperties {
+    arrangementPlayer: ArrangementPlayer;
+    services: ScoreBookUiServices;
+    undoManager: UndoManager;
     editMode: boolean;
     onEditEnd: () => void;
 }
@@ -20,9 +24,6 @@ interface IArrangementTitleState {
 }
 
 export class ArrangementTitle extends UIComponent<IArrangementTitleProps, IArrangementTitleState> {
-
-    private scoreBookContext?: ContextType<typeof UndoManagerContext>;
-    private arrangementPlayerContext?: ContextType<typeof ArrangementPlayerContext>;
     private inputRef = createRef<HTMLInputElement>();
 
     public constructor(props: IArrangementTitleProps) {
@@ -34,13 +35,20 @@ export class ArrangementTitle extends UIComponent<IArrangementTitleProps, IArran
     }
 
     public override componentDidMount(): void {
-        const { editMode } = this.props;
+        const { editMode, arrangementPlayer } = this.props;
         if (editMode) {
             this.inputRef.current?.focus();
         }
 
-        const arrangement = this.arrangementPlayerContext?.arrangementView;
-        if (arrangement) {
+        const arrangement = arrangementPlayer.arrangementView;
+        this.setState({ title: arrangement.title, inputValue: arrangement.title });
+    }
+
+    public override componentDidUpdate(prevProps: IArrangementTitleProps): void {
+        const { arrangementPlayer } = this.props;
+
+        const arrangement = arrangementPlayer.arrangementView;
+        if (arrangement.title !== this.state.title) {
             this.setState({ title: arrangement.title, inputValue: arrangement.title });
         }
     }
@@ -50,74 +58,48 @@ export class ArrangementTitle extends UIComponent<IArrangementTitleProps, IArran
         const { title, inputValue } = this.state;
 
         return (
-            <UndoManagerContext.Consumer>
-                {(scoreBookContext) => {
-                    return (
-                        <ArrangementPlayerContext.Consumer>
-                            {(arrangementPlayerContext) => {
-                                this.useSubscriptions(arrangementPlayerContext, scoreBookContext);
-
-                                return (
-                                    <div id="title-wrapper" style={{ textAlign: "center" }}>
-                                        {
-                                            editMode
-                                                ? <input
-                                                    ref={this.inputRef}
-                                                    onBlur={this.onBlur}
-                                                    onChange={(e) => {
-                                                        this.setState({
-                                                            inputValue: (e.target as HTMLInputElement).value
-                                                        });
-                                                    }}
-                                                    onKeyUp={this.onKeyUp}
-                                                    onKeyDown={(e) => {
-                                                        e.stopPropagation();
-                                                    }}
-                                                    // Don't want to trigger global keyboard handlers,
-                                                    // like play-on-spacebar.
-                                                    style={{
-                                                        height: "unset",
-                                                        width: "100%",
-                                                        border: "none",
-                                                        textAlign: "center",
-                                                        fontSize: "2em",
-                                                        fontWeight: "bold",
-                                                        marginBlockStart: "0.67em",
-                                                        marginBlockEnd: "0.67em",
-                                                        padding: "0"
-                                                    }}
-                                                    placeholder="Add a title..."
-                                                    value={inputValue}
-                                                />
-                                                : <h1>{title}</h1>
-                                        }
-                                    </div>
-                                );
+            <div id="title-wrapper" style={{ textAlign: "center" }}>
+                {
+                    editMode
+                        ? <input
+                            ref={this.inputRef}
+                            onBlur={this.onBlur}
+                            onChange={(e) => {
+                                this.setState({
+                                    inputValue: (e.target as HTMLInputElement).value
+                                });
                             }}
-                        </ArrangementPlayerContext.Consumer>
-                    );
-                }}
-            </UndoManagerContext.Consumer>
+                            onKeyUp={this.onKeyUp}
+                            onKeyDown={(e) => {
+                                e.stopPropagation();
+                            }}
+                            // Don't want to trigger global keyboard handlers,
+                            // like play-on-spacebar.
+                            style={{
+                                height: "unset",
+                                width: "100%",
+                                border: "none",
+                                textAlign: "center",
+                                fontSize: "2em",
+                                fontWeight: "bold",
+                                marginBlockStart: "0.67em",
+                                marginBlockEnd: "0.67em",
+                                padding: "0"
+                            }}
+                            placeholder="Add a title..."
+                            value={inputValue}
+                        />
+                        : <h1>{title}</h1>
+                }
+            </div>
         );
     }
 
-    private useSubscriptions = (
-        arrangementPlayerContext: ContextType<typeof ArrangementPlayerContext>,
-        scoreBookContext: ContextType<typeof UndoManagerContext>
-    ): void => {
-        if (this.arrangementPlayerContext !== arrangementPlayerContext) {
-            this.arrangementPlayerContext = arrangementPlayerContext;
-            this.scoreBookContext = scoreBookContext;
-
-            this.setState({ inputValue: arrangementPlayerContext!.arrangementView.title });
-        }
-    };
-
     private onBlur = (event: FocusEvent) => {
-        const { onEditEnd } = this.props;
+        const { onEditEnd, undoManager, arrangementPlayer } = this.props;
 
-        const arrangement = this.arrangementPlayerContext!.arrangementView;
-        this.scoreBookContext?.edit({
+        const arrangement = arrangementPlayer.arrangementView;
+        undoManager.edit({
             type: "EditCommand_ArrangementTitle", arrangement,
             newTitle: (event.target as HTMLInputElement).value
         });
@@ -125,11 +107,11 @@ export class ArrangementTitle extends UIComponent<IArrangementTitleProps, IArran
     };
 
     private onKeyUp = (event: KeyboardEvent) => {
-        const { onEditEnd } = this.props;
+        const { onEditEnd, undoManager, arrangementPlayer } = this.props;
 
-        const arrangement = this.arrangementPlayerContext!.arrangementView;
+        const arrangement = arrangementPlayer.arrangementView;
         if (event.key === "Enter") { // Enter means submit the changes and stop editing
-            this.scoreBookContext?.edit({
+            undoManager.edit({
                 type: "EditCommand_ArrangementTitle",
                 arrangement,
                 newTitle: (event.target as HTMLInputElement).value

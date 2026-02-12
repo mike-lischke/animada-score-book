@@ -8,10 +8,10 @@ import type { ISbDmTrack, ITiming, RealTime } from "../core/ScoreBookDataModel.j
 import type { IArrangement } from "../core/types/general.js";
 import { TimeCoordinator } from "./TimeCoordinator.js";
 import { TrackPlayer } from "./TrackPlayer.js";
-import { Event, IArrangementPlayer, ICallbackEvent, IInterval, ILoopInterval, ITrackPlayer } from "./types.js";
+import { Event, ICallbackEvent, IInterval, ILoopInterval } from "./types.js";
 
 /**
- * Coordinates playback for an `IArrangementView` by aggregating events from all `ITrackPlayer`s,
+ * Coordinates playback for an `IArrangementView` by aggregating events from all `TrackPlayer`s,
  * converting times across loops, and publishing UI-relevant updates (current timing and audible tracks).
  *
  * Lifecycle:
@@ -19,11 +19,11 @@ import { Event, IArrangementPlayer, ICallbackEvent, IInterval, ILoopInterval, IT
  * - Connect to an `IEventEngine` as an event source.
  * - Call `dispose()` when replacing the arrangement to clean up subscriptions.
  */
-export class ArrangementPlayer extends Publisher implements IArrangementPlayer {
+export class ArrangementPlayer extends Publisher {
     public readonly arrangementView: Readonly<IArrangement>;
 
-    public readonly trackPlayers: Map<ISbDmTrack, ITrackPlayer> = new Map<ISbDmTrack, ITrackPlayer>();
-    public readonly audibleTrackPlayers: Map<ISbDmTrack, ITrackPlayer> = new Map<ISbDmTrack, ITrackPlayer>();
+    public readonly trackPlayers: Map<ISbDmTrack, TrackPlayer> = new Map<ISbDmTrack, TrackPlayer>();
+    public readonly audibleTrackPlayers: Map<ISbDmTrack, TrackPlayer> = new Map<ISbDmTrack, TrackPlayer>();
 
     public readonly currentTimingPublisher: Publisher = new Publisher();
     public readonly audibleTrackPlayersPublisher: Publisher = new Publisher();
@@ -85,7 +85,7 @@ export class ArrangementPlayer extends Publisher implements IArrangementPlayer {
         this.timing = null;
         this.currentTimingPublisher.publish();
         for (const player of this.trackPlayers.values()) {
-            player.onStop?.();
+            player.onStop();
         }
     };
 
@@ -122,7 +122,7 @@ export class ArrangementPlayer extends Publisher implements IArrangementPlayer {
      * @param interval The real-time interval [start, end) to query.
      * @returns A list of events sorted by their real-time occurrence.
      */
-    public getEvents = (interval: IInterval): Event[] => {
+    public getEvents(interval: IInterval): Event[] {
         if (this.disposed) {
             return [];
         }
@@ -259,9 +259,9 @@ export class ArrangementPlayer extends Publisher implements IArrangementPlayer {
      * @param trackPlayers The complete set of track players to consider.
      * @returns The list of audible track players in their current state.
      */
-    private calculateAudibleTrackPlayers(trackPlayers: Map<ISbDmTrack, ITrackPlayer>): ITrackPlayer[] {
-        const soloedTracksPlayers: ITrackPlayer[] = [];
-        const unmutedTracksPlayers: ITrackPlayer[] = [];
+    private calculateAudibleTrackPlayers(trackPlayers: Map<ISbDmTrack, TrackPlayer>): TrackPlayer[] {
+        const soloedTracksPlayers: TrackPlayer[] = [];
+        const unmutedTracksPlayers: TrackPlayer[] = [];
 
         trackPlayers.forEach((trackPlayer) => {
             if (trackPlayer.soloMute === "solo") {

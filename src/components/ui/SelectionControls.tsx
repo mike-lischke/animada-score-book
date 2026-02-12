@@ -6,29 +6,35 @@
 import { createRef, type ComponentChild, type ContextType } from "preact";
 
 import type { IArrangement } from "../../core/types/general.js";
+import type { UndoManager } from "../../core/UndoManager.js";
+import type { ArrangementPlayer } from "../../player/ArrangementPlayer.js";
+import type { ScoreBookUiServices } from "../../ui/AnimadaScoreBookUi.js";
 import type { SelectionManager } from "../../ui/SelectionManager.js";
-import { ArrangementPlayerContext } from "./Arrangement/ArrangementViewer.js";
 import { ExpandingSpacer } from "./ExpandingSpacer.js";
-import { UIComponent } from "./framework/UIComponent.js";
-import { OverlayStateContext } from "./Overlay.js";
-import { ServicesContext, UndoManagerContext } from "./ScoreBookViewer.js";
-import { SmallSpacer } from "./SmallSpacer.js";
 import { Button } from "./framework/Button.js";
+import { UIComponent, type ICommonUIProperties } from "./framework/UIComponent.js";
+import { OverlayStateContext } from "./Overlay.js";
+import { SmallSpacer } from "./SmallSpacer.js";
 
 const digitMatcher = /^\d$/;
+
+export interface ISelectionControlsProperties extends ICommonUIProperties {
+    arrangementPlayer: ArrangementPlayer;
+    services: ScoreBookUiServices;
+    undoManager: UndoManager;
+}
 
 interface ISelectionControlsState {
     addingPolyrhythm: boolean;
 }
 
-export class SelectionControls extends UIComponent<{}, ISelectionControlsState> {
-    private polyrhythmInputRef = createRef<HTMLInputElement>();
-    private scoreBookContext: ContextType<typeof UndoManagerContext> | null = null;
-    private overlayStateContext: ContextType<typeof OverlayStateContext> | null = null;
-    private servicesContext: ContextType<typeof ServicesContext> | null = null;
-    private arrangementPlayerContext: ContextType<typeof ArrangementPlayerContext> | null = null;
+export class SelectionControls extends UIComponent<ISelectionControlsProperties, ISelectionControlsState> {
+    public static override contextType = OverlayStateContext;
+    declare public context: ContextType<typeof OverlayStateContext>;
 
-    public constructor(props: {}) {
+    private polyrhythmInputRef = createRef<HTMLInputElement>();
+
+    public constructor(props: ISelectionControlsProperties) {
         super(props);
 
         this.state = {
@@ -38,143 +44,123 @@ export class SelectionControls extends UIComponent<{}, ISelectionControlsState> 
 
     public override componentDidMount(): void {
         window.addEventListener("keypress", this.onWindowKeyPress);
+
+        const context = this.context;
+        if (context) {
+            this.addSubscription(context, this.overlayStateChanged);
+        }
     }
 
     public override componentWillUnmount(): void {
-        this.overlayStateContext?.unsubscribe(this.overlayStateChanged);
         window.removeEventListener("keypress", this.onWindowKeyPress);
     }
 
     public render(): ComponentChild {
+        const { arrangementPlayer, services } = this.props;
+        const { addingPolyrhythm } = this.state;
+
         return (
-            <UndoManagerContext.Consumer>
-                {(scoreBookContext) => {
+            <OverlayStateContext.Consumer>
+                {(overlayState) => {
+                    const arrangement = arrangementPlayer.arrangementView;
+                    const selectionManager = services.selectionManager;
+
                     return (
-                        <OverlayStateContext.Consumer>
-                            {(overlayState) => {
-                                return (
-                                    <ServicesContext.Consumer>
-                                        {(services) => {
-                                            return (
-                                                <ArrangementPlayerContext.Consumer>
-                                                    {(context) => {
-                                                        const { addingPolyrhythm } = this.state;
-                                                        const arrangement = context!.arrangementView;
-                                                        const selectionManager = services!.selectionManager;
+                        <div
+                            className={`selection-controls ${addingPolyrhythm
+                                ? "adding-polyrhythm"
+                                : ""}`}
+                            style={{ width: "100%", height: "100%" }}>
+                            <div
+                                style={{
+                                    alignItems: "center",
+                                    height: "100%",
+                                    display: addingPolyrhythm ? "none" : "flex"
+                                }}>
+                                <Button
+                                    className="push-button"
+                                    onClick={() => {
+                                        this.setState({ addingPolyrhythm: true });
+                                        setTimeout(() => {
+                                            this.polyrhythmInputRef.current!
+                                                .focus();
+                                        }, 0);
+                                    }}
+                                >add polyrhythm</Button>
 
-                                                        if (!this.scoreBookContext) {
-                                                            this.scoreBookContext = scoreBookContext;
-                                                            this.servicesContext = services;
-                                                            this.arrangementPlayerContext = context;
+                                <SmallSpacer />
 
-                                                            this.overlayStateContext = overlayState;
-                                                            overlayState?.subscribe(this.overlayStateChanged);
-                                                        }
+                                <Button
+                                    className="push-button"
+                                    onClick={this.handleClearSounds}
+                                >Clear sounds</Button>
 
-                                                        return (
-                                                            <div
-                                                                className={`selection-controls ${addingPolyrhythm
-                                                                    ? "adding-polyrhythm"
-                                                                    : ""}`}
-                                                                style={{ width: "100%", height: "100%" }}>
-                                                                <div
-                                                                    style={{
-                                                                        alignItems: "center",
-                                                                        height: "100%",
-                                                                        display: addingPolyrhythm ? "none" : "flex"
-                                                                    }}>
-                                                                    <Button
-                                                                        className="push-button"
-                                                                        onClick={() => {
-                                                                            this.setState({ addingPolyrhythm: true });
-                                                                            setTimeout(() => {
-                                                                                this.polyrhythmInputRef.current!
-                                                                                    .focus();
-                                                                            }, 0);
-                                                                        }}
-                                                                    >add polyrhythm</Button>
+                                <ExpandingSpacer />
+                                <SmallSpacer />
 
-                                                                    <SmallSpacer />
+                                <Button
+                                    className="push-button"
+                                    onClick={() => {
+                                        selectionManager.deselectAll();
+                                    }}
+                                >Cancel</Button>
+                            </div>
+                            <div
+                                style={{
+                                    alignItems: "center",
+                                    height: "100%",
+                                    display: addingPolyrhythm ? "flex" : "none"
+                                }}>
+                                <div className="time-control">
+                                    New number of notes: <input
+                                        id="polyrhythm-note-count-input"
+                                        type="text"
+                                        inputMode="numeric"
+                                        pattern="[0-9]*"
+                                        onKeyPress={
+                                            this.handleNoteCountInputKeyPress
+                                        }
+                                        ref={this.polyrhythmInputRef}
+                                    />
+                                </div>
 
-                                                                    <Button
-                                                                        className="push-button"
-                                                                        onClick={this.handleClearSounds}
-                                                                    >Clear sounds</Button>
+                                <Button
+                                    className="push-button"
+                                    onClick={() => {
+                                        this.createPolyrhythm(
+                                            this.polyrhythmInputRef.current!.value,
+                                            selectionManager, arrangement);
+                                    }}
+                                >go!
+                                </Button>
 
-                                                                    <ExpandingSpacer />
-                                                                    <SmallSpacer />
+                                <ExpandingSpacer />
+                                <SmallSpacer />
 
-                                                                    <Button
-                                                                        className="push-button"
-                                                                        onClick={() => {
-                                                                            selectionManager.deselectAll();
-                                                                        }}
-                                                                    >Cancel</Button>
-                                                                </div>
-                                                                <div
-                                                                    style={{
-                                                                        alignItems: "center",
-                                                                        height: "100%",
-                                                                        display: addingPolyrhythm ? "flex" : "none"
-                                                                    }}>
-                                                                    <div className="time-control">
-                                                                        New number of notes: <input
-                                                                            id="polyrhythm-note-count-input"
-                                                                            type="text"
-                                                                            inputMode="numeric"
-                                                                            pattern="[0-9]*"
-                                                                            onKeyPress={
-                                                                                this.handleNoteCountInputKeyPress
-                                                                            }
-                                                                            ref={this.polyrhythmInputRef}
-                                                                        />
-                                                                    </div>
-
-                                                                    <Button
-                                                                        className="push-button"
-                                                                        onClick={() => {
-                                                                            this.createPolyrhythm(
-                                                                                this.polyrhythmInputRef.current!.value,
-                                                                                selectionManager, arrangement);
-                                                                        }}
-                                                                    >go!
-                                                                    </Button>
-
-                                                                    <ExpandingSpacer />
-                                                                    <SmallSpacer />
-
-                                                                    <Button
-                                                                        className="push-button"
-                                                                        onClick={() => {
-                                                                            this.setState({ addingPolyrhythm: false });
-                                                                            this.polyrhythmInputRef.current!.value = "";
-                                                                        }}
-                                                                    >Cancel</Button>
-                                                                </div>
-                                                            </div >
-                                                        );
-                                                    }}
-                                                </ArrangementPlayerContext.Consumer>
-                                            );
-                                        }}
-                                    </ServicesContext.Consumer>
-                                );
-                            }}
-                        </OverlayStateContext.Consumer >
+                                <Button
+                                    className="push-button"
+                                    onClick={() => {
+                                        this.setState({ addingPolyrhythm: false });
+                                        this.polyrhythmInputRef.current!.value = "";
+                                    }}
+                                >Cancel</Button>
+                            </div>
+                        </div >
                     );
                 }}
-            </UndoManagerContext.Consumer>
+            </OverlayStateContext.Consumer >
         );
     }
 
-    private createPolyrhythm(inputValue: string, selectionManager: SelectionManager,
-        arrangement: IArrangement): void {
+    private createPolyrhythm(inputValue: string, selectionManager: SelectionManager, arrangement: IArrangement): void {
+        const { undoManager } = this.props;
+
         const length = Number(inputValue);
         if (!length) {
             return;
         }
 
-        this.scoreBookContext?.edit({
+        undoManager.edit({
             type: "EditCommand_ArrangementAddPolyrhythms",
             arrangement,
             addPolyrhythms: { length, selection: selectionManager.selections }
@@ -184,10 +170,12 @@ export class SelectionControls extends UIComponent<{}, ISelectionControlsState> 
     }
 
     private handleClearSounds = () => {
-        const selectionManager = this.servicesContext!.selectionManager;
-        const arrangement = this.arrangementPlayerContext!.arrangementView;
+        const { arrangementPlayer, services, undoManager } = this.props;
 
-        this.scoreBookContext?.edit({
+        const selectionManager = services.selectionManager;
+        const arrangement = arrangementPlayer.arrangementView;
+
+        undoManager.edit({
             type: "EditCommand_ArrangementClearSelection",
             arrangement,
             clearSelection: selectionManager.selections
@@ -196,8 +184,10 @@ export class SelectionControls extends UIComponent<{}, ISelectionControlsState> 
     };
 
     private handleNoteCountInputKeyPress = (event: KeyboardEvent) => {
-        const selectionManager = this.servicesContext!.selectionManager;
-        const arrangement = this.arrangementPlayerContext!.arrangementView;
+        const { arrangementPlayer, services } = this.props;
+
+        const selectionManager = services.selectionManager;
+        const arrangement = arrangementPlayer.arrangementView;
 
         if (event.key === "Enter") {
             this.createPolyrhythm(
@@ -208,7 +198,9 @@ export class SelectionControls extends UIComponent<{}, ISelectionControlsState> 
     };
 
     private onWindowKeyPress = (event: KeyboardEvent) => {
-        const selectionManager = this.servicesContext!.selectionManager;
+        const { services } = this.props;
+
+        const selectionManager = services.selectionManager;
         if (!(event.target instanceof HTMLInputElement) && selectionManager.selections.size
             && this.polyrhythmInputRef.current && digitMatcher.test(event.key)) {
             this.polyrhythmInputRef.current.value = event.key;
@@ -222,7 +214,9 @@ export class SelectionControls extends UIComponent<{}, ISelectionControlsState> 
     };
 
     private overlayStateChanged = () => {
-        if (!this.overlayStateContext?.visible) {
+        const context = this.context;
+
+        if (!context?.visible) {
             this.setState({ addingPolyrhythm: false });
             this.polyrhythmInputRef.current!.value = "";
         }

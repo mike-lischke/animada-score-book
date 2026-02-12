@@ -3,18 +3,23 @@
 * Licensed under the MIT License. See License.txt in the project root for license information.
 */
 
-import type { ComponentChild, ContextType } from "preact";
+import type { ComponentChild } from "preact";
 
 import { getShareLink } from "../../core/serialisation/url.js";
-import { ArrangementPlayerContext } from "./Arrangement/ArrangementViewer.js";
+import type { UndoManager } from "../../core/UndoManager.js";
+import type { ArrangementPlayer } from "../../player/ArrangementPlayer.js";
 import { Button } from "./framework/Button.js";
-import { UIComponent } from "./framework/UIComponent.js";
+import { UIComponent, type ICommonUIProperties } from "./framework/UIComponent.js";
 import { Overlay } from "./Overlay.js";
-import { UndoManagerContext } from "./ScoreBookViewer.js";
 import { SmallSpacer } from "./SmallSpacer.js";
 
 const haveNativeSharing = "share" in navigator;
 const haveClipboardAccess = "clipboard" in navigator;
+
+export interface IShareProperties extends ICommonUIProperties {
+    arrangementPlayer: ArrangementPlayer;
+    undoManager: UndoManager;
+}
 
 interface IShareState {
     url: string;
@@ -22,10 +27,9 @@ interface IShareState {
     title: string;
 }
 
-export class Share extends UIComponent<{}, IShareState> {
-    private scoreBookContext: ContextType<typeof UndoManagerContext> | null = null;
+export class Share extends UIComponent<IShareProperties, IShareState> {
 
-    public constructor(props: {}) {
+    public constructor(props: IShareProperties) {
         super(props);
 
         this.state = {
@@ -35,94 +39,83 @@ export class Share extends UIComponent<{}, IShareState> {
         };
     }
 
+    public override componentDidMount(): void {
+        const { arrangementPlayer } = this.props;
+
+        const arrangement = arrangementPlayer.arrangementView;
+        this.addSubscription(arrangementPlayer, () => {
+            this.setState({ title: arrangement.title });
+        });
+    }
+
     public render(): ComponentChild {
         const { url, title, copyText } = this.state;
 
+        const sharedTitle = title
+            ? title + " - Animada Score Book" : "Animada Score Book - Samba Rhythms";
+
         return (
-            <ArrangementPlayerContext.Consumer>
-                {(context) => {
-                    return (
-                        <UndoManagerContext.Consumer>
-                            {(scoreBookContext) => {
-                                if (!this.scoreBookContext) {
-                                    this.scoreBookContext = scoreBookContext;
-                                    const arrangement = context!.arrangementView;
-                                    arrangement.subscribe(() => {
-                                        this.setState({ title: arrangement.title });
-                                    });
-                                }
+            <div className="viewport-wrapper">
+                <div id="share">
+                    <div className="share-content-wrapper">
+                        <>
+                            {url ?
+                                (<>
+                                    <h2>Here's your beat:</h2>
+                                    <div className="beat-url">
+                                        <p onClick={this.selectContent}>{url}</p>
+                                        <div id="share-link-buttons"
+                                            style={{
+                                                display: "flex",
+                                                flexDirection: "row",
+                                                justifyContent: "center"
+                                            }}>
+                                            {haveNativeSharing &&
+                                                <Button
+                                                    className="push-button"
+                                                    onClick={() => {
+                                                        void navigator.share(
+                                                            { url, title: sharedTitle });
+                                                    }}
+                                                >share</Button>
 
-                                const sharedTitle = title
-                                    ? title + " - Animada Score Book" : "Animada Score Book - Samba Rhythms";
-
-                                return (
-                                    <div className="viewport-wrapper">
-                                        <div id="share">
-                                            <div className="share-content-wrapper">
-                                                <>
-                                                    {url ?
-                                                        (<>
-                                                            <h2>Here's your beat:</h2>
-                                                            <div className="beat-url">
-                                                                <p onClick={this.selectContent}>{url}</p>
-                                                                <div id="share-link-buttons"
-                                                                    style={{
-                                                                        display: "flex",
-                                                                        flexDirection: "row",
-                                                                        justifyContent: "center"
-                                                                    }}>
-                                                                    {haveNativeSharing &&
-                                                                        <Button
-                                                                            className="push-button"
-                                                                            onClick={() => {
-                                                                                void navigator.share(
-                                                                                    { url, title: sharedTitle });
-                                                                            }}
-                                                                        >share</Button>
-
-                                                                    }
-                                                                    {haveNativeSharing && haveClipboardAccess &&
-                                                                        <SmallSpacer />
-                                                                    }
-                                                                    {haveClipboardAccess &&
-                                                                        <Button
-                                                                            className="push-button"
-                                                                            onClick={
-                                                                                this.copyButtonClick.bind(this, url)
-                                                                            }
-                                                                        >{copyText}</Button>
-
-                                                                    }
-                                                                </div>
-
-                                                            </div>
-                                                        </>) :
-                                                        (<>
-                                                            <h2>Ready to share this beat?</h2>
-                                                            <Button
-                                                                className="push-button shiny-link"
-                                                                onClick={this.showLink}>
-                                                                generate link!
-                                                            </Button>
-                                                        </>)
+                                            }
+                                            {haveNativeSharing && haveClipboardAccess &&
+                                                <SmallSpacer />
+                                            }
+                                            {haveClipboardAccess &&
+                                                <Button
+                                                    className="push-button"
+                                                    onClick={
+                                                        this.copyButtonClick.bind(this, url)
                                                     }
-                                                </>
-                                            </div>
-                                            <Button
-                                                id="load-button"
-                                                className="push-button"
-                                                onClick={this.close}
-                                            >
-                                                Back to my beat!
-                                            </Button>
+                                                >{copyText}</Button>
+
+                                            }
                                         </div>
+
                                     </div>
-                                );
-                            }}
-                        </UndoManagerContext.Consumer>
-                    );
-                }}
-            </ArrangementPlayerContext.Consumer>
+                                </>) :
+                                (<>
+                                    <h2>Ready to share this beat?</h2>
+                                    <Button
+                                        className="push-button shiny-link"
+                                        onClick={this.showLink}>
+                                        generate link!
+                                    </Button>
+                                </>)
+                            }
+                        </>
+                    </div>
+                    <Button
+                        id="load-button"
+                        className="push-button"
+                        onClick={this.close}
+                    >
+                        Back to my beat!
+                    </Button>
+                </div>
+            </div>
         );
     }
 
@@ -132,7 +125,8 @@ export class Share extends UIComponent<{}, IShareState> {
     };
 
     private showLink = () => {
-        this.setState({ url: getShareLink(this.scoreBookContext!.currentState) });
+        const { undoManager } = this.props;
+        this.setState({ url: getShareLink(undoManager.currentState) });
     };
 
     private selectContent = (event: MouseEvent) => {
