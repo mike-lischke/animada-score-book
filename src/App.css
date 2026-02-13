@@ -365,10 +365,11 @@ select.long {
 
 .scroll-shadow {
     display: none;
-    width: 20pt;
+    width: 10pt;
     pointer-events: none;
     z-index: 1;
     position: absolute;
+
     /* Vertically offset shadows slightly to cover borders */
     margin-top: calc(-0.5 * var(--thick-border-width));
     height: calc(var(--thick-border-width) + var(--note-height))
@@ -387,10 +388,11 @@ select.long {
 }
 
 .track-meta {
+    --padding: 2pt;
+
     display: flex;
     flex-direction: column;
     justify-content: space-between;
-    --padding: 2pt;
     width: var(--track-meta-width);
     height: var(--note-height);
     border: var(--thick-border);
@@ -401,7 +403,7 @@ select.long {
     flex-shrink: 0;
     position: absolute;
     background-color: white;
-    z-index: 100;
+    z-index: 5;
     /* Currently only for covering track-controls overlay */
 }
 
@@ -831,11 +833,11 @@ select.long {
     margin-left: 16px;
     font-size: 24pt;
     font-weight: 400;
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    font-family: 'NovaMono for Powerline', Tahoma, Geneva, Verdana, sans-serif;
 }
 
 #titleLogo {
-    height: 50px;
+    height: 150px;
 }
 
 #themeSwitch {

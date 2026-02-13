@@ -8,13 +8,13 @@ import { createRef, type ComponentChild } from "preact";
 import type { ISbDmNote, ISbDmTrack } from "../../../core/ScoreBookDataModel.js";
 import type { IPolyrhythm } from "../../../core/types/general.js";
 import type { UndoManager } from "../../../core/UndoManager.js";
+import type { ArrangementPlayer } from "../../../player/ArrangementPlayer.js";
 import type { TrackPlayer } from "../../../player/TrackPlayer.js";
 import type { ScoreBookUiServices } from "../../../ui/AnimadaScoreBookUi.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
+import { NoteViewer } from "../Note/NoteViewer.js";
 import { PolyrhythmViewer } from "../PolyrhythmViewer.js";
 import type { ITrackViewerCallbacks } from "./TrackViewer.js";
-import { NoteViewer } from "../Note/NoteViewer.js";
-import type { ArrangementPlayer } from "../../../player/ArrangementPlayer.js";
 
 export interface INoteLineProperties extends ICommonUIProperties {
     trackPlayer: TrackPlayer;
@@ -44,18 +44,11 @@ export class NoteLine extends UIComponent<INoteLineProperties, INoteLineState> {
             notes: [...track.notes],
             polyrhythms: [...track.polyrhythms],
         };
-
-        track.subscribe(this.trackChanged);
     }
 
     public override componentDidMount(): void {
         const { track } = this.props;
-        track.subscribe(this.trackChanged);
-    }
-
-    public override componentWillUnmount(): void {
-        const { track } = this.props;
-        track.unsubscribe(this.trackChanged);
+        this.addSubscription(track, this.trackChanged);
     }
 
     public override componentDidUpdate(): void {

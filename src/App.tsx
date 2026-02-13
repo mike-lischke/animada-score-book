@@ -6,8 +6,6 @@
 import "@vscode/codicons/dist/codicon.css";
 import "./App.css";
 
-import titleImage from "./assets/images/Animada.svg";
-
 import { createRef } from "preact";
 
 import { ErrorBoundary } from "./components/ui/ErrorBoundary.js";
@@ -91,8 +89,8 @@ export class App extends UIComponent<{}, IAppState> {
                         orientation={Orientation.LeftToRight}
                         crossAlignment={ChildAlignment.Center}
                     >
-                        <Image id="titleLogo" src={titleImage} />
-                        <Label id="appTitle">Score Book</Label>
+                        <Image id="titleLogo" src="/logo.svg" />
+                        <Label id="appTitle">ANIMADA Score Book</Label>
                         <Switch
                             id="themeSwitch"
                             type="switch"

@@ -11,15 +11,9 @@ interface ITrackSelection {
     range: [ISbDmNote | null, ISbDmNote | null];
 }
 
-/**
- * Manages note selections across tracks and publishes selection changes.
- *
- * Inherits from `Publisher` so consumers can `subscribe`/`unsubscribe` directly.
- */
+/** Manages note selections across tracks and publishes selection changes. */
 export class SelectionManager extends Publisher {
-    /**
-     * Current selections per track, including selected notes and range per track.
-     */
+    /** Current selections per track, including selected notes and range per track. */
     public readonly selections: Map<ISbDmTrack, ITrackSelection> = new Map<ISbDmTrack, ITrackSelection>();
 
     private anchor: ISbDmNote | null = null;

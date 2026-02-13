@@ -53,15 +53,9 @@ export class ArrangementControlsTop extends UIComponent<IArrangementControlsTopP
     }
 
     public override componentDidMount(): void {
-        this.eventEngineUnsubscribe = EventEngine.instance.subscribe(this.onPlaybackStateChange);
-    }
-
-    public override componentDidUpdate(): void {
         const { arrangementPlayer: arrangementPlayerContext, services } = this.props;
 
-        this.selectionChangeUnsubscribe?.();
-        this.arrangementUnsubscribe?.();
-
+        this.eventEngineUnsubscribe = EventEngine.instance.subscribe(this.onPlaybackStateChange);
         const arrangement = arrangementPlayerContext.arrangementView;
         this.arrangementUnsubscribe = arrangement.subscribe(this.titleChangeSubscription);
         this.selectionChangeUnsubscribe = services.selectionManager.subscribe(this.onSelectionChange);

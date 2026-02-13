@@ -136,8 +136,7 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
                                 onGrab={autoFollowIsOn ? this.onScrollbarGrab : undefined}
                             />
                         </div>
-                        <Overlay name="instrument_browser">
-                        </Overlay>
+                        <Overlay name="instrument_browser" />
                     </div>
                 </div>
                 <ArrangementControlsBottom
@@ -200,7 +199,12 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
     }
 
     private updateScrollShadows = () => {
-        this.setState({ scrollShadowClasses: this.getScrollShadowClasses(this.viewerRef.current) });
+        const { scrollShadowClasses } = this.state;
+
+        const newClasse = this.getScrollShadowClasses(this.viewerRef.current);
+        if (scrollShadowClasses !== newClasse) {
+            this.setState({ scrollShadowClasses: newClasse });
+        }
     };
 
     private updateNoteWidth = () => {

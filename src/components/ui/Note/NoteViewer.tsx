@@ -6,7 +6,7 @@
 import type { ComponentChild } from "preact";
 
 import type { ISbDmNote } from "../../../core/ScoreBookDataModel.js";
-import type { INoteStyle, ISubscribable } from "../../../core/types/general.js";
+import type { INoteStyle } from "../../../core/types/general.js";
 import type { UndoManager } from "../../../core/UndoManager.js";
 import { isSameTiming } from "../../../core/utils.js";
 import type { ArrangementPlayer } from "../../../player/ArrangementPlayer.js";
@@ -47,6 +47,7 @@ export class NoteViewer extends UIComponent<INoteViewerProps, INoteViewerState> 
         this.state = {
             isCurrent: false,
             selected: false,
+            noteStyle: props.note.noteStyle,
         };
     }
 
@@ -102,39 +103,14 @@ export class NoteViewer extends UIComponent<INoteViewerProps, INoteViewerState> 
         return stepIsEven ? "even-beat" : "odd-beat";
     }
 
+    public override componentDidMount(): void {
+        this.addSubscriptions();
+    }
+
     public override componentWillUnmount(): void {
         this.timingChangeUnsubscribe?.();
         this.selectionChangeUnsubscribe?.();
         this.noteStyleChangeUnsubscribe?.();
-    }
-
-    public override componentDidUpdate(): void {
-        const { note, services, trackPlayer, arrangementPlayer } = this.props;
-        const { selectionManager } = services;
-
-        this.timingChangeUnsubscribe?.();
-        this.selectionChangeUnsubscribe?.();
-        this.noteStyleChangeUnsubscribe?.();
-
-        const timingPublisher: ISubscribable = note.polyrhythm
-            ? trackPlayer.currentPolyrhythmNotePublisher
-            : arrangementPlayer.currentTimingPublisher;
-
-        this.timingChangeUnsubscribe = timingPublisher.subscribe(this.timingChanged);
-        this.selectionChangeUnsubscribe = selectionManager.subscribe(this.selectionChanged);
-
-        const { isCurrent, noteStyle } = this.state;
-
-        const isPlaying = this.isCurrentlyPlaying();
-        if (isPlaying !== isCurrent) {
-            this.setState({ isCurrent: isPlaying });
-        }
-
-        if (noteStyle !== note.noteStyle) {
-            this.setState({ noteStyle: note.noteStyle });
-        }
-
-        this.noteStyleChangeUnsubscribe = note.subscribe(this.noteStyleChanged);
     }
 
     public override render(): ComponentChild {
@@ -157,12 +133,25 @@ export class NoteViewer extends UIComponent<INoteViewerProps, INoteViewerState> 
                     holdLength={1100}
                     callback={this.handleTouchHold}
                 >
-                    <div className="note-details-viewer" >
+                    <div className="note-details-viewer">
                         <NoteStyleSymbolViewer noteStyle={noteStyle} />
                     </div>
                 </TouchHoldDetector>
             </div >
         );
+    }
+
+    private addSubscriptions(): void {
+        const { note, services, trackPlayer, arrangementPlayer } = this.props;
+        const { selectionManager } = services;
+
+        const timingPublisher = note.polyrhythm
+            ? trackPlayer.currentPolyrhythmNotePublisher
+            : arrangementPlayer.currentTimingPublisher;
+
+        this.timingChangeUnsubscribe = timingPublisher.subscribe(this.timingChanged);
+        this.selectionChangeUnsubscribe = selectionManager.subscribe(this.selectionChanged);
+        this.noteStyleChangeUnsubscribe = note.subscribe(this.noteStyleChanged);
     }
 
     private timingChanged = (): void => {
