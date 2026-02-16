@@ -18,9 +18,7 @@ import { Button } from "../framework/Button.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
 import { Overlay } from "../Overlay.js";
 import { SelectionControls } from "../SelectionControls.js";
-import { ShareButton } from "../ShareButton.js";
 import { SmallSpacer } from "../SmallSpacer.js";
-import { ArrangementTitle } from "./ArrangementTitle.js";
 import { TimeControls } from "./TimeControls.js";
 import { UndoRedoControls } from "./UndoRedoControls.js";
 
@@ -48,7 +46,7 @@ export class ArrangementControlsTop extends UIComponent<IArrangementControlsTopP
         this.state = {
             playing: EventEngine.instance.state === "playing",
             editingTitle: false,
-            title: "",
+            title: props.arrangementPlayer.arrangementView.title,
         };
     }
 
@@ -69,22 +67,12 @@ export class ArrangementControlsTop extends UIComponent<IArrangementControlsTopP
 
     public override render(): ComponentChild {
         const { arrangementPlayer, services, undoManager } = this.props;
-        const { playing, editingTitle, title } = this.state;
+        const { playing } = this.state;
 
         const arrangement = arrangementPlayer.arrangementView;
-        const titleVisible = title.length > 0 || editingTitle;
 
         return (
             <>
-                <div className={titleVisible ? "" : "hidden"}>
-                    <ArrangementTitle
-                        editMode={editingTitle}
-                        onEditEnd={this.onEditEnd}
-                        arrangementPlayer={arrangementPlayer}
-                        services={services}
-                        undoManager={undoManager}
-                    />
-                </div>
                 <div className="arrangement-controls arrangement-controls-top">
                     {
                         playing ? (
@@ -125,7 +113,6 @@ export class ArrangementControlsTop extends UIComponent<IArrangementControlsTopP
                     <SmallSpacer />
                     <ExpandingSpacer />
 
-                    <ShareButton />
                     <Overlay name="selection_controls">
                         <SelectionControls
                             arrangementPlayer={arrangementPlayer}

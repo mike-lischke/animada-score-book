@@ -74,7 +74,6 @@ export class Label extends UIComponent<ILabelProperties> {
                 id={id}
                 ref={this.labelRef}
                 className={className}
-                data-tooltip="expand"
                 style={actualStyle}
             >
                 {content}

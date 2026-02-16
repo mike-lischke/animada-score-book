@@ -5,21 +5,50 @@
 
 import "./App.css";
 
-import logo from "./assets/images/animada-logo2.svg";
+import logo from "/logo.svg";
 
 import { render } from "preact";
 
 import { App } from "./App.js";
+import { Container } from "./components/ui/framework/Container.js";
 import { Message } from "./components/ui/framework/Message.js";
 import { ChildAlignment, MessageType, Orientation } from "./components/ui/framework/ui-types.js";
-import { Container } from "./components/ui/framework/Container.js";
+import { convertErrorToString } from "./core/utils.js";
+
+const root = document.getElementById("app")!;
+
+const renderFatal = (error?: unknown) => {
+    const text = convertErrorToString(error);
+    console.error("Global fatal error:", text);
+    render(
+        <Message messageType={MessageType.Error}>
+            <Container
+                orientation={Orientation.TopDown}
+                crossAlignment={ChildAlignment.Center}
+            >
+                <p>{text}</p>
+            </Container>
+        </Message>,
+        root
+    );
+};
+
+window.onerror = (message, source, lineno, colno, error) => {
+    renderFatal(error);
+
+    return true;
+};
+
+window.onunhandledrejection = (event) => {
+    renderFatal(event.reason);
+};
 
 try {
     if (/(iPad|iPhone|iPod)/g.test(navigator.userAgent)) {
         await navigator.mediaDevices.getUserMedia({ video: false, audio: true });
     }
 
-    render(<App />, document.body);
+    render(<App />, root);
 } catch {
     render(
         <Message messageType={MessageType.Info}>
@@ -38,6 +67,6 @@ try {
                 </p>
             </Container>
         </Message >,
-        document.getElementById("app")!
+        root
     );
 }

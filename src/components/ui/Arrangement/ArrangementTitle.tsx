@@ -5,14 +5,12 @@
 
 import { createRef, type ComponentChild } from "preact";
 
+import type { IArrangement } from "../../../core/types/general.js";
 import type { UndoManager } from "../../../core/UndoManager.js";
-import type { ArrangementPlayer } from "../../../player/ArrangementPlayer.js";
-import type { ScoreBookUiServices } from "../../../ui/AnimadaScoreBookUi.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
 
 export interface IArrangementTitleProps extends ICommonUIProperties {
-    arrangementPlayer: ArrangementPlayer;
-    services: ScoreBookUiServices;
+    arrangement: Readonly<IArrangement>;
     undoManager: UndoManager;
     editMode: boolean;
     onEditEnd: () => void;
@@ -35,19 +33,17 @@ export class ArrangementTitle extends UIComponent<IArrangementTitleProps, IArran
     }
 
     public override componentDidMount(): void {
-        const { editMode, arrangementPlayer } = this.props;
+        const { editMode, arrangement } = this.props;
         if (editMode) {
             this.inputRef.current?.focus();
         }
 
-        const arrangement = arrangementPlayer.arrangementView;
         this.setState({ title: arrangement.title, inputValue: arrangement.title });
     }
 
     public override componentDidUpdate(prevProps: IArrangementTitleProps): void {
-        const { arrangementPlayer } = this.props;
+        const { arrangement } = this.props;
 
-        const arrangement = arrangementPlayer.arrangementView;
         if (arrangement.title !== this.state.title) {
             this.setState({ title: arrangement.title, inputValue: arrangement.title });
         }
@@ -96,9 +92,8 @@ export class ArrangementTitle extends UIComponent<IArrangementTitleProps, IArran
     }
 
     private onBlur = (event: FocusEvent) => {
-        const { onEditEnd, undoManager, arrangementPlayer } = this.props;
+        const { onEditEnd, undoManager, arrangement } = this.props;
 
-        const arrangement = arrangementPlayer.arrangementView;
         undoManager.edit({
             type: "EditCommand_ArrangementTitle", arrangement,
             newTitle: (event.target as HTMLInputElement).value
@@ -107,9 +102,8 @@ export class ArrangementTitle extends UIComponent<IArrangementTitleProps, IArran
     };
 
     private onKeyUp = (event: KeyboardEvent) => {
-        const { onEditEnd, undoManager, arrangementPlayer } = this.props;
+        const { onEditEnd, undoManager, arrangement } = this.props;
 
-        const arrangement = arrangementPlayer.arrangementView;
         if (event.key === "Enter") { // Enter means submit the changes and stop editing
             undoManager.edit({
                 type: "EditCommand_ArrangementTitle",

@@ -3,9 +3,9 @@
 * Licensed under the MIT License. See License.txt in the project root for license information.
 */
 
+import { ArrangementViewer } from "../components/ui/Arrangement/ArrangementViewer.js";
 import { UIComponent, type ICommonUIProperties } from "../components/ui/framework/UIComponent.js";
 import { Overlay } from "../components/ui/Overlay.js";
-import { ScoreBookViewer } from "../components/ui/ScoreBookViewer.js";
 import type { ScoreBookDataModel } from "../core/ScoreBookDataModel.js";
 import type { ISerialisedArrangement } from "../core/types/snapshots.js";
 import { UndoManager } from "../core/UndoManager.js";
@@ -63,10 +63,6 @@ export class AnimadaScoreBookUi extends UIComponent<IAnimadaScoreBookUiPropertie
         };
 
         this.initEventHandlers();
-
-        // Load the initial arrangement to have a player ready.
-        //this.loadScorebook([]);
-        //initSessionRecovery(this.scoreBook);
     }
 
     public static override getDerivedStateFromProps(nextProps: IAnimadaScoreBookUiProperties,
@@ -101,7 +97,7 @@ export class AnimadaScoreBookUi extends UIComponent<IAnimadaScoreBookUiPropertie
         }
 
         return (
-            <ScoreBookViewer
+            <ArrangementViewer
                 arrangementPlayer={this.arrangementPlayer!}
                 services={this.services}
                 undoManager={this.undoManager!}

@@ -17,22 +17,34 @@ import { ProgressIndicator } from "./components/ui/framework/ProgressIndicator.j
 import { ChildAlignment, Orientation } from "./components/ui/framework/ui-types.js";
 import { UIComponent } from "./components/ui/framework/UIComponent.js";
 
+import { ArrangementViewer } from "./components/ui/Arrangement/ArrangementViewer.js";
+import { ValueEditorEntryType, type IValueEditorValueEntry } from "./components/ui/composites/ValueDialog.js";
 import { Codicon } from "./components/ui/framework/Codicon.js";
 import { Dialog, DialogResponseClosure, DialogType } from "./components/ui/framework/Dialogs/Dialog.js";
+import { Grid } from "./components/ui/framework/Grid.js";
+import { GridCell } from "./components/ui/framework/GridCell.js";
 import { Icon } from "./components/ui/framework/Icon.js";
 import { CheckState, Switch } from "./components/ui/framework/Switch/Switch.js";
 import { TooltipProvider } from "./components/ui/framework/Tooltip.js";
+import { Overlay } from "./components/ui/Overlay.js";
+import { ShareButton } from "./components/ui/ShareButton.js";
 import {
     SbDmEntityType, ScoreBookDataModel, type ISbDmScore, type ISbDmScoreFolder
 } from "./core/ScoreBookDataModel.js";
 import { getSerialisedArrangementFromParams } from "./core/serialisation/url.js";
 import type { ISerialisedArrangement } from "./core/types/snapshots.js";
+import { UndoManager } from "./core/UndoManager.js";
 import { convertErrorToString } from "./core/utils.js";
-import { AnimadaScoreBookUi } from "./ui/AnimadaScoreBookUi.js";
-import { emptySongString } from "./ui/index.js";
-import { ScoreLibrary } from "./ui/ScoreLibrary.js";
+import { ArrangementPlayer } from "./player/ArrangementPlayer.js";
+import { EventEngine } from "./player/EventEngine.js";
+import { type ScoreBookUiServices } from "./ui/AnimadaScoreBookUi.js";
+import { AnimationEngine } from "./ui/AnimationEngine.js";
 import { DialogHost } from "./ui/DialogHost.js";
-import { ValueEditorEntryType, type IValueEditorValueEntry } from "./components/ui/composites/ValueDialog.js";
+import { emptySongString } from "./ui/index.js";
+import { ModeManager } from "./ui/ModeManager.js";
+import { MouseHandler } from "./ui/MouseHandler.js";
+import { ScoreLibrary } from "./ui/ScoreLibrary.js";
+import { SelectionManager } from "./ui/SelectionManager.js";
 
 interface IAppState {
     ready: boolean;
@@ -41,9 +53,20 @@ interface IAppState {
     theme: "light" | "dark";
 }
 
+const currentYear = new Date().getFullYear();
+const copyright = `© 2025 - ${currentYear} Mike Lischke. All rights reserved.`;
+
+const newSong: ISerialisedArrangement = { composition: emptySongString, version: 2, title: "New Song" };
+
 export class App extends UIComponent<{}, IAppState> {
     private scoreLibraryRef = createRef<Dialog>();
     private dataModel = new ScoreBookDataModel();
+
+    private services: ScoreBookUiServices;
+    private arrangementPlayer?: ArrangementPlayer;
+    private undoManager?: UndoManager;
+
+    private mouseHandler?: MouseHandler;
 
     public constructor(props: {}) {
         super(props);
@@ -52,19 +75,26 @@ export class App extends UIComponent<{}, IAppState> {
             ready: false,
             theme: "light",
         };
+
+        const selectionManager = new SelectionManager();
+        this.services = {
+            animationEngine: new AnimationEngine(EventEngine.instance),
+            selectionManager,
+            modeManager: new ModeManager(selectionManager),
+        };
+
+        this.initEventHandlers();
     }
 
     public override componentDidMount() {
+        const { theme } = this.state;
+        document.body.setAttribute("data-theme", theme);
+
         void this.dataModel.initialize().then(() => {
             const serializedArrangement =
                 getSerialisedArrangementFromParams(new URL(window.location.href).searchParams);
-            this.setState({
-                ready: true,
-                serializedArrangement,
-            }, () => {
-                const { theme } = this.state;
-                document.body.setAttribute("data-theme", theme);
-            });
+            this.loadScorebook(serializedArrangement ?? newSong);
+            this.setState({ ready: true });
         });
     }
 
@@ -75,7 +105,7 @@ export class App extends UIComponent<{}, IAppState> {
             return <ProgressIndicator />;
         }
 
-        const arrangement = serializedArrangement ?? { composition: emptySongString, version: 2, title: "New Song" };
+        const arrangement = serializedArrangement ?? newSong;
 
         return (
             <ErrorBoundary>
@@ -89,8 +119,51 @@ export class App extends UIComponent<{}, IAppState> {
                         orientation={Orientation.LeftToRight}
                         crossAlignment={ChildAlignment.Center}
                     >
-                        <Image id="titleLogo" src="/logo.svg" />
-                        <Label id="appTitle">ANIMADA Score Book</Label>
+                        <Grid id="titleGrid" columns={["auto", "auto", "1fr", "auto"]} >
+                            <GridCell rowSpan={2} orientation={Orientation.TopDown}>
+                                <Image id="titleLogo" src="/logo.svg" />
+                            </GridCell>
+                            <GridCell orientation={Orientation.TopDown} mainAlignment={ChildAlignment.Center}>
+                                <Label className="appTitle top">ANIMADA</Label>
+                            </GridCell>
+                            <GridCell
+                                rowSpan={2}
+                                orientation={Orientation.TopDown}
+                                mainAlignment={ChildAlignment.Center}
+                                crossAlignment={ChildAlignment.Center}
+                            >
+                                {
+                                    arrangement.title && <Label
+                                        className="arrangementTitle"
+                                        title={arrangement.title}
+                                    >
+                                        {arrangement.title}
+                                    </Label>
+                                }
+                            </GridCell>
+                            <GridCell
+                                id="toolbarButtons"
+                                rowSpan={2}
+                                orientation={Orientation.TopDown}
+                                mainAlignment={ChildAlignment.Center}
+                            >
+                                <Button
+                                    id="scoreLibraryButton"
+                                    caption="Score Library"
+                                    onClick={this.handleScoreLibraryClick}
+                                />
+                                <Button
+                                    id="instrumentEditor"
+                                    caption="Instrument Editor"
+                                    disabled
+                                    onClick={this.handleInstrumentEditorClick}
+                                />
+                                <ShareButton />
+                            </GridCell>
+                            <GridCell orientation={Orientation.TopDown}>
+                                <Label className="appTitle bottom">Score Book</Label>
+                            </GridCell>
+                        </Grid>
                         <Switch
                             id="themeSwitch"
                             type="switch"
@@ -98,6 +171,20 @@ export class App extends UIComponent<{}, IAppState> {
                             checkState={theme === "dark" ? CheckState.Checked : CheckState.Unchecked}
                             onChange={this.handleThemeChange}
                         />
+                    </Container>
+
+                    {this.arrangementPlayer && <ArrangementViewer
+                        arrangementPlayer={this.arrangementPlayer}
+                        services={this.services}
+                        undoManager={this.undoManager!}
+                    />}
+
+                    <Container
+                        id="footer"
+                        orientation={Orientation.LeftToRight}
+                        mainAlignment={ChildAlignment.Center}
+                    >
+                        {copyright}
                         <Button
                             id="githubLink"
                             title="View on GitHub"
@@ -105,23 +192,10 @@ export class App extends UIComponent<{}, IAppState> {
                             role="switch"
                             onClick={this.handleGithubClick}
                         >
-                            <Icon src={Codicon.GithubInverted} />
+                            <Icon src={Codicon.Github} />
                         </Button>
-                    </Container>
 
-                    <Container id="toolbar" orientation={Orientation.LeftToRight}>
-                        <Button
-                            id="scoreLibraryButton"
-                            caption="Score Library"
-                            onClick={this.handleScoreLibraryClick}
-                        />
-                        <Button
-                            id="instrumentEditor"
-                            caption="Instrument Editor"
-                            onClick={this.handleInstrumentEditorClick}
-                        />
                     </Container>
-                    <AnimadaScoreBookUi serializedArrangement={arrangement} dataModel={this.dataModel} />
                 </Container>
                 <Dialog
                     ref={this.scoreLibraryRef}
@@ -327,7 +401,8 @@ export class App extends UIComponent<{}, IAppState> {
                 if (data.type === SbDmEntityType.Score) {
                     const params = new URLSearchParams(data.content);
                     const serializedArrangement = getSerialisedArrangementFromParams(params);
-                    this.setState({ serializedArrangement });
+
+                    this.loadScorebook(serializedArrangement ?? newSong);
                 }
 
                 break;
@@ -370,4 +445,111 @@ export class App extends UIComponent<{}, IAppState> {
 
         return true;
     };
+
+    private loadScorebook(arrangementToLoad: ISerialisedArrangement) {
+        if (this.arrangementPlayer) {
+            EventEngine.instance.disconnect(this.arrangementPlayer);
+            this.arrangementPlayer.dispose();
+        }
+
+        const arrangement = this.dataModel.loadArrangement(arrangementToLoad);
+        this.undoManager = new UndoManager(arrangement, this.dataModel.instruments);
+        this.arrangementPlayer = new ArrangementPlayer(arrangement);
+        EventEngine.instance.connect(this.arrangementPlayer);
+
+        if (arrangement.title) {
+            document.title = arrangement.title + " - Animada Score Book";
+        }
+
+        this.setState({ serializedArrangement: arrangementToLoad });
+
+    }
+
+    private initEventHandlers(): void {
+        window.addEventListener("keydown", (event) => {
+            this.handleKeyDown(event);
+        });
+        window.addEventListener("keyup", (event) => {
+            this.handleKeyUp(event);
+        });
+
+        this.mouseHandler = new MouseHandler(this.services.modeManager, this.services.selectionManager);
+    }
+
+    private handleKeyDown(event: KeyboardEvent): void {
+        switch (event.key) {
+            case "Escape": {
+                Overlay.closeAllOverlays();
+                this.services.selectionManager.deselectAll();
+                this.services.modeManager.deletePolyrhythmMode = false;
+
+                break;
+            }
+
+            case " ": {
+                if (EventEngine.instance.state === "stopped") {
+                    void EventEngine.instance.play();
+                } else {
+                    EventEngine.instance.stop();
+                }
+                event.preventDefault(); // This is to prevent spaces getting written in number inputs
+
+                break;
+            }
+
+            case "Alt": {
+                this.services.modeManager.deletePolyrhythmMode = true;
+                event.preventDefault();
+
+                break;
+            }
+
+            case "Backspace":
+            case "Delete": {
+                if (!(event.target instanceof HTMLInputElement)) {
+                    this.undoManager?.edit({
+                        type: "EditCommand_ArrangementClearSelection",
+                        arrangement: this.undoManager.arrangement,
+                        clearSelection: this.services.selectionManager.selections
+                    });
+                    this.services.selectionManager.deselectAll();
+                }
+
+                break;
+            }
+
+            // Undo/Redo: We have different conventions between Mac and Windows
+            // Windows: ctrl+z / ctrl+y
+            // Mac: command+z / command+shift+z
+            // We allow overlap for maximum cross-browser consistency, except where it actually causes confusion
+            case "z": {
+                if (event.ctrlKey || event.metaKey) {
+                    if (event.shiftKey) {
+                        this.undoManager?.redo();
+                    } else {
+                        // Standard redo on Mac, and no problem to allow it on Windows
+                        this.undoManager?.undo();
+                    } // With ctrl, this doesn't even trigger on Mac. Seems harmless to include it anyway.
+                }
+                break;
+            }
+
+            case "y": {
+                // We do not allow command+y to redo on Mac
+                // On Chrome, Firefox, and Safari, it triggers browser things, and so is very confusing to also redo
+                if (event.ctrlKey) {
+                    this.undoManager?.redo();
+                }
+
+                break;
+            }
+        }
+    }
+
+    private handleKeyUp(event: KeyboardEvent): void {
+        if (event.key === "Alt") {
+            this.services.modeManager.deletePolyrhythmMode = false;
+        }
+    }
+
 }

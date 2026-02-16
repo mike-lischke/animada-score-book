@@ -3,6 +3,14 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
+@font-face {
+    font-family: "HeyOctober";
+    src: url("/fonts/HeyOctober.woff2") format("woff2");
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+}
+
 :root {
     /* TODO: Export all the colors to a theme file. */
     --background: #ffffff;
@@ -58,7 +66,7 @@
     --input-foreground-color: #f0f0f0;
     --input-border-color: #555a66;
 
-    --button-background: #005fb8;
+    --button-background: #005bbdda;
     --button-border: #0000001a;
     --button-foreground: #ffffff;
     --button-hoverBackground: #0258a8;
@@ -95,8 +103,7 @@ body {
     width: 100vw;
     height: 100vh;
 
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen,
-        Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+    font-family: 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
     line-height: 1.5;
     font-weight: 400;
 
@@ -127,7 +134,7 @@ body {
 }
 
 .button#githubLink {
-    background-color: black;
+    background-color: transparent;
 }
 
 .hidden {
@@ -142,7 +149,8 @@ body {
     height: 100%;
 }
 
-#score-book-viewer {
+.arrangement-viewer,
+.arrangement-viewer-body {
     position: relative;
     padding: 40px;
 
@@ -151,14 +159,18 @@ body {
     flex-direction: column;
 }
 
+.arrangement-viewer-body > .overlay {
+    padding: 5pt;
+}
+
 #footer {
-    --footer-height: 20pt;
-    flex-basis: var(--footer-height);
+    flex-basis: 25pt;
     flex-grow: 0;
     flex-shrink: 0;
     text-align: center;
-    background-color: var(--lightest-gray);
-    line-height: var(--footer-height)
+    background-color: var(--button-background);
+    line-height: 25pt;
+    color: var(--button-foreground);
 }
 
 .beat-url {
@@ -169,16 +181,17 @@ body {
     overflow-wrap: anywhere;
 }
 
-.arrangement-title h1 {
-    text-align: center;
-    margin-bottom: 0;
+.arrangementTitle {
+    display: block;
+    align-self: center;
+
+    font-size: 20pt;
+    font-weight: bold;
 }
 
 .arrangement-controls {
     position: relative;
     display: flex;
-    padding: 20pt;
-    border-bottom: var(--thick-border);
     align-items: center;
 }
 
@@ -679,15 +692,6 @@ select.long {
     height: 70%;
 }
 
-.arrangement-viewer-body > .overlay {
-    padding: 5pt;
-}
-
-.arrangement-viewer,
-.arrangement-viewer-body {
-    position: relative;
-}
-
 .instrument-chooser {
     height: 50pt;
     width: 70pt;
@@ -829,19 +833,36 @@ select.long {
     padding: 12px 12px 0 12px;
 }
 
-#appTitle {
+#titleGrid {
+    margin-bottom: 12px;
+    width: 100%;
+}
+
+.appTitle {
     margin-left: 16px;
     font-size: 24pt;
     font-weight: 400;
-    font-family: 'NovaMono for Powerline', Tahoma, Geneva, Verdana, sans-serif;
+    font-family: 'HeyOctober', Tahoma, Geneva, Verdana, sans-serif;
+    height: 24pt;
+    color: #F57031;
+}
+
+.appTitle.bottom {
+    font-size: 64pt;
+    height: 64pt;
 }
 
 #titleLogo {
-    height: 150px;
+    height: 120px;
 }
 
 #themeSwitch {
+    display: none;
     margin-left: auto;
+}
+
+#toolbarButtons {
+    margin-left: 40px;
 }
 
 #appTabview {

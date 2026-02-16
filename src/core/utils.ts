@@ -86,6 +86,15 @@ export const convertErrorToString = (error: unknown): string => {
     let result = e.message;
     if (e.cause) {
         result += "\n" + convertErrorToString(e.cause);
+    } else if (e.stack) {
+        // Extract the first line of the stack trace, which usually contains the most relevant information about
+        // where the error occurred.
+        const lines = e.stack.split("\n");
+        if (lines.length > 1) {
+            // Remove any parameters from the stack trace line.
+            lines[1] = lines[1].replace(/\?[^:]*:/, " => ");
+            result += "\n" + lines[1];
+        }
     }
 
     return result;
