@@ -14,7 +14,7 @@ import { ExpandingSpacer } from "./ExpandingSpacer.js";
 import { Button } from "./framework/Button.js";
 import { UIComponent, type ICommonUIProperties } from "./framework/UIComponent.js";
 import { OverlayStateContext } from "./Overlay.js";
-import { SmallSpacer } from "./SmallSpacer.js";
+import { Separator } from "./Separator.js";
 
 const digitMatcher = /^\d$/;
 
@@ -52,6 +52,8 @@ export class SelectionControls extends UIComponent<ISelectionControlsProperties,
     }
 
     public override componentWillUnmount(): void {
+        super.componentWillUnmount();
+
         window.removeEventListener("keypress", this.onWindowKeyPress);
     }
 
@@ -88,7 +90,7 @@ export class SelectionControls extends UIComponent<ISelectionControlsProperties,
                                     }}
                                 >add polyrhythm</Button>
 
-                                <SmallSpacer />
+                                <Separator />
 
                                 <Button
                                     className="push-button"
@@ -96,7 +98,7 @@ export class SelectionControls extends UIComponent<ISelectionControlsProperties,
                                 >Clear sounds</Button>
 
                                 <ExpandingSpacer />
-                                <SmallSpacer />
+                                <Separator />
 
                                 <Button
                                     className="push-button"
@@ -135,7 +137,7 @@ export class SelectionControls extends UIComponent<ISelectionControlsProperties,
                                 </Button>
 
                                 <ExpandingSpacer />
-                                <SmallSpacer />
+                                <Separator />
 
                                 <Button
                                     className="push-button"

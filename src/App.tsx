@@ -4,7 +4,7 @@
  */
 
 import "@vscode/codicons/dist/codicon.css";
-import "./App.css";
+import "./App.scss";
 
 import { createRef } from "preact";
 
@@ -45,12 +45,15 @@ import { ModeManager } from "./ui/ModeManager.js";
 import { MouseHandler } from "./ui/MouseHandler.js";
 import { ScoreLibrary } from "./ui/ScoreLibrary.js";
 import { SelectionManager } from "./ui/SelectionManager.js";
+import { ArrangementTitle } from "./components/ui/Arrangement/ArrangementTitle.js";
+import { ArrangementPlayControls } from "./components/ui/Arrangement/ArrangementPlayControls.js";
 
 interface IAppState {
     ready: boolean;
     serializedArrangement?: ISerialisedArrangement;
 
     theme: "light" | "dark";
+    editingTitle: boolean;
 }
 
 const currentYear = new Date().getFullYear();
@@ -68,12 +71,15 @@ export class App extends UIComponent<{}, IAppState> {
 
     private mouseHandler?: MouseHandler;
 
+    private justFinishedEditingTitle = false;
+
     public constructor(props: {}) {
         super(props);
 
         this.state = {
             ready: false,
             theme: "light",
+            editingTitle: false,
         };
 
         const selectionManager = new SelectionManager();
@@ -99,13 +105,38 @@ export class App extends UIComponent<{}, IAppState> {
     }
 
     public render() {
-        const { ready, serializedArrangement, theme } = this.state;
+        const { ready, theme, editingTitle } = this.state;
 
         if (!ready) {
             return <ProgressIndicator />;
         }
 
-        const arrangement = serializedArrangement ?? newSong;
+        let titleBlock;
+        if (this.arrangementPlayer) {
+            titleBlock = <Container
+                orientation={Orientation.LeftToRight}
+                mainAlignment={ChildAlignment.Center}
+                crossAlignment={ChildAlignment.Center}>
+                <ArrangementTitle
+                    id="mainArrangementTitle"
+                    arrangement={this.arrangementPlayer.arrangementView}
+                    data-tooltip="expand"
+                    undoManager={this.undoManager!}
+                    editMode={editingTitle}
+                    onEditEnd={this.onEditEnd}
+                />
+                {
+                    !editingTitle && <Button
+                        id="editTitleButton"
+                        title="Edit Score Title"
+                        imageOnly
+                        onClick={this.onClickEditTitle}
+                    >
+                        <Icon src={Codicon.Edit} />
+                    </Button>
+                }
+            </Container>;
+        }
 
         return (
             <ErrorBoundary>
@@ -119,7 +150,11 @@ export class App extends UIComponent<{}, IAppState> {
                         orientation={Orientation.LeftToRight}
                         crossAlignment={ChildAlignment.Center}
                     >
-                        <Grid id="titleGrid" columns={["auto", "auto", "1fr", "auto"]} >
+                        <Grid
+                            id="titleGrid"
+                            columns={["auto", "auto", "minmax(0, 1fr)", "auto"]}
+                            columnGap={8}
+                        >
                             <GridCell rowSpan={2} orientation={Orientation.TopDown}>
                                 <Image id="titleLogo" src="/logo.svg" />
                             </GridCell>
@@ -127,19 +162,11 @@ export class App extends UIComponent<{}, IAppState> {
                                 <Label className="appTitle top">ANIMADA</Label>
                             </GridCell>
                             <GridCell
-                                rowSpan={2}
                                 orientation={Orientation.TopDown}
                                 mainAlignment={ChildAlignment.Center}
-                                crossAlignment={ChildAlignment.Center}
+                                crossAlignment={ChildAlignment.Stretch}
                             >
-                                {
-                                    arrangement.title && <Label
-                                        className="arrangementTitle"
-                                        title={arrangement.title}
-                                    >
-                                        {arrangement.title}
-                                    </Label>
-                                }
+                                {titleBlock}
                             </GridCell>
                             <GridCell
                                 id="toolbarButtons"
@@ -159,9 +186,28 @@ export class App extends UIComponent<{}, IAppState> {
                                     onClick={this.handleInstrumentEditorClick}
                                 />
                                 <ShareButton />
+                                <Button
+                                    id="displayOptionsButton"
+                                    caption="Display Options"
+                                    disabled
+                                    onClick={this.handleDisplayOptionsClick}
+                                />
                             </GridCell>
                             <GridCell orientation={Orientation.TopDown}>
                                 <Label className="appTitle bottom">Score Book</Label>
+                            </GridCell>
+                            <GridCell
+                                id="arrangementPlayControlsCell"
+                                orientation={Orientation.TopDown}
+                                mainAlignment={ChildAlignment.Center}
+                                crossAlignment={ChildAlignment.Start}
+                            >
+                                <ArrangementPlayControls
+                                    arrangementPlayer={this.arrangementPlayer!}
+                                    services={this.services}
+                                    undoManager={this.undoManager!}
+                                />
+
                             </GridCell>
                         </Grid>
                         <Switch
@@ -232,6 +278,10 @@ export class App extends UIComponent<{}, IAppState> {
         alert("Instrument Editor is not yet implemented.");
     };
 
+    private handleDisplayOptionsClick = () => {
+        alert("Display Options is not yet implemented.");
+    };
+
     private handleScoreLibraryAction = async (action: string, data?: ISbDmScoreFolder | ISbDmScore,
         parent?: ISbDmScoreFolder): Promise<boolean> => {
 
@@ -290,13 +340,17 @@ export class App extends UIComponent<{}, IAppState> {
                     if (parent) {
                         // See if the clipboard has a valid score URL.
                         let content = "";
-                        const clipboardText = await navigator.clipboard.readText();
-                        if (clipboardText && clipboardText.trim().length > 0) {
-                            try {
-                                new URL(clipboardText);
-                                content = clipboardText;
-                            } catch {
-                                // Not a valid URL, ignore.
+
+                        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+                        if (navigator.clipboard?.readText) {
+                            const clipboardText = await navigator.clipboard.readText();
+                            if (clipboardText && clipboardText.trim().length > 0) {
+                                try {
+                                    new URL(clipboardText);
+                                    content = clipboardText;
+                                } catch {
+                                    // Not a valid URL, ignore.
+                                }
                             }
                         }
 
@@ -552,4 +606,17 @@ export class App extends UIComponent<{}, IAppState> {
         }
     }
 
+    private onEditEnd = () => {
+        this.setState({ editingTitle: false });
+        this.justFinishedEditingTitle = true;
+        setTimeout(() => {
+            return this.justFinishedEditingTitle = false;
+        }, 100);
+    };
+
+    private onClickEditTitle = () => {
+        if (!this.justFinishedEditingTitle) {
+            this.setState({ editingTitle: true });
+        }
+    };
 }

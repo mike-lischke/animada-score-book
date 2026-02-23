@@ -58,14 +58,15 @@ export class Overlay extends UIComponent<IOverlayProps, IOverlayState> {
     public override componentDidMount(): void {
         const { name } = this.props;
 
-        this.overlayState.subscribe(this.overlayStateChanged);
+        this.addSubscription(this.overlayState, this.overlayStateChanged);
         Overlay.overlayStates[name] = this.overlayState;
     }
 
     public override componentWillUnmount(): void {
+        super.componentWillUnmount();
+
         const { name } = this.props;
 
-        this.overlayState.unsubscribe(this.overlayStateChanged);
         delete Overlay.overlayStates[name];
     }
 

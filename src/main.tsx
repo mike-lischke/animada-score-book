@@ -3,8 +3,6 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import "./App.css";
-
 import logo from "/logo.svg";
 
 import { render } from "preact";
@@ -13,12 +11,32 @@ import { App } from "./App.js";
 import { Container } from "./components/ui/framework/Container.js";
 import { Message } from "./components/ui/framework/Message.js";
 import { ChildAlignment, MessageType, Orientation } from "./components/ui/framework/ui-types.js";
-import { convertErrorToString } from "./core/utils.js";
 
 const root = document.getElementById("app")!;
+interface ISerializedError {
+    tag?: string;
+    message: string;
+    source?: string | EventTarget | null;
+    lineno?: number;
+    colno?: number;
+    stack?: string;
+}
 
 const renderFatal = (error?: unknown) => {
-    const text = convertErrorToString(error);
+    let text;
+
+    if (error instanceof Error) {
+        text = `${error.name}: ${error.message}\n${error.stack}`;
+    } else {
+        const e = error as ISerializedError;
+        text =
+            `Message: ${e.message}\n` +
+            (e.source ? `Source: ${e.source}\n` : "") +
+            (e.lineno != null ? `Line: ${e.lineno}\n` : "") +
+            (e.colno != null ? `Column: ${e.colno}\n` : "") +
+            (e.stack ? `Stack: ${e.stack}\n` : "");
+    }
+
     console.error("Global fatal error:", text);
     render(
         <Message messageType={MessageType.Error}>
@@ -34,7 +52,25 @@ const renderFatal = (error?: unknown) => {
 };
 
 window.onerror = (message, source, lineno, colno, error) => {
-    renderFatal(error);
+    const txt = typeof message === "string" ? message : String(message);
+    if (txt.includes("Script error") || txt.includes("ethereum")) {
+        // Special handling for third‑party ethereum errors, which are common and not actionable for us.
+        // Seen only on Brave browser so far, which injects a script for its built‑in crypto wallet.
+        console.warn("Ignored third‑party ethereum error:", txt, source);
+
+        return true;
+    }
+
+    if (error instanceof Error) {
+        renderFatal(error);
+    } else {
+        renderFatal({
+            message: String(message),
+            source,
+            lineno: lineno ?? undefined,
+            colno: colno ?? undefined,
+        });
+    }
 
     return true;
 };

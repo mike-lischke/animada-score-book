@@ -41,12 +41,7 @@ export class SoloMuteButtons extends UIComponent<ISoloMuteButtonsProps, ISoloMut
 
     public override componentDidMount(): void {
         const { trackPlayer } = this.props;
-        trackPlayer.subscribe(this.muteChanged);
-    }
-
-    public override componentWillUnmount(): void {
-        const { trackPlayer } = this.props;
-        trackPlayer.unsubscribe(this.muteChanged);
+        this.addSubscription(trackPlayer, this.muteChanged);
     }
 
     public render(): ComponentChild {

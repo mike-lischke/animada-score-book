@@ -61,7 +61,7 @@ export class ScrollHandler {
     private scroll = (distance: number) => {
         if (this.wrapper) {
             this.wrapper.scrollLeft += distance;
-            this.wrapper.dispatchEvent(new Event("scroll"));
+            //this.wrapper.dispatchEvent(new Event("scroll")); Seems to be useless.
         }
     };
 }

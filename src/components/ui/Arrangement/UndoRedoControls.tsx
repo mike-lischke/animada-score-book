@@ -3,15 +3,14 @@
 * Licensed under the MIT License. See License.txt in the project root for license information.
 */
 
-import redoIcon from "../../../assets/images/icons/redo_white.svg";
-import undoIcon from "../../../assets/images/icons/undo_white.svg";
-
 import type { ComponentChild } from "preact";
 
 import type { UndoManager } from "../../../core/UndoManager.js";
 import { Button } from "../framework/Button.js";
+import { Codicon } from "../framework/Codicon.js";
+import { Container } from "../framework/Container.js";
+import { Icon } from "../framework/Icon.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
-import { SmallSpacer } from "../SmallSpacer.js";
 
 export interface IUndoRedoProps extends ICommonUIProperties {
     undoManager: UndoManager;
@@ -33,39 +32,61 @@ export class UndoRedoControls extends UIComponent<IUndoRedoProps, IUndoRedoState
     }
 
     public override componentDidMount(): void {
+        this.prepareSubscriptions();
+    }
+
+    public override componentDidUpdate(prevProps: IUndoRedoProps, prevState: IUndoRedoState): void {
+        super.componentDidUpdate(prevProps, prevState);
+
         const { undoManager } = this.props;
 
-        this.addSubscription(undoManager.topics.canUndo, () => {
-            this.setState({ canUndo: undoManager.canUndo });
-        });
-        this.addSubscription(undoManager.topics.canRedo, () => {
-            this.setState({ canRedo: undoManager.canRedo });
-        });
-
+        if (prevProps.undoManager !== undoManager) {
+            this.setState({
+                canUndo: undoManager.canUndo,
+                canRedo: undoManager.canRedo
+            });
+        }
+        this.prepareSubscriptions();
     }
 
     public render(): ComponentChild {
         const { undoManager } = this.props;
         const { canUndo, canRedo } = this.state;
 
+        // TODO: make the undo/redo records human readable and show the current state in the tooltips.
+        // const state = undoManager.currentState;
+
         return (
-            <div className='undo-redo-wrapper'>
+            <Container id='undoRedoControls'>
                 <Button
-                    className='push-button medium gray'
                     disabled={!canUndo}
                     onClick={undoManager.undo}
+                    imageOnly
+                    data-tooltip="Revert your last change"
                 >
-                    <img src={undoIcon} style={{ height: "0.78em" }} />
+                    <Icon src={Codicon.Discard} data-tooltip="inherit" />
                 </Button>
-                <SmallSpacer />
                 <Button
-                    className='push-button medium gray'
                     disabled={!canRedo}
                     onClick={undoManager.redo}
+                    imageOnly
+                    data-tooltip="Redo the last change you reverted"
                 >
-                    <img src={redoIcon} style={{ height: "0.78em" }} />
+                    <Icon src={Codicon.Redo} data-tooltip="inherit" />
                 </Button>
-            </div>
+            </Container>
         );
+    }
+
+    private prepareSubscriptions(): void {
+        const { undoManager } = this.props;
+
+        this.addSubscription(undoManager.topics.canUndo, () => {
+            this.setState({ canUndo: undoManager.canUndo });
+        }, true);
+        this.addSubscription(undoManager.topics.canRedo, () => {
+            this.setState({ canRedo: undoManager.canRedo });
+        }, true);
+
     }
 }

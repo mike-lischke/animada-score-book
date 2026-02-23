@@ -172,11 +172,8 @@ export interface ISbDmInstrument extends ISbDmVisual, ISubscribable {
     /** The display name of this instrument. */
     readonly displayName: string;
 
-    /**
-     * The colour group of this instrument.
-     * TODO: the group should be described by an own entity.
-     */
-    readonly colourGroup: string; // blue, purple, green, orange, or yellow
+    /** The color associated with this instrument. */
+    readonly color: string;
 
     /** The relative URL path to the audio file associated with this instrument. */
     readonly audioPath: string;
@@ -573,10 +570,8 @@ export class ScoreBookDataModel extends Publisher {
      *          development and production.
      */
     private getApiBase(): string {
-        const origin = window.location.origin;
-
         // For local development use the test server.
-        if (origin.includes("localhost") || origin.includes("127.0.0.1")) {
+        if (import.meta.env.DEV) {
             return import.meta.env.VITE_BASE_URL;
         }
 

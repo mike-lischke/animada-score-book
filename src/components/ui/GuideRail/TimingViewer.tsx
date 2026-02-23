@@ -29,7 +29,7 @@ export class TimingViewer extends UIComponent<ITimingViewerProperties> {
         const { timeSignature, stepResolution } = timeParams;
         const className = `guiderail-timing note-width ` +
             `${NoteViewer.getParityClass(bar, step, timeSignature, stepResolution)} ` +
-            (isStartOfBar ? "start-of-bar" : "");
+            (isStartOfBar ? "startOfBar" : "");
 
         return (
             <div className={className} >

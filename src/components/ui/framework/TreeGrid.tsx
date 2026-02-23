@@ -258,6 +258,8 @@ export class TreeGrid<TRow extends object = {}> extends UIComponent<ITreeGridPro
     }
 
     public override componentWillUnmount(): void {
+        super.componentWillUnmount();
+
         this.tableReady = false;
         this.cancelled = true;
         if (this.timeoutId) {
@@ -267,6 +269,8 @@ export class TreeGrid<TRow extends object = {}> extends UIComponent<ITreeGridPro
     }
 
     public override componentDidUpdate(prevProps: ITreeGridProperties<TRow>): void {
+        super.componentDidUpdate(prevProps, {});
+
         if (this.tabulator && this.tableReady) {
             const { selectedRows, columns, tableData } = this.props;
 

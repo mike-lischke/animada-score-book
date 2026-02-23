@@ -11,7 +11,7 @@ export interface IInstrumentMeta {
     displayOrder: number;
     displayName: string;
     icon: string;
-    colourGroup: string; // blue, purple, green, orange, or yellow
+    color: string;
     noteStyles?: Record<string, INoteStyleBase>;
 }
 

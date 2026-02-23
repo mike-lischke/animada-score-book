@@ -51,7 +51,9 @@ export class NoteLine extends UIComponent<INoteLineProperties, INoteLineState> {
         this.addSubscription(track, this.trackChanged);
     }
 
-    public override componentDidUpdate(): void {
+    public override componentDidUpdate(prevProps: INoteLineProperties, prevState: INoteLineState): void {
+        super.componentDidUpdate(prevProps, prevState);
+
         const { polyrhythms } = this.state;
 
         // Adjust polyrhythms in order, since nested polyrhythms will be repositioned based on earlier polyrhythms

@@ -51,6 +51,7 @@ export class Label extends UIComponent<ILabelProperties> {
     public render(): ComponentChild {
         const {
             id, children, caption, textAlignment, quoted, code, heading, messageType: type, style, wrap,
+            title, "data-tooltip": dataTooltip
         } = this.props;
 
         const actualStyle = { ...style };
@@ -75,6 +76,8 @@ export class Label extends UIComponent<ILabelProperties> {
                 ref={this.labelRef}
                 className={className}
                 style={actualStyle}
+                title={title}
+                data-tooltip={dataTooltip}
             >
                 {content}
             </span>

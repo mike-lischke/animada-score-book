@@ -6,8 +6,8 @@
 import type { ComponentChild } from "preact";
 import { UIComponent } from "./framework/UIComponent.js";
 
-export class SmallSpacer extends UIComponent {
+export class Separator extends UIComponent {
     public render(): ComponentChild {
-        return <div style={{ width: "8pt" }} />;
+        return <span className="separator" />;
     }
 }

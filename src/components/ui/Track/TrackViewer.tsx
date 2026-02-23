@@ -14,6 +14,8 @@ import { Overlay } from "../Overlay.js";
 import { NoteLine } from "./NoteLine.js";
 import { TrackControls } from "./TrackControls.js";
 import { TrackMeta } from "./TrackMeta.js";
+import { Container } from "../framework/Container.js";
+import { ChildAlignment } from "../framework/ui-types.js";
 
 export interface ITrackViewerCallbacks {
     noteLineTouchStart?: (event: TouchEvent) => void;
@@ -76,10 +78,17 @@ export class TrackViewer extends UIComponent<ITrackViewerProperties, ITrackViewe
         const { audible } = this.state;
 
         return (
-            <div
+            <Container
                 className={`track-viewer ${audible ? "audible" : "inaudible"}`}
-                data-colour-group={track.instrument.colourGroup}
+                crossAlignment={ChildAlignment.Center}
             >
+                <TrackMeta
+                    track={track}
+                    trackPlayer={trackPlayer}
+                    toggleControls={() => {
+                        Overlay.toggleOverlay(overlayName);
+                    }}
+                />
                 <div className="note-line-wrapper">
                     <NoteLine
                         track={track}
@@ -98,15 +107,7 @@ export class TrackViewer extends UIComponent<ITrackViewerProperties, ITrackViewe
                         />
                     </Overlay>
                 </div>
-                <div className="scroll-shadow left-scroll-shadow" />
-                <div className="scroll-shadow right-scroll-shadow" />
-                <TrackMeta
-                    track={track}
-                    trackPlayer={trackPlayer}
-                    toggleControls={() => {
-                        Overlay.toggleOverlay(overlayName);
-                    }} />
-            </div>
+            </Container>
         );
     }
 

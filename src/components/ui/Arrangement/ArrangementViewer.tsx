@@ -14,11 +14,11 @@ import type { ScoreBookUiServices } from "../../../ui/AnimadaScoreBookUi.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
 import { GuideRail } from "../GuideRail/GuideRail.js";
 import { Overlay } from "../Overlay.js";
-import { Scrollbar } from "../Scrollbar.js";
 import { Share } from "../Share.js";
 import { TrackViewer, type ITrackViewerCallbacks } from "../Track/TrackViewer.js";
-import { ArrangementControlsBottom } from "./ArrangementControlsBottom.js";
-import { ArrangementControlsTop } from "./ArrangementControlsTop.js";
+import { ArrangementEditControls } from "./ArrangementEditControls.js";
+import { Container } from "../framework/Container.js";
+import { ChildAlignment, Orientation } from "../framework/ui-types.js";
 
 const baseNoteWidth = 55.5; // 54pt flex-basis + 1.5pt for border
 
@@ -83,6 +83,8 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
     }
 
     public override componentWillUnmount(): void {
+        super.componentWillUnmount();
+
         const { services } = this.props;
 
         this.resizeObserver.disconnect();
@@ -96,61 +98,50 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         const arrangement = arrangementPlayer.arrangementView;
 
         return (
-            <div className="arrangement-viewer">
-                <div className="arrangement-viewer-head">
-                    <ArrangementControlsTop
-                        arrangementPlayer={arrangementPlayer}
-                        services={services}
-                        undoManager={undoManager}
-                    />
-                </div>
-                <div className="arrangement-viewer-body">
-                    <div>
-                        <div
-                            className={`track-viewers-wrapper ${scrollShadowClasses}`}
-                            ref={this.viewerRef}
-                            onScroll={this.updateScrollShadows}
-                            onWheel={autoFollowIsOn ? this.handleWheel : undefined}
-                        >
-                            <GuideRail arrangementView={arrangement} />
-                            {
-                                arrangement.tracks.map((track) => {
-                                    return arrangementPlayer.trackPlayers.get(track)!;
-                                }).map((trackPlayer) => {
-                                    return (
-                                        <TrackViewer
-                                            trackPlayer={trackPlayer}
-                                            callbacks={this.useTrackViewerTouchInterpretation()}
-                                            key={trackPlayer.track.id}
-                                            arrangementPlayer={arrangementPlayer}
-                                            services={services}
-                                            undoManager={undoManager}
-                                            noteLineMinWidth={noteLineMinWidth}
-                                        />
-                                    );
-                                })
-                            }
-                            <Scrollbar
-                                wrapperRef={this.viewerRef}
-                                contentWidthPublisher={this.contentWidthPublisher}
-                                onGrab={autoFollowIsOn ? this.onScrollbarGrab : undefined}
-                            />
-                        </div>
-                        <Overlay name="instrument_browser" />
-                    </div>
-                </div>
-                <ArrangementControlsBottom
+            <Container
+                className="arrangementViewer"
+                orientation={Orientation.TopDown}
+                crossAlignment={ChildAlignment.Stretch}
+            >
+                <ArrangementEditControls
                     arrangementPlayer={arrangementPlayer}
                     services={services}
                     undoManager={undoManager}
                 />
+                <Container
+                    className={`trackViewerHost ${scrollShadowClasses}`}
+                    innerRef={this.viewerRef}
+                    orientation={Orientation.TopDown}
+                    crossAlignment={ChildAlignment.Stretch}
+                    onScroll={this.updateScrollShadows}
+                    onWheel={autoFollowIsOn ? this.handleWheel : undefined}
+                >
+                    <GuideRail arrangementView={arrangement} />
+                    {
+                        arrangement.tracks.map((track) => {
+                            return arrangementPlayer.trackPlayers.get(track)!;
+                        }).map((trackPlayer) => {
+                            return (
+                                <TrackViewer
+                                    trackPlayer={trackPlayer}
+                                    callbacks={this.useTrackViewerTouchInterpretation()}
+                                    key={trackPlayer.track.id}
+                                    arrangementPlayer={arrangementPlayer}
+                                    services={services}
+                                    undoManager={undoManager}
+                                    noteLineMinWidth={noteLineMinWidth}
+                                />
+                            );
+                        })
+                    }
+                </Container>
                 <Overlay name="share">
                     <Share
                         arrangementPlayer={arrangementPlayer}
                         undoManager={undoManager}
                     />
                 </Overlay>
-            </div>
+            </Container>
         );
     }
 
@@ -180,7 +171,7 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         // On the left side, the boundary is the right side of the track-metas
         const { right: metaRight } = trackViewersWrapper!.querySelector(".track-meta")!.getBoundingClientRect();
 
-        // On the right side, the boundary is right edge of the track-viewers-wrapper
+        // On the right side, the boundary is right edge of the trackViewerHost.
         const { right: wrapperRight } = trackViewersWrapper!.getBoundingClientRect();
 
         // This works much better with a little bit of tolerance, so we do a little subtraction

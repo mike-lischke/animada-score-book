@@ -3,16 +3,14 @@
 * Licensed under the MIT License. See License.txt in the project root for license information.
 */
 
-import wrenchIcon from "../../../assets/images/icons/wrench.svg";
-
 import type { ComponentChild } from "preact";
 
 import type { ISbDmTrack } from "../../../core/ScoreBookDataModel.js";
 import type { TrackPlayer } from "../../../player/TrackPlayer.js";
-import { getTrackColour } from "../../../ui/track-colour.js";
-import { Button } from "../framework/Button.js";
+import { Container } from "../framework/Container.js";
+import { Icon } from "../framework/Icon.js";
+import { ChildAlignment, Orientation } from "../framework/ui-types.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
-import { SoloMuteButtons } from "./SoloMuteButtons.js";
 
 export interface ITrackMetaProps extends ICommonUIProperties {
     trackPlayer: TrackPlayer;
@@ -22,23 +20,27 @@ export interface ITrackMetaProps extends ICommonUIProperties {
 
 export class TrackMeta extends UIComponent<ITrackMetaProps> {
     public render(): ComponentChild {
-        const { track, toggleControls } = this.props;
+        const { track } = this.props;
 
         const instrumentName = track.instrument.displayName;
+        const iconPath = track.instrument.image.filePath;
 
         return (
-            <div
+            <Container
                 className="track-meta"
-                style={{ backgroundColor: getTrackColour(track) }}
+                style={{ backgroundColor: track.instrument.color }}
+                orientation={Orientation.LeftToRight}
+                mainAlignment={ChildAlignment.Center}
+                crossAlignment={ChildAlignment.Center}
             >
-                {instrumentName}
-                <div className="buttons-wrapper">
-                    <SoloMuteButtons trackPlayer={this.props.trackPlayer} />
-                    <Button className="options-button push-button small gray" onClick={toggleControls}>
-                        <img src={wrenchIcon} alt="options" />
-                    </Button>
-                </div>
-            </div>
+                <Icon
+                    className="trackInstrumentIcon"
+                    src={iconPath}
+                    data-tooltip={instrumentName}
+                    width={40}
+                    height={40}
+                />
+            </Container>
         );
     }
 }

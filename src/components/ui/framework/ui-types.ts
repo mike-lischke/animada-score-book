@@ -29,8 +29,7 @@ export enum ChildAlignment {
     Center = "center",
     End = "flex-end",
     Stretch = "stretch",
-    SpaceBetween = "space-between",
-    SpaceEvenly = "space-evenly",
+    Baseline = "baseline",
 }
 
 /** Determines how child elements are wrapped if they exceed the available space. */

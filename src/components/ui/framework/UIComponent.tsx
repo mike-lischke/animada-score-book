@@ -5,8 +5,11 @@
 
 import "./component-styles.css";
 
-import { Component, type AriaRole, type ComponentChildren, type CSSProperties } from "preact";
 import cx from "classnames";
+import {
+    Component, type AriaRole, type ComponentChildren, type CSSProperties, type UIEventHandler, type WheelEventHandler
+} from "preact";
+
 import type { ISubscribable, Subscription } from "../../../core/types/general.js";
 
 // Click events can also be triggered using the keyboard.
@@ -87,15 +90,17 @@ export interface ICommonUIProperties {
     onKeyUp?: KeyboardEventCallback;
     onKeyPress?: KeyboardEventCallback;
 
+    onScroll?: UIEventHandler<HTMLElement>;
+    onWheel?: WheelEventHandler<HTMLElement>;
 }
 
 export abstract class UIComponent<P extends ICommonUIProperties = {}, S = {}>
     extends Component<P, S> {
 
-    private unsubscribers: Array<() => void> = [];
+    private unsubscribers: Array<[boolean, () => void]> = [];
 
     public override componentWillUnmount(): void {
-        this.unsubscribers.forEach((unsubscribe) => {
+        this.unsubscribers.forEach(([, unsubscribe]) => {
             unsubscribe();
         });
         this.unsubscribers = [];
@@ -106,9 +111,23 @@ export abstract class UIComponent<P extends ICommonUIProperties = {}, S = {}>
      *
      * @param subscribable The subscribable to subscribe to.
      * @param subscription  The subscription callback to subscribe.
+     * @param removeAtUpdate Whether to remove the subscription at next component update.
      */
-    public addSubscription(subscribable: ISubscribable, subscription: Subscription): void {
-        this.unsubscribers.push(subscribable.subscribe(subscription));
+    public addSubscription(subscribable: ISubscribable, subscription: Subscription, removeAtUpdate = false): void {
+        this.unsubscribers.push([removeAtUpdate, subscribable.subscribe(subscription)]);
+    }
+
+    public override componentDidUpdate(previousProps: Readonly<P>, previousState: Readonly<S>,
+        snapshot: unknown = undefined): void {
+        this.unsubscribers = this.unsubscribers.filter(([removeAtUpdate, unsubscribe]) => {
+            if (removeAtUpdate) {
+                unsubscribe();
+
+                return false;
+            }
+
+            return true;
+        });
     }
 
     /**

@@ -8,6 +8,8 @@ import { createRef, type ComponentChild } from "preact";
 import type { IArrangement } from "../../../core/types/general.js";
 import type { UndoManager } from "../../../core/UndoManager.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
+import { Input } from "../framework/Input.js";
+import { Label } from "../framework/Label.js";
 
 export interface IArrangementTitleProps extends ICommonUIProperties {
     arrangement: Readonly<IArrangement>;
@@ -41,7 +43,9 @@ export class ArrangementTitle extends UIComponent<IArrangementTitleProps, IArran
         this.setState({ title: arrangement.title, inputValue: arrangement.title });
     }
 
-    public override componentDidUpdate(prevProps: IArrangementTitleProps): void {
+    public override componentDidUpdate(prevProps: IArrangementTitleProps, prevState: IArrangementTitleState): void {
+        super.componentDidUpdate(prevProps, prevState);
+
         const { arrangement } = this.props;
 
         if (arrangement.title !== this.state.title) {
@@ -50,48 +54,53 @@ export class ArrangementTitle extends UIComponent<IArrangementTitleProps, IArran
     }
 
     public override render(): ComponentChild {
-        const { editMode } = this.props;
+        const { id, editMode, "data-tooltip": dataTooltip } = this.props;
         const { title, inputValue } = this.state;
 
+        if (editMode) {
+            return (
+                <Input
+                    id={id}
+                    ref={this.inputRef}
+                    autoFocus
+                    onChange={(e) => {
+                        this.setState({
+                            inputValue: (e.target as HTMLInputElement).value
+                        });
+                    }}
+                    onConfirm={this.onConfirm}
+                    onCancel={this.onCancel}
+                    onBlur={this.onBlur}
+                    onKeyDown={(e) => {
+                        // Don't forward key events to parent elements, as they might trigger unwanted actions
+                        // (e.g. space triggering play/pause).
+                        e.stopPropagation();
+                    }}
+                    placeholder="Add a title..."
+                    value={inputValue}
+                    data-tooltip={dataTooltip}
+                />
+            );
+        }
+
         return (
-            <div id="title-wrapper" style={{ textAlign: "center" }}>
-                {
-                    editMode
-                        ? <input
-                            ref={this.inputRef}
-                            onBlur={this.onBlur}
-                            onChange={(e) => {
-                                this.setState({
-                                    inputValue: (e.target as HTMLInputElement).value
-                                });
-                            }}
-                            onKeyUp={this.onKeyUp}
-                            onKeyDown={(e) => {
-                                e.stopPropagation();
-                            }}
-                            // Don't want to trigger global keyboard handlers,
-                            // like play-on-spacebar.
-                            style={{
-                                height: "unset",
-                                width: "100%",
-                                border: "none",
-                                textAlign: "center",
-                                fontSize: "2em",
-                                fontWeight: "bold",
-                                marginBlockStart: "0.67em",
-                                marginBlockEnd: "0.67em",
-                                padding: "0"
-                            }}
-                            placeholder="Add a title..."
-                            value={inputValue}
-                        />
-                        : <h1>{title}</h1>
-                }
-            </div>
+            <Label id={id} data-tooltip={dataTooltip}>{title}</Label>
         );
     }
 
     private onBlur = (event: FocusEvent) => {
+        const { editMode, onEditEnd, undoManager, arrangement } = this.props;
+
+        if (editMode) {
+            undoManager.edit({
+                type: "EditCommand_ArrangementTitle", arrangement,
+                newTitle: (event.target as HTMLInputElement).value
+            });
+            onEditEnd();
+        }
+    };
+
+    private onConfirm = (event: KeyboardEvent) => {
         const { onEditEnd, undoManager, arrangement } = this.props;
 
         undoManager.edit({
@@ -101,21 +110,11 @@ export class ArrangementTitle extends UIComponent<IArrangementTitleProps, IArran
         onEditEnd();
     };
 
-    private onKeyUp = (event: KeyboardEvent) => {
-        const { onEditEnd, undoManager, arrangement } = this.props;
+    private onCancel = (event: KeyboardEvent) => {
+        const { onEditEnd, arrangement } = this.props;
 
-        if (event.key === "Enter") { // Enter means submit the changes and stop editing
-            undoManager.edit({
-                type: "EditCommand_ArrangementTitle",
-                arrangement,
-                newTitle: (event.target as HTMLInputElement).value
-            });
-            onEditEnd();
-        }
-
-        if (event.key === "Escape") { // Escape means stop editing and discard the changes
-            this.setState({ inputValue: arrangement.title });
-            onEditEnd();
-        }
+        this.setState({ inputValue: arrangement.title });
+        onEditEnd();
     };
+
 }

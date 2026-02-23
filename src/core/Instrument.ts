@@ -19,7 +19,7 @@ export class Instrument extends Publisher implements ISbDmInstrument {
     public readonly displayOrder: number;
     public readonly displayName: string;
     public readonly image: ISbDmInstrumentImage;
-    public readonly colourGroup: string;
+    public readonly color: string;
 
     public readonly audioPath: string;
     public readonly range: [number, number] = [0, 127];
@@ -42,13 +42,13 @@ export class Instrument extends Publisher implements ISbDmInstrument {
     public constructor(packedInstrument: IPackedInstrument) {
         super();
 
-        const { id, packedNoteStyles, displayOrder, displayName, colourGroup, typeId } = packedInstrument;
+        const { id, packedNoteStyles, displayOrder, displayName, color, typeId } = packedInstrument;
         this.id = id;
         this.typeId = typeId;
         this.displayOrder = displayOrder;
         this.displayName = displayName;
         this.image = { type: SbDmEntityType.InstrumentImage, id: getNewId(), filePath: packedInstrument.icon };
-        this.colourGroup = colourGroup;
+        this.color = color;
         this.audioPath = `${Instrument.soundBasePath}/instrument_${typeId}/`;
 
         packedNoteStyles.forEach(({ id, file, symbol, muting }) => {

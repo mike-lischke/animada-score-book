@@ -11,7 +11,7 @@ import type { ArrangementPlayer } from "../../player/ArrangementPlayer.js";
 import { Button } from "./framework/Button.js";
 import { UIComponent, type ICommonUIProperties } from "./framework/UIComponent.js";
 import { Overlay } from "./Overlay.js";
-import { SmallSpacer } from "./SmallSpacer.js";
+import { Separator } from "./Separator.js";
 
 const haveNativeSharing = "share" in navigator;
 const haveClipboardAccess = "clipboard" in navigator;
@@ -81,7 +81,7 @@ export class Share extends UIComponent<IShareProperties, IShareState> {
 
                                             }
                                             {haveNativeSharing && haveClipboardAccess &&
-                                                <SmallSpacer />
+                                                <Separator />
                                             }
                                             {haveClipboardAccess &&
                                                 <Button

@@ -25,7 +25,9 @@ export class Container extends UIComponent<IContainerProperties> {
         orientation: Orientation.LeftToRight,
     };
 
-    public override componentDidUpdate(): void {
+    public override componentDidUpdate(prevProps: IContainerProperties): void {
+        super.componentDidUpdate(prevProps, {});
+
         const { innerRef, scrollPosition } = this.props;
 
         if (scrollPosition !== undefined) {
@@ -34,7 +36,10 @@ export class Container extends UIComponent<IContainerProperties> {
     }
 
     public render(): ComponentChild {
-        const { id, children, style, orientation, mainAlignment, crossAlignment, wrap, innerRef, onClick } = this.props;
+        const {
+            id, children, style, orientation, mainAlignment, crossAlignment, wrap, innerRef, onClick, title,
+            "data-tooltip": dataTooltip
+        } = this.props;
 
         const newStyle = {
             flexDirection: orientation,
@@ -55,6 +60,8 @@ export class Container extends UIComponent<IContainerProperties> {
                 style={newStyle}
                 className={className}
                 onClick={onClick}
+                title={title}
+                data-tooltip={dataTooltip}
             >
                 {children}
             </ div>

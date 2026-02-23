@@ -42,7 +42,9 @@ export class Switch extends UIComponent<ISwitchProperties> {
         }
     }
 
-    public override componentDidUpdate(): void {
+    public override componentDidUpdate(prevProps: ISwitchProperties): void {
+        super.componentDidUpdate(prevProps, {});
+
         if (this.toggleRef.current) {
             const { checkState } = this.props;
 

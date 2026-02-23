@@ -4,32 +4,37 @@
 */
 
 import type { ISbDmTrack } from "../../../core/ScoreBookDataModel.js";
+import type { EditCommand_TimeParamsTimeSignature } from "../../../core/types/edit_commands.js";
 import type { IArrangement } from "../../../core/types/general.js";
 import type { UndoManager } from "../../../core/UndoManager.js";
 import type { ArrangementPlayer } from "../../../player/ArrangementPlayer.js";
 import type { ScoreBookUiServices } from "../../../ui/AnimadaScoreBookUi.js";
 import { ExpandingSpacer } from "../ExpandingSpacer.js";
 import { Button } from "../framework/Button.js";
+import { Container } from "../framework/Container.js";
+import { ChildAlignment } from "../framework/ui-types.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
 import { Overlay } from "../Overlay.js";
-import { SmallSpacer } from "../SmallSpacer.js";
+import { SelectionControls } from "../SelectionControls.js";
+import { Separator } from "../Separator.js";
+import { UndoRedoControls } from "./UndoRedoControls.js";
 
-export interface IArrangementControlsBottomProps extends ICommonUIProperties {
+export interface IArrangementEditControlsProperties extends ICommonUIProperties {
     arrangementPlayer: ArrangementPlayer,
     services: ScoreBookUiServices,
     undoManager: UndoManager;
 }
 
-interface IArrangementControlsBottomState {
+interface IArrangementEditorControlsState {
     arePolyrhythms?: boolean;
 }
 
-export class ArrangementControlsBottom
-    extends UIComponent<IArrangementControlsBottomProps, IArrangementControlsBottomState> {
+export class ArrangementEditControls
+    extends UIComponent<IArrangementEditControlsProperties, IArrangementEditorControlsState> {
 
     private subscribedTracks = new Set<ISbDmTrack>();
 
-    public constructor(props: IArrangementControlsBottomProps) {
+    public constructor(props: IArrangementEditControlsProperties) {
         super(props);
 
         this.state = {};
@@ -42,6 +47,7 @@ export class ArrangementControlsBottom
         const arrangement = arrangementPlayer.arrangementView;
         this.addSubscription(arrangement, this.arrangementCallback);
         this.addSubscription(arrangement, this.trackUpdate);
+        this.addSubscription(services.selectionManager, this.onSelectionChange);
 
         arrangement.tracks.forEach((track) => {
             track.subscribe(this.arrangementCallback);
@@ -60,6 +66,8 @@ export class ArrangementControlsBottom
     }
 
     public override componentWillUnmount(): void {
+        super.componentWillUnmount();
+
         this.subscribedTracks.forEach((track) => {
             track.unsubscribe(this.arrangementCallback);
         });
@@ -71,20 +79,41 @@ export class ArrangementControlsBottom
         const { arrangementPlayer, services, undoManager } = this.props;
         const { arePolyrhythms } = this.state;
 
-        const arrangement = arrangementPlayer.arrangementView;
+        const arrangementView = arrangementPlayer.arrangementView;
         const modeManager = services.modeManager;
 
-        return (
-            <div className="arrangement-controls arrangement-controls-bottom">
-                <Button
-                    className="push-button"
-                    onClick={() => {
-                        Overlay.toggleOverlay("instrument_browser", "show");
-                    }}
-                >Add Instrument</Button>
+        // TODO: move this to a score creation dialog. Changing that in an existing score makes no sense.
+        const signatureSelect = (
+            <Container className="time-control" crossAlignment={ChildAlignment.Center}>
+                <select
+                    id="time-signature-select"
+                    className="short"
+                    onInput={this.changeTimeSignature}
+                    value={arrangementView.timeParams.timeSignature}>
+                    <option>4/4</option>
+                    <option>6/8</option>
+                    <option>5/4</option>
+                    <option>7/8</option>
+                </select><span>time</span>
+            </Container>
+        );
 
-                <SmallSpacer />
-                <ExpandingSpacer />
+        return (
+            <Container
+                id="arrangementEditControls"
+                crossAlignment={ChildAlignment.Center}
+            >
+                <Button
+                    id="newScoreButton"
+                    onClick={() => {
+                        Overlay.toggleOverlay("clear_tracks", "show");
+                    }}
+                    data-tooltip="Start a new score."
+                >
+                    Start New Score
+                </Button>
+                <Separator />
+                <UndoRedoControls undoManager={undoManager} />
 
                 {
                     arePolyrhythms
@@ -97,20 +126,11 @@ export class ArrangementControlsBottom
                                         Overlay.toggleOverlay("delete_polyrhythms", "show");
                                     }}
                                 >Delete polyrhythms...</Button>
-                                <SmallSpacer />
+                                <Separator />
                             </>
                         )
                         : (<></>)
                 }
-
-                <Button
-                    className="push-button"
-                    onClick={() => {
-                        Overlay.toggleOverlay("clear_tracks", "show");
-                    }}
-                >
-                    Clear all sounds
-                </Button>
 
                 <Overlay name="clear_tracks">
                     <div style={{
@@ -124,7 +144,7 @@ export class ArrangementControlsBottom
                             className="push-button"
                             onClick={() => {
                                 undoManager.edit({
-                                    type: "EditCommand_ArrangementClear", arrangement,
+                                    type: "EditCommand_ArrangementClear", arrangement: arrangementView,
                                     command: "clear all tracks"
                                 });
                                 Overlay.toggleOverlay("clear_tracks", "hide");
@@ -132,7 +152,7 @@ export class ArrangementControlsBottom
                         >
                             Really, clear sounds
                         </Button>
-                        <SmallSpacer />
+                        <Separator />
                         <Button
                             className="push-button"
                             onClick={() => {
@@ -162,7 +182,15 @@ export class ArrangementControlsBottom
                         </Button>
                     </div>
                 </Overlay>
-            </div>
+                <Overlay name="selection_controls">
+                    <SelectionControls
+                        arrangementPlayer={arrangementPlayer}
+                        services={services}
+                        undoManager={undoManager}
+                    />
+                </Overlay>
+
+            </Container>
         );
     }
 
@@ -208,4 +236,58 @@ export class ArrangementControlsBottom
             }
         });
     };
+
+    private changeTimeSignature = (event: InputEvent) => {
+        const { arrangementPlayer, undoManager } = this.props;
+        const arrangementView = arrangementPlayer.arrangementView;
+
+        const command: Partial<EditCommand_TimeParamsTimeSignature> = {
+            type: "EditCommand_TimeParamsTimeSignature",
+            timeParams: arrangementView.timeParams
+        };
+
+        command.timeSignature = (event.target as HTMLInputElement).value;
+        switch ((event.target as HTMLInputElement).value) {
+            case "4/4":
+                command.stepResolution = 16;
+                command.pulse = "1/4";
+                break;
+            case "6/8":
+                command.stepResolution = 8;
+                command.pulse = "3/8";
+                break;
+            case "5/4":
+                command.stepResolution = 8;
+                command.pulse = "1/2";
+                break;
+            case "7/8":
+                command.stepResolution = 8;
+                command.pulse = "1/2";
+                break;
+        }
+
+        // XXX: if you need such a cast, it may be a sign that the command type definitions could be improved.
+        undoManager.edit(command as EditCommand_TimeParamsTimeSignature);
+    };
+
+    private handleLengthChange = (newValue: number) => {
+        const { arrangementPlayer, undoManager } = this.props;
+        const arrangementView = arrangementPlayer.arrangementView;
+
+        if (!isNaN(newValue)) {
+            undoManager.edit({
+                type: "EditCommand_TimeParamsLength",
+                timeParams: arrangementView.timeParams,
+                length: newValue
+            });
+        }
+    };
+
+    private onSelectionChange = () => {
+        const { services } = this.props;
+
+        const selectionManager = services.selectionManager;
+        Overlay.toggleOverlay("selection_controls", selectionManager.selections.size ? "show" : "hide");
+    };
+
 };

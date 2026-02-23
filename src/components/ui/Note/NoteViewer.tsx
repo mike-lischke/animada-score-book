@@ -13,7 +13,6 @@ import type { ArrangementPlayer } from "../../../player/ArrangementPlayer.js";
 import { AudioBufferPlayer } from "../../../player/AudioBufferPlayer.js";
 import type { TrackPlayer } from "../../../player/TrackPlayer.js";
 import type { ScoreBookUiServices } from "../../../ui/AnimadaScoreBookUi.js";
-import { getTrackColour } from "../../../ui/track-colour.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
 import { TouchHoldDetector } from "../TouchHoldDetector.js";
 import { NoteStyleSymbolViewer } from "./NoteStyleSymbolViewer.js";
@@ -108,6 +107,8 @@ export class NoteViewer extends UIComponent<INoteViewerProps, INoteViewerState> 
     }
 
     public override componentWillUnmount(): void {
+        super.componentWillUnmount();
+
         this.timingChangeUnsubscribe?.();
         this.selectionChangeUnsubscribe?.();
         this.noteStyleChangeUnsubscribe?.();
@@ -227,7 +228,7 @@ export class NoteViewer extends UIComponent<INoteViewerProps, INoteViewerState> 
         classes.push(NoteViewer.getParityClass(bar, step, timeSignature, stepResolution));
 
         if (step === 1) {
-            classes.push("start-of-bar");
+            classes.push("startOfBar");
         }
 
         return classes.join(" ");
@@ -239,10 +240,8 @@ export class NoteViewer extends UIComponent<INoteViewerProps, INoteViewerState> 
         return isCurrent
             ? "var(--light-yellow)"    // Light up notes as the music plays
             : selected
-                ? this.getSelectedColour(note.track.instrument.colourGroup)
-                : note.noteStyle
-                    ? getTrackColour(note.track)  // Otherwise, give active notes the track colour
-                    : "";                         // Inactive notes have no inline background colour
+                ? note.track.instrument.color
+                : "";
     }
 
     private isCurrentlyPlaying(): boolean {
@@ -292,13 +291,4 @@ export class NoteViewer extends UIComponent<INoteViewerProps, INoteViewerState> 
         return undefined; // Cycle back to rest after all note-styles
     }
 
-    private getSelectedColour(colourGroup: string) {
-        switch (colourGroup) {
-            case "yellow": return `var(--secondary-purple)`;
-            case "orange": return `var(--secondary-blue)`;
-            case "green": return `var(--secondary-red)`;
-            case "blue": return `var(--secondary-orange)`;
-            case "purple": return `var(--secondary-green)`;
-        }
-    }
 }

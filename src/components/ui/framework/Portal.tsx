@@ -63,7 +63,9 @@ export class Portal extends UIComponent<IPortalProperties, IPortalState> {
         };
     }
 
-    public override componentDidUpdate(): void {
+    public override componentDidUpdate(prevProps: IPortalProperties, prevState: IPortalState): void {
+        super.componentDidUpdate(prevProps, prevState);
+
         const { id, children, container = document.body } = this.props;
         const { open, options } = this.state;
 
@@ -94,6 +96,8 @@ export class Portal extends UIComponent<IPortalProperties, IPortalState> {
     }
 
     public override componentWillUnmount(): void {
+        super.componentWillUnmount();
+
         this.host?.remove();
         this.host = undefined;
     }

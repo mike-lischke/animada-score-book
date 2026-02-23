@@ -5,7 +5,7 @@
 
 import { type ComponentChild } from "preact";
 
-import type { IArrangement, ITimeParamsView, Subscription } from "../../../core/types/general.js";
+import type { IArrangement, ITimeParamsView } from "../../../core/types/general.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
 import { TimingViewer } from "./TimingViewer.js";
 
@@ -31,24 +31,15 @@ export class GuideRail extends UIComponent<IGuideRailProps, IGuideRailState> {
 
     public override componentDidMount(): void {
         const { arrangementView } = this.props;
-        arrangementView.timeParams.subscribe(this.timeParamsSubscription as Subscription);
-    }
-
-    public override componentWillUnmount(): void {
-        const { arrangementView } = this.props;
-        arrangementView.timeParams.unsubscribe(this.timeParamsSubscription as Subscription);
+        this.addSubscription(arrangementView.timeParams, this.timeParamsSubscription);
     }
 
     public override render(): ComponentChild {
         const { arrangementView } = this.props;
         const { barDivisibility } = this.state;
 
-        // Because only time-param can change at a time, we know numBars only ever changes if numNotes also changes
-        const numBars = arrangementView.timeParams.length;
-        const display = numBars > 1 ? "block" : "none";
-
         return (
-            <div className='guiderail-wrapper' style={{ display }}>
+            <div className='guiderail-wrapper'>
                 <div className='guiderail-meta'></div>
                 <div className='guiderail'>
                     {arrangementView.timeParams.timings.map((timing) => {
@@ -60,8 +51,6 @@ export class GuideRail extends UIComponent<IGuideRailProps, IGuideRailState> {
                         />;
                     })}
                 </div>
-                <div className="scroll-shadow left-scroll-shadow" />
-                <div className="scroll-shadow right-scroll-shadow" />
             </div>
         );
     }

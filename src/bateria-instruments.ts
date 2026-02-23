@@ -32,12 +32,35 @@ import highSurdoIcon from "./assets/images/instrument-icons/high surdo.svg";
 
 import type { IPackedInstrument } from "./core/types/general.js";
 
+export const pastelColors: string[] = [
+    "hsl(  0, 100%, 75%)",
+    "hsl( 18, 100%, 75%)",
+    "hsl( 36, 100%, 75%)",
+    "hsl( 54, 100%, 75%)",
+    "hsl( 72, 100%, 75%)",
+    "hsl( 90, 100%, 75%)",
+    "hsl(108, 100%, 75%)",
+    "hsl(126, 100%, 75%)",
+    "hsl(144, 100%, 75%)",
+    "hsl(162, 100%, 75%)",
+    "hsl(180, 100%, 75%)",
+    "hsl(198, 100%, 75%)",
+    "hsl(216, 100%, 75%)",
+    "hsl(234, 100%, 75%)",
+    "hsl(252, 100%, 75%)",
+    "hsl(270, 100%, 75%)",
+    "hsl(288, 100%, 75%)",
+    "hsl(306, 100%, 75%)",
+    "hsl(324, 100%, 75%)",
+    "hsl(342, 100%, 75%)",
+];
+
 export const bateriaInstruments: IPackedInstrument[] = [{
     id: 0,
     typeId: "0",
     icon: agogo2Icon,
     displayOrder: 0,
-    displayName: "Agogo",
+    displayName: "Agogô",
     packedNoteStyles: [
         {
             id: "1",
@@ -56,7 +79,7 @@ export const bateriaInstruments: IPackedInstrument[] = [{
             }
         }
     ],
-    colourGroup: "yellow"
+    color: pastelColors[0],
 }, {
     id: 10,
     typeId: "a",
@@ -97,7 +120,7 @@ export const bateriaInstruments: IPackedInstrument[] = [{
             }
         }
     ],
-    colourGroup: "yellow"
+    color: pastelColors[1],
 }, {
     id: 1,
     typeId: "1",
@@ -122,7 +145,7 @@ export const bateriaInstruments: IPackedInstrument[] = [{
             }
         }
     ],
-    colourGroup: "yellow"
+    color: pastelColors[2]
 }, {
     id: 2,
     typeId: "2",
@@ -147,7 +170,7 @@ export const bateriaInstruments: IPackedInstrument[] = [{
             }
         }
     ],
-    colourGroup: "orange"
+    color: pastelColors[3]
 }, {
     id: 3,
     typeId: "3",
@@ -212,7 +235,7 @@ export const bateriaInstruments: IPackedInstrument[] = [{
             }
         }
     ],
-    colourGroup: "orange"
+    color: pastelColors[4]
 }, {
     id: 4,
     typeId: "4",
@@ -237,7 +260,7 @@ export const bateriaInstruments: IPackedInstrument[] = [{
             }
         }
     ],
-    colourGroup: "orange"
+    color: pastelColors[5]
 }, {
     id: 5,
     typeId: "5",
@@ -278,7 +301,7 @@ export const bateriaInstruments: IPackedInstrument[] = [{
             }
         },
     ],
-    colourGroup: "green"
+    color: pastelColors[6]
 }, {
     id: 6,
     typeId: "6",
@@ -311,7 +334,7 @@ export const bateriaInstruments: IPackedInstrument[] = [{
             }
         }
     ],
-    colourGroup: "blue"
+    color: pastelColors[7]
 }, {
     id: 7,
     typeId: "7",
@@ -338,7 +361,7 @@ export const bateriaInstruments: IPackedInstrument[] = [{
             }
         }
     ],
-    colourGroup: "purple"
+    color: pastelColors[8]
 }, {
     id: 8,
     typeId: "8",
@@ -365,7 +388,7 @@ export const bateriaInstruments: IPackedInstrument[] = [{
             }
         }
     ],
-    colourGroup: "purple"
+    color: pastelColors[9]
 }, {
     id: 9,
     typeId: "9",
@@ -392,5 +415,5 @@ export const bateriaInstruments: IPackedInstrument[] = [{
             }
         }
     ],
-    colourGroup: "purple"
+    color: pastelColors[10]
 }];

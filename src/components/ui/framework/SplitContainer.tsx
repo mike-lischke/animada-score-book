@@ -106,7 +106,9 @@ export class SplitContainer extends UIComponent<ISplitContainerProperties> {
         }
     }
 
-    public override componentDidUpdate(): void {
+    public override componentDidUpdate(prevProps: ISplitContainerProperties): void {
+        super.componentDidUpdate(prevProps, {});
+
         this.updatePaneData();
         this.computeLayout();
     }
@@ -135,6 +137,8 @@ export class SplitContainer extends UIComponent<ISplitContainerProperties> {
     }
 
     public override componentWillUnmount(): void {
+        super.componentWillUnmount();
+
         if (this.resizeTimer) {
             clearTimeout(this.resizeTimer);
         }

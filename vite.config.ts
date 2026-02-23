@@ -11,5 +11,6 @@ export default defineConfig({
     plugins: [preact()],
     build: {
         target: "esnext",
+        assetsInlineLimit: 0, // Don't inline any assets.
     },
 });
