@@ -8,6 +8,7 @@ import { type ComponentChild } from "preact";
 import type { IArrangement, ITimeParamsView } from "../../../core/types/general.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
 import { TimingViewer } from "./TimingViewer.js";
+import { Container } from "../framework/Container.js";
 
 export type BarDivisibility = 1 | 2 | 4;
 
@@ -39,19 +40,18 @@ export class GuideRail extends UIComponent<IGuideRailProps, IGuideRailState> {
         const { barDivisibility } = this.state;
 
         return (
-            <div className='guiderail-wrapper'>
-                <div className='guiderail-meta'></div>
-                <div className='guiderail'>
-                    {arrangementView.timeParams.timings.map((timing) => {
-                        return <TimingViewer
-                            timing={timing}
-                            key={`${timing.bar}.${timing.step}`}
-                            timeParams={arrangementView.timeParams}
-                            barDivisibility={barDivisibility}
-                        />;
-                    })}
-                </div>
-            </div>
+            <Container
+                className='guiderail'
+            >
+                {arrangementView.timeParams.timings.map((timing) => {
+                    return <TimingViewer
+                        timing={timing}
+                        key={`${timing.bar}.${timing.step}`}
+                        timeParams={arrangementView.timeParams}
+                        barDivisibility={barDivisibility}
+                    />;
+                })}
+            </Container>
         );
     }
 

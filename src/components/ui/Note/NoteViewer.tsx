@@ -3,7 +3,7 @@
 * Licensed under the MIT License. See License.txt in the project root for license information.
 */
 
-import type { ComponentChild } from "preact";
+import { createRef, type ComponentChild } from "preact";
 
 import type { ISbDmNote } from "../../../core/ScoreBookDataModel.js";
 import type { INoteStyle } from "../../../core/types/general.js";
@@ -12,7 +12,7 @@ import { isSameTiming } from "../../../core/utils.js";
 import type { ArrangementPlayer } from "../../../player/ArrangementPlayer.js";
 import { AudioBufferPlayer } from "../../../player/AudioBufferPlayer.js";
 import type { TrackPlayer } from "../../../player/TrackPlayer.js";
-import type { ScoreBookUiServices } from "../../../ui/AnimadaScoreBookUi.js";
+import type { ScoreBookUiServices } from "../../../player/types.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
 import { TouchHoldDetector } from "../TouchHoldDetector.js";
 import { NoteStyleSymbolViewer } from "./NoteStyleSymbolViewer.js";
@@ -36,9 +36,11 @@ interface INoteViewerState {
 }
 
 export class NoteViewer extends UIComponent<INoteViewerProps, INoteViewerState> {
-    private timingChangeUnsubscribe?: () => void;
+    //private timingChangeUnsubscribe?: () => void;
     private selectionChangeUnsubscribe?: () => void;
     private noteStyleChangeUnsubscribe?: () => void;
+
+    private readonly viewerRef = createRef<HTMLDivElement>();
 
     public constructor(props: INoteViewerProps) {
         super(props);
@@ -109,7 +111,7 @@ export class NoteViewer extends UIComponent<INoteViewerProps, INoteViewerState> 
     public override componentWillUnmount(): void {
         super.componentWillUnmount();
 
-        this.timingChangeUnsubscribe?.();
+        //this.timingChangeUnsubscribe?.();
         this.selectionChangeUnsubscribe?.();
         this.noteStyleChangeUnsubscribe?.();
     }
@@ -123,6 +125,7 @@ export class NoteViewer extends UIComponent<INoteViewerProps, INoteViewerState> 
 
         return (
             <div
+                ref={this.viewerRef}
                 id={`note-${note.id}`}
                 className={classString}
                 onClick={this.handleClick}
@@ -143,20 +146,20 @@ export class NoteViewer extends UIComponent<INoteViewerProps, INoteViewerState> 
     }
 
     private addSubscriptions(): void {
-        const { note, services, trackPlayer, arrangementPlayer } = this.props;
+        const { note, services } = this.props;
         const { selectionManager } = services;
 
-        const timingPublisher = note.polyrhythm
+        /*const timingPublisher = note.polyrhythm
             ? trackPlayer.currentPolyrhythmNotePublisher
             : arrangementPlayer.currentTimingPublisher;
 
-        this.timingChangeUnsubscribe = timingPublisher.subscribe(this.timingChanged);
+        this.timingChangeUnsubscribe = timingPublisher.subscribe(this.timingChanged);*/
         this.selectionChangeUnsubscribe = selectionManager.subscribe(this.selectionChanged);
         this.noteStyleChangeUnsubscribe = note.subscribe(this.noteStyleChanged);
     }
 
     private timingChanged = (): void => {
-        this.setState({ isCurrent: this.isCurrentlyPlaying() });
+        // No longer used. We keep it around for now in case we need to use it in the future.
     };
 
     private noteStyleChanged = (): void => {
@@ -234,7 +237,7 @@ export class NoteViewer extends UIComponent<INoteViewerProps, INoteViewerState> 
         return classes.join(" ");
     }
 
-    private useBackgroundColor(isCurrent: boolean, selected: boolean) {
+    private useBackgroundColor = (isCurrent: boolean, selected: boolean): string => {
         const { note } = this.props;
 
         return isCurrent
@@ -242,7 +245,7 @@ export class NoteViewer extends UIComponent<INoteViewerProps, INoteViewerState> 
             : selected
                 ? note.track.instrument.color
                 : "";
-    }
+    };
 
     private isCurrentlyPlaying(): boolean {
         const { arrangementPlayer, trackPlayer } = this.props;
@@ -267,9 +270,7 @@ export class NoteViewer extends UIComponent<INoteViewerProps, INoteViewerState> 
         if (noteStyle?.audioBuffer) {
             // Play a preview of the selected note style.
             // Default start time (0) is fine here.
-            // eslint-disable-next-line @typescript-eslint/naming-convention
-            const _player = new AudioBufferPlayer(noteStyle.audioBuffer, audioContext);
-            void audioContext.resume();
+            new AudioBufferPlayer(noteStyle.audioBuffer, audioContext);
         }
     }
 

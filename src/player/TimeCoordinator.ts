@@ -7,36 +7,76 @@ import { Publisher } from "../core/Publisher.js";
 import type { ITiming, RealTime } from "../core/ScoreBookDataModel.js";
 import type { ITimeParamsView } from "../core/types/general.js";
 import { EventEngine } from "./EventEngine.js";
-import { IInterval, ILoopInterval, ITimeCoordinator } from "./types.js";
+import { IInterval, ILoopInterval } from "./types.js";
+
+/**
+ * Timing details about the score, such as how long a bar is, or how many pulses there are in a bar.
+ */
+export interface IScoreMetrics {
+    /**
+     * The length of the full loop in seconds.
+     * A loop is the full length of the music before it starts again.
+     */
+    realTimeLength: number,
+
+    /** How many seconds is a bar long? */
+    secondsPerBar: RealTime,
+
+    /** How many seconds is a step long? */
+    secondsPerStep: RealTime,
+
+    /** How many bars are in the score? */
+    bars: number,
+
+    /** How many beats are in a bar? */
+    beatsPerBar: number,
+
+    /** How many steps are in a bar? */
+    stepsPerBar: number,
+
+    /** How many steps are in a pulse? */
+    stepsPerPulse: number,
+}
 
 /**
  * TimeCoordinator handles all maths that need to be done with TimeParams.
  * In the EventEngine, time always marches forward (except when paused).
  * In music-related objects, times are always between 0 and the length of the section.
  * A TimeCoordinator adjust times from the EventEngine to make sense to music objects.
+ *
+ * Terms used here:
+ * - Real time: A time in seconds, relative to the start of the music.
+ * - Loop interval: An interval with a loop number, and start and end times between 0 and the length of the loop.
+ * - Loop progress: A number between 0 and 1 representing how far through the loop we are.
+ *
+ * - Bar: A subdivision of the music, defined by the time signature. Bars are numbered from 1.
+ * - Pulse: A subdivision of a bar. Groups steps together. Usually corresponds to the beat (2 for 2/4, 4 for 4/4 etc.).
+ *          Defined by the pulse setting.
+ * - Step: The base unit of time in the music. Steps are numbered from 1, and there are `stepResolution` steps
+ *         in a beat.
  */
-export class TimeCoordinator extends Publisher implements ITimeCoordinator {
-
-    public realTimeLength!: number;
-    public secondsPerBar!: RealTime;
-    public secondsPerStep!: RealTime;
+export class TimeCoordinator extends Publisher {
 
     private offset: RealTime = 0;
 
-    // Tempo and length changes incur offset changes
+    // Tempo and length changes incur offset changes.
     private cachedTempo: number;
-    private cachedLength: number;
+
+    #metrics: IScoreMetrics;
 
     public constructor(private timeParams: ITimeParamsView) {
         super();
 
-        this.setInternalParams(); // Sets the variables above
+        this.#metrics = this.computeMetrics();
 
         this.cachedTempo = timeParams.tempo;
-        this.cachedLength = timeParams.length;
 
         timeParams.subscribe(this.handleTimeParamsChange);
         EventEngine.instance.subscribe(this.handlePlaybackChange);
+    }
+
+    public get metrics(): IScoreMetrics {
+        return this.#metrics;
     }
 
     /**
@@ -47,7 +87,7 @@ export class TimeCoordinator extends Publisher implements ITimeCoordinator {
      * @returns The real time.
      */
     public convertToRealTime(timing: ITiming): RealTime {
-        return (this.secondsPerBar * (timing.bar - 1)) + (this.secondsPerStep * (timing.step - 1));
+        return (this.#metrics.secondsPerBar * (timing.bar - 1)) + (this.#metrics.secondsPerStep * (timing.step - 1));
     };
 
     /**
@@ -64,10 +104,10 @@ export class TimeCoordinator extends Publisher implements ITimeCoordinator {
     public convertToLoopIntervals({ start, end }: IInterval): ILoopInterval[] {
         const offsetStart = start + this.offset;
         const offsetEnd = end + this.offset;
-        const startLoopNumber = Math.floor(offsetStart / this.realTimeLength);
-        const endLoopNumber = Math.floor(offsetEnd / this.realTimeLength);
-        const adjustedStart = offsetStart % this.realTimeLength;
-        const adjustedEnd = offsetEnd % this.realTimeLength;
+        const startLoopNumber = Math.floor(offsetStart / this.#metrics.realTimeLength);
+        const endLoopNumber = Math.floor(offsetEnd / this.#metrics.realTimeLength);
+        const adjustedStart = offsetStart % this.#metrics.realTimeLength;
+        const adjustedEnd = offsetEnd % this.#metrics.realTimeLength;
 
         if (startLoopNumber === endLoopNumber) {
             return [
@@ -79,14 +119,14 @@ export class TimeCoordinator extends Publisher implements ITimeCoordinator {
             ];
         }
 
-        // If the end-loop is different to the start-loop, this interval is overflowing the loopNumber
-        // So we return a segment at the end of the loop, and a segment at the beginning
-        // We're assuming at the moment that a note-request-interval is not longer than a loop
+        // If the end-loop is different to the start-loop, this interval is overflowing the loopNumber.
+        // So we return a segment at the end of the loop, and a segment at the beginning.
+        // We're assuming at the moment that a note-request-interval is not longer than a loop.
         return [
             {
                 loopNumber: startLoopNumber,
                 start: adjustedStart,
-                end: this.realTimeLength
+                end: this.#metrics.realTimeLength
             },
             {
                 loopNumber: endLoopNumber,
@@ -94,43 +134,6 @@ export class TimeCoordinator extends Publisher implements ITimeCoordinator {
                 end: adjustedEnd
             }
         ];
-    };
-
-    public setInternalParams() {
-        const view = this.calcNoteTimes(this.timeParams);
-        this.secondsPerBar = view.secondsPerBar;
-        this.secondsPerStep = view.secondsPerStep;
-
-        this.realTimeLength = this.convertToRealTime({ bar: this.timeParams.length + 1, step: 1 });
-    };
-
-    /**
-     * We must only ever have one timeParam change at a time.
-     */
-    public handleTimeParamsChange = () => {
-        if (this.timeParams.tempo !== this.cachedTempo) {
-            this.handleTempoChange();
-        } else if (this.timeParams.length !== this.cachedLength) {// MUST call setInternalParams
-            this.handleLengthChange();
-        } else { // MUST call setInternalParams
-            this.setInternalParams();
-        }
-        this.publish();
-    };
-
-    /**
-     * The audio-time does not change, so we are jumped to a different point in the music.
-     * We use offset to move back to the correct point in the music.
-     */
-    public handleTempoChange() {
-        this.setInternalParams();
-        const oldTempo = this.cachedTempo;
-        const newTempo = this.timeParams.tempo;
-        const audioTime = EventEngine.instance.getTime();
-        const oldOffsetTime = audioTime + this.offset;
-        const newOffsetTime = oldOffsetTime * (oldTempo / newTempo);
-        this.offset = newOffsetTime - audioTime;
-        this.cachedTempo = newTempo;
     };
 
     /**
@@ -143,14 +146,44 @@ export class TimeCoordinator extends Publisher implements ITimeCoordinator {
      * @returns The audio time.
      */
     public convertToAudioTime(realTime: number, loopNumber: number) {
-        return realTime + (loopNumber * this.realTimeLength) - this.offset;
+        return realTime + (loopNumber * this.#metrics.realTimeLength) - this.offset;
     };
 
     public convertToLoopProgress(realTime: number): RealTime {
-        return ((realTime + this.offset) % this.realTimeLength) / this.realTimeLength;
+        return ((realTime + this.offset) % this.#metrics.realTimeLength) / this.#metrics.realTimeLength;
     };
 
-    public handlePlaybackChange = () => {
+    /**
+     * We must only ever have one timeParam change at a time.
+     */
+    private handleTimeParamsChange = () => {
+        if (this.timeParams.tempo !== this.cachedTempo) {
+            this.handleTempoChange();
+        } else if (this.timeParams.length !== this.metrics.bars) {// MUST re-compute metrics.
+            this.handleLengthChange();
+        } else { // MUST re-compute metrics, as other params may have changed, such as time signature or pulse.
+            this.#metrics = this.computeMetrics();
+        }
+        this.publish();
+    };
+
+    /**
+     * The audio-time does not change, so we are jumped to a different point in the music.
+     * We use offset to move back to the correct point in the music.
+     */
+    private handleTempoChange() {
+        this.#metrics = this.computeMetrics();
+
+        const oldTempo = this.cachedTempo;
+        const newTempo = this.timeParams.tempo;
+        const audioTime = EventEngine.instance.getTime();
+        const oldOffsetTime = audioTime + this.offset;
+        const newOffsetTime = oldOffsetTime * (oldTempo / newTempo);
+        this.offset = newOffsetTime - audioTime;
+        this.cachedTempo = newTempo;
+    };
+
+    private handlePlaybackChange = () => {
         if (EventEngine.instance.state !== "playing") {
             this.offset = 0;
         }
@@ -161,14 +194,14 @@ export class TimeCoordinator extends Publisher implements ITimeCoordinator {
      * We use offset to move back to the correct loop and bar within it.
      */
     private handleLengthChange() {
-        const oldRealTimeLength = this.realTimeLength;
-        this.setInternalParams();
+        const oldRealTimeLength = this.#metrics.realTimeLength;
+        this.#metrics = this.computeMetrics();
 
         const audioTime = EventEngine.instance.getTime();
         const oldOffsetTime = audioTime + this.offset;
 
         const oldTimeWithinLoop = oldOffsetTime % oldRealTimeLength;
-        const targetTimeWithinLoop = oldTimeWithinLoop % this.realTimeLength;
+        const targetTimeWithinLoop = oldTimeWithinLoop % this.#metrics.realTimeLength;
         let loopsFinished = Math.floor(oldOffsetTime / oldRealTimeLength);
 
         // Prevent moving earlier into the same loop, which, musically, we've already played.
@@ -176,14 +209,12 @@ export class TimeCoordinator extends Publisher implements ITimeCoordinator {
             loopsFinished++;
         }
 
-        const newOffsetTime = (loopsFinished * this.realTimeLength) + targetTimeWithinLoop;
+        const newOffsetTime = (loopsFinished * this.#metrics.realTimeLength) + targetTimeWithinLoop;
         this.offset = newOffsetTime - audioTime;
-
-        // Everything actually worked fine without this line, which suggests there's an optimisation we could make.
-        this.cachedLength = this.timeParams.length;
     };
 
-    private calcNoteTimes({ timeSignature, tempo, pulse, stepResolution }: ITimeParamsView) {
+    private computeMetrics(): IScoreMetrics {
+        const { timeSignature, tempo, pulse, stepResolution } = this.timeParams;
         const [beatsPerBar, beatUnit] = timeSignature.split("/").map((str) => {
             return Number(str);
         });
@@ -201,6 +232,14 @@ export class TimeCoordinator extends Publisher implements ITimeCoordinator {
         const secondsPerStep = secondsPerPulse / stepsPerPulse;
         const secondsPerBar = secondsPerStep * stepsPerBar;
 
-        return { secondsPerBar, secondsPerStep };
+        return {
+            realTimeLength: secondsPerBar * this.timeParams.length,
+            secondsPerBar,
+            secondsPerStep,
+            bars: this.timeParams.length,
+            beatsPerBar,
+            stepsPerBar,
+            stepsPerPulse,
+        };
     }
 };

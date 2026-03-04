@@ -5,6 +5,9 @@
 
 import type { ISbDmNote, ISbDmTrack, ITiming, RealTime } from "../core/ScoreBookDataModel.js";
 import type { IArrangement, ISubscribable } from "../core/types/general.js";
+import type { AnimationEngine } from "../ui/AnimationEngine.js";
+import type { ModeManager } from "../ui/ModeManager.js";
+import type { SelectionManager } from "../ui/SelectionManager.js";
 import type { TrackPlayer } from "./TrackPlayer.js";
 
 export type EventEngineState = "stopped" | "playing";
@@ -57,10 +60,9 @@ export interface ILoopInterval extends IInterval {
     loopNumber: number;
 }
 
-export interface ITimeCoordinator extends ISubscribable {
-    readonly realTimeLength: RealTime;
-    convertToRealTime(timing: ITiming): RealTime;
-    convertToLoopIntervals(interval: IInterval): ILoopInterval[];
-    convertToAudioTime(realTime: RealTime, loopNumber: number): RealTime;
-    convertToLoopProgress(realTime: RealTime): number; //  distance through loop from 0 to 1
+/** Stuff which is created once for the entire lifetime of the app. */
+export interface ScoreBookUiServices {
+    animationEngine: AnimationEngine;
+    selectionManager: SelectionManager;
+    modeManager: ModeManager;
 }

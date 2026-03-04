@@ -17,8 +17,10 @@
         "watch": "tsc --noEmit --watch"
     },
     "dependencies": {
+        "@mediabunny/mp3-encoder": "1.35.1",
         "@vscode/codicons": "0.0.43",
         "classnames": "2.5.1",
+        "mediabunny": "1.35.1",
         "preact": "10.27.2",
         "tabulator-tables": "6.3.1",
         "wavesurfer.js": "7.12.0"

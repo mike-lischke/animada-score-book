@@ -8,7 +8,7 @@ import type { EditCommand_TimeParamsTimeSignature } from "../../../core/types/ed
 import type { IArrangement } from "../../../core/types/general.js";
 import type { UndoManager } from "../../../core/UndoManager.js";
 import type { ArrangementPlayer } from "../../../player/ArrangementPlayer.js";
-import type { ScoreBookUiServices } from "../../../ui/AnimadaScoreBookUi.js";
+import type { ScoreBookUiServices } from "../../../player/types.js";
 import { ExpandingSpacer } from "../ExpandingSpacer.js";
 import { Button } from "../framework/Button.js";
 import { Container } from "../framework/Container.js";

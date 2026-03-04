@@ -8,14 +8,13 @@ import { type ComponentChild } from "preact";
 import type { UndoManager } from "../../../core/UndoManager.js";
 import type { ArrangementPlayer } from "../../../player/ArrangementPlayer.js";
 import type { TrackPlayer } from "../../../player/TrackPlayer.js";
-import type { ScoreBookUiServices } from "../../../ui/AnimadaScoreBookUi.js";
+import type { ScoreBookUiServices } from "../../../player/types.js";
+import { Container } from "../framework/Container.js";
+import { ChildAlignment } from "../framework/ui-types.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
 import { Overlay } from "../Overlay.js";
 import { NoteLine } from "./NoteLine.js";
 import { TrackControls } from "./TrackControls.js";
-import { TrackMeta } from "./TrackMeta.js";
-import { Container } from "../framework/Container.js";
-import { ChildAlignment } from "../framework/ui-types.js";
 
 export interface ITrackViewerCallbacks {
     noteLineTouchStart?: (event: TouchEvent) => void;
@@ -82,31 +81,22 @@ export class TrackViewer extends UIComponent<ITrackViewerProperties, ITrackViewe
                 className={`track-viewer ${audible ? "audible" : "inaudible"}`}
                 crossAlignment={ChildAlignment.Center}
             >
-                <TrackMeta
+                <NoteLine
                     track={track}
+                    callbacks={callbacks}
                     trackPlayer={trackPlayer}
-                    toggleControls={() => {
-                        Overlay.toggleOverlay(overlayName);
-                    }}
+                    arrangementPlayer={arrangementPlayer}
+                    services={services}
+                    undoManager={undoManager}
+                    noteLineMinWidth={noteLineMinWidth}
                 />
-                <div className="note-line-wrapper">
-                    <NoteLine
+                <Overlay name={overlayName}>
+                    <TrackControls
                         track={track}
-                        callbacks={callbacks}
-                        trackPlayer={trackPlayer}
-                        arrangementPlayer={arrangementPlayer}
-                        services={services}
+                        overlayName={overlayName}
                         undoManager={undoManager}
-                        noteLineMinWidth={noteLineMinWidth}
                     />
-                    <Overlay name={overlayName}>
-                        <TrackControls
-                            track={track}
-                            overlayName={overlayName}
-                            undoManager={undoManager}
-                        />
-                    </Overlay>
-                </div>
+                </Overlay>
             </Container>
         );
     }

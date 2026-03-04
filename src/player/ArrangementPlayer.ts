@@ -6,7 +6,8 @@
 import { Publisher } from "../core/Publisher.js";
 import type { ISbDmTrack, ITiming, RealTime } from "../core/ScoreBookDataModel.js";
 import type { IArrangement } from "../core/types/general.js";
-import { TimeCoordinator } from "./TimeCoordinator.js";
+import { TimeCoordinator, type IScoreMetrics } from "./TimeCoordinator.js";
+import { EventEngine } from "./EventEngine.js";
 import { TrackPlayer } from "./TrackPlayer.js";
 import { Event, ICallbackEvent, IInterval, ILoopInterval } from "./types.js";
 
@@ -16,7 +17,7 @@ import { Event, ICallbackEvent, IInterval, ILoopInterval } from "./types.js";
  *
  * Lifecycle:
  * - Construct with an arrangement to subscribe to changes.
- * - Connect to an `IEventEngine` as an event source.
+ * - Connect to an `EventEngine` as an event source.
  * - Call `dispose()` when replacing the arrangement to clean up subscriptions.
  */
 export class ArrangementPlayer extends Publisher {
@@ -51,6 +52,8 @@ export class ArrangementPlayer extends Publisher {
 
         this.updateCallbackEvents();
         this.arrangementView.timeParams.subscribe(this.updateCallbackEvents);
+
+        EventEngine.instance.connect(this);
     }
 
     /**
@@ -61,6 +64,10 @@ export class ArrangementPlayer extends Publisher {
      */
     public get currentTiming(): ITiming | null {
         return this.timing;
+    }
+
+    public get scoreMetrics(): IScoreMetrics {
+        return this.timeCoordinator.metrics;
     }
 
     /**
@@ -102,7 +109,8 @@ export class ArrangementPlayer extends Publisher {
         // Stop any ongoing play state.
         this.onStop();
 
-        // Unsubscribe from arrangement changes.
+        // Unsubscribe from arrangement changes and the event engine.
+        EventEngine.instance.disconnect(this);
         this.arrangementView.unsubscribe(this.updateTrackPlayers);
         this.arrangementView.timeParams.unsubscribe(this.updateCallbackEvents);
 
@@ -150,6 +158,23 @@ export class ArrangementPlayer extends Publisher {
 
         return events;
     };
+
+    /**
+     * Play an interval specified in bars. Bar numbers begin with 1.
+     * Playback will start at the beginning of `startBar` and stop after the given number of bars.
+     * If `loop` is true the interval will be looped.
+     *
+     * @param startBar The 1-based bar number to start playback at.
+     * @param numberOfBars The number of bars to play.
+     * @param loop Whether to loop the specified interval continuously until stopped.
+     *
+     * @returns A promise that resolves when playback starts.
+     */
+    public async playBars(startBar: number, numberOfBars: number, loop = false): Promise<void> {
+        const startTime = this.timeCoordinator.convertToRealTime({ bar: startBar, step: 1 });
+        const endTime = this.timeCoordinator.convertToRealTime({ bar: startBar + numberOfBars, step: 1 });
+        await EventEngine.instance.playInterval({ start: startTime, end: endTime }, loop);
+    }
 
     /**
      * Builds callback events for a given interval across loops, updating `currentTiming` when fired.

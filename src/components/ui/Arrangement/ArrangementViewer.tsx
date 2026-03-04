@@ -10,15 +10,16 @@ import type { RealTime } from "../../../core/ScoreBookDataModel.js";
 import type { ITimeParamsView } from "../../../core/types/general.js";
 import type { UndoManager } from "../../../core/UndoManager.js";
 import type { ArrangementPlayer } from "../../../player/ArrangementPlayer.js";
-import type { ScoreBookUiServices } from "../../../ui/AnimadaScoreBookUi.js";
+import type { ScoreBookUiServices } from "../../../player/types.js";
+import { Container } from "../framework/Container.js";
+import { ChildAlignment, Orientation } from "../framework/ui-types.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
 import { GuideRail } from "../GuideRail/GuideRail.js";
 import { Overlay } from "../Overlay.js";
 import { Share } from "../Share.js";
 import { TrackViewer, type ITrackViewerCallbacks } from "../Track/TrackViewer.js";
 import { ArrangementEditControls } from "./ArrangementEditControls.js";
-import { Container } from "../framework/Container.js";
-import { ChildAlignment, Orientation } from "../framework/ui-types.js";
+import { TrackControls } from "./TrackControls.js";
 
 const baseNoteWidth = 55.5; // 54pt flex-basis + 1.5pt for border
 
@@ -32,13 +33,16 @@ interface IArrangementViewerState {
     noteWidth: number;
     trackPlayerCount: number;
     noteLineMinWidth: number;
-    scrollShadowClasses: string;
     autoFollowIsOn: boolean;
     userMightBeTakingControl: boolean;
 }
 
 export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArrangementViewerState> {
     private viewerRef = createRef<HTMLDivElement>();
+    private shadowRef = createRef<HTMLDivElement>();
+    private playBeamRef = createRef<HTMLDivElement>();
+    private playRangeRef = createRef<HTMLDivElement>();
+
     private contentWidthPublisher = new Publisher();
 
     //private animationEngine?: AnimationEngine;
@@ -48,6 +52,13 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
     private lastX = 0;
     private stopAutoFollowTimeoutId = 0;
 
+    // Used in auto follow mode to indicate the last pulse we were on, so that we can determine when to scroll.
+    private lastPulse = 0;
+
+    // This is the scroll target pulse. If the current pulse is more than 2 pulses ahead of this, or lower which
+    // indicates we looped back, we scroll to catch up.
+    private targetPulse = 0;
+
     public constructor(props: IArrangementViewerProps) {
         super(props);
 
@@ -55,7 +66,6 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
             noteWidth: 0,
             trackPlayerCount: props.arrangementPlayer.trackPlayers.size,
             noteLineMinWidth: this.getNoteLineMinWidth(props.arrangementPlayer.arrangementView.timeParams),
-            scrollShadowClasses: "",
             autoFollowIsOn: true,
             userMightBeTakingControl: false
         };
@@ -75,11 +85,18 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
 
         // If desired, turn on auto-follow like so.
         if (autoFollowIsOn) {
-            services.animationEngine.connect(this.autoFollowAnimation);
+            services.animationEngine.connect(this.autoFollow);
         } else {
             // Otherwise, set up the subscription which will turn it on again.
             this.addSubscription(services.animationEngine, this.animationEngineSubscription);
         }
+
+        this.updateScrollShadows();
+    }
+
+    public override componentDidUpdate(prevProps: IArrangementViewerProps, prevState: IArrangementViewerState): void {
+        super.componentDidUpdate(prevProps, prevState);
+        this.updateScrollShadows();
     }
 
     public override componentWillUnmount(): void {
@@ -88,12 +105,12 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         const { services } = this.props;
 
         this.resizeObserver.disconnect();
-        services.animationEngine.disconnect(this.autoFollowAnimation);
+        services.animationEngine.disconnect(this.autoFollow);
     }
 
     public override render(): JSX.Element {
         const { arrangementPlayer, services, undoManager } = this.props;
-        const { noteLineMinWidth, scrollShadowClasses, autoFollowIsOn } = this.state;
+        const { noteLineMinWidth, autoFollowIsOn } = this.state;
 
         const arrangement = arrangementPlayer.arrangementView;
 
@@ -109,31 +126,60 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
                     undoManager={undoManager}
                 />
                 <Container
-                    className={`trackViewerHost ${scrollShadowClasses}`}
-                    innerRef={this.viewerRef}
-                    orientation={Orientation.TopDown}
+                    id="trackViewerContainer"
+                    orientation={Orientation.LeftToRight}
                     crossAlignment={ChildAlignment.Stretch}
-                    onScroll={this.updateScrollShadows}
-                    onWheel={autoFollowIsOn ? this.handleWheel : undefined}
                 >
-                    <GuideRail arrangementView={arrangement} />
-                    {
-                        arrangement.tracks.map((track) => {
-                            return arrangementPlayer.trackPlayers.get(track)!;
-                        }).map((trackPlayer) => {
-                            return (
-                                <TrackViewer
-                                    trackPlayer={trackPlayer}
-                                    callbacks={this.useTrackViewerTouchInterpretation()}
-                                    key={trackPlayer.track.id}
-                                    arrangementPlayer={arrangementPlayer}
-                                    services={services}
-                                    undoManager={undoManager}
-                                    noteLineMinWidth={noteLineMinWidth}
-                                />
-                            );
-                        })
-                    }
+                    <TrackControls tracks={arrangement.tracks} />
+                    <Container
+                        id="trackViewerHostShadow"
+                        innerRef={this.shadowRef}
+                    >
+                        <Container
+                            className={`trackViewerHost`}
+                            innerRef={this.viewerRef}
+                            orientation={Orientation.TopDown}
+                            crossAlignment={ChildAlignment.Start}
+                            onScroll={this.updateScrollShadows}
+                            onWheel={autoFollowIsOn ? this.handleWheel : undefined}
+                        >
+                            <Container
+                                id="trackViewerContentHost"
+                                orientation={Orientation.TopDown}
+                                crossAlignment={ChildAlignment.Start}
+                            >
+                                <Container
+                                    id="trackViewerDecorations"
+                                    crossAlignment={ChildAlignment.Stretch}
+                                >
+                                    <div id="playRange" ref={this.playRangeRef} />
+                                    <div id="playBeam" ref={this.playBeamRef} />
+                                </Container>
+                                <GuideRail arrangementView={arrangement} />
+                                {
+                                    arrangement.tracks.map((track) => {
+                                        return arrangementPlayer.trackPlayers.get(track)!;
+                                    }).map((trackPlayer) => {
+                                        return (
+                                            <TrackViewer
+                                                trackPlayer={trackPlayer}
+                                                callbacks={this.useTrackViewerTouchInterpretation()}
+                                                key={trackPlayer.track.id}
+                                                arrangementPlayer={arrangementPlayer}
+                                                services={services}
+                                                undoManager={undoManager}
+                                                noteLineMinWidth={noteLineMinWidth}
+                                            />
+                                        );
+                                    })
+                                }
+                                <Container
+                                    id="trackViewerSelectionOverlay"
+                                >
+                                </Container>
+                            </Container>
+                        </Container>
+                    </Container>
                 </Container>
                 <Overlay name="share">
                     <Share
@@ -145,7 +191,10 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         );
     }
 
-    // Returns width in pt
+    /**
+     * @param timeParams The time params of the arrangement.
+     * @returns The width of the entire note line  in pt.
+     */
     private getNoteLineMinWidth = (timeParams: ITimeParamsView): number => {
         const widthFromNotes = baseNoteWidth * timeParams.timings.length;
         const extraWidthBetweenBars = (timeParams.length - 1) * 4;
@@ -153,49 +202,24 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         return widthFromNotes + extraWidthBetweenBars;
     };
 
-    private handleResize = (entries: ResizeObserverEntry[], observer: ResizeObserver) => {
+    private handleResize = () => {
         this.updateScrollShadows();
         this.updateNoteWidth();
     };
 
-    // We need scroll shadows if the note-lines are out of site to either the left or the right
-    private getScrollShadowClasses(trackViewersWrapper: HTMLElement | null): string {
-        const notesWrapper = trackViewersWrapper?.querySelector(".notes-wrapper");
-        if (!notesWrapper) {
-            return "";
-        } // In case there are no tracks
-
-        const { left: notesWrapperLeft } = notesWrapper.getBoundingClientRect();
-        const notesWrapperRight = notesWrapperLeft + notesWrapper.scrollWidth;
-
-        // On the left side, the boundary is the right side of the track-metas
-        const { right: metaRight } = trackViewersWrapper!.querySelector(".track-meta")!.getBoundingClientRect();
-
-        // On the right side, the boundary is right edge of the trackViewerHost.
-        const { right: wrapperRight } = trackViewersWrapper!.getBoundingClientRect();
-
-        // This works much better with a little bit of tolerance, so we do a little subtraction
-        if (notesWrapperRight - wrapperRight > 2) {
-            if (metaRight - notesWrapperLeft > 2) {
-                return "overflowing-left overflowing-right";
-            }
-
-            return "overflowing-right";
-        }
-        if (metaRight - notesWrapperLeft > 2) {
-            return "overflowing-left";
-        }
-
-        return "";
-    }
-
     private updateScrollShadows = () => {
-        const { scrollShadowClasses } = this.state;
-
-        const newClasse = this.getScrollShadowClasses(this.viewerRef.current);
-        if (scrollShadowClasses !== newClasse) {
-            this.setState({ scrollShadowClasses: newClasse });
+        if (!this.viewerRef.current || !this.shadowRef.current) {
+            return;
         }
+
+        const scrollLeft = this.viewerRef.current.scrollLeft;
+        const scrollWidth = this.viewerRef.current.scrollWidth;
+        const clientWidth = this.viewerRef.current.clientWidth;
+
+        // The left shadow doesn't work well with auto follow, which scrolls the tracks so that the first node
+        // is half under the shadow.
+        this.shadowRef.current.classList.toggle("overflowingLeft", scrollLeft > 2);
+        this.shadowRef.current.classList.toggle("overflowingRight", scrollLeft + clientWidth < scrollWidth - 2);
     };
 
     private updateNoteWidth = () => {
@@ -211,7 +235,7 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
     };
 
     private getNoteWidth(trackViewersWrapper: HTMLElement | null): number {
-        const noteViewer = trackViewersWrapper?.querySelector(".note-line-wrapper .notes-wrapper .note-viewer");
+        const noteViewer = trackViewersWrapper?.querySelector(".notes-wrapper .note-viewer");
         if (!noteViewer) {
             return 0;
         } // In case there are no tracks
@@ -219,17 +243,64 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         return noteViewer.clientWidth;
     }
 
-    private autoFollow(wrapper: HTMLDivElement | null, realTime: RealTime) {
-        if (wrapper) {
+    private autoFollow = (realTime: RealTime) => {
+        if (this.viewerRef.current && this.playBeamRef.current && this.playRangeRef.current) {
             const { arrangementPlayer } = this.props;
+            const { noteWidth } = this.state;
 
-            const distanceMultiplier = arrangementPlayer.convertToLoopProgress(realTime);
-            wrapper.scrollLeft = (distanceMultiplier * wrapper.scrollWidth) - (wrapper.offsetWidth / 2);
-        }
-    }
+            // Convert the time to a position between 0 and 1 and then to a pixel value for the play beam.
+            const normalizedPosition = arrangementPlayer.convertToLoopProgress(realTime);
+            const position = (normalizedPosition * this.viewerRef.current.scrollWidth);
 
-    private autoFollowAnimation = (realTime: RealTime) => {
-        this.autoFollow(this.viewerRef.current, realTime);
+            // Reset the last pulse if we've looped around.
+            if (normalizedPosition < 0.01) {
+                this.lastPulse = 0;
+                this.viewerRef.current.scrollTo({ left: 0, behavior: "instant" });
+                this.playRangeRef.current.style.left = `0px`;
+            }
+
+            this.playBeamRef.current.style.left = `${position}px`;
+
+            // Determine the current pulse (which is a group of steps in a bar).
+            // A pulse usually corresponds to the beat (e.g. 4 beats in 4/4).
+            // We usually want to scroll by two pulses every time the two previous pulses have been played
+            // (or one if the beat has an uneven number of beats).
+            const scoreMetrics = arrangementPlayer.scoreMetrics;
+
+            // Determine the time in the current loop. From this, we can determine the current pulse.
+            const timeInCurrentLoop = realTime % scoreMetrics.realTimeLength;
+            this.targetPulse = Math.floor(timeInCurrentLoop /
+                (scoreMetrics.secondsPerBar / scoreMetrics.stepsPerBar * scoreMetrics.stepsPerPulse));
+
+            // Act only if the new pulse is lower than the previous pulse, which means we've looped around,
+            // or if the new pulse is at least 2 pulses ahead of the previous pulse.
+            if (this.targetPulse < this.lastPulse || (this.targetPulse - this.lastPulse >= 2)) {
+                if (this.targetPulse < this.lastPulse) {
+                    const distanceToTarget = (this.targetPulse - this.lastPulse) + scoreMetrics.stepsPerPulse;
+                    this.viewerRef.current.scrollBy({
+                        left: distanceToTarget * noteWidth,
+                        top: 0,
+                    });
+                    this.playRangeRef.current.style.left = `${distanceToTarget * noteWidth}px`;
+                } else {
+                    let pulseWidth = 2 * scoreMetrics.stepsPerPulse * (noteWidth);
+                    if (this.lastPulse === 0) {
+                        // Give the first pulse a bit of extra space, so that the notes don't end up right under the
+                        // left shadow.
+                        pulseWidth -= noteWidth / 4;
+                    }
+
+                    this.viewerRef.current.scrollBy({
+                        left: pulseWidth,
+                        behavior: "smooth"
+                    });
+                    this.playRangeRef.current.style.left = `${position}px`;
+                }
+
+                this.updateScrollShadows();
+                this.lastPulse = this.targetPulse;
+            }
+        };
     };
 
     private animationEngineSubscription = () => {
@@ -243,10 +314,6 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         if (event.deltaX > 6) {
             this.setState({ autoFollowIsOn: false });
         }
-    };
-
-    private onScrollbarGrab = () => {
-        this.setState({ autoFollowIsOn: false });
     };
 
     private useTrackViewerTouchInterpretation(): ITrackViewerCallbacks {

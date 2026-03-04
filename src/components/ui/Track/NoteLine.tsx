@@ -10,7 +10,7 @@ import type { IPolyrhythm } from "../../../core/types/general.js";
 import type { UndoManager } from "../../../core/UndoManager.js";
 import type { ArrangementPlayer } from "../../../player/ArrangementPlayer.js";
 import type { TrackPlayer } from "../../../player/TrackPlayer.js";
-import type { ScoreBookUiServices } from "../../../ui/AnimadaScoreBookUi.js";
+import type { ScoreBookUiServices } from "../../../player/types.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
 import { NoteViewer } from "../Note/NoteViewer.js";
 import { PolyrhythmViewer } from "../PolyrhythmViewer.js";

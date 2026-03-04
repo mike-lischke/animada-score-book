@@ -14,9 +14,10 @@ import type { INoteStyle, IPolyrhythm, ISubscribable, Mutable } from "./types/ge
 import type { IArrangementSnapshot, ISerialisedArrangement } from "./types/snapshots.js";
 import { getNewId } from "./utils.js";
 
-// steps are currently always sixteenths
-// When we bring in polyrhythms that will change
-// It may also change for other time signatures but I'm not sure yet
+/**
+ * Steps are usually sixteenths (2/4, 4/4).
+ * For other time signatures, they can be different. For example in 6/8, steps are usually eighths.
+ */
 export interface ITiming { readonly bar: number, readonly step: number; };
 
 export type RealTime = number;

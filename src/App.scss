@@ -49,9 +49,7 @@
     --thin-border-width: 1pt;
     --thin-border: var(--thin-border-width) solid var(--dark-gray);
 
-    --note-height: 56px;
-
-    --track-meta-width: 84.9pt;
+    --note-height: 54pt;
 
     --a-color: var(--darker-blue);
     --a-color-hover: var(--light-blue);
@@ -178,10 +176,70 @@ button {
 
 .arrangementViewer {
     padding: 15px;
+    height: 100%;
+    overflow-x: hidden;
+    overflow-y: auto;
 }
 
 .trackViewerHost {
     padding-bottom: 15px;
+    overflow-x: auto;
+}
+
+#trackViewerHostShadow {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+#trackViewerHostShadow::before,
+#trackViewerHostShadow::after {
+    content: "";
+    position: absolute;
+    flex: 0 0 auto;
+
+    top: 0;
+    width: 64px;
+    height: 100%;
+
+    pointer-events: none;
+    z-index: 2;
+
+    transition: opacity 250ms ease;
+}
+
+#trackViewerHostShadow.overflowingLeft::before {
+    opacity: 1;
+    width: 24px;
+}
+
+#trackViewerHostShadow.overflowingRight::after {
+    opacity: 1;
+}
+
+/* Left shadow. */
+#trackViewerHostShadow::before {
+    left: 0;
+
+    background: rgba(255, 255, 255, 0.95);
+    opacity: 0;
+
+    animation-name: show-left-shadow;
+    animation-timeline: --trackViewer-scroll;
+    animation-duration: 1s;
+    animation-fill-mode: both;
+}
+
+/* Right shadow. */
+#trackViewerHostShadow::after {
+    right: 0;
+
+    background: rgba(255, 255, 255, 0.95);
+    opacity: 0;
+
+    animation-name: show-right-shadow;
+    animation-timeline: --trackViewer-scroll;
+    animation-duration: 1s;
+    animation-fill-mode: both;
 }
 
 #footer {
@@ -249,7 +307,7 @@ button {
 
 #arrangementPlayControls > * {
     /* Need to override the stronger image-only buttons margins. */
-    margin-right: 12px !important;
+    margin-right: 8px !important;
 }
 
 #arrangementPlayControls .upDown #content {
@@ -262,9 +320,12 @@ button {
     padding: 12px;
     border-radius: 50%;
     font-weight: bold;
+    width: 50px;
+    height: 50px;
 }
 
-#playbackButton {
+#playbackButton,
+#recordButton {
     height: 30px;
     width: 30px;
 }
@@ -282,9 +343,40 @@ button {
 }
 
 .track-viewer {
-    min-width: 100%;
-    display: flex;
-    position: relative;
+    margin: 8px 0;
+}
+
+#trackViewerDecorations {
+    position: absolute;
+    flex-grow: 1;
+
+    left: 0;
+    top: 0;
+    right: 0;
+    height: 100%;
+
+    pointer-events: none;
+}
+
+#playBeam {
+    width: 2px;
+    background-color: var(--light-gray);
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: -1000px;
+}
+
+#playRange {
+    width: calc(8 * var(--note-height));
+    background-color: rgba(255, 221, 0, 0.25);
+    border-radius: 16px;
+    ;
+
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: -1000px;
 }
 
 @keyframes loadingPulse {
@@ -299,10 +391,6 @@ button {
 
 .track-viewer.pending-track {
     height: var(--note-height);
-}
-
-.track-viewer.pending-track .track-meta {
-    animation: loadingPulse 1.5s infinite alternate;
 }
 
 .pending-note-line {
@@ -322,9 +410,16 @@ button {
     display: inline-block;
 }
 
-.track-meta {
-    width: calc(var(--note-height) + 15px);
-    height: calc(var(--note-height) + 15px);
+.trackControlsList {
+    overflow: hidden;
+    flex: 0 0 calc(var(--note-height) + 6pt);
+    margin: 26pt 12px 0;
+    padding-left: 6px;
+}
+
+.trackControls {
+    width: var(--note-height);
+    height: var(--note-height);
 
     flex-shrink: 0;
     border-radius: 50%;
@@ -333,71 +428,14 @@ button {
     margin: 8px 6px 8px 0;
 }
 
-.track-meta > * {
-    padding: var(--padding);
-}
-
-.track-meta .buttons-wrapper {
-    display: flex;
-    flex-direction: row;
-    justify-content: end
-}
-
-.track-meta .buttons-wrapper > * {
-    margin-left: 4pt;
-    width: 17pt;
-}
-
-.track-meta .options-button img {
-    width: 8pt;
-}
-
-.track-meta .options-button.small {
-    width: 12pt;
-    height: 12pt;
-    min-height: 0;
-    min-width: 0;
-    border-radius: 4px;
-    padding: 2px;
-    margin: 0 2px;
-}
-
-.track-meta .trackInstrumentIcon {
+.trackControls .trackInstrumentIcon {
     mask-size: contain;
     background-color: var(--dark-gray);
     flex: 1 0 auto;
 }
 
-.track-controls {
-    display: flex;
-    align-items: center;
-    height: 100%;
-    width: 100%;
-    padding-left: 10pt;
-}
-
-.track-controls button {
-    margin-right: 10pt;
-}
-
-.guiderail-wrapper {
-    flex-grow: 1;
-    margin-bottom: 8px;
-}
-
-.guiderail-meta {
-    border-right: var(--thick-border);
-    width: var(--track-meta-width);
-    background-color: var(--lighter-gray);
-    height: 20pt;
-    position: absolute;
-    z-index: 5;
-}
-
 .guiderail {
-    display: flex;
     margin-left: calc(var(--track-meta-width) + var(--thick-border-width));
-    flex-direction: row;
     height: 20pt;
 }
 
@@ -421,15 +459,6 @@ button {
     .guiderail-timing:not(.startOfBar) .guiderail-timing-content {
         display: none;
     }
-}
-
-.note-line-wrapper {
-    position: relative;
-    width: 100%;
-}
-
-.note-line-wrapper .overlay {
-    z-index: 50;
 }
 
 .note-line {
@@ -495,7 +524,6 @@ button {
     cursor: pointer;
 
     user-select: none;
-    background-color: white;
     overflow-x: hidden;
 }
 
@@ -511,12 +539,6 @@ button {
 .note-viewer img {
     pointer-events: none;
     /* Prevent dragging note-style symbols around when trying to select notes */
-}
-
-.note-viewer.startOfBar:not(:first-child),
-.guiderail-timing.startOfBar:not(:first-child) {
-    border-left: 1pt solid var(--light-gray);
-    margin-left: 8px;
 }
 
 .polyrhythm-viewer .note-viewer {
@@ -693,32 +715,34 @@ button {
 }
 
 .appTitle {
-    margin-left: 16px;
-    font-size: 24pt;
+    margin-left: 0;
+    font-size: 20pt;
     font-weight: 400;
     font-family: 'HeyOctober', Tahoma, Geneva, Verdana, sans-serif;
     height: 24pt;
     color: #F57031;
 
     @media (max-width: 1000px) {
-        font-size: 18pt;
+        font-size: 16pt;
     }
 
     @media (max-width: 800px) {
-        font-size: 14pt;
+        font-size: 12pt;
     }
 }
 
 .appTitle.bottom {
-    font-size: 64pt;
-    height: 64pt;
+    font-size: 50pt;
+    height: 50pt;
 
     @media (max-width: 1000px) {
         font-size: 32pt;
+        height: 32pt;
     }
 
     @media (max-width: 800px) {
         font-size: 24pt;
+        height: 24pt;
     }
 }
 

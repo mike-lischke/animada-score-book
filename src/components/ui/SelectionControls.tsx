@@ -8,7 +8,7 @@ import { createRef, type ComponentChild, type ContextType } from "preact";
 import type { IArrangement } from "../../core/types/general.js";
 import type { UndoManager } from "../../core/UndoManager.js";
 import type { ArrangementPlayer } from "../../player/ArrangementPlayer.js";
-import type { ScoreBookUiServices } from "../../ui/AnimadaScoreBookUi.js";
+import type { ScoreBookUiServices } from "../../player/types.js";
 import type { SelectionManager } from "../../ui/SelectionManager.js";
 import { ExpandingSpacer } from "./ExpandingSpacer.js";
 import { Button } from "./framework/Button.js";

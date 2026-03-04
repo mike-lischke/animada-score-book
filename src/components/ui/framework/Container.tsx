@@ -38,7 +38,7 @@ export class Container extends UIComponent<IContainerProperties> {
     public render(): ComponentChild {
         const {
             id, children, style, orientation, mainAlignment, crossAlignment, wrap, innerRef, onClick, title,
-            "data-tooltip": dataTooltip
+            "data-tooltip": dataTooltip, onScroll
         } = this.props;
 
         const newStyle = {
@@ -60,6 +60,7 @@ export class Container extends UIComponent<IContainerProperties> {
                 style={newStyle}
                 className={className}
                 onClick={onClick}
+                onScroll={onScroll}
                 title={title}
                 data-tooltip={dataTooltip}
             >

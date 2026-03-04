@@ -78,9 +78,9 @@ export interface ITimeParamsView extends ISubscribable {
     readonly length: number;
     readonly pulse: string;
     readonly stepResolution: number;
-    isValid(timing: ITiming): boolean;
     readonly timings: ITiming[];
 
+    isValid(timing: ITiming): boolean;
 }
 
 export interface ITimeParams extends ITimeParamsView {

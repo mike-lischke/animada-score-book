@@ -37,7 +37,6 @@ import { UndoManager } from "./core/UndoManager.js";
 import { convertErrorToString } from "./core/utils.js";
 import { ArrangementPlayer } from "./player/ArrangementPlayer.js";
 import { EventEngine } from "./player/EventEngine.js";
-import { type ScoreBookUiServices } from "./ui/AnimadaScoreBookUi.js";
 import { AnimationEngine } from "./ui/AnimationEngine.js";
 import { DialogHost } from "./ui/DialogHost.js";
 import { emptySongString } from "./ui/index.js";
@@ -47,6 +46,7 @@ import { ScoreLibrary } from "./ui/ScoreLibrary.js";
 import { SelectionManager } from "./ui/SelectionManager.js";
 import { ArrangementTitle } from "./components/ui/Arrangement/ArrangementTitle.js";
 import { ArrangementPlayControls } from "./components/ui/Arrangement/ArrangementPlayControls.js";
+import type { ScoreBookUiServices } from "./player/types.js";
 
 interface IAppState {
     ready: boolean;
@@ -502,14 +502,12 @@ export class App extends UIComponent<{}, IAppState> {
 
     private loadScorebook(arrangementToLoad: ISerialisedArrangement) {
         if (this.arrangementPlayer) {
-            EventEngine.instance.disconnect(this.arrangementPlayer);
             this.arrangementPlayer.dispose();
         }
 
         const arrangement = this.dataModel.loadArrangement(arrangementToLoad);
         this.undoManager = new UndoManager(arrangement, this.dataModel.instruments);
         this.arrangementPlayer = new ArrangementPlayer(arrangement);
-        EventEngine.instance.connect(this.arrangementPlayer);
 
         if (arrangement.title) {
             document.title = arrangement.title + " - Animada Score Book";

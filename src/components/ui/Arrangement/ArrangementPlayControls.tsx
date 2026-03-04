@@ -8,15 +8,17 @@ import type { ComponentChild } from "preact";
 import type { UndoManager } from "../../../core/UndoManager.js";
 import type { ArrangementPlayer } from "../../../player/ArrangementPlayer.js";
 import { EventEngine } from "../../../player/EventEngine.js";
-import type { ScoreBookUiServices } from "../../../ui/AnimadaScoreBookUi.js";
+import type { ScoreBookUiServices } from "../../../player/types.js";
 import { Button } from "../framework/Button.js";
 import { Codicon } from "../framework/Codicon.js";
 import { Container } from "../framework/Container.js";
+import { Grid } from "../framework/Grid.js";
+import { GridCell } from "../framework/GridCell.js";
 import { Icon } from "../framework/Icon.js";
 import { Label } from "../framework/Label.js";
-import { ChildAlignment, Orientation } from "../framework/ui-types.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
 import { UpDown } from "../framework/UpDown.js";
+import { ChildAlignment } from "../framework/ui-types.js";
 
 export interface IArrangementControlsTopProps extends ICommonUIProperties {
     arrangementPlayer: ArrangementPlayer,
@@ -81,32 +83,51 @@ export class ArrangementPlayControls extends UIComponent<IArrangementControlsTop
         }
 
         return (
-            <Container
-                id="arrangementPlayControls"
-                orientation={Orientation.LeftToRight}
-                crossAlignment={ChildAlignment.Center}
-            >
-                <Label>Play your score: </Label>
-                {playButton}
-                <Label>@</Label>
-                <UpDown
-                    id="tempo-input"
-                    value={arrangementView.timeParams.tempo}
-                    min={40}
-                    step={10}
-                    onChange={(newValue) => {
-                        undoManager.edit({
-                            type: "EditCommand_TimeParamsTempo",
-                            timeParams: arrangementView.timeParams,
-                            tempo: newValue
-                        });
-                    }}
-                />
-                <span>bpm</span>
-                <Container id="timeSignatureDisplay" data-tooltip="Time signature">
-                    {arrangementView.timeParams.timeSignature}
-                </Container>
-            </Container>
+            <Grid columns={["auto", "40px", "auto", "auto", "auto", "60px"]} id="arrangementPlayControls" >
+                <GridCell crossAlignment={ChildAlignment.Center}>
+                    <Label>Play your score: </Label>
+                </GridCell>
+                <GridCell>
+                    {playButton}
+                </GridCell>
+                <GridCell crossAlignment={ChildAlignment.Center}>
+                    <Label>@</Label>
+                </GridCell>
+                <GridCell>
+                    <UpDown
+                        id="tempo-input"
+                        value={arrangementView.timeParams.tempo}
+                        min={40}
+                        step={10}
+                        onChange={(newValue) => {
+                            undoManager.edit({
+                                type: "EditCommand_TimeParamsTempo",
+                                timeParams: arrangementView.timeParams,
+                                tempo: newValue
+                            });
+                        }}
+                    />
+                </GridCell>
+                <GridCell crossAlignment={ChildAlignment.Center}>bpm</GridCell>
+                <GridCell rowSpan={2} crossAlignment={ChildAlignment.Center}>
+                    <Container id="timeSignatureDisplay" data-tooltip="Time signature">
+                        {arrangementView.timeParams.timeSignature}
+                    </Container>
+                </GridCell>
+                <GridCell crossAlignment={ChildAlignment.Center}>
+                    <Label>Record your Score</Label>
+                </GridCell>
+                <GridCell crossAlignment={ChildAlignment.Center}>
+                    <Button
+                        imageOnly
+                        id="recordButton"
+                        data-tooltip="Record your song and export it as an MP3 file."
+                        onClick={this.startRecording}
+                    >
+                        <Icon src={Codicon.Record} data-tooltip="inherit" />
+                    </Button>
+                </GridCell>
+            </Grid>
         );
     }
 
@@ -121,4 +142,11 @@ export class ArrangementPlayControls extends UIComponent<IArrangementControlsTop
         this.setState({ playing: EventEngine.instance.state === "playing" });
     };
 
+    private startRecording = () => {
+        const { arrangementPlayer } = this.props;
+        // Play the whole arrangement in bars and loop while recording.
+        void arrangementPlayer.playBars(4, 1, true);
+
+        // arrangementPlayer.startRecording();
+    };
 };

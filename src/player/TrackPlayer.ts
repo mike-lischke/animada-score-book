@@ -7,7 +7,8 @@ import { Publisher } from "../core/Publisher.js";
 import type { ISbDmNote, ISbDmTrack, RealTime } from "../core/ScoreBookDataModel.js";
 import type { IPolyrhythm } from "../core/types/general.js";
 import { getMuteEvents } from "./Muting.js";
-import { Event, ICallbackEvent, IInterval, ITimeCoordinator, SoloMute } from "./types.js";
+import type { TimeCoordinator } from "./TimeCoordinator.js";
+import { Event, ICallbackEvent, IInterval, SoloMute } from "./types.js";
 
 /**
  * Coordinates playback for a single track (`ITrackView`).
@@ -23,7 +24,7 @@ export class TrackPlayer extends Publisher {
     public readonly track: ISbDmTrack;
     /** Publishes when the current polyrhythm note changes (for UI highlighting). */
     public readonly currentPolyrhythmNotePublisher: Publisher = new Publisher();
-    private readonly timeCoordinator: ITimeCoordinator;
+    private readonly timeCoordinator: TimeCoordinator;
 
     private readonly noteTimes = new Map<ISbDmNote, RealTime>();
     private cachedPolyrhythms: IPolyrhythm[] = [];
@@ -44,7 +45,7 @@ export class TrackPlayer extends Publisher {
      * @param track The track view to observe and play.
      * @param timeCoordinator Converts score timings to real-time and provides loop/length context.
      */
-    public constructor(track: ISbDmTrack, timeCoordinator: ITimeCoordinator) {
+    public constructor(track: ISbDmTrack, timeCoordinator: TimeCoordinator) {
         super();
         this.track = track;
         this.timeCoordinator = timeCoordinator;
@@ -121,11 +122,14 @@ export class TrackPlayer extends Publisher {
         const noteIterator = this.track.getNoteIterator();
         for (const note of noteIterator) {
             const time = this.noteTimes.get(note)!;
-            if (time > end) {
+            // Treat `end` as exclusive. If the note time is at or past the end,
+            // stop iterating. This prevents notes exactly on the loop boundary
+            // from being included in the following interval.
+            if (time >= end) {
                 break;
             }
 
-            if (time >= start) {
+            if (time >= start && time < end) {
                 if (note.noteStyle) {
                     events.push(this.getAudioEvent(note, time));
                 }
@@ -295,7 +299,7 @@ export class TrackPlayer extends Publisher {
 
         const endTime = nextNote
             ? this.noteTimes.get(nextNote)!
-            : this.timeCoordinator.realTimeLength;
+            : this.timeCoordinator.metrics.realTimeLength;
 
         const realTimeLength = endTime - startTime;
         const timePerNote = realTimeLength / polyrhythm.notes.length;
