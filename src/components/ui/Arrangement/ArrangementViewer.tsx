@@ -81,21 +81,37 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         this.resizeObserver.observe(this.viewerRef.current!);
 
         const arrangement = arrangementPlayer.arrangementView;
-        this.addSubscription(arrangement.timeParams, this.timeParamsSubscription);
+        this.addSubscription(arrangement.timeParams, this.timeParamsSubscription, true);
 
         // If desired, turn on auto-follow like so.
         if (autoFollowIsOn) {
             arrangementPlayer.animationEngine.connect(this.autoFollow);
-        } else {
-            // Otherwise, set up the subscription which will turn it on again.
-            this.addSubscription(arrangementPlayer.animationEngine, this.animationEngineSubscription);
         }
+
+        // Otherwise, set up the subscription which will turn it on again.
+        this.addSubscription(arrangementPlayer.animationEngine, this.animationEngineSubscription, true);
 
         this.updateScrollShadows();
     }
 
     public override componentDidUpdate(prevProps: IArrangementViewerProps, prevState: IArrangementViewerState): void {
         super.componentDidUpdate(prevProps, prevState);
+
+        const { arrangementPlayer } = this.props;
+        const { autoFollowIsOn } = this.state;
+
+        if (prevProps.arrangementPlayer !== arrangementPlayer) {
+            prevProps.arrangementPlayer.animationEngine.disconnect(this.autoFollow);
+
+            const arrangement = arrangementPlayer.arrangementView;
+            this.addSubscription(arrangement.timeParams, this.timeParamsSubscription);
+
+            if (autoFollowIsOn) {
+                arrangementPlayer.animationEngine.connect(this.autoFollow);
+            }
+            this.addSubscription(arrangementPlayer.animationEngine, this.animationEngineSubscription);
+        }
+
         this.updateScrollShadows();
     }
 

@@ -5,25 +5,32 @@
 
 import { describe, expect, it, vi } from "vitest";
 
-import type {
-    INoteStyle, IPolyrhythm, ITimeParamsView, Mutable
-} from "../../src/core/types/general.js";
-import type {
-    ICallbackEvent, IInterval, ILoopInterval, ITimeCoordinator, ITrackPlayer
-} from "../../src/player/types.js";
+import type { INoteStyle, IPolyrhythm, ITimeParams, Mutable } from "../../src/core/types/general.js";
+import type { ICallbackEvent, IInterval, ILoopInterval, } from "../../src/player/types.js";
 
 // Simple subscribable helper with publish capability for tests
 type Sub = (...args: unknown[]) => void;
 
 type CallbackHelper = { callback: () => void; } & { realTime: number; } & { identifier: unknown; };
 
-interface PublishableSubscribable { subscribe: (cb: Sub) => void; unsubscribe: (cb: Sub) => void; publish: () => void; }
+interface PublishableSubscribable {
+    subscribe: (cb: Sub) => () => void; unsubscribe: (cb: Sub) => void;
+    publish: () => void;
+}
+
 const makeSubscribable = (): PublishableSubscribable => {
     const subs: Sub[] = [];
 
     return {
         subscribe: (cb: Sub) => {
             subs.push(cb);
+
+            return () => {
+                const i = subs.indexOf(cb);
+                if (i !== -1) {
+                    subs.splice(i, 1);
+                }
+            };
         },
         unsubscribe: (cb: Sub) => {
             const i = subs.indexOf(cb);
@@ -41,11 +48,11 @@ const makeSubscribable = (): PublishableSubscribable => {
 
 // Mock TimeCoordinator used by ArrangementPlayer
 vi.mock("../../src/player/TimeCoordinator.js", () => {
-    class MockTimeCoordinator implements ITimeCoordinator {
+    class MockTimeCoordinator {
         public realTimeLength: RealTime;
         private readonly subs = makeSubscribable();
 
-        public constructor(_timeParams: ITimeParamsView) {
+        public constructor(_timeParams: ITimeParams) {
             this.realTimeLength = 1;
         }
 
@@ -92,12 +99,12 @@ vi.mock("../../src/player/TimeCoordinator.js", () => {
 
 // Mock TrackPlayer used inside ArrangementPlayer
 vi.mock("../../src/player/TrackPlayer.js", () => {
-    class MockTrackPlayer implements ITrackPlayer {
+    class MockTrackPlayer {
         public soloMute: null | "solo" | "mute" = null;
         public readonly currentPolyrhythmNotePublisher = makeSubscribable();
         public stopped = false;
         private readonly subs = makeSubscribable();
-        public constructor(public track: ISbDmTrack, _tc: ITimeCoordinator) { }
+        public constructor(public track: ISbDmTrack, _tc: TimeCoordinator) { }
 
         public get currentPolyrhythmNote(): ISbDmNote | null {
             return null;
@@ -114,7 +121,7 @@ vi.mock("../../src/player/TrackPlayer.js", () => {
                 }
             });
 
-            return events as unknown as ReturnType<ITrackPlayer["getEvents"]>;
+            return events;
         }
 
         public subscribe(cb: Sub): void {
@@ -159,7 +166,7 @@ const makeNote = (track: ISbDmTrack, timing: ITiming, noteStyle?: INoteStyle,
 const makeArrangement = (trackCount: number): ISbDmArrangement & { _publish: () => void; } => {
     const arrangementSubs = makeSubscribable();
     const timeParamsSubs = makeSubscribable();
-    const timeParams: ITimeParamsView & { _publish: () => void; } = {
+    const timeParams: ITimeParams & { _publish: () => void; } = {
         timeSignature: "4/4",
         tempo: 120,
         length: 1,
@@ -202,7 +209,7 @@ const makeArrangement = (trackCount: number): ISbDmArrangement & { _publish: () 
                 id: i,
                 filePath: `path/to/image${i}.png`,
             },
-            colourGroup: "blue",
+            color: "blue",
             noteStyles: {},
             ...makeSubscribable()
         };
@@ -265,6 +272,8 @@ import {
 } from "../../src/core/ScoreBookDataModel.js";
 import { ArrangementPlayer } from "../../src/player/ArrangementPlayer.js";
 import { getNewId } from "../../src/core/utils.js";
+import type { TimeCoordinator } from "../../src/player/TimeCoordinator.js";
+import type { TrackPlayer } from "../../src/player/TrackPlayer.js";
 
 describe("ArrangementPlayer", () => {
     it("creates track players and computes audible set (no solo)", () => {
@@ -278,7 +287,7 @@ describe("ArrangementPlayer", () => {
     it("audible set reacts to solo/mute changes via subscriptions", () => {
         const arrangement = makeArrangement(3);
         const player = new ArrangementPlayer(arrangement);
-        const tps = Array.from(player.trackPlayers.values()) as Array<ITrackPlayer & { publish: () => void; }>;
+        const tps = Array.from(player.trackPlayers.values()) as Array<TrackPlayer & { publish: () => void; }>;
 
         // Solo the second track
         tps[1].soloMute = "solo";
@@ -331,7 +340,8 @@ describe("ArrangementPlayer", () => {
         const arrangement = makeArrangement(1);
         const player = new ArrangementPlayer(arrangement);
 
-        // Interval crosses loop boundary (length=1): [0.9, 1.2]
+        // Interval crosses loop boundary (length=1): [0.9, 1.2].
+        // @ts-expect-error Accessing internal for test purposes
         const events = player.getEvents({ start: 0.9, end: 1.2 });
         expect(events.length).toBeGreaterThan(0);
         // Ensure sorted order
@@ -344,7 +354,7 @@ describe("ArrangementPlayer", () => {
             return ("callback" in e) && ("identifier" in e);
         });
         const currentTimingUpdates: number[] = [];
-        player.currentTimingPublisher.subscribe(() => {
+        player.subscribe(() => {
             currentTimingUpdates.push(1);
         });
         cb?.callback();
@@ -356,7 +366,8 @@ describe("ArrangementPlayer", () => {
         const arrangement = makeArrangement(2);
         const player = new ArrangementPlayer(arrangement);
 
-        // Prime currentTiming by firing a timing callback
+        // Prime currentTiming by firing a timing callback.
+        // @ts-expect-error Accessing internal for test purposes
         const events = player.getEvents({ start: 0, end: 0.5 });
         const timingCb = events.find((e): e is ICallbackEvent & { identifier: unknown; } => {
             return ("callback" in e) && ("identifier" in e);
@@ -368,7 +379,7 @@ describe("ArrangementPlayer", () => {
         player.onStop();
         expect(player.currentTiming).toBeNull();
 
-        const tps = Array.from(player.trackPlayers.values()) as Array<ITrackPlayer & { stopped: boolean; }>;
+        const tps = Array.from(player.trackPlayers.values()) as Array<TrackPlayer & { stopped: boolean; }>;
         tps.forEach((tp) => {
             expect(tp.stopped).toBe(true);
         });

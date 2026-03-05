@@ -74,7 +74,7 @@ export class ArrangementPlayControls extends UIComponent<IArrangementControlsTop
                     imageOnly
                     id="playbackButton"
                     onClick={() => {
-                        arrangementPlayer.play();
+                        void arrangementPlayer.play();
                     }}>
                     <Icon src={Codicon.DebugStart} />
                 </Button>
