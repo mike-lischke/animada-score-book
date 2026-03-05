@@ -4,7 +4,7 @@
 */
 
 import type { ISbDmInstrument, ISbDmNote, ISbDmTrack } from "../ScoreBookDataModel.js";
-import type { IArrangement, INoteStyle, IPolyrhythm, ITimeParamsView } from "./general.js";
+import type { IArrangement, INoteStyle, IPolyrhythm, ITimeParams } from "./general.js";
 
 /* eslint-disable @typescript-eslint/naming-convention */
 
@@ -67,7 +67,7 @@ export interface EditCommand_Note {
 
 export interface EditCommand_TimeParamsTimeSignature {
     type: "EditCommand_TimeParamsTimeSignature";
-    timeParams: ITimeParamsView;
+    timeParams: Readonly<ITimeParams>;
     timeSignature: string;
     pulse: string;
     stepResolution: number;
@@ -75,13 +75,13 @@ export interface EditCommand_TimeParamsTimeSignature {
 
 export interface EditCommand_TimeParamsTempo {
     type: "EditCommand_TimeParamsTempo";
-    timeParams: ITimeParamsView;
+    timeParams: Readonly<ITimeParams>;
     tempo: number;
 }
 
 export interface EditCommand_TimeParamsLength {
     type: "EditCommand_TimeParamsLength";
-    timeParams: ITimeParamsView;
+    timeParams: Readonly<ITimeParams>;
     length: number;
 }
 

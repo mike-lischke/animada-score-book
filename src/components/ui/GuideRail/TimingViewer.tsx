@@ -6,7 +6,7 @@
 import type { ComponentChild } from "preact";
 
 import type { ITiming } from "../../../core/ScoreBookDataModel.js";
-import type { ITimeParams, ITimeParamsView } from "../../../core/types/general.js";
+import type { ITimeParams } from "../../../core/types/general.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
 import { NoteViewer } from "../Note/NoteViewer.js";
 import { type BarDivisibility } from "./GuideRail.js";
@@ -40,7 +40,7 @@ export class TimingViewer extends UIComponent<ITimingViewerProperties> {
         );
     }
 
-    private getTimingText(timeParams: ITimeParamsView, barDivisibility: BarDivisibility, timing: ITiming,
+    private getTimingText(timeParams: Readonly<ITimeParams>, barDivisibility: BarDivisibility, timing: ITiming,
         isStartOfBar: boolean): string {
         const { timeSignature, stepResolution } = timeParams;
 

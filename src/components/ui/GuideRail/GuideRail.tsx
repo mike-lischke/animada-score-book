@@ -5,7 +5,7 @@
 
 import { type ComponentChild } from "preact";
 
-import type { IArrangement, ITimeParamsView } from "../../../core/types/general.js";
+import type { IArrangement, ITimeParams } from "../../../core/types/general.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
 import { TimingViewer } from "./TimingViewer.js";
 import { Container } from "../framework/Container.js";
@@ -55,7 +55,7 @@ export class GuideRail extends UIComponent<IGuideRailProps, IGuideRailState> {
         );
     }
 
-    private getBarDivisibility(timeParams: ITimeParamsView): BarDivisibility {
+    private getBarDivisibility(timeParams: Readonly<ITimeParams>): BarDivisibility {
         const beatsPerBar = Number(timeParams.timeSignature.split("/")[0]);
         if (beatsPerBar % 4 === 0) {
             return 4;

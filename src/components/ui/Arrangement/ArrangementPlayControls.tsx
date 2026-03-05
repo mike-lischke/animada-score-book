@@ -7,7 +7,6 @@ import type { ComponentChild } from "preact";
 
 import type { UndoManager } from "../../../core/UndoManager.js";
 import type { ArrangementPlayer } from "../../../player/ArrangementPlayer.js";
-import { EventEngine } from "../../../player/EventEngine.js";
 import type { ScoreBookUiServices } from "../../../player/types.js";
 import { Button } from "../framework/Button.js";
 import { Codicon } from "../framework/Codicon.js";
@@ -37,7 +36,7 @@ export class ArrangementPlayControls extends UIComponent<IArrangementControlsTop
         super(props);
 
         this.state = {
-            playing: EventEngine.instance.state === "playing",
+            playing: props.arrangementPlayer.currentTiming !== null,
             editingTitle: false,
             title: props.arrangementPlayer.arrangementView.title,
         };
@@ -46,7 +45,7 @@ export class ArrangementPlayControls extends UIComponent<IArrangementControlsTop
     public override componentDidMount(): void {
         const { arrangementPlayer } = this.props;
 
-        this.addSubscription(EventEngine.instance, this.onPlaybackStateChange);
+        this.addSubscription(arrangementPlayer, this.onPlaybackStateChange);
         const arrangement = arrangementPlayer.arrangementView;
         this.addSubscription(arrangement, this.titleChangeSubscription);
     }
@@ -64,7 +63,7 @@ export class ArrangementPlayControls extends UIComponent<IArrangementControlsTop
                     imageOnly
                     id="playbackButton"
                     onClick={() => {
-                        EventEngine.instance.stop();
+                        arrangementPlayer.stop();
                     }}>
                     <Icon src={Codicon.DebugPause} />
                 </Button>
@@ -75,7 +74,7 @@ export class ArrangementPlayControls extends UIComponent<IArrangementControlsTop
                     imageOnly
                     id="playbackButton"
                     onClick={() => {
-                        void EventEngine.instance.play();
+                        arrangementPlayer.play();
                     }}>
                     <Icon src={Codicon.DebugStart} />
                 </Button>
@@ -139,7 +138,8 @@ export class ArrangementPlayControls extends UIComponent<IArrangementControlsTop
     };
 
     private onPlaybackStateChange = () => {
-        this.setState({ playing: EventEngine.instance.state === "playing" });
+        const { arrangementPlayer } = this.props;
+        this.setState({ playing: arrangementPlayer.currentTiming !== null });
     };
 
     private startRecording = () => {

@@ -5,7 +5,6 @@
 
 import type { ISbDmNote, ISbDmTrack, ITiming, RealTime } from "../core/ScoreBookDataModel.js";
 import type { IArrangement, ISubscribable } from "../core/types/general.js";
-import type { AnimationEngine } from "../ui/AnimationEngine.js";
 import type { ModeManager } from "../ui/ModeManager.js";
 import type { SelectionManager } from "../ui/SelectionManager.js";
 import type { TrackPlayer } from "./TrackPlayer.js";
@@ -62,7 +61,6 @@ export interface ILoopInterval extends IInterval {
 
 /** Stuff which is created once for the entire lifetime of the app. */
 export interface ScoreBookUiServices {
-    animationEngine: AnimationEngine;
     selectionManager: SelectionManager;
     modeManager: ModeManager;
 }

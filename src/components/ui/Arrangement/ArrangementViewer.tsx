@@ -7,7 +7,7 @@ import { createRef, type JSX } from "preact";
 
 import { Publisher } from "../../../core/Publisher.js";
 import type { RealTime } from "../../../core/ScoreBookDataModel.js";
-import type { ITimeParamsView } from "../../../core/types/general.js";
+import type { ITimeParams } from "../../../core/types/general.js";
 import type { UndoManager } from "../../../core/UndoManager.js";
 import type { ArrangementPlayer } from "../../../player/ArrangementPlayer.js";
 import type { ScoreBookUiServices } from "../../../player/types.js";
@@ -74,7 +74,7 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
     }
 
     public override componentDidMount(): void {
-        const { arrangementPlayer, services } = this.props;
+        const { arrangementPlayer } = this.props;
         const { autoFollowIsOn } = this.state;
 
         setTimeout(this.handleResize, 0);
@@ -85,10 +85,10 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
 
         // If desired, turn on auto-follow like so.
         if (autoFollowIsOn) {
-            services.animationEngine.connect(this.autoFollow);
+            arrangementPlayer.animationEngine.connect(this.autoFollow);
         } else {
             // Otherwise, set up the subscription which will turn it on again.
-            this.addSubscription(services.animationEngine, this.animationEngineSubscription);
+            this.addSubscription(arrangementPlayer.animationEngine, this.animationEngineSubscription);
         }
 
         this.updateScrollShadows();
@@ -102,10 +102,10 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
     public override componentWillUnmount(): void {
         super.componentWillUnmount();
 
-        const { services } = this.props;
+        const { arrangementPlayer } = this.props;
 
         this.resizeObserver.disconnect();
-        services.animationEngine.disconnect(this.autoFollow);
+        arrangementPlayer.animationEngine.disconnect(this.autoFollow);
     }
 
     public override render(): JSX.Element {
@@ -195,7 +195,7 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
      * @param timeParams The time params of the arrangement.
      * @returns The width of the entire note line  in pt.
      */
-    private getNoteLineMinWidth = (timeParams: ITimeParamsView): number => {
+    private getNoteLineMinWidth = (timeParams: Readonly<ITimeParams>): number => {
         const widthFromNotes = baseNoteWidth * timeParams.timings.length;
         const extraWidthBetweenBars = (timeParams.length - 1) * 4;
 
@@ -304,8 +304,9 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
     };
 
     private animationEngineSubscription = () => {
-        const { services } = this.props;
-        if (services.animationEngine.state === "playing") {
+        const { arrangementPlayer } = this.props;
+
+        if (arrangementPlayer.animationEngine.state === "playing") {
             this.setState({ autoFollowIsOn: true });
         }
     };

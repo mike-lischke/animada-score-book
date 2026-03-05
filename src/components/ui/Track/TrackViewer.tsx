@@ -108,6 +108,7 @@ export class TrackViewer extends UIComponent<ITrackViewerProperties, ITrackViewe
     };
 
     private audibleChanged = () => {
+        // XXX: this is called way too often. Need a callback only when the audible state of this track changes.
         const { trackPlayer, arrangementPlayer } = this.props;
 
         this.setState({

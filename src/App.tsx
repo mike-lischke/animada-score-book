@@ -17,6 +17,8 @@ import { ProgressIndicator } from "./components/ui/framework/ProgressIndicator.j
 import { ChildAlignment, Orientation } from "./components/ui/framework/ui-types.js";
 import { UIComponent } from "./components/ui/framework/UIComponent.js";
 
+import { ArrangementPlayControls } from "./components/ui/Arrangement/ArrangementPlayControls.js";
+import { ArrangementTitle } from "./components/ui/Arrangement/ArrangementTitle.js";
 import { ArrangementViewer } from "./components/ui/Arrangement/ArrangementViewer.js";
 import { ValueEditorEntryType, type IValueEditorValueEntry } from "./components/ui/composites/ValueDialog.js";
 import { Codicon } from "./components/ui/framework/Codicon.js";
@@ -36,17 +38,13 @@ import type { ISerialisedArrangement } from "./core/types/snapshots.js";
 import { UndoManager } from "./core/UndoManager.js";
 import { convertErrorToString } from "./core/utils.js";
 import { ArrangementPlayer } from "./player/ArrangementPlayer.js";
-import { EventEngine } from "./player/EventEngine.js";
-import { AnimationEngine } from "./ui/AnimationEngine.js";
+import type { ScoreBookUiServices } from "./player/types.js";
 import { DialogHost } from "./ui/DialogHost.js";
 import { emptySongString } from "./ui/index.js";
 import { ModeManager } from "./ui/ModeManager.js";
 import { MouseHandler } from "./ui/MouseHandler.js";
 import { ScoreLibrary } from "./ui/ScoreLibrary.js";
 import { SelectionManager } from "./ui/SelectionManager.js";
-import { ArrangementTitle } from "./components/ui/Arrangement/ArrangementTitle.js";
-import { ArrangementPlayControls } from "./components/ui/Arrangement/ArrangementPlayControls.js";
-import type { ScoreBookUiServices } from "./player/types.js";
 
 interface IAppState {
     ready: boolean;
@@ -84,7 +82,6 @@ export class App extends UIComponent<{}, IAppState> {
 
         const selectionManager = new SelectionManager();
         this.services = {
-            animationEngine: new AnimationEngine(EventEngine.instance),
             selectionManager,
             modeManager: new ModeManager(selectionManager),
         };
@@ -539,10 +536,12 @@ export class App extends UIComponent<{}, IAppState> {
             }
 
             case " ": {
-                if (EventEngine.instance.state === "stopped") {
-                    void EventEngine.instance.play();
-                } else {
-                    EventEngine.instance.stop();
+                if (this.arrangementPlayer) {
+                    if (this.arrangementPlayer.currentTiming === null) {
+                        this.arrangementPlayer.play();
+                    } else {
+                        this.arrangementPlayer.stop();
+                    }
                 }
                 event.preventDefault(); // This is to prevent spaces getting written in number inputs
 

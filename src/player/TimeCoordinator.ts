@@ -5,8 +5,7 @@
 
 import { Publisher } from "../core/Publisher.js";
 import type { ITiming, RealTime } from "../core/ScoreBookDataModel.js";
-import type { ITimeParamsView } from "../core/types/general.js";
-import { EventEngine } from "./EventEngine.js";
+import type { ITimeParams } from "../core/types/general.js";
 import { IInterval, ILoopInterval } from "./types.js";
 
 /**
@@ -57,14 +56,20 @@ export interface IScoreMetrics {
  */
 export class TimeCoordinator extends Publisher {
 
-    private offset: RealTime = 0;
+    /**
+     * Time offset used temporarily when there are changes to the time params that would cause the music to jump
+     * to a different point and the music is currently playing.
+     * This allows us to keep the music playing without jumps, while still updating the timing of future events to
+     * match the new time params.
+     */
+    private internalOffset: RealTime = 0;
 
     // Tempo and length changes incur offset changes.
     private cachedTempo: number;
 
     #metrics: IScoreMetrics;
 
-    public constructor(private timeParams: ITimeParamsView) {
+    public constructor(private timeParams: Readonly<ITimeParams>) {
         super();
 
         this.#metrics = this.computeMetrics();
@@ -72,7 +77,6 @@ export class TimeCoordinator extends Publisher {
         this.cachedTempo = timeParams.tempo;
 
         timeParams.subscribe(this.handleTimeParamsChange);
-        EventEngine.instance.subscribe(this.handlePlaybackChange);
     }
 
     public get metrics(): IScoreMetrics {
@@ -102,8 +106,8 @@ export class TimeCoordinator extends Publisher {
      * @returns The converted intervals.
      */
     public convertToLoopIntervals({ start, end }: IInterval): ILoopInterval[] {
-        const offsetStart = start + this.offset;
-        const offsetEnd = end + this.offset;
+        const offsetStart = start + this.internalOffset;
+        const offsetEnd = end + this.internalOffset;
         const startLoopNumber = Math.floor(offsetStart / this.#metrics.realTimeLength);
         const endLoopNumber = Math.floor(offsetEnd / this.#metrics.realTimeLength);
         const adjustedStart = offsetStart % this.#metrics.realTimeLength;
@@ -146,12 +150,21 @@ export class TimeCoordinator extends Publisher {
      * @returns The audio time.
      */
     public convertToAudioTime(realTime: number, loopNumber: number) {
-        return realTime + (loopNumber * this.#metrics.realTimeLength) - this.offset;
+        return realTime + (loopNumber * this.#metrics.realTimeLength) - this.internalOffset;
     };
 
     public convertToLoopProgress(realTime: number): RealTime {
-        return ((realTime + this.offset) % this.#metrics.realTimeLength) / this.#metrics.realTimeLength;
+        return ((realTime + this.internalOffset) % this.#metrics.realTimeLength) / this.#metrics.realTimeLength;
     };
+
+    /**
+     * Called when the current arrangement stopped playing.
+     */
+    public reset(): void {
+        this.internalOffset = 0;
+        this.cachedTempo = this.timeParams.tempo;
+        this.#metrics = this.computeMetrics();
+    }
 
     /**
      * We must only ever have one timeParam change at a time.
@@ -159,11 +172,12 @@ export class TimeCoordinator extends Publisher {
     private handleTimeParamsChange = () => {
         if (this.timeParams.tempo !== this.cachedTempo) {
             this.handleTempoChange();
-        } else if (this.timeParams.length !== this.metrics.bars) {// MUST re-compute metrics.
+        } else if (this.timeParams.length !== this.metrics.bars) {
             this.handleLengthChange();
-        } else { // MUST re-compute metrics, as other params may have changed, such as time signature or pulse.
+        } else {
             this.#metrics = this.computeMetrics();
         }
+
         this.publish();
     };
 
@@ -176,17 +190,11 @@ export class TimeCoordinator extends Publisher {
 
         const oldTempo = this.cachedTempo;
         const newTempo = this.timeParams.tempo;
-        const audioTime = EventEngine.instance.getTime();
-        const oldOffsetTime = audioTime + this.offset;
+        const audioTime = 1000; // XXX get current audio time from arrangement player.
+        const oldOffsetTime = audioTime + this.internalOffset;
         const newOffsetTime = oldOffsetTime * (oldTempo / newTempo);
-        this.offset = newOffsetTime - audioTime;
+        this.internalOffset = newOffsetTime - audioTime;
         this.cachedTempo = newTempo;
-    };
-
-    private handlePlaybackChange = () => {
-        if (EventEngine.instance.state !== "playing") {
-            this.offset = 0;
-        }
     };
 
     /**
@@ -197,8 +205,8 @@ export class TimeCoordinator extends Publisher {
         const oldRealTimeLength = this.#metrics.realTimeLength;
         this.#metrics = this.computeMetrics();
 
-        const audioTime = EventEngine.instance.getTime();
-        const oldOffsetTime = audioTime + this.offset;
+        const audioTime = 1000; // XXX get current audio time from arrangement player.
+        const oldOffsetTime = audioTime + this.internalOffset;
 
         const oldTimeWithinLoop = oldOffsetTime % oldRealTimeLength;
         const targetTimeWithinLoop = oldTimeWithinLoop % this.#metrics.realTimeLength;
@@ -210,7 +218,7 @@ export class TimeCoordinator extends Publisher {
         }
 
         const newOffsetTime = (loopsFinished * this.#metrics.realTimeLength) + targetTimeWithinLoop;
-        this.offset = newOffsetTime - audioTime;
+        this.internalOffset = newOffsetTime - audioTime;
     };
 
     private computeMetrics(): IScoreMetrics {

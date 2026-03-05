@@ -76,6 +76,7 @@ export class TimeParams extends Publisher implements ISbDmTimeParams {
         if (!this.validateTimeSignature(newTimeSignature)) {
             throw new Error("Invalid time signature");
         }
+
         if (newTimeSignature !== this.signature) {
             this.signature = newTimeSignature;
             this.regenerateTimings();
@@ -101,6 +102,7 @@ export class TimeParams extends Publisher implements ISbDmTimeParams {
         if (!this.validateTempo(newTempo)) {
             throw new Error("Invalid tempo");
         }
+
         if (newTempo !== this.usedTempo) {
             this.usedTempo = newTempo;
             this.regenerateTimings();

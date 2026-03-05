@@ -41,6 +41,8 @@ const serialiseNotes = (trackSnapshot: ITrackSnapshot): string => {
     const notesStylesAsNumbers = trackSnapshot.notes.map((noteChar) => {
         return urlCharacterToNumber[noteChar];
     });
+
+    throw new Error("Move serialization to the data model.");
     const base = 2n; // XXX BigInt(getNoteStyleCount(trackSnapshot.instrumentId));
     const notesAsNumber = interpretAsBaseN(notesStylesAsNumbers, base);
 

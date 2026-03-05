@@ -6,19 +6,24 @@
 import { Publisher } from "../core/Publisher.js";
 import type { RealTime } from "../core/ScoreBookDataModel.js";
 import type { ISubscribable } from "../core/types/general.js";
-import type { EventEngine } from "../player/EventEngine.js";
 import type { EventEngineState } from "../player/types.js";
 
-export class AnimationEngine implements ISubscribable {
+export interface IRealtimeProvider extends ISubscribable {
+    getTime(): RealTime;
+}
+
+export class AnimationEngine extends Publisher {
     public state: EventEngineState = "stopped";
 
     private readonly animations: Array<(realTime: RealTime) => void> = [];
     private nextAnimationId = 0;
     private readonly publisher = new Publisher();
 
-    public constructor(private eventEngine: EventEngine) {
-        eventEngine.subscribe(() => {
-            if (eventEngine.state === "playing") {
+    public constructor(private readonly realtimeProvider: IRealtimeProvider) {
+        super();
+
+        realtimeProvider.subscribe(() => {
+            if (realtimeProvider.getTime() > -1) {
                 this.start();
 
                 return;
@@ -36,14 +41,6 @@ export class AnimationEngine implements ISubscribable {
         if (animationIndex !== -1) {
             this.animations.splice(animationIndex, 1);
         }
-    }
-
-    public get subscribe() {
-        return this.publisher.subscribe;
-    }
-
-    public get unsubscribe() {
-        return this.publisher.unsubscribe;
     }
 
     private start() {
@@ -65,7 +62,7 @@ export class AnimationEngine implements ISubscribable {
     private loop() {
         this.nextAnimationId = requestAnimationFrame(() => {
             this.animations.forEach((animation) => {
-                animation(this.eventEngine.getTime());
+                animation(this.realtimeProvider.getTime());
             });
             this.loop();
         });

@@ -72,23 +72,15 @@ export interface IArrangement extends ISubscribable {
     removeTrack(track: ISbDmTrack): void;
 }
 
-export interface ITimeParamsView extends ISubscribable {
-    readonly timeSignature: string;
-    readonly tempo: number;
-    readonly length: number;
-    readonly pulse: string;
-    readonly stepResolution: number;
-    readonly timings: ITiming[];
-
-    isValid(timing: ITiming): boolean;
-}
-
-export interface ITimeParams extends ITimeParamsView {
+export interface ITimeParams extends ISubscribable {
     timeSignature: string;
     tempo: number;
     length: number;
     pulse: string;
     stepResolution: number;
+    timings: ITiming[];
+
+    isValid(timing: ITiming): boolean;
 }
 
 export interface IPolyrhythm {
