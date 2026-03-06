@@ -11,7 +11,8 @@ import { AudioBufferPlayer } from "./AudioBufferPlayer.js";
 import { TimeCoordinator, type IScoreMetrics } from "./TimeCoordinator.js";
 import { TrackPlayer } from "./TrackPlayer.js";
 import {
-    Event, ICallbackEvent, IInterval, ILoopInterval, type IAudioEvent, type IEventSource, type IMuteEvent,
+    Event, ICallbackEvent, IInterval, ILoopInterval, type IAudioEvent,
+    type IMuteEvent,
     type MuteFilter
 } from "./types.js";
 
@@ -48,7 +49,6 @@ export class ArrangementPlayer extends Publisher {
     /** We may want to swap this out for a different context in the future, for example when recording. */
     private audioContext: AudioContext = this.mainAudioContext;
 
-    private eventSources: IEventSource[];
     private nextIterationId: number | null = null;
     private loopBoundaryTimeoutId: number | null = null;
 
@@ -89,7 +89,6 @@ export class ArrangementPlayer extends Publisher {
         this.updateCallbackEvents();
         this.arrangementView.timeParams.subscribe(this.updateCallbackEvents);
 
-        this.eventSources = [this];
         this.animationEngine = new AnimationEngine(this);
     }
 
@@ -147,7 +146,6 @@ export class ArrangementPlayer extends Publisher {
         this.onStop();
 
         // Unsubscribe from arrangement changes and the event engine.
-        this.eventSources = [];
         this.arrangementView.unsubscribe(this.updateTrackPlayers);
         this.arrangementView.timeParams.unsubscribe(this.updateCallbackEvents);
 
@@ -159,42 +157,6 @@ export class ArrangementPlayer extends Publisher {
         this.trackPlayers.clear();
         this.audibleTrackPlayers.clear();
     }
-
-    /**
-     * Returns all events within the given interval, including audio, mute, and callback events.
-     * Intervals spanning loops are split via `TimeCoordinator` and per-loop events are converted to audio time.
-     *
-     * @param interval The real-time interval [start, end) to query.
-     * @returns A list of events sorted by their real-time occurrence.
-     */
-    public getEvents(interval: IInterval): Event[] {
-        if (this.disposed) {
-            return [];
-        }
-        const events: Event[] = [];
-        const loopIntervals: ILoopInterval[] = this.timeCoordinator.convertToLoopIntervals(interval);
-
-        loopIntervals.forEach((loopInterval) => {
-            const { loopNumber } = loopInterval;
-            this.audibleTrackPlayers.forEach((trackPlayer) => {
-                trackPlayer.getEvents(loopInterval).forEach((event) => {
-                    return events.push({
-                        ...event,
-                        realTime: this.timeCoordinator.convertToAudioTime(event.realTime, loopNumber)
-                    });
-                });
-            });
-        });
-
-        events.push(...this.getCallbackEvents(interval));
-
-        // Ensure deterministic ordering across tracks and loops.
-        events.sort((a, b) => {
-            return a.realTime - b.realTime;
-        });
-
-        return events;
-    };
 
     /**
      * Play an interval specified in bars. Bar numbers begin with 1.
@@ -211,30 +173,6 @@ export class ArrangementPlayer extends Publisher {
         const startTime = this.timeCoordinator.convertToRealTime({ bar: startBar, step: 1 });
         const endTime = this.timeCoordinator.convertToRealTime({ bar: startBar + numberOfBars, step: 1 });
         await this.playInterval({ start: startTime, end: endTime }, loop);
-    }
-
-    /**
-     * Register an event source to the engine. The engine will use the source to get events to play.
-     * Typical event sources are arrangement players and metronomes.
-     *
-     * @param eventSource The event source to register.
-     */
-    public addEventSource(eventSource: IEventSource): void {
-        if (!this.eventSources.includes(eventSource)) {
-            this.eventSources.push(eventSource);
-        }
-    }
-
-    /**
-     * Disconnect an event source from the engine. The engine will stop getting events from the source.
-     *
-     * @param eventSource The event source to disconnect.
-     */
-    public removeEventSource(eventSource: IEventSource): void {
-        const index = this.eventSources.indexOf(eventSource);
-        if (index !== -1) {
-            this.eventSources.splice(index, 1);
-        }
     }
 
     /**
@@ -332,6 +270,41 @@ export class ArrangementPlayer extends Publisher {
     public get state(): PlayerPlayState {
         return this.#state;
     }
+
+    /**
+     * Returns all events within the given interval, including audio, mute, and callback events.
+     *
+     * @param interval The real-time interval [start, end) to query.
+     * @returns A list of events sorted by their real-time occurrence.
+     */
+    private getEvents(interval: IInterval): Event[] {
+        if (this.disposed) {
+            return [];
+        }
+        const events: Event[] = [];
+        const loopIntervals: ILoopInterval[] = this.timeCoordinator.convertToLoopIntervals(interval);
+
+        loopIntervals.forEach((loopInterval) => {
+            const { loopNumber } = loopInterval;
+            this.audibleTrackPlayers.forEach((trackPlayer) => {
+                trackPlayer.getEvents(loopInterval).forEach((event) => {
+                    return events.push({
+                        ...event,
+                        realTime: this.timeCoordinator.convertToAudioTime(event.realTime, loopNumber)
+                    });
+                });
+            });
+        });
+
+        events.push(...this.getCallbackEvents(interval));
+
+        // Ensure deterministic ordering across tracks and loops.
+        events.sort((a, b) => {
+            return a.realTime - b.realTime;
+        });
+
+        return events;
+    };
 
     /**
      * Builds callback events for a given interval across loops, updating `currentTiming` when fired.
@@ -529,21 +502,21 @@ export class ArrangementPlayer extends Publisher {
     }
 
     private scheduleEvents(interval: IInterval): void {
-        this.eventSources.forEach((eventSource) => {
-            eventSource.getEvents(interval).forEach((event) => {
-                if ("audioBuffer" in event) {
-                    this.scheduleAudioEvent(event);
-                }
+        this.getEvents(interval).forEach((event) => {
+            if ("audioBuffer" in event) {
+                this.scheduleAudioEvent(event);
+            }
 
-                if ("callback" in event) {
-                    this.scheduleCallbackEvent(event);
-                }
+            if ("callback" in event) {
+                this.scheduleCallbackEvent(event);
+            }
 
-                if ("muteFilter" in event) {
-                    this.scheduleMuteEvent(event);
-                }
-            });
+            if ("muteFilter" in event) {
+                this.scheduleMuteEvent(event);
+            }
         });
+
+        // Also add metronome events.
     }
 
     private scheduleAudioEvent(audioEvent: IAudioEvent): void {
@@ -631,9 +604,7 @@ export class ArrangementPlayer extends Publisher {
     }
 
     private callOnStopCallbacks(): void {
-        this.eventSources.forEach(({ onStop }) => {
-            return (onStop?.());
-        });
+        this.onStop();
     }
 
     private getMsFromNow(time: number): number {

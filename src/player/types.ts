@@ -3,11 +3,9 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import type { ISbDmNote, ISbDmTrack, ITiming, RealTime } from "../core/ScoreBookDataModel.js";
-import type { IArrangement, ISubscribable } from "../core/types/general.js";
+import type { ISbDmNote, RealTime } from "../core/ScoreBookDataModel.js";
 import type { ModeManager } from "../ui/ModeManager.js";
 import type { SelectionManager } from "../ui/SelectionManager.js";
-import type { TrackPlayer } from "./TrackPlayer.js";
 
 export type EventEngineState = "stopped" | "playing";
 
@@ -34,17 +32,6 @@ export type Event = ICallbackEvent | IAudioEvent | IMuteEvent;
 export interface IEventSource {
     getEvents(interval: IInterval): Event[];
     onStop?: () => void;
-}
-
-export interface IArrangementPlayer extends IEventSource, ISubscribable {
-    arrangementView: Readonly<IArrangement>;
-    trackPlayers: Map<ISbDmTrack, TrackPlayer>;
-    get currentTiming(): ITiming | null;
-    currentTimingPublisher: ISubscribable;
-    convertToLoopProgress(realTime: RealTime): number;
-    audibleTrackPlayers: Map<ISbDmTrack, TrackPlayer>;
-    audibleTrackPlayersPublisher: ISubscribable;
-    dispose(): void;
 }
 
 export type SoloMute = null | "solo" | "mute";

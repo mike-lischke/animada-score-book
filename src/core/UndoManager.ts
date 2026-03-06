@@ -4,6 +4,7 @@
  */
 
 import { edit } from "./edit.js";
+import { FaviconDirtyService } from "./FavIconDirtyService.js";
 import { Publisher } from "./Publisher.js";
 import type { ISbDmArrangement, ISbDmInstrument } from "./ScoreBookDataModel.js";
 import type { EditCommand } from "./types/edit_commands.js";
@@ -23,6 +24,7 @@ export class UndoManager {
      */
     public constructor(public arrangement: ISbDmArrangement, private instruments: ISbDmInstrument[]) {
         this.undoRedoStack = new UndoRedoStack(this.arrangement);
+        this.updateDirtyState();
     }
 
     /**
@@ -64,6 +66,7 @@ export class UndoManager {
         if (anythingHasChanged) {
             this.undoRedoStack.handleEdit(command, oldValue);
             this.currentStatePublisher.publish();
+            this.updateDirtyState();
         }
     }
 
@@ -78,6 +81,7 @@ export class UndoManager {
         this.undoRedoStack.goBack();
         this.arrangement.applyArrangementSnapshot(this.undoRedoStack.currentState, this.instruments);
         this.currentStatePublisher.publish();
+        this.updateDirtyState();
     };
 
     /**
@@ -91,6 +95,7 @@ export class UndoManager {
         this.undoRedoStack.goForward();
         this.arrangement.applyArrangementSnapshot(this.undoRedoStack.currentState, this.instruments);
         this.currentStatePublisher.publish();
+        this.updateDirtyState();
     };
 
     /**
@@ -110,5 +115,9 @@ export class UndoManager {
         const targetNote = command.type === "EditCommand_Note" ? command.note : undefined;
 
         return targetNote ? targetNote.noteStyle : undefined;
+    }
+
+    private updateDirtyState() {
+        void FaviconDirtyService.setDirty(this.canUndo);
     }
 }
