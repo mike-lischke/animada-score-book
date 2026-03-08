@@ -34,6 +34,7 @@ interface IArrangementViewerState {
     trackPlayerCount: number;
     noteLineMinWidth: number;
     autoFollowIsOn: boolean;
+
     userMightBeTakingControl: boolean;
 }
 
@@ -51,13 +52,19 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
     private lastY = 0;
     private lastX = 0;
     private stopAutoFollowTimeoutId = 0;
+    private scrollAnimationFrameId = 0;
 
     // Used in auto follow mode to indicate the last pulse we were on, so that we can determine when to scroll.
     private lastPulse = 0;
 
     // This is the scroll target pulse. If the current pulse is more than 2 pulses ahead of this, or lower which
     // indicates we looped back, we scroll to catch up.
-    private targetPulse = 0;
+    // Initialize to -2 so that the first update happens at pulse 0.
+    private targetPulse = -2;
+
+    // The value set for the left-transition in CSS. We want to use the same value in JS to determine how long the
+    // auto-follow transition should be.
+    private autoFollowTransitionDurationMs: number;
 
     public constructor(props: IArrangementViewerProps) {
         super(props);
@@ -71,6 +78,7 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         };
 
         this.resizeObserver = new ResizeObserver(this.handleResize);
+        this.autoFollowTransitionDurationMs = 0;
     }
 
     public override componentDidMount(): void {
@@ -92,6 +100,8 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         this.addSubscription(arrangementPlayer.animationEngine, this.animationEngineSubscription, true);
 
         this.updateScrollShadows();
+
+        this.autoFollowTransitionDurationMs = this.getPlayRangeTransitionDurationMs();
     }
 
     public override componentDidUpdate(prevProps: IArrangementViewerProps, prevState: IArrangementViewerState): void {
@@ -122,6 +132,11 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
 
         this.resizeObserver.disconnect();
         arrangementPlayer.animationEngine.disconnect(this.autoFollow);
+
+        if (this.scrollAnimationFrameId !== 0) {
+            cancelAnimationFrame(this.scrollAnimationFrameId);
+            this.scrollAnimationFrameId = 0;
+        }
     }
 
     public override render(): JSX.Element {
@@ -232,8 +247,6 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         const scrollWidth = this.viewerRef.current.scrollWidth;
         const clientWidth = this.viewerRef.current.clientWidth;
 
-        // The left shadow doesn't work well with auto follow, which scrolls the tracks so that the first node
-        // is half under the shadow.
         this.shadowRef.current.classList.toggle("overflowingLeft", scrollLeft > 2);
         this.shadowRef.current.classList.toggle("overflowingRight", scrollLeft + clientWidth < scrollWidth - 2);
     };
@@ -264,65 +277,126 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
             const { arrangementPlayer } = this.props;
             const { noteWidth } = this.state;
 
-            // Convert the time to a position between 0 and 1 and then to a pixel value for the play beam.
+            // 1. Update play beam continuously.
             const normalizedPosition = arrangementPlayer.convertToLoopProgress(realTime);
-            const position = (normalizedPosition * this.viewerRef.current.scrollWidth);
-
-            // Reset the last pulse if we've looped around.
-            if (normalizedPosition < 0.01) {
-                this.lastPulse = 0;
-                this.viewerRef.current.scrollTo({ left: 0, behavior: "instant" });
-                this.playRangeRef.current.style.left = `0px`;
-            }
+            const scrollWidth = this.viewerRef.current.scrollWidth;
+            const position = Math.floor(normalizedPosition * scrollWidth);
 
             this.playBeamRef.current.style.left = `${position}px`;
 
-            // Determine the current pulse (which is a group of steps in a bar).
-            // A pulse usually corresponds to the beat (e.g. 4 beats in 4/4).
-            // We usually want to scroll by two pulses every time the two previous pulses have been played
-            // (or one if the beat has an uneven number of beats).
+            // 2. Calculate current pulse.
             const scoreMetrics = arrangementPlayer.scoreMetrics;
-
-            // Determine the time in the current loop. From this, we can determine the current pulse.
-            const timeInCurrentLoop = realTime % scoreMetrics.realTimeLength;
-            this.targetPulse = Math.floor(timeInCurrentLoop /
+            const currentPulse = Math.floor(realTime /
                 (scoreMetrics.secondsPerBar / scoreMetrics.stepsPerBar * scoreMetrics.stepsPerPulse));
 
-            // Act only if the new pulse is lower than the previous pulse, which means we've looped around,
-            // or if the new pulse is at least 2 pulses ahead of the previous pulse.
-            if (this.targetPulse < this.lastPulse || (this.targetPulse - this.lastPulse >= 2)) {
-                if (this.targetPulse < this.lastPulse) {
-                    const distanceToTarget = (this.targetPulse - this.lastPulse) + scoreMetrics.stepsPerPulse;
-                    this.viewerRef.current.scrollBy({
-                        left: distanceToTarget * noteWidth,
-                        top: 0,
-                    });
-                    this.playRangeRef.current.style.left = `${distanceToTarget * noteWidth}px`;
-                } else {
-                    let pulseWidth = 2 * scoreMetrics.stepsPerPulse * (noteWidth);
-                    if (this.lastPulse === 0) {
-                        // Give the first pulse a bit of extra space, so that the notes don't end up right under the
-                        // left shadow.
-                        pulseWidth -= noteWidth / 4;
-                    }
+            // 3. Update viewer scroll and play range only every 2 pulses.
+            // Check if we've moved at least 2 pulses ahead or looped back.
+            const hasLoopedBack = currentPulse < this.lastPulse;
+            const hasMoved2Pulses = currentPulse >= this.targetPulse + 2;
 
-                    this.viewerRef.current.scrollBy({
-                        left: pulseWidth,
-                        behavior: "smooth"
-                    });
-                    this.playRangeRef.current.style.left = `${position}px`;
-                }
+            if (hasLoopedBack || hasMoved2Pulses) {
+                this.targetPulse = currentPulse;
 
-                this.updateScrollShadows();
-                this.lastPulse = this.targetPulse;
+                const clientWidth = this.viewerRef.current.clientWidth;
+
+                // Calculate play range dimensions (2 pulses wide).
+                const playRangeWidth = 2 * noteWidth * (scoreMetrics.stepsPerBar / scoreMetrics.stepsPerPulse);
+
+                // Scroll to center the play range in the viewer.
+                const desiredScroll = (position + (playRangeWidth / 2)) - (clientWidth / 2);
+                const maxScroll = scrollWidth - clientWidth;
+                const clampedScroll = Math.max(0, Math.min(desiredScroll, maxScroll));
+
+                // Keep the range visually fixed in the center while there is enough scroll room.
+                // At the song boundaries it follows the content, because centering is not possible.
+                const canKeepCentered = clampedScroll === desiredScroll;
+                const playRangeLeft = canKeepCentered
+                    ? clampedScroll + ((clientWidth - playRangeWidth) / 2)
+                    : Math.max(0, Math.min(position, scrollWidth - playRangeWidth));
+
+                this.playRangeRef.current.style.left = `${playRangeLeft}px`;
+                this.playRangeRef.current.style.width = `${playRangeWidth}px`;
+
+                this.animateViewerScroll(clampedScroll, this.autoFollowTransitionDurationMs);
+            }
+
+            // Update lastPulse to track where we are.
+            this.lastPulse = currentPulse;
+        }
+    };
+
+    private getPlayRangeTransitionDurationMs(): number {
+        if (!this.playRangeRef.current) {
+            return 0;
+        }
+
+        const style = getComputedStyle(this.playRangeRef.current);
+        const durations = style.transitionDuration.split(",").map((value) => {
+            return value.trim();
+        });
+        let maxDuration = 0;
+
+        for (const duration of durations) {
+            const parsed = Number.parseFloat(duration);
+            if (Number.isNaN(parsed)) {
+                continue;
+            }
+
+            const durationInMs = duration.endsWith("ms") ? parsed : parsed * 1000;
+            maxDuration = Math.max(maxDuration, durationInMs);
+        }
+
+        return maxDuration;
+    }
+
+    private animateViewerScroll(targetLeft: number, durationMs: number): void {
+        const viewer = this.viewerRef.current;
+        if (!viewer) {
+            return;
+        }
+
+        if (this.scrollAnimationFrameId !== 0) {
+            cancelAnimationFrame(this.scrollAnimationFrameId);
+            this.scrollAnimationFrameId = 0;
+        }
+
+        const startLeft = viewer.scrollLeft;
+        if (durationMs <= 0 || Math.abs(targetLeft - startLeft) < 0.5) {
+            viewer.scrollLeft = targetLeft;
+            this.updateScrollShadows();
+
+            return;
+        }
+
+        const startTime = performance.now();
+
+        const step = (now: number) => {
+            const elapsed = now - startTime;
+            const progress = Math.min(1, elapsed / durationMs);
+            const easedProgress = this.easeInOut(progress);
+
+            viewer.scrollLeft = startLeft + ((targetLeft - startLeft) * easedProgress);
+            this.updateScrollShadows();
+
+            if (progress < 1) {
+                this.scrollAnimationFrameId = requestAnimationFrame(step);
+            } else {
+                this.scrollAnimationFrameId = 0;
             }
         };
-    };
+
+        this.scrollAnimationFrameId = requestAnimationFrame(step);
+    }
+
+    private easeInOut(progress: number): number {
+        // Linear easing to match CSS transition timing function.
+        return progress;
+    }
 
     private animationEngineSubscription = () => {
         const { arrangementPlayer } = this.props;
 
-        if (arrangementPlayer.animationEngine.state === "playing") {
+        if (arrangementPlayer.state === "playing") {
             this.setState({ autoFollowIsOn: true });
         }
     };

@@ -36,7 +36,7 @@ export class ArrangementPlayControls extends UIComponent<IArrangementControlsTop
         super(props);
 
         this.state = {
-            playing: props.arrangementPlayer.currentTiming !== null,
+            playing: props.arrangementPlayer.state === "playing",
             editingTitle: false,
             title: props.arrangementPlayer.arrangementView.title,
         };
@@ -74,7 +74,7 @@ export class ArrangementPlayControls extends UIComponent<IArrangementControlsTop
                     imageOnly
                     id="playbackButton"
                     onClick={() => {
-                        void arrangementPlayer.play();
+                        arrangementPlayer.play();
                     }}>
                     <Icon src={Codicon.DebugStart} />
                 </Button>
@@ -139,13 +139,12 @@ export class ArrangementPlayControls extends UIComponent<IArrangementControlsTop
 
     private onPlaybackStateChange = () => {
         const { arrangementPlayer } = this.props;
-        this.setState({ playing: arrangementPlayer.currentTiming !== null });
+        this.setState({ playing: arrangementPlayer.state === "playing" });
     };
 
     private startRecording = () => {
         const { arrangementPlayer } = this.props;
-        // Play the whole arrangement in bars and loop while recording.
-        void arrangementPlayer.playBars(4, 1, true);
+        arrangementPlayer.playBars(4, 1, true);
 
         // arrangementPlayer.startRecording();
     };

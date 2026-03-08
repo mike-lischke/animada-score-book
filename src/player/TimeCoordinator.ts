@@ -6,6 +6,7 @@
 import { Publisher } from "../core/Publisher.js";
 import type { ITiming, RealTime } from "../core/ScoreBookDataModel.js";
 import type { ITimeParams } from "../core/types/general.js";
+import type { IRealtimeProvider } from "../ui/AnimationEngine.js";
 import { IInterval, ILoopInterval } from "./types.js";
 
 /**
@@ -69,7 +70,8 @@ export class TimeCoordinator extends Publisher {
 
     #metrics: IScoreMetrics;
 
-    public constructor(private timeParams: Readonly<ITimeParams>) {
+    public constructor(private timeParams: Readonly<ITimeParams>,
+        private readonly realtimeProvider: IRealtimeProvider) {
         super();
 
         this.#metrics = this.computeMetrics();
@@ -190,7 +192,7 @@ export class TimeCoordinator extends Publisher {
 
         const oldTempo = this.cachedTempo;
         const newTempo = this.timeParams.tempo;
-        const audioTime = 1000; // XXX get current audio time from arrangement player.
+        const audioTime = this.realtimeProvider.currentTime;
         const oldOffsetTime = audioTime + this.internalOffset;
         const newOffsetTime = oldOffsetTime * (oldTempo / newTempo);
         this.internalOffset = newOffsetTime - audioTime;
@@ -205,7 +207,7 @@ export class TimeCoordinator extends Publisher {
         const oldRealTimeLength = this.#metrics.realTimeLength;
         this.#metrics = this.computeMetrics();
 
-        const audioTime = 1000; // XXX get current audio time from arrangement player.
+        const audioTime = this.realtimeProvider.currentTime;
         const oldOffsetTime = audioTime + this.internalOffset;
 
         const oldTimeWithinLoop = oldOffsetTime % oldRealTimeLength;

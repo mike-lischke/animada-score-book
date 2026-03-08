@@ -377,6 +377,8 @@ button {
     top: 0;
     bottom: 0;
     left: -1000px;
+
+    transition: left 0.125s linear;
 }
 
 @keyframes loadingPulse {

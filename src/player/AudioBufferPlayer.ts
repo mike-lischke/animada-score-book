@@ -3,6 +3,8 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
+import { clampValue } from "../core/utils.js";
+
 export class AudioBufferPlayer {
     private readonly sourceNode: AudioBufferSourceNode;
     private readonly gainNode: GainNode;
@@ -22,7 +24,7 @@ export class AudioBufferPlayer {
         this.gainNode.connect(audioContext.destination);
         this.gainNode.gain.value = 0.5; // Consider initial volume in future if needed
         this.sourceNode.connect(this.gainNode);
-        this.sourceNode.start(time);
+        this.sourceNode.start(clampValue(time, 0, Number.MAX_SAFE_INTEGER));
     }
 
     /** Fade out rapidly to avoid popping on stop playback. */

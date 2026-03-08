@@ -6,25 +6,25 @@
 import { Publisher } from "../core/Publisher.js";
 import type { RealTime } from "../core/ScoreBookDataModel.js";
 import type { ISubscribable } from "../core/types/general.js";
-import type { EventEngineState } from "../player/types.js";
+import type { PlayerPlayState } from "../player/ArrangementPlayer.js";
 
 export interface IRealtimeProvider extends ISubscribable {
-    getTime(): RealTime;
+    get state(): PlayerPlayState;
+    get currentTime(): RealTime;
 }
 
 export class AnimationEngine extends Publisher {
-    public state: EventEngineState = "stopped";
-
     private readonly animations: Array<(realTime: RealTime) => void> = [];
     private nextAnimationId = 0;
-    private readonly publisher = new Publisher();
 
     public constructor(private readonly realtimeProvider: IRealtimeProvider) {
         super();
 
         realtimeProvider.subscribe(() => {
-            if (realtimeProvider.getTime() > -1) {
-                this.start();
+            if (realtimeProvider.state === "playing") {
+                if (this.nextAnimationId === 0) {
+                    this.start();
+                }
 
                 return;
             }
@@ -44,25 +44,24 @@ export class AnimationEngine extends Publisher {
     }
 
     private start() {
-        if (this.state === "stopped") {
-            this.state = "playing";
-            this.publisher.publish();
+        if (this.realtimeProvider.state === "playing") {
+            this.publish();
             this.loop();
         }
     }
 
     private stop() {
-        if (this.state === "playing") {
+        if (this.realtimeProvider.state === "stopped") {
             cancelAnimationFrame(this.nextAnimationId);
-            this.state = "stopped";
-            this.publisher.publish();
+            this.nextAnimationId = 0;
+            this.publish();
         }
     }
 
     private loop() {
         this.nextAnimationId = requestAnimationFrame(() => {
             this.animations.forEach((animation) => {
-                animation(this.realtimeProvider.getTime());
+                animation(this.realtimeProvider.currentTime);
             });
             this.loop();
         });

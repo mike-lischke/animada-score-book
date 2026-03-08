@@ -28,10 +28,35 @@ export const exists = <T>(value: T | undefined | null): value is T => {
     return value === (value ?? !value);
 };
 
-export const rangeArray = <T>(itemCount: number, mapIndexToItem: (index: number) => T): T[] => {
-    return Array.from(Array(itemCount)).map((_, index) => {
-        return mapIndexToItem(index);
+/**
+ * A helper function to asynchronously wait for a specific time. The call allows to run other JS code
+ * while waiting for the timeout.
+ *
+ * @param ms The duration in milliseconds to wait.
+ *
+ * @returns A promise to wait for.
+ */
+export const sleep = (ms: number): Promise<unknown> => {
+    return new Promise((resolve) => {
+        return setTimeout(resolve, ms);
     });
+};
+
+/**
+ * Waits for a condition to become true.
+ *
+ * @param timeout The number of milliseconds to wait for the condition.
+ * @param condition A function that checks if a condition has become true.
+ *
+ * @returns A promise that resolves to true, if the condition became true within the timeout range, otherwise false.
+ */
+export const waitFor = async (timeout: number, condition: () => boolean): Promise<boolean> => {
+    while (!condition() && timeout > 0) {
+        timeout -= 100;
+        await sleep(100);
+    }
+
+    return timeout > 0 ? true : false;
 };
 
 let nextId = 1;

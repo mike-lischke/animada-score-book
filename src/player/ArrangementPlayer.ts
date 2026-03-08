@@ -6,6 +6,7 @@
 import { Publisher } from "../core/Publisher.js";
 import type { ISbDmTrack, ITiming, RealTime } from "../core/ScoreBookDataModel.js";
 import type { IArrangement } from "../core/types/general.js";
+import { sleep } from "../core/utils.js";
 import { AnimationEngine } from "../ui/AnimationEngine.js";
 import { AudioBufferPlayer } from "./AudioBufferPlayer.js";
 import { TimeCoordinator, type IScoreMetrics } from "./TimeCoordinator.js";
@@ -46,10 +47,10 @@ export class ArrangementPlayer extends Publisher {
     /** The AudioContext used for playback. */
     private readonly mainAudioContext = new AudioContext();
 
-    /** We may want to swap this out for a different context in the future, for example when recording. */
+    /** We swap this out for a different context, when recording. */
     private audioContext: AudioContext = this.mainAudioContext;
 
-    private nextIterationId: number | null = null;
+    private nextIterationId?: number;
     private loopBoundaryTimeoutId: number | null = null;
 
     /**
@@ -58,13 +59,18 @@ export class ArrangementPlayer extends Publisher {
      */
     private offset = 0;
 
-    /** The end of the last interval we played. */
+    /** The time point relative to the start of the offset, for which we have scheduled events. */
     private timeCovered = 0;
 
-    // When set, playback is limited to this interval. If `intervalLoop` is true
-    // the interval is repeated, otherwise playback stops at its end.
-    private currentInterval: IInterval | null = null;
-    private intervalLoop = false;
+    /** The end of the last interval we played. Once `timeCovered` reaches this point, we are done with the interval. */
+    private endOffset = 0;
+
+    /** The part of the song we want to play. If not set, the entire song is played. */
+    private currentInterval?: IInterval;
+
+    /** Whether we want to start over, once the current interval ends. */
+    private loopOnEnd = false;
+
     private scheduledAudioEvents: Array<{ audioEvent: IAudioEvent, audioBufferPlayer: AudioBufferPlayer; }> = [];
     private scheduledCallbackEvents: Array<{ callbackEvent: ICallbackEvent, timeoutId: number; }> = [];
     private scheduledMuteEvents: Array<{ muteEvent: IMuteEvent, timeoutId: number; }> = [];
@@ -80,7 +86,7 @@ export class ArrangementPlayer extends Publisher {
         super();
         this.arrangementView = arrangement;
 
-        this.timeCoordinator = new TimeCoordinator(this.arrangementView.timeParams);
+        this.timeCoordinator = new TimeCoordinator(this.arrangementView.timeParams, this);
 
         this.updateTrackPlayers();
         this.updateAudibleTrackPlayers();
@@ -166,68 +172,46 @@ export class ArrangementPlayer extends Publisher {
      * @param startBar The 1-based bar number to start playback at.
      * @param numberOfBars The number of bars to play.
      * @param loop Whether to loop the specified interval continuously until stopped.
-     *
-     * @returns A promise that resolves when playback starts.
      */
-    public async playBars(startBar: number, numberOfBars: number, loop = false): Promise<void> {
+    public playBars(startBar: number, numberOfBars: number, loop = false): void {
         const startTime = this.timeCoordinator.convertToRealTime({ bar: startBar, step: 1 });
         const endTime = this.timeCoordinator.convertToRealTime({ bar: startBar + numberOfBars, step: 1 });
-        await this.playInterval({ start: startTime, end: endTime }, loop);
+        this.play({ start: startTime, end: endTime }, loop);
     }
 
     /**
      * Plays the entire score in an endless loop until `stop()` is called.
+     *
+     * @param interval An optional interval to play instead of the entire score.
+     * @param loop Whether to start over when the end of the interval is reached.
      */
-    public async play(): Promise<void> {
+    public play(interval?: IInterval, loop = false): void {
         if (this.disposed) {
             return;
         }
 
-        await this.ensureContextIsRunning();
+        void this.ensureContextIsRunning().then(() => {
+            // If already playing something, stop it first to clear schedules.
+            if (this.nextIterationId) {
+                this.stop();
+            }
 
-        // If already playing something, stop it first to clear schedules.
-        if (this.nextIterationId !== null) {
-            this.stop();
-        }
+            // Clear any interval restriction and start from 0.
+            this.#state = "playing";
+            this.currentInterval = interval;
+            this.loopOnEnd = loop;
 
-        // Clear any interval restriction and start from 0.
-        this.#state = "playing";
-        this.currentInterval = null;
-        this.intervalLoop = false;
-        this.offset = this.audioContext.currentTime;
-        this.timeCovered = 0;
+            // If an interval is given, pretend we started earlier by setting the offset back in time.
+            // We never access time before the current audio time.
+            this.offset = this.audioContext.currentTime - (interval?.start ?? 0);
+            this.endOffset = interval?.end ?? this.timeCoordinator.metrics.realTimeLength;
 
-        this.iteration();
-        this.publish();
-    }
+            // Pretend we have covered all events before the interval start.
+            this.timeCovered = interval?.start ?? 0;
 
-    /**
-     * Plays a specific interval of the score. If `loop` is true the interval is
-     * repeated until `stop()` is called, otherwise the engine stops when the
-     * interval end is reached.
-     *
-     * @param interval The interval to play, in seconds.
-     * @param loop Whether to loop the interval or stop at its end.
-     */
-    public async playInterval(interval: IInterval, loop = false): Promise<void> {
-        await this.ensureContextIsRunning();
-
-        // If already playing something, stop it first to clear schedules.
-        if (this.nextIterationId !== null) {
-            this.stop();
-        }
-
-        this.#state = "playing";
-        this.currentInterval = interval;
-        this.intervalLoop = loop;
-
-        // Map audio context time to the requested interval start.
-        this.offset = this.audioContext.currentTime;
-        this.timeCovered = interval.start;
-
-        // Get the engine going.
-        this.iteration();
-        this.publish();
+            this.iteration();
+            this.publish();
+        });
     }
 
     /** Stops current playback. */
@@ -238,7 +222,7 @@ export class ArrangementPlayer extends Publisher {
 
         this.timeCoordinator.reset();
 
-        if (this.nextIterationId !== null) {
+        if (this.nextIterationId) {
             clearTimeout(this.nextIterationId);
             if (this.loopBoundaryTimeoutId !== null) {
                 clearTimeout(this.loopBoundaryTimeoutId);
@@ -247,21 +231,16 @@ export class ArrangementPlayer extends Publisher {
             this.clearScheduledEvents();
 
             this.#state = "stopped";
-            this.nextIterationId = null;
-            this.timeCovered = 0;
-            this.currentInterval = null;
-            this.intervalLoop = false;
+            this.nextIterationId = undefined;
 
             this.callOnStopCallbacks();
             this.publish();
         }
     }
 
-    public getTime(): number {
+    public get currentTime(): number {
         if (this.#state === "playing") {
-            // Adding the current interval start to the current time compensates for the the fact that
-            // we started playing from the middle of the AudioContext time when an interval was set.
-            return this.audioContext.currentTime - this.offset + (this.currentInterval?.start ?? 0);
+            return this.audioContext.currentTime - this.offset;
         }
 
         return -1;
@@ -269,6 +248,39 @@ export class ArrangementPlayer extends Publisher {
 
     public get state(): PlayerPlayState {
         return this.#state;
+    }
+
+    /**
+     * The loop is a setTimeout loop.
+     * It gets and schedules events in an upcoming time interval.
+     * We make sure never to request any time we've requested before.
+     */
+    private iteration(): void {
+        // We look for events in a small interval in the future (0.25s) to give ourselves time to schedule them.
+        const intervalEnd = Math.min(this.currentTime + 0.25, this.endOffset);
+        const interval: IInterval = { start: this.timeCovered, end: intervalEnd };
+
+        // Stop playback if the covered time has reached the end of the current interval.
+        if (interval.start >= this.endOffset) {
+            // We stop playback here, but wait for a moment to let the last events fire.
+            void sleep(60).then(() => {
+                this.stop();
+                // If we were supposed to loop, start again immediately.
+                if (this.loopOnEnd) {
+                    this.play(this.currentInterval, true);
+                }
+            });
+
+            return;
+        }
+
+        // Get and schedule events in the upcoming interval, then schedule the next loop iteration.
+        this.scheduleEvents(interval);
+
+        this.nextIterationId = setTimeout(() => {
+            this.iteration();
+        }, 125); // Schedule the next iteration after 125ms.
+        this.timeCovered = intervalEnd;
     }
 
     /**
@@ -443,64 +455,6 @@ export class ArrangementPlayer extends Publisher {
         }
     }
 
-    /**
-     * The loop is a setTimeout loop.
-     * It gets and schedules events in an upcoming time interval.
-     * We make sure never to request any time we've requested before.
-     */
-    private iteration(): void {
-        // We look for events in a small interval in the future (0.25s) to give ourselves time to schedule them.
-        const intervalEnd = this.getTime() + 0.25;
-        const interval: IInterval = { start: this.timeCovered, end: intervalEnd };
-
-        // Get and schedule events in the upcoming interval, then schedule the next loop iteration.
-        if (interval.start < interval.end) {
-            this.scheduleEvents(interval);
-        }
-
-        this.nextIterationId = setTimeout(() => {
-            this.iteration();
-        }, 125); // Schedule the next iteration after 125ms.
-        this.timeCovered = Math.min(intervalEnd, this.currentInterval?.end ?? Infinity);
-
-        // If we're playing an interval and we've reached its end, either loop
-        // back to the start or stop playback. When looping we must also clear
-        // any audio or callbacks scheduled for the previous iteration so that
-        // audio which would otherwise spill past the interval end is cut off.
-        if (this.currentInterval && this.timeCovered >= this.currentInterval.end) {
-            if (this.intervalLoop) {
-                // Instead of immediately adjusting offset and clearing events
-                // (which can cause UI/time mismatches), schedule the actual
-                // loop transition to occur exactly when the AudioContext hits
-                // the loop boundary. Compute the audio-time for the boundary
-                // (offset + intervalDuration) and schedule the transition for
-                // that moment.
-                const intervalDuration = this.currentInterval.end - this.currentInterval.start;
-                const audioBoundaryTime = this.offset + intervalDuration; // in audioContext time
-                const msUntilBoundary = (audioBoundaryTime - this.audioContext.currentTime) * 1000;
-
-                // Clear any previously scheduled boundary handler.
-                if (this.loopBoundaryTimeoutId !== null) {
-                    clearTimeout(this.loopBoundaryTimeoutId);
-                    this.loopBoundaryTimeoutId = null;
-                }
-
-                const safeMs = Math.max(msUntilBoundary, 0);
-                this.loopBoundaryTimeoutId = setTimeout(() => {
-                    // At the exact audio boundary: clear scheduled events,
-                    // advance offset to the next loop and reset timeCovered so
-                    // playback continues from the interval start.
-                    this.clearScheduledEvents();
-                    this.offset += intervalDuration;
-                    this.timeCovered = this.currentInterval!.start;
-                    this.loopBoundaryTimeoutId = null;
-                }, safeMs);
-            } else {
-                this.stop();
-            }
-        }
-    }
-
     private scheduleEvents(interval: IInterval): void {
         this.getEvents(interval).forEach((event) => {
             if ("audioBuffer" in event) {
@@ -520,9 +474,8 @@ export class ArrangementPlayer extends Publisher {
     }
 
     private scheduleAudioEvent(audioEvent: IAudioEvent): void {
-        const actualOffset = this.offset - (this.currentInterval ? this.currentInterval.start : 0);
         const audioBufferPlayer = new AudioBufferPlayer(audioEvent.audioBuffer, this.audioContext,
-            audioEvent.realTime + actualOffset);
+            audioEvent.realTime + this.offset);
         const audioEventReference = { audioEvent, audioBufferPlayer };
         this.scheduledAudioEvents.push(audioEventReference);
 
@@ -608,7 +561,7 @@ export class ArrangementPlayer extends Publisher {
     }
 
     private getMsFromNow(time: number): number {
-        return (time - this.getTime()) * 1000;
+        return (time - this.currentTime) * 1000;
     }
 
     private muteUsingFilter(muteFilter: MuteFilter): void {
@@ -624,6 +577,6 @@ export class ArrangementPlayer extends Publisher {
     private hasStarted(
         audioEventReference: { audioEvent: IAudioEvent, audioBufferPlayer: AudioBufferPlayer; }
     ): boolean {
-        return audioEventReference.audioEvent.realTime <= this.getTime();
+        return audioEventReference.audioEvent.realTime <= this.currentTime;
     }
 }

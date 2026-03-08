@@ -7,8 +7,6 @@ import type { ISbDmNote, RealTime } from "../core/ScoreBookDataModel.js";
 import type { ModeManager } from "../ui/ModeManager.js";
 import type { SelectionManager } from "../ui/SelectionManager.js";
 
-export type EventEngineState = "stopped" | "playing";
-
 export interface IEventDetails {
     realTime: RealTime;
 }
