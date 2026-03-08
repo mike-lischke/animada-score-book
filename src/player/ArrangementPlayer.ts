@@ -7,6 +7,7 @@ import { Publisher } from "../core/Publisher.js";
 import type { ISbDmTrack, ITiming, RealTime } from "../core/ScoreBookDataModel.js";
 import type { IArrangement } from "../core/types/general.js";
 import { sleep } from "../core/utils.js";
+import { MP3Export } from "../supplement/MP3Export.js";
 import { AnimationEngine } from "../ui/AnimationEngine.js";
 import { AudioBufferPlayer } from "./AudioBufferPlayer.js";
 import { TimeCoordinator, type IScoreMetrics } from "./TimeCoordinator.js";
@@ -48,7 +49,7 @@ export class ArrangementPlayer extends Publisher {
     private readonly mainAudioContext = new AudioContext();
 
     /** We swap this out for a different context, when recording. */
-    private audioContext: AudioContext = this.mainAudioContext;
+    private audioContext: BaseAudioContext = this.mainAudioContext;
 
     private nextIterationId?: number;
     private loopBoundaryTimeoutId: number | null = null;
@@ -250,6 +251,25 @@ export class ArrangementPlayer extends Publisher {
         return this.#state;
     }
 
+    public renderToBlob = async (): Promise<Blob> => {
+        const songDuration = this.timeCoordinator.metrics.realTimeLength;
+        const scheduleSong = (ctx: BaseAudioContext): void => {
+            this.audioContext = ctx as AudioContext;
+            this.clearScheduledEvents();
+
+            // Offline rendering must pre-schedule all audio events before startRendering() begins.
+            this.scheduleAudioEventsForOfflineRender(songDuration);
+        };
+
+        const mp3Exporter = new MP3Export();
+        try {
+            return await mp3Exporter.exportSongToMp3(songDuration, scheduleSong);
+        } finally {
+            this.audioContext = this.mainAudioContext;
+            this.clearScheduledEvents();
+        }
+    };
+
     /**
      * The loop is a setTimeout loop.
      * It gets and schedules events in an upcoming time interval.
@@ -263,7 +283,7 @@ export class ArrangementPlayer extends Publisher {
         // Stop playback if the covered time has reached the end of the current interval.
         if (interval.start >= this.endOffset) {
             // We stop playback here, but wait for a moment to let the last events fire.
-            void sleep(60).then(() => {
+            void sleep(80).then(() => {
                 this.stop();
                 // If we were supposed to loop, start again immediately.
                 if (this.loopOnEnd) {
@@ -446,12 +466,14 @@ export class ArrangementPlayer extends Publisher {
     };
 
     private async ensureContextIsRunning(): Promise<void> {
-        if (this.audioContext.state !== "running") {
-            await this.audioContext.resume();
-        }
+        if (this.audioContext instanceof AudioContext) {
+            if (this.audioContext.state !== "running") {
+                await this.audioContext.resume();
+            }
 
-        if (this.audioContext.state !== "running") {
-            throw new Error("Couldn't start the AudioContext");
+            if (this.audioContext.state !== "running") {
+                throw new Error("Couldn't start the AudioContext");
+            }
         }
     }
 
@@ -471,6 +493,43 @@ export class ArrangementPlayer extends Publisher {
         });
 
         // Also add metronome events.
+    }
+
+    /**
+     * When rendering to a Blob, we can directly schedule all events in one go.
+     *
+     * @param songDuration The duration of the song in seconds, used to determine how long to schedule events for.
+     */
+    private scheduleAudioEventsForOfflineRender(songDuration: number): void {
+        let intervalStart = 0;
+        const muteEvents: IMuteEvent[] = [];
+
+        // Use the same look-ahead chunk size as live playback, but schedule synchronously.
+        // We could schedule all events in one go, but this is more memory efficient for long songs and doesn't
+        // add overhead in an offline context. Offline rendering is like 10x faster than real-time, so
+        // the scheduling overhead is negligible even with many events.
+        while (intervalStart < songDuration) {
+            const intervalEnd = Math.min(intervalStart + 0.25, songDuration);
+            const interval: IInterval = { start: intervalStart, end: intervalEnd };
+
+            this.getEvents(interval).forEach((event) => {
+                if ("audioBuffer" in event) {
+                    this.scheduleAudioEvent(event);
+                }
+
+                if ("muteFilter" in event) {
+                    muteEvents.push(event);
+                }
+            });
+
+            intervalStart = intervalEnd;
+        }
+
+        // Apply all mute events immediately after audio events are scheduled.
+        // In offline rendering, we don't use setTimeout; we just apply the mute directly.
+        for (const muteEvent of muteEvents) {
+            this.muteUsingFilter(muteEvent.muteFilter);
+        }
     }
 
     private scheduleAudioEvent(audioEvent: IAudioEvent): void {

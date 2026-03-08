@@ -144,8 +144,14 @@ export class ArrangementPlayControls extends UIComponent<IArrangementControlsTop
 
     private startRecording = () => {
         const { arrangementPlayer } = this.props;
-        arrangementPlayer.playBars(4, 1, true);
-
-        // arrangementPlayer.startRecording();
+        //arrangementPlayer.playBars(4, 1, true);
+        void arrangementPlayer.renderToBlob().then((blob) => {
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `${arrangementPlayer.arrangementView.title}.mp3`;
+            a.click();
+            URL.revokeObjectURL(url);
+        });
     };
 };

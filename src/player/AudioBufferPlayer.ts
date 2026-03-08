@@ -9,7 +9,7 @@ export class AudioBufferPlayer {
     private readonly sourceNode: AudioBufferSourceNode;
     private readonly gainNode: GainNode;
 
-    public constructor(audioBuffer: AudioBuffer, audioContext: AudioContext, time = 0) {
+    public constructor(audioBuffer: AudioBuffer, audioContext: BaseAudioContext, time = 0) {
         // Use the AudioContext factory to create the source node to avoid
         // referencing a global constructor which may not exist in some test
         // environments (Node + JSDOM / test runners).

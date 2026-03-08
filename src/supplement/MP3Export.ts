@@ -21,7 +21,10 @@ export class MP3Export {
      *
      * @returns A Promise that resolves to a Blob containing the MP3 file.
      */
-    public async exportSongToMp3(songDuration: number, scheduleSong: (ctx: BaseAudioContext) => void): Promise<Blob> {
+    public async exportSongToMp3(
+        songDuration: number,
+        scheduleSong: (ctx: BaseAudioContext) => void | Promise<void>
+    ): Promise<Blob> {
         const audioBuffer = await this.renderSongToAudioBuffer(songDuration, scheduleSong);
         const wavBlob = this.audioBufferToWavBlob(audioBuffer);
         const mp3Blob = await this.wavBlobToMp3Blob(wavBlob);
@@ -29,11 +32,13 @@ export class MP3Export {
         return mp3Blob;
     }
 
-    private async renderSongToAudioBuffer(songDuration: number,
-        scheduleSong: (ctx: BaseAudioContext) => void): Promise<AudioBuffer> {
+    private async renderSongToAudioBuffer(
+        songDuration: number,
+        scheduleSong: (ctx: BaseAudioContext) => void | Promise<void>
+    ): Promise<AudioBuffer> {
         const offline = new OfflineAudioContext(2, this.sampleRate * songDuration, this.sampleRate);
 
-        scheduleSong(offline);
+        await scheduleSong(offline);
 
         const renderedBuffer = await offline.startRendering();
 

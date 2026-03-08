@@ -198,48 +198,33 @@ button {
     flex: 0 0 auto;
 
     top: 0;
-    width: 64px;
+    width: 128px;
     height: 100%;
 
     pointer-events: none;
     z-index: 2;
+
+    opacity: 0;
 
     transition: opacity 250ms ease;
 }
 
 #trackViewerHostShadow.overflowingLeft::before {
     opacity: 1;
-    width: 24px;
 }
 
 #trackViewerHostShadow.overflowingRight::after {
     opacity: 1;
 }
 
-/* Left shadow. */
 #trackViewerHostShadow::before {
     left: 0;
-
-    background: rgba(255, 255, 255, 0.95);
-    opacity: 0;
-
-    animation-name: show-left-shadow;
-    animation-timeline: --trackViewer-scroll;
-    animation-duration: 1s;
-    animation-fill-mode: both;
+    background: linear-gradient(to right, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0));
 }
 
-/* Right shadow. */
 #trackViewerHostShadow::after {
     right: 0;
-
-    background: rgba(255, 255, 255, 0.95);
-    opacity: 0;
-
-    animation-name: show-right-shadow;
-    animation-timeline: --trackViewer-scroll;
-    animation-duration: 1s;
-    animation-fill-mode: both;
+    background: linear-gradient(to left, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0));
 }
 
 #footer {
@@ -364,19 +349,18 @@ button {
     position: absolute;
     top: 0;
     bottom: 0;
-    left: -1000px;
+    left: -500px;
 }
 
 #playRange {
-    width: calc(8 * var(--note-height));
-    background-color: rgba(255, 221, 0, 0.25);
+    width: 0;
+    background-color: rgba(255, 211, 100, 0.2);
     border-radius: 16px;
-    ;
 
     position: absolute;
     top: 0;
     bottom: 0;
-    left: -1000px;
+    left: -500px;
 
     transition: left 0.125s linear;
 }
@@ -415,7 +399,7 @@ button {
 .trackControlsList {
     overflow: hidden;
     flex: 0 0 calc(var(--note-height) + 6pt);
-    margin: 26pt 12px 0;
+    margin: 18pt 12px 0;
     padding-left: 6px;
 }
 
