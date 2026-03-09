@@ -36,7 +36,9 @@ export class MP3Export {
         songDuration: number,
         scheduleSong: (ctx: BaseAudioContext) => void | Promise<void>
     ): Promise<AudioBuffer> {
-        const offline = new OfflineAudioContext(2, this.sampleRate * songDuration, this.sampleRate);
+        // Ensure we have enough samples for the full duration, rounded up to avoid truncation.
+        const totalSamples = Math.ceil(this.sampleRate * songDuration);
+        const offline = new OfflineAudioContext(2, totalSamples, this.sampleRate);
 
         await scheduleSong(offline);
 

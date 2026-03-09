@@ -204,12 +204,10 @@ export class Track extends Publisher implements ISbDmTrack {
         if (this.polyrhythms.length < initialPolyrhythmCount) {
             this.publish();
         }
-
     };
 
-    // The note-iterator is what makes polyrhythms work
-    // polyrhythmsToIgnore is for serialising, so we can walk the notes as if the polyrhythm hasn't been crated yet
     /**
+     * The note-iterator is what makes polyrhythms work.
      * Iterates notes in playback/serialization order, traversing into polyrhythms where present.
      * Use `polyrhythmsToIgnore` to skip traversal into specific polyrhythms (e.g., during serialization).
      *

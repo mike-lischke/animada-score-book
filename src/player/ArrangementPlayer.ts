@@ -252,9 +252,11 @@ export class ArrangementPlayer extends Publisher {
     }
 
     public renderToBlob = async (): Promise<Blob> => {
+        this.currentInterval = undefined;
         const songDuration = this.timeCoordinator.metrics.realTimeLength;
         const scheduleSong = (ctx: BaseAudioContext): void => {
             this.audioContext = ctx as AudioContext;
+            this.offset = this.audioContext.currentTime;
             this.clearScheduledEvents();
 
             // Offline rendering must pre-schedule all audio events before startRendering() begins.
@@ -263,7 +265,8 @@ export class ArrangementPlayer extends Publisher {
 
         const mp3Exporter = new MP3Export();
         try {
-            return await mp3Exporter.exportSongToMp3(songDuration, scheduleSong);
+            // Add 1 second tail to allow the last notes to finish playing (important for resonant instruments).
+            return await mp3Exporter.exportSongToMp3(songDuration + 1, scheduleSong);
         } finally {
             this.audioContext = this.mainAudioContext;
             this.clearScheduledEvents();
@@ -329,11 +332,6 @@ export class ArrangementPlayer extends Publisher {
         });
 
         events.push(...this.getCallbackEvents(interval));
-
-        // Ensure deterministic ordering across tracks and loops.
-        events.sort((a, b) => {
-            return a.realTime - b.realTime;
-        });
 
         return events;
     };

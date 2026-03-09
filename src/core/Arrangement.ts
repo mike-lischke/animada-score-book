@@ -324,7 +324,7 @@ export class Arrangement extends Publisher implements ISbDmArrangement {
     };
 
     private applyTrackSnapshot(track: ISbDmTrack, trackSnapshot: ITrackSnapshot): void {
-        // First we remove polyrhythms, since this won't affect indexing
+        // First we remove polyrhythms, since this won't affect indexing.
         let polyrhythmIndex = 0;
         while (polyrhythmIndex < track.polyrhythms.length) {
             const polyrhythm = track.polyrhythms[polyrhythmIndex];

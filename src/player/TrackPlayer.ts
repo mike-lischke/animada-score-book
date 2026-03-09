@@ -122,14 +122,12 @@ export class TrackPlayer extends Publisher {
         const noteIterator = this.track.getNoteIterator();
         for (const note of noteIterator) {
             const time = this.noteTimes.get(note)!;
-            // Treat `end` as exclusive. If the note time is at or past the end,
-            // stop iterating. This prevents notes exactly on the loop boundary
-            // from being included in the following interval.
+            // Treat `end` as exclusive. Notes exactly on this end are included in the following interval.
             if (time >= end) {
                 break;
             }
 
-            if (time >= start && time < end) {
+            if (time >= start) {
                 if (note.noteStyle) {
                     events.push(this.getAudioEvent(note, time));
                 }
