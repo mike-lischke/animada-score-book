@@ -11,7 +11,7 @@ import tailwindcss from "@tailwindcss/vite";
 import { defineConfig, loadEnv } from "vite";
 
 // https://vitejs.dev/config/
-export default defineConfig(({ mode }) => {
+export default defineConfig(({ command, mode }) => {
     // eslint-disable-next-line no-restricted-syntax
     const env = loadEnv(mode, process.cwd(), "");
 
@@ -20,7 +20,7 @@ export default defineConfig(({ mode }) => {
     const apiTarget = env.VITE_BASE_URL;
 
     return {
-        server: {
+        server: command === "serve" ? {
             https: {
                 key: readFileSync(join(home, ".ssh", "localhost-key.pem")),
                 cert: readFileSync(join(home, ".ssh", "localhost-cert.pem")),
@@ -33,7 +33,7 @@ export default defineConfig(({ mode }) => {
                     changeOrigin: true,
                 },
             },
-        },
+        } : undefined,
         plugins: [
             preact({
                 prefreshEnabled: false, // Disable Preact's fast refresh to avoid issues with the NoteViewer component.
