@@ -3,13 +3,14 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
+import type { ISbDmArrangement } from "./ScoreBookDataModel.js";
 import type {
     EditCommand, EditCommand_Arrangement,
     EditCommand_ArrangementTitle, EditCommand_Note, EditCommand_TimeParams,
     EditCommand_TimeParamsLength, EditCommand_TimeParamsTempo, EditCommand_TimeParamsTimeSignature,
     EditCommand_Track
 } from "./types/edit_commands.js";
-import type { IArrangement, ITimeParams } from "./types/general.js";
+import type { ITimeParams } from "./types/general.js";
 
 // Single edit function for all changes to the arrangement, so that we can maintain an undo stack
 // Returns a boolean indicating whether anything has changed
@@ -39,7 +40,7 @@ export const edit = (command: EditCommand): boolean => {
 };
 
 const editArrangement = (command: EditCommand_Arrangement): boolean => {
-    const arrangement = command.arrangement as IArrangement;
+    const arrangement = command.arrangement as ISbDmArrangement;
 
     const newTitle = (command as EditCommand_ArrangementTitle).newTitle;
     if (typeof newTitle === "string") {

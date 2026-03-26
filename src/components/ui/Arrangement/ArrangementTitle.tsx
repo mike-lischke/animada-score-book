@@ -5,14 +5,14 @@
 
 import { createRef, type ComponentChild } from "preact";
 
-import type { IArrangement } from "../../../core/types/general.js";
+import type { ISbDmArrangement } from "../../../core/ScoreBookDataModel.js";
 import type { UndoManager } from "../../../core/UndoManager.js";
-import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
 import { Input } from "../framework/Input.js";
 import { Label } from "../framework/Label.js";
+import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
 
 export interface IArrangementTitleProps extends ICommonUIProperties {
-    arrangement: Readonly<IArrangement>;
+    arrangement: Readonly<ISbDmArrangement>;
     undoManager: UndoManager;
     editMode: boolean;
     onEditEnd: () => void;
@@ -54,7 +54,7 @@ export class ArrangementTitle extends UIComponent<IArrangementTitleProps, IArran
     }
 
     public override render(): ComponentChild {
-        const { id, editMode, "data-tooltip": dataTooltip } = this.props;
+        const { id, editMode } = this.props;
         const { title, inputValue } = this.state;
 
         if (editMode) {
@@ -62,6 +62,7 @@ export class ArrangementTitle extends UIComponent<IArrangementTitleProps, IArran
                 <Input
                     id={id}
                     ref={this.inputRef}
+                    className={`input px-0 py-0`}
                     autoFocus
                     onChange={(e) => {
                         this.setState({
@@ -78,13 +79,12 @@ export class ArrangementTitle extends UIComponent<IArrangementTitleProps, IArran
                     }}
                     placeholder="Add a title..."
                     value={inputValue}
-                    data-tooltip={dataTooltip}
                 />
             );
         }
 
         return (
-            <Label id={id} data-tooltip={dataTooltip}>{title}</Label>
+            <Label id={id}>{title}</Label>
         );
     }
 

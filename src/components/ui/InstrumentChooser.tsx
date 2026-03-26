@@ -22,7 +22,7 @@ export class InstrumentChooser extends UIComponent<IInstrumentChooserProps> {
 
         return (
             <Button
-                className="instrument-chooser push-button"
+                className="instrument-chooser"
                 onClick={this.buttonClick}
             >
                 {instrument.displayName}

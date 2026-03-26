@@ -9,7 +9,7 @@ import type { TrackPlayer } from "../../../player/TrackPlayer.js";
 import { Button } from "../framework/Button.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
 
-const smButtonClasses = "options-button push-button small solo-mute-button";
+const smButtonClasses = "options-button small solo-mute-button";
 
 export interface ISoloMuteButtonsProps extends ICommonUIProperties {
     trackPlayer: TrackPlayer;

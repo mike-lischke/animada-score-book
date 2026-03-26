@@ -195,17 +195,11 @@ export const computeContentPosition = (placement: ComponentPlacement, content: H
         const handleFlip = (flipH: boolean, flipV: boolean, flippedBoth: ComponentPlacement | null,
             flippedH: ComponentPlacement | null, flippedV: ComponentPlacement | null): void => {
             if (flipH || flipV) {
-                let newClass = "";
-                if (flipH && flipV) {
-                    newClass = flippedBoth!;
-                } else {
-                    if (flipH) {
-                        newClass = flippedH!;
-
-                    } else {
-                        newClass = flippedV!;
-                    }
-                }
+                const newClass = flipH && flipV
+                    ? flippedBoth!
+                    : flipH
+                        ? flippedH!
+                        : flippedV!;
                 content.classList.remove(placement);
                 content.classList.add(newClass);
             }

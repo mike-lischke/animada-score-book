@@ -62,6 +62,7 @@ export class UpDown extends UIComponent<IUpDownProperties> {
         const content = (
             <Input
                 id={id ?? "upDownInput"}
+                className="input-sm"
                 value={value.toString()}
                 onChange={this.handleInputChange}
                 onConfirm={this.handleInputConfirm}
@@ -69,7 +70,6 @@ export class UpDown extends UIComponent<IUpDownProperties> {
                 textAlignment={textAlignment}
                 data-tooltip="inherit"
                 disabled={disabled}
-                pattern="[0-9]+"
             />
         );
 

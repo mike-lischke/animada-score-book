@@ -4,17 +4,17 @@
  */
 
 import eslint from "@eslint/js";
-import tslint from "typescript-eslint";
+import tseslint from "typescript-eslint";
 import stylistic from "@stylistic/eslint-plugin";
 import jsdoc from "eslint-plugin-jsdoc";
 import preferArrow from "eslint-plugin-prefer-arrow";
 import importPlugin from "eslint-plugin-import";
 import globals from "globals";
 
-export default tslint.config(
+export default tseslint.config(
     eslint.configs.recommended,
-    ...tslint.configs.strictTypeChecked,
-    ...tslint.configs.stylisticTypeChecked,
+    tseslint.configs.strictTypeChecked,
+    tseslint.configs.stylisticTypeChecked,
     jsdoc.configs["flat/recommended"],
     {
         files: ["*.ts", "*.tsx", "*.mjs" ],
@@ -28,11 +28,14 @@ export default tslint.config(
         },
         languageOptions: {
             ecmaVersion: "latest",
-            parser: tslint.parser,
+            parser: tseslint.parser,
             parserOptions: {
                 projectService: {
                     allowDefaultProject: [
                         "eslint.config.mjs",
+                        "build/*.ts",
+                        "vitest.config.ts",
+                        "tailwind.config.mjs",
                     ],
                     defaultProject: "tsconfig.json",
                 },

@@ -76,8 +76,8 @@ export class TooltipProvider extends UIComponent<ITooltipProviderProperties, ITo
         const { tooltip, target, expand, mouse } = this.state;
 
         if (this.innerRef.current && target) {
-            let x = 0;
-            let y = 0;
+            let x: number;
+            let y: number;
             let width: number | undefined;
             if (expand) {
                 // A tooltip that shows shortened text in full.
@@ -100,8 +100,9 @@ export class TooltipProvider extends UIComponent<ITooltipProviderProperties, ITo
                 combinedStyle.padding = refStyle.padding;
                 combinedStyle.border = refStyle.border;
 
-                const [width, height] = computeBounds(tooltip, combinedStyle);
-                bounds.width = width;
+                const [tooltipWidth, height] = computeBounds(tooltip, combinedStyle);
+                width = tooltipWidth;
+                bounds.width = tooltipWidth;
                 bounds.height = height;
 
                 // Ensure the tooltip's bounds stay within the document.
@@ -158,6 +159,7 @@ export class TooltipProvider extends UIComponent<ITooltipProviderProperties, ITo
 
         const className = this.generateFinalClassName([
             "tooltip",
+            "p-3 bg-base-100 rounded-box shadow-lg w-64 border border-base-300",
             this.classFromProperty(tooltip === "expand", "expand"),
         ]);
 
@@ -191,8 +193,13 @@ export class TooltipProvider extends UIComponent<ITooltipProviderProperties, ITo
         // See if there's tooltip text in the target or if it inherits one from a parent.
         let tooltip: string | undefined;
         for (const element of e.composedPath()) {
+            if (element instanceof SVGElement) {
+                continue;
+            }
+
             target = element as HTMLElement;
             const data = target.getAttribute("data-tooltip");
+
             if (!data) {
                 break;
             } else if (data !== "inherit") {

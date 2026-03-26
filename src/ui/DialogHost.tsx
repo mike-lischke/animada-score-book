@@ -9,7 +9,7 @@ import { ConfirmDialog } from "../components/ui/composites/ConfirmDialog.js";
 import { ValueDialog, type IValueEditorValueEntry } from "../components/ui/composites/ValueDialog.js";
 import {
     DialogType, type DialogResponseClosure, type IDialogRequest, type IDialogResponse
-} from "../components/ui/framework/Dialogs/Dialog.js";
+} from "../components/ui/framework/Dialog.js";
 import { UIComponent } from "../components/ui/framework/UIComponent.js";
 import { Semaphore } from "../supplement/Semaphore.js";
 

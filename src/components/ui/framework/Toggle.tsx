@@ -3,11 +3,9 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import "./Switch.css";
-
 import { ComponentChild, createRef } from "preact";
 
-import { UIComponent, type ICommonUIProperties } from "../UIComponent.js";
+import { UIComponent, type ICommonUIProperties } from "./UIComponent.js";
 
 export enum CheckState {
     Unchecked,
@@ -15,16 +13,14 @@ export enum CheckState {
     Indeterminate,
 }
 
-export interface ISwitchProperties extends ICommonUIProperties {
+export interface IToggleProperties extends ICommonUIProperties {
     checkState?: CheckState;
     disabled?: boolean;
-    round?: boolean;
-    caption?: string;
 
     onChange?: (e: InputEvent, checkState: CheckState) => void;
 }
 
-export class Switch extends UIComponent<ISwitchProperties> {
+export class Toggle extends UIComponent<IToggleProperties> {
 
     public static override defaultProps = {
         checkState: CheckState.Unchecked,
@@ -37,12 +33,12 @@ export class Switch extends UIComponent<ISwitchProperties> {
     public override componentDidMount(): void {
         const { checkState } = this.props;
 
-        if (this.toggleRef.current) {
-            this.toggleRef.current.checked = checkState === CheckState.Checked;
+        if (this.toggleRef.current && checkState === CheckState.Indeterminate) {
+            this.toggleRef.current.indeterminate = true;
         }
     }
 
-    public override componentDidUpdate(prevProps: ISwitchProperties): void {
+    public override componentDidUpdate(prevProps: IToggleProperties): void {
         super.componentDidUpdate(prevProps, {});
 
         if (this.toggleRef.current) {
@@ -53,34 +49,20 @@ export class Switch extends UIComponent<ISwitchProperties> {
     }
 
     public render(): ComponentChild {
-        const { children, id = "", round, caption } = this.props;
+        const { id = "" } = this.props;
         const className = this.generateFinalClassName([
-            "switch",
-            this.classFromProperty(round, "round"),
+            "toggle",
         ]);
 
-        let content = children;
-        content ??= caption;
-
         return (
-            <div id={id}>
-                <input
-                    type="checkbox"
-                    id="switch-checkbox-input"
-                    ref={this.toggleRef}
-                    className={className}
-                    onInput={this.handleInput}
-                />
-
-                <label
-                    htmlFor="switch-checkbox-input"
-                    className={className}
-                    tabIndex={0}
-                    onKeyPress={this.handleInput}
-                >
-                    {content}
-                </label>
-            </div>
+            <input
+                id={id}
+                ref={this.toggleRef}
+                className={className}
+                type="checkbox"
+                checked={this.props.checkState === CheckState.Checked}
+                onInput={this.handleInput}
+            />
         );
     }
 

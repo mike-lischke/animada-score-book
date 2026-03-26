@@ -71,7 +71,6 @@ export class PolyrhythmViewer extends UIComponent<IPolyrhythmViewerProps, IPolyr
                                         : (
                                             <Button
                                                 disabled={isShrouded}
-                                                className="push-button"
                                                 onClick={this.deleteClicked}
                                             >
                                                 Delete

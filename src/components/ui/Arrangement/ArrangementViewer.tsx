@@ -18,7 +18,6 @@ import { GuideRail } from "../GuideRail/GuideRail.js";
 import { Overlay } from "../Overlay.js";
 import { Share } from "../Share.js";
 import { TrackViewer, type ITrackViewerCallbacks } from "../Track/TrackViewer.js";
-import { ArrangementEditControls } from "./ArrangementEditControls.js";
 import { TrackControls } from "./TrackControls.js";
 
 const baseNoteWidth = 55.5; // 54pt flex-basis + 1.5pt for border
@@ -51,7 +50,7 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
 
     private lastY = 0;
     private lastX = 0;
-    private stopAutoFollowTimeoutId = 0;
+    private stopAutoFollowTimeoutId?: ReturnType<typeof setTimeout>;
     private scrollAnimationFrameId = 0;
 
     // Used in auto follow mode to indicate the last pulse we were on, so that we can determine when to scroll.
@@ -151,11 +150,6 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
                 orientation={Orientation.TopDown}
                 crossAlignment={ChildAlignment.Stretch}
             >
-                <ArrangementEditControls
-                    arrangementPlayer={arrangementPlayer}
-                    services={services}
-                    undoManager={undoManager}
-                />
                 <Container
                     id="trackViewerContainer"
                     orientation={Orientation.LeftToRight}
@@ -303,18 +297,13 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
                 const playRangeWidth = 2 * noteWidth * (scoreMetrics.stepsPerBar / scoreMetrics.stepsPerPulse);
 
                 // Scroll to center the play range in the viewer.
-                const desiredScroll = (position + (playRangeWidth / 2)) - (clientWidth / 2);
+                const desiredScroll = Math.floor(position + (playRangeWidth / 2)) - (clientWidth / 2);
                 const maxScroll = scrollWidth - clientWidth;
                 const clampedScroll = Math.max(0, Math.min(desiredScroll, maxScroll));
 
-                // Keep the range visually fixed in the center while there is enough scroll room.
-                // At the song boundaries it follows the content, because centering is not possible.
-                const canKeepCentered = clampedScroll === desiredScroll;
-                const playRangeLeft = canKeepCentered
-                    ? clampedScroll + ((clientWidth - playRangeWidth) / 2)
-                    : Math.max(0, Math.min(position, scrollWidth - playRangeWidth));
+                const playRangeLeft = Math.max(0, currentPulse * scoreMetrics.stepsPerPulse * noteWidth);
 
-                this.playRangeRef.current.style.left = `${playRangeLeft}px`;
+                this.playRangeRef.current.style.left = `${Math.floor(playRangeLeft)}px`;
                 this.playRangeRef.current.style.width = `${playRangeWidth}px`;
 
                 this.animateViewerScroll(clampedScroll, this.autoFollowTransitionDurationMs);

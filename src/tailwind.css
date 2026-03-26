@@ -1,0 +1,29 @@
+/*
+ * Copyright (c) Mike Lischke. All rights reserved.
+ * Licensed under the MIT License. See License.txt in the project root for license information.
+ */
+
+ /* CSS styles that directly involve TailwindCSS (or belong to classes that use TailwindCSS). */
+
+@import "tailwindcss";
+@import "./generated/themes.css";
+
+/** Some TailwindCSS classes collide with our own classes or do not work as expected. */
+@source not inline("{container, tooltip}");
+
+@plugin "daisyui" {
+    themes: false;
+}
+
+
+
+@utility input {
+  &:focus {
+    @apply outline-1 outline-base-content/50 outline-offset-0;
+  }
+}
+
+/* Allow mouse events reaching disabled buttons (for tooltips). */
+.btn:disabled {
+    pointer-events: all;
+}

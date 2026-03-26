@@ -23,7 +23,6 @@
         "lib": [
             "es2022",
             "dom",
-            "WebWorker"
         ],
         "skipLibCheck": true,
         "allowSyntheticDefaultImports": false,
@@ -39,7 +38,8 @@
         },
         "types": [
             "vite/client",
-            "vitest/globals"
+            "vitest/globals",
+            "node",
         ]
     },
     "include": [

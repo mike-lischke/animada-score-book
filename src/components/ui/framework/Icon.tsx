@@ -40,7 +40,7 @@ export class Icon extends UIComponent<IIconProperties> {
     };
 
     public render(): ComponentChild {
-        const { src, overlays, disabled, style, height, width, color, "data-tooltip": dataTooltip } = this.props;
+        const { id, src, overlays, disabled, style, height, width, color, "data-tooltip": dataTooltip } = this.props;
         let className = this.generateFinalClassName([
             "icon",
             this.classFromProperty(disabled, "overlayDisabled"),
@@ -91,6 +91,7 @@ export class Icon extends UIComponent<IIconProperties> {
         if (overlays) {
             return (
                 <div
+                    id={id}
                     className="iconHost"
                 >
                     <div
@@ -104,6 +105,7 @@ export class Icon extends UIComponent<IIconProperties> {
         } else {
             return (
                 <div
+                    id={id}
                     className={className}
                     style={newStyle}
                     data-tooltip={dataTooltip}
@@ -111,5 +113,4 @@ export class Icon extends UIComponent<IIconProperties> {
             );
         }
     }
-
 }

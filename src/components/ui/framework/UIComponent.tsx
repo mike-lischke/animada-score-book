@@ -7,7 +7,8 @@ import "./component-styles.css";
 
 import cx from "classnames";
 import {
-    Component, type AriaRole, type ComponentChildren, type CSSProperties, type UIEventHandler, type WheelEventHandler
+    Component, type AriaRole, type ComponentChildren, type CSSProperties, type GenericEventHandler,
+    type WheelEventHandler
 } from "preact";
 
 import type { ISubscribable, Subscription } from "../../../core/types/general.js";
@@ -78,7 +79,7 @@ export interface ICommonUIProperties {
     /** For OS style tooltips. */
     title?: string;
 
-    /** Tooltip text to show a custom tooltip. */
+    /** Tooltip text to show in a custom tooltip. */
     "data-tooltip"?: string;
 
     /** Some often used input events: */
@@ -90,20 +91,20 @@ export interface ICommonUIProperties {
     onKeyUp?: KeyboardEventCallback;
     onKeyPress?: KeyboardEventCallback;
 
-    onScroll?: UIEventHandler<HTMLElement>;
+    onScroll?: GenericEventHandler<HTMLElement>;
     onWheel?: WheelEventHandler<HTMLElement>;
 }
 
 export abstract class UIComponent<P extends ICommonUIProperties = {}, S = {}>
     extends Component<P, S> {
 
-    private unsubscribers: Array<[boolean, () => void]> = [];
+    private subscriptionHandlers: Array<[boolean, () => void]> = [];
 
     public override componentWillUnmount(): void {
-        this.unsubscribers.forEach(([, unsubscribe]) => {
+        this.subscriptionHandlers.forEach(([, unsubscribe]) => {
             unsubscribe();
         });
-        this.unsubscribers = [];
+        this.subscriptionHandlers = [];
     }
 
     /**
@@ -114,12 +115,12 @@ export abstract class UIComponent<P extends ICommonUIProperties = {}, S = {}>
      * @param removeAtUpdate Whether to remove the subscription at next component update.
      */
     public addSubscription(subscribable: ISubscribable, subscription: Subscription, removeAtUpdate = false): void {
-        this.unsubscribers.push([removeAtUpdate, subscribable.subscribe(subscription)]);
+        this.subscriptionHandlers.push([removeAtUpdate, subscribable.subscribe(subscription)]);
     }
 
     public override componentDidUpdate(previousProps: Readonly<P>, previousState: Readonly<S>,
-        snapshot: unknown = undefined): void {
-        this.unsubscribers = this.unsubscribers.filter(([removeAtUpdate, unsubscribe]) => {
+        snapshot?: unknown): void {
+        this.subscriptionHandlers = this.subscriptionHandlers.filter(([removeAtUpdate, unsubscribe]) => {
             if (removeAtUpdate) {
                 unsubscribe();
 
@@ -131,7 +132,7 @@ export abstract class UIComponent<P extends ICommonUIProperties = {}, S = {}>
     }
 
     /**
-     * Takes the given base class names (CSS classe names) and combines them with the class name of the component.
+     * Takes the given base class names (CSS class names) and combines them with the class name of the component.
      * It automatically handles undefined values.
      *
      * @param base The base names for a given component.

@@ -5,13 +5,15 @@
 
 import "@vscode/codicons/dist/codicon.css";
 import "./App.scss";
+import "./tailwind.css";
+
+import timbauImage from "./assets/images/instrument-icons/timbau.svg";
 
 import { createRef } from "preact";
 
 import { ErrorBoundary } from "./components/ui/ErrorBoundary.js";
 import { Button } from "./components/ui/framework/Button.js";
 import { Container } from "./components/ui/framework/Container.js";
-import { Image } from "./components/ui/framework/Image.js";
 import { Label } from "./components/ui/framework/Label.js";
 import { ProgressIndicator } from "./components/ui/framework/ProgressIndicator.js";
 import { ChildAlignment, Orientation } from "./components/ui/framework/ui-types.js";
@@ -22,14 +24,12 @@ import { ArrangementTitle } from "./components/ui/Arrangement/ArrangementTitle.j
 import { ArrangementViewer } from "./components/ui/Arrangement/ArrangementViewer.js";
 import { ValueEditorEntryType, type IValueEditorValueEntry } from "./components/ui/composites/ValueDialog.js";
 import { Codicon } from "./components/ui/framework/Codicon.js";
-import { Dialog, DialogResponseClosure, DialogType } from "./components/ui/framework/Dialogs/Dialog.js";
-import { Grid } from "./components/ui/framework/Grid.js";
-import { GridCell } from "./components/ui/framework/GridCell.js";
+import { Dialog, DialogResponseClosure, DialogType } from "./components/ui/framework/Dialog.js";
 import { Icon } from "./components/ui/framework/Icon.js";
-import { CheckState, Switch } from "./components/ui/framework/Switch/Switch.js";
 import { TooltipProvider } from "./components/ui/framework/Tooltip.js";
 import { Overlay } from "./components/ui/Overlay.js";
 import { ShareButton } from "./components/ui/ShareButton.js";
+import { AppStorage } from "./core/AppStorage.js";
 import {
     SbDmEntityType, ScoreBookDataModel, type ISbDmScore, type ISbDmScoreFolder
 } from "./core/ScoreBookDataModel.js";
@@ -45,22 +45,30 @@ import { ModeManager } from "./ui/ModeManager.js";
 import { MouseHandler } from "./ui/MouseHandler.js";
 import { ScoreLibrary } from "./ui/ScoreLibrary.js";
 import { SelectionManager } from "./ui/SelectionManager.js";
+import { SettingsDialog } from "./ui/SettingsDialog.js";
+import { ArrangementEditControls } from "./components/ui/Arrangement/ArrangementEditControls.js";
+
+enum DisplayMode {
+    Standard,
+    Editing
+}
 
 interface IAppState {
     ready: boolean;
     serializedArrangement?: ISerialisedArrangement;
 
-    theme: "light" | "dark";
+    theme: string;
     editingTitle: boolean;
-}
 
-const currentYear = new Date().getFullYear();
-const copyright = `© 2025 - ${currentYear} Mike Lischke. All rights reserved.`;
+    displayMode: DisplayMode;
+}
 
 const newSong: ISerialisedArrangement = { composition: emptySongString, version: 2, title: "New Song" };
 
 export class App extends UIComponent<{}, IAppState> {
     private scoreLibraryRef = createRef<Dialog>();
+    private settingsDialogRef = createRef<SettingsDialog>();
+
     private dataModel = new ScoreBookDataModel();
 
     private services: ScoreBookUiServices;
@@ -74,10 +82,13 @@ export class App extends UIComponent<{}, IAppState> {
     public constructor(props: {}) {
         super(props);
 
+        const settings = AppStorage.loadUISettings() ?? {};
+        const theme = settings.theme ?? "Light+";
         this.state = {
             ready: false,
-            theme: "light",
+            theme,
             editingTitle: false,
+            displayMode: DisplayMode.Standard,
         };
 
         const selectionManager = new SelectionManager();
@@ -91,7 +102,7 @@ export class App extends UIComponent<{}, IAppState> {
 
     public override componentDidMount() {
         const { theme } = this.state;
-        document.body.setAttribute("data-theme", theme);
+        document.documentElement.setAttribute("data-theme", theme);
 
         void this.dataModel.initialize().then(() => {
             const serializedArrangement =
@@ -102,11 +113,14 @@ export class App extends UIComponent<{}, IAppState> {
     }
 
     public render() {
-        const { ready, theme, editingTitle } = this.state;
+        const { ready, displayMode } = this.state;
 
         if (!ready) {
             return <ProgressIndicator />;
         }
+
+        const arrangementView = this.arrangementPlayer!.arrangementView;
+        const scoreMetrics = this.arrangementPlayer!.scoreMetrics;
 
         let titleBlock;
         if (this.arrangementPlayer) {
@@ -116,24 +130,18 @@ export class App extends UIComponent<{}, IAppState> {
                 crossAlignment={ChildAlignment.Center}>
                 <ArrangementTitle
                     id="mainArrangementTitle"
-                    arrangement={this.arrangementPlayer.arrangementView}
-                    data-tooltip="expand"
+                    arrangement={arrangementView}
+                    data-tip="expand"
                     undoManager={this.undoManager!}
-                    editMode={editingTitle}
+                    editMode={displayMode === DisplayMode.Editing}
                     onEditEnd={this.onEditEnd}
                 />
-                {
-                    !editingTitle && <Button
-                        id="editTitleButton"
-                        title="Edit Score Title"
-                        imageOnly
-                        onClick={this.onClickEditTitle}
-                    >
-                        <Icon src={Codicon.Edit} />
-                    </Button>
-                }
             </Container>;
         }
+
+        const bars = scoreMetrics.bars === 1 ? "1 bar" : `${scoreMetrics.bars} bars`;
+        const scoreStats = `${scoreMetrics.beatsPerBar}/${scoreMetrics.beatsPerBar} • ${bars} • ` +
+            `${Math.round(100 * scoreMetrics.realTimeLength) / 100} s`;
 
         return (
             <ErrorBoundary>
@@ -143,77 +151,91 @@ export class App extends UIComponent<{}, IAppState> {
                     crossAlignment={ChildAlignment.Stretch}
                 >
                     <Container
-                        id="appHeader"
                         orientation={Orientation.LeftToRight}
                         crossAlignment={ChildAlignment.Center}
                     >
-                        <Grid
-                            id="titleGrid"
-                            columns={["auto", "auto", "minmax(0, 1fr)", "auto"]}
-                            columnGap={8}
+                        <Container
+                            id="headerContent"
+                            className="rounded-3xl shadow-md border border-base-200/70"
                         >
-                            <GridCell rowSpan={2} orientation={Orientation.TopDown}>
-                                <Image id="titleLogo" src="/logo.svg" />
-                            </GridCell>
-                            <GridCell orientation={Orientation.TopDown} mainAlignment={ChildAlignment.Center}>
-                                <Label className="appTitle top">ANIMADA</Label>
-                            </GridCell>
-                            <GridCell
-                                orientation={Orientation.TopDown}
-                                mainAlignment={ChildAlignment.Center}
-                                crossAlignment={ChildAlignment.Stretch}
-                            >
-                                {titleBlock}
-                            </GridCell>
-                            <GridCell
+                            <Container
                                 id="toolbarButtons"
-                                rowSpan={2}
                                 orientation={Orientation.TopDown}
                                 mainAlignment={ChildAlignment.Center}
+                                className="bg-base-100/80 p-2"
                             >
+                                <Button
+                                    imageOnly
+                                    className="btn-ghost"
+                                    data-tooltip="Display Options"
+                                    onClick={this.handleDisplayOptionsClick}
+                                >
+                                    <Icon src={Codicon.Gear} data-tooltip="inherit" />
+                                </Button>
                                 <Button
                                     id="scoreLibraryButton"
-                                    caption="Score Library"
+                                    imageOnly
+                                    className="btn-ghost"
+                                    data-tooltip="Score Library"
                                     onClick={this.handleScoreLibraryClick}
-                                />
+                                >
+                                    <Icon src={Codicon.Library} data-tooltip="inherit" />
+                                </Button>
                                 <Button
                                     id="instrumentEditor"
-                                    caption="Instrument Editor"
+                                    imageOnly
+                                    className="btn-ghost"
+                                    data-tooltip="Instrument Editor"
                                     disabled
                                     onClick={this.handleInstrumentEditorClick}
-                                />
+                                >
+                                    <Icon src={timbauImage} width={24} height={24} data-tooltip="inherit" />
+                                </Button>
                                 <ShareButton />
-                                <Button
-                                    id="displayOptionsButton"
-                                    caption="Display Options"
-                                    disabled
-                                    onClick={this.handleDisplayOptionsClick}
-                                />
-                            </GridCell>
-                            <GridCell orientation={Orientation.TopDown}>
-                                <Label className="appTitle bottom">Score Book</Label>
-                            </GridCell>
-                            <GridCell
-                                id="arrangementPlayControlsCell"
+                            </Container>
+                            <Container
+                                id="appTitleContainer"
+                                orientation={Orientation.TopDown}
+                                crossAlignment={ChildAlignment.Stretch}
+                            >
+                                <Container>
+                                    <img id="titleLogo" src="/logo.svg" />
+                                    <Label className="appTitle top">ANIMADA</Label>
+                                </Container>
+                                <Container>
+                                    <Label className="appTitle bottom">Score</Label>
+                                    <Label className="appTitle bottom accent">Book</Label>
+                                </Container>
+                                <Container crossAlignment={ChildAlignment.Center} id="arrangementStats">
+                                    {scoreStats}
+                                </Container>
+
+                            </Container>
+                            <Container
                                 orientation={Orientation.TopDown}
                                 mainAlignment={ChildAlignment.Center}
-                                crossAlignment={ChildAlignment.Start}
                             >
                                 <ArrangementPlayControls
                                     arrangementPlayer={this.arrangementPlayer!}
                                     services={this.services}
                                     undoManager={this.undoManager!}
                                 />
-
-                            </GridCell>
-                        </Grid>
-                        <Switch
-                            id="themeSwitch"
-                            type="switch"
-                            title="Switch to dark mode"
-                            checkState={theme === "dark" ? CheckState.Checked : CheckState.Unchecked}
-                            onChange={this.handleThemeChange}
-                        />
+                            </Container>
+                            <Container
+                                id="arrangementPalette"
+                                className="flex-1 p-1 pr-2"
+                                orientation={Orientation.TopDown}
+                                mainAlignment={ChildAlignment.Start}
+                                crossAlignment={ChildAlignment.End}
+                            >
+                                {titleBlock}
+                                {displayMode === DisplayMode.Editing && <ArrangementEditControls
+                                    arrangementPlayer={this.arrangementPlayer!}
+                                    services={this.services}
+                                    undoManager={this.undoManager!}
+                                />}
+                            </Container>
+                        </Container>
                     </Container>
 
                     {this.arrangementPlayer && <ArrangementViewer
@@ -222,23 +244,6 @@ export class App extends UIComponent<{}, IAppState> {
                         undoManager={this.undoManager!}
                     />}
 
-                    <Container
-                        id="footer"
-                        orientation={Orientation.LeftToRight}
-                        mainAlignment={ChildAlignment.Center}
-                    >
-                        {copyright}
-                        <Button
-                            id="githubLink"
-                            title="View on GitHub"
-                            imageOnly={true}
-                            role="switch"
-                            onClick={this.handleGithubClick}
-                        >
-                            <Icon src={Codicon.Github} />
-                        </Button>
-
-                    </Container>
                 </Container>
                 <Dialog
                     ref={this.scoreLibraryRef}
@@ -250,21 +255,13 @@ export class App extends UIComponent<{}, IAppState> {
                 </Dialog>
                 <TooltipProvider />
                 <DialogHost />
+                <SettingsDialog ref={this.settingsDialogRef} onSettingsChanged={this.handleSettingsChanged} />
             </ErrorBoundary>
         );
     }
 
     private handleGithubClick = () => {
         window.open("https://github.com/mike-lischke/animada-score-book", "_blank");
-    };
-
-    private handleThemeChange = (e: InputEvent, checkState: CheckState) => {
-        this.setState({
-            theme: checkState === CheckState.Checked ? "dark" : "light",
-        }, () => {
-            const { theme } = this.state;
-            document.body.setAttribute("data-theme", theme);
-        });
     };
 
     private handleScoreLibraryClick = () => {
@@ -276,7 +273,13 @@ export class App extends UIComponent<{}, IAppState> {
     };
 
     private handleDisplayOptionsClick = () => {
-        alert("Display Options is not yet implemented.");
+        this.settingsDialogRef.current?.open();
+    };
+
+    private handleSettingsChanged = () => {
+        const settings = AppStorage.loadUISettings() ?? {};
+        const theme = settings.theme ?? "light";
+        this.setState({ theme });
     };
 
     private handleScoreLibraryAction = async (action: string, data?: ISbDmScoreFolder | ISbDmScore,

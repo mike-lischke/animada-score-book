@@ -1,0 +1,26 @@
+<svg
+  width="256"
+  height="256"
+  viewBox="0 0 256 256"
+  xmlns="http://www.w3.org/2000/svg"
+>
+  <!-- äußerer Kreis (Button-Rand, wie bei Record) -->
+  <circle
+    cx="128"
+    cy="128"
+    r="80"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="16"
+  />
+  <!-- inneres Stop-Symbol -->
+  <rect
+    x="96"
+    y="96"
+    width="64"
+    height="64"
+    rx="10"
+    ry="10"
+    fill="currentColor"
+  />
+</svg>

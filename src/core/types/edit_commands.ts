@@ -3,44 +3,44 @@
 * Licensed under the MIT License. See License.txt in the project root for license information.
 */
 
-import type { ISbDmInstrument, ISbDmNote, ISbDmTrack } from "../ScoreBookDataModel.js";
-import type { IArrangement, INoteStyle, IPolyrhythm, ITimeParams } from "./general.js";
+import type { ISbDmArrangement, ISbDmInstrument, ISbDmNote, ISbDmTrack } from "../ScoreBookDataModel.js";
+import type { INoteStyle, IPolyrhythm, ITimeParams } from "./general.js";
 
 /* eslint-disable @typescript-eslint/naming-convention */
 
 export interface EditCommand_ArrangementTitle {
     type: "EditCommand_ArrangementTitle";
-    arrangement: Readonly<IArrangement>;
+    arrangement: Readonly<ISbDmArrangement>;
     newTitle: string;
 }
 
 export interface EditCommand_ArrangementAddTrack {
     type: "EditCommand_ArrangementAddTrack";
-    arrangement: Readonly<IArrangement>;
+    arrangement: Readonly<ISbDmArrangement>;
     addTrack: ISbDmInstrument;
 }
 
 export interface EditCommand_ArrangementRemoveTrack {
     type: "EditCommand_ArrangementRemoveTrack";
-    arrangement: Readonly<IArrangement>;
+    arrangement: Readonly<ISbDmArrangement>;
     removeTrack: ISbDmTrack;
 }
 
 export interface EditCommand_ArrangementClear {
     type: "EditCommand_ArrangementClear";
-    arrangement: Readonly<IArrangement>;
+    arrangement: Readonly<ISbDmArrangement>;
     command: "clear all tracks";
 }
 
 export interface EditCommand_ArrangementClearSelection {
     type: "EditCommand_ArrangementClearSelection";
-    arrangement: Readonly<IArrangement>;
+    arrangement: Readonly<ISbDmArrangement>;
     clearSelection: Map<ISbDmTrack, { selectedNotes: Set<ISbDmNote>; }>;
 }
 
 export interface EditCommand_ArrangementAddPolyrhythms {
     type: "EditCommand_ArrangementAddPolyrhythms";
-    arrangement: Readonly<IArrangement>;
+    arrangement: Readonly<ISbDmArrangement>;
     addPolyrhythms: {
         length: number;
         selection: Map<ISbDmTrack, { range: [ISbDmNote | null, ISbDmNote | null]; }>;

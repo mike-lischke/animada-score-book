@@ -198,9 +198,22 @@ export interface ISbDmTimeParams extends ITimeParamsView {
 
 export interface ISbDmArrangement extends ISbDmCommon, ISubscribable {
     readonly type: SbDmEntityType.Arrangement;
-    readonly title: string;
-    readonly timeParams: ISbDmTimeParams;
-    readonly tracks: ISbDmTrack[];
+
+    title: string;
+    timeParams: ISbDmTimeParams;
+    tracks: ISbDmTrack[];
+
+    /** The main playback and record volume of the arrangement (0-100%). */
+    mainVolume: number;
+
+    /** Indicates whether the arrangement should loop during playback. */
+    loop: boolean;
+
+    /** Indicates whether the metronome should be used during playback. */
+    useMetronome: boolean;
+
+    /** Indicates whether a count-in should be used before starting playback. */
+    countIn: boolean;
 
     addTrack(instrument: ISbDmInstrument, id?: number): ISbDmTrack;
     removeTrack(track: ISbDmTrack): void;
@@ -573,7 +586,7 @@ export class ScoreBookDataModel extends Publisher {
     private getApiBase(): string {
         // For local development use the test server.
         if (import.meta.env.DEV) {
-            return import.meta.env.VITE_BASE_URL;
+            //return import.meta.env.VITE_BASE_URL;
         }
 
         // In production: use the same server as the app is served from.

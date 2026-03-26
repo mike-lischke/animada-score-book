@@ -36,7 +36,7 @@ export class InstrumentBrowser extends UIComponent<IInstrumentBrowserProps> {
                     })}
                     <br />
                     <br />
-                    <Button className="push-button" onClick={close}>Back</Button>
+                    <Button onClick={close}>Back</Button>
                 </div>
             </div>
         );

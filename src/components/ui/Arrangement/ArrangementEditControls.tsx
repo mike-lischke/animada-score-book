@@ -3,9 +3,8 @@
 * Licensed under the MIT License. See License.txt in the project root for license information.
 */
 
-import type { ISbDmTrack } from "../../../core/ScoreBookDataModel.js";
+import type { ISbDmArrangement, ISbDmTrack } from "../../../core/ScoreBookDataModel.js";
 import type { EditCommand_TimeParamsTimeSignature } from "../../../core/types/edit_commands.js";
-import type { IArrangement } from "../../../core/types/general.js";
 import type { UndoManager } from "../../../core/UndoManager.js";
 import type { ArrangementPlayer } from "../../../player/ArrangementPlayer.js";
 import type { ScoreBookUiServices } from "../../../player/types.js";
@@ -108,7 +107,7 @@ export class ArrangementEditControls
                     onClick={() => {
                         Overlay.toggleOverlay("clear_tracks", "show");
                     }}
-                    data-tooltip="Start a new score."
+                    data-tip="Start a new score."
                 >
                     Start New Score
                 </Button>
@@ -120,7 +119,6 @@ export class ArrangementEditControls
                         ? (
                             <>
                                 <Button
-                                    className="push-button"
                                     onClick={() => {
                                         modeManager.deletePolyrhythmMode = true;
                                         Overlay.toggleOverlay("delete_polyrhythms", "show");
@@ -141,7 +139,6 @@ export class ArrangementEditControls
                     }}>
                         <ExpandingSpacer />
                         <Button
-                            className="push-button"
                             onClick={() => {
                                 undoManager.edit({
                                     type: "EditCommand_ArrangementClear", arrangement: arrangementView,
@@ -154,7 +151,6 @@ export class ArrangementEditControls
                         </Button>
                         <Separator />
                         <Button
-                            className="push-button"
                             onClick={() => {
                                 Overlay.toggleOverlay("clear_tracks", "hide");
                             }}
@@ -173,7 +169,6 @@ export class ArrangementEditControls
                     }}>
                         <ExpandingSpacer />
                         <Button
-                            className="push-button"
                             onClick={() => {
                                 return modeManager.deletePolyrhythmMode = false;
                             }}
@@ -194,7 +189,7 @@ export class ArrangementEditControls
         );
     }
 
-    private hasPolyrhythms(arrangement: IArrangement): boolean {
+    private hasPolyrhythms(arrangement: ISbDmArrangement): boolean {
         for (const track of arrangement.tracks) {
             if (track.polyrhythms.length) {
                 return true;

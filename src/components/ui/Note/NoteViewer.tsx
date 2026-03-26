@@ -131,7 +131,7 @@ export class NoteViewer extends UIComponent<INoteViewerProps, INoteViewerState> 
                 onClick={this.handleClick}
                 onMouseDown={this.handleMouseDown}
                 onMouseMove={this.handleMouseMove}
-                style={{ backgroundColor }}
+                style={{ backgroundColor: backgroundColor }}
             >
                 <TouchHoldDetector
                     holdLength={1100}
@@ -244,7 +244,7 @@ export class NoteViewer extends UIComponent<INoteViewerProps, INoteViewerState> 
             ? "var(--light-yellow)"    // Light up notes as the music plays
             : selected
                 ? note.track.instrument.color
-                : "";
+                : `color-mix(in hsl, ${note.track.instrument.color} 30%, transparent)`;
     };
 
     private isCurrentlyPlaying(): boolean {
@@ -263,14 +263,14 @@ export class NoteViewer extends UIComponent<INoteViewerProps, INoteViewerState> 
     }
 
     private cycleNoteStyle() {
-        const { note, undoManager } = this.props;
+        const { note, undoManager, arrangementPlayer } = this.props;
         const noteStyle = this.getNextNoteStyle(note);
 
         undoManager.edit({ type: "EditCommand_Note", note, noteStyle });
         if (noteStyle?.audioBuffer) {
             // Play a preview of the selected note style.
-            // Default start time (0) is fine here.
-            new AudioBufferPlayer(noteStyle.audioBuffer, audioContext);
+            const arrangement = arrangementPlayer.arrangementView;
+            new AudioBufferPlayer(noteStyle.audioBuffer, audioContext, 0, arrangement.mainVolume / 100);
         }
     }
 

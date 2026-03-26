@@ -5,9 +5,8 @@
 
 import { ComponentChild, createRef } from "preact";
 
-import { UIComponent, type ICommonUIProperties } from "../UIComponent.js";
-import { Portal, type IPortalOptions } from "../Portal.js";
-import { DialogContent } from "./DialogContent.js";
+import { UIComponent, type ICommonUIProperties } from "./UIComponent.js";
+import { getNewId } from "../../../core/utils.js";
 
 /** What decision made the user to close a dialog. */
 export enum DialogResponseClosure {
@@ -67,91 +66,66 @@ export interface IDialogResponse extends Record<string, unknown> {
  * Describes a collection of react nodes that should be rendered in an action area, separated
  * by their alignment.
  */
-export interface IDialogActions {
-    /** Top/Left aligned content. */
-    begin?: ComponentChild[];
-
-    /** Ditto for right/bottom. */
-    end?: ComponentChild[];
-}
 
 interface IDialogProperties extends ICommonUIProperties {
-    content?: ComponentChild;
-    header?: ComponentChild;
     caption?: ComponentChild;
 
-    /** A node where to mount the dialog to. */
-    container?: HTMLElement;
+    actions?: ComponentChild[];
 
-    actions?: IDialogActions;
-
-    onClose?: (cancelled: boolean, props: IDialogProperties) => void;
-    onOpen?: (props: IDialogProperties) => void;
+    /** Called when the dialog is closed. The return value indicates how the dialog was closed. */
+    onClose?: (returnValue: string) => void;
 }
 
 /** A modal popup component to interact with the user (e.g. in wizards or task lists). */
 export class Dialog extends UIComponent<IDialogProperties> {
+    private dialogRef = createRef<HTMLDialogElement>();
 
-    public static override defaultProps = {
-        container: document.body,
-    };
+    public override componentDidMount(): void {
+        this.dialogRef.current?.addEventListener("close", this.handleClose);
+    }
 
-    private portalRef = createRef<Portal>();
+    public override componentWillUnmount(): void {
+        super.componentWillUnmount();
+
+        this.dialogRef.current?.removeEventListener("close", this.handleClose);
+    }
 
     public render(): ComponentChild {
-        const { children, caption, header, content, actions, container } = this.props;
-
-        const className = this.generateFinalClassName([]); // Dialog class name is handled in the DialogContent class.
+        const { id = `dialog-${getNewId()}`, children, caption, actions } = this.props;
 
         return (
-            <Portal
-                ref={this.portalRef}
-                container={container}
-
-                onClose={this.handleClose}
-                onOpen={this.handleOpen}
-            >
-                <DialogContent
-                    className={className}
-                    caption={caption}
-                    header={header}
-                    content={content}
-                    actions={actions}
-                    draggable
-                    onCloseClick={this.handleCloseClick}
-                >
+            <dialog
+                id={id}
+                className="modal"
+                ref={this.dialogRef}>
+                <div className="modal-box">
+                    {caption && <h3 className="font-bold text-lg">{caption}</h3>}
                     {children}
-                </DialogContent>
-            </Portal>
+                    <div className="modal-action">
+                        <form method="dialog">
+                            {actions}
+                        </form>
+                    </div>
+                </div>
+            </dialog>
         );
     }
 
-    public open(options?: IPortalOptions): void {
-        this.portalRef.current?.open({
-            backgroundOpacity: 0.5,
-            ...options,
-        });
+    public open(): void {
+        if (this.dialogRef.current) {
+            this.dialogRef.current.returnValue = "cancel";
+            this.dialogRef.current.showModal();
+        }
     }
 
     public close(cancelled: boolean): void {
-        this.portalRef.current?.close(cancelled);
+        this.dialogRef.current?.close(cancelled ? "cancel" : "accept");
     }
 
-    private handleClose = (cancelled: boolean): void => {
+    private handleClose = (event: Event): void => {
         const { onClose } = this.props;
 
-        onClose?.(cancelled, this.props);
-
-        this.setState({ open: false });
-    };
-
-    private handleOpen = (): void => {
-        const { onOpen } = this.props;
-
-        onOpen?.(this.props);
-    };
-
-    private handleCloseClick = (): void => {
-        this.close(true);
+        const returnValue = this.dialogRef.current?.returnValue ?? "cancel";
+        onClose?.(returnValue);
     };
 }

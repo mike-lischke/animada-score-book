@@ -14,6 +14,7 @@ export interface IContainerProperties extends ICommonUIProperties {
     crossAlignment?: ChildAlignment;
     wrap?: ChildWrap;
     scrollPosition?: number;
+    gap?: number | string;
 
     innerRef?: preact.RefObject<HTMLDivElement>;
 }
@@ -38,7 +39,7 @@ export class Container extends UIComponent<IContainerProperties> {
     public render(): ComponentChild {
         const {
             id, children, style, orientation, mainAlignment, crossAlignment, wrap, innerRef, onClick, title,
-            "data-tooltip": dataTooltip, onScroll
+            "data-tooltip": dataTooltip, gap, onScroll
         } = this.props;
 
         const newStyle = {
@@ -46,6 +47,7 @@ export class Container extends UIComponent<IContainerProperties> {
             justifyContent: mainAlignment,
             alignItems: crossAlignment,
             flexWrap: wrap,
+            gap,
             ...style,
         };
 

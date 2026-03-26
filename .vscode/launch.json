@@ -8,7 +8,7 @@
             "type": "chrome",
             "request": "launch",
             "name": "Launch",
-            "url": "http://localhost:5173",
+            "url": "https://localhost:5173",
             "webRoot": "${workspaceFolder}", // Point to folder with vite.config.ts.
             "userDataDir": "${workspaceRoot}/.vscode/chrome",
             "preLaunchTask": "tsc: watch",

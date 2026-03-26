@@ -5,15 +5,16 @@
 
 import { type ComponentChild } from "preact";
 
-import type { IArrangement, ITimeParams } from "../../../core/types/general.js";
+import type { ISbDmArrangement } from "../../../core/ScoreBookDataModel.js";
+import type { ITimeParams } from "../../../core/types/general.js";
+import { Container } from "../framework/Container.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
 import { TimingViewer } from "./TimingViewer.js";
-import { Container } from "../framework/Container.js";
 
 export type BarDivisibility = 1 | 2 | 4;
 
 export interface IGuideRailProps extends ICommonUIProperties {
-    arrangementView: Readonly<IArrangement>;
+    arrangementView: Readonly<ISbDmArrangement>;
 }
 
 interface IGuideRailState {

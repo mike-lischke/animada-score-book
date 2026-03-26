@@ -23,7 +23,7 @@ export class TrackControls extends UIComponent<ITrackControlsProps> {
 
         return (
             <div className="track-controls">
-                <Button className="push-button gray"
+                <Button className="gray"
                     onClick={() => {
                         undoManager.edit({
                             type: "EditCommand_ArrangementRemoveTrack",
@@ -32,7 +32,7 @@ export class TrackControls extends UIComponent<ITrackControlsProps> {
                         });
                     }}
                 >Remove track</Button>
-                <Button className="push-button gray"
+                <Button className="gray"
                     onClick={() => {
                         undoManager.edit({
                             type: "EditCommand_TrackClear",
@@ -42,7 +42,7 @@ export class TrackControls extends UIComponent<ITrackControlsProps> {
                         Overlay.toggleOverlay(overlayName, "hide");
                     }}
                 >Clear track</Button>
-                <Button className="push-button gray"
+                <Button className="gray"
                     onClick={() => {
                         Overlay.toggleOverlay(overlayName, "hide");
                     }}

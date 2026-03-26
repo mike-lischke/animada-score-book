@@ -11,7 +11,7 @@ import { Button } from "../components/ui/framework/Button.js";
 import { Card } from "../components/ui/framework/Card.js";
 import { Codicon } from "../components/ui/framework/Codicon.js";
 import { Container } from "../components/ui/framework/Container.js";
-import { Dialog } from "../components/ui/framework/Dialogs/Dialog.js";
+import { Dialog } from "../components/ui/framework/Dialog.js";
 import { Grid } from "../components/ui/framework/Grid.js";
 import { GridCell } from "../components/ui/framework/GridCell.js";
 import { Icon } from "../components/ui/framework/Icon.js";
@@ -269,8 +269,6 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
                         id="scoreNotes"
                         value={description}
                         placeholder="Enter other details here"
-                        multiLine
-                        multiLineCount={5}
                         style={{ width: "100%", fieldSizing: "content" }}
                     />
                 </GridCell>
@@ -392,18 +390,12 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
             </Container>;
         }
 
-        let subCaption;
-        /*if (data.dataModelEntry.description) {
-            subCaption = <Label className="subCaption" caption={data.dataModelEntry.description} />;
-        }*/
-
         const content = <>
             <Icon
                 src={iconSrc}
                 className={iconClass + " scoreTreeIcon"}
             />
             <Label caption={data.name} />
-            {subCaption}
             {actionBox}
         </>;
 
@@ -459,7 +451,7 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
 
                     case "edit": {
                         const tree = this.scoreTableRef.current;
-                        if (tree && data && data.type === SbDmEntityType.ScoreFolder) {
+                        if (tree && data?.type === SbDmEntityType.ScoreFolder) {
                             updateRowsById(data.id, data);
                         }
 

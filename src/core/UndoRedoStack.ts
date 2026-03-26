@@ -6,9 +6,10 @@
 import { Publisher } from "./Publisher.js";
 import { getArrangementSnapshot } from "./serialisation/snapshots.js";
 import type { EditCommand, EditCommand_ArrangementTitle, EditCommand_Note } from "./types/edit_commands.js";
+import type { INoteStyle, ISubscribable } from "./types/general.js";
 import type { IArrangementSnapshot } from "./types/snapshots.js";
-import type { IArrangement, INoteStyle, ISubscribable } from "./types/general.js";
 // Note cycling squash logic is implemented as private methods inside the stack.
+import type { ISbDmArrangement } from "./ScoreBookDataModel.js";
 import { exists } from "./utils.js";
 
 export interface IHistoryState {
@@ -32,7 +33,7 @@ export class UndoRedoStack {
 
     private past: IHistoryState[];
     private future: IHistoryState[] = [];
-    private queuedSquashTimeout = 0;
+    private queuedSquashTimeout?: ReturnType<typeof setTimeout>;
     private squashIsQueued = false;
     private readonly lookBackTime = 180_000; // 3 minutes
     private readonly noteCycleTime = 2000; // 2 seconds
@@ -43,7 +44,7 @@ export class UndoRedoStack {
      *
      * @param arrangementView The arrangement to track and snapshot.
      */
-    public constructor(private readonly arrangementView: Readonly<IArrangement>) {
+    public constructor(private readonly arrangementView: Readonly<ISbDmArrangement>) {
         // Past must always contain at least one element, which is the present state
         // We initialise it with edit-command {}, which is meant as an EditCommand_LoadPage
         this.past = [this.getNewHistoryState(this.arrangementView)];
@@ -182,7 +183,7 @@ export class UndoRedoStack {
         return !!command && command.type === "EditCommand_Note";
     }
 
-    private getNewHistoryState(arrangementView: Readonly<IArrangement>, lastCommand?: EditCommand,
+    private getNewHistoryState(arrangementView: Readonly<ISbDmArrangement>, lastCommand?: EditCommand,
         oldValue?: INoteStyle): IHistoryState {
         return {
             arrangementSnapshot: getArrangementSnapshot(arrangementView),

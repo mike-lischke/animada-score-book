@@ -3,6 +3,7 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
+import { AppStorage } from "./AppStorage.js";
 import { Publisher } from "./Publisher.js";
 import {
     SbDmEntityType, type ISbDmArrangement, type ISbDmInstrument, type ISbDmNote, type ISbDmTrack
@@ -26,6 +27,11 @@ export class Arrangement extends Publisher implements ISbDmArrangement {
 
     public timeParams!: ITimeParams;
 
+    public mainVolume = 100;
+    public loop = false;
+    public useMetronome = false;
+    public countIn = false;
+
     private titleString: string | undefined;
 
     /**
@@ -42,6 +48,13 @@ export class Arrangement extends Publisher implements ISbDmArrangement {
         const arrangement = new Arrangement();
         arrangement.timeParams = timeParams;
 
+        const settings = AppStorage.loadUISettings();
+        if (settings) {
+            arrangement.loop = settings.loop ?? false;
+            arrangement.mainVolume = settings.masterVolume ?? 100;
+            arrangement.useMetronome = settings.metronome ?? false;
+            arrangement.countIn = settings.countIn ?? false;
+        }
         arrangement.applyArrangementSnapshot(snapshot, instruments);
 
         return arrangement;
@@ -341,7 +354,7 @@ export class Arrangement extends Publisher implements ISbDmArrangement {
         // Then we add missing polyrhythms, being careful to specify ID and index
         trackSnapshot.polyrhythms.forEach((polyrhythmSnapshot, polyrhythmIndex) => {
             const polyrhythmAtIndex = track.polyrhythms[polyrhythmIndex] as IPolyrhythm | undefined;
-            if (!polyrhythmAtIndex || polyrhythmSnapshot.id !== polyrhythmAtIndex.id) {
+            if (polyrhythmSnapshot.id !== polyrhythmAtIndex?.id) {
                 const [start, end] = this.getStartAndEndNotes(track, polyrhythmSnapshot, polyrhythmIndex);
                 track.addPolyrhythm(start, end, polyrhythmSnapshot.length, polyrhythmSnapshot.id, polyrhythmIndex);
             }

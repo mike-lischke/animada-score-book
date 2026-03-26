@@ -522,11 +522,10 @@ export class SplitContainer extends UIComponent<ISplitContainerProperties> {
                 let assignableCount = 0;
                 this.paneData.forEach((entry: IPanePositionData): void => {
                     if (entry.startSize === -1) {
-                        let size = 0;
                         if (entry.initialSize) {
-                            size = Math.max(Math.min(entry.initialSize, entry.maxSize), entry.minSize);
-                            entry.startSize = size;
-                            entry.currentSize = size;
+                            const boundedSize = Math.max(Math.min(entry.initialSize, entry.maxSize), entry.minSize);
+                            entry.startSize = boundedSize;
+                            entry.currentSize = boundedSize;
 
                             entry.initialSize = undefined;
                         } else {

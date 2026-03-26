@@ -4,10 +4,8 @@
  */
 
 import { Publisher } from "../core/Publisher.js";
-import type { ISbDmTrack, ITiming, RealTime } from "../core/ScoreBookDataModel.js";
-import type { IArrangement } from "../core/types/general.js";
+import type { ISbDmArrangement, ISbDmTrack, ITiming, RealTime } from "../core/ScoreBookDataModel.js";
 import { sleep } from "../core/utils.js";
-import { MP3Export } from "../supplement/MP3Export.js";
 import { AnimationEngine } from "../ui/AnimationEngine.js";
 import { AudioBufferPlayer } from "./AudioBufferPlayer.js";
 import { TimeCoordinator, type IScoreMetrics } from "./TimeCoordinator.js";
@@ -30,7 +28,7 @@ export type PlayerPlayState = "playing" | "stopped";
  * - Call `dispose()` when replacing the arrangement to clean up subscriptions.
  */
 export class ArrangementPlayer extends Publisher {
-    public readonly arrangementView: Readonly<IArrangement>;
+    public readonly arrangementView: ISbDmArrangement;
 
     public readonly trackPlayers: Map<ISbDmTrack, TrackPlayer> = new Map<ISbDmTrack, TrackPlayer>();
     public readonly audibleTrackPlayers: Map<ISbDmTrack, TrackPlayer> = new Map<ISbDmTrack, TrackPlayer>();
@@ -51,8 +49,8 @@ export class ArrangementPlayer extends Publisher {
     /** We swap this out for a different context, when recording. */
     private audioContext: BaseAudioContext = this.mainAudioContext;
 
-    private nextIterationId?: number;
-    private loopBoundaryTimeoutId: number | null = null;
+    private nextIterationId?: ReturnType<typeof setTimeout>;
+    private loopBoundaryTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
     /**
      * We use the AudioContext (which always runs) to move forward in time.
@@ -73,8 +71,11 @@ export class ArrangementPlayer extends Publisher {
     private loopOnEnd = false;
 
     private scheduledAudioEvents: Array<{ audioEvent: IAudioEvent, audioBufferPlayer: AudioBufferPlayer; }> = [];
-    private scheduledCallbackEvents: Array<{ callbackEvent: ICallbackEvent, timeoutId: number; }> = [];
-    private scheduledMuteEvents: Array<{ muteEvent: IMuteEvent, timeoutId: number; }> = [];
+    private scheduledCallbackEvents: Array<{
+        callbackEvent: ICallbackEvent,
+        timeoutId: ReturnType<typeof setTimeout>;
+    }> = [];
+    private scheduledMuteEvents: Array<{ muteEvent: IMuteEvent, timeoutId: ReturnType<typeof setTimeout>; }> = [];
 
     #state: PlayerPlayState = "stopped";
 
@@ -83,7 +84,7 @@ export class ArrangementPlayer extends Publisher {
      *
      * @param arrangement The arrangement context to observe and play.
      */
-    public constructor(arrangement: Readonly<IArrangement>) {
+    public constructor(arrangement: ISbDmArrangement) {
         super();
         this.arrangementView = arrangement;
 
@@ -254,6 +255,10 @@ export class ArrangementPlayer extends Publisher {
     public renderToBlob = async (): Promise<Blob> => {
         this.currentInterval = undefined;
         const songDuration = this.timeCoordinator.metrics.realTimeLength;
+
+        // Load MP3 export dependencies only when the user requests an export.
+        const { MP3Export } = await import("../supplement/MP3Export.js");
+
         const scheduleSong = (ctx: BaseAudioContext): void => {
             this.audioContext = ctx as AudioContext;
             this.offset = this.audioContext.currentTime;
@@ -532,7 +537,7 @@ export class ArrangementPlayer extends Publisher {
 
     private scheduleAudioEvent(audioEvent: IAudioEvent): void {
         const audioBufferPlayer = new AudioBufferPlayer(audioEvent.audioBuffer, this.audioContext,
-            audioEvent.realTime + this.offset);
+            audioEvent.realTime + this.offset, this.arrangementView.mainVolume / 100);
         const audioEventReference = { audioEvent, audioBufferPlayer };
         this.scheduledAudioEvents.push(audioEventReference);
 
@@ -567,7 +572,7 @@ export class ArrangementPlayer extends Publisher {
     }
 
     private removeFromCallbackSchedule(
-        callbackEventReference: { callbackEvent: ICallbackEvent, timeoutId: number; }
+        callbackEventReference: { callbackEvent: ICallbackEvent, timeoutId: ReturnType<typeof setTimeout>; }
     ): void {
         const scheduleIndex = this.scheduledCallbackEvents.indexOf(callbackEventReference);
         if (scheduleIndex !== -1) {
@@ -591,7 +596,10 @@ export class ArrangementPlayer extends Publisher {
         this.scheduledMuteEvents.push(scheduledMuteEvent);
     }
 
-    private removeFromMuteSchedule(muteEventReference: { muteEvent: IMuteEvent, timeoutId: number; }): void {
+    private removeFromMuteSchedule(muteEventReference: {
+        muteEvent: IMuteEvent,
+        timeoutId: ReturnType<typeof setTimeout>;
+    }): void {
         const scheduleIndex = this.scheduledMuteEvents.indexOf(muteEventReference);
         if (scheduleIndex !== -1) {
             this.scheduledMuteEvents.splice(scheduleIndex, 1);

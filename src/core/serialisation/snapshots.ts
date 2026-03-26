@@ -3,11 +3,11 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
+import type { ISbDmArrangement, ISbDmTrack } from "../ScoreBookDataModel.js";
+import type { IPolyrhythm } from "../types/general.js";
 import type { IArrangementSnapshot, IPolyrhythmSnapshot, ITrackSnapshot } from "../types/snapshots.js";
-import type { IArrangement, IPolyrhythm } from "../types/general.js";
-import type { ISbDmTrack } from "../ScoreBookDataModel.js";
 
-export const getArrangementSnapshot = (arrangementView: Readonly<IArrangement>): IArrangementSnapshot => {
+export const getArrangementSnapshot = (arrangementView: Readonly<ISbDmArrangement>): IArrangementSnapshot => {
     const { timeSignature, tempo, length, pulse, stepResolution } = arrangementView.timeParams;
 
     return {

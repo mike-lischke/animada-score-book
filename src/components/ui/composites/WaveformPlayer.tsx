@@ -25,7 +25,7 @@ export class WaveformPlayer extends UIComponent<IWaveformPlayerProps, IWaveformP
     private containerRef = createRef<HTMLDivElement>();
     private wavesurfer?: WaveSurfer;
 
-    private seekTimeout?: number;
+    private seekTimeout?: ReturnType<typeof setTimeout>;
 
     public constructor(props: IWaveformPlayerProps) {
         super(props);

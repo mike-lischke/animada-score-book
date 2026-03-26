@@ -3,72 +3,10 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-.button {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    background-color: var(--button-background);
-    border: 1px solid var(--button-border);
-    border-radius: 6px;
-    color: var(--button-foreground);
-    padding: 6px 8px;
-    margin: 2px 8px;
-    min-width: 80px;
-}
-
-.button.default {
-    background: var(--button-defaultBackground);
-    color: var(--button-defaultForeground);
-}
-
-.button.imageOnly {
-    padding: 2px 2px;
-    margin: 2px;
-    min-width: 0;
-}
-
-.button:not(.disabled):hover {
-    background-color: var(--button-hoverBackground);
-}
-
-.button:not(.disabled):active {
-    background-color: var(--button-hoverBackground);
-}
-
-.button.disabled {
-    background-color: var(--button-secondaryHoverBackground);
-}
-
-.button.round {
-    border-radius: 50%;
-    padding: 0;
-    margin: 0;
-    min-width: 16px;
-    min-height: 16px;
-    width: 32px;
-    height: 32px;
-    overflow: hidden;
-}
-
-.button > .image {
-    width: 32px;
-    height: 32px;
-
-    background-color: var(--button-background);
-}
-
-.button:not(.round) > .image {
-    margin-right: 8px;
-}
-
-.button > .icon:not(.codicon) {
-    background-color: var(--button-foreground);
-}
-
 .container {
     display: flex;
     position: relative;
+    max-width: none;
 }
 
 .container.topLeft {
@@ -673,20 +611,6 @@
     z-index: 1;
 }
 
-.tabview .scrollable .scrollbar > .slider {
-    position: absolute;
-    width: 500px;
-    height: 3px;
-    opacity: 0;
-    background-color: var(--scrollbarSlider-background);
-    transition: opacity 1000ms ease-out;
-}
-
-.tabview .scrollable:hover .scrollbar > .slider {
-    opacity: 1;
-    transition: opacity 200ms ease-in;
-}
-
 .iconHost {
     flex-shrink: 0;
     position: relative;
@@ -697,9 +621,17 @@
     width: auto;
 }
 
+.icon {
+    min-width: 16px;
+    min-height: 16px;
+    color: var(--color-base-content);
+}
+
 .icon:not(.codicon) {
     mask-repeat: no-repeat;
     mask-position: center;
+    mask-size: contain;
+    background-color: var(--color-base-content);
 }
 
 .icon.withOverlay {
@@ -707,7 +639,7 @@
     mask-repeat: no-repeat;
     mask-composite: subtract;
 
-    background-color: var(--icon-foreground);
+    background-color: var(--color-base-content);
 }
 
 .iconHost .overlay {
@@ -956,115 +888,7 @@
     pointer-events: auto;
 }
 
-/** Dialog styles */
-.dialog {
-    position: absolute;
-    display: none;
-    flex-direction: column;
-
-    min-width: 500px;
-    min-height: 300px;
-    max-width: 90%;
-    max-height: 90%;
-    left: 50%;
-    top: 50%;
-    transform: translate(-50%, -50%);
-
-    text-align: left;
-    border: 1px solid color-mix(in srgb, var(--dialog-inactiveBorder) 20%, var(--dialog-background));
-    border-radius: 16px;
-    overflow: hidden;
-
-    background-color: var(--dialog-background);
-}
-
-.dialog:focus,
-.dialog:focus-within {
-    border: 1px solid color-mix(in srgb, var(--dialog-inactiveBorder) 40%, var(--dialog-background));
-}
-
-.dialog.visible {
-    display: flex;
-}
-
-.dialog > .title {
-    padding: 8px;
-}
-
-.dialog > .title .icon {
-    margin-right: 4px;
-}
-
-.dialog .title .icon:not(.codicon) {
-    background: var(--icon-foreground);
-    width: 21px;
-    height: 21px;
-    margin-right: 0;
-}
-
-.dialog .title #closeButton {
-    background: transparent;
-    border: none;
-    width: 16px;
-    height: 16px;
-    padding: 0;
-    margin-left: auto;
-    color: var(--foreground)
-}
-
-.dialog > .header {
-    flex: 1 1 auto;
-    background-color: var(--dialog-headerBackground);
-    text-align: center;
-    padding: 20px;
-}
-
-.dialog > .header > .label {
-    margin-top: 0;
-}
-
-.dialog > .content {
-    flex: 15 1 auto;
-    margin: 0;
-    padding: 16px;
-    overflow: auto;
-    white-space: nowrap;
-}
-
-.dialog > .footer {
-    padding: 12px 20px;
-    border-top: 1px solid;
-    border-color: color-mix(in srgb, var(--dialog-inactiveBorder) 20%, var(--dialog-background));
-    background-color: var(--dialog-footerBackground);
-}
-
-.dialog > .footer > .leftItems {
-    flex-grow: 1
-}
-
-.input {
-    background-color: var(--input-background);
-    border: 1px solid var(--input-border);
-    border-radius: 4px;
-    color: var(--input-foreground);
-    padding: 2px 8px;
-    margin: 0;
-    min-width: 10px;
-}
-
-.input:disabled {
-    background-color: var(--button-secondaryHoverBackground);
-}
-
-.input:hover:not(:disabled) {
-    background-color: var(--inputOption-hoverBackground);
-}
-
-.input::placeholder {
-    color: var(--input-placeholderForeground);
-    font-weight: 200;
-}
-
+/** Tooltip styles */
 .tooltip {
     position: absolute;
     left: 0;
@@ -1075,15 +899,6 @@
 
     height: fit-content;
     max-height: 500px;
-
-    padding: 1px 4px;
-
-    color: var(--tooltip-foreground);
-    border: 1px solid var(--tooltip-border);
-    border-radius: 4px;
-    background-color: var(--tooltip-background);
-    box-shadow: 0 2px 6px 0 var(--widget-shadow);
-    opacity: 0.95;
 
     overflow: auto;
     pointer-events: none;
@@ -1096,6 +911,10 @@
 
 .tooltip .label {
     background: none;
+}
+
+dialog .modal-action button {
+    margin-left: 4px;
 }
 
 .dialog.valueDialog,
@@ -1128,7 +947,7 @@
     margin-bottom: 8px;
 }
 
-/*** UpDown control styles. */
+/** UpDown control styles. */
 
 .upDown {
     /* Set by the control on mount to the real size. */
@@ -1138,18 +957,18 @@
 }
 
 .upDown .input {
-    flex: 1 1 auto;
-    margin: 0 1px 0 0;
+    border: none;
     border-top-right-radius: 0;
     border-bottom-right-radius: 0;
 }
 
-.upDown .button {
+.upDown .btn {
     flex: 1 1 auto;
 
     min-width: 0;
-    height: 16px;
-    width: 16px;
+    min-height: 0;
+    height: auto;
+    width: auto;
 
     padding: 0;
     margin: 0;
@@ -1160,11 +979,7 @@
     pointer-events: all;
 }
 
-.upDown #up {
-    margin-bottom: 1px;
-}
-
-.upDown .button::after {
+.upDown .btn::after {
     display: inline-block;
     content: "";
     width: 5px;
@@ -1173,8 +988,8 @@
     position: absolute;
     right: 5px;
 
-    border-right: 1px solid var(--button-foreground);
-    border-bottom: 1px solid var(--button-foreground);
+    border-right: 1px solid var(--color-base-content);
+    border-bottom: 1px solid var(--color-base-content);
 
     transform: translateY(1px) rotate(-135deg);
     pointer-events: none;
@@ -1216,4 +1031,85 @@
 
 .upDown #innerList > .container {
     flex: 1 1 var(--item-height);
+}
+
+/** Slider input styles. */
+.slider {
+    --current-value: 50%;
+    --handle-size: 24px;
+
+    display: flex;
+    flex-direction: row;
+
+    position: relative;
+    min-width: 50px;
+    min-height: 10px;
+
+    height: 32px;
+
+    user-select: none;
+}
+
+.slider > .body {
+    align-self: center;
+
+    width: 100%;
+    height: 8px;
+
+    border-radius: 9999px;
+
+    cursor: pointer;
+    overflow: visible;
+    user-select: none;
+}
+
+.slider.vertical {
+    flex-direction: column;
+
+    min-width: 10px;
+    min-height: 50px;
+}
+
+.slider.vertical > .body {
+    width: 8px;
+    height: 100%;
+    background-color: var(--color-base-300);
+    box-shadow: inset 1px 1px 1px rgba(0, 0, 0, 0.1);
+}
+
+.slider > .body .handle {
+    position: absolute;
+    left: calc(var(--current-value) - var(--handle-size) / 4);
+
+    height: var(--handle-size);
+    width: calc(var(--handle-size) / 2);
+
+    border-radius: 9999px;
+    background: oklch(100% 0 270);
+    box-shadow: 1px 1px 4px rgba(0, 0, 0, 0.2);
+    border: 1px solid var(--color-bawse-300);
+
+    align-self: center;
+}
+
+.slider.vertical > .body .handle {
+    left: auto;
+    top: calc(var(--current-value) - var(--handle-size) / 4);
+
+    width: var(--handle-size);
+    height: calc(var(--handle-size) / 2);
+}
+
+.checkbox {
+    border: none;
+    border-radius: 9999px;
+    background-color: var(--color-primary);
+    color: var(--color-primary-content);
+    box-shadow: none;
+
+    &::before {
+        width: 70%;
+        height: 70%;
+        transform: translate(40%, 0%);
+    }
 }

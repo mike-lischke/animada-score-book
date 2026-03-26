@@ -58,58 +58,53 @@ export class Share extends UIComponent<IShareProperties, IShareState> {
             <div className="viewport-wrapper">
                 <div id="share">
                     <div className="share-content-wrapper">
-                        <>
-                            {url ?
-                                (<>
-                                    <h2>Here's your beat:</h2>
-                                    <div className="beat-url">
-                                        <p onClick={this.selectContent}>{url}</p>
-                                        <div id="share-link-buttons"
-                                            style={{
-                                                display: "flex",
-                                                flexDirection: "row",
-                                                justifyContent: "center"
-                                            }}>
-                                            {haveNativeSharing &&
-                                                <Button
-                                                    className="push-button"
-                                                    onClick={() => {
-                                                        void navigator.share(
-                                                            { url, title: sharedTitle });
-                                                    }}
-                                                >share</Button>
+                        {url ?
+                            (<>
+                                <h2>Here's your beat:</h2>
+                                <div>
+                                    <p onClick={this.selectContent}>{url}</p>
+                                    <div id="share-link-buttons"
+                                        style={{
+                                            display: "flex",
+                                            flexDirection: "row",
+                                            justifyContent: "center"
+                                        }}>
+                                        {haveNativeSharing &&
+                                            <Button
+                                                onClick={() => {
+                                                    void navigator.share(
+                                                        { url, title: sharedTitle });
+                                                }}
+                                            >share</Button>
 
-                                            }
-                                            {haveNativeSharing && haveClipboardAccess &&
-                                                <Separator />
-                                            }
-                                            {haveClipboardAccess &&
-                                                <Button
-                                                    className="push-button"
-                                                    onClick={
-                                                        this.copyButtonClick.bind(this, url)
-                                                    }
-                                                >{copyText}</Button>
+                                        }
+                                        {haveNativeSharing && haveClipboardAccess &&
+                                            <Separator />
+                                        }
+                                        {haveClipboardAccess &&
+                                            <Button
+                                                onClick={
+                                                    this.copyButtonClick.bind(this, url)
+                                                }
+                                            >{copyText}</Button>
 
-                                            }
-                                        </div>
-
+                                        }
                                     </div>
-                                </>) :
-                                (<>
-                                    <h2>Ready to share this beat?</h2>
-                                    <Button
-                                        className="push-button shiny-link"
-                                        onClick={this.showLink}>
-                                        generate link!
-                                    </Button>
-                                </>)
-                            }
-                        </>
+
+                                </div>
+                            </>) :
+                            (<>
+                                <h2>Ready to share this beat?</h2>
+                                <Button
+                                    className="shiny-link"
+                                    onClick={this.showLink}>
+                                    generate link!
+                                </Button>
+                            </>)
+                        }
                     </div>
                     <Button
                         id="load-button"
-                        className="push-button"
                         onClick={this.close}
                     >
                         Back to my beat!

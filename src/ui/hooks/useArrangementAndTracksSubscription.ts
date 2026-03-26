@@ -7,11 +7,11 @@
 
 import { useEffect } from "preact/hooks";
 
-import type { ISbDmTrack } from "../../core/ScoreBookDataModel.js";
-import type { IArrangement, Subscription } from "../../core/types/general.js";
+import type { ISbDmArrangement, ISbDmTrack } from "../../core/ScoreBookDataModel.js";
+import type { Subscription } from "../../core/types/general.js";
 import { useSubscription } from "./useSubscription.js";
 
-export function useArrangementAndTracksSubscription(arrangementView: Readonly<IArrangement>,
+export function useArrangementAndTracksSubscription(arrangementView: Readonly<ISbDmArrangement>,
     callback: Subscription): void {
     useSubscription(arrangementView, callback);
 

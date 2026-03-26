@@ -3,7 +3,7 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import type { ISbDmInstrument, ISbDmNote, ISbDmTrack, ITiming } from "../ScoreBookDataModel.js";
+import type { ISbDmInstrument, ISbDmNote, ITiming } from "../ScoreBookDataModel.js";
 
 export interface IInstrumentMeta {
     id: number;
@@ -62,14 +62,6 @@ export interface ISubscribable {
 
 export interface IPublisher extends ISubscribable {
     publish(): void;
-}
-
-export interface IArrangement extends ISubscribable {
-    title: string;
-    timeParams: ITimeParams;
-    tracks: ISbDmTrack[];
-    addTrack(instrument: ISbDmInstrument, id?: number): ISbDmTrack;
-    removeTrack(track: ISbDmTrack): void;
 }
 
 export interface ITimeParams extends ISubscribable {

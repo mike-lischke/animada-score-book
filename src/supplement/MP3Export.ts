@@ -3,13 +3,6 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import { registerMp3Encoder } from "@mediabunny/mp3-encoder";
-import { ALL_FORMATS, BlobSource, BufferTarget, canEncodeAudio, Input, Mp3OutputFormat, Output } from "mediabunny";
-
-// const blob = await exportSongToMp3(duration, scheduleSong);
-// const url = URL.createObjectURL(blob);
-// <a href={url} download="song.mp3">Download</a>
-
 export class MP3Export {
     private sampleRate = 44100;
 
@@ -134,19 +127,22 @@ export class MP3Export {
     }
 
     private async wavBlobToMp3Blob(wavBlob: Blob): Promise<Blob> {
+        const {
+            BlobSource, BufferTarget, Conversion, Input, Mp3OutputFormat, Output, WAVE
+        } = await import("mediabunny");
+
         await this.ensureMp3Encoder();
 
         const input = new Input({
             source: new BlobSource(wavBlob),
-            formats: ALL_FORMATS,
+            // We generate WAV input ourselves, so only enable WAV parsing.
+            formats: [WAVE],
         });
 
         const output = new Output({
             format: new Mp3OutputFormat(),
             target: new BufferTarget(),
         });
-
-        const { Conversion } = await import("mediabunny");
 
         const conversion = await Conversion.init({ input, output });
         await conversion.execute();
@@ -157,7 +153,10 @@ export class MP3Export {
     }
 
     private async ensureMp3Encoder(): Promise<void> {
+        const { canEncodeAudio } = await import("mediabunny");
+
         if (!(await canEncodeAudio("mp3"))) {
+            const { registerMp3Encoder } = await import("@mediabunny/mp3-encoder");
             registerMp3Encoder();
         }
     }

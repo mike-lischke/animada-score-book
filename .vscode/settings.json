@@ -1,4 +1,8 @@
 {
+    "files.associations": {
+        "*.tailwind.css": "tailwindcss",
+        "*.postcss": "postcss"
+    },
     "cSpell.words": [
         "abelian",
         "Agogo",
@@ -36,7 +40,9 @@
     ],
     "cSpell.ignoreWords": [
         "folderid",
+        "mediabunny",
         "parentid",
-        "tableholder"
+        "tableholder",
+        "wavesurfer"
     ]
 }

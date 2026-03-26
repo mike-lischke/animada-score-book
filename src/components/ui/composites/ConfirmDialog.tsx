@@ -12,7 +12,7 @@ import { Icon } from "../framework/Icon.js";
 import { Label } from "../framework/Label.js";
 import { Orientation } from "../framework/ui-types.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
-import { Dialog, DialogResponseClosure } from "../framework/Dialogs/Dialog.js";
+import { Dialog, DialogResponseClosure } from "../framework/Dialog.js";
 
 /** Possible buttons to show. Only fields with a value also show a button. */
 export interface IConfirmDialogButtons {
@@ -115,12 +115,9 @@ export class ConfirmDialog extends UIComponent<IConfirmDialogProperties, IConfir
                         <Label>{title ?? "Confirm"}</Label>
                     </>
                 }
-                content={dialogContent}
-                actions={{
-                    end: actions,
-                }}
-                onClose={this.handleClose}
+                actions={actions}
             >
+                {dialogContent}
             </Dialog>
         );
     }
@@ -128,7 +125,7 @@ export class ConfirmDialog extends UIComponent<IConfirmDialogProperties, IConfir
     public show(message: ComponentChild, buttons: IConfirmDialogButtons, title?: string, description?: string[],
         values?: Record<string, unknown>): void {
         this.setState({ title, message, buttons, values, description }, () => {
-            return this.dialogRef.current?.open({ closeOnEscape: true });
+            return this.dialogRef.current?.open();
         });
     }
 

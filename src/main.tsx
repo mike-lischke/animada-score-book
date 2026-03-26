@@ -12,6 +12,8 @@ import { Container } from "./components/ui/framework/Container.js";
 import { Message } from "./components/ui/framework/Message.js";
 import { ChildAlignment, MessageType, Orientation } from "./components/ui/framework/ui-types.js";
 
+import "./web-components.js";
+
 const root = document.getElementById("app")!;
 interface ISerializedError {
     tag?: string;
@@ -80,12 +82,10 @@ window.onunhandledrejection = (event) => {
 };
 
 try {
-    if (/(iPad|iPhone|iPod)/g.test(navigator.userAgent)) {
-        await navigator.mediaDevices.getUserMedia({ video: false, audio: true });
-    }
-
     render(<App />, root);
-} catch {
+} catch (error) {
+    console.error("Fatal error during initial render:", error);
+
     render(
         <Message messageType={MessageType.Info}>
             <Container

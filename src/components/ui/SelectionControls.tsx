@@ -5,7 +5,7 @@
 
 import { createRef, type ComponentChild, type ContextType } from "preact";
 
-import type { IArrangement } from "../../core/types/general.js";
+import type { ISbDmArrangement } from "../../core/ScoreBookDataModel.js";
 import type { UndoManager } from "../../core/UndoManager.js";
 import type { ArrangementPlayer } from "../../player/ArrangementPlayer.js";
 import type { ScoreBookUiServices } from "../../player/types.js";
@@ -80,7 +80,6 @@ export class SelectionControls extends UIComponent<ISelectionControlsProperties,
                                     display: addingPolyrhythm ? "none" : "flex"
                                 }}>
                                 <Button
-                                    className="push-button"
                                     onClick={() => {
                                         this.setState({ addingPolyrhythm: true });
                                         setTimeout(() => {
@@ -93,7 +92,6 @@ export class SelectionControls extends UIComponent<ISelectionControlsProperties,
                                 <Separator />
 
                                 <Button
-                                    className="push-button"
                                     onClick={this.handleClearSounds}
                                 >Clear sounds</Button>
 
@@ -101,7 +99,6 @@ export class SelectionControls extends UIComponent<ISelectionControlsProperties,
                                 <Separator />
 
                                 <Button
-                                    className="push-button"
                                     onClick={() => {
                                         selectionManager.deselectAll();
                                     }}
@@ -127,7 +124,6 @@ export class SelectionControls extends UIComponent<ISelectionControlsProperties,
                                 </div>
 
                                 <Button
-                                    className="push-button"
                                     onClick={() => {
                                         this.createPolyrhythm(
                                             this.polyrhythmInputRef.current!.value,
@@ -140,7 +136,6 @@ export class SelectionControls extends UIComponent<ISelectionControlsProperties,
                                 <Separator />
 
                                 <Button
-                                    className="push-button"
                                     onClick={() => {
                                         this.setState({ addingPolyrhythm: false });
                                         this.polyrhythmInputRef.current!.value = "";
@@ -154,7 +149,8 @@ export class SelectionControls extends UIComponent<ISelectionControlsProperties,
         );
     }
 
-    private createPolyrhythm(inputValue: string, selectionManager: SelectionManager, arrangement: IArrangement): void {
+    private createPolyrhythm(inputValue: string, selectionManager: SelectionManager,
+        arrangement: ISbDmArrangement): void {
         const { undoManager } = this.props;
 
         const length = Number(inputValue);

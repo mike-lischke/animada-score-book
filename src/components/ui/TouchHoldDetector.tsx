@@ -14,7 +14,7 @@ export interface ITouchHoldDetectorProps extends ICommonUIProperties {
 }
 
 export class TouchHoldDetector extends UIComponent<ITouchHoldDetectorProps> {
-    private timeoutIdRef = 0;
+    private timeoutIdRef: ReturnType<typeof setTimeout> | null = null;
 
     public render(): ComponentChild {
         const { children } = this.props;
@@ -46,7 +46,9 @@ export class TouchHoldDetector extends UIComponent<ITouchHoldDetectorProps> {
     };
 
     private cancel = (event: TouchEvent) => {
-        clearTimeout(this.timeoutIdRef);
+        if (this.timeoutIdRef) {
+            clearTimeout(this.timeoutIdRef);
+        }
 
         if (isMobile) {
             event.preventDefault();

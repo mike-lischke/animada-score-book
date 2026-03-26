@@ -9,7 +9,7 @@ export class AudioBufferPlayer {
     private readonly sourceNode: AudioBufferSourceNode;
     private readonly gainNode: GainNode;
 
-    public constructor(audioBuffer: AudioBuffer, audioContext: BaseAudioContext, time = 0) {
+    public constructor(audioBuffer: AudioBuffer, audioContext: BaseAudioContext, time: number, volume: number) {
         // Use the AudioContext factory to create the source node to avoid
         // referencing a global constructor which may not exist in some test
         // environments (Node + JSDOM / test runners).
@@ -22,7 +22,7 @@ export class AudioBufferPlayer {
         // Maybe we should be doing this at the AudioContext level, rather than each sample...
         this.gainNode = audioContext.createGain();
         this.gainNode.connect(audioContext.destination);
-        this.gainNode.gain.value = 0.5; // Consider initial volume in future if needed
+        this.gainNode.gain.value = volume;
         this.sourceNode.connect(this.gainNode);
         this.sourceNode.start(clampValue(time, 0, Number.MAX_SAFE_INTEGER));
     }

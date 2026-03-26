@@ -7,7 +7,7 @@ import { ComponentChild, createRef } from "preact";
 
 import { Button } from "../framework/Button.js";
 import { Codicon } from "../framework/Codicon.js";
-import { Dialog, DialogResponseClosure } from "../framework/Dialogs/Dialog.js";
+import { Dialog, DialogResponseClosure } from "../framework/Dialog.js";
 import { Grid } from "../framework/Grid.js";
 import { GridCell } from "../framework/GridCell.js";
 import { Icon } from "../framework/Icon.js";
@@ -150,35 +150,31 @@ export class ValueDialog extends UIComponent<IValueDialogProperties, IValueDialo
             id={id}
             ref={this.dialogRef}
             className={className}
-            onClose={this.closeDialog}
             caption={
                 <>
                     <Icon src={Codicon.PassFilled} />
                     <Label>{caption}</Label>
                 </>
             }
-            content={
-                <Grid columns={8} columnGap={8}>
-                    {cells}
-                </Grid>
-            }
-            actions={{
-                end: [
-                    <Button
-                        id="accept"
-                        key="accept"
-                        caption="OK"
-                        onClick={this.handleButtonClick}
-                    />,
-                    <Button
-                        id="cancel"
-                        key="cancel"
-                        caption="Cancel"
-                        onClick={this.handleButtonClick}
-                    />,
-                ],
-            }}
-        />;
+            actions={[
+                <Button
+                    id="accept"
+                    key="accept"
+                    caption="OK"
+                    onClick={this.handleButtonClick}
+                />,
+                <Button
+                    id="cancel"
+                    key="cancel"
+                    caption="Cancel"
+                    onClick={this.handleButtonClick}
+                />,
+            ]}
+        >
+            <Grid columns={8} columnGap={8}>
+                {cells}
+            </Grid>
+        </Dialog>;
     }
 
     private handleValueChange = (e: InputEvent): void => {

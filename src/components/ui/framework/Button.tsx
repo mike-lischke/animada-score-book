@@ -29,6 +29,11 @@ export interface IButtonProperties extends ICommonUIProperties {
 
     focusOnClick?: boolean;
 
+    /** The value to returned if the button is used in a form/dialog. */
+    name?: string;
+
+    value?: string;
+
     onContextMenu?: MouseEventCallback;
 }
 
@@ -44,13 +49,13 @@ export class Button extends UIComponent<IButtonProperties> {
     public render(): ComponentChild {
         const {
             id, children, caption, style, orientation, round, imageOnly, disabled, isDefault, title, role,
-            "data-tooltip": dataTooltip, onClick
+            "data-tooltip": dataTooltip, name, value, onClick
         } = this.props;
         const className = this.generateFinalClassName([
-            "button",
-            this.classFromProperty(round, "round"),
+            "btn",
+            this.classFromProperty(round, "btn-circle"),
             this.classFromProperty(imageOnly, "imageOnly"),
-            this.classFromProperty(disabled, "disabled"),
+            this.classFromProperty(disabled, "btn-disabled"),
             this.classFromProperty(isDefault, "default"),
         ]);
 
@@ -60,20 +65,22 @@ export class Button extends UIComponent<IButtonProperties> {
             flexDirection: orientation,
         };
 
-        return (
-            <button
-                id={id}
-                ref={this.buttonRef}
-                style={newStyle}
-                className={className}
-                title={title}
-                disabled={disabled}
-                role={role}
-                data-tooltip={dataTooltip}
-                onClick={onClick}
-            >
-                {content}
-            </button>
-        );
+        const button = <button
+            id={id}
+            ref={this.buttonRef}
+            style={newStyle}
+            className={className}
+            title={title}
+            disabled={disabled}
+            role={role}
+            name={name}
+            value={value}
+            data-tooltip={dataTooltip}
+            onClick={onClick}
+        >
+            {content}
+        </button>;
+
+        return button;
     }
 }
