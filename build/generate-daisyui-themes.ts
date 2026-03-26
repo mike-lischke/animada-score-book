@@ -3,7 +3,7 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import { readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -118,6 +118,7 @@ const daisyThemes = files.map((file: string) => {
     themeNames[theme.name] = theme.type;
 });
 
+mkdirSync(dirname(outFile), { recursive: true });
 writeFileSync(outFile, themeExports.join("\n\n"), "utf8");
 writeFileSync(themeNamesFile,
     `export const themeNames = ${JSON.stringify(themeNames, null, 4)};\n`, "utf8");
