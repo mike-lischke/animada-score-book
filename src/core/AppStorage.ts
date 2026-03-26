@@ -65,7 +65,7 @@ export class AppStorage {
 
             return true;
         } catch (e) {
-            console.error("LocalStorage is not available:", e);
+            console.warn("LocalStorage is not available:", e);
 
             return false;
         }

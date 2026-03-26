@@ -70,23 +70,11 @@ describe("AudioBufferPlayer", () => {
         const ctx = stubCtx as unknown as AudioContext;
         const buffer = {} as AudioBuffer;
 
-        const player = new AudioBufferPlayer(buffer, ctx, 1.5);
+        const player = new AudioBufferPlayer(buffer, ctx, 1.5, 0);
         expect(source.start).toHaveBeenCalledWith(1.5);
         expect(source.connectedNode).toBe(gain);
         expect(gain.connectedDest).toBe(stubCtx.destination);
         expect(player).toBeTruthy();
-    });
-
-    it("uses default start time 0 when not provided", () => {
-        const source = new StubAudioBufferSourceNode();
-        const gain = new StubGainNode();
-        const ctx = new StubAudioContext(source, gain) as unknown as AudioContext;
-        const buffer = {} as AudioBuffer;
-
-        // time omitted
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        const player = new AudioBufferPlayer(buffer, ctx);
-        expect(source.start).toHaveBeenCalledWith(0);
     });
 
     it("registers onEnded callback and invokes it when ended", () => {
@@ -95,7 +83,7 @@ describe("AudioBufferPlayer", () => {
         const ctx = new StubAudioContext(source, gain) as unknown as AudioContext;
         const buffer = {} as AudioBuffer;
 
-        const player = new AudioBufferPlayer(buffer, ctx, 0);
+        const player = new AudioBufferPlayer(buffer, ctx, 0, 100);
         const fn = vi.fn();
         player.onEnded(fn);
 
@@ -109,7 +97,7 @@ describe("AudioBufferPlayer", () => {
         const ctx = new StubAudioContext(source, gain) as unknown as AudioContext;
         const buffer = {} as AudioBuffer;
 
-        const player = new AudioBufferPlayer(buffer, ctx, 0);
+        const player = new AudioBufferPlayer(buffer, ctx, 0, 10);
         const fn1 = vi.fn();
         const fn2 = vi.fn();
         player.onEnded(fn1);
@@ -126,7 +114,7 @@ describe("AudioBufferPlayer", () => {
         const ctx = new StubAudioContext(source, gain) as unknown as AudioContext;
         const buffer = {} as AudioBuffer;
 
-        const player = new AudioBufferPlayer(buffer, ctx, 0);
+        const player = new AudioBufferPlayer(buffer, ctx, 0, 20);
         const fn = vi.fn();
         player.onEnded(fn);
         player.onEnded(fn);
@@ -141,7 +129,7 @@ describe("AudioBufferPlayer", () => {
         const ctx = new StubAudioContext(source, gain) as unknown as AudioContext;
         const buffer = {} as AudioBuffer;
 
-        const player = new AudioBufferPlayer(buffer, ctx, 0);
+        const player = new AudioBufferPlayer(buffer, ctx, 0, 30);
         player.stop();
         expect(gain.gain.setTargetAtTime).toHaveBeenCalledWith(0, 0, 0.05);
     });
@@ -152,7 +140,7 @@ describe("AudioBufferPlayer", () => {
         const ctx = new StubAudioContext(source, gain) as unknown as AudioContext;
         const buffer = {} as AudioBuffer;
 
-        const player = new AudioBufferPlayer(buffer, ctx, 0);
+        const player = new AudioBufferPlayer(buffer, ctx, 0, 40);
         player.stop();
         player.stop();
         expect(gain.gain.setTargetAtTime).toHaveBeenCalledTimes(2);
@@ -165,7 +153,7 @@ describe("AudioBufferPlayer", () => {
         const buffer = {} as AudioBuffer;
 
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        const player = new AudioBufferPlayer(buffer, ctx, 0);
+        const player = new AudioBufferPlayer(buffer, ctx, 0, 50);
         expect(source.connectCalledCount).toBe(1);
         expect(gain.connectCalledCount).toBe(1);
     });
@@ -176,7 +164,7 @@ describe("AudioBufferPlayer", () => {
         const ctx = new StubAudioContext(source, gain) as unknown as AudioContext;
         const buffer = {} as AudioBuffer;
 
-        const player = new AudioBufferPlayer(buffer, ctx, 0);
+        const player = new AudioBufferPlayer(buffer, ctx, 0, 100);
         source.triggerEnded();
 
         const fn = vi.fn();
