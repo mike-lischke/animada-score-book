@@ -98,6 +98,7 @@ export class SettingsDialog extends Component<ISettingsDialogProperties, ISettin
                 <Dropdown
                     caption={`Current Theme: ${currentTheme}`}
                     items={themeItems}
+                    selectedItem={currentTheme}
                 />
             </Dialog>
         );

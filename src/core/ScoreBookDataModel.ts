@@ -53,6 +53,9 @@ export interface ISbDmEntityState {
 
     /** Was the entry expanded before? If not it must be initialized on expand. */
     expandedOnce: boolean;
+
+    /** Indicates whether the entry is currently being loaded. */
+    loading?: boolean;
 }
 
 export enum SbDmEntityType {

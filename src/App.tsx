@@ -19,12 +19,14 @@ import { ProgressIndicator } from "./components/ui/framework/ProgressIndicator.j
 import { ChildAlignment, Orientation } from "./components/ui/framework/ui-types.js";
 import { UIComponent } from "./components/ui/framework/UIComponent.js";
 
+import { ArrangementEditControls } from "./components/ui/Arrangement/ArrangementEditControls.js";
 import { ArrangementPlayControls } from "./components/ui/Arrangement/ArrangementPlayControls.js";
 import { ArrangementTitle } from "./components/ui/Arrangement/ArrangementTitle.js";
 import { ArrangementViewer } from "./components/ui/Arrangement/ArrangementViewer.js";
 import { ValueEditorEntryType, type IValueEditorValueEntry } from "./components/ui/composites/ValueDialog.js";
 import { Codicon } from "./components/ui/framework/Codicon.js";
-import { Dialog, DialogResponseClosure, DialogType } from "./components/ui/framework/Dialog.js";
+import { DialogResponseClosure, DialogType } from "./components/ui/framework/Dialog.js";
+import { DrawerSidebar } from "./components/ui/framework/DrawerSidebar.js";
 import { Icon } from "./components/ui/framework/Icon.js";
 import { TooltipProvider } from "./components/ui/framework/Tooltip.js";
 import { Overlay } from "./components/ui/Overlay.js";
@@ -46,7 +48,6 @@ import { MouseHandler } from "./ui/MouseHandler.js";
 import { ScoreLibrary } from "./ui/ScoreLibrary.js";
 import { SelectionManager } from "./ui/SelectionManager.js";
 import { SettingsDialog } from "./ui/SettingsDialog.js";
-import { ArrangementEditControls } from "./components/ui/Arrangement/ArrangementEditControls.js";
 
 enum DisplayMode {
     Standard,
@@ -61,12 +62,13 @@ interface IAppState {
     editingTitle: boolean;
 
     displayMode: DisplayMode;
+    sidebarOpen: boolean;
 }
 
 const newSong: ISerialisedArrangement = { composition: emptySongString, version: 2, title: "New Song" };
 
 export class App extends UIComponent<{}, IAppState> {
-    private scoreLibraryRef = createRef<Dialog>();
+    private scoreLibraryRef = createRef<DrawerSidebar>();
     private settingsDialogRef = createRef<SettingsDialog>();
 
     private dataModel = new ScoreBookDataModel();
@@ -89,6 +91,7 @@ export class App extends UIComponent<{}, IAppState> {
             theme,
             editingTitle: false,
             displayMode: DisplayMode.Standard,
+            sidebarOpen: false,
         };
 
         const selectionManager = new SelectionManager();
@@ -112,8 +115,15 @@ export class App extends UIComponent<{}, IAppState> {
         });
     }
 
+    public override shouldComponentUpdate(nextProps: {}, nextState: IAppState): boolean {
+        const { theme, displayMode, sidebarOpen, ready } = this.state;
+
+        return theme != nextState.theme || displayMode !== nextState.displayMode
+            || sidebarOpen !== nextState.sidebarOpen || ready !== nextState.ready;
+    }
+
     public render() {
-        const { ready, displayMode } = this.state;
+        const { ready, displayMode, sidebarOpen } = this.state;
 
         if (!ready) {
             return <ProgressIndicator />;
@@ -126,12 +136,12 @@ export class App extends UIComponent<{}, IAppState> {
         if (this.arrangementPlayer) {
             titleBlock = <Container
                 orientation={Orientation.LeftToRight}
-                mainAlignment={ChildAlignment.Center}
+                mainAlignment={ChildAlignment.End}
                 crossAlignment={ChildAlignment.Center}>
                 <ArrangementTitle
                     id="mainArrangementTitle"
                     arrangement={arrangementView}
-                    data-tip="expand"
+                    data-tooltip="expand"
                     undoManager={this.undoManager!}
                     editMode={displayMode === DisplayMode.Editing}
                     onEditEnd={this.onEditEnd}
@@ -150,109 +160,111 @@ export class App extends UIComponent<{}, IAppState> {
                     orientation={Orientation.TopDown}
                     crossAlignment={ChildAlignment.Stretch}
                 >
-                    <Container
-                        orientation={Orientation.LeftToRight}
-                        crossAlignment={ChildAlignment.Center}
+                    <DrawerSidebar
+                        id="mainDrawer"
+                        ref={this.scoreLibraryRef}
+                        open={sidebarOpen}
+                        siderbarContent={
+                            <ScoreLibrary
+                                onAction={this.handleScoreLibraryAction}
+                                dataModel={this.dataModel}
+                            />
+                        }
                     >
                         <Container
-                            id="headerContent"
-                            className="rounded-3xl shadow-md border border-base-200/70"
+                            orientation={Orientation.LeftToRight}
+                            crossAlignment={ChildAlignment.Center}
                         >
                             <Container
-                                id="toolbarButtons"
-                                orientation={Orientation.TopDown}
-                                mainAlignment={ChildAlignment.Center}
-                                className="bg-base-100/80 p-2"
+                                id="headerContent"
+                                className="rounded-3xl shadow-md border border-base-200/70"
                             >
-                                <Button
-                                    imageOnly
-                                    className="btn-ghost"
-                                    data-tooltip="Display Options"
-                                    onClick={this.handleDisplayOptionsClick}
+                                <Container
+                                    id="toolbarButtons"
+                                    orientation={Orientation.TopDown}
+                                    mainAlignment={ChildAlignment.Center}
+                                    className="bg-base-100/80 p-2"
                                 >
-                                    <Icon src={Codicon.Gear} data-tooltip="inherit" />
-                                </Button>
-                                <Button
-                                    id="scoreLibraryButton"
-                                    imageOnly
-                                    className="btn-ghost"
-                                    data-tooltip="Score Library"
-                                    onClick={this.handleScoreLibraryClick}
+                                    <Button
+                                        imageOnly
+                                        className="btn-ghost"
+                                        data-tooltip="Display Options"
+                                        onClick={this.handleDisplayOptionsClick}
+                                    >
+                                        <Icon src={Codicon.Gear} data-tooltip="inherit" />
+                                    </Button>
+                                    <Button
+                                        id="scoreLibraryButton"
+                                        imageOnly
+                                        className="btn-ghost"
+                                        data-tooltip="Score Library"
+                                        onClick={this.handleScoreLibraryClick}
+                                    >
+                                        <Icon src={Codicon.Library} data-tooltip="inherit" />
+                                    </Button>
+                                    <Button
+                                        id="instrumentEditor"
+                                        imageOnly
+                                        className="btn-ghost"
+                                        data-tooltip="Instrument Editor"
+                                        disabled
+                                        onClick={this.handleInstrumentEditorClick}
+                                    >
+                                        <Icon src={timbauImage} width={24} height={24} data-tooltip="inherit" />
+                                    </Button>
+                                    <ShareButton />
+                                </Container>
+                                <Container
+                                    id="appTitleContainer"
+                                    orientation={Orientation.TopDown}
+                                    crossAlignment={ChildAlignment.Stretch}
                                 >
-                                    <Icon src={Codicon.Library} data-tooltip="inherit" />
-                                </Button>
-                                <Button
-                                    id="instrumentEditor"
-                                    imageOnly
-                                    className="btn-ghost"
-                                    data-tooltip="Instrument Editor"
-                                    disabled
-                                    onClick={this.handleInstrumentEditorClick}
-                                >
-                                    <Icon src={timbauImage} width={24} height={24} data-tooltip="inherit" />
-                                </Button>
-                                <ShareButton />
-                            </Container>
-                            <Container
-                                id="appTitleContainer"
-                                orientation={Orientation.TopDown}
-                                crossAlignment={ChildAlignment.Stretch}
-                            >
-                                <Container>
-                                    <img id="titleLogo" src="/logo.svg" />
-                                    <Label className="appTitle top">ANIMADA</Label>
-                                </Container>
-                                <Container>
-                                    <Label className="appTitle bottom">Score</Label>
-                                    <Label className="appTitle bottom accent">Book</Label>
-                                </Container>
-                                <Container crossAlignment={ChildAlignment.Center} id="arrangementStats">
-                                    {scoreStats}
-                                </Container>
+                                    <Container>
+                                        <img id="titleLogo" src="/logo.svg" />
+                                        <Label className="appTitle top">ANIMADA</Label>
+                                    </Container>
+                                    <Container>
+                                        <Label className="appTitle bottom">Score</Label>
+                                        <Label className="appTitle bottom accent">Book</Label>
+                                    </Container>
+                                    <Container crossAlignment={ChildAlignment.Center} id="arrangementStats">
+                                        {scoreStats}
+                                    </Container>
 
-                            </Container>
-                            <Container
-                                orientation={Orientation.TopDown}
-                                mainAlignment={ChildAlignment.Center}
-                            >
-                                <ArrangementPlayControls
-                                    arrangementPlayer={this.arrangementPlayer!}
-                                    services={this.services}
-                                    undoManager={this.undoManager!}
-                                />
-                            </Container>
-                            <Container
-                                id="arrangementPalette"
-                                className="flex-1 p-1 pr-2"
-                                orientation={Orientation.TopDown}
-                                mainAlignment={ChildAlignment.Start}
-                                crossAlignment={ChildAlignment.End}
-                            >
-                                {titleBlock}
-                                {displayMode === DisplayMode.Editing && <ArrangementEditControls
-                                    arrangementPlayer={this.arrangementPlayer!}
-                                    services={this.services}
-                                    undoManager={this.undoManager!}
-                                />}
+                                </Container>
+                                <Container
+                                    orientation={Orientation.TopDown}
+                                    mainAlignment={ChildAlignment.Center}
+                                >
+                                    <ArrangementPlayControls
+                                        arrangementPlayer={this.arrangementPlayer!}
+                                        services={this.services}
+                                        undoManager={this.undoManager!}
+                                    />
+                                </Container>
+                                <Container
+                                    id="arrangementPalette"
+                                    orientation={Orientation.TopDown}
+                                    mainAlignment={ChildAlignment.Start}
+                                    crossAlignment={ChildAlignment.Stretch}
+                                >
+                                    {titleBlock}
+                                    {displayMode === DisplayMode.Editing && <ArrangementEditControls
+                                        arrangementPlayer={this.arrangementPlayer!}
+                                        services={this.services}
+                                        undoManager={this.undoManager!}
+                                    />}
+                                </Container>
                             </Container>
                         </Container>
-                    </Container>
 
-                    {this.arrangementPlayer && <ArrangementViewer
-                        arrangementPlayer={this.arrangementPlayer}
-                        services={this.services}
-                        undoManager={this.undoManager!}
-                    />}
-
+                        {this.arrangementPlayer && <ArrangementViewer
+                            arrangementPlayer={this.arrangementPlayer}
+                            services={this.services}
+                            undoManager={this.undoManager!}
+                        />}
+                    </DrawerSidebar>
                 </Container>
-                <Dialog
-                    ref={this.scoreLibraryRef}
-                >
-                    <ScoreLibrary
-                        onAction={this.handleScoreLibraryAction}
-                        dataModel={this.dataModel}
-                    />
-                </Dialog>
                 <TooltipProvider />
                 <DialogHost />
                 <SettingsDialog ref={this.settingsDialogRef} onSettingsChanged={this.handleSettingsChanged} />
@@ -265,7 +277,7 @@ export class App extends UIComponent<{}, IAppState> {
     };
 
     private handleScoreLibraryClick = () => {
-        this.scoreLibraryRef.current?.open();
+        this.setState({ sidebarOpen: true });
     };
 
     private handleInstrumentEditorClick = () => {
@@ -442,15 +454,13 @@ export class App extends UIComponent<{}, IAppState> {
                     if (newName && newName.trim().length > 0) {
                         await this.dataModel.renameEntry(data, newName.trim());
                     }
-                } else {
-                    this.scoreLibraryRef.current?.close(false);
                 }
 
                 break;
             }
 
-            case "play": {
-                this.scoreLibraryRef.current?.close(false);
+            case "load": {
+                this.setState({ sidebarOpen: false });
 
                 if (data.type === SbDmEntityType.Score) {
                     const params = new URLSearchParams(data.content);
@@ -534,6 +544,7 @@ export class App extends UIComponent<{}, IAppState> {
                 Overlay.closeAllOverlays();
                 this.services.selectionManager.deselectAll();
                 this.services.modeManager.deletePolyrhythmMode = false;
+                this.setState({ sidebarOpen: false });
 
                 break;
             }
@@ -614,9 +625,4 @@ export class App extends UIComponent<{}, IAppState> {
         }, 100);
     };
 
-    private onClickEditTitle = () => {
-        if (!this.justFinishedEditingTitle) {
-            this.setState({ editingTitle: true });
-        }
-    };
 }

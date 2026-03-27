@@ -107,7 +107,7 @@ export class ArrangementEditControls
                     onClick={() => {
                         Overlay.toggleOverlay("clear_tracks", "show");
                     }}
-                    data-tip="Start a new score."
+                    data-tooltip="Start a new score."
                 >
                     Start New Score
                 </Button>

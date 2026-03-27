@@ -47,7 +47,7 @@ const mapVsThemeToDaisyTheme = (theme: VSTheme): string => {
     const baseContent = c["editor.foreground"] ?? c.foreground;
     const primary = c["button.background"] ?? c["banner.background"] ?? "#3794ff";
     const secondary = c["minimapGutter.addedBackground"] ?? primary;
-    const neutralBg = c["radio.activeBackground"] ?? c["activityBar.background"] ?? "#404040";
+    const neutralBg = c["activityBar.background"] ?? "#404040";
     const neutralFg = c["activityBar.foreground"] ?? "#cccccc";
     const accent = c["charts.green"] ?? primary;
     const info = c["inputValidation.infoBackground"] ?? primary;

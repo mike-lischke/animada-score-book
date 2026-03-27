@@ -65,6 +65,15 @@ export class ArrangementPlayControls
         this.addSubscription(arrangement, this.titleChangeSubscription);
     }
 
+    public override componentDidUpdate(previousProps: Readonly<IArrangementPlayControlsProperties>,
+        previousState: Readonly<IArrangementPlayControlsState>): void {
+        const { arrangementPlayer } = this.props;
+        const arrangement = arrangementPlayer.arrangementView;
+        if (previousState.currentTempo !== arrangement.timeParams.tempo) {
+            this.setState({ currentTempo: arrangement.timeParams.tempo });
+        }
+    }
+
     public override render(): ComponentChild {
         const { arrangementPlayer, undoManager } = this.props;
         const { playing, currentVolume, currentTempo } = this.state;
@@ -199,7 +208,7 @@ export class ArrangementPlayControls
                                 AppStorage.saveSetting("loop", checked);
                             }}
                         />
-                        <Label caption="Loop" style={{ fontSize: "80%", marginLeft: "4px" }} data-tooltip="inherit" />
+                        <Label caption="Loop" style={{ marginLeft: "4px" }} data-tooltip="inherit" />
                     </Container>
                     <Container
                         orientation={Orientation.LeftToRight}
@@ -222,8 +231,8 @@ export class ArrangementPlayControls
                             }}
                         />
                         <Label
-                            caption="Use Metronome"
-                            style={{ fontSize: "80%", marginLeft: "4px" }}
+                            caption="Metronome"
+                            style={{ marginLeft: "4px" }}
                             data-tooltip="inherit" />
                     </Container>
                     <Container
@@ -248,7 +257,7 @@ export class ArrangementPlayControls
                         />
                         <Label
                             caption="Count In"
-                            style={{ fontSize: "80%", marginLeft: "4px" }}
+                            style={{ marginLeft: "4px" }}
                             data-tooltip="inherit"
                         />
                     </Container>

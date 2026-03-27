@@ -605,6 +605,8 @@ export class TreeGrid<TRow extends object = {}> extends UIComponent<ITreeGridPro
             }
         }
 
+        // SVG elements work well as expand/collapse icons. However, Tabulator expects an HTML element.
+        const expander = this.createChevronSvg() as unknown as HTMLElement;
         const result: Options = {
             index: options?.index ?? "id",
             columns,
@@ -615,8 +617,8 @@ export class TreeGrid<TRow extends object = {}> extends UIComponent<ITreeGridPro
             dataTreeChildIndent: options?.treeChildIndent ?? 8,
             dataTreeChildField: options?.childKey ?? "children",
             dataTreeElementColumn: options?.treeColumn,
-            dataTreeExpandElement: "<span class='treeToggle codicon codicon-chevron-right' />",
-            dataTreeCollapseElement: "<span class='treeToggle expanded codicon codicon-chevron-down' />",
+            dataTreeExpandElement: expander,
+            dataTreeCollapseElement: expander,
             dataTreeBranchElement: false,
             dataTreeStartExpanded: options?.expandedLevels ?? false,
 
@@ -768,4 +770,26 @@ export class TreeGrid<TRow extends object = {}> extends UIComponent<ITreeGridPro
     private handleCellEditCancelled = () => {
         this.isEditing = false;
     };
+
+    private createChevronSvg(): SVGElement {
+        const xmlns = "http://www.w3.org/2000/svg";
+        const svg = document.createElementNS(xmlns, "svg");
+        svg.setAttribute("viewBox", "0 0 24 24");
+        svg.setAttribute("width", "24");
+        svg.setAttribute("height", "24");
+        svg.classList.add("treeToggle");
+
+        const poly = document.createElementNS(xmlns, "polyline");
+        // Pfeil nach rechts: oben -> Mitte -> unten
+        poly.setAttribute("points", "9,6 15,12 9,18");
+        poly.setAttribute("fill", "none");
+        poly.setAttribute("stroke", "currentColor");
+        poly.setAttribute("stroke-width", "2.5");
+        poly.setAttribute("stroke-linecap", "round");
+        poly.setAttribute("stroke-linejoin", "round");
+
+        svg.appendChild(poly);
+
+        return svg;
+    }
 }

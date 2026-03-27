@@ -15,16 +15,20 @@ export interface IDropdownItem {
 
 export interface IDropdownProperties extends ICommonUIProperties {
     caption: string;
+    selectedItem?: string;
     items: IDropdownItem[];
 }
 
 export class Dropdown extends UIComponent<IDropdownProperties> {
     public render(): ComponentChild {
-        const { caption, items } = this.props;
+        const { caption, items, selectedItem } = this.props;
 
         const children = items.map((item, index) => {
             return (
-                <li key={index}>
+                <li
+                    key={index}
+                    className={item.label === selectedItem ? "selected" : ""}
+                >
                     <a onClick={item.onClick}>{item.label}</a>
                 </li>
             );
