@@ -12,8 +12,6 @@ import { Container } from "./components/ui/framework/Container.js";
 import { Message } from "./components/ui/framework/Message.js";
 import { ChildAlignment, MessageType, Orientation } from "./components/ui/framework/ui-types.js";
 
-import "./web-components.js";
-
 const root = document.getElementById("app")!;
 interface ISerializedError {
     tag?: string;

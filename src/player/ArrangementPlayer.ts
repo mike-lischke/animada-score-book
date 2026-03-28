@@ -11,9 +11,7 @@ import { AudioBufferPlayer } from "./AudioBufferPlayer.js";
 import { TimeCoordinator, type IScoreMetrics } from "./TimeCoordinator.js";
 import { TrackPlayer } from "./TrackPlayer.js";
 import {
-    Event, ICallbackEvent, IInterval, ILoopInterval, type IAudioEvent,
-    type IMuteEvent,
-    type MuteFilter
+    Event, ICallbackEvent, IInterval, ILoopInterval, type IAudioEvent, type IMuteEvent, type MuteFilter
 } from "./types.js";
 
 export type PlayerPlayState = "playing" | "stopped";
@@ -182,7 +180,7 @@ export class ArrangementPlayer extends Publisher {
     }
 
     /**
-     * Plays the entire score in an endless loop until `stop()` is called.
+     * Plays the entire score or the specified interval in real time.
      *
      * @param interval An optional interval to play instead of the entire score.
      * @param loop Whether to start over when the end of the interval is reached.

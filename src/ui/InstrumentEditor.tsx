@@ -5,7 +5,6 @@
 
 import { WaveformPlayer } from "../components/ui/composites/WaveformPlayer.js";
 import { Container } from "../components/ui/framework/Container.js";
-import { Image } from "../components/ui/framework/Image.js";
 import { Label } from "../components/ui/framework/Label.js";
 import { Orientation } from "../components/ui/framework/ui-types.js";
 import { UIComponent, type ICommonUIProperties } from "../components/ui/framework/UIComponent.js";
@@ -27,10 +26,6 @@ export class InstrumentEditor extends UIComponent<IInstrumentEditorProps> {
                 className={className}
                 orientation={Orientation.LeftToRight}
             >
-                <Image
-                    className="instrument-image"
-                //src={instrument.image}
-                />
                 <Label className="instrument-name" caption={instrument.displayName} />
                 <Container
                     className="instrument-waveform-panel"

@@ -12,8 +12,9 @@ import { Container } from "../components/ui/framework/Container.js";
 import { Icon } from "../components/ui/framework/Icon.js";
 import { Label } from "../components/ui/framework/Label.js";
 import { Loading, LoadingSize, LoadingStyle } from "../components/ui/framework/Loading.js";
+import { RadialMenu, type IRadialMenuItem } from "../components/ui/framework/RadialMenu.js";
 import { SetDataAction, TreeGrid, type ITreeGridOptions } from "../components/ui/framework/TreeGrid.js";
-import { UIComponent, type ICommonUIProperties } from "../components/ui/framework/UIComponent.js";
+import { ComponentPlacement, UIComponent, type ICommonUIProperties } from "../components/ui/framework/UIComponent.js";
 import { ChildAlignment, Orientation, SelectionType } from "../components/ui/framework/ui-types.js";
 import { Arrangement } from "../core/Arrangement.js";
 import {
@@ -40,6 +41,7 @@ interface IScoreLibraryState {
  */
 export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLibraryState> {
     private scoreTableRef = createRef<TreeGrid>();
+    private radialMenuRef = createRef<RadialMenu>();
 
     public constructor(props: IScoreLibraryProperties) {
         super(props);
@@ -104,13 +106,14 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
                         columns={scoreTreeColumns}
                         tableData={scores}
 
-                        onRowSelected={this.handleScoreTreeRowSelected}
+                        onRowClick={this.handleScoreTreeRowClick}
                         onRowExpanded={this.handleScoreTreeRowExpanded}
                         onRowCollapsed={this.handleScoreTreeRowCollapsed}
                         isRowExpanded={this.isScoreTreeRowExpanded}
                         onRowContext={this.handleScoreTreeRowContext}
                     />
                 </Container>
+                <RadialMenu ref={this.radialMenuRef} />
             </Container>
         );
     }
@@ -197,32 +200,6 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
                 iconSrc = Codicon.Music;
                 iconClass = "score";
 
-                const playButton = <Button
-                    className="playButton actionButton"
-                    data-tooltip="Load Score"
-                    imageOnly
-                    onClick={(e) => {
-                        this.handleActionClick(e, "load", data);
-                    }}
-                >
-                    <Icon src={Codicon.Play} data-tooltip="inherit" />
-                </Button>;
-
-                const removeButton = <Button
-                    className="removeButton actionButton"
-                    data-tooltip="Remove Score"
-                    imageOnly
-                    onClick={(e) => {
-                        this.handleActionClick(e, "remove", data);
-                    }}
-                >
-                    <Icon src={Codicon.Trash} data-tooltip="inherit" />
-                </Button>;
-
-                actionBox = <Container className="actionBox" orientation={Orientation.LeftToRight}>
-                    {playButton}
-                    {removeButton}
-                </Container>;
             }
 
             icon = <Icon src={iconSrc} className={iconClass + " scoreTreeIcon"} />;
@@ -300,9 +277,37 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
 
     };
 
-    private handleScoreTreeRowSelected = (row: RowComponent): void => {
+    private handleScoreTreeRowClick = (event: UIEvent, row: RowComponent): void => {
         const entry = row.getData() as ISbDmScoreFolder | ISbDmScore;
         if (entry.type === SbDmEntityType.Score) {
+            const items: IRadialMenuItem[] = [
+                {
+                    id: "load1",
+                    icon: <Icon src={Codicon.Play} />,
+                    onClick: () => {
+                        this.handleActionClick(new MouseEvent("click"), "load", entry);
+                    }
+                },
+                {
+                    id: "remove1",
+                    icon: <Icon src={Codicon.Trash} />,
+                    onClick: () => {
+                        this.handleActionClick(new MouseEvent("click"), "remove", entry);
+                    },
+                },
+            ];
+
+            let anchorRect;
+
+            // Determine the position for the radial menu based on the current mouse position.
+            if (event instanceof MouseEvent) {
+                anchorRect = new DOMRect(event.clientX, event.clientY, 2, 2);
+            } else {
+                anchorRect = row.getElement().getBoundingClientRect();
+            }
+
+            this.radialMenuRef.current?.open(anchorRect, ComponentPlacement.TopCenter, items, 40);
+
             const params = new URLSearchParams(entry.content);
             const serialisedArrangement = getSerialisedArrangementFromParams(params);
             if (serialisedArrangement) {

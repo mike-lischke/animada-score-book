@@ -18,23 +18,8 @@ export enum DialogResponseClosure {
     Cancel,
 }
 
-/** Types for general dialogs. */
-export enum DialogType {
-    /** A simple prompt value dialog, requesting a single value from the user. */
-    Prompt,
-
-    /** Confirm a question (yes, no, alt). */
-    Confirm,
-
-    /** Select one entry from a list. */
-    Select,
-}
-
 /** A set of values that describe a single modal dialog request. */
 export interface IDialogRequest extends Record<string, unknown> {
-    /** The type of the dialog to show. Used mostly to schedule dialog requests. */
-    type: DialogType;
-
     /** An id to identify the invocation. */
     id: string;
 
@@ -56,7 +41,6 @@ export interface IDialogRequest extends Record<string, unknown> {
 
 export interface IDialogResponse extends Record<string, unknown> {
     id: string;
-    type: DialogType;
     closure: DialogResponseClosure;
 
     data?: Record<string, unknown>;
@@ -125,6 +109,7 @@ export class Dialog extends UIComponent<IDialogProperties> {
     private handleClose = (event: Event): void => {
         const { onClose } = this.props;
 
+        event.stopPropagation();
         const returnValue = this.dialogRef.current?.returnValue ?? "cancel";
         onClose?.(returnValue);
     };

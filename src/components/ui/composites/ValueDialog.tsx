@@ -5,15 +5,16 @@
 
 import { ComponentChild, createRef } from "preact";
 
+import { Semaphore } from "../../../supplement/Semaphore.js";
 import { Button } from "../framework/Button.js";
 import { Codicon } from "../framework/Codicon.js";
-import { Dialog, DialogResponseClosure } from "../framework/Dialog.js";
+import { Dialog, DialogResponseClosure, type IDialogResponse } from "../framework/Dialog.js";
 import { Grid } from "../framework/Grid.js";
 import { GridCell } from "../framework/GridCell.js";
 import { Icon } from "../framework/Icon.js";
 import { Input } from "../framework/Input.js";
 import { Label } from "../framework/Label.js";
-import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
+import { UIComponent } from "../framework/UIComponent.js";
 import { ChildAlignment } from "../framework/ui-types.js";
 
 export enum ValueEditorEntryType {
@@ -42,10 +43,6 @@ export interface IValueEditorValueEntry extends IValueEditorEntry {
     placeholder?: string;
 }
 
-interface IValueDialogProperties extends ICommonUIProperties {
-    onClose?: (id: string, closure: DialogResponseClosure, values: IValueEditorValueEntry[]) => void;
-}
-
 export interface IValueDialogState {
     id: string;
     caption: string;
@@ -59,10 +56,11 @@ interface IGridCellProperties {
 }
 
 /** A dialog to edit multiple values. */
-export class ValueDialog extends UIComponent<IValueDialogProperties, IValueDialogState> {
+export class ValueDialog extends UIComponent<{}, IValueDialogState> {
     private dialogRef = createRef<Dialog>();
+    private signal?: Semaphore<IDialogResponse>;
 
-    public constructor(props: IValueDialogProperties) {
+    public constructor(props: {}) {
         super(props);
 
         // Add a copy of all value entries to the state for editing.
@@ -74,7 +72,8 @@ export class ValueDialog extends UIComponent<IValueDialogProperties, IValueDialo
         };
     }
 
-    public show = (id: string, caption: string, entries: IValueEditorEntry[]): void => {
+    public async show(id: string, caption: string, entries: IValueEditorEntry[]): Promise<IDialogResponse> {
+        this.signal = new Semaphore<IDialogResponse>();
         const map = new Map<string, IValueEditorValueEntry>();
         entries.forEach((entry) => {
             if (entry.type === ValueEditorEntryType.Value) {
@@ -82,9 +81,14 @@ export class ValueDialog extends UIComponent<IValueDialogProperties, IValueDialo
             }
         });
 
-        this.setState({ id, caption, valueMap: map, entries });
+        this.setState({ id, caption, valueMap: map, entries }, () => {
+            return this.dialogRef.current?.open();
+        });
 
-        return this.dialogRef.current?.open();
+        const result = await this.signal.wait();
+        this.signal = undefined;
+
+        return result;
     };
 
     public render(): ComponentChild {
@@ -158,18 +162,19 @@ export class ValueDialog extends UIComponent<IValueDialogProperties, IValueDialo
             }
             actions={[
                 <Button
-                    id="accept"
-                    key="accept"
-                    caption="OK"
-                    onClick={this.handleButtonClick}
-                />,
-                <Button
                     id="cancel"
                     key="cancel"
                     caption="Cancel"
                     onClick={this.handleButtonClick}
                 />,
+                <Button
+                    id="accept"
+                    key="accept"
+                    caption="OK"
+                    onClick={this.handleButtonClick}
+                />,
             ]}
+            onClose={this.closeDialog}
         >
             <Grid columns={8} columnGap={8}>
                 {cells}
@@ -194,7 +199,6 @@ export class ValueDialog extends UIComponent<IValueDialogProperties, IValueDialo
 
     private handleButtonClick = (e: MouseEvent | KeyboardEvent): void => {
         const { id, valueMap } = this.state;
-        const { onClose } = this.props;
 
         const target = e.currentTarget as HTMLElement;
 
@@ -217,15 +221,18 @@ export class ValueDialog extends UIComponent<IValueDialogProperties, IValueDialo
         }
 
         this.dialogRef.current?.close(false);
-        onClose?.(id, closure, valueMap.size > 0 ? Array.from(valueMap.values()) : []);
+        this.signal?.notify({ id, closure, values: valueMap.size > 0 ? Array.from(valueMap.values()) : [] });
     };
 
-    private closeDialog = (cancelled: boolean): void => {
-        if (cancelled) {
+    private closeDialog = (returnValue: string): void => {
+        if (returnValue === "cancelled") {
             const { id, valueMap } = this.state;
-            const { onClose } = this.props;
 
-            onClose?.(id, DialogResponseClosure.Cancel, valueMap.size > 0 ? Array.from(valueMap.values()) : []);
+            this.signal?.notify({
+                id,
+                closure: DialogResponseClosure.Cancel,
+                values: valueMap.size > 0 ? Array.from(valueMap.values()) : []
+            });
         }
     };
 }

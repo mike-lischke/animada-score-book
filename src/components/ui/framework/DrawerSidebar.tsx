@@ -15,14 +15,14 @@ export interface IDrawerSidebarProps {
     /** Shows the sidebar permanently, ignoring the `open` state. */
     alwaysOpen?: boolean;
 
-    siderbarContent: ComponentChild;
+    sidebarContent: ComponentChild;
 
     onOpenChange?: (open: boolean) => void;
 }
 
 export class DrawerSidebar extends UIComponent<IDrawerSidebarProps> {
     public render(): ComponentChild {
-        const { id, open, alwaysOpen, siderbarContent, children } = this.props;
+        const { id, open, alwaysOpen, sidebarContent, children } = this.props;
 
         return (
             <div id={id} className={`drawer ${alwaysOpen ? "drawer-open" : ""}`}>
@@ -33,7 +33,7 @@ export class DrawerSidebar extends UIComponent<IDrawerSidebarProps> {
                 <div className="drawer-side">
                     <label htmlFor={`${id}-toggle`} aria-label="close sidebar" className="drawer-overlay" />
                     <Container className="drawer-sidebar-content">
-                        {siderbarContent}
+                        {sidebarContent}
                     </Container>
                 </div>
             </div>

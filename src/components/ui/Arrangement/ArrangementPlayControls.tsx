@@ -3,14 +3,9 @@
 * Licensed under the MIT License. See License.txt in the project root for license information.
 */
 
-import pauseIcon from "../../../assets/images/icons/pause.svg";
-import playIcon from "../../../assets/images/icons/play.svg";
-import recordIcon from "../../../assets/images/icons/record.svg";
-import metronomeIcon from "../../../assets/images/icons/metronome.svg";
-import countInIcon from "../../../assets/images/icons/count-in.svg";
-
 import type { ComponentChild } from "preact";
 
+import { AppStorage } from "../../../core/AppStorage.js";
 import type { UndoManager } from "../../../core/UndoManager.js";
 import type { ArrangementPlayer } from "../../../player/ArrangementPlayer.js";
 import type { ScoreBookUiServices } from "../../../player/types.js";
@@ -21,11 +16,11 @@ import { Container } from "../framework/Container.js";
 import { Grid } from "../framework/Grid.js";
 import { GridCell } from "../framework/GridCell.js";
 import { Icon } from "../framework/Icon.js";
+import { Image, PredefinedImage } from "../framework/Image.js";
 import { Label } from "../framework/Label.js";
 import { Slider } from "../framework/Slider.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
 import { ChildAlignment, Orientation } from "../framework/ui-types.js";
-import { AppStorage } from "../../../core/AppStorage.js";
 
 export interface IArrangementPlayControlsProperties extends ICommonUIProperties {
     arrangementPlayer: ArrangementPlayer,
@@ -47,20 +42,20 @@ export class ArrangementPlayControls
     public constructor(props: IArrangementPlayControlsProperties) {
         super(props);
 
-        const arrangemmentView = props.arrangementPlayer.arrangementView;
+        const arrangementView = props.arrangementPlayer.arrangementView;
         this.state = {
             playing: props.arrangementPlayer.state === "playing",
             editingTitle: false,
-            title: arrangemmentView.title,
-            currentVolume: arrangemmentView.mainVolume,
-            currentTempo: arrangemmentView.timeParams.tempo,
+            title: arrangementView.title,
+            currentVolume: arrangementView.mainVolume,
+            currentTempo: arrangementView.timeParams.tempo,
         };
     }
 
     public override componentDidMount(): void {
         const { arrangementPlayer } = this.props;
 
-        this.addSubscription(arrangementPlayer, this.onPlaybackStateChange);
+        this.addSubscription(arrangementPlayer, this.onPlaybackStateChange, true);
         const arrangement = arrangementPlayer.arrangementView;
         this.addSubscription(arrangement, this.titleChangeSubscription);
     }
@@ -68,6 +63,8 @@ export class ArrangementPlayControls
     public override componentDidUpdate(previousProps: Readonly<IArrangementPlayControlsProperties>,
         previousState: Readonly<IArrangementPlayControlsState>): void {
         const { arrangementPlayer } = this.props;
+
+        this.addSubscription(arrangementPlayer, this.onPlaybackStateChange, true);
         const arrangement = arrangementPlayer.arrangementView;
         if (previousState.currentTempo !== arrangement.timeParams.tempo) {
             this.setState({ currentTempo: arrangement.timeParams.tempo });
@@ -91,7 +88,7 @@ export class ArrangementPlayControls
                     onClick={() => {
                         arrangementPlayer.stop();
                     }}>
-                    <load-file key="pauseButton" src={pauseIcon} data-tooltip="inherit" />
+                    <Image key="pauseButton" src={PredefinedImage.PauseImage} data-tooltip="inherit" />
                 </Button>
             );
         } else {
@@ -103,9 +100,9 @@ export class ArrangementPlayControls
                     className="softButton shadow-md"
                     data-tooltip="Start playback with the selected tempo and volume settings."
                     onClick={() => {
-                        arrangementPlayer.play();
+                        arrangementPlayer.play(undefined, arrangementView.loop);
                     }}>
-                    <load-file key="playButton" src={playIcon} data-tooltip="inherit" />
+                    <Image key="playButton" src={PredefinedImage.PlayImage} data-tooltip="inherit" />
                 </Button>
             );
         }
@@ -131,7 +128,7 @@ export class ArrangementPlayControls
                             data-tooltip="Record your song and export it as an MP3 file."
                             onClick={this.startRecording}
                         >
-                            <load-file key="recordButton" src={recordIcon} data-tooltip="inherit" />
+                            <Image key="recordButton" src={PredefinedImage.Record} data-tooltip="inherit" />
                         </Button>
                     </GridCell>
                 </Grid>
@@ -216,8 +213,9 @@ export class ArrangementPlayControls
                         data-tooltip="Loop Playback"
                         gap={4}
                     >
-                        <Icon
-                            src={metronomeIcon}
+                        <Image
+                            key="metronomeButton"
+                            src={PredefinedImage.Metronome}
                             data-tooltip="inherit"
                             width={24}
                             height={24}
@@ -241,8 +239,9 @@ export class ArrangementPlayControls
                         data-tooltip="Count in before playback starts"
                         gap={4}
                     >
-                        <Icon
-                            src={countInIcon}
+                        <Image
+                            key="countInButton"
+                            src={PredefinedImage.CountIn}
                             data-tooltip="inherit"
                             width={24}
                             height={24}
@@ -280,7 +279,6 @@ export class ArrangementPlayControls
 
     private startRecording = () => {
         const { arrangementPlayer } = this.props;
-        //arrangementPlayer.playBars(4, 1, true);
         void arrangementPlayer.renderToBlob().then((blob) => {
             const url = URL.createObjectURL(blob);
             const a = document.createElement("a");

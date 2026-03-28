@@ -142,13 +142,14 @@ interface ITreeGridProperties<TRow extends object> extends ICommonUIProperties {
     onFormatRow?: (row: RowComponent) => void;
 
     /** Triggered when a row context is required. It allows to show an own menu implementation. */
-    onRowContext?: (event: Event, row: RowComponent) => void;
+    onRowContext?: (event: UIEvent, row: RowComponent) => void;
 
     /** Ditto for single cells. */
-    onCellContext?: (event: Event, cell: CellComponent) => void;
+    onCellContext?: (event: UIEvent, cell: CellComponent) => void;
 
-    onCellClick?: (event: Event, cell: CellComponent) => void;
+    onCellClick?: (event: UIEvent, cell: CellComponent) => void;
 
+    onRowClick?: (event: UIEvent, row: RowComponent) => void;
     onRowSelected?: (row: RowComponent) => void;
     onRowDeselected?: (row: RowComponent) => void;
 
@@ -672,28 +673,30 @@ export class TreeGrid<TRow extends object = {}> extends UIComponent<ITreeGridPro
         onRowCollapsed?.(row, level);
     };
 
-    private handleRowContext = (event: Event, row: RowComponent): void => {
+    private handleRowContext = (event: UIEvent, row: RowComponent): void => {
         const { onRowContext } = this.props;
 
         onRowContext?.(event, row);
     };
 
-    private handleCellClick = (event: Event, cell: CellComponent): void => {
+    private handleCellClick = (event: UIEvent, cell: CellComponent): void => {
         const { onCellClick } = this.props;
 
         onCellClick?.(event, cell);
     };
 
-    private handleCellContext = (event: Event, cell: CellComponent): void => {
+    private handleCellContext = (event: UIEvent, cell: CellComponent): void => {
         const { onCellContext } = this.props;
 
         onCellContext?.(event, cell);
     };
 
-    private handleRowClicked = (event: Event, row: RowComponent): void => {
-        const { options, columns } = this.props;
+    private handleRowClicked = (event: UIEvent, row: RowComponent): void => {
+        const { options, columns, onRowClick } = this.props;
 
-        if (options?.treeColumn) {
+        onRowClick?.(event, row);
+
+        if (!event.defaultPrevented && options?.treeColumn) {
             if (this.toggleTimeoutId) {
                 clearTimeout(this.toggleTimeoutId);
                 this.toggleTimeoutId = null;

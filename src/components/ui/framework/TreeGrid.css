@@ -29,3 +29,7 @@
 .treeGrid.tabulator .tabulator-row.expanded .treeToggle {
   transform: rotate(90deg);
 }
+
+.treeGrid.tabulator .tabulator-tableholder .tabulator-table {
+    color: currentColor;
+}

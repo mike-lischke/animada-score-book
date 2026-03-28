@@ -5,14 +5,20 @@
 
 import { ComponentChild, createRef, VNode } from "preact";
 
+import { Semaphore } from "../../../supplement/Semaphore.js";
 import { Button } from "../framework/Button.js";
 import { Codicon } from "../framework/Codicon.js";
 import { Container } from "../framework/Container.js";
+import { Dialog, DialogResponseClosure } from "../framework/Dialog.js";
 import { Icon } from "../framework/Icon.js";
 import { Label } from "../framework/Label.js";
 import { Orientation } from "../framework/ui-types.js";
-import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
-import { Dialog, DialogResponseClosure } from "../framework/Dialog.js";
+import { UIComponent } from "../framework/UIComponent.js";
+
+export interface IConfirmDialogResponse {
+    closure: DialogResponseClosure;
+    values?: Record<string, unknown>;
+}
 
 /** Possible buttons to show. Only fields with a value also show a button. */
 export interface IConfirmDialogButtons {
@@ -20,10 +26,6 @@ export interface IConfirmDialogButtons {
     refuse?: string;
     alternative?: string;
     default?: string;
-}
-
-interface IConfirmDialogProperties extends ICommonUIProperties {
-    onClose?: (closure: DialogResponseClosure, values?: Record<string, unknown>) => void;
 }
 
 interface IConfirmDialogState {
@@ -34,16 +36,29 @@ interface IConfirmDialogState {
     description?: string[];
 }
 
-export class ConfirmDialog extends UIComponent<IConfirmDialogProperties, IConfirmDialogState> {
-
+export class ConfirmDialog extends UIComponent<{}, IConfirmDialogState> {
     private dialogRef = createRef<Dialog>();
+    private signal?: Semaphore<IConfirmDialogResponse>;
 
-    public constructor(props: IConfirmDialogProperties) {
+    public constructor(props: {}) {
         super(props);
         this.state = {
             message: "",
             buttons: {},
         };
+    }
+
+    public async show(message: ComponentChild, buttons: IConfirmDialogButtons, title?: string, description?: string[],
+        values?: Record<string, unknown>): Promise<IConfirmDialogResponse> {
+        this.signal = new Semaphore<IConfirmDialogResponse>();
+        this.setState({ title, message, buttons, values, description }, () => {
+            return this.dialogRef.current?.open();
+        });
+
+        const result = this.signal.wait();
+        this.signal = undefined;
+
+        return result;
     }
 
     public render(): ComponentChild {
@@ -116,21 +131,14 @@ export class ConfirmDialog extends UIComponent<IConfirmDialogProperties, IConfir
                     </>
                 }
                 actions={actions}
+                onClose={this.handleClose}
             >
                 {dialogContent}
             </Dialog>
         );
     }
 
-    public show(message: ComponentChild, buttons: IConfirmDialogButtons, title?: string, description?: string[],
-        values?: Record<string, unknown>): void {
-        this.setState({ title, message, buttons, values, description }, () => {
-            return this.dialogRef.current?.open();
-        });
-    }
-
     private handleActionClick = (e: MouseEvent | KeyboardEvent): void => {
-        const { onClose } = this.props;
         const { values } = this.state;
 
         const id = (e.currentTarget as HTMLElement).id;
@@ -153,16 +161,14 @@ export class ConfirmDialog extends UIComponent<IConfirmDialogProperties, IConfir
         }
 
         this.dialogRef.current?.close(false);
-
-        onClose?.(closure, values);
+        this.signal?.notify({ closure, values });
     };
 
-    private handleClose = (cancelled: boolean): void => {
-        if (cancelled) {
-            const { onClose } = this.props;
+    private handleClose = (returnValue: string): void => {
+        if (returnValue === "cancelled") {
             const { values } = this.state;
 
-            onClose?.(DialogResponseClosure.Cancel, values);
+            this.signal?.notify({ closure: DialogResponseClosure.Cancel, values });
         }
     };
 

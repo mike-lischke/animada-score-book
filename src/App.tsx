@@ -23,9 +23,11 @@ import { ArrangementEditControls } from "./components/ui/Arrangement/Arrangement
 import { ArrangementPlayControls } from "./components/ui/Arrangement/ArrangementPlayControls.js";
 import { ArrangementTitle } from "./components/ui/Arrangement/ArrangementTitle.js";
 import { ArrangementViewer } from "./components/ui/Arrangement/ArrangementViewer.js";
-import { ValueEditorEntryType, type IValueEditorValueEntry } from "./components/ui/composites/ValueDialog.js";
+import {
+    ValueDialog, ValueEditorEntryType, type IValueEditorValueEntry
+} from "./components/ui/composites/ValueDialog.js";
 import { Codicon } from "./components/ui/framework/Codicon.js";
-import { DialogResponseClosure, DialogType } from "./components/ui/framework/Dialog.js";
+import { DialogResponseClosure } from "./components/ui/framework/Dialog.js";
 import { DrawerSidebar } from "./components/ui/framework/DrawerSidebar.js";
 import { Icon } from "./components/ui/framework/Icon.js";
 import { TooltipProvider } from "./components/ui/framework/Tooltip.js";
@@ -41,13 +43,13 @@ import { UndoManager } from "./core/UndoManager.js";
 import { convertErrorToString } from "./core/utils.js";
 import { ArrangementPlayer } from "./player/ArrangementPlayer.js";
 import type { ScoreBookUiServices } from "./player/types.js";
-import { DialogHost } from "./ui/DialogHost.js";
 import { emptySongString } from "./ui/index.js";
 import { ModeManager } from "./ui/ModeManager.js";
 import { MouseHandler } from "./ui/MouseHandler.js";
 import { ScoreLibrary } from "./ui/ScoreLibrary.js";
 import { SelectionManager } from "./ui/SelectionManager.js";
 import { SettingsDialog } from "./ui/SettingsDialog.js";
+import { ConfirmDialog } from "./components/ui/composites/ConfirmDialog.js";
 
 enum DisplayMode {
     Standard,
@@ -70,6 +72,8 @@ const newSong: ISerialisedArrangement = { composition: emptySongString, version:
 export class App extends UIComponent<{}, IAppState> {
     private scoreLibraryRef = createRef<DrawerSidebar>();
     private settingsDialogRef = createRef<SettingsDialog>();
+    private valueDialogRef = createRef<ValueDialog>();
+    private confirmDialogRef = createRef<ConfirmDialog>();
 
     private dataModel = new ScoreBookDataModel();
 
@@ -164,7 +168,7 @@ export class App extends UIComponent<{}, IAppState> {
                         id="mainDrawer"
                         ref={this.scoreLibraryRef}
                         open={sidebarOpen}
-                        siderbarContent={
+                        sidebarContent={
                             <ScoreLibrary
                                 onAction={this.handleScoreLibraryAction}
                                 dataModel={this.dataModel}
@@ -266,7 +270,8 @@ export class App extends UIComponent<{}, IAppState> {
                     </DrawerSidebar>
                 </Container>
                 <TooltipProvider />
-                <DialogHost />
+                <ValueDialog ref={this.valueDialogRef} />
+                <ConfirmDialog ref={this.confirmDialogRef} />
                 <SettingsDialog ref={this.settingsDialogRef} onSettingsChanged={this.handleSettingsChanged} />
             </ErrorBoundary>
         );
@@ -302,23 +307,25 @@ export class App extends UIComponent<{}, IAppState> {
             switch (action) {
                 case "addFolder": {
                     let newFolderName: string | undefined;
-                    const result = await DialogHost.showDialog({
-                        id: "addFolderDialog",
-                        type: DialogType.Prompt,
-                        parameters: {
-                            title: "Add New Folder",
-                            entries: [{
-                                type: ValueEditorEntryType.Title,
-                                id: "folderNameDescription",
-                                content: "Enter the new folder name:",
-                            },
-                            {
-                                type: ValueEditorEntryType.Value,
-                                id: "folderName",
-                                content: "New Folder",
-                            }],
+                    const result = await this.valueDialogRef.current?.show(
+                        "addFolderDialog",
+                        "Add New Folder",
+                        [{
+                            type: ValueEditorEntryType.Title,
+                            id: "folderNameDescription",
+                            content: "Name:",
                         },
-                    });
+                        {
+                            type: ValueEditorEntryType.Value,
+                            id: "folderName",
+                            content: "Name of the new folder",
+                            displayWidth: 6,
+                        }],
+                    );
+
+                    if (!result) {
+                        return false;
+                    }
 
                     if (result.closure === DialogResponseClosure.Accept && result.data) {
                         newFolderName = (result.data.values as IValueEditorValueEntry[])
@@ -366,48 +373,47 @@ export class App extends UIComponent<{}, IAppState> {
                             }
                         }
 
-                        const result = await DialogHost.showDialog({
-                            id: "importScoreDialog",
-                            type: DialogType.Prompt,
-                            parameters: {
-                                title: "Import Score",
-                                entries: [{
-                                    type: ValueEditorEntryType.Title,
-                                    id: "importScoreDescription",
-                                    content: `Score URL:`,
-                                    displayWidth: 2,
-                                },
-                                {
-                                    type: ValueEditorEntryType.Value,
-                                    id: "scoreUrl",
-                                    content,
-                                    placeholder: "https://<host-name>/?t=...",
-                                    displayWidth: 6,
-                                }],
+                        const result = await this.valueDialogRef.current?.show(
+                            "importScoreDialog",
+                            "Import Score",
+                            [{
+                                type: ValueEditorEntryType.Title,
+                                id: "importScoreDescription",
+                                content: `Score URL:`,
+                                displayWidth: 2,
                             },
-                        });
+                            {
+                                type: ValueEditorEntryType.Value,
+                                id: "scoreUrl",
+                                content,
+                                placeholder: "https://<host-name>/?t=...",
+                                displayWidth: 6,
+                            } as IValueEditorValueEntry],
+                        );
 
-                        let url: string | undefined;
+                        if (result) {
+                            let url: string | undefined;
 
-                        if (result.closure === DialogResponseClosure.Accept && result.data) {
-                            url = (result.data.values as IValueEditorValueEntry[])
-                                .find((entry) => {
-                                    return entry.id === "scoreUrl";
-                                })?.content as string;
-                        }
+                            if (result.closure === DialogResponseClosure.Accept && result.data) {
+                                url = (result.data.values as IValueEditorValueEntry[])
+                                    .find((entry) => {
+                                        return entry.id === "scoreUrl";
+                                    })?.content as string;
+                            }
 
-                        if (url && url.trim().length > 0) {
-                            try {
-                                const params = new URL(url).searchParams;
-                                const title = params.get("t") ?? "Imported Score";
-                                await this.dataModel.addScore(title, params.toString(), parent);
+                            if (url && url.trim().length > 0) {
+                                try {
+                                    const params = new URL(url).searchParams;
+                                    const title = params.get("t") ?? "Imported Score";
+                                    await this.dataModel.addScore(title, params.toString(), parent);
 
-                                return true;
-                            } catch (error) {
-                                const message = convertErrorToString(error);
-                                alert(message);
+                                    return true;
+                                } catch (error) {
+                                    const message = convertErrorToString(error);
+                                    alert(message);
 
-                                return false;
+                                    return false;
+                                }
                             }
                         }
                     }
@@ -424,35 +430,34 @@ export class App extends UIComponent<{}, IAppState> {
         switch (action) {
             case "edit": {
                 if (data.type === SbDmEntityType.ScoreFolder) {
-                    const result = await DialogHost.showDialog({
-                        id: "renameFolderDialog",
-                        type: DialogType.Prompt,
-                        parameters: {
-                            title: "Rename Folder",
-                            entries: [{
-                                type: ValueEditorEntryType.Title,
-                                id: "renameFolderDescription",
-                                content: "Enter the new folder name:",
-                            },
-                            {
-                                type: ValueEditorEntryType.Value,
-                                id: "folderName",
-                                content: data.name,
-                            }],
+                    const result = await this.valueDialogRef.current?.show(
+                        "renameFolderDialog",
+                        "Rename Folder",
+                        [{
+                            type: ValueEditorEntryType.Title,
+                            id: "renameFolderDescription",
+                            content: "Enter the new folder name:",
                         },
-                    });
+                        {
+                            type: ValueEditorEntryType.Value,
+                            id: "folderName",
+                            content: data.name,
+                        }],
+                    );
 
-                    let newName: string | undefined;
+                    if (result) {
+                        let newName: string | undefined;
 
-                    if (result.closure === DialogResponseClosure.Accept && result.data) {
-                        newName = (result.data.values as IValueEditorValueEntry[])
-                            .find((entry) => {
-                                return entry.id === "folderName";
-                            })?.content as string;
-                    }
+                        if (result.closure === DialogResponseClosure.Accept && result.data) {
+                            newName = (result.data.values as IValueEditorValueEntry[])
+                                .find((entry) => {
+                                    return entry.id === "folderName";
+                                })?.content as string;
+                        }
 
-                    if (newName && newName.trim().length > 0) {
-                        await this.dataModel.renameEntry(data, newName.trim());
+                        if (newName && newName.trim().length > 0) {
+                            await this.dataModel.renameEntry(data, newName.trim());
+                        }
                     }
                 }
 
@@ -475,20 +480,16 @@ export class App extends UIComponent<{}, IAppState> {
             case "remove": {
                 await data.refresh?.();
 
-                const result = await DialogHost.showDialog({
-                    id: "deleteConfirmDialog",
-                    type: DialogType.Confirm,
-                    title: "Delete Confirmation",
-                    description: [
-                        `Are you sure you want to delete '${data.name}'? This action cannot be undone.`,
-                    ],
-                    parameters: {
+                const result = await this.confirmDialogRef.current?.show(
+                    `Are you sure you want to delete '${data.name}'? This action cannot be undone.`,
+                    {
                         accept: "Delete",
                         refuse: "Cancel",
                     },
-                });
+                    "Delete Confirmation"
+                );
 
-                if (result.closure !== DialogResponseClosure.Accept) {
+                if (result?.closure !== DialogResponseClosure.Accept) {
                     return false;
                 }
 
@@ -551,8 +552,8 @@ export class App extends UIComponent<{}, IAppState> {
 
             case " ": {
                 if (this.arrangementPlayer) {
-                    if (this.arrangementPlayer.currentTiming === null) {
-                        this.arrangementPlayer.play();
+                    if (this.arrangementPlayer.state === "stopped") {
+                        this.arrangementPlayer.play(undefined, this.arrangementPlayer.arrangementView.loop);
                     } else {
                         this.arrangementPlayer.stop();
                     }

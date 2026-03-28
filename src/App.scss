@@ -13,8 +13,8 @@
 
 :root {
     --bar-decoration-color: rgba(188, 207, 67, 0.648);
-
     --note-height: 54pt;
+    --selection-background: rgba(79, 195, 247, 0.4);
 }
 
 body {
@@ -723,7 +723,8 @@ body {
 #libraryPaneContent {
     height: 100%;
     padding: 8px;
-    min-width: 300px;
+    width: 25vw;
+    min-width: 250px;
 }
 
 #scoreTreeHost .tabulator .tabulator-cell {

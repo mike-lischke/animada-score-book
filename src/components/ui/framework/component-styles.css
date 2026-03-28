@@ -1091,3 +1091,37 @@ dialog .modal-action button {
     background-color: var(--color-primary);
     color: var(--color-primary-content);
 }
+
+.radial-menu {
+    position: fixed;
+    pointer-events: none;
+    inset: 0;
+}
+
+.radial-menu .radial-background {
+    position: absolute;
+    transform: translate(-50%, -50%);
+    background: color-mix(in oklch, var(--color-base-200) 65%, transparent);
+    border-radius: 999px;
+    transition: width 0.25s ease, height 0.25s ease;
+    backdrop-filter: blur(5px);
+}
+
+.radial-menu .radial-content {
+    position: absolute;
+    pointer-events: none;
+}
+
+.radial-btn::before {
+  content: "";
+  position: absolute;
+  inset: -6px;
+  border-radius: 999px;
+  background: radial-gradient(
+    circle,
+    rgba(0, 0, 0, 0.16),
+    transparent 60%
+  );
+  opacity: 0.4;
+  pointer-events: none;
+}
