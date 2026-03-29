@@ -23,6 +23,7 @@ import { ArrangementEditControls } from "./components/ui/Arrangement/Arrangement
 import { ArrangementPlayControls } from "./components/ui/Arrangement/ArrangementPlayControls.js";
 import { ArrangementTitle } from "./components/ui/Arrangement/ArrangementTitle.js";
 import { ArrangementViewer } from "./components/ui/Arrangement/ArrangementViewer.js";
+import { ConfirmDialog } from "./components/ui/composites/ConfirmDialog.js";
 import {
     ValueDialog, ValueEditorEntryType, type IValueEditorValueEntry
 } from "./components/ui/composites/ValueDialog.js";
@@ -43,13 +44,13 @@ import { UndoManager } from "./core/UndoManager.js";
 import { convertErrorToString } from "./core/utils.js";
 import { ArrangementPlayer } from "./player/ArrangementPlayer.js";
 import type { ScoreBookUiServices } from "./player/types.js";
+import { escapeStack } from "./supplement/EscapeStack.js";
 import { emptySongString } from "./ui/index.js";
 import { ModeManager } from "./ui/ModeManager.js";
 import { MouseHandler } from "./ui/MouseHandler.js";
 import { ScoreLibrary } from "./ui/ScoreLibrary.js";
 import { SelectionManager } from "./ui/SelectionManager.js";
 import { SettingsDialog } from "./ui/SettingsDialog.js";
-import { ConfirmDialog } from "./components/ui/composites/ConfirmDialog.js";
 
 enum DisplayMode {
     Standard,
@@ -110,6 +111,7 @@ export class App extends UIComponent<{}, IAppState> {
     public override componentDidMount() {
         const { theme } = this.state;
         document.documentElement.setAttribute("data-theme", theme);
+        escapeStack.attach();
 
         void this.dataModel.initialize().then(() => {
             const serializedArrangement =
@@ -124,6 +126,11 @@ export class App extends UIComponent<{}, IAppState> {
 
         return theme != nextState.theme || displayMode !== nextState.displayMode
             || sidebarOpen !== nextState.sidebarOpen || ready !== nextState.ready;
+    }
+
+    public override componentWillUnmount() {
+        super.componentWillUnmount();
+        escapeStack.detach();
     }
 
     public render() {
@@ -174,6 +181,13 @@ export class App extends UIComponent<{}, IAppState> {
                                 dataModel={this.dataModel}
                             />
                         }
+                        onOpenChange={(open) => {
+                            this.setState({ sidebarOpen: open }, () => {
+                                if (!open) {
+                                    escapeStack.remove(this.onSidebarEscape);
+                                }
+                            });
+                        }}
                     >
                         <Container
                             orientation={Orientation.LeftToRight}
@@ -225,10 +239,10 @@ export class App extends UIComponent<{}, IAppState> {
                                 >
                                     <Container>
                                         <img id="titleLogo" src="/logo.svg" />
-                                        <Label className="appTitle top">ANIMADA</Label>
+                                        <Label className="appTitle top faded">ANIMADA</Label>
                                     </Container>
                                     <Container>
-                                        <Label className="appTitle bottom">Score</Label>
+                                        <Label className="appTitle bottom faded">Score</Label>
                                         <Label className="appTitle bottom accent">Book</Label>
                                     </Container>
                                     <Container crossAlignment={ChildAlignment.Center} id="arrangementStats">
@@ -282,7 +296,9 @@ export class App extends UIComponent<{}, IAppState> {
     };
 
     private handleScoreLibraryClick = () => {
-        this.setState({ sidebarOpen: true });
+        this.setState({ sidebarOpen: true }, () => {
+            escapeStack.push(this.onSidebarEscape);
+        });
     };
 
     private handleInstrumentEditorClick = () => {
@@ -310,6 +326,7 @@ export class App extends UIComponent<{}, IAppState> {
                     const result = await this.valueDialogRef.current?.show(
                         "addFolderDialog",
                         "Add New Folder",
+                        Codicon.Add,
                         [{
                             type: ValueEditorEntryType.Title,
                             id: "folderNameDescription",
@@ -376,6 +393,7 @@ export class App extends UIComponent<{}, IAppState> {
                         const result = await this.valueDialogRef.current?.show(
                             "importScoreDialog",
                             "Import Score",
+                            Codicon.CloudDownload,
                             [{
                                 type: ValueEditorEntryType.Title,
                                 id: "importScoreDescription",
@@ -433,15 +451,18 @@ export class App extends UIComponent<{}, IAppState> {
                     const result = await this.valueDialogRef.current?.show(
                         "renameFolderDialog",
                         "Rename Folder",
+                        Codicon.Rename,
                         [{
                             type: ValueEditorEntryType.Title,
                             id: "renameFolderDescription",
-                            content: "Enter the new folder name:",
+                            content: "New name:",
+                            displayWidth: 2,
                         },
                         {
                             type: ValueEditorEntryType.Value,
                             id: "folderName",
                             content: data.name,
+                            displayWidth: 6,
                         }],
                     );
 
@@ -465,7 +486,9 @@ export class App extends UIComponent<{}, IAppState> {
             }
 
             case "load": {
-                this.setState({ sidebarOpen: false });
+                this.setState({ sidebarOpen: false }, () => {
+                    escapeStack.remove(this.onSidebarEscape);
+                });
 
                 if (data.type === SbDmEntityType.Score) {
                     const params = new URLSearchParams(data.content);
@@ -481,12 +504,13 @@ export class App extends UIComponent<{}, IAppState> {
                 await data.refresh?.();
 
                 const result = await this.confirmDialogRef.current?.show(
-                    `Are you sure you want to delete '${data.name}'? This action cannot be undone.`,
+                    `Are you sure you want to delete '${data.name}'?`,
                     {
                         accept: "Delete",
                         refuse: "Cancel",
                     },
-                    "Delete Confirmation"
+                    "Delete Confirmation",
+                    ["This action cannot be undone.", "Make sure to export the content if you want to keep a copy."],
                 );
 
                 if (result?.closure !== DialogResponseClosure.Accept) {
@@ -539,13 +563,16 @@ export class App extends UIComponent<{}, IAppState> {
         this.mouseHandler = new MouseHandler(this.services.modeManager, this.services.selectionManager);
     }
 
+    private onSidebarEscape = (): void => {
+        this.setState({ sidebarOpen: false });
+    };
+
     private handleKeyDown(event: KeyboardEvent): void {
         switch (event.key) {
             case "Escape": {
                 Overlay.closeAllOverlays();
                 this.services.selectionManager.deselectAll();
                 this.services.modeManager.deletePolyrhythmMode = false;
-                this.setState({ sidebarOpen: false });
 
                 break;
             }

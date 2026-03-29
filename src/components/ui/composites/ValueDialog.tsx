@@ -46,6 +46,7 @@ export interface IValueEditorValueEntry extends IValueEditorEntry {
 export interface IValueDialogState {
     id: string;
     caption: string;
+    icon: Codicon;
     entries: IValueEditorEntry[];
     valueMap: Map<string, IValueEditorValueEntry>;
 }
@@ -67,12 +68,14 @@ export class ValueDialog extends UIComponent<{}, IValueDialogState> {
         this.state = {
             id: "",
             caption: "",
+            icon: Codicon.Undefined,
             valueMap: new Map(),
             entries: [],
         };
     }
 
-    public async show(id: string, caption: string, entries: IValueEditorEntry[]): Promise<IDialogResponse> {
+    public async show(id: string, caption: string, icon: Codicon,
+        entries: IValueEditorEntry[]): Promise<IDialogResponse> {
         this.signal = new Semaphore<IDialogResponse>();
         const map = new Map<string, IValueEditorValueEntry>();
         entries.forEach((entry) => {
@@ -81,7 +84,7 @@ export class ValueDialog extends UIComponent<{}, IValueDialogState> {
             }
         });
 
-        this.setState({ id, caption, valueMap: map, entries }, () => {
+        this.setState({ id, caption, valueMap: map, icon, entries }, () => {
             return this.dialogRef.current?.open();
         });
 
@@ -92,7 +95,7 @@ export class ValueDialog extends UIComponent<{}, IValueDialogState> {
     };
 
     public render(): ComponentChild {
-        const { id, caption, entries, valueMap } = this.state;
+        const { id, caption, icon, entries, valueMap } = this.state;
 
         const className = this.generateFinalClassName(["valueDialog"]);
 
@@ -156,7 +159,7 @@ export class ValueDialog extends UIComponent<{}, IValueDialogState> {
             className={className}
             caption={
                 <>
-                    <Icon src={Codicon.PassFilled} />
+                    <Icon src={icon} />
                     <Label>{caption}</Label>
                 </>
             }
@@ -220,7 +223,7 @@ export class ValueDialog extends UIComponent<{}, IValueDialogState> {
             }
         }
 
-        this.dialogRef.current?.close(false);
+        this.dialogRef.current?.close(closure === DialogResponseClosure.Decline);
         this.signal?.notify({ id, closure, values: valueMap.size > 0 ? Array.from(valueMap.values()) : [] });
     };
 

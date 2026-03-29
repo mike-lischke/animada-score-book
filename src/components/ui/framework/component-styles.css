@@ -56,6 +56,7 @@
 
 .label {
     user-select: text;
+    color: currentColor;
 }
 
 .label.quote {
@@ -99,35 +100,33 @@
 }
 
 .label[disabled] {
-    color: var(--disabledForeground);
+    color: var(--color-disabled);
 }
 
 .label.error {
     padding: 0 4px;
     background-color: hsla(14, 88%, 42%, 0.1);
-    color: var(--errorForeground);
+    color: var(--color-error);
 }
 
 .label.warning {
     padding: 0 4px;
     background-color: hsla(54, 88%, 42%, 0.1);
-    color: var(--editorWarning-foreground);
+    color: var(--color-warning);
 }
 
 .label.info {
     padding: 0 4px;
-    color: var(--foreground);
+    color: var(--color-info);
 }
 
 .label.success {
     padding: 0 4px;
-    color: var(--terminal-ansiGreen);
+    color: var(--color-success);
 }
 
-.label.log {
-    padding: 0 4px;
-    text-wrap: wrap !important;
-    color: var(--terminal-ansiBrightBlue);
+.label.faded {
+    color: color-mix(in oklab, currentColor 60%, transparent);
 }
 
 .message {
@@ -893,13 +892,24 @@ dialog .modal-action button {
 .dialog.valueDialog,
 .dialog.confirmDialog {
     padding: 0;
-    color: var(--foreground);
     min-height: 50px;
 }
 
+.dialog #dialog-caption,
 .dialog.valueDialog #dialogHeading {
     font-size: 1.2em;
+    font-weight: bold;
     margin-bottom: 20px;
+}
+
+.dialog #dialog-caption .icon.codicon {
+    color: var(--color-primary);
+    font-size: 120%;
+}
+
+.dialog .description {
+    margin-top: 12px;
+    font-weight: lighter;
 }
 
 .dialog.valueDialog .content {
@@ -1060,7 +1070,7 @@ dialog .modal-action button {
     border-radius: 9999px;
     background: oklch(100% 0 270);
     box-shadow: 1px 1px 4px rgba(0, 0, 0, 0.2);
-    border: 1px solid var(--color-bawse-300);
+    border: 1px solid var(--color-base-200);
 
     align-self: center;
 }

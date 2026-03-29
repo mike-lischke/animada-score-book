@@ -3,7 +3,7 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import { ComponentChild, createRef, VNode } from "preact";
+import { ComponentChild, createRef } from "preact";
 
 import { Semaphore } from "../../../supplement/Semaphore.js";
 import { Button } from "../framework/Button.js";
@@ -30,7 +30,7 @@ export interface IConfirmDialogButtons {
 
 interface IConfirmDialogState {
     title?: string;
-    message: ComponentChild;
+    message: string;
     buttons: IConfirmDialogButtons;
     values?: Record<string, unknown>;
     description?: string[];
@@ -48,7 +48,7 @@ export class ConfirmDialog extends UIComponent<{}, IConfirmDialogState> {
         };
     }
 
-    public async show(message: ComponentChild, buttons: IConfirmDialogButtons, title?: string, description?: string[],
+    public async show(message: string, buttons: IConfirmDialogButtons, title?: string, description?: string[],
         values?: Record<string, unknown>): Promise<IConfirmDialogResponse> {
         this.signal = new Semaphore<IConfirmDialogResponse>();
         this.setState({ title, message, buttons, values, description }, () => {
@@ -66,29 +66,23 @@ export class ConfirmDialog extends UIComponent<{}, IConfirmDialogState> {
 
         const className = this.generateFinalClassName(["confirmDialog"]);
         let dialogContent = null;
-        if ((message as VNode).key !== undefined) {
-            dialogContent = message;
-        } else {
-            // If no explicit content is specified, use the description list for additional content.
-            const descriptionLabels: ComponentChild[] = [];
-            description?.forEach((value, index) => {
-                descriptionLabels.push(
-                    <Label id={`caption${index}`} caption={value} />,
-                );
-            });
+        const descriptionLabels: ComponentChild[] = [];
+        description?.forEach((value, index) => {
+            descriptionLabels.push(
+                <Label id={`caption${index}`} caption={value} />,
+            );
+        });
 
-            dialogContent =
-                <Container orientation={Orientation.TopDown}>
-                    {message && <Label id="dialogMessage" caption={message as string} />}
-                    <Container
-                        orientation={Orientation.TopDown}
-                        className="description">
-                        {descriptionLabels}
-                    </Container>
-                </Container>;
-        }
+        dialogContent =
+            <Container orientation={Orientation.TopDown}>
+                {message && <Label id="dialogMessage" caption={message} />}
+                <Container
+                    orientation={Orientation.TopDown}
+                    className="description">
+                    {descriptionLabels}
+                </Container>
+            </Container>;
 
-        // TODO: consider the different order of the buttons based on the OS.
         const actions: ComponentChild[] = [];
         if (buttons.alternative) {
             actions.push(<Button
@@ -100,22 +94,22 @@ export class ConfirmDialog extends UIComponent<{}, IConfirmDialogState> {
             />);
         }
 
-        if (buttons.accept) {
-            actions.push(<Button
-                caption={buttons.accept.replace(/&/g, "")}
-                id="accept"
-                key="accept"
-                isDefault={buttons.accept === buttons.default}
-                onClick={this.handleActionClick}
-            />);
-        }
-
         if (buttons.refuse) {
             actions.push(<Button
                 caption={buttons.refuse.replace(/&/g, "")}
                 id="refuse"
                 key="refuse"
                 isDefault={buttons.refuse === buttons.default}
+                onClick={this.handleActionClick}
+            />);
+        }
+
+        if (buttons.accept) {
+            actions.push(<Button
+                caption={buttons.accept.replace(/&/g, "")}
+                id="accept"
+                key="accept"
+                isDefault={buttons.accept === buttons.default}
                 onClick={this.handleActionClick}
             />);
         }
@@ -160,7 +154,7 @@ export class ConfirmDialog extends UIComponent<{}, IConfirmDialogState> {
             }
         }
 
-        this.dialogRef.current?.close(false);
+        this.dialogRef.current?.close(closure === DialogResponseClosure.Decline);
         this.signal?.notify({ closure, values });
     };
 

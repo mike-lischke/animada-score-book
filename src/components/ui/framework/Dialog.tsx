@@ -7,6 +7,7 @@ import { ComponentChild, createRef } from "preact";
 
 import { UIComponent, type ICommonUIProperties } from "./UIComponent.js";
 import { getNewId } from "../../../core/utils.js";
+import { escapeStack } from "../../../supplement/EscapeStack.js";
 
 /** What decision made the user to close a dialog. */
 export enum DialogResponseClosure {
@@ -66,24 +67,28 @@ export class Dialog extends UIComponent<IDialogProperties> {
 
     public override componentDidMount(): void {
         this.dialogRef.current?.addEventListener("close", this.handleClose);
+        this.dialogRef.current?.addEventListener("cancel", this.handleCancelEvent);
     }
 
     public override componentWillUnmount(): void {
         super.componentWillUnmount();
 
         this.dialogRef.current?.removeEventListener("close", this.handleClose);
+        this.dialogRef.current?.removeEventListener("cancel", this.handleCancelEvent);
     }
 
     public render(): ComponentChild {
         const { id = `dialog-${getNewId()}`, children, caption, actions } = this.props;
 
+        const className = this.generateFinalClassName(["dialog", "modal"]);
+
         return (
             <dialog
                 id={id}
-                className="modal"
+                className={className}
                 ref={this.dialogRef}>
                 <div className="modal-box">
-                    {caption && <h3 className="font-bold text-lg">{caption}</h3>}
+                    {caption && <h3 id="dialog-caption">{caption}</h3>}
                     {children}
                     <div className="modal-action">
                         <form method="dialog">
@@ -99,6 +104,8 @@ export class Dialog extends UIComponent<IDialogProperties> {
         if (this.dialogRef.current) {
             this.dialogRef.current.returnValue = "cancel";
             this.dialogRef.current.showModal();
+
+            escapeStack.push(this.onEscape);
         }
     }
 
@@ -106,11 +113,22 @@ export class Dialog extends UIComponent<IDialogProperties> {
         this.dialogRef.current?.close(cancelled ? "cancel" : "accept");
     }
 
-    private handleClose = (event: Event): void => {
+    private handleClose = (): void => {
         const { onClose } = this.props;
 
-        event.stopPropagation();
+        escapeStack.remove(this.onEscape);
         const returnValue = this.dialogRef.current?.returnValue ?? "cancel";
         onClose?.(returnValue);
+    };
+
+    private onEscape = (): void => {
+        // At this point the escape handler is already popped from the stack, so we don't need to worry about that.
+        this.close(true);
+    };
+
+    private handleCancelEvent = (event: Event): void => {
+        // No automatic closing on escape key, we want to handle this ourselves via the EscapeStack to ensure
+        // correct stacking of dialogs.
+        event.preventDefault();
     };
 }

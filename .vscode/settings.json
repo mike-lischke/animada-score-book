@@ -40,9 +40,16 @@
         "Timbau"
     ],
     "cSpell.ignoreWords": [
+        "dasharray",
+        "dashoffset",
         "folderid",
+        "linecap",
         "mediabunny",
+        "nowrap",
+        "oklab",
+        "oklch",
         "parentid",
+        "rgba",
         "tableholder",
         "wavesurfer"
     ]

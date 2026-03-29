@@ -3,7 +3,7 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import type { ComponentChild } from "preact";
+import type { ComponentChild, TargetedEvent } from "preact";
 
 import { UIComponent } from "./UIComponent.js";
 import { Container } from "./Container.js";
@@ -26,7 +26,13 @@ export class DrawerSidebar extends UIComponent<IDrawerSidebarProps> {
 
         return (
             <div id={id} className={`drawer ${alwaysOpen ? "drawer-open" : ""}`}>
-                <input id={`${id}-toggle`} type="checkbox" className="drawer-toggle" checked={open} />
+                <input
+                    id={`${id}-toggle`}
+                    type="checkbox"
+                    className="drawer-toggle"
+                    checked={open}
+                    onChange={this.handleOnChange}
+                />
                 <div className="drawer-content">
                     {children}
                 </div>
@@ -39,4 +45,16 @@ export class DrawerSidebar extends UIComponent<IDrawerSidebarProps> {
             </div>
         );
     }
+
+    /**
+     * Handles user clicks on the drawer toggle checkbox (which usually means the checkbox becomes unchecked,
+     * i.e. the drawer is closed).
+     *
+     * @param e The event object
+     */
+    private handleOnChange = (e: TargetedEvent<HTMLInputElement>) => {
+        const { onOpenChange } = this.props;
+
+        onOpenChange?.(e.currentTarget.checked);
+    };
 }

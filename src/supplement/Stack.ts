@@ -5,7 +5,7 @@
 
 export class Stack<T> extends Array<T> {
 
-    /** @returns True if there's content in this class. */
+    /** @returns True if there's no content in this stack. */
     public get empty(): boolean {
         return this.length === 0;
     }

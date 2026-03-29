@@ -11,9 +11,7 @@ export enum MessageType {
     Warning,
     Info,
     Text,
-    Response,
     Success,
-    Log,
 }
 
 /** Semantically the same as ContentAlignment, but needs different values. */

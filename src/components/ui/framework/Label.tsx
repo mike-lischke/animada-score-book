@@ -63,7 +63,7 @@ export class Label extends UIComponent<ILabelProperties> {
 
         const className = this.generateFinalClassName([
             "label",
-            this.classFromProperty(type, ["error", "warning", "info", "text", "response"]),
+            this.classFromProperty(type, ["error", "warning", "info", "text", "success"]),
             this.classFromProperty(quoted, "quote"),
             this.classFromProperty(code, "code"),
             this.classFromProperty(heading, "heading"),
