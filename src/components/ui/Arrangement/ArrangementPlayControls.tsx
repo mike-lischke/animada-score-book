@@ -141,18 +141,21 @@ export class ArrangementPlayControls
                     <Icon src={Codicon.Unmute} data-tooltip="inherit" />
                     <Slider
                         id="volumeSlider"
-                        value={currentVolume / 100}
+                        value={currentVolume}
+                        min={0}
+                        max={100}
+
                         vertical
                         orientation="decreasing"
                         data-tooltip="inherit"
                         onChange={(value) => {
-                            arrangementView.mainVolume = Math.round(value * 100);
+                            arrangementView.mainVolume = value;
                             this.setState({ currentVolume: arrangementView.mainVolume }, () => {
                                 AppStorage.saveSetting("masterVolume", arrangementView.mainVolume);
                             });
                         }}
                     />
-                    <Label caption={`${currentVolume}%`} style={{ fontSize: "80%", marginTop: "4px" }} />
+                    <Label caption={`${Math.round(currentVolume)}%`} style={{ fontSize: "80%", marginTop: "4px" }} />
                 </Container>
                 <Container
                     orientation={Orientation.TopDown}
@@ -163,17 +166,19 @@ export class ArrangementPlayControls
                     <Icon src={Codicon.Pulse} data-tooltip="inherit" />
                     <Slider
                         id="tempoSlider"
-                        value={(currentTempo - 30) / 270}
+                        value={currentTempo}
+                        min={30}
+                        max={200}
+                        step={5}
                         vertical
                         orientation="decreasing"
                         data-tooltip="inherit"
                         onChange={(value) => {
-                            const tempo = Math.round(30 + (270 * value));
-                            this.setState({ currentTempo: tempo });
+                            this.setState({ currentTempo: value });
                             undoManager.edit({
                                 type: "EditCommand_TimeParamsTempo",
                                 timeParams: arrangementView.timeParams,
-                                tempo: tempo
+                                tempo: value
                             });
 
                         }}

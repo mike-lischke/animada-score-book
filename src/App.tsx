@@ -524,12 +524,16 @@ export class App extends UIComponent<{}, IAppState> {
 
     private loadScorebook(arrangementToLoad: ISerialisedArrangement) {
         if (this.arrangementPlayer) {
+            const arrangementView = this.arrangementPlayer.arrangementView;
+            arrangementView.timeParams.unsubscribe(this.handleTimeParamsChanged);
+
             this.arrangementPlayer.dispose();
         }
 
         const arrangement = this.dataModel.loadArrangement(arrangementToLoad);
         this.undoManager = new UndoManager(arrangement, this.dataModel.instruments);
         this.arrangementPlayer = new ArrangementPlayer(arrangement);
+        this.arrangementPlayer.arrangementView.timeParams.subscribe(this.handleTimeParamsChanged);
 
         if (arrangement.title) {
             document.title = arrangement.title + " - Animada Score Book";
@@ -640,4 +644,7 @@ export class App extends UIComponent<{}, IAppState> {
         }, 100);
     };
 
+    private handleTimeParamsChanged = () => {
+        this.forceUpdate();
+    };
 }

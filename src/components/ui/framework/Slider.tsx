@@ -11,9 +11,13 @@ import { Container } from "./Container.js";
 import { Orientation } from "./ui-types.js";
 
 interface ISliderProperties extends ICommonUIProperties {
-    value: number;
     vertical?: boolean;
     handleSize?: number;
+
+    value: number;
+    min?: number;
+    max?: number;
+    step?: number;
 
     orientation?: "increasing" | "decreasing";
 
@@ -33,17 +37,6 @@ export class Slider extends UIComponent<ISliderProperties> {
 
     public constructor(props: ISliderProperties) {
         super(props);
-    }
-
-    public set value(newValue: number) {
-        const { onChange } = this.props;
-
-        newValue = clampValue(newValue, 0, 1);
-        this.setState({ currentValue: newValue });
-
-        this.sliderRef.current?.style.setProperty("--current-value", `${100 * newValue}%`);
-
-        onChange?.(newValue);
     }
 
     public override componentDidMount(): void {
@@ -108,7 +101,7 @@ export class Slider extends UIComponent<ISliderProperties> {
 
     private handleItemPointerMove = (e: PointerEvent): void => {
         if (this.sliderRef.current) {
-            const { vertical, orientation, onChange } = this.props;
+            const { vertical, orientation, min = 0, max = 1, step, onChange } = this.props;
 
             const bounds = this.sliderRef.current.getBoundingClientRect();
             let value;
@@ -118,21 +111,34 @@ export class Slider extends UIComponent<ISliderProperties> {
                 value = clampValue((e.clientX - bounds.x) / bounds.width, 0, 1);
             }
 
+            // Convert value to user space, snap to step if necessary and compute new internal value.
+            let realValue = value * (max - min);
+            if (step) {
+                realValue = Math.round(realValue / step) * step;
+            }
+            value = realValue / (max - min);
+
+            // Convert value to client range and update CSS variable for slider fill.
             this.sliderRef.current.style.setProperty("--current-value", `${100 * value}%`);
 
             if (orientation === "decreasing") {
-                value = 1 - value;
+                realValue = max - realValue;
             }
 
-            onChange?.(value);
+            onChange?.(realValue);
         }
     };
 
     private applyValue(): void {
         if (this.sliderRef.current) {
-            const { value, orientation } = this.props;
+            const { value, orientation, min = 0, max = 1, step } = this.props;
+            let newValue = clampValue(value, min, max);
+            if (step) {
+                newValue = Math.round(newValue / step) * step;
+            }
+            newValue = (newValue - min) / (max - min);
 
-            const displayValue = orientation === "decreasing" ? 1 - value : value;
+            const displayValue = orientation === "decreasing" ? 1 - newValue : newValue;
             this.sliderRef.current.style.setProperty("--current-value", `${100 * displayValue}%`);
         }
     }
