@@ -34,6 +34,8 @@ export interface IButtonProperties extends ICommonUIProperties {
 
     value?: string;
 
+    popoverTarget?: string;
+
     onContextMenu?: MouseEventCallback;
 }
 
@@ -49,7 +51,7 @@ export class Button extends UIComponent<IButtonProperties> {
     public render(): ComponentChild {
         const {
             id, children, caption, style, orientation, round, imageOnly, disabled, isDefault, title, role,
-            "data-tooltip": dataTooltip, name, value, onClick
+            "data-tooltip": dataTooltip, name, value, popoverTarget, onClick
         } = this.props;
         const className = this.generateFinalClassName([
             "btn",
@@ -76,6 +78,7 @@ export class Button extends UIComponent<IButtonProperties> {
             name={name}
             value={value}
             data-tooltip={dataTooltip}
+            popoverTarget={popoverTarget}
             onClick={onClick}
         >
             {content}

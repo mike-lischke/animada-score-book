@@ -322,7 +322,6 @@ export class App extends UIComponent<{}, IAppState> {
         if (!data || action === "addFolder") {
             switch (action) {
                 case "addFolder": {
-                    let newFolderName: string | undefined;
                     const result = await this.valueDialogRef.current?.show(
                         "addFolderDialog",
                         "Add New Folder",
@@ -340,17 +339,11 @@ export class App extends UIComponent<{}, IAppState> {
                         }],
                     );
 
-                    if (!result) {
+                    if (result?.closure !== DialogResponseClosure.Accept) {
                         return false;
                     }
 
-                    if (result.closure === DialogResponseClosure.Accept && result.data) {
-                        newFolderName = (result.data.values as IValueEditorValueEntry[])
-                            .find((entry) => {
-                                return entry.id === "folderName";
-                            })?.content as string;
-                    }
-
+                    const newFolderName = (result.data.folderName as IValueEditorValueEntry).content as string;
                     if (!newFolderName) {
                         return false;
                     }
@@ -412,11 +405,8 @@ export class App extends UIComponent<{}, IAppState> {
                         if (result) {
                             let url: string | undefined;
 
-                            if (result.closure === DialogResponseClosure.Accept && result.data) {
-                                url = (result.data.values as IValueEditorValueEntry[])
-                                    .find((entry) => {
-                                        return entry.id === "scoreUrl";
-                                    })?.content as string;
+                            if (result.closure === DialogResponseClosure.Accept) {
+                                url = (result.data.scoreUrl as IValueEditorValueEntry).content as string;
                             }
 
                             if (url && url.trim().length > 0) {
@@ -469,11 +459,8 @@ export class App extends UIComponent<{}, IAppState> {
                     if (result) {
                         let newName: string | undefined;
 
-                        if (result.closure === DialogResponseClosure.Accept && result.data) {
-                            newName = (result.data.values as IValueEditorValueEntry[])
-                                .find((entry) => {
-                                    return entry.id === "folderName";
-                                })?.content as string;
+                        if (result.closure === DialogResponseClosure.Accept) {
+                            newName = (result.data.folderName as IValueEditorValueEntry).content as string;
                         }
 
                         if (newName && newName.trim().length > 0) {
@@ -513,7 +500,7 @@ export class App extends UIComponent<{}, IAppState> {
                     ["This action cannot be undone.", "Make sure to export the content if you want to keep a copy."],
                 );
 
-                if (result?.closure !== DialogResponseClosure.Accept) {
+                if (result !== DialogResponseClosure.Accept) {
                     return false;
                 }
 

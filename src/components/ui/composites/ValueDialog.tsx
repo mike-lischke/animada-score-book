@@ -224,17 +224,28 @@ export class ValueDialog extends UIComponent<{}, IValueDialogState> {
         }
 
         this.dialogRef.current?.close(closure === DialogResponseClosure.Decline);
-        this.signal?.notify({ id, closure, values: valueMap.size > 0 ? Array.from(valueMap.values()) : [] });
+
+        const data: Record<string, IValueEditorValueEntry> = {};
+        valueMap.forEach((valueEntry, key) => {
+            data[key] = valueEntry;
+        });
+
+        this.signal?.notify({ id, closure, data });
     };
 
     private closeDialog = (returnValue: string): void => {
         if (returnValue === "cancelled") {
             const { id, valueMap } = this.state;
 
+            const data: Record<string, IValueEditorValueEntry> = {};
+            valueMap.forEach((valueEntry, key) => {
+                data[key] = valueEntry;
+            });
+
             this.signal?.notify({
                 id,
                 closure: DialogResponseClosure.Cancel,
-                values: valueMap.size > 0 ? Array.from(valueMap.values()) : []
+                data,
             });
         }
     };

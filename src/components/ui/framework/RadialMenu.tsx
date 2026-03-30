@@ -63,7 +63,7 @@ export class RadialMenu extends UIComponent<IRadialMenuProps, IRadialMenuState> 
             return null;
         }
 
-        const hostPos = this.#computeMenuHostPosition(anchorRect, placement);
+        const hostPos = this.computeMenuHostPosition(anchorRect, placement);
         const backgroundSize = currentRadius * (2 + (80 / targetRadius));
 
         const className = this.generateFinalClassName(["radial-menu"]);
@@ -93,7 +93,7 @@ export class RadialMenu extends UIComponent<IRadialMenuProps, IRadialMenuState> 
                             transform: "translate(-50%, -50%)",
                         }}
                     />
-                    {this.#renderRadialContent(items, currentRadius, placement)}
+                    {this.renderRadialContent(items, currentRadius, placement)}
                 </div>
             </div>
         );
@@ -101,7 +101,7 @@ export class RadialMenu extends UIComponent<IRadialMenuProps, IRadialMenuState> 
 
     // Angle range depending on item count and placement.
     // Convention: 0° = right, 90° = top, 180° = left, 270°/-90° = bottom.
-    #getAngleRange(count: number, placement: ComponentPlacement): { start: number; end: number; } {
+    private getAngleRange(count: number, placement: ComponentPlacement): { start: number; end: number; } {
         // Default direction per placement
         const isTop =
             placement === ComponentPlacement.TopLeft ||
@@ -159,8 +159,8 @@ export class RadialMenu extends UIComponent<IRadialMenuProps, IRadialMenuState> 
         return { start: 0, end: 360 };
     }
 
-    #getItemAngle(index: number, count: number, placement: ComponentPlacement): number {
-        const { start, end } = this.#getAngleRange(count, placement);
+    private getItemAngle(index: number, count: number, placement: ComponentPlacement): number {
+        const { start, end } = this.getAngleRange(count, placement);
         if (count === 1) {
             return (start + end) / 2;
         }
@@ -170,7 +170,7 @@ export class RadialMenu extends UIComponent<IRadialMenuProps, IRadialMenuState> 
         return start + (step * index);
     }
 
-    #computeMenuHostPosition(rect: DOMRect, placement: ComponentPlacement): { left: number; top: number; } {
+    private computeMenuHostPosition(rect: DOMRect, placement: ComponentPlacement): { left: number; top: number; } {
         const margin = 8;
         let left = rect.left;
         let top = rect.top;
@@ -252,7 +252,8 @@ export class RadialMenu extends UIComponent<IRadialMenuProps, IRadialMenuState> 
         return { left, top };
     }
 
-    #renderRadialContent(items: IRadialMenuItem[], radius: number, placement: ComponentPlacement,): ComponentChild {
+    private renderRadialContent(items: IRadialMenuItem[], radius: number,
+        placement: ComponentPlacement,): ComponentChild {
         const { open } = this.state;
 
         const count = items.length;
@@ -272,7 +273,7 @@ export class RadialMenu extends UIComponent<IRadialMenuProps, IRadialMenuState> 
                 style={{ transform: `translate(-20px, -20px)` }}
             >
                 {items.map((item, index) => {
-                    const angle = this.#getItemAngle(index, count, placement);
+                    const angle = this.getItemAngle(index, count, placement);
                     const rad = (angle * Math.PI) / 180;
 
                     // Final position (fully expanded).

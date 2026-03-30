@@ -5,23 +5,29 @@
 
 import { ComponentChild } from "preact";
 
-import { type ICommonUIProperties, type MouseEventCallback, UIComponent } from "./UIComponent.js";
 import { getNewId } from "../../../core/utils.js";
+import { Button } from "./Button.js";
+import { type ICommonUIProperties, type MouseEventCallback, UIComponent } from "./UIComponent.js";
 
 export interface IDropdownItem {
-    label: string;
+    label?: string;
+    icon?: ComponentChild;
     onClick?: MouseEventCallback;
 }
 
 export interface IDropdownProperties extends ICommonUIProperties {
-    caption: string;
+    caption?: string;
+    icon?: ComponentChild;
     selectedItem?: string;
     items: IDropdownItem[];
 }
 
 export class Dropdown extends UIComponent<IDropdownProperties> {
+    private anchorName = `--anchor-${getNewId()}`;
+    private popoverId = `popover-${getNewId()}`;
+
     public render(): ComponentChild {
-        const { caption, items, selectedItem } = this.props;
+        const { caption, icon, items, selectedItem } = this.props;
 
         const children = items.map((item, index) => {
             return (
@@ -29,24 +35,41 @@ export class Dropdown extends UIComponent<IDropdownProperties> {
                     key={index}
                     className={item.label === selectedItem ? "selected" : ""}
                 >
-                    <a onClick={item.onClick}>{item.label}</a>
+                    <a onClick={item.onClick}>
+                        {item.icon && <span className="inline-flex w-6 h-6 items-center justify-center">
+                            {item.icon}
+                        </span>}
+                        {item.label}
+                    </a>
                 </li>
             );
         });
 
-        const popoverId = `popover-${getNewId()}`;
+        const defaultCaption = !caption && (icon === undefined) ? "Select an option" : undefined;
+        const className = this.generateFinalClassName(["dropdownHost"]);
 
         return (
-            <>
-                <button className="btn" popoverTarget={popoverId} style={{ anchorName: "--anchor-1" }}>
-                    {caption}
-                </button>
+            <div className={className}>
+                <Button
+                    popoverTarget={this.popoverId}
+                    style={{ anchorName: this.anchorName }}
+                    imageOnly={!caption && icon !== undefined}
+                    onClick={(e) => {
+                        e.stopPropagation();
+                    }}
+                >
+                    {icon}
+                    {caption ?? defaultCaption}
+                </Button>
 
                 <ul className="dropdown menu w-52 rounded-box bg-base-100 shadow-sm"
-                    popover="auto" id={popoverId} style={{ positionAnchor: "--anchor-1" }}>
+                    popover="auto"
+                    id={this.popoverId}
+                    style={{ positionAnchor: this.anchorName }}
+                >
                     {children}
                 </ul>
-            </>
+            </div>
         );
     }
 }

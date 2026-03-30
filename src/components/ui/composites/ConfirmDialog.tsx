@@ -15,11 +15,6 @@ import { Label } from "../framework/Label.js";
 import { Orientation } from "../framework/ui-types.js";
 import { UIComponent } from "../framework/UIComponent.js";
 
-export interface IConfirmDialogResponse {
-    closure: DialogResponseClosure;
-    values?: Record<string, unknown>;
-}
-
 /** Possible buttons to show. Only fields with a value also show a button. */
 export interface IConfirmDialogButtons {
     accept?: string;
@@ -38,7 +33,7 @@ interface IConfirmDialogState {
 
 export class ConfirmDialog extends UIComponent<{}, IConfirmDialogState> {
     private dialogRef = createRef<Dialog>();
-    private signal?: Semaphore<IConfirmDialogResponse>;
+    private signal?: Semaphore<DialogResponseClosure>;
 
     public constructor(props: {}) {
         super(props);
@@ -49,13 +44,13 @@ export class ConfirmDialog extends UIComponent<{}, IConfirmDialogState> {
     }
 
     public async show(message: string, buttons: IConfirmDialogButtons, title?: string, description?: string[],
-        values?: Record<string, unknown>): Promise<IConfirmDialogResponse> {
-        this.signal = new Semaphore<IConfirmDialogResponse>();
+        values?: Record<string, unknown>): Promise<DialogResponseClosure> {
+        this.signal = new Semaphore<DialogResponseClosure>();
         this.setState({ title, message, buttons, values, description }, () => {
             return this.dialogRef.current?.open();
         });
 
-        const result = this.signal.wait();
+        const result = await this.signal.wait();
         this.signal = undefined;
 
         return result;
@@ -133,8 +128,6 @@ export class ConfirmDialog extends UIComponent<{}, IConfirmDialogState> {
     }
 
     private handleActionClick = (e: MouseEvent | KeyboardEvent): void => {
-        const { values } = this.state;
-
         const id = (e.currentTarget as HTMLElement).id;
         let closure;
         switch (id) {
@@ -155,14 +148,12 @@ export class ConfirmDialog extends UIComponent<{}, IConfirmDialogState> {
         }
 
         this.dialogRef.current?.close(closure === DialogResponseClosure.Decline);
-        this.signal?.notify({ closure, values });
+        this.signal?.notify(closure);
     };
 
     private handleClose = (returnValue: string): void => {
         if (returnValue === "cancelled") {
-            const { values } = this.state;
-
-            this.signal?.notify({ closure: DialogResponseClosure.Cancel, values });
+            this.signal?.notify(DialogResponseClosure.Cancel);
         }
     };
 

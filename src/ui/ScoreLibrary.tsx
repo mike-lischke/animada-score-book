@@ -6,15 +6,18 @@
 import { createRef, render, type ComponentChild } from "preact";
 
 import type { CellComponent, ColumnDefinition, RowComponent } from "tabulator-tables";
+
 import { Button } from "../components/ui/framework/Button.js";
 import { Codicon } from "../components/ui/framework/Codicon.js";
 import { Container } from "../components/ui/framework/Container.js";
+import { Dropdown, type IDropdownItem } from "../components/ui/framework/Dropdown.js";
 import { Icon } from "../components/ui/framework/Icon.js";
+import { Image, PredefinedImage } from "../components/ui/framework/Image.js";
 import { Label } from "../components/ui/framework/Label.js";
 import { Loading, LoadingSize, LoadingStyle } from "../components/ui/framework/Loading.js";
-import { RadialMenu, type IRadialMenuItem } from "../components/ui/framework/RadialMenu.js";
+import { RadialMenu } from "../components/ui/framework/RadialMenu.js";
 import { SetDataAction, TreeGrid, type ITreeGridOptions } from "../components/ui/framework/TreeGrid.js";
-import { ComponentPlacement, UIComponent, type ICommonUIProperties } from "../components/ui/framework/UIComponent.js";
+import { UIComponent, type ICommonUIProperties } from "../components/ui/framework/UIComponent.js";
 import { ChildAlignment, Orientation, SelectionType } from "../components/ui/framework/ui-types.js";
 import { Arrangement } from "../core/Arrangement.js";
 import {
@@ -85,7 +88,6 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
                     <Icon src={Codicon.Library} style={{ fontSize: "40px", color: "var(--color-primary)" }} />
                     <Label heading={true} style={{ marginLeft: "16px" }}>Score Library</Label>
                     <Button
-                        imageOnly={true}
                         style={{ marginLeft: "auto" }}
                         title="Add New Folder"
                         onClick={(e) => {
@@ -125,8 +127,8 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
         const host = document.createElement("div");
         host.className = "scoreTreeEntry";
 
-        let actionBox;
         let icon: ComponentChild;
+        const dropdownItems: IDropdownItem[] = [];
 
         if (data.state.loading) {
             icon = <Loading
@@ -141,74 +143,70 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
                 // Use the row's expanded state to determine the icon. Our internal state is not updated yet.
                 iconSrc = row.isTreeExpanded() ? Codicon.FolderOpened : Codicon.Folder;
 
-                const importScoreButton = <Button
-                    id="importScoreButton"
-                    className="actionButton"
-                    data-tooltip="Import Banandrum Score into Folder"
-                    imageOnly
-                    onClick={(e) => {
-                        this.handleActionClick(e, "import", undefined, data);
-                    }}
-                >
-                    <Icon src={Codicon.CloudDownload} data-tooltip="inherit" />
-                </Button>;
-
-                const addFolderButton = <Button
-                    id="addFolderButton"
-                    className="actionButton"
-                    data-tooltip="Add New Sub Folder"
-                    imageOnly
-                    onClick={(e) => {
-                        this.handleActionClick(e, "addFolder", undefined, data);
-                    }}
-                >
-                    <Icon src={Codicon.NewFolder} data-tooltip="inherit" />
-                </Button>;
-
-                const editButton = <Button
-                    id="editButton"
-                    className="actionButton"
-                    data-tooltip="Rename Folder"
-                    imageOnly
-                    onClick={(e) => {
-                        this.handleActionClick(e, "edit", data);
-                    }}
-                >
-                    <Icon src={Codicon.Edit} data-tooltip="inherit" />
-                </Button>;
-
-                const removeFolderButton = <Button
-                    id="removeFolderButton"
-                    className="actionButton"
-                    data-tooltip="Remove Folder"
-                    imageOnly
-                    onClick={(e) => {
-                        this.handleActionClick(e, "remove", data);
-                    }}
-                >
-                    <Icon src={Codicon.Trash} data-tooltip="inherit" />
-                </Button>;
-
-                actionBox = <Container className="actionBox" orientation={Orientation.LeftToRight}>
-                    {importScoreButton}
-                    {addFolderButton}
-                    {editButton}
-                    {removeFolderButton}
-                </Container>;
-
+                dropdownItems.push(
+                    {
+                        label: "Import Score",
+                        icon: <Icon src={Codicon.CloudDownload} />,
+                        onClick: (e) => {
+                            this.handleActionClick(e, "import", undefined, data);
+                        },
+                    },
+                    {
+                        label: "Add New Sub Folder",
+                        icon: <Icon src={Codicon.NewFolder} />,
+                        onClick: (e) => {
+                            this.handleActionClick(e, "addFolder", undefined, data);
+                        },
+                    },
+                    {
+                        label: "Rename Folder",
+                        icon: <Icon src={Codicon.Edit} />,
+                        onClick: (e) => {
+                            this.handleActionClick(e, "edit", data);
+                        },
+                    },
+                    {
+                        label: "Remove Folder",
+                        icon: <Icon src={Codicon.Trash} />,
+                        onClick: (e) => {
+                            this.handleActionClick(e, "remove", data);
+                        },
+                    },
+                );
             } else {
                 iconSrc = Codicon.Music;
                 iconClass = "score";
 
+                dropdownItems.push(
+                    {
+                        label: "Load Score",
+                        icon: <Image src={PredefinedImage.PlayImage} />,
+                        onClick: (e) => {
+                            this.handleActionClick(e, "load", data);
+                        },
+                    },
+                    {
+                        label: "Remove Score",
+                        icon: <Icon src={Codicon.Trash} />,
+                        onClick: (e) => {
+                            this.handleActionClick(e, "remove", data);
+                        },
+                    }
+                );
             }
 
             icon = <Icon src={iconSrc} className={iconClass + " scoreTreeIcon"} />;
-        }
+        };
 
         const content = <>
             {icon}
             <Label caption={data.name} />
-            {actionBox}
+            <Container className="actionBox" orientation={Orientation.LeftToRight}>
+                <Dropdown
+                    icon={<Icon src={Codicon.KebabVertical} />}
+                    items={dropdownItems}
+                />
+            </Container>
         </>;
 
         render(content, host);
@@ -221,6 +219,7 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
         const { onAction, dataModel } = this.props;
 
         e.stopPropagation();
+
         void onAction?.(action, data, parent).then((handled) => {
             if (handled) {
                 const updateRowsById = (id: number, data: ISbDmScoreFolder | ISbDmScore): void => {
@@ -280,34 +279,6 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
     private handleScoreTreeRowClick = (event: UIEvent, row: RowComponent): void => {
         const entry = row.getData() as ISbDmScoreFolder | ISbDmScore;
         if (entry.type === SbDmEntityType.Score) {
-            const items: IRadialMenuItem[] = [
-                {
-                    id: "load1",
-                    icon: <Icon src={Codicon.Play} />,
-                    onClick: () => {
-                        this.handleActionClick(new MouseEvent("click"), "load", entry);
-                    }
-                },
-                {
-                    id: "remove1",
-                    icon: <Icon src={Codicon.Trash} />,
-                    onClick: () => {
-                        this.handleActionClick(new MouseEvent("click"), "remove", entry);
-                    },
-                },
-            ];
-
-            let anchorRect;
-
-            // Determine the position for the radial menu based on the current mouse position.
-            if (event instanceof MouseEvent) {
-                anchorRect = new DOMRect(event.clientX, event.clientY, 2, 2);
-            } else {
-                anchorRect = row.getElement().getBoundingClientRect();
-            }
-
-            this.radialMenuRef.current?.open(anchorRect, ComponentPlacement.TopCenter, items, 40);
-
             const params = new URLSearchParams(entry.content);
             const serialisedArrangement = getSerialisedArrangementFromParams(params);
             if (serialisedArrangement) {

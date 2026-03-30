@@ -5,9 +5,8 @@
 
 import { ComponentChild, createRef } from "preact";
 
-import { UIComponent, type ICommonUIProperties } from "./UIComponent.js";
-import { getNewId } from "../../../core/utils.js";
 import { escapeStack } from "../../../supplement/EscapeStack.js";
+import { UIComponent, type ICommonUIProperties } from "./UIComponent.js";
 
 /** What decision made the user to close a dialog. */
 export enum DialogResponseClosure {
@@ -40,11 +39,11 @@ export interface IDialogRequest extends Record<string, unknown> {
     data?: Record<string, unknown>;
 }
 
-export interface IDialogResponse extends Record<string, unknown> {
+export interface IDialogResponse {
     id: string;
     closure: DialogResponseClosure;
 
-    data?: Record<string, unknown>;
+    data: Record<string, unknown>;
 }
 
 /**
@@ -66,19 +65,19 @@ export class Dialog extends UIComponent<IDialogProperties> {
     private dialogRef = createRef<HTMLDialogElement>();
 
     public override componentDidMount(): void {
-        this.dialogRef.current?.addEventListener("close", this.handleClose);
+        this.dialogRef.current?.addEventListener("close", this.handleCloseEvent);
         this.dialogRef.current?.addEventListener("cancel", this.handleCancelEvent);
     }
 
     public override componentWillUnmount(): void {
         super.componentWillUnmount();
 
-        this.dialogRef.current?.removeEventListener("close", this.handleClose);
+        this.dialogRef.current?.removeEventListener("close", this.handleCloseEvent);
         this.dialogRef.current?.removeEventListener("cancel", this.handleCancelEvent);
     }
 
     public render(): ComponentChild {
-        const { id = `dialog-${getNewId()}`, children, caption, actions } = this.props;
+        const { id, children, caption, actions } = this.props;
 
         const className = this.generateFinalClassName(["dialog", "modal"]);
 
@@ -113,7 +112,7 @@ export class Dialog extends UIComponent<IDialogProperties> {
         this.dialogRef.current?.close(cancelled ? "cancel" : "accept");
     }
 
-    private handleClose = (): void => {
+    private handleCloseEvent = (): void => {
         const { onClose } = this.props;
 
         escapeStack.remove(this.onEscape);

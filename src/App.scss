@@ -698,7 +698,7 @@ h6 {
 }
 
 #scoreTreeHost .scoreTreeEntry > .actionBox {
-    display: none;
+    display: flex;
     justify-content: flex-end;
     overflow: hidden;
     min-width: fit-content;
@@ -708,12 +708,12 @@ h6 {
     display: flex;
 }
 
-#scoreTreeHost .scoreTreeEntry > .actionBox > .actionButton {
+#scoreTreeHost .scoreTreeEntry > .actionBox > .actionButton,
+#scoreTreeHost .scoreTreeEntry > .actionBox > .dropdownHost > .btn {
     top: 1px;
     right: 0;
     width: 20px;
     min-width: 0;
-    height: 20px;
     min-height: 0;
     margin: 0;
     border: none;
@@ -722,9 +722,10 @@ h6 {
     background-color: transparent;
 }
 
-#scoreTreeHost .scoreTreeEntry:hover > .actionBox > .actionButton:hover {
+#scoreTreeHost .scoreTreeEntry:hover > .actionBox > .actionButton:hover .icon {
     color: var(--color-primary);
-    background-color: var(--button-hoverBackground);
+    border: 1px solid var(--color-primary);
+    border-radius: 4px;
 }
 
 #scoreTreeHost .scoreTreeEntry > .actionBox > .actionButton:first-of-type {

@@ -58,14 +58,20 @@ export class AppStorage {
     static #settingsKey = "asb-ui-settings";
 
     static #hasLocalStorage: boolean = (() => {
-        try {
-            const testKey = "__asb-test__";
-            window.localStorage.setItem(testKey, "1");
-            window.localStorage.removeItem(testKey);
+        if ("setItem" in window.localStorage) {
+            try {
+                const testKey = "__asb-test__";
+                window.localStorage.setItem(testKey, "1");
+                window.localStorage.removeItem(testKey);
 
-            return true;
-        } catch (e) {
-            console.warn("LocalStorage is not available:", e);
+                return true;
+            } catch (e) {
+                console.warn("LocalStorage is not available:", e);
+
+                return false;
+            }
+        } else {
+            console.warn("LocalStorage is not available.");
 
             return false;
         }
