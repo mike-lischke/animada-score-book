@@ -5,7 +5,8 @@
 
 import { Publisher } from "./Publisher.js";
 import { SbDmEntityType, type ISbDmInstrument, type ISbDmInstrumentImage } from "./ScoreBookDataModel.js";
-import type { INoteStyle, IPackedInstrument } from "./types/general.js";
+import type { INoteStyle } from "./types/general.js";
+import type { IInstrumentMeta } from "./ScoreBookDataModel.js";
 import { getNewId } from "./utils.js";
 
 /**
@@ -31,7 +32,6 @@ export class Instrument extends Publisher implements ISbDmInstrument {
     };
 
     public readonly noteStyles: Record<string, INoteStyle> = {};
-    public readonly unpackPromises: Array<Promise<AudioBuffer>> = [];
 
     /** Base folder for audio files under the public assets. */
     private static readonly soundBasePath = "sounds";
@@ -39,28 +39,29 @@ export class Instrument extends Publisher implements ISbDmInstrument {
     /** Shared audio context used to decode instrument audio buffers. */
     private static readonly audioCtx = new AudioContext();
 
-    public constructor(packedInstrument: IPackedInstrument) {
+    public constructor(instrumentMeta: IInstrumentMeta) {
         super();
 
-        const { id, packedNoteStyles, displayOrder, displayName, color, typeId } = packedInstrument;
+        const { id, variants, displayOrder, displayName, color, typeId } = instrumentMeta;
         this.id = id;
         this.typeId = typeId;
         this.displayOrder = displayOrder;
         this.displayName = displayName;
-        this.image = { type: SbDmEntityType.InstrumentImage, id: getNewId(), filePath: packedInstrument.icon };
+        this.image = { type: SbDmEntityType.InstrumentImage, id: getNewId(), filePath: instrumentMeta.icon };
         this.color = color;
         this.audioPath = `${Instrument.soundBasePath}/instrument_${typeId}/`;
 
-        packedNoteStyles.forEach(({ id, file, symbol, muting }) => {
+        const unpackPromises: Array<Promise<AudioBuffer>> = [];
+        variants.forEach(({ id, file, symbol, muting }) => {
             this.noteStyles[id] = { id, symbol, audioBuffer: null, instrument: this, muting };
-            this.unpackPromises.push(
+            unpackPromises.push(
                 Instrument.loadAudio(file).then((audioBuffer) => {
                     return this.noteStyles[id].audioBuffer = audioBuffer;
                 })
             );
         });
 
-        void Promise.all(this.unpackPromises).then(() => {
+        void Promise.all(unpackPromises).then(() => {
             this.state.initialized = true;
             this.publish();
         });

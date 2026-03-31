@@ -3,8 +3,7 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import type { ISbDmNote, RealTime } from "../core/ScoreBookDataModel.js";
-import type { IMutingRuleOtherInstrument, MutingRule } from "../core/types/general.js";
+import type { IMutingRuleOtherInstrument, ISbDmNote, MutingRule, RealTime } from "../core/ScoreBookDataModel.js";
 import { exists, isSameTiming } from "../core/utils.js";
 import type { IAudioEvent, IMuteEvent, MuteFilter } from "./types.js";
 
@@ -13,7 +12,7 @@ export const getMuteEvents = (note: ISbDmNote, realTime: RealTime): IMuteEvent[]
 
     return muteFilters.map((muteFilter) => {
         // TODO: Handle undefined muteFilters.
-        return { muteFilter: muteFilter!, realTime };
+        return { kind: "mute", muteFilter: muteFilter!, realTime };
     });
 };
 

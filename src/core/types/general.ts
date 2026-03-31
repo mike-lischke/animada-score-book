@@ -3,55 +3,20 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import type { ISbDmInstrument, ISbDmNote, ITiming } from "../ScoreBookDataModel.js";
+import type { INoteStyleMeta, ISbDmInstrument, ISbDmNote, ITiming } from "../ScoreBookDataModel.js";
 
-export interface IInstrumentMeta {
-    id: number;
-    typeId: string;
-    displayOrder: number;
-    displayName: string;
-    icon: string;
-    color: string;
-    noteStyles?: Record<string, INoteStyleBase>;
-}
+export interface INoteStyle extends Omit<INoteStyleMeta, "file"> {
+    /** The audio buffer associated with this note style. Null while the instrument is loading. */
+    audioBuffer: AudioBuffer | null;
 
-export interface IPackedInstrument extends IInstrumentMeta {
-    packedNoteStyles: IPackedNoteStyle[];
-}
-
-export interface IInstrument extends IInstrumentMeta, ISubscribable {
-    readonly loaded: boolean;
-    noteStyles: Record<string, INoteStyle>;
-}
-
-export interface INoteStyleBase {
-    id: string; // single digit or char, can't be 0
-    symbol?: INoteStyleSymbol;
-    muting?: MutingRule | MutingRule[];
-}
-
-export interface IPackedNoteStyle extends INoteStyleBase {
-    file: string;
-}
-
-export interface INoteStyle extends INoteStyleBase {
-    audioBuffer: AudioBuffer | null; // null while the instrument is loading
-    instrument: ISbDmInstrument;
+    /** The instrument to which this note style belongs. */
+    readonly instrument: ISbDmInstrument;
 }
 
 export interface INoteStyleSymbol {
     src?: string; // path to use an img src
     string: string; // string to display for this note-style
 }
-
-export type MutingRule = MutingRuleSimple | IMutingRuleOtherInstrument;
-
-export interface IMutingRuleOtherInstrument {
-    name: "otherInstrument";
-    id: string;
-}
-
-export type MutingRuleSimple = string;
 
 export type Subscription = (...args: unknown[]) => void;
 

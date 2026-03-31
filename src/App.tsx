@@ -571,7 +571,7 @@ export class App extends UIComponent<{}, IAppState> {
             case " ": {
                 if (this.arrangementPlayer) {
                     if (this.arrangementPlayer.state === "stopped") {
-                        this.arrangementPlayer.play(undefined, this.arrangementPlayer.arrangementView.loop);
+                        this.arrangementPlayer.play(undefined);
                     } else {
                         this.arrangementPlayer.stop();
                     }

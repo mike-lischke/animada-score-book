@@ -100,7 +100,7 @@ export class ArrangementPlayControls
                     className="softButton shadow-md"
                     data-tooltip="Start playback with the selected tempo and volume settings."
                     onClick={() => {
-                        arrangementPlayer.play(undefined, arrangementView.loop);
+                        arrangementPlayer.play(undefined);
                     }}>
                     <Image key="playButton" src={PredefinedImage.PlayImage} data-tooltip="inherit" />
                 </Button>

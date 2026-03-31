@@ -8,10 +8,12 @@ import type { ISbDmArrangement, ISbDmTrack, ITiming, RealTime } from "../core/Sc
 import { sleep } from "../core/utils.js";
 import { AnimationEngine } from "../ui/AnimationEngine.js";
 import { AudioBufferPlayer } from "./AudioBufferPlayer.js";
+import { Metronome } from "./Metronome.js";
 import { TimeCoordinator, type IScoreMetrics } from "./TimeCoordinator.js";
 import { TrackPlayer } from "./TrackPlayer.js";
 import {
-    Event, ICallbackEvent, IInterval, ILoopInterval, type IAudioEvent, type IMuteEvent, type MuteFilter
+    Event, ICallbackEvent, IInterval, ILoopInterval, type IAudioEvent, type IMetronomeEvent, type IMuteEvent,
+    type MuteFilter
 } from "./types.js";
 
 export type PlayerPlayState = "playing" | "stopped";
@@ -28,13 +30,14 @@ export type PlayerPlayState = "playing" | "stopped";
 export class ArrangementPlayer extends Publisher {
     public readonly arrangementView: ISbDmArrangement;
 
-    public readonly trackPlayers: Map<ISbDmTrack, TrackPlayer> = new Map<ISbDmTrack, TrackPlayer>();
-    public readonly audibleTrackPlayers: Map<ISbDmTrack, TrackPlayer> = new Map<ISbDmTrack, TrackPlayer>();
+    public readonly trackPlayers = new Map<ISbDmTrack, TrackPlayer>();
+    public readonly audibleTrackPlayers = new Map<ISbDmTrack, TrackPlayer>();
 
     public readonly audibleTrackPlayersPublisher: Publisher = new Publisher();
 
     public readonly animationEngine: AnimationEngine;
 
+    private metronome: Metronome;
     private readonly timeCoordinator: TimeCoordinator;
 
     private timing: ITiming | null = null;
@@ -65,9 +68,6 @@ export class ArrangementPlayer extends Publisher {
     /** The part of the song we want to play. If not set, the entire song is played. */
     private currentInterval?: IInterval;
 
-    /** Whether we want to start over, once the current interval ends. */
-    private loopOnEnd = false;
-
     private scheduledAudioEvents: Array<{ audioEvent: IAudioEvent, audioBufferPlayer: AudioBufferPlayer; }> = [];
     private scheduledCallbackEvents: Array<{
         callbackEvent: ICallbackEvent,
@@ -96,6 +96,7 @@ export class ArrangementPlayer extends Publisher {
         this.arrangementView.timeParams.subscribe(this.updateCallbackEvents);
 
         this.animationEngine = new AnimationEngine(this);
+        this.metronome = new Metronome(this.timeCoordinator);
     }
 
     /**
@@ -136,6 +137,7 @@ export class ArrangementPlayer extends Publisher {
         for (const player of this.trackPlayers.values()) {
             player.onStop();
         }
+        this.metronome.onStop();
     };
 
     /**
@@ -160,6 +162,7 @@ export class ArrangementPlayer extends Publisher {
             player.unsubscribe(this.updateAudibleTrackPlayers);
             player.dispose();
         }
+        this.metronome.dispose();
         this.trackPlayers.clear();
         this.audibleTrackPlayers.clear();
     }
@@ -171,21 +174,19 @@ export class ArrangementPlayer extends Publisher {
      *
      * @param startBar The 1-based bar number to start playback at.
      * @param numberOfBars The number of bars to play.
-     * @param loop Whether to loop the specified interval continuously until stopped.
      */
-    public playBars(startBar: number, numberOfBars: number, loop = false): void {
+    public playBars(startBar: number, numberOfBars: number): void {
         const startTime = this.timeCoordinator.convertToRealTime({ bar: startBar, step: 1 });
         const endTime = this.timeCoordinator.convertToRealTime({ bar: startBar + numberOfBars, step: 1 });
-        this.play({ start: startTime, end: endTime }, loop);
+        this.play({ start: startTime, end: endTime });
     }
 
     /**
      * Plays the entire score or the specified interval in real time.
      *
      * @param interval An optional interval to play instead of the entire score.
-     * @param loop Whether to start over when the end of the interval is reached.
      */
-    public play(interval?: IInterval, loop = false): void {
+    public play(interval?: IInterval): void {
         if (this.disposed) {
             return;
         }
@@ -199,7 +200,6 @@ export class ArrangementPlayer extends Publisher {
             // Clear any interval restriction and start from 0.
             this.#state = "playing";
             this.currentInterval = interval;
-            this.loopOnEnd = loop;
 
             // If an interval is given, pretend we started earlier by setting the offset back in time.
             // We never access time before the current audio time.
@@ -292,8 +292,8 @@ export class ArrangementPlayer extends Publisher {
             void sleep(80).then(() => {
                 this.stop();
                 // If we were supposed to loop, start again immediately.
-                if (this.loopOnEnd) {
-                    this.play(this.currentInterval, true);
+                if (this.arrangementView.loop) {
+                    this.play(this.currentInterval);
                 }
             });
 
@@ -310,10 +310,9 @@ export class ArrangementPlayer extends Publisher {
     }
 
     /**
-     * Returns all events within the given interval, including audio, mute, and callback events.
+     * @returns all events within the given interval, including audio, mute, and callback events.
      *
      * @param interval The real-time interval [start, end) to query.
-     * @returns A list of events sorted by their real-time occurrence.
      */
     private getEvents(interval: IInterval): Event[] {
         if (this.disposed) {
@@ -332,6 +331,15 @@ export class ArrangementPlayer extends Publisher {
                     });
                 });
             });
+
+            if (this.arrangementView.useMetronome) {
+                this.metronome.getEvents(loopInterval).forEach((event) => {
+                    return events.push({
+                        ...event,
+                        realTime: this.timeCoordinator.convertToAudioTime(event.realTime, loopNumber)
+                    });
+                });
+            }
         });
 
         events.push(...this.getCallbackEvents(interval));
@@ -402,6 +410,7 @@ export class ArrangementPlayer extends Publisher {
     private updateCallbackEvents = (): void => {
         this.callbackEvents = this.arrangementView.timeParams.timings.map((timing) => {
             return {
+                kind: "callback",
                 realTime: this.timeCoordinator.convertToRealTime(timing),
                 callback: () => {
                     this.timing = timing;
@@ -480,20 +489,29 @@ export class ArrangementPlayer extends Publisher {
 
     private scheduleEvents(interval: IInterval): void {
         this.getEvents(interval).forEach((event) => {
-            if ("audioBuffer" in event) {
-                this.scheduleAudioEvent(event);
-            }
+            switch (event.kind) {
+                case "audio": {
+                    this.scheduleAudioEvent(event);
+                    break;
+                }
 
-            if ("callback" in event) {
-                this.scheduleCallbackEvent(event);
-            }
+                case "callback": {
+                    this.scheduleCallbackEvent(event);
+                    break;
+                }
+                case "mute": {
+                    this.scheduleMuteEvent(event);
+                    break;
+                }
 
-            if ("muteFilter" in event) {
-                this.scheduleMuteEvent(event);
+                case "metronome": {
+                    this.scheduleMetronomeEvent(event);
+                    break;
+                }
+
+                default:
             }
         });
-
-        // Also add metronome events.
     }
 
     /**
@@ -514,12 +532,18 @@ export class ArrangementPlayer extends Publisher {
             const interval: IInterval = { start: intervalStart, end: intervalEnd };
 
             this.getEvents(interval).forEach((event) => {
-                if ("audioBuffer" in event) {
-                    this.scheduleAudioEvent(event);
-                }
+                switch (event.kind) {
+                    case "audio": {
+                        this.scheduleAudioEvent(event);
+                        break;
+                    }
 
-                if ("muteFilter" in event) {
-                    muteEvents.push(event);
+                    case "mute": {
+                        muteEvents.push(event);
+                        break;
+                    }
+
+                    default:
                 }
             });
 
@@ -567,6 +591,38 @@ export class ArrangementPlayer extends Publisher {
         };
 
         this.scheduledCallbackEvents.push(callbackEventReference);
+    }
+
+    private scheduleMetronomeEvent(event: IMetronomeEvent) {
+        const ctx = this.audioContext;
+        const time = event.realTime + this.offset;
+
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+
+        // Strong beat on 1: higher & louder, weak beats: lower & softer
+        const accentFreq = 2000;
+        const weakFreq = 1200;
+
+        const accentGain = this.arrangementView.mainVolume / 100;
+        const weakGain = accentGain * 0.7;
+
+        osc.type = "square";
+        osc.frequency.value = event.isAccent ? accentFreq : weakFreq;
+
+        // short, punchy envelope
+        gain.gain.setValueAtTime(0.0001, time);
+        gain.gain.linearRampToValueAtTime(
+            event.isAccent ? accentGain : weakGain,
+            time + 0.001,
+        );
+        gain.gain.exponentialRampToValueAtTime(0.0001, time + 0.03);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+
+        osc.start(time);
+        osc.stop(time + 0.04);
     }
 
     private removeFromCallbackSchedule(

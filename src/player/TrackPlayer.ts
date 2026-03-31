@@ -8,10 +8,10 @@ import type { ISbDmNote, ISbDmTrack, RealTime } from "../core/ScoreBookDataModel
 import type { IPolyrhythm } from "../core/types/general.js";
 import { getMuteEvents } from "./Muting.js";
 import type { TimeCoordinator } from "./TimeCoordinator.js";
-import { Event, ICallbackEvent, IInterval, SoloMute } from "./types.js";
+import { Event, ICallbackEvent, IInterval, SoloMute, type IEventSource } from "./types.js";
 
 /**
- * Coordinates playback for a single track (`ITrackView`).
+ * Coordinates playback for a single track.
  *
  * - Caches real-time positions for notes based on `timeCoordinator`.
  * - Produces audio, mute, and callback events for time intervals.
@@ -20,7 +20,7 @@ import { Event, ICallbackEvent, IInterval, SoloMute } from "./types.js";
  * - Exposes `soloMute` to participate in arrangement-wide audible filtering.
  * - Provides a robust lifecycle via `onStop()` and `dispose()`.
  */
-export class TrackPlayer extends Publisher {
+export class TrackPlayer extends Publisher implements IEventSource {
     public readonly track: ISbDmTrack;
     /** Publishes when the current polyrhythm note changes (for UI highlighting). */
     public readonly currentPolyrhythmNotePublisher: Publisher = new Publisher();
@@ -237,6 +237,7 @@ export class TrackPlayer extends Publisher {
      */
     private getAudioEvent = (note: ISbDmNote, realTime: RealTime): Event => {
         return {
+            kind: "audio",
             note,
             realTime,
             audioBuffer: note.noteStyle!.audioBuffer!
@@ -327,6 +328,7 @@ export class TrackPlayer extends Publisher {
     private getCurrentPolyrhythmNoteEvent = (note: ISbDmNote, realTime: RealTime): ICallbackEvent => {
         if (note.polyrhythm) {
             return {
+                kind: "callback",
                 realTime,
                 callback: () => {
                     this._currentPolyrhythmNote = note;
@@ -336,6 +338,7 @@ export class TrackPlayer extends Publisher {
         }
 
         return {
+            kind: "callback",
             realTime,
             callback: () => {
                 this._currentPolyrhythmNote = null;

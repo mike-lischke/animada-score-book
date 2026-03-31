@@ -10,7 +10,7 @@ import { Arrangement } from "./Arrangement.js";
 import type { IScoreDBEntry, ISoundLibFsNode } from "./DatabaseTypes.js";
 import { Instrument } from "./Instrument.js";
 import { Publisher } from "./Publisher.js";
-import type { INoteStyle, IPolyrhythm, ISubscribable, Mutable } from "./types/general.js";
+import type { INoteStyle, INoteStyleSymbol, IPolyrhythm, ISubscribable, Mutable } from "./types/general.js";
 import type { IArrangementSnapshot, ISerialisedArrangement } from "./types/snapshots.js";
 import { getNewId } from "./utils.js";
 
@@ -18,9 +18,56 @@ import { getNewId } from "./utils.js";
  * Steps are usually sixteenths (2/4, 4/4).
  * For other time signatures, they can be different. For example in 6/8, steps are usually eighths.
  */
-export interface ITiming { readonly bar: number, readonly step: number; };
+export interface ITiming {
+    readonly bar: number,
+    readonly step: number;
+};
 
 export type RealTime = number;
+
+export type MutingRule = MutingRuleSimple | IMutingRuleOtherInstrument;
+
+export interface IMutingRuleOtherInstrument {
+    name: "otherInstrument";
+    id: string;
+}
+
+export type MutingRuleSimple = string;
+
+/** Information about a note style. */
+export interface INoteStyleMeta {
+    /** The unique identifier for the note style. Single digit or character, can't be 0. */
+    readonly id: string;
+
+    /** The name of the source file. */
+    readonly file: string;
+
+    /** The muting rules for this note style. */
+    readonly muting?: MutingRule | MutingRule[];
+
+    /** The symbol associated with the note style. */
+    readonly symbol?: INoteStyleSymbol;
+}
+
+/** Base information for a sound (like instruments, the metronome, etc.). */
+export interface ISoundMeta {
+    /** A unique identifier for the sound. */
+    readonly id: number;
+
+    /** The type identifier for the sound. Describes what it is (in a short form). */
+    readonly typeId: string;
+
+    /** The different variants of the sound (if any). */
+    readonly variants: INoteStyleMeta[];
+}
+
+/** Defines the structure of the instrument metadata. */
+export interface IInstrumentMeta extends ISoundMeta {
+    readonly displayOrder: number;
+    readonly displayName: string;
+    readonly icon: string;
+    readonly color: string;
+}
 
 export interface ITimeParamsView extends ISubscribable {
     readonly timeSignature: string;
@@ -77,7 +124,7 @@ export interface ISbDmCommon {
     readonly type: SbDmEntityType;
 }
 
-/** A special form of a datamodel item. It's used in the UI. */
+/** A special form of a data model item. It's used in the UI. */
 export interface ISbDmVisual extends ISbDmCommon {
     /** Transient state information. */
     readonly state: ISbDmEntityState;

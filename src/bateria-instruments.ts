@@ -4,33 +4,33 @@
  */
 
 import arrowDownIcon from "./assets/images/icons/arrow_down.svg";
-import arrowUpIcon from "./assets/images/icons/arrow_up.svg";
 import arrowDownWithLineIcon from "./assets/images/icons/arrow_down_with_line.svg";
 import arrowHalfDownIcon from "./assets/images/icons/arrow_half_down.svg";
 import arrowHalfUpIcon from "./assets/images/icons/arrow_half_up.svg";
+import arrowUpIcon from "./assets/images/icons/arrow_up.svg";
 import arrowUpWithLineIcon from "./assets/images/icons/arrow_up_with_line.svg";
+import oBigIcon from "./assets/images/icons/o_big.svg";
+import oBigClosedIcon from "./assets/images/icons/o_big_closed.svg";
+import rimIcon from "./assets/images/icons/rim.svg";
+import sunRaysIcon from "./assets/images/icons/sun_rays.svg";
+import sunriseRaiseIcon from "./assets/images/icons/sun_rise_rays.svg";
+import tripleSlashIcon from "./assets/images/icons/triple_slash.svg";
 import xBigIcon from "./assets/images/icons/x_big.svg";
 import xSmallIcon from "./assets/images/icons/x_small.svg";
-import sunriseRaiseIcon from "./assets/images/icons/sun_rise_rays.svg";
-import rimIcon from "./assets/images/icons/rim.svg";
-import tripleSlashIcon from "./assets/images/icons/triple_slash.svg";
-import oBigIcon from "./assets/images/icons/o_big.svg";
-import sunRaysIcon from "./assets/images/icons/sun_rays.svg";
-import oBigClosedIcon from "./assets/images/icons/o_big_closed.svg";
 
 import agogo2Icon from "./assets/images/instrument-icons/agogo-2.svg";
 import agogo4Icon from "./assets/images/instrument-icons/agogo-4.svg";
 import caixaIcon from "./assets/images/instrument-icons/caixa.svg";
 import chocalhoIcon from "./assets/images/instrument-icons/chocalho.svg";
-import tamborimIcon from "./assets/images/instrument-icons/tamborim.svg";
-import repiStickIcon from "./assets/images/instrument-icons/repi with stick.svg";
-import repiWithWhippiesIcon from "./assets/images/instrument-icons/repi with whippies.svg";
-import timbauIcon from "./assets/images/instrument-icons/timbau.svg";
+import highSurdoIcon from "./assets/images/instrument-icons/high surdo.svg";
 import lowSurdoIcon from "./assets/images/instrument-icons/low surdo.svg";
 import midSurdoIcon from "./assets/images/instrument-icons/mid surdo.svg";
-import highSurdoIcon from "./assets/images/instrument-icons/high surdo.svg";
+import repiStickIcon from "./assets/images/instrument-icons/repi with stick.svg";
+import repiWithWhippiesIcon from "./assets/images/instrument-icons/repi with whippies.svg";
+import tamborimIcon from "./assets/images/instrument-icons/tamborim.svg";
+import timbauIcon from "./assets/images/instrument-icons/timbau.svg";
 
-import type { IPackedInstrument } from "./core/types/general.js";
+import type { IInstrumentMeta } from "./core/ScoreBookDataModel.js";
 
 export const pastelColors: string[] = [
     "hsl(  0, 100%, 75%)",
@@ -55,13 +55,13 @@ export const pastelColors: string[] = [
     "hsl(342, 100%, 75%)",
 ];
 
-export const bateriaInstruments: IPackedInstrument[] = [{
+export const bateriaInstruments: IInstrumentMeta[] = [{
     id: 0,
     typeId: "0",
     icon: agogo2Icon,
     displayOrder: 0,
     displayName: "Agogô",
-    packedNoteStyles: [
+    variants: [
         {
             id: "1",
             file: "Agogo_Low.mp3",
@@ -86,7 +86,7 @@ export const bateriaInstruments: IPackedInstrument[] = [{
     icon: agogo4Icon,
     displayOrder: 1,
     displayName: "4-Bell Agogo",
-    packedNoteStyles: [
+    variants: [
         {
             id: "1",
             file: "4_Bell_Agogo_Low_Low.mp3",
@@ -127,7 +127,7 @@ export const bateriaInstruments: IPackedInstrument[] = [{
     icon: chocalhoIcon,
     displayOrder: 2,
     displayName: "Chocalho",
-    packedNoteStyles: [
+    variants: [
         {
             id: "1",
             file: "Chocalho_Accent.mp3",
@@ -152,7 +152,7 @@ export const bateriaInstruments: IPackedInstrument[] = [{
     icon: tamborimIcon,
     displayOrder: 3,
     displayName: "Tamborim",
-    packedNoteStyles: [
+    variants: [
         {
             id: "1",
             file: "Tamborim_Accent.mp3",
@@ -177,7 +177,7 @@ export const bateriaInstruments: IPackedInstrument[] = [{
     icon: repiStickIcon,
     displayOrder: 4,
     displayName: "Repinique",
-    packedNoteStyles: [
+    variants: [
         {
             id: "1",
             file: "Repinique_Center.mp3",
@@ -242,7 +242,7 @@ export const bateriaInstruments: IPackedInstrument[] = [{
     icon: repiWithWhippiesIcon,
     displayOrder: 5,
     displayName: "Repinique (Whippy Sticks)",
-    packedNoteStyles: [
+    variants: [
         {
             id: "1",
             file: "Repinique_Whippy_Accent.mp3",
@@ -267,7 +267,7 @@ export const bateriaInstruments: IPackedInstrument[] = [{
     icon: caixaIcon,
     displayOrder: 6,
     displayName: "Caixa",
-    packedNoteStyles: [
+    variants: [
         {
             id: "1",
             file: "Caixa_Accent.mp3",
@@ -308,7 +308,7 @@ export const bateriaInstruments: IPackedInstrument[] = [{
     icon: timbauIcon,
     displayOrder: 7,
     displayName: "Timbau",
-    packedNoteStyles: [
+    variants: [
         {
             id: "1",
             file: "Timbau_Open.mp3",
@@ -341,7 +341,7 @@ export const bateriaInstruments: IPackedInstrument[] = [{
     icon: highSurdoIcon,
     displayOrder: 8,
     displayName: "High Surdo",
-    packedNoteStyles: [
+    variants: [
         {
             id: "1",
             file: "High_Surdo_Accent.mp3",
@@ -368,7 +368,7 @@ export const bateriaInstruments: IPackedInstrument[] = [{
     icon: midSurdoIcon,
     displayOrder: 9,
     displayName: "Mid Surdo",
-    packedNoteStyles: [
+    variants: [
         {
             id: "1",
             file: "Mid_Surdo_Accent.mp3",
@@ -395,7 +395,7 @@ export const bateriaInstruments: IPackedInstrument[] = [{
     icon: lowSurdoIcon,
     displayOrder: 10,
     displayName: "Low Surdo",
-    packedNoteStyles: [
+    variants: [
         {
             id: "1",
             file: "Low_Surdo_Accent.mp3",

@@ -7,6 +7,7 @@ import type { ComponentChild, TargetedEvent } from "preact";
 
 import { UIComponent } from "./UIComponent.js";
 import { Container } from "./Container.js";
+import { Orientation } from "./ui-types.js";
 
 export interface IDrawerSidebarProps {
     id: string;
@@ -33,9 +34,12 @@ export class DrawerSidebar extends UIComponent<IDrawerSidebarProps> {
                     checked={open}
                     onChange={this.handleOnChange}
                 />
-                <div className="drawer-content">
+                <Container
+                    className="drawer-content"
+                    orientation={Orientation.TopDown}
+                >
                     {children}
-                </div>
+                </Container>
                 <div className="drawer-side">
                     <label htmlFor={`${id}-toggle`} aria-label="close sidebar" className="drawer-overlay" />
                     <Container className="drawer-sidebar-content">

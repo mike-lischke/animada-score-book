@@ -1145,3 +1145,7 @@ dialog .modal-action button {
     background-color: var(--color-base-200);
     border: none;
 }
+
+.drawer, .drawer-content {
+    min-height: 0;
+}
