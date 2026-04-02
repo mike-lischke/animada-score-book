@@ -5,6 +5,7 @@
 
 import type { ComponentChild } from "preact";
 
+import type { ScoreBookDataModel } from "../../core/ScoreBookDataModel.js";
 import type { IPolyrhythm } from "../../core/types/general.js";
 import type { UndoManager } from "../../core/UndoManager.js";
 import type { ArrangementPlayer } from "../../player/ArrangementPlayer.js";
@@ -21,6 +22,7 @@ export interface IPolyrhythmViewerProps extends ICommonUIProperties {
     arrangementPlayer: ArrangementPlayer;
     services: ScoreBookUiServices;
     undoManager: UndoManager;
+    dataModel: ScoreBookDataModel;
 }
 
 interface IPolyrhythmViewerState {
@@ -53,7 +55,7 @@ export class PolyrhythmViewer extends UIComponent<IPolyrhythmViewerProps, IPolyr
     }
 
     public override render(): ComponentChild {
-        const { polyrhythm, trackPlayer, arrangementPlayer, services, undoManager } = this.props;
+        const { polyrhythm, trackPlayer, arrangementPlayer, services, undoManager, dataModel } = this.props;
         const { deleteMode, isShrouded } = this.state;
 
         return (
@@ -88,6 +90,7 @@ export class PolyrhythmViewer extends UIComponent<IPolyrhythmViewerProps, IPolyr
                                         key={note.id}
                                         trackPlayer={trackPlayer}
                                         arrangementPlayer={arrangementPlayer}
+                                        dataModel={dataModel}
                                         services={services}
                                         undoManager={undoManager}
                                     />;

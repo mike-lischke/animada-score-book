@@ -11,6 +11,7 @@ import { App } from "./App.js";
 import { Container } from "./components/ui/framework/Container.js";
 import { Message } from "./components/ui/framework/Message.js";
 import { ChildAlignment, MessageType, Orientation } from "./components/ui/framework/ui-types.js";
+import { LoadAudioError } from "./core/LoadAudioError.js";
 
 const root = document.getElementById("app")!;
 interface ISerializedError {
@@ -25,8 +26,18 @@ interface ISerializedError {
 const renderFatal = (error?: unknown) => {
     let text;
 
-    if (error instanceof Error) {
-        text = `${error.name}: ${error.message}\n${error.stack}`;
+    if (error instanceof LoadAudioError) {
+        text =
+            `Failed to load audio file "${error.details.filename}".\n` +
+            `Stage: ${error.details.stage}\n` +
+            (error.details.responseUrl ? `Response URL: ${error.details.responseUrl}\n` : "") +
+            (error.details.status != null ? `Status: ${error.details.status} ${error.details.statusText}\n` : "") +
+            (error.details.contentType ? `Content-Type: ${error.details.contentType}\n` : "") +
+            (error.details.contentLength ? `Content-Length: ${error.details.contentLength}\n` : "") +
+            (error.cause instanceof Error
+                ? `Cause: ${error.cause.name}: ${error.cause.message}` : "");
+    } else if (error instanceof Error) {
+        text = `${error.name}: ${error.message}\n${error.stack ?? ""}`;
     } else {
         const e = error as ISerializedError;
         text =

@@ -5,6 +5,7 @@
 
 import { type ComponentChild } from "preact";
 
+import type { ScoreBookDataModel } from "../../../core/ScoreBookDataModel.js";
 import type { UndoManager } from "../../../core/UndoManager.js";
 import type { ArrangementPlayer } from "../../../player/ArrangementPlayer.js";
 import type { TrackPlayer } from "../../../player/TrackPlayer.js";
@@ -29,6 +30,7 @@ export interface ITrackViewerProperties extends ICommonUIProperties {
     arrangementPlayer: ArrangementPlayer;
     services: ScoreBookUiServices;
     undoManager: UndoManager;
+    dataModel: ScoreBookDataModel;
 
     noteLineMinWidth: number;
 }
@@ -59,7 +61,9 @@ export class TrackViewer extends UIComponent<ITrackViewerProperties, ITrackViewe
     }
 
     public render(): ComponentChild {
-        const { trackPlayer, arrangementPlayer, callbacks, services, undoManager, noteLineMinWidth } = this.props;
+        const {
+            trackPlayer, arrangementPlayer, callbacks, services, undoManager, noteLineMinWidth, dataModel
+        } = this.props;
         const { loaded } = this.state;
 
         if (!loaded) {
@@ -86,6 +90,7 @@ export class TrackViewer extends UIComponent<ITrackViewerProperties, ITrackViewe
                     callbacks={callbacks}
                     trackPlayer={trackPlayer}
                     arrangementPlayer={arrangementPlayer}
+                    dataModel={dataModel}
                     services={services}
                     undoManager={undoManager}
                     noteLineMinWidth={noteLineMinWidth}

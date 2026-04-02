@@ -6,7 +6,7 @@
 import { edit } from "./edit.js";
 import { FaviconDirtyService } from "./FavIconDirtyService.js";
 import { Publisher } from "./Publisher.js";
-import type { ISbDmArrangement, ISbDmInstrument } from "./ScoreBookDataModel.js";
+import type { ScoreBookDataModel } from "./ScoreBookDataModel.js";
 import type { EditCommand } from "./types/edit_commands.js";
 import type { INoteStyle } from "./types/general.js";
 import { UndoRedoStack } from "./UndoRedoStack.js";
@@ -19,11 +19,10 @@ export class UndoManager {
     /**
      * Creates a new score book from an arrangement snapshot.
      *
-     * @param arrangement The arrangement to use.
-     * @param instruments The available instruments.
+     * @param dataModel The data model containing the arrangement and instruments to manage.
      */
-    public constructor(public arrangement: ISbDmArrangement, private instruments: ISbDmInstrument[]) {
-        this.undoRedoStack = new UndoRedoStack(this.arrangement);
+    public constructor(private dataModel: ScoreBookDataModel) {
+        this.undoRedoStack = new UndoRedoStack(this.dataModel.arrangement!);
         this.updateDirtyState();
     }
 
@@ -79,7 +78,8 @@ export class UndoManager {
         }
 
         this.undoRedoStack.goBack();
-        this.arrangement.applyArrangementSnapshot(this.undoRedoStack.currentState, this.instruments);
+        this.dataModel.arrangement!.applyArrangementSnapshot(this.undoRedoStack.currentState,
+            this.dataModel.instruments);
         this.currentStatePublisher.publish();
         this.updateDirtyState();
     };
@@ -93,7 +93,8 @@ export class UndoManager {
         }
 
         this.undoRedoStack.goForward();
-        this.arrangement.applyArrangementSnapshot(this.undoRedoStack.currentState, this.instruments);
+        this.dataModel.arrangement!.applyArrangementSnapshot(this.undoRedoStack.currentState,
+            this.dataModel.instruments);
         this.currentStatePublisher.publish();
         this.updateDirtyState();
     };

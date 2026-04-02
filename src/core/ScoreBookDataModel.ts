@@ -5,6 +5,7 @@
 
 // Temporarily load instruments from bateria-instruments until we have a proper backend.
 import { bateriaInstruments } from "../bateria-instruments.js";
+import { numberSounds } from "../support-sounds.js";
 import { Arrangement } from "./Arrangement.js";
 
 import type { IScoreDBEntry, ISoundLibFsNode } from "./DatabaseTypes.js";
@@ -49,8 +50,8 @@ export interface INoteStyleMeta {
     readonly symbol?: INoteStyleSymbol;
 }
 
-/** Base information for a sound (like instruments, the metronome, etc.). */
-export interface ISoundMeta {
+/** Defines the structure of the instrument metadata. */
+export interface IInstrumentMeta {
     /** A unique identifier for the sound. */
     readonly id: number;
 
@@ -59,10 +60,7 @@ export interface ISoundMeta {
 
     /** The different variants of the sound (if any). */
     readonly variants: INoteStyleMeta[];
-}
 
-/** Defines the structure of the instrument metadata. */
-export interface IInstrumentMeta extends ISoundMeta {
     readonly displayOrder: number;
     readonly displayName: string;
     readonly icon: string;
@@ -131,7 +129,6 @@ export interface ISbDmVisual extends ISbDmCommon {
 
     /**
      * Reloads the content of this data model entry, regardless of whether it was already initialized or not.
-     * This should always be set if `initialize` is set.
      *
      * @param callback An optional callback to report progress.
      */
@@ -211,10 +208,10 @@ export interface ISbDmInstrumentImage {
 export interface ISbDmInstrument extends ISbDmVisual, ISubscribable {
     readonly type: SbDmEntityType.Instrument;
 
-    /** The type identifier of this instrument. It corresponds to a specific instrument class (Agogo, Repinique etc). */
+    /** The type identifier of this instrument. It corresponds to a specific instrument class (Agogô, Repinique etc). */
     readonly typeId: string;
 
-    /** The relative URL path to the image associated with this instrument. */
+    /** The image associated with this instrument. */
     readonly image: ISbDmInstrumentImage;
 
     /** A number indicating the display order of this instrument. */
@@ -226,16 +223,11 @@ export interface ISbDmInstrument extends ISbDmVisual, ISubscribable {
     /** The color associated with this instrument. */
     readonly color: string;
 
-    /** The relative URL path to the audio file associated with this instrument. */
-    readonly audioPath: string;
-
     /** Start end and position in the audio file. */
     readonly range: [number, number];
 
-    /** Note styles available for this instrument. */
+    /** Note (play) styles available for this instrument (high bell, center, rimshot, press roll etc.). */
     readonly noteStyles: Record<string, INoteStyle>;
-
-    readonly noteStyleCount: number;
 }
 
 export interface ISbDmTimeParams extends ITimeParamsView {
@@ -275,6 +267,7 @@ interface IScoreBookDataModelData {
     soundLib: Array<ISbDmSoundFolder | ISbDmSoundFile>;
     scoreLib: Array<ISbDmScoreFolder | ISbDmScore>;
     instruments: ISbDmInstrument[];
+    numberSounds?: ISbDmInstrument;
 
     /** The current arrangement being edited or viewed. */
     arrangement?: ISbDmArrangement;
@@ -301,13 +294,13 @@ export class ScoreBookDataModel extends Publisher {
         soundLib: [],
         scoreLib: [],
         instruments: [],
-        arrangement: undefined,
     };
 
     public async initialize(): Promise<void> {
         const promises: Array<Promise<void>> = [
             this.loadSoundLib(),
             this.loadInstruments(),
+            this.loadNumberSounds(),
             this.updateScoreLibFolder(this.data.scoreLib),
         ];
 
@@ -330,6 +323,10 @@ export class ScoreBookDataModel extends Publisher {
 
     public get arrangement(): ISbDmArrangement | undefined {
         return this.data.arrangement;
+    }
+
+    public get numberSounds(): ISbDmInstrument | undefined {
+        return this.data.numberSounds;
     }
 
     public loadArrangement(serializedArrangement: ISerialisedArrangement): ISbDmArrangement {
@@ -359,7 +356,7 @@ export class ScoreBookDataModel extends Publisher {
             throw new Error(`A folder named '${name}' already exists in the target location.`);
         }
 
-        const res = await fetch(`${this.getApiBase()}/api.php?action=addScoreFolder`, {
+        const res = await fetch(`/api.php?action=addScoreFolder`, {
             method: "POST",
             headers: { Accept: "application/json" },
             body: JSON.stringify({ name, parentid: parent?.id }),
@@ -398,7 +395,7 @@ export class ScoreBookDataModel extends Publisher {
     }
 
     public async addScore(name: string, content: string, parent?: ISbDmScoreFolder): Promise<void> {
-        const res = await fetch(`${this.getApiBase()}/api.php?action=addScore`, {
+        const res = await fetch(`/api.php?action=addScore`, {
             method: "POST",
             headers: { Accept: "application/json" },
             body: JSON.stringify({ name, content, folderId: parent?.id }),
@@ -435,7 +432,7 @@ export class ScoreBookDataModel extends Publisher {
     }
 
     public async renameEntry(entry: ISbDmScoreFolder | ISbDmScore, newName: string): Promise<void> {
-        const res = await fetch(`${this.getApiBase()}/api.php?action=renameEntry`, {
+        const res = await fetch(`/api.php?action=renameEntry`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -459,7 +456,7 @@ export class ScoreBookDataModel extends Publisher {
             throw new Error("Cannot delete a folder that still has children.");
         }
 
-        const res = await fetch(`${this.getApiBase()}/api.php?action=delete`, {
+        const res = await fetch(`/api.php?action=delete`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -505,7 +502,7 @@ export class ScoreBookDataModel extends Publisher {
             return Promise.resolve();
         }
 
-        const res = await fetch(`${this.getApiBase()}/api.php?action=listSoundLib`, {
+        const res = await fetch(`/api.php?action=listSoundLib`, {
             headers: { Accept: "application/json" },
         });
 
@@ -568,9 +565,15 @@ export class ScoreBookDataModel extends Publisher {
         return Promise.resolve();
     };
 
+    private async loadNumberSounds(): Promise<void> {
+        this.data.numberSounds = new Instrument(numberSounds);
+
+        return Promise.resolve();
+    }
+
     private async updateScoreLibFolder(list: Array<ISbDmScoreFolder | ISbDmScore>,
         parent?: ISbDmScoreFolder): Promise<void> {
-        const res = await fetch(`${this.getApiBase()}/api.php?action=listScoreFolderContent`, {
+        const res = await fetch(`/api.php?action=listScoreFolderContent`, {
             method: "POST",
             headers: { Accept: "application/json" },
             body: JSON.stringify({ parentid: parent?.id ?? -1 }),
@@ -622,24 +625,4 @@ export class ScoreBookDataModel extends Publisher {
 
         return Promise.resolve();
     }
-
-    private getSoundUrl(path: string): string {
-        const base = this.getApiBase();
-
-        return `${base}/soundLib/${path}`;
-    }
-
-    /**
-     * @returns the path to use for the REST API script as string. It differs between local
-     *          development and production.
-     */
-    private getApiBase(): string {
-        // For local development use the test server.
-        if (import.meta.env.DEV) {
-            //return import.meta.env.VITE_BASE_URL;
-        }
-
-        // In production: use the same server as the app is served from.
-        return "";
-    };
 }

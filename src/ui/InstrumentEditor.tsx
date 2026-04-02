@@ -31,7 +31,7 @@ export class InstrumentEditor extends UIComponent<IInstrumentEditorProps> {
                     className="instrument-waveform-panel"
                     orientation={Orientation.TopDown}
                 >
-                    <WaveformPlayer url={instrument.audioPath} />
+                    <WaveformPlayer />
                 </Container>
 
             </Container>

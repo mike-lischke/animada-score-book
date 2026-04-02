@@ -3,10 +3,9 @@
 * Licensed under the MIT License. See License.txt in the project root for license information.
 */
 
-import type { ISbDmArrangement, ISbDmTrack } from "../../../core/ScoreBookDataModel.js";
+import type { ISbDmArrangement, ISbDmTrack, ScoreBookDataModel } from "../../../core/ScoreBookDataModel.js";
 import type { EditCommand_TimeParamsTimeSignature } from "../../../core/types/edit_commands.js";
 import type { UndoManager } from "../../../core/UndoManager.js";
-import type { ArrangementPlayer } from "../../../player/ArrangementPlayer.js";
 import type { ScoreBookUiServices } from "../../../player/types.js";
 import { ExpandingSpacer } from "../ExpandingSpacer.js";
 import { Button } from "../framework/Button.js";
@@ -19,7 +18,7 @@ import { Separator } from "../Separator.js";
 import { UndoRedoControls } from "./UndoRedoControls.js";
 
 export interface IArrangementEditControlsProperties extends ICommonUIProperties {
-    arrangementPlayer: ArrangementPlayer,
+    dataModel: ScoreBookDataModel;
     services: ScoreBookUiServices,
     undoManager: UndoManager;
 }
@@ -40,10 +39,10 @@ export class ArrangementEditControls
     }
 
     public override componentDidMount(): void {
-        const { arrangementPlayer, services } = this.props;
+        const { dataModel, services } = this.props;
         const { arePolyrhythms } = this.state;
 
-        const arrangement = arrangementPlayer.arrangementView;
+        const arrangement = dataModel.arrangement!;
         this.addSubscription(arrangement, this.arrangementCallback);
         this.addSubscription(arrangement, this.trackUpdate);
         this.addSubscription(services.selectionManager, this.onSelectionChange);
@@ -75,10 +74,10 @@ export class ArrangementEditControls
     }
 
     public render() {
-        const { arrangementPlayer, services, undoManager } = this.props;
+        const { dataModel, services, undoManager } = this.props;
         const { arePolyrhythms } = this.state;
 
-        const arrangementView = arrangementPlayer.arrangementView;
+        const arrangementView = dataModel.arrangement!;
         const modeManager = services.modeManager;
 
         // TODO: move this to a score creation dialog. Changing that in an existing score makes no sense.
@@ -179,7 +178,7 @@ export class ArrangementEditControls
                 </Overlay>
                 <Overlay name="selection_controls">
                     <SelectionControls
-                        arrangementPlayer={arrangementPlayer}
+                        dataModel={dataModel}
                         services={services}
                         undoManager={undoManager}
                     />
@@ -200,9 +199,9 @@ export class ArrangementEditControls
     }
 
     private arrangementCallback = () => {
-        const { arrangementPlayer, services } = this.props;
+        const { dataModel, services } = this.props;
 
-        const arrangement = arrangementPlayer.arrangementView;
+        const arrangement = dataModel.arrangement!;
 
         const arePolyrhythms = this.hasPolyrhythms(arrangement);
         if (!arePolyrhythms) {
@@ -214,8 +213,9 @@ export class ArrangementEditControls
     };
 
     private trackUpdate = (): void => {
-        const { arrangementPlayer: arrangementPlayerContext } = this.props;
-        const arrangement = arrangementPlayerContext.arrangementView;
+        const { dataModel } = this.props;
+
+        const arrangement = dataModel.arrangement!;
 
         this.subscribedTracks.forEach((track) => {
             if (!arrangement.tracks.includes(track)) {
@@ -233,8 +233,9 @@ export class ArrangementEditControls
     };
 
     private changeTimeSignature = (event: InputEvent) => {
-        const { arrangementPlayer, undoManager } = this.props;
-        const arrangementView = arrangementPlayer.arrangementView;
+        const { dataModel, undoManager } = this.props;
+
+        const arrangementView = dataModel.arrangement!;
 
         const command: Partial<EditCommand_TimeParamsTimeSignature> = {
             type: "EditCommand_TimeParamsTimeSignature",
@@ -266,8 +267,9 @@ export class ArrangementEditControls
     };
 
     private handleLengthChange = (newValue: number) => {
-        const { arrangementPlayer, undoManager } = this.props;
-        const arrangementView = arrangementPlayer.arrangementView;
+        const { dataModel, undoManager } = this.props;
+
+        const arrangementView = dataModel.arrangement!;
 
         if (!isNaN(newValue)) {
             undoManager.edit({

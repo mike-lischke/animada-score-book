@@ -5,9 +5,8 @@
 
 import { createRef, type ComponentChild, type ContextType } from "preact";
 
-import type { ISbDmArrangement } from "../../core/ScoreBookDataModel.js";
+import type { ISbDmArrangement, ScoreBookDataModel } from "../../core/ScoreBookDataModel.js";
 import type { UndoManager } from "../../core/UndoManager.js";
-import type { ArrangementPlayer } from "../../player/ArrangementPlayer.js";
 import type { ScoreBookUiServices } from "../../player/types.js";
 import type { SelectionManager } from "../../ui/SelectionManager.js";
 import { ExpandingSpacer } from "./ExpandingSpacer.js";
@@ -19,7 +18,7 @@ import { Separator } from "./Separator.js";
 const digitMatcher = /^\d$/;
 
 export interface ISelectionControlsProperties extends ICommonUIProperties {
-    arrangementPlayer: ArrangementPlayer;
+    dataModel: ScoreBookDataModel;
     services: ScoreBookUiServices;
     undoManager: UndoManager;
 }
@@ -58,13 +57,13 @@ export class SelectionControls extends UIComponent<ISelectionControlsProperties,
     }
 
     public render(): ComponentChild {
-        const { arrangementPlayer, services } = this.props;
+        const { dataModel, services } = this.props;
         const { addingPolyrhythm } = this.state;
 
         return (
             <OverlayStateContext.Consumer>
                 {(overlayState) => {
-                    const arrangement = arrangementPlayer.arrangementView;
+                    const arrangement = dataModel.arrangement!;
                     const selectionManager = services.selectionManager;
 
                     return (
@@ -168,10 +167,10 @@ export class SelectionControls extends UIComponent<ISelectionControlsProperties,
     }
 
     private handleClearSounds = () => {
-        const { arrangementPlayer, services, undoManager } = this.props;
+        const { dataModel, services, undoManager } = this.props;
 
         const selectionManager = services.selectionManager;
-        const arrangement = arrangementPlayer.arrangementView;
+        const arrangement = dataModel.arrangement!;
 
         undoManager.edit({
             type: "EditCommand_ArrangementClearSelection",
@@ -182,10 +181,10 @@ export class SelectionControls extends UIComponent<ISelectionControlsProperties,
     };
 
     private handleNoteCountInputKeyPress = (event: KeyboardEvent) => {
-        const { arrangementPlayer, services } = this.props;
+        const { dataModel, services } = this.props;
 
         const selectionManager = services.selectionManager;
-        const arrangement = arrangementPlayer.arrangementView;
+        const arrangement = dataModel.arrangement!;
 
         if (event.key === "Enter") {
             this.createPolyrhythm(

@@ -3,15 +3,16 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
+import { LoadAudioError, type LoadAudioStage } from "./LoadAudioError.js";
 import { Publisher } from "./Publisher.js";
+import type { IInstrumentMeta } from "./ScoreBookDataModel.js";
 import { SbDmEntityType, type ISbDmInstrument, type ISbDmInstrumentImage } from "./ScoreBookDataModel.js";
 import type { INoteStyle } from "./types/general.js";
-import type { IInstrumentMeta } from "./ScoreBookDataModel.js";
 import { getNewId } from "./utils.js";
 
 /**
- * This should be the only instance of an instrument.
- * So if this is called, the instrument must start unloaded.
+ * All details about a specific instrument, including its note styles and associated audio buffers.
+ * This is the main class representing an instrument in the data model.
  */
 export class Instrument extends Publisher implements ISbDmInstrument {
     public readonly type = SbDmEntityType.Instrument;
@@ -22,8 +23,7 @@ export class Instrument extends Publisher implements ISbDmInstrument {
     public readonly image: ISbDmInstrumentImage;
     public readonly color: string;
 
-    public readonly audioPath: string;
-    public readonly range: [number, number] = [0, 127];
+    public readonly range: [number, number] = [0, -1];
     public readonly state = {
         initialized: false,
         isLeaf: true,
@@ -49,19 +49,18 @@ export class Instrument extends Publisher implements ISbDmInstrument {
         this.displayName = displayName;
         this.image = { type: SbDmEntityType.InstrumentImage, id: getNewId(), filePath: instrumentMeta.icon };
         this.color = color;
-        this.audioPath = `${Instrument.soundBasePath}/instrument_${typeId}/`;
 
-        const unpackPromises: Array<Promise<AudioBuffer>> = [];
+        const loadPromises: Array<Promise<AudioBuffer>> = [];
         variants.forEach(({ id, file, symbol, muting }) => {
             this.noteStyles[id] = { id, symbol, audioBuffer: null, instrument: this, muting };
-            unpackPromises.push(
+            loadPromises.push(
                 Instrument.loadAudio(file).then((audioBuffer) => {
                     return this.noteStyles[id].audioBuffer = audioBuffer;
                 })
             );
         });
 
-        void Promise.all(unpackPromises).then(() => {
+        void Promise.all(loadPromises).then(() => {
             this.state.initialized = true;
             this.publish();
         });
@@ -75,14 +74,41 @@ export class Instrument extends Publisher implements ISbDmInstrument {
      */
     private static async loadAudio(filename: string): Promise<AudioBuffer> {
         const filepath = `${Instrument.soundBasePath}/${filename}`;
-        const response = await fetch(filepath);
-        const arrayBuffer = await response.arrayBuffer();
 
-        return Instrument.audioCtx.decodeAudioData(arrayBuffer);
+        const createLoadAudioError = (message: string, stage: LoadAudioStage, cause?: unknown) => {
+            return new LoadAudioError(message, {
+                stage,
+                filename,
+                filepath,
+                responseUrl: response.url,
+                status: response.status,
+                statusText: response.statusText,
+                contentType: response.headers.get("content-type"),
+                contentLength: response.headers.get("content-length"),
+                cause,
+            });
+        };
+
+        let response: Response;
+
+        try {
+            response = await fetch(filepath);
+        } catch (cause) {
+            throw createLoadAudioError("Network error while fetching audio file.", "fetch", cause);
+        }
+
+        if (!response.ok) {
+            throw createLoadAudioError("HTTP error while fetching audio file.", "http");
+        }
+
+        const arrayBuffer = await response.arrayBuffer().catch((cause: unknown) => {
+            throw createLoadAudioError("Failed to read response as ArrayBuffer.", "read-array-buffer", cause);
+        });
+
+        try {
+            return await Instrument.audioCtx.decodeAudioData(arrayBuffer);
+        } catch (cause) {
+            throw createLoadAudioError("Failed to decode audio data.", "decode-audio", cause);
+        }
     }
-
-    public get noteStyleCount(): number {
-        return Object.keys(this.noteStyles).length + 1; // + 1 for rests
-    };
-
 }

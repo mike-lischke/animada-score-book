@@ -135,6 +135,7 @@
     min-width: 80px;
     outline: none;
     overflow: auto;
+    white-space: pre-wrap;
 }
 
 .message.error {

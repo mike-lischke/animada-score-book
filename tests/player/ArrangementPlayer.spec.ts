@@ -11,7 +11,25 @@ import type { ICallbackEvent, IInterval, ILoopInterval, } from "../../src/player
 // Simple subscribable helper with publish capability for tests
 type Sub = (...args: unknown[]) => void;
 
-type CallbackHelper = { callback: () => void; } & { realTime: number; } & { identifier: unknown; };
+type CallbackHelper = {
+    kind: "callback";
+    callback: () => void;
+} & { realTime: number; } & {
+    identifier: unknown;
+};
+
+class TestScoreBookDataModel extends ScoreBookDataModel {
+    private readonly _arrangement: ISbDmArrangement;
+
+    public constructor(arrangement: ISbDmArrangement) {
+        super();
+        this._arrangement = arrangement;
+    }
+
+    public override get arrangement(): ISbDmArrangement {
+        return this._arrangement;
+    }
+}
 
 interface PublishableSubscribable {
     subscribe: (cb: Sub) => () => void; unsubscribe: (cb: Sub) => void;
@@ -198,8 +216,6 @@ const makeArrangement = (trackCount: number): ISbDmArrangement & { _publish: () 
                 expanded: false,
                 expandedOnce: false,
             },
-            noteStyleCount: 0,
-            audioPath: "",
             range: [21, 108],
             typeId: `inst${i}`,
             displayOrder: i + 1,
@@ -256,7 +272,11 @@ const makeArrangement = (trackCount: number): ISbDmArrangement & { _publish: () 
         unsubscribe: arrangementSubs.unsubscribe,
         _publish: () => {
             arrangementSubs.publish();
-        }
+        },
+        mainVolume: 1,
+        loop: false,
+        useMetronome: false,
+        countIn: false
     };
     tracks.forEach((t) => {
         t.arrangement = arrangement;
@@ -267,8 +287,8 @@ const makeArrangement = (trackCount: number): ISbDmArrangement & { _publish: () 
 
 // Import after mocks
 import {
-    SbDmEntityType, type ISbDmArrangement, type ISbDmInstrument, type ISbDmNote, type ISbDmTrack, type ITiming,
-    type RealTime
+    SbDmEntityType, ScoreBookDataModel, type ISbDmArrangement, type ISbDmInstrument, type ISbDmNote, type ISbDmTrack,
+    type ITiming, type RealTime
 } from "../../src/core/ScoreBookDataModel.js";
 import { ArrangementPlayer } from "../../src/player/ArrangementPlayer.js";
 import { getNewId } from "../../src/core/utils.js";
@@ -278,15 +298,18 @@ import type { TrackPlayer } from "../../src/player/TrackPlayer.js";
 describe("ArrangementPlayer", () => {
     it("creates track players and computes audible set (no solo)", () => {
         const arrangement = makeArrangement(2);
-        const player = new ArrangementPlayer(arrangement);
+        const dm = new TestScoreBookDataModel(arrangement);
+        const player = new ArrangementPlayer(dm);
         expect(player.trackPlayers.size).toBe(2);
+
         // Initially all unmuted => both audible
         expect(player.audibleTrackPlayers.size).toBe(2);
     });
 
     it("audible set reacts to solo/mute changes via subscriptions", () => {
         const arrangement = makeArrangement(3);
-        const player = new ArrangementPlayer(arrangement);
+        const dm = new TestScoreBookDataModel(arrangement);
+        const player = new ArrangementPlayer(dm);
         const tps = Array.from(player.trackPlayers.values()) as Array<TrackPlayer & { publish: () => void; }>;
 
         // Solo the second track
@@ -305,7 +328,8 @@ describe("ArrangementPlayer", () => {
 
     it("updates track player set when arrangement tracks change", () => {
         const arrangement = makeArrangement(1);
-        const player = new ArrangementPlayer(arrangement);
+        const dm = new TestScoreBookDataModel(arrangement);
+        const player = new ArrangementPlayer(dm);
         expect(player.trackPlayers.size).toBe(1);
 
         // Add a new track and publish arrangement
@@ -338,7 +362,8 @@ describe("ArrangementPlayer", () => {
 
     it("aggregates events across loops and includes timing callbacks", () => {
         const arrangement = makeArrangement(1);
-        const player = new ArrangementPlayer(arrangement);
+        const dm = new TestScoreBookDataModel(arrangement);
+        const player = new ArrangementPlayer(dm);
 
         // Interval crosses loop boundary (length=1): [0.9, 1.2].
         // @ts-expect-error Accessing internal for test purposes
@@ -364,7 +389,8 @@ describe("ArrangementPlayer", () => {
 
     it("onStop resets currentTiming and forwards to track players", () => {
         const arrangement = makeArrangement(2);
-        const player = new ArrangementPlayer(arrangement);
+        const dm = new TestScoreBookDataModel(arrangement);
+        const player = new ArrangementPlayer(dm);
 
         // Prime currentTiming by firing a timing callback.
         // @ts-expect-error Accessing internal for test purposes

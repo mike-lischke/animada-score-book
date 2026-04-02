@@ -4,8 +4,8 @@
  */
 
 import { Publisher } from "../core/Publisher.js";
-import type { ISbDmArrangement, ISbDmTrack, ITiming, RealTime } from "../core/ScoreBookDataModel.js";
-import { sleep } from "../core/utils.js";
+import type { ISbDmNote, ISbDmTrack, ITiming, RealTime, ScoreBookDataModel } from "../core/ScoreBookDataModel.js";
+import { sleep, waitFor } from "../core/utils.js";
 import { AnimationEngine } from "../ui/AnimationEngine.js";
 import { AudioBufferPlayer } from "./AudioBufferPlayer.js";
 import { Metronome } from "./Metronome.js";
@@ -16,7 +16,7 @@ import {
     type MuteFilter
 } from "./types.js";
 
-export type PlayerPlayState = "playing" | "stopped";
+export type PlayerPlayState = "counting" | "playing" | "stopped";
 
 /**
  * Coordinates playback for an `IArrangementView` by aggregating events from all `TrackPlayer`s,
@@ -28,8 +28,6 @@ export type PlayerPlayState = "playing" | "stopped";
  * - Call `dispose()` when replacing the arrangement to clean up subscriptions.
  */
 export class ArrangementPlayer extends Publisher {
-    public readonly arrangementView: ISbDmArrangement;
-
     public readonly trackPlayers = new Map<ISbDmTrack, TrackPlayer>();
     public readonly audibleTrackPlayers = new Map<ISbDmTrack, TrackPlayer>();
 
@@ -59,13 +57,16 @@ export class ArrangementPlayer extends Publisher {
      */
     private offset = 0;
 
-    /** The time point relative to the start of the offset, for which we have scheduled events. */
+    /** The time point in score time, for which we already have scheduled events. */
     private timeCovered = 0;
 
-    /** The end of the last interval we played. Once `timeCovered` reaches this point, we are done with the interval. */
+    /**
+     * The end of the last interval we played (score time).
+     * Once `timeCovered` reaches this point, we are done with the interval.
+     */
     private endOffset = 0;
 
-    /** The part of the song we want to play. If not set, the entire song is played. */
+    /** The part of the song we want to play (in score time). If not set, the entire song is played. */
     private currentInterval?: IInterval;
 
     private scheduledAudioEvents: Array<{ audioEvent: IAudioEvent, audioBufferPlayer: AudioBufferPlayer; }> = [];
@@ -80,20 +81,19 @@ export class ArrangementPlayer extends Publisher {
     /**
      * Creates a player for the given arrangement and sets up all necessary subscriptions.
      *
-     * @param arrangement The arrangement context to observe and play.
+     * @param dataModel The data model containing the arrangement to play.
      */
-    public constructor(arrangement: ISbDmArrangement) {
+    public constructor(private dataModel: ScoreBookDataModel) {
         super();
-        this.arrangementView = arrangement;
 
-        this.timeCoordinator = new TimeCoordinator(this.arrangementView.timeParams, this);
+        this.timeCoordinator = new TimeCoordinator(this.dataModel.arrangement!.timeParams, this);
 
         this.updateTrackPlayers();
         this.updateAudibleTrackPlayers();
-        this.arrangementView.subscribe(this.updateTrackPlayers);
+        this.dataModel.arrangement!.subscribe(this.updateTrackPlayers);
 
         this.updateCallbackEvents();
-        this.arrangementView.timeParams.subscribe(this.updateCallbackEvents);
+        this.dataModel.arrangement!.timeParams.subscribe(this.updateCallbackEvents);
 
         this.animationEngine = new AnimationEngine(this);
         this.metronome = new Metronome(this.timeCoordinator);
@@ -154,8 +154,8 @@ export class ArrangementPlayer extends Publisher {
         this.onStop();
 
         // Unsubscribe from arrangement changes and the event engine.
-        this.arrangementView.unsubscribe(this.updateTrackPlayers);
-        this.arrangementView.timeParams.unsubscribe(this.updateCallbackEvents);
+        this.dataModel.arrangement!.unsubscribe(this.updateTrackPlayers);
+        this.dataModel.arrangement!.timeParams.unsubscribe(this.updateCallbackEvents);
 
         // Unsubscribe from all track players and clear references.
         for (const player of this.trackPlayers.values()) {
@@ -174,11 +174,14 @@ export class ArrangementPlayer extends Publisher {
      *
      * @param startBar The 1-based bar number to start playback at.
      * @param numberOfBars The number of bars to play.
+     *
+     * @returns A promise that resolves when playback has stopped.
      */
-    public playBars(startBar: number, numberOfBars: number): void {
+    public async playBars(startBar: number, numberOfBars: number): Promise<void> {
         const startTime = this.timeCoordinator.convertToRealTime({ bar: startBar, step: 1 });
         const endTime = this.timeCoordinator.convertToRealTime({ bar: startBar + numberOfBars, step: 1 });
-        this.play({ start: startTime, end: endTime });
+
+        return this.play({ start: startTime, end: endTime });
     }
 
     /**
@@ -186,32 +189,45 @@ export class ArrangementPlayer extends Publisher {
      *
      * @param interval An optional interval to play instead of the entire score.
      */
-    public play(interval?: IInterval): void {
+    public async play(interval?: IInterval): Promise<void> {
         if (this.disposed) {
             return;
         }
 
-        void this.ensureContextIsRunning().then(() => {
-            // If already playing something, stop it first to clear schedules.
-            if (this.nextIterationId) {
-                this.stop();
-            }
+        await this.ensureContextIsRunning();
 
-            // Clear any interval restriction and start from 0.
-            this.#state = "playing";
-            this.currentInterval = interval;
+        // If already playing something, stop it first to clear schedules.
+        if (this.nextIterationId) {
+            this.stop();
+        }
 
-            // If an interval is given, pretend we started earlier by setting the offset back in time.
-            // We never access time before the current audio time.
-            this.offset = this.audioContext.currentTime - (interval?.start ?? 0);
-            this.endOffset = interval?.end ?? this.timeCoordinator.metrics.realTimeLength;
+        // Clear any interval restriction and start from 0.
+        this.currentInterval = interval;
 
-            // Pretend we have covered all events before the interval start.
-            this.timeCovered = interval?.start ?? 0;
-
-            this.iteration();
+        this.#state = "counting";
+        if (this.dataModel.arrangement!.countIn) {
             this.publish();
-        });
+            this.offset = this.audioContext.currentTime;
+            await this.countIn();
+        }
+
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+        if (this.#state !== "counting") { // May have been stopped during count-in.
+            return;
+        }
+
+        this.#state = "playing";
+
+        // If an interval is given, pretend we started earlier by setting the offset back in time.
+        // We never access time before the current audio time.
+        this.offset = this.audioContext.currentTime - (interval?.start ?? 0);
+        this.endOffset = interval?.end ?? this.timeCoordinator.metrics.realTimeLength;
+
+        // Pretend we have covered all events before the interval start.
+        this.timeCovered = interval?.start ?? 0;
+
+        await this.iteration();
+        this.publish();
     }
 
     /** Stops current playback. */
@@ -221,19 +237,22 @@ export class ArrangementPlayer extends Publisher {
         }
 
         this.timeCoordinator.reset();
+        this.offset = 0;
 
         if (this.nextIterationId) {
             clearTimeout(this.nextIterationId);
+            this.nextIterationId = undefined;
             if (this.loopBoundaryTimeoutId !== null) {
                 clearTimeout(this.loopBoundaryTimeoutId);
                 this.loopBoundaryTimeoutId = null;
             }
+        }
+
+        if (this.#state !== "stopped") { // Playing or counting.
             this.clearScheduledEvents();
-
             this.#state = "stopped";
-            this.nextIterationId = undefined;
 
-            this.callOnStopCallbacks();
+            this.onStop();
             this.publish();
         }
     }
@@ -280,8 +299,10 @@ export class ArrangementPlayer extends Publisher {
      * The loop is a setTimeout loop.
      * It gets and schedules events in an upcoming time interval.
      * We make sure never to request any time we've requested before.
+     *
+     * @returns A promise that resolves when the current play iteration finishes.
      */
-    private iteration(): void {
+    private async iteration(): Promise<void> {
         // We look for events in a small interval in the future (0.25s) to give ourselves time to schedule them.
         const intervalEnd = Math.min(this.currentTime + 0.25, this.endOffset);
         const interval: IInterval = { start: this.timeCovered, end: intervalEnd };
@@ -289,11 +310,12 @@ export class ArrangementPlayer extends Publisher {
         // Stop playback if the covered time has reached the end of the current interval.
         if (interval.start >= this.endOffset) {
             // We stop playback here, but wait for a moment to let the last events fire.
+            await sleep(80);
             void sleep(80).then(() => {
                 this.stop();
                 // If we were supposed to loop, start again immediately.
-                if (this.arrangementView.loop) {
-                    this.play(this.currentInterval);
+                if (this.dataModel.arrangement!.loop) {
+                    return this.play(this.currentInterval);
                 }
             });
 
@@ -303,10 +325,12 @@ export class ArrangementPlayer extends Publisher {
         // Get and schedule events in the upcoming interval, then schedule the next loop iteration.
         this.scheduleEvents(interval);
 
-        this.nextIterationId = setTimeout(() => {
-            this.iteration();
-        }, 125); // Schedule the next iteration after 125ms.
-        this.timeCovered = intervalEnd;
+        return new Promise((resolve) => {
+            this.nextIterationId = setTimeout(() => {
+                void this.iteration().then(resolve);
+            }, 125); // Schedule the next iteration after 125ms.
+            this.timeCovered = intervalEnd;
+        });
     }
 
     /**
@@ -332,7 +356,7 @@ export class ArrangementPlayer extends Publisher {
                 });
             });
 
-            if (this.arrangementView.useMetronome) {
+            if (this.dataModel.arrangement!.useMetronome) {
                 this.metronome.getEvents(loopInterval).forEach((event) => {
                     return events.push({
                         ...event,
@@ -379,7 +403,7 @@ export class ArrangementPlayer extends Publisher {
         let somethingChanged = false;
 
         for (const trackPlayer of this.trackPlayers.values()) {
-            if (!this.arrangementView.tracks.includes(trackPlayer.track)) {
+            if (!this.dataModel.arrangement!.tracks.includes(trackPlayer.track)) {
                 trackPlayer.dispose();
                 trackPlayer.unsubscribe(this.updateAudibleTrackPlayers);
                 this.trackPlayers.delete(trackPlayer.track);
@@ -388,7 +412,7 @@ export class ArrangementPlayer extends Publisher {
             }
         }
 
-        for (const track of this.arrangementView.tracks) {
+        for (const track of this.dataModel.arrangement!.tracks) {
             if (!this.trackPlayers.get(track)) {
                 const trackPlayer = new TrackPlayer(track, this.timeCoordinator);
                 this.trackPlayers.set(track, trackPlayer);
@@ -408,7 +432,7 @@ export class ArrangementPlayer extends Publisher {
      * Publishing `currentTiming` occurs when those callbacks fire during playback.
      */
     private updateCallbackEvents = (): void => {
-        this.callbackEvents = this.arrangementView.timeParams.timings.map((timing) => {
+        this.callbackEvents = this.dataModel.arrangement!.timeParams.timings.map((timing) => {
             return {
                 kind: "callback",
                 realTime: this.timeCoordinator.convertToRealTime(timing),
@@ -512,7 +536,7 @@ export class ArrangementPlayer extends Publisher {
                 default:
             }
         });
-    }
+    };
 
     /**
      * When rendering to a Blob, we can directly schedule all events in one go.
@@ -543,6 +567,11 @@ export class ArrangementPlayer extends Publisher {
                         break;
                     }
 
+                    case "metronome": {
+                        this.scheduleMetronomeEvent(event);
+                        break;
+                    }
+
                     default:
                 }
             });
@@ -559,7 +588,7 @@ export class ArrangementPlayer extends Publisher {
 
     private scheduleAudioEvent(audioEvent: IAudioEvent): void {
         const audioBufferPlayer = new AudioBufferPlayer(audioEvent.audioBuffer, this.audioContext,
-            audioEvent.realTime + this.offset, this.arrangementView.mainVolume / 100);
+            audioEvent.realTime + this.offset, this.dataModel.arrangement!.mainVolume / 100);
         const audioEventReference = { audioEvent, audioBufferPlayer };
         this.scheduledAudioEvents.push(audioEventReference);
 
@@ -604,7 +633,7 @@ export class ArrangementPlayer extends Publisher {
         const accentFreq = 2000;
         const weakFreq = 1200;
 
-        const accentGain = this.arrangementView.mainVolume / 100;
+        const accentGain = this.dataModel.arrangement!.mainVolume / 100;
         const weakGain = accentGain * 0.7;
 
         osc.type = "square";
@@ -664,19 +693,18 @@ export class ArrangementPlayer extends Publisher {
         this.scheduledAudioEvents.forEach(({ audioBufferPlayer }) => {
             audioBufferPlayer.stop();
         });
+
         this.scheduledCallbackEvents.forEach(({ timeoutId }) => {
             clearTimeout(timeoutId);
         });
+
         this.scheduledMuteEvents.forEach(({ timeoutId }) => {
             clearTimeout(timeoutId);
         });
+
         this.scheduledAudioEvents.splice(0);
         this.scheduledCallbackEvents.splice(0);
         this.scheduledMuteEvents.splice(0);
-    }
-
-    private callOnStopCallbacks(): void {
-        this.onStop();
     }
 
     private getMsFromNow(time: number): number {
@@ -697,5 +725,51 @@ export class ArrangementPlayer extends Publisher {
         audioEventReference: { audioEvent: IAudioEvent, audioBufferPlayer: AudioBufferPlayer; }
     ): boolean {
         return audioEventReference.audioEvent.realTime <= this.currentTime;
+    }
+
+    private async countIn(): Promise<void> {
+        const metrics = this.timeCoordinator.metrics;
+        const numberSounds = this.dataModel.numberSounds!;
+
+        // Count in happens in two steps: first we have 2 counts in one bar and then 4 counts in the next bar.
+        // Which gives us the "1-2, 1-2-3-4" pattern (for 2/4 and 4/4) before the music starts.
+        let noteStyle = numberSounds.noteStyles["1"];
+        const audioEvent: IAudioEvent = {
+            kind: "audio",
+            realTime: 0,
+            audioBuffer: noteStyle.audioBuffer!,
+            note: {} as ISbDmNote,
+        };
+        this.scheduleAudioEvent(audioEvent);
+
+        noteStyle = numberSounds.noteStyles["2"];
+        audioEvent.realTime += metrics.secondsPerBar / 2;
+        audioEvent.audioBuffer = noteStyle.audioBuffer!;
+        this.scheduleAudioEvent(audioEvent);
+
+        noteStyle = numberSounds.noteStyles["1"];
+        audioEvent.realTime += metrics.secondsPerBar / 2;
+        audioEvent.audioBuffer = noteStyle.audioBuffer!;
+        this.scheduleAudioEvent(audioEvent);
+
+        noteStyle = numberSounds.noteStyles["2"];
+        audioEvent.realTime += metrics.secondsPerBar / 4;
+        audioEvent.audioBuffer = noteStyle.audioBuffer!;
+        this.scheduleAudioEvent(audioEvent);
+
+        noteStyle = numberSounds.noteStyles["3"];
+        audioEvent.realTime += metrics.secondsPerBar / 4;
+        audioEvent.audioBuffer = noteStyle.audioBuffer!;
+        this.scheduleAudioEvent(audioEvent);
+
+        noteStyle = numberSounds.noteStyles["4"];
+        audioEvent.realTime += metrics.secondsPerBar / 4;
+        audioEvent.audioBuffer = noteStyle.audioBuffer!;
+        this.scheduleAudioEvent(audioEvent);
+
+        // Wait for the count-in to finish before resolving.
+        await waitFor(metrics.secondsPerBar * 2000, () => {
+            return this.#state !== "counting";
+        });
     }
 }

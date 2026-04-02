@@ -8,7 +8,53 @@ import { join } from "node:path";
 
 import preact from "@preact/preset-vite";
 import tailwindcss from "@tailwindcss/vite";
-import { defineConfig, loadEnv } from "vite";
+import { defineConfig, loadEnv, Plugin } from "vite";
+
+/**
+ * Helper plugin to serve index.html for non-asset requests, enabling SPA-like routing in development mode.
+ *
+ * @returns A Vite plugin object.
+ */
+const spaDocumentFallback = (): Plugin => {
+    return {
+        name: "spa-document-fallback",
+        apply: "serve",
+        configureServer: (server) => {
+            server.middlewares.use((req, _res, next) => {
+                const method = req.method ?? "GET";
+                if (method !== "GET" && method !== "HEAD") {
+                    next();
+
+                    return;
+                }
+
+                const url = req.url ?? "/";
+                const pathname = url.split("?")[0];
+                const accept = req.headers.accept ?? "";
+
+                const isHtmlRequest =
+                    accept.includes("text/html") || accept.includes("*/*");
+
+                const isAssetLike =
+                    pathname.startsWith("/sounds") ||
+                    pathname.startsWith("/assets") ||
+                    pathname.startsWith("/src") ||
+                    pathname.startsWith("/@vite") ||
+                    pathname.includes("/__vite_") ||
+                    /\.[a-zA-Z0-9]+$/.test(pathname);
+
+                if (!isHtmlRequest || isAssetLike) {
+                    next();
+
+                    return;
+                }
+
+                req.url = "/index.html";
+                next();
+            });
+        },
+    };
+};
 
 // https://vitejs.dev/config/
 export default defineConfig(({ command, mode }) => {
@@ -39,10 +85,12 @@ export default defineConfig(({ command, mode }) => {
                 prefreshEnabled: false, // Disable Preact's fast refresh to avoid issues with the NoteViewer component.
             }),
             tailwindcss(),
+            spaDocumentFallback(),
         ],
         build: {
             target: "esnext",
             assetsInlineLimit: 0, // Don't inline any assets.
         },
+        appType: "mpa",
     };
 });

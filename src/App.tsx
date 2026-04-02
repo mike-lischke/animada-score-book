@@ -140,7 +140,7 @@ export class App extends UIComponent<{}, IAppState> {
             return <ProgressIndicator />;
         }
 
-        const arrangementView = this.arrangementPlayer!.arrangementView;
+        const arrangementView = this.dataModel.arrangement!;
         const scoreMetrics = this.arrangementPlayer!.scoreMetrics;
 
         let titleBlock;
@@ -256,6 +256,7 @@ export class App extends UIComponent<{}, IAppState> {
                                 >
                                     <ArrangementPlayControls
                                         arrangementPlayer={this.arrangementPlayer!}
+                                        dataModel={this.dataModel}
                                         services={this.services}
                                         undoManager={this.undoManager!}
                                     />
@@ -268,7 +269,7 @@ export class App extends UIComponent<{}, IAppState> {
                                 >
                                     {titleBlock}
                                     {displayMode === DisplayMode.Editing && <ArrangementEditControls
-                                        arrangementPlayer={this.arrangementPlayer!}
+                                        dataModel={this.dataModel}
                                         services={this.services}
                                         undoManager={this.undoManager!}
                                     />}
@@ -278,6 +279,7 @@ export class App extends UIComponent<{}, IAppState> {
 
                         {this.arrangementPlayer && <ArrangementViewer
                             arrangementPlayer={this.arrangementPlayer}
+                            dataModel={this.dataModel}
                             services={this.services}
                             undoManager={this.undoManager!}
                         />}
@@ -524,16 +526,16 @@ export class App extends UIComponent<{}, IAppState> {
 
     private loadScorebook(arrangementToLoad: ISerialisedArrangement) {
         if (this.arrangementPlayer) {
-            const arrangementView = this.arrangementPlayer.arrangementView;
+            const arrangementView = this.dataModel.arrangement!;
             arrangementView.timeParams.unsubscribe(this.handleTimeParamsChanged);
 
             this.arrangementPlayer.dispose();
         }
 
         const arrangement = this.dataModel.loadArrangement(arrangementToLoad);
-        this.undoManager = new UndoManager(arrangement, this.dataModel.instruments);
-        this.arrangementPlayer = new ArrangementPlayer(arrangement);
-        this.arrangementPlayer.arrangementView.timeParams.subscribe(this.handleTimeParamsChanged);
+        this.undoManager = new UndoManager(this.dataModel);
+        this.arrangementPlayer = new ArrangementPlayer(this.dataModel);
+        this.dataModel.arrangement!.timeParams.subscribe(this.handleTimeParamsChanged);
 
         if (arrangement.title) {
             document.title = arrangement.title + " - Animada Score Book";
@@ -571,7 +573,7 @@ export class App extends UIComponent<{}, IAppState> {
             case " ": {
                 if (this.arrangementPlayer) {
                     if (this.arrangementPlayer.state === "stopped") {
-                        this.arrangementPlayer.play(undefined);
+                        void this.arrangementPlayer.play();
                     } else {
                         this.arrangementPlayer.stop();
                     }
@@ -593,7 +595,7 @@ export class App extends UIComponent<{}, IAppState> {
                 if (!(event.target instanceof HTMLInputElement)) {
                     this.undoManager?.edit({
                         type: "EditCommand_ArrangementClearSelection",
-                        arrangement: this.undoManager.arrangement,
+                        arrangement: this.dataModel.arrangement!,
                         clearSelection: this.services.selectionManager.selections
                     });
                     this.services.selectionManager.deselectAll();

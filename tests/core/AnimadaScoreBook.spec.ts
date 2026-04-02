@@ -6,10 +6,25 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { Arrangement } from "../../src/core/Arrangement.js";
-import type { ISbDmInstrument, ISbDmNote } from "../../src/core/ScoreBookDataModel.js";
+import {
+    ScoreBookDataModel, type ISbDmArrangement, type ISbDmInstrument, type ISbDmNote
+} from "../../src/core/ScoreBookDataModel.js";
 import type { EditCommand } from "../../src/core/types/edit_commands.js";
 import type { IArrangementSnapshot } from "../../src/core/types/snapshots.js";
 import { UndoManager } from "../../src/core/UndoManager.js";
+
+class TestScoreBookDataModel extends ScoreBookDataModel {
+    private readonly _arrangement: ISbDmArrangement;
+
+    public constructor(arrangement: ISbDmArrangement) {
+        super();
+        this._arrangement = arrangement;
+    }
+
+    public override get arrangement(): ISbDmArrangement {
+        return this._arrangement;
+    }
+}
 
 vi.mock("../../src/core/edit.js", () => {
     const edit = vi.fn(() => {
@@ -101,10 +116,11 @@ describe("AnimadaScoreBook", () => {
 
     const arrangement = Arrangement.fromSnapshot(snapshot, []);
     arrangement.applyArrangementSnapshot = vi.fn();
+    const dm = new TestScoreBookDataModel(arrangement);
 
     let manager: UndoManager;
     beforeEach(() => {
-        manager = new UndoManager(arrangement, []);
+        manager = new UndoManager(dm);
         // reset mocks
         vi.clearAllMocks();
         if (undoRedo.stackRef.instance) {
@@ -116,8 +132,8 @@ describe("AnimadaScoreBook", () => {
         }
     });
 
-    it("initialises with arrangement and library", () => {
-        expect(manager.arrangement.title).toBe("Initial");
+    it("initializes with arrangement and library", () => {
+        expect(dm.arrangement.title).toBe("Initial");
         expect(manager.canUndo).toBe(false);
         expect(manager.canRedo).toBe(false);
         expect(manager.currentState.title).toBe("Snapshot");
@@ -145,7 +161,7 @@ describe("AnimadaScoreBook", () => {
         manager.topics.currentState.subscribe(publishSpy);
         const cmd: EditCommand = {
             type: "EditCommand_ArrangementTitle",
-            arrangement: manager.arrangement,
+            arrangement: dm.arrangement,
             newTitle: "X"
         };
         manager.edit(cmd);

@@ -5,9 +5,9 @@
 
 import type { ComponentChild } from "preact";
 
+import type { ScoreBookDataModel } from "../../core/ScoreBookDataModel.js";
 import { getShareLink } from "../../core/serialisation/url.js";
 import type { UndoManager } from "../../core/UndoManager.js";
-import type { ArrangementPlayer } from "../../player/ArrangementPlayer.js";
 import { Button } from "./framework/Button.js";
 import { UIComponent, type ICommonUIProperties } from "./framework/UIComponent.js";
 import { Overlay } from "./Overlay.js";
@@ -17,7 +17,7 @@ const haveNativeSharing = "share" in navigator;
 const haveClipboardAccess = "clipboard" in navigator;
 
 export interface IShareProperties extends ICommonUIProperties {
-    arrangementPlayer: ArrangementPlayer;
+    dataModel: ScoreBookDataModel;
     undoManager: UndoManager;
 }
 
@@ -40,10 +40,10 @@ export class Share extends UIComponent<IShareProperties, IShareState> {
     }
 
     public override componentDidMount(): void {
-        const { arrangementPlayer } = this.props;
+        const { dataModel } = this.props;
 
-        const arrangement = arrangementPlayer.arrangementView;
-        this.addSubscription(arrangementPlayer, () => {
+        const arrangement = dataModel.arrangement!;
+        this.addSubscription(dataModel, () => {
             this.setState({ title: arrangement.title });
         });
     }

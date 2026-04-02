@@ -5,7 +5,7 @@
 
 import { createRef, type ComponentChild } from "preact";
 
-import type { ISbDmNote, ISbDmTrack } from "../../../core/ScoreBookDataModel.js";
+import type { ISbDmNote, ISbDmTrack, ScoreBookDataModel } from "../../../core/ScoreBookDataModel.js";
 import type { IPolyrhythm } from "../../../core/types/general.js";
 import type { UndoManager } from "../../../core/UndoManager.js";
 import type { ArrangementPlayer } from "../../../player/ArrangementPlayer.js";
@@ -24,6 +24,7 @@ export interface INoteLineProperties extends ICommonUIProperties {
     arrangementPlayer: ArrangementPlayer;
     services: ScoreBookUiServices;
     undoManager: UndoManager;
+    dataModel: ScoreBookDataModel;
 
     noteLineMinWidth: number;
 }
@@ -65,7 +66,7 @@ export class NoteLine extends UIComponent<INoteLineProperties, INoteLineState> {
     }
 
     public override render(): ComponentChild {
-        const { trackPlayer, arrangementPlayer, services, undoManager, noteLineMinWidth } = this.props;
+        const { trackPlayer, arrangementPlayer, services, undoManager, noteLineMinWidth, dataModel } = this.props;
 
         const { track, callbacks } = this.props;
         const { notes } = this.state;
@@ -88,6 +89,7 @@ export class NoteLine extends UIComponent<INoteLineProperties, INoteLineState> {
                             arrangementPlayer={arrangementPlayer}
                             services={services}
                             undoManager={undoManager}
+                            dataModel={dataModel}
                         />;
                     })}
                 </div>
@@ -100,6 +102,7 @@ export class NoteLine extends UIComponent<INoteLineProperties, INoteLineState> {
                             arrangementPlayer={arrangementPlayer}
                             services={services}
                             undoManager={undoManager}
+                            dataModel={dataModel}
                         />;
                     })}
                 </div>

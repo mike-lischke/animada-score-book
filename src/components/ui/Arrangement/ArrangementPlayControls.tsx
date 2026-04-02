@@ -6,6 +6,7 @@
 import type { ComponentChild } from "preact";
 
 import { AppStorage } from "../../../core/AppStorage.js";
+import type { ScoreBookDataModel } from "../../../core/ScoreBookDataModel.js";
 import type { UndoManager } from "../../../core/UndoManager.js";
 import type { ArrangementPlayer } from "../../../player/ArrangementPlayer.js";
 import type { ScoreBookUiServices } from "../../../player/types.js";
@@ -24,6 +25,7 @@ import { ChildAlignment, Orientation } from "../framework/ui-types.js";
 
 export interface IArrangementPlayControlsProperties extends ICommonUIProperties {
     arrangementPlayer: ArrangementPlayer,
+    dataModel: ScoreBookDataModel;
     services: ScoreBookUiServices;
     undoManager: UndoManager;
 }
@@ -42,7 +44,7 @@ export class ArrangementPlayControls
     public constructor(props: IArrangementPlayControlsProperties) {
         super(props);
 
-        const arrangementView = props.arrangementPlayer.arrangementView;
+        const arrangementView = props.dataModel.arrangement!;
         this.state = {
             playing: props.arrangementPlayer.state === "playing",
             editingTitle: false,
@@ -53,29 +55,29 @@ export class ArrangementPlayControls
     }
 
     public override componentDidMount(): void {
-        const { arrangementPlayer } = this.props;
+        const { dataModel, arrangementPlayer } = this.props;
 
         this.addSubscription(arrangementPlayer, this.onPlaybackStateChange, true);
-        const arrangement = arrangementPlayer.arrangementView;
+        const arrangement = dataModel.arrangement!;
         this.addSubscription(arrangement, this.titleChangeSubscription);
     }
 
     public override componentDidUpdate(previousProps: Readonly<IArrangementPlayControlsProperties>,
         previousState: Readonly<IArrangementPlayControlsState>): void {
-        const { arrangementPlayer } = this.props;
+        const { arrangementPlayer, dataModel } = this.props;
 
         this.addSubscription(arrangementPlayer, this.onPlaybackStateChange, true);
-        const arrangement = arrangementPlayer.arrangementView;
+        const arrangement = dataModel.arrangement!;
         if (previousState.currentTempo !== arrangement.timeParams.tempo) {
             this.setState({ currentTempo: arrangement.timeParams.tempo });
         }
     }
 
     public override render(): ComponentChild {
-        const { arrangementPlayer, undoManager } = this.props;
+        const { arrangementPlayer, dataModel, undoManager } = this.props;
         const { playing, currentVolume, currentTempo } = this.state;
 
-        const arrangementView = arrangementPlayer.arrangementView;
+        const arrangementView = dataModel.arrangement!;
 
         let playButton;
         if (playing) {
@@ -100,7 +102,7 @@ export class ArrangementPlayControls
                     className="softButton shadow-md"
                     data-tooltip="Start playback with the selected tempo and volume settings."
                     onClick={() => {
-                        arrangementPlayer.play(undefined);
+                        void arrangementPlayer.play();
                     }}>
                     <Image key="playButton" src={PredefinedImage.PlayImage} data-tooltip="inherit" />
                 </Button>
@@ -271,24 +273,24 @@ export class ArrangementPlayControls
     }
 
     private titleChangeSubscription = () => {
-        const { arrangementPlayer: arrangementPlayerContext } = this.props;
+        const { dataModel } = this.props;
 
-        const arrangement = arrangementPlayerContext.arrangementView;
+        const arrangement = dataModel.arrangement!;
         this.setState({ title: arrangement.title });
     };
 
     private onPlaybackStateChange = () => {
         const { arrangementPlayer } = this.props;
-        this.setState({ playing: arrangementPlayer.state === "playing" });
+        this.setState({ playing: arrangementPlayer.state === "playing" || arrangementPlayer.state === "counting" });
     };
 
     private startRecording = () => {
-        const { arrangementPlayer } = this.props;
+        const { arrangementPlayer, dataModel } = this.props;
         void arrangementPlayer.renderToBlob().then((blob) => {
             const url = URL.createObjectURL(blob);
             const a = document.createElement("a");
             a.href = url;
-            a.download = `${arrangementPlayer.arrangementView.title}.mp3`;
+            a.download = `${dataModel.arrangement!.title}.mp3`;
             a.click();
             URL.revokeObjectURL(url);
         });

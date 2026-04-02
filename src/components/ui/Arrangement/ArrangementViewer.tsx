@@ -6,7 +6,7 @@
 import { createRef, type JSX } from "preact";
 
 import { Publisher } from "../../../core/Publisher.js";
-import type { RealTime } from "../../../core/ScoreBookDataModel.js";
+import type { RealTime, ScoreBookDataModel } from "../../../core/ScoreBookDataModel.js";
 import type { ITimeParams } from "../../../core/types/general.js";
 import type { UndoManager } from "../../../core/UndoManager.js";
 import type { ArrangementPlayer } from "../../../player/ArrangementPlayer.js";
@@ -24,6 +24,7 @@ const baseNoteWidth = 55.5; // 54pt flex-basis + 1.5pt for border
 
 export interface IArrangementViewerProps extends ICommonUIProperties {
     arrangementPlayer: ArrangementPlayer;
+    dataModel: ScoreBookDataModel;
     services: ScoreBookUiServices;
     undoManager: UndoManager;
 }
@@ -71,7 +72,7 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         this.state = {
             noteWidth: 0,
             trackPlayerCount: props.arrangementPlayer.trackPlayers.size,
-            noteLineMinWidth: this.getNoteLineMinWidth(props.arrangementPlayer.arrangementView.timeParams),
+            noteLineMinWidth: this.getNoteLineMinWidth(props.dataModel.arrangement!.timeParams),
             autoFollowIsOn: true,
             userMightBeTakingControl: false
         };
@@ -87,7 +88,7 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         setTimeout(this.handleResize, 0);
         this.resizeObserver.observe(this.viewerRef.current!);
 
-        const arrangement = arrangementPlayer.arrangementView;
+        const arrangement = this.props.dataModel.arrangement!;
         this.addSubscription(arrangement.timeParams, this.timeParamsSubscription, true);
 
         // If desired, turn on auto-follow like so.
@@ -106,13 +107,13 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
     public override componentDidUpdate(prevProps: IArrangementViewerProps, prevState: IArrangementViewerState): void {
         super.componentDidUpdate(prevProps, prevState);
 
-        const { arrangementPlayer } = this.props;
+        const { arrangementPlayer, dataModel } = this.props;
         const { autoFollowIsOn } = this.state;
 
         if (prevProps.arrangementPlayer !== arrangementPlayer) {
             prevProps.arrangementPlayer.animationEngine.disconnect(this.autoFollow);
 
-            const arrangement = arrangementPlayer.arrangementView;
+            const arrangement = dataModel.arrangement!;
             this.addSubscription(arrangement.timeParams, this.timeParamsSubscription);
 
             if (autoFollowIsOn) {
@@ -139,10 +140,10 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
     }
 
     public override render(): JSX.Element {
-        const { arrangementPlayer, services, undoManager } = this.props;
+        const { arrangementPlayer, dataModel, services, undoManager } = this.props;
         const { noteLineMinWidth, autoFollowIsOn } = this.state;
 
-        const arrangement = arrangementPlayer.arrangementView;
+        const arrangement = dataModel.arrangement!;
 
         return (
             <Container
@@ -191,6 +192,7 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
                                                 callbacks={this.useTrackViewerTouchInterpretation()}
                                                 key={trackPlayer.track.id}
                                                 arrangementPlayer={arrangementPlayer}
+                                                dataModel={dataModel}
                                                 services={services}
                                                 undoManager={undoManager}
                                                 noteLineMinWidth={noteLineMinWidth}
@@ -208,7 +210,7 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
                 </Container>
                 <Overlay name="share">
                     <Share
-                        arrangementPlayer={arrangementPlayer}
+                        dataModel={dataModel}
                         undoManager={undoManager}
                     />
                 </Overlay>

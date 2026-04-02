@@ -5,7 +5,7 @@
 
 import { createRef, type ComponentChild } from "preact";
 
-import type { ISbDmNote } from "../../../core/ScoreBookDataModel.js";
+import type { ISbDmNote, ScoreBookDataModel } from "../../../core/ScoreBookDataModel.js";
 import type { INoteStyle } from "../../../core/types/general.js";
 import type { UndoManager } from "../../../core/UndoManager.js";
 import { isSameTiming } from "../../../core/utils.js";
@@ -27,6 +27,7 @@ export interface INoteViewerProps extends ICommonUIProperties {
     services: ScoreBookUiServices;
     undoManager: UndoManager;
     arrangementPlayer: ArrangementPlayer;
+    dataModel: ScoreBookDataModel;
 }
 
 interface INoteViewerState {
@@ -263,13 +264,13 @@ export class NoteViewer extends UIComponent<INoteViewerProps, INoteViewerState> 
     }
 
     private cycleNoteStyle() {
-        const { note, undoManager, arrangementPlayer } = this.props;
+        const { note, undoManager, dataModel } = this.props;
         const noteStyle = this.getNextNoteStyle(note);
 
         undoManager.edit({ type: "EditCommand_Note", note, noteStyle });
         if (noteStyle?.audioBuffer) {
             // Play a preview of the selected note style.
-            const arrangement = arrangementPlayer.arrangementView;
+            const arrangement = dataModel.arrangement!;
             new AudioBufferPlayer(noteStyle.audioBuffer, audioContext, 0, arrangement.mainVolume / 100);
         }
     }

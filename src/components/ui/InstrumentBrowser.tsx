@@ -11,13 +11,13 @@ import { Button } from "./framework/Button.js";
 import { UIComponent, type ICommonUIProperties } from "./framework/UIComponent.js";
 import { InstrumentChooser } from "./InstrumentChooser.js";
 
-export interface IInstrumentBrowserProps extends ICommonUIProperties {
+export interface IInstrumentBrowserProperties extends ICommonUIProperties {
     undoManager: UndoManager;
     dataModel: ScoreBookDataModel;
     close: () => void;
 }
 
-export class InstrumentBrowser extends UIComponent<IInstrumentBrowserProps> {
+export class InstrumentBrowser extends UIComponent<IInstrumentBrowserProperties> {
 
     public render(): ComponentChild {
         const { close, undoManager, dataModel } = this.props;
@@ -32,6 +32,7 @@ export class InstrumentBrowser extends UIComponent<IInstrumentBrowserProps> {
                             instrument={meta}
                             close={close}
                             undoManager={undoManager}
+                            dataModel={dataModel}
                         />;
                     })}
                     <br />
