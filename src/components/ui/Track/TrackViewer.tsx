@@ -31,8 +31,6 @@ export interface ITrackViewerProperties extends ICommonUIProperties {
     services: ScoreBookUiServices;
     undoManager: UndoManager;
     dataModel: ScoreBookDataModel;
-
-    noteLineMinWidth: number;
 }
 
 interface ITrackViewerState {
@@ -62,7 +60,7 @@ export class TrackViewer extends UIComponent<ITrackViewerProperties, ITrackViewe
 
     public render(): ComponentChild {
         const {
-            trackPlayer, arrangementPlayer, callbacks, services, undoManager, noteLineMinWidth, dataModel
+            trackPlayer, arrangementPlayer, callbacks, services, undoManager, dataModel
         } = this.props;
         const { loaded } = this.state;
 
@@ -93,7 +91,6 @@ export class TrackViewer extends UIComponent<ITrackViewerProperties, ITrackViewe
                     dataModel={dataModel}
                     services={services}
                     undoManager={undoManager}
-                    noteLineMinWidth={noteLineMinWidth}
                 />
                 <Overlay name={overlayName}>
                     <TrackControls

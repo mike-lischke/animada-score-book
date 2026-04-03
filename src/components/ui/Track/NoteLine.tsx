@@ -25,8 +25,6 @@ export interface INoteLineProperties extends ICommonUIProperties {
     services: ScoreBookUiServices;
     undoManager: UndoManager;
     dataModel: ScoreBookDataModel;
-
-    noteLineMinWidth: number;
 }
 
 interface INoteLineState {
@@ -66,7 +64,7 @@ export class NoteLine extends UIComponent<INoteLineProperties, INoteLineState> {
     }
 
     public override render(): ComponentChild {
-        const { trackPlayer, arrangementPlayer, services, undoManager, noteLineMinWidth, dataModel } = this.props;
+        const { trackPlayer, arrangementPlayer, services, undoManager, dataModel } = this.props;
 
         const { track, callbacks } = this.props;
         const { notes } = this.state;
@@ -75,7 +73,6 @@ export class NoteLine extends UIComponent<INoteLineProperties, INoteLineState> {
             <div
                 className="note-line"
                 ref={this.noteLineRef}
-                style={{ minWidth: `${noteLineMinWidth}px` }}
                 onTouchStart={callbacks.noteLineTouchStart}
                 onTouchMove={callbacks.noteLineTouchMove}
                 onTouchEnd={callbacks.noteLineTouchEnd}

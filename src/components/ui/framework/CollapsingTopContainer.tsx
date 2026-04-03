@@ -1,0 +1,181 @@
+/*
+* Copyright (c) Mike Lischke. All rights reserved.
+* Licensed under the MIT License. See License.txt in the project root for license information.
+*/
+
+import { Component, createRef } from "preact";
+
+import { clampValue } from "../../../core/utils.js";
+import type { ICommonUIProperties } from "./UIComponent.js";
+
+export interface CollapsingTopContainerProperties extends ICommonUIProperties {
+    top: preact.ComponentChildren;
+    collapsedTop: preact.ComponentChildren;
+    bottom: preact.ComponentChildren;
+    restoreButtonSelector?: string;
+}
+
+export class CollapsingTopContainer extends Component<CollapsingTopContainerProperties> {
+    private rootRef = createRef<HTMLDivElement>();
+    private topRef = createRef<HTMLDivElement>();
+    private collapsedTopRef = createRef<HTMLDivElement>();
+    private bottomRef = createRef<HTMLDivElement>();
+
+    private resizeObserver?: ResizeObserver;
+    private rafId?: number;
+
+    private topHeight = 0;
+    private collapsedTopHeight = 0;
+
+    public override componentDidMount(): void {
+        this.measureLayout();
+        this.applyStaticLayout();
+        this.applyScrollState();
+
+        const topEl = this.topRef.current;
+        const collapsedTopEl = this.collapsedTopRef.current;
+
+        if (typeof ResizeObserver !== "undefined" && topEl && collapsedTopEl) {
+            this.resizeObserver = new ResizeObserver(() => {
+                this.measureLayout();
+                this.applyStaticLayout();
+                this.applyScrollState();
+            });
+
+            this.resizeObserver.observe(topEl);
+            this.resizeObserver.observe(collapsedTopEl);
+        }
+    }
+
+    public override componentWillUnmount(): void {
+        if (this.resizeObserver) {
+            this.resizeObserver.disconnect();
+        }
+
+        if (this.rafId !== undefined) {
+            cancelAnimationFrame(this.rafId);
+            this.rafId = undefined;
+        }
+    }
+
+    public render({ top, collapsedTop, bottom, className }: CollapsingTopContainerProperties) {
+        return (
+            <div
+                id="collapsing-top-container"
+                ref={this.rootRef}
+                className={className}
+                style={{
+                    position: "relative",
+                    height: "100dvh",
+                    overflow: "hidden",
+                    display: "flex",
+                    flexDirection: "column",
+                    minHeight: 0,
+                }}
+            >
+                <div
+                    id="bottom"
+                    ref={this.bottomRef}
+                    style={{
+                        overflow: "auto",
+                    }}
+                    onScroll={this.handleBottomScroll}
+                >
+                    {bottom}
+                </div>
+
+                <div
+                    id="expanded-top"
+                    ref={this.topRef}
+                    style={{
+                        position: "absolute",
+                        left: 0,
+                        top: 0,
+                        right: 0,
+                        willChange: "opacity",
+                        opacity: "1",
+                    }}
+                >
+                    {top}
+                </div>
+
+                <div
+                    id="collapsed-top"
+                    ref={this.collapsedTopRef}
+                    style={{
+                        visibility: "hidden",
+                        pointerEvents: "none",
+                        position: "absolute",
+                        left: 0,
+                        top: 0,
+                        right: 0,
+                        opacity: "0",
+                    }}
+                >
+                    {collapsedTop}
+                </div>
+            </div>
+        );
+    }
+
+    private measureLayout(): void {
+        const topEl = this.topRef.current;
+        const collapsedTopEl = this.collapsedTopRef.current;
+
+        if (!topEl || !collapsedTopEl) {
+            return;
+        }
+
+        this.topHeight = topEl.getBoundingClientRect().height;
+        this.collapsedTopHeight = collapsedTopEl.getBoundingClientRect().height;
+    }
+
+    private applyStaticLayout(): void {
+        const bottomEl = this.bottomRef.current;
+        if (!bottomEl) {
+            return;
+        }
+
+        bottomEl.style.paddingTop = `${this.topHeight}px`;
+    }
+
+    private handleBottomScroll = (): void => {
+        if (this.rafId !== undefined) {
+            return;
+        }
+
+        this.rafId = requestAnimationFrame(() => {
+            this.rafId = undefined;
+            this.applyScrollState();
+        });
+    };
+
+    private applyScrollState(): void {
+        const topEl = this.topRef.current;
+        const collapsedTopEl = this.collapsedTopRef.current;
+        const bottomEl = this.bottomRef.current;
+
+        if (!topEl || !collapsedTopEl || !bottomEl) {
+            return;
+        }
+
+        const scrollTop = Math.max(0, bottomEl.scrollTop);
+
+        const fadeEnd = Math.max(1, this.topHeight / 2);
+        const collapseAt = fadeEnd;
+
+        const opacity = 1 - clampValue(scrollTop / fadeEnd, 0, 1);
+        const topInactive = scrollTop >= fadeEnd;
+        const collapsedVisible = scrollTop >= collapseAt;
+
+        topEl.style.opacity = opacity.toString();
+        topEl.inert = topInactive;
+        topEl.style.pointerEvents = topInactive ? "none" : "auto";
+        topEl.style.visibility = opacity <= 0 ? "hidden" : "visible";
+
+        collapsedTopEl.style.opacity = collapsedVisible ? "1" : "0";
+        collapsedTopEl.style.visibility = collapsedVisible ? "visible" : "hidden";
+        collapsedTopEl.inert = !collapsedVisible;
+        collapsedTopEl.style.pointerEvents = collapsedVisible ? "auto" : "none";
+    }
+}

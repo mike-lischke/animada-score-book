@@ -10,6 +10,8 @@ import type { ITimeParams } from "../../../core/types/general.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
 import { NoteViewer } from "../Note/NoteViewer.js";
 import { type BarDivisibility } from "./GuideRail.js";
+import { Container } from "../framework/Container.js";
+import { ChildAlignment } from "../framework/ui-types.js";
 
 export interface ITimingViewerProperties extends ICommonUIProperties {
     timing: ITiming;
@@ -27,16 +29,19 @@ export class TimingViewer extends UIComponent<ITimingViewerProperties> {
 
         const { bar, step } = timing;
         const { timeSignature, stepResolution } = timeParams;
-        const className = `guiderail-timing note-width ` +
-            `${NoteViewer.getParityClass(bar, step, timeSignature, stepResolution)} ` +
-            (isStartOfBar ? "startOfBar" : "");
+        const className = this.generateFinalClassName([
+            "guiderail-timing",
+            "note-width",
+            NoteViewer.getParityClass(bar, step, timeSignature, stepResolution),
+            this.classFromProperty(isStartOfBar, ["", "startOfBar"])
+        ]);
 
         return (
-            <div className={className} >
+            <Container className={className} crossAlignment={ChildAlignment.Center}>
                 <div className='guiderail-timing-content'>
                     {timingLabel}
                 </div>
-            </div>
+            </Container>
         );
     }
 

@@ -51,6 +51,7 @@ import { MouseHandler } from "./ui/MouseHandler.js";
 import { ScoreLibrary } from "./ui/ScoreLibrary.js";
 import { SelectionManager } from "./ui/SelectionManager.js";
 import { SettingsDialog } from "./ui/SettingsDialog.js";
+import { CollapsingTopContainer } from "./components/ui/framework/CollapsingTopContainer.js";
 
 enum DisplayMode {
     Standard,
@@ -189,100 +190,108 @@ export class App extends UIComponent<{}, IAppState> {
                             });
                         }}
                     >
-                        <Container
-                            orientation={Orientation.LeftToRight}
-                            crossAlignment={ChildAlignment.Center}
-                        >
-                            <Container
-                                id="headerContent"
-                                className="rounded-3xl shadow-md border border-base-200/70"
-                            >
+                        <CollapsingTopContainer
+                            top={
                                 <Container
-                                    id="toolbarButtons"
-                                    orientation={Orientation.TopDown}
-                                    mainAlignment={ChildAlignment.Center}
-                                    className="bg-base-100/80 p-2"
+                                    orientation={Orientation.LeftToRight}
+                                    crossAlignment={ChildAlignment.Center}
                                 >
-                                    <Button
-                                        imageOnly
-                                        className="btn-ghost"
-                                        data-tooltip="Display Options"
-                                        onClick={this.handleDisplayOptionsClick}
+                                    <Container
+                                        id="headerContent"
+                                        className="rounded-3xl shadow-md border border-base-200/70"
                                     >
-                                        <Icon src={Codicon.Gear} data-tooltip="inherit" />
-                                    </Button>
-                                    <Button
-                                        id="scoreLibraryButton"
-                                        imageOnly
-                                        className="btn-ghost"
-                                        data-tooltip="Score Library"
-                                        onClick={this.handleScoreLibraryClick}
-                                    >
-                                        <Icon src={Codicon.Library} data-tooltip="inherit" />
-                                    </Button>
-                                    <Button
-                                        id="instrumentEditor"
-                                        imageOnly
-                                        className="btn-ghost"
-                                        data-tooltip="Instrument Editor"
-                                        disabled
-                                        onClick={this.handleInstrumentEditorClick}
-                                    >
-                                        <Icon src={timbauImage} width={24} height={24} data-tooltip="inherit" />
-                                    </Button>
-                                    <ShareButton />
-                                </Container>
-                                <Container
-                                    id="appTitleContainer"
-                                    orientation={Orientation.TopDown}
-                                    crossAlignment={ChildAlignment.Stretch}
-                                >
-                                    <Container>
-                                        <img id="titleLogo" src="/logo.svg" />
-                                        <Label className="appTitle top faded">ANIMADA</Label>
-                                    </Container>
-                                    <Container>
-                                        <Label className="appTitle bottom faded">Score</Label>
-                                        <Label className="appTitle bottom accent">Book</Label>
-                                    </Container>
-                                    <Container crossAlignment={ChildAlignment.Center} id="arrangementStats">
-                                        {scoreStats}
-                                    </Container>
+                                        <Container
+                                            id="toolbarButtons"
+                                            orientation={Orientation.TopDown}
+                                            mainAlignment={ChildAlignment.Center}
+                                            className="bg-base-100/80 p-2"
+                                        >
+                                            <Button
+                                                imageOnly
+                                                className="btn-ghost"
+                                                data-tooltip="Display Options"
+                                                onClick={this.handleDisplayOptionsClick}
+                                            >
+                                                <Icon src={Codicon.Gear} data-tooltip="inherit" />
+                                            </Button>
+                                            <Button
+                                                id="scoreLibraryButton"
+                                                imageOnly
+                                                className="btn-ghost"
+                                                data-tooltip="Score Library"
+                                                onClick={this.handleScoreLibraryClick}
+                                            >
+                                                <Icon src={Codicon.Library} data-tooltip="inherit" />
+                                            </Button>
+                                            <Button
+                                                id="instrumentEditor"
+                                                imageOnly
+                                                className="btn-ghost"
+                                                data-tooltip="Instrument Editor"
+                                                disabled
+                                                onClick={this.handleInstrumentEditorClick}
+                                            >
+                                                <Icon src={timbauImage} width={24} height={24} data-tooltip="inherit" />
+                                            </Button>
+                                            <ShareButton />
+                                        </Container>
+                                        <Container
+                                            id="appTitleContainer"
+                                            orientation={Orientation.TopDown}
+                                            crossAlignment={ChildAlignment.Stretch}
+                                        >
+                                            <Container>
+                                                <img id="titleLogo" src="/logo.svg" />
+                                                <Label className="appTitle top faded">ANIMADA</Label>
+                                            </Container>
+                                            <Container>
+                                                <Label className="appTitle bottom faded">Score</Label>
+                                                <Label className="appTitle bottom accent">Book</Label>
+                                            </Container>
+                                            <Container crossAlignment={ChildAlignment.Center} id="arrangementStats">
+                                                {scoreStats}
+                                            </Container>
 
+                                        </Container>
+                                        <Container
+                                            orientation={Orientation.TopDown}
+                                            mainAlignment={ChildAlignment.Center}
+                                        >
+                                            <ArrangementPlayControls
+                                                arrangementPlayer={this.arrangementPlayer!}
+                                                dataModel={this.dataModel}
+                                                services={this.services}
+                                                undoManager={this.undoManager!}
+                                            />
+                                        </Container>
+                                        <Container
+                                            id="arrangementPalette"
+                                            orientation={Orientation.TopDown}
+                                            mainAlignment={ChildAlignment.Start}
+                                            crossAlignment={ChildAlignment.Stretch}
+                                        >
+                                            {titleBlock}
+                                            {displayMode === DisplayMode.Editing && <ArrangementEditControls
+                                                dataModel={this.dataModel}
+                                                services={this.services}
+                                                undoManager={this.undoManager!}
+                                            />}
+                                        </Container>
+                                    </Container>
                                 </Container>
-                                <Container
-                                    orientation={Orientation.TopDown}
-                                    mainAlignment={ChildAlignment.Center}
-                                >
-                                    <ArrangementPlayControls
-                                        arrangementPlayer={this.arrangementPlayer!}
-                                        dataModel={this.dataModel}
-                                        services={this.services}
-                                        undoManager={this.undoManager!}
-                                    />
-                                </Container>
-                                <Container
-                                    id="arrangementPalette"
-                                    orientation={Orientation.TopDown}
-                                    mainAlignment={ChildAlignment.Start}
-                                    crossAlignment={ChildAlignment.Stretch}
-                                >
-                                    {titleBlock}
-                                    {displayMode === DisplayMode.Editing && <ArrangementEditControls
-                                        dataModel={this.dataModel}
-                                        services={this.services}
-                                        undoManager={this.undoManager!}
-                                    />}
-                                </Container>
-                            </Container>
-                        </Container>
-
-                        {this.arrangementPlayer && <ArrangementViewer
-                            arrangementPlayer={this.arrangementPlayer}
-                            dataModel={this.dataModel}
-                            services={this.services}
-                            undoManager={this.undoManager!}
-                        />}
+                            }
+                            collapsedTop={
+                                <Container><Button caption="Restore" data-role="restore-top" /> </Container>
+                            }
+                            bottom={
+                                this.arrangementPlayer && <ArrangementViewer
+                                    arrangementPlayer={this.arrangementPlayer}
+                                    dataModel={this.dataModel}
+                                    services={this.services}
+                                    undoManager={this.undoManager!}
+                                />
+                            }
+                        />
                     </DrawerSidebar>
                 </Container>
                 <TooltipProvider />

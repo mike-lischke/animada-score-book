@@ -13,8 +13,9 @@
 
 :root {
     --bar-decoration-color: rgba(188, 207, 67, 0.648);
-    --note-height: 54pt;
     --selection-background: rgba(79, 195, 247, 0.4);
+
+    --note-height: 54pt;
 }
 
 body {
@@ -76,7 +77,6 @@ h6 {
 
 .arrangementViewer {
     padding: 15px;
-    height: 100%;
     overflow-x: hidden;
     overflow-y: auto;
 }
@@ -335,15 +335,13 @@ h6 {
 }
 
 .guiderail-timing.odd-beat {
-    background-color: var(--color-info);
+    background-color: var(--bar-decoration-color);
 }
 
 .guiderail-timing-content {
-    line-height: 20pt;
     padding: 2px 0 0 12px;
-    color: var(--color-primary-content);
-    font-weight: lighter;
-    font-size: 100%;
+    color: var(--color-neutral);
+    font-size: 90%;
 }
 
 @media only screen and (min-width: 1000px) {
@@ -566,6 +564,7 @@ h6 {
     margin: 12px;
     width: 100%;
     overflow: hidden;
+    background: var(--color-base-100);
 }
 
 .appTitle {

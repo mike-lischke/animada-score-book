@@ -7,7 +7,6 @@ import { createRef, type JSX } from "preact";
 
 import { Publisher } from "../../../core/Publisher.js";
 import type { RealTime, ScoreBookDataModel } from "../../../core/ScoreBookDataModel.js";
-import type { ITimeParams } from "../../../core/types/general.js";
 import type { UndoManager } from "../../../core/UndoManager.js";
 import type { ArrangementPlayer } from "../../../player/ArrangementPlayer.js";
 import type { ScoreBookUiServices } from "../../../player/types.js";
@@ -20,8 +19,6 @@ import { Share } from "../Share.js";
 import { TrackViewer, type ITrackViewerCallbacks } from "../Track/TrackViewer.js";
 import { TrackControls } from "./TrackControls.js";
 
-const baseNoteWidth = 55.5; // 54pt flex-basis + 1.5pt for border
-
 export interface IArrangementViewerProps extends ICommonUIProperties {
     arrangementPlayer: ArrangementPlayer;
     dataModel: ScoreBookDataModel;
@@ -32,7 +29,6 @@ export interface IArrangementViewerProps extends ICommonUIProperties {
 interface IArrangementViewerState {
     noteWidth: number;
     trackPlayerCount: number;
-    noteLineMinWidth: number;
     autoFollowIsOn: boolean;
 
     userMightBeTakingControl: boolean;
@@ -72,7 +68,6 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         this.state = {
             noteWidth: 0,
             trackPlayerCount: props.arrangementPlayer.trackPlayers.size,
-            noteLineMinWidth: this.getNoteLineMinWidth(props.dataModel.arrangement!.timeParams),
             autoFollowIsOn: true,
             userMightBeTakingControl: false
         };
@@ -141,7 +136,7 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
 
     public override render(): JSX.Element {
         const { arrangementPlayer, dataModel, services, undoManager } = this.props;
-        const { noteLineMinWidth, autoFollowIsOn } = this.state;
+        const { autoFollowIsOn } = this.state;
 
         const arrangement = dataModel.arrangement!;
 
@@ -195,7 +190,6 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
                                                 dataModel={dataModel}
                                                 services={services}
                                                 undoManager={undoManager}
-                                                noteLineMinWidth={noteLineMinWidth}
                                             />
                                         );
                                     })
@@ -217,17 +211,6 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
             </Container>
         );
     }
-
-    /**
-     * @param timeParams The time params of the arrangement.
-     * @returns The width of the entire note line  in pt.
-     */
-    private getNoteLineMinWidth = (timeParams: Readonly<ITimeParams>): number => {
-        const widthFromNotes = baseNoteWidth * timeParams.timings.length;
-        const extraWidthBetweenBars = (timeParams.length - 1) * 4;
-
-        return widthFromNotes + extraWidthBetweenBars;
-    };
 
     private handleResize = () => {
         this.updateScrollShadows();
