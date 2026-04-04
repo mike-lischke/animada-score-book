@@ -3,19 +3,19 @@
 * Licensed under the MIT License. See License.txt in the project root for license information.
 */
 
-import { Component, createRef } from "preact";
+import { createRef } from "preact";
 
 import { clampValue } from "../../../core/utils.js";
-import type { ICommonUIProperties } from "./UIComponent.js";
+import { UIComponent, type ICommonUIProperties } from "./UIComponent.js";
 
 export interface CollapsingTopContainerProperties extends ICommonUIProperties {
     top: preact.ComponentChildren;
     collapsedTop: preact.ComponentChildren;
     bottom: preact.ComponentChildren;
-    restoreButtonSelector?: string;
+    forceExpanded?: boolean;
 }
 
-export class CollapsingTopContainer extends Component<CollapsingTopContainerProperties> {
+export class CollapsingTopContainer extends UIComponent<CollapsingTopContainerProperties> {
     private rootRef = createRef<HTMLDivElement>();
     private topRef = createRef<HTMLDivElement>();
     private collapsedTopRef = createRef<HTMLDivElement>();
@@ -47,6 +47,11 @@ export class CollapsingTopContainer extends Component<CollapsingTopContainerProp
         }
     }
 
+    public override componentDidUpdate(): void {
+        this.applyStaticLayout();
+        this.applyScrollState();
+    }
+
     public override componentWillUnmount(): void {
         if (this.resizeObserver) {
             this.resizeObserver.disconnect();
@@ -59,6 +64,13 @@ export class CollapsingTopContainer extends Component<CollapsingTopContainerProp
     }
 
     public render({ top, collapsedTop, bottom, className }: CollapsingTopContainerProperties) {
+        const collapsedClassName = this.generateFinalClassName([
+            "rounded-md",
+            "shadow-md",
+            "border",
+            "border-base-200/70",
+        ]);
+
         return (
             <div
                 id="collapsing-top-container"
@@ -100,7 +112,8 @@ export class CollapsingTopContainer extends Component<CollapsingTopContainerProp
                 </div>
 
                 <div
-                    id="collapsed-top"
+                    id="collapsedHeaderContent"
+                    className={collapsedClassName}
                     ref={this.collapsedTopRef}
                     style={{
                         visibility: "hidden",
@@ -151,6 +164,8 @@ export class CollapsingTopContainer extends Component<CollapsingTopContainerProp
     };
 
     private applyScrollState(): void {
+        const { forceExpanded } = this.props;
+
         const topEl = this.topRef.current;
         const collapsedTopEl = this.collapsedTopRef.current;
         const bottomEl = this.bottomRef.current;
@@ -159,7 +174,7 @@ export class CollapsingTopContainer extends Component<CollapsingTopContainerProp
             return;
         }
 
-        const scrollTop = Math.max(0, bottomEl.scrollTop);
+        const scrollTop = Math.max(0, forceExpanded ? 0 : bottomEl.scrollTop);
 
         const fadeEnd = Math.max(1, this.topHeight / 2);
         const collapseAt = fadeEnd;

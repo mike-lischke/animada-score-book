@@ -118,6 +118,24 @@ export abstract class UIComponent<P extends ICommonUIProperties = {}, S = {}>
         this.subscriptionHandlers.push([removeAtUpdate, subscribable.subscribe(subscription)]);
     }
 
+    /**
+     * Removes a subscription that was added using addSubscription.
+     *
+     * @param subscribable The subscribable to unsubscribe from.
+     * @param subscription The subscription callback to unsubscribe.
+     */
+    public removeSubscription(subscribable: ISubscribable, subscription: Subscription): void {
+        this.subscriptionHandlers = this.subscriptionHandlers.filter(([, unsubscribe]) => {
+            if (unsubscribe === subscribable.subscribe(subscription)) {
+                unsubscribe();
+
+                return false;
+            }
+
+            return true;
+        });
+    }
+
     public override componentDidUpdate(previousProps: Readonly<P>, previousState: Readonly<S>,
         snapshot?: unknown): void {
         this.subscriptionHandlers = this.subscriptionHandlers.filter(([removeAtUpdate, unsubscribe]) => {

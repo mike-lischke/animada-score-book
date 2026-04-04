@@ -52,6 +52,7 @@ import { ScoreLibrary } from "./ui/ScoreLibrary.js";
 import { SelectionManager } from "./ui/SelectionManager.js";
 import { SettingsDialog } from "./ui/SettingsDialog.js";
 import { CollapsingTopContainer } from "./components/ui/framework/CollapsingTopContainer.js";
+import { PlayStopButton } from "./components/ui/Arrangement/PlayStopButton.js";
 
 enum DisplayMode {
     Standard,
@@ -67,6 +68,8 @@ interface IAppState {
 
     displayMode: DisplayMode;
     sidebarOpen: boolean;
+
+    headerPinned: boolean;
 }
 
 const newSong: ISerialisedArrangement = { composition: emptySongString, version: 2, title: "New Song" };
@@ -98,6 +101,7 @@ export class App extends UIComponent<{}, IAppState> {
             editingTitle: false,
             displayMode: DisplayMode.Standard,
             sidebarOpen: false,
+            headerPinned: false,
         };
 
         const selectionManager = new SelectionManager();
@@ -123,10 +127,11 @@ export class App extends UIComponent<{}, IAppState> {
     }
 
     public override shouldComponentUpdate(nextProps: {}, nextState: IAppState): boolean {
-        const { theme, displayMode, sidebarOpen, ready } = this.state;
+        const { theme, displayMode, sidebarOpen, ready, headerPinned } = this.state;
 
         return theme != nextState.theme || displayMode !== nextState.displayMode
-            || sidebarOpen !== nextState.sidebarOpen || ready !== nextState.ready;
+            || sidebarOpen !== nextState.sidebarOpen || ready !== nextState.ready
+            || headerPinned !== nextState.headerPinned;
     }
 
     public override componentWillUnmount() {
@@ -135,7 +140,7 @@ export class App extends UIComponent<{}, IAppState> {
     }
 
     public render() {
-        const { ready, displayMode, sidebarOpen } = this.state;
+        const { ready, displayMode, sidebarOpen, headerPinned } = this.state;
 
         if (!ready) {
             return <ProgressIndicator />;
@@ -149,7 +154,9 @@ export class App extends UIComponent<{}, IAppState> {
             titleBlock = <Container
                 orientation={Orientation.LeftToRight}
                 mainAlignment={ChildAlignment.End}
-                crossAlignment={ChildAlignment.Center}>
+                crossAlignment={ChildAlignment.Center}
+                style={{ width: "100%" }}
+            >
                 <ArrangementTitle
                     id="mainArrangementTitle"
                     arrangement={arrangementView}
@@ -158,6 +165,21 @@ export class App extends UIComponent<{}, IAppState> {
                     editMode={displayMode === DisplayMode.Editing}
                     onEditEnd={this.onEditEnd}
                 />
+                <Button
+                    imageOnly
+                    data-role="restore-top"
+                    style={{ margin: "2px 16px 0 0", width: "24px", height: "24px" }}
+                    className="normal-case btn-ghost"
+                    onClick={() => {
+                        this.setState({ headerPinned: !headerPinned });
+                    }}
+                >
+                    <Icon
+                        src={headerPinned ? Codicon.Pinned : Codicon.Pin}
+                        data-tooltip={headerPinned ? "Header Pinned" : "Auto Size Header"}
+                    />
+                </Button>
+
             </Container>;
         }
 
@@ -195,6 +217,7 @@ export class App extends UIComponent<{}, IAppState> {
                                 <Container
                                     orientation={Orientation.LeftToRight}
                                     crossAlignment={ChildAlignment.Center}
+                                    className="bg-base-100"
                                 >
                                     <Container
                                         id="headerContent"
@@ -281,7 +304,17 @@ export class App extends UIComponent<{}, IAppState> {
                                 </Container>
                             }
                             collapsedTop={
-                                <Container><Button caption="Restore" data-role="restore-top" /> </Container>
+                                <Container
+                                    className="collapsed-header"
+                                    orientation={Orientation.LeftToRight}
+                                    crossAlignment={ChildAlignment.Center}
+                                >
+                                    <PlayStopButton
+                                        id="standalonePlayButton"
+                                        arrangementPlayer={this.arrangementPlayer!}
+                                    />
+                                    {titleBlock}
+                                </Container>
                             }
                             bottom={
                                 this.arrangementPlayer && <ArrangementViewer
@@ -291,6 +324,7 @@ export class App extends UIComponent<{}, IAppState> {
                                     undoManager={this.undoManager!}
                                 />
                             }
+                            forceExpanded={headerPinned}
                         />
                     </DrawerSidebar>
                 </Container>

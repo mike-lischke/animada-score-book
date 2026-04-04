@@ -1150,3 +1150,21 @@ dialog .modal-action button {
 .drawer, .drawer-content {
     min-height: 0;
 }
+
+#collapsedHeaderContent {
+    margin: 8px 12px;
+    padding: 4px;
+
+    overflow: visible;
+    background: color-mix(in oklch, var(--color-base-100) 90%, transparent);
+}
+
+#collapsedHeaderContent::before {
+    content: "";
+    position: absolute;
+    top: -9px;
+    left: 0;
+    width: 100%;
+    height: 8px;
+    background-color: var(--color-base-100);
+}

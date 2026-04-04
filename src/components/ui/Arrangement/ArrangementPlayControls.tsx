@@ -22,6 +22,7 @@ import { Label } from "../framework/Label.js";
 import { Slider } from "../framework/Slider.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
 import { ChildAlignment, Orientation } from "../framework/ui-types.js";
+import { PlayStopButton } from "./PlayStopButton.js";
 
 export interface IArrangementPlayControlsProperties extends ICommonUIProperties {
     arrangementPlayer: ArrangementPlayer,
@@ -31,7 +32,6 @@ export interface IArrangementPlayControlsProperties extends ICommonUIProperties 
 }
 
 interface IArrangementPlayControlsState {
-    playing: boolean;
     editingTitle: boolean;
     title: string;
 
@@ -46,7 +46,6 @@ export class ArrangementPlayControls
 
         const arrangementView = props.dataModel.arrangement!;
         this.state = {
-            playing: props.arrangementPlayer.state === "playing",
             editingTitle: false,
             title: arrangementView.title,
             currentVolume: arrangementView.mainVolume,
@@ -55,65 +54,65 @@ export class ArrangementPlayControls
     }
 
     public override componentDidMount(): void {
-        const { dataModel, arrangementPlayer } = this.props;
+        const { dataModel } = this.props;
 
-        this.addSubscription(arrangementPlayer, this.onPlaybackStateChange, true);
         const arrangement = dataModel.arrangement!;
         this.addSubscription(arrangement, this.titleChangeSubscription);
     }
 
     public override componentDidUpdate(previousProps: Readonly<IArrangementPlayControlsProperties>,
         previousState: Readonly<IArrangementPlayControlsState>): void {
-        const { arrangementPlayer, dataModel } = this.props;
+        const { dataModel } = this.props;
 
-        this.addSubscription(arrangementPlayer, this.onPlaybackStateChange, true);
         const arrangement = dataModel.arrangement!;
         if (previousState.currentTempo !== arrangement.timeParams.tempo) {
             this.setState({ currentTempo: arrangement.timeParams.tempo });
         }
     }
 
+    public override shouldComponentUpdate(nextProps: Readonly<IArrangementPlayControlsProperties>,
+        nextState: Readonly<IArrangementPlayControlsState>): boolean {
+        const { arrangementPlayer, dataModel } = this.props;
+        const { editingTitle, title, currentVolume, currentTempo } = this.state;
+
+        if (arrangementPlayer !== nextProps.arrangementPlayer) {
+            return true;
+        }
+
+        if (dataModel !== nextProps.dataModel) {
+            return true;
+        }
+
+        if (editingTitle !== nextState.editingTitle) {
+            return true;
+        }
+
+        if (title !== nextState.title) {
+            return true;
+        }
+
+        if (currentVolume !== nextState.currentVolume) {
+            return true;
+        }
+
+        if (currentTempo !== nextState.currentTempo) {
+            return true;
+        }
+
+        return false;
+    }
+
     public override render(): ComponentChild {
         const { arrangementPlayer, dataModel, undoManager } = this.props;
-        const { playing, currentVolume, currentTempo } = this.state;
+        const { currentVolume, currentTempo } = this.state;
 
         const arrangementView = dataModel.arrangement!;
-
-        let playButton;
-        if (playing) {
-            playButton = (
-                <Button
-                    imageOnly
-                    round
-                    id="playbackButton"
-                    data-tooltip="Stop playback"
-                    onClick={() => {
-                        arrangementPlayer.stop();
-                    }}>
-                    <Image key="pauseButton" src={PredefinedImage.PauseImage} data-tooltip="inherit" />
-                </Button>
-            );
-        } else {
-            playButton = (
-                <Button
-                    imageOnly
-                    round
-                    id="playbackButton"
-                    className="softButton shadow-md"
-                    data-tooltip="Start playback with the selected tempo and volume settings."
-                    onClick={() => {
-                        void arrangementPlayer.play();
-                    }}>
-                    <Image key="playButton" src={PredefinedImage.PlayImage} data-tooltip="inherit" />
-                </Button>
-            );
-        }
 
         return (
             <Container id="arrangementPlayControls">
                 <Grid id="mainPlayControls" columns={["max-content", "max-content"]} className="pl-8 pr-8" equalHeight>
                     <GridCell mainAlignment={ChildAlignment.Center} crossAlignment={ChildAlignment.Center}>
-                        {playButton}
+                        <PlayStopButton id="mainPlayButton" arrangementPlayer={arrangementPlayer} />
                     </GridCell>
                     <GridCell></GridCell>
                     <GridCell></GridCell>
@@ -277,11 +276,6 @@ export class ArrangementPlayControls
 
         const arrangement = dataModel.arrangement!;
         this.setState({ title: arrangement.title });
-    };
-
-    private onPlaybackStateChange = () => {
-        const { arrangementPlayer } = this.props;
-        this.setState({ playing: arrangementPlayer.state === "playing" || arrangementPlayer.state === "counting" });
     };
 
     private startRecording = () => {

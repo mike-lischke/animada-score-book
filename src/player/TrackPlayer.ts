@@ -22,8 +22,10 @@ import { Event, ICallbackEvent, IInterval, SoloMute, type IEventSource } from ".
  */
 export class TrackPlayer extends Publisher implements IEventSource {
     public readonly track: ISbDmTrack;
+
     /** Publishes when the current polyrhythm note changes (for UI highlighting). */
     public readonly currentPolyrhythmNotePublisher: Publisher = new Publisher();
+
     private readonly timeCoordinator: TimeCoordinator;
 
     private readonly noteTimes = new Map<ISbDmNote, RealTime>();
@@ -107,12 +109,11 @@ export class TrackPlayer extends Publisher implements IEventSource {
      * Builds all events (audio, mute, and callbacks) for the given real-time interval.
      * Returns an empty list if the instrument is not loaded or the player is disposed.
      *
-     * @param {{ start: RealTime, end: RealTime }} root0 The interval descriptor.
-     * @param {RealTime} root0.start Interval start (inclusive).
-     * @param {RealTime} root0.end Interval end (exclusive).
-     * @returns {Event[]} Events occurring within the interval, ordered by time.
+     * @param interval The real-time interval for which to retrieve events. `end` is treated as exclusive.
+     *
+     * @returns Events occurring within the interval, ordered by time.
      */
-    public getEvents = ({ start, end }: IInterval): Event[] => {
+    public getEvents = (interval: IInterval): Event[] => {
         if (this.disposed || !this.track.instrument.state.initialized) {
             return [];
         }
@@ -123,11 +124,11 @@ export class TrackPlayer extends Publisher implements IEventSource {
         for (const note of noteIterator) {
             const time = this.noteTimes.get(note)!;
             // Treat `end` as exclusive. Notes exactly on this end are included in the following interval.
-            if (time >= end) {
+            if (time >= interval.end) {
                 break;
             }
 
-            if (time >= start) {
+            if (time >= interval.start) {
                 if (note.noteStyle) {
                     events.push(this.getAudioEvent(note, time));
                 }

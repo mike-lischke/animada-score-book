@@ -137,6 +137,15 @@ h6 {
     min-width: 0;
 }
 
+.collapsed-header #mainArrangementTitle {
+    display: block;
+    font-size: clamp(10pt, 16pt, 16pt);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+}
+
 #arrangementPalette {
     flex: 1 1 auto;
     min-width: 0;
