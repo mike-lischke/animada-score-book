@@ -23,18 +23,20 @@ import { ArrangementEditControls } from "./components/ui/Arrangement/Arrangement
 import { ArrangementPlayControls } from "./components/ui/Arrangement/ArrangementPlayControls.js";
 import { ArrangementTitle } from "./components/ui/Arrangement/ArrangementTitle.js";
 import { ArrangementViewer } from "./components/ui/Arrangement/ArrangementViewer.js";
+import { PlayStopButton } from "./components/ui/Arrangement/PlayStopButton.js";
 import { ConfirmDialog } from "./components/ui/composites/ConfirmDialog.js";
 import {
     ValueDialog, ValueEditorEntryType, type IValueEditorValueEntry
 } from "./components/ui/composites/ValueDialog.js";
 import { Codicon } from "./components/ui/framework/Codicon.js";
+import { CollapsingTopContainer } from "./components/ui/framework/CollapsingTopContainer.js";
 import { DialogResponseClosure } from "./components/ui/framework/Dialog.js";
 import { DrawerSidebar } from "./components/ui/framework/DrawerSidebar.js";
 import { Icon } from "./components/ui/framework/Icon.js";
 import { TooltipProvider } from "./components/ui/framework/Tooltip.js";
 import { Overlay } from "./components/ui/Overlay.js";
 import { ShareButton } from "./components/ui/ShareButton.js";
-import { AppStorage } from "./core/AppStorage.js";
+import { AppStorage, type IUISettings } from "./core/AppStorage.js";
 import {
     SbDmEntityType, ScoreBookDataModel, type ISbDmScore, type ISbDmScoreFolder
 } from "./core/ScoreBookDataModel.js";
@@ -51,8 +53,6 @@ import { MouseHandler } from "./ui/MouseHandler.js";
 import { ScoreLibrary } from "./ui/ScoreLibrary.js";
 import { SelectionManager } from "./ui/SelectionManager.js";
 import { SettingsDialog } from "./ui/SettingsDialog.js";
-import { CollapsingTopContainer } from "./components/ui/framework/CollapsingTopContainer.js";
-import { PlayStopButton } from "./components/ui/Arrangement/PlayStopButton.js";
 
 enum DisplayMode {
     Standard,
@@ -64,6 +64,7 @@ interface IAppState {
     serializedArrangement?: ISerialisedArrangement;
 
     theme: string;
+    viewerZoom: number;
     editingTitle: boolean;
 
     displayMode: DisplayMode;
@@ -95,9 +96,11 @@ export class App extends UIComponent<{}, IAppState> {
 
         const settings = AppStorage.loadUISettings() ?? {};
         const theme = settings.theme ?? "Light+";
+        const viewerZoom = settings.viewSettings?.arrangementViewSettings?.zoomLevel ?? 100;
         this.state = {
             ready: false,
             theme,
+            viewerZoom,
             editingTitle: false,
             displayMode: DisplayMode.Standard,
             sidebarOpen: false,
@@ -140,7 +143,7 @@ export class App extends UIComponent<{}, IAppState> {
     }
 
     public render() {
-        const { ready, displayMode, sidebarOpen, headerPinned } = this.state;
+        const { ready, displayMode, sidebarOpen, headerPinned, viewerZoom } = this.state;
 
         if (!ready) {
             return <ProgressIndicator />;
@@ -176,7 +179,7 @@ export class App extends UIComponent<{}, IAppState> {
                 >
                     <Icon
                         src={headerPinned ? Codicon.Pinned : Codicon.Pin}
-                        data-tooltip={headerPinned ? "Header Pinned" : "Auto Size Header"}
+                        data-tooltip={headerPinned ? "Pinned Header" : "Automatic Header"}
                     />
                 </Button>
 
@@ -221,7 +224,7 @@ export class App extends UIComponent<{}, IAppState> {
                                 >
                                     <Container
                                         id="headerContent"
-                                        className="rounded-3xl shadow-md border border-base-200/70"
+                                        className="rounded-3xl shadow-md border border-base-200/70 gap-4"
                                     >
                                         <Container
                                             id="toolbarButtons"
@@ -276,17 +279,12 @@ export class App extends UIComponent<{}, IAppState> {
                                             </Container>
 
                                         </Container>
-                                        <Container
-                                            orientation={Orientation.TopDown}
-                                            mainAlignment={ChildAlignment.Center}
-                                        >
-                                            <ArrangementPlayControls
-                                                arrangementPlayer={this.arrangementPlayer!}
-                                                dataModel={this.dataModel}
-                                                services={this.services}
-                                                undoManager={this.undoManager!}
-                                            />
-                                        </Container>
+                                        <ArrangementPlayControls
+                                            arrangementPlayer={this.arrangementPlayer!}
+                                            dataModel={this.dataModel}
+                                            services={this.services}
+                                            undoManager={this.undoManager!}
+                                        />
                                         <Container
                                             id="arrangementPalette"
                                             orientation={Orientation.TopDown}
@@ -322,6 +320,7 @@ export class App extends UIComponent<{}, IAppState> {
                                     dataModel={this.dataModel}
                                     services={this.services}
                                     undoManager={this.undoManager!}
+                                    viewerZoom={viewerZoom}
                                 />
                             }
                             forceExpanded={headerPinned}
@@ -354,10 +353,10 @@ export class App extends UIComponent<{}, IAppState> {
         this.settingsDialogRef.current?.open();
     };
 
-    private handleSettingsChanged = () => {
-        const settings = AppStorage.loadUISettings() ?? {};
+    private handleSettingsChanged = (settings: IUISettings) => {
         const theme = settings.theme ?? "light";
-        this.setState({ theme });
+        const viewerZoom = settings.viewSettings?.arrangementViewSettings?.zoomLevel ?? 100;
+        this.setState({ theme, viewerZoom });
     };
 
     private handleScoreLibraryAction = async (action: string, data?: ISbDmScoreFolder | ISbDmScore,

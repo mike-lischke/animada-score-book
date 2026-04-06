@@ -5,26 +5,26 @@
 
 export interface IArrangementViewSettings {
     /** The scroll position of the arrangement in its viewer. */
-    scrollPosition: number;
+    scrollPosition?: number;
 
-    /** The zoom level of the arrangement in its viewer (currently unused). */
-    zoomLevel: number;
+    /** The zoom level of the arrangement in its viewer (in percentage). */
+    zoomLevel?: number;
 
     /** The position of the current play range in the arrangement. */
-    playRangePosition: number;
+    playRangePosition?: number;
 
     /** The position of the play beam in the arrangement. */
-    markerPosition: number;
+    markerPosition?: number;
 }
 
 /** UI element specific settings */
 export interface IViewSettings {
-    /** Settings related to the arrangement player. Only taken into account when an initial score is loaded. */
-    arrangementViewSettings: IArrangementViewSettings;
+    /** Settings related to the arrangement viewer. */
+    arrangementViewSettings?: IArrangementViewSettings;
 }
 
 export interface IUISettings {
-    /** Theme selection for the user interface (not implemented yet). */
+    /** Theme selection for the user interface. */
     theme?: string;
 
     /**

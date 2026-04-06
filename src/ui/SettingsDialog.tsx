@@ -14,14 +14,18 @@ import { Icon } from "../components/ui/framework/Icon.js";
 import { Container } from "../components/ui/framework/Container.js";
 import { ChildAlignment, Orientation } from "../components/ui/framework/ui-types.js";
 import { Button } from "../components/ui/framework/Button.js";
+import { clampValue } from "../core/utils.js";
 
 export interface ISettingsDialogProperties {
     onSettingsChanged?: (settings: IUISettings) => void;
 }
 
 interface ISettingsDialogState {
-    settings: IUISettings;
-    previousTheme: string;
+    /** Settings are they are currently. Might not yet be saved. */
+    currentSettings: IUISettings;
+
+    /** Settings as they were before any changes. */
+    previousSettings: IUISettings;
 }
 
 export class SettingsDialog extends Component<ISettingsDialogProperties, ISettingsDialogState> {
@@ -30,18 +34,20 @@ export class SettingsDialog extends Component<ISettingsDialogProperties, ISettin
     public constructor(props: ISettingsDialogProperties) {
         super(props);
 
-        const settings = AppStorage.loadUISettings() ?? {};
-        const previousTheme = settings.theme ?? "Light+";
+        const currentSettings = AppStorage.loadUISettings() ?? {};
+
+        // Deep clone to prevent mutations to previousSettings when changing currentSettings.
+        const previousSettings = JSON.parse(JSON.stringify(currentSettings)) as IUISettings;
 
         this.state = {
-            settings,
-            previousTheme,
+            currentSettings,
+            previousSettings,
         };
     }
 
     public render(): ComponentChild {
-        const { settings } = this.state;
-        const currentTheme = settings.theme ?? "Light+";
+        const { currentSettings } = this.state;
+        const currentTheme = currentSettings.theme ?? "Light+";
 
         const darkThemes: string[] = [];
         const lightThemes: string[] = [];
@@ -60,8 +66,8 @@ export class SettingsDialog extends Component<ISettingsDialogProperties, ISettin
                 label: themeName,
                 onClick: () => {
                     document.documentElement.setAttribute("data-theme", themeName);
-                    settings.theme = themeName;
-                    this.setState({ settings });
+                    currentSettings.theme = themeName;
+                    this.setState({ currentSettings });
                 },
             });
         });
@@ -71,11 +77,13 @@ export class SettingsDialog extends Component<ISettingsDialogProperties, ISettin
                 label: themeName,
                 onClick: () => {
                     document.documentElement.setAttribute("data-theme", themeName);
-                    settings.theme = themeName;
-                    this.setState({ settings });
+                    currentSettings.theme = themeName;
+                    this.setState({ currentSettings });
                 },
             });
         });
+
+        const currentViewerZoom = currentSettings.viewSettings?.arrangementViewSettings?.zoomLevel ?? 100;
 
         return (
             <Dialog
@@ -100,28 +108,95 @@ export class SettingsDialog extends Component<ISettingsDialogProperties, ISettin
                     items={themeItems}
                     selectedItem={currentTheme}
                 />
-            </Dialog>
+
+                <p className="py-4">Change the zoom level of the arrangement viewer.</p>
+                <Button
+                    round
+                    imageOnly
+                    className="zoomButton"
+                    onClick={() => {
+                        const newZoom = clampValue(currentViewerZoom - 10, 50, 150);
+                        if (newZoom !== currentViewerZoom) {
+                            currentSettings.viewSettings = currentSettings.viewSettings ?? {};
+                            currentSettings.viewSettings.arrangementViewSettings ??= {};
+                            currentSettings.viewSettings.arrangementViewSettings.zoomLevel = newZoom;
+                            this.setState({ currentSettings }, () => {
+                                this.temporarySettingsChange();
+                            });
+                        }
+                    }}
+                >
+                    <Icon src={Codicon.ZoomOut} />
+                </Button>
+
+                <Button
+                    round
+                    imageOnly
+                    className="zoomButton"
+                    onClick={() => {
+                        const newZoom = clampValue(currentViewerZoom + 10, 50, 150);
+                        if (newZoom !== currentViewerZoom) {
+                            currentSettings.viewSettings = currentSettings.viewSettings ?? {};
+                            currentSettings.viewSettings.arrangementViewSettings ??= {};
+                            currentSettings.viewSettings.arrangementViewSettings.zoomLevel = newZoom;
+                            this.setState({ currentSettings }, () => {
+                                this.temporarySettingsChange();
+                            });
+                        }
+                    }}
+                >
+                    <Icon src={Codicon.ZoomIn} />
+                </Button>
+
+                <Button
+                    caption="Reset Zoom"
+                    className="zoomButton"
+                    onClick={() => {
+                        currentSettings.viewSettings = currentSettings.viewSettings ?? {};
+                        currentSettings.viewSettings.arrangementViewSettings ??= {};
+                        currentSettings.viewSettings.arrangementViewSettings.zoomLevel = 100;
+                        this.setState({ currentSettings });
+                    }}
+                >
+                    <Icon src={Codicon.ZoomIn} />
+                </Button>
+
+            </Dialog >
         );
     }
 
     public open(): void {
-        const settings = AppStorage.loadUISettings() ?? {};
-        const previousTheme = settings.theme ?? "Light+";
-        this.setState({ settings, previousTheme }, () => {
+        const currentSettings = AppStorage.loadUISettings() ?? {};
+        const previousSettings = JSON.parse(JSON.stringify(currentSettings)) as IUISettings;
+        currentSettings.theme ??= "Light+";
+        this.setState({ currentSettings, previousSettings }, () => {
             this.dialogRef.current?.open();
         });
     }
 
     private handleClose = (returnValue: string): void => {
         const { onSettingsChanged } = this.props;
-        const { settings, previousTheme } = this.state;
+        const { currentSettings, previousSettings } = this.state;
 
         if (returnValue === "cancel" || returnValue === "") {
             // Reset the theme to the original value if the user cancelled the dialog.
-            document.documentElement.setAttribute("data-theme", previousTheme);
+            document.documentElement.setAttribute("data-theme", previousSettings.theme ?? "Light+");
+
+            const restoredSettings = JSON.parse(JSON.stringify(previousSettings)) as IUISettings;
+            this.setState({ currentSettings: restoredSettings });
         } else {
-            AppStorage.saveUISettings(settings);
-            onSettingsChanged?.(settings);
+            const newPreviousSettings = JSON.parse(JSON.stringify(currentSettings)) as IUISettings;
+            this.setState({ previousSettings: newPreviousSettings });
+
+            AppStorage.saveUISettings(currentSettings);
+            onSettingsChanged?.(currentSettings);
         }
     };
+
+    private temporarySettingsChange() {
+        const { onSettingsChanged } = this.props;
+        const { currentSettings } = this.state;
+
+        onSettingsChanged?.(currentSettings);
+    }
 }

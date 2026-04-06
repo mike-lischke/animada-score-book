@@ -14,8 +14,6 @@ import { Container } from "../framework/Container.js";
 import { ChildAlignment, Orientation } from "../framework/ui-types.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
 import { GuideRail } from "../GuideRail/GuideRail.js";
-import { Overlay } from "../Overlay.js";
-import { Share } from "../Share.js";
 import { TrackViewer, type ITrackViewerCallbacks } from "../Track/TrackViewer.js";
 import { TrackControls } from "./TrackControls.js";
 
@@ -24,6 +22,8 @@ export interface IArrangementViewerProps extends ICommonUIProperties {
     dataModel: ScoreBookDataModel;
     services: ScoreBookUiServices;
     undoManager: UndoManager;
+
+    viewerZoom?: number;
 }
 
 interface IArrangementViewerState {
@@ -39,6 +39,7 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
     private shadowRef = createRef<HTMLDivElement>();
     private playBeamRef = createRef<HTMLDivElement>();
     private playRangeRef = createRef<HTMLDivElement>();
+    private trackViewerContainerRef = createRef<HTMLDivElement>();
 
     private contentWidthPublisher = new Publisher();
 
@@ -77,7 +78,7 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
     }
 
     public override componentDidMount(): void {
-        const { arrangementPlayer } = this.props;
+        const { arrangementPlayer, viewerZoom } = this.props;
         const { autoFollowIsOn } = this.state;
 
         setTimeout(this.handleResize, 0);
@@ -97,12 +98,13 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         this.updateScrollShadows();
 
         this.autoFollowTransitionDurationMs = this.getPlayRangeTransitionDurationMs();
+        this.trackViewerContainerRef.current!.style.zoom = `${viewerZoom}%`;
     }
 
     public override componentDidUpdate(prevProps: IArrangementViewerProps, prevState: IArrangementViewerState): void {
         super.componentDidUpdate(prevProps, prevState);
 
-        const { arrangementPlayer, dataModel } = this.props;
+        const { arrangementPlayer, dataModel, viewerZoom } = this.props;
         const { autoFollowIsOn } = this.state;
 
         if (prevProps.arrangementPlayer !== arrangementPlayer) {
@@ -118,6 +120,7 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         }
 
         this.updateScrollShadows();
+        this.trackViewerContainerRef.current!.style.zoom = `${viewerZoom}%`;
     }
 
     public override componentWillUnmount(): void {
@@ -135,7 +138,7 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
     }
 
     public override render(): JSX.Element {
-        const { arrangementPlayer, dataModel, services, undoManager } = this.props;
+        const { arrangementPlayer, dataModel, services, undoManager, viewerZoom } = this.props;
         const { autoFollowIsOn } = this.state;
 
         const arrangement = dataModel.arrangement!;
@@ -148,8 +151,10 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
             >
                 <Container
                     id="trackViewerContainer"
+                    innerRef={this.trackViewerContainerRef}
                     orientation={Orientation.LeftToRight}
                     crossAlignment={ChildAlignment.Stretch}
+                    style={{ zoom: `${viewerZoom}%` }}
                 >
                     <TrackControls tracks={arrangement.tracks} />
                     <Container
@@ -202,13 +207,7 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
                         </Container>
                     </Container>
                 </Container>
-                <Overlay name="share">
-                    <Share
-                        dataModel={dataModel}
-                        undoManager={undoManager}
-                    />
-                </Overlay>
-            </Container>
+            </Container >
         );
     }
 

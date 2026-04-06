@@ -15,7 +15,7 @@ interface VSTheme {
 }
 
 const sharedValues = `
-    --radius-selector: 1rem;
+    --radius-selector: 0.5rem;
     --radius-field: 0.25rem;
     --radius-box: 0.5rem;
 

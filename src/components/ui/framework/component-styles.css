@@ -1023,87 +1023,6 @@ dialog .modal-action button {
     flex: 1 1 var(--item-height);
 }
 
-/** Slider input styles. */
-.slider {
-    --current-value: 50%;
-    --handle-size: 24px;
-
-    display: flex;
-    flex-direction: row;
-
-    position: relative;
-    min-width: 50px;
-    min-height: 10px;
-
-    height: 32px;
-
-    user-select: none;
-}
-
-.slider > .body {
-    align-self: center;
-
-    width: 100%;
-    height: 8px;
-
-    border-radius: 9999px;
-
-    cursor: pointer;
-    overflow: visible;
-    user-select: none;
-}
-
-.slider.vertical {
-    flex-direction: column;
-
-    min-width: 10px;
-    min-height: 50px;
-}
-
-.slider.vertical > .body {
-    width: 8px;
-    height: 100%;
-    background-color: var(--color-base-300);
-    box-shadow: inset 1px 1px 1px rgba(0, 0, 0, 0.1);
-}
-
-.slider > .body .handle {
-    position: absolute;
-    left: calc(var(--current-value) - var(--handle-size) / 4);
-
-    height: var(--handle-size);
-    width: calc(var(--handle-size) / 2);
-
-    border-radius: 9999px;
-    background: oklch(100% 0 270);
-    box-shadow: 1px 1px 4px rgba(0, 0, 0, 0.2);
-    border: 1px solid var(--color-base-200);
-
-    align-self: center;
-}
-
-.slider.vertical > .body .handle {
-    left: auto;
-    top: calc(var(--current-value) - var(--handle-size) / 4);
-
-    width: var(--handle-size);
-    height: calc(var(--handle-size) / 2);
-}
-
-.checkbox {
-    border: none;
-    border-radius: 9999px;
-    background-color: var(--color-primary);
-    color: var(--color-primary-content);
-    box-shadow: none;
-
-    &::before {
-        width: 70%;
-        height: 70%;
-        transform: translate(40%, 0%);
-    }
-}
-
 .dropdown {
     /* Override the value from daisyUI to avoid that the dropdown jumps in Chrome. */
     transition-behavior: normal;
@@ -1157,6 +1076,7 @@ dialog .modal-action button {
 
     overflow: visible;
     background: color-mix(in oklch, var(--color-base-100) 90%, transparent);
+    z-index: 3;
 }
 
 #collapsedHeaderContent::before {
@@ -1167,4 +1087,10 @@ dialog .modal-action button {
     width: 100%;
     height: 8px;
     background-color: var(--color-base-100);
+}
+
+.fieldset-legend {
+    color: var(--color-base-content);
+    font-weight: normal;
+    padding: 0 4px;
 }

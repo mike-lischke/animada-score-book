@@ -14,8 +14,7 @@ import { Button } from "../framework/Button.js";
 import { Checkbox } from "../framework/Checkbox.js";
 import { Codicon } from "../framework/Codicon.js";
 import { Container } from "../framework/Container.js";
-import { Grid } from "../framework/Grid.js";
-import { GridCell } from "../framework/GridCell.js";
+import { FieldSet } from "../framework/FieldSet.js";
 import { Icon } from "../framework/Icon.js";
 import { Image, PredefinedImage } from "../framework/Image.js";
 import { Label } from "../framework/Label.js";
@@ -23,6 +22,8 @@ import { Slider } from "../framework/Slider.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
 import { ChildAlignment, Orientation } from "../framework/ui-types.js";
 import { PlayStopButton } from "./PlayStopButton.js";
+import { Grid } from "../framework/Grid.js";
+import { GridCell } from "../framework/GridCell.js";
 
 export interface IArrangementPlayControlsProperties extends ICommonUIProperties {
     arrangementPlayer: ArrangementPlayer,
@@ -109,165 +110,127 @@ export class ArrangementPlayControls
         const arrangementView = dataModel.arrangement!;
 
         return (
-            <Container id="arrangementPlayControls">
-                <Grid id="mainPlayControls" columns={["max-content", "max-content"]} className="pl-8 pr-8" equalHeight>
-                    <GridCell mainAlignment={ChildAlignment.Center} crossAlignment={ChildAlignment.Center}>
-                        <PlayStopButton id="mainPlayButton" arrangementPlayer={arrangementPlayer} />
-                    </GridCell>
-                    <GridCell></GridCell>
-                    <GridCell></GridCell>
-                    <GridCell
-                        mainAlignment={ChildAlignment.Center}
-                        crossAlignment={ChildAlignment.Center}
-                        style={{ width: "50px" }} // To ensure both grid columns have the same width.
-                    >
+            <Grid id="arrangementPlayControls" columns={[160, "auto"]}>
+                <Container
+                    orientation={Orientation.TopDown}
+                    mainAlignment={ChildAlignment.Start}
+                    crossAlignment={ChildAlignment.Start}
+                >
+                    <FieldSet legend="Play / Record" className="grid-cols-2 gap-4">
+                        <PlayStopButton id="playbackButton" arrangementPlayer={arrangementPlayer} />
                         <Button
-                            imageOnly
                             round
                             id="recordButton"
-                            className="softButton shadow-md"
                             data-tooltip="Record your song and export it as an MP3 file."
                             onClick={this.startRecording}
                         >
                             <Image key="recordButton" src={PredefinedImage.Record} data-tooltip="inherit" />
                         </Button>
-                    </GridCell>
-                </Grid>
-                <Container
-                    orientation={Orientation.TopDown}
-                    crossAlignment={ChildAlignment.Center}
-                    data-tooltip="Master volume for playback"
-                    style={{ width: "50px" }}
-                >
-                    <Icon src={Codicon.Unmute} data-tooltip="inherit" />
-                    <Slider
-                        id="volumeSlider"
-                        value={currentVolume}
-                        min={0}
-                        max={100}
-
-                        vertical
-                        orientation="decreasing"
-                        data-tooltip="inherit"
-                        onChange={(value) => {
-                            arrangementView.mainVolume = value;
-                            this.setState({ currentVolume: arrangementView.mainVolume }, () => {
-                                AppStorage.saveSetting("masterVolume", arrangementView.mainVolume);
-                            });
-                        }}
-                    />
-                    <Label caption={`${Math.round(currentVolume)}%`} style={{ fontSize: "80%", marginTop: "4px" }} />
-                </Container>
-                <Container
-                    orientation={Orientation.TopDown}
-                    crossAlignment={ChildAlignment.Center}
-                    data-tooltip="Tempo for playback (beats per minute)"
-                    style={{ width: "50px" }}
-                >
-                    <Icon src={Codicon.Pulse} data-tooltip="inherit" />
-                    <Slider
-                        id="tempoSlider"
-                        value={currentTempo}
-                        min={30}
-                        max={200}
-                        step={5}
-                        vertical
-                        orientation="decreasing"
-                        data-tooltip="inherit"
-                        onChange={(value) => {
-                            this.setState({ currentTempo: value });
-                            undoManager.edit({
-                                type: "EditCommand_TimeParamsTempo",
-                                timeParams: arrangementView.timeParams,
-                                tempo: value
-                            });
-
-                        }}
-                    />
-                    <Label caption={`${currentTempo} bpm`} style={{ fontSize: "80%", marginTop: "4px" }} />
+                    </FieldSet>
                 </Container>
                 <Container
                     orientation={Orientation.TopDown}
                     mainAlignment={ChildAlignment.SpaceEvenly}
-                    crossAlignment={ChildAlignment.Start}
-                    style={{ marginLeft: "30px" }}
+                    crossAlignment={ChildAlignment.Stretch}
+                    data-tooltip="Tempo for playback (beats per minute)"
+                    style={{ width: "100%" }}
                 >
                     <Container
-                        orientation={Orientation.LeftToRight}
+                        mainAlignment={ChildAlignment.Stretch}
                         crossAlignment={ChildAlignment.Center}
-                        data-tooltip="Loop Playback"
                         gap={4}
                     >
-                        <Icon
-                            src={Codicon.DebugRerun}
+                        <Icon src={Codicon.Pulse} data-tooltip="inherit" />
+                        <Slider
+                            id="tempoSlider"
+                            value={currentTempo}
+                            min={30}
+                            max={200}
+                            step={5}
                             data-tooltip="inherit"
-                            style={{ margin: "0 4px" }}
-                        />
-                        <Checkbox
-                            data-tooltip="inherit"
-                            checked={arrangementView.loop}
-                            onChange={(checked) => {
-                                arrangementView.loop = checked;
-                                AppStorage.saveSetting("loop", checked);
+                            className="range-xs"
+                            onChange={(value) => {
+                                this.setState({ currentTempo: value });
+                                undoManager.edit({
+                                    type: "EditCommand_TimeParamsTempo",
+                                    timeParams: arrangementView.timeParams,
+                                    tempo: value
+                                });
+
                             }}
                         />
-                        <Label caption="Loop" style={{ marginLeft: "4px" }} data-tooltip="inherit" />
+                        <Label caption={`${currentTempo} bpm`} style={{ fontSize: "80%", marginTop: "4px" }} />
                     </Container>
                     <Container
-                        orientation={Orientation.LeftToRight}
+                        mainAlignment={ChildAlignment.Start}
                         crossAlignment={ChildAlignment.Center}
-                        data-tooltip="Loop Playback"
                         gap={4}
                     >
-                        <Image
-                            key="metronomeButton"
-                            src={PredefinedImage.Metronome}
+                        <Icon src={Codicon.Unmute} data-tooltip="inherit" />
+                        <Slider
+                            id="volumeSlider"
+                            value={currentVolume}
+                            min={0}
+                            max={100}
                             data-tooltip="inherit"
-                            width={24}
-                            height={24}
-                        />
-                        <Checkbox
-                            data-tooltip="inherit"
-                            checked={arrangementView.useMetronome}
-                            onChange={(checked) => {
-                                arrangementView.useMetronome = checked;
-                                AppStorage.saveSetting("metronome", checked);
+                            className="range-xs"
+                            onChange={(value) => {
+                                arrangementView.mainVolume = value;
+                                this.setState({ currentVolume: arrangementView.mainVolume }, () => {
+                                    AppStorage.saveSetting("masterVolume", arrangementView.mainVolume);
+                                });
                             }}
                         />
                         <Label
-                            caption="Metronome"
-                            style={{ marginLeft: "4px" }}
-                            data-tooltip="inherit" />
-                    </Container>
-                    <Container
-                        orientation={Orientation.LeftToRight}
-                        crossAlignment={ChildAlignment.Center}
-                        data-tooltip="Count in before playback starts"
-                        gap={4}
-                    >
-                        <Image
-                            key="countInButton"
-                            src={PredefinedImage.CountIn}
-                            data-tooltip="inherit"
-                            width={24}
-                            height={24}
-                        />
-                        <Checkbox
-                            data-tooltip="inherit"
-                            checked={arrangementView.countIn}
-                            onChange={(checked) => {
-                                arrangementView.countIn = checked;
-                                AppStorage.saveSetting("countIn", checked);
-                            }}
-                        />
-                        <Label
-                            caption="Count In"
-                            style={{ marginLeft: "4px" }}
-                            data-tooltip="inherit"
+                            caption={`${Math.round(currentVolume)}%`}
+                            style={{ fontSize: "80%", marginTop: "4px" }}
                         />
                     </Container>
                 </Container>
-            </Container>
+                <GridCell columnSpan={2}>
+                    <FieldSet legend="Play Options" style={{ flex: "1 1 auto" }} className="flex">
+                        <Container
+                            gap={16}
+                            style={{ flex: "1 1 auto", padding: "0 24px" }}
+                            mainAlignment={ChildAlignment.SpaceBetween}
+                        >
+                            <Container gap={4}>
+                                <Checkbox
+                                    data-tooltip="inherit"
+                                    checked={arrangementView.loop}
+                                    onChange={(checked) => {
+                                        arrangementView.loop = checked;
+                                        AppStorage.saveSetting("loop", checked);
+                                    }}
+                                />
+                                <Label caption="Loop" />
+                            </Container>
+                            <Container gap={4}>
+                                <Checkbox
+                                    data-tooltip="inherit"
+                                    checked={arrangementView.countIn}
+                                    onChange={(checked) => {
+                                        arrangementView.countIn = checked;
+                                        AppStorage.saveSetting("countIn", checked);
+                                    }}
+                                />
+                                <Label caption="Count In" />
+                            </Container>
+                            <Container gap={4}>
+                                <Checkbox
+                                    data-tooltip="inherit"
+                                    checked={arrangementView.useMetronome}
+                                    onChange={(checked) => {
+                                        arrangementView.useMetronome = checked;
+                                        AppStorage.saveSetting("metronome", checked);
+                                    }}
+                                />
+                                <Label caption="Metronome" />
+                            </Container>
+                        </Container>
+                    </FieldSet>
+                </GridCell>
+            </Grid >
         );
     }
 
