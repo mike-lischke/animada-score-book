@@ -5,11 +5,13 @@
 
 import { createRef, type JSX } from "preact";
 
+import { AppStorage, type IUISettings } from "../../../core/AppStorage.js";
 import { Publisher } from "../../../core/Publisher.js";
 import type { RealTime, ScoreBookDataModel } from "../../../core/ScoreBookDataModel.js";
 import type { UndoManager } from "../../../core/UndoManager.js";
 import type { ArrangementPlayer } from "../../../player/ArrangementPlayer.js";
 import type { ScoreBookUiServices } from "../../../player/types.js";
+import { requisitions } from "../../../supplement/Requisitions.js";
 import { Container } from "../framework/Container.js";
 import { ChildAlignment, Orientation } from "../framework/ui-types.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
@@ -22,14 +24,13 @@ export interface IArrangementViewerProps extends ICommonUIProperties {
     dataModel: ScoreBookDataModel;
     services: ScoreBookUiServices;
     undoManager: UndoManager;
-
-    viewerZoom?: number;
 }
 
 interface IArrangementViewerState {
     noteWidth: number;
     trackPlayerCount: number;
     autoFollowIsOn: boolean;
+    viewerZoom: number;
 
     userMightBeTakingControl: boolean;
 }
@@ -66,7 +67,10 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
     public constructor(props: IArrangementViewerProps) {
         super(props);
 
+        const settings = AppStorage.loadUISettings() ?? {};
+        const viewerZoom = settings.viewSettings?.arrangementViewSettings?.zoomLevel ?? 100;
         this.state = {
+            viewerZoom,
             noteWidth: 0,
             trackPlayerCount: props.arrangementPlayer.trackPlayers.size,
             autoFollowIsOn: true,
@@ -78,8 +82,10 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
     }
 
     public override componentDidMount(): void {
-        const { arrangementPlayer, viewerZoom } = this.props;
-        const { autoFollowIsOn } = this.state;
+        const { arrangementPlayer } = this.props;
+        const { autoFollowIsOn, viewerZoom } = this.state;
+
+        requisitions.register("settingsChanged", this.handleSettingsChanged);
 
         setTimeout(this.handleResize, 0);
         this.resizeObserver.observe(this.viewerRef.current!);
@@ -104,8 +110,8 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
     public override componentDidUpdate(prevProps: IArrangementViewerProps, prevState: IArrangementViewerState): void {
         super.componentDidUpdate(prevProps, prevState);
 
-        const { arrangementPlayer, dataModel, viewerZoom } = this.props;
-        const { autoFollowIsOn } = this.state;
+        const { arrangementPlayer, dataModel } = this.props;
+        const { autoFollowIsOn, viewerZoom } = this.state;
 
         if (prevProps.arrangementPlayer !== arrangementPlayer) {
             prevProps.arrangementPlayer.animationEngine.disconnect(this.autoFollow);
@@ -135,11 +141,13 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
             cancelAnimationFrame(this.scrollAnimationFrameId);
             this.scrollAnimationFrameId = 0;
         }
+
+        requisitions.unregister("settingsChanged", this.handleSettingsChanged);
     }
 
     public override render(): JSX.Element {
-        const { arrangementPlayer, dataModel, services, undoManager, viewerZoom } = this.props;
-        const { autoFollowIsOn } = this.state;
+        const { arrangementPlayer, dataModel, services, undoManager } = this.props;
+        const { autoFollowIsOn, viewerZoom } = this.state;
 
         const arrangement = dataModel.arrangement!;
 
@@ -437,5 +445,15 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
                 noteLineTouchEnd: undefined
             };
         }
+    };
+
+    private handleSettingsChanged = (settings: IUISettings): Promise<boolean> => {
+        const { viewerZoom } = this.state;
+        const newZoom = settings.viewSettings?.arrangementViewSettings?.zoomLevel ?? 100;
+        if (newZoom !== viewerZoom) {
+            this.setState({ viewerZoom: newZoom });
+        }
+
+        return Promise.resolve(true);
     };
 }

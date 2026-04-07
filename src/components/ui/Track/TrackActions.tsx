@@ -17,7 +17,7 @@ export interface ITrackControlsProps extends ICommonUIProperties {
     overlayName: string;
 }
 
-export class TrackControls extends UIComponent<ITrackControlsProps> {
+export class TrackActions extends UIComponent<ITrackControlsProps> {
     public render(): ComponentChild {
         const { track, overlayName, undoManager } = this.props;
 

@@ -15,7 +15,7 @@ import { ChildAlignment } from "../framework/ui-types.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
 import { Overlay } from "../Overlay.js";
 import { NoteLine } from "./NoteLine.js";
-import { TrackControls } from "./TrackControls.js";
+import { TrackActions } from "./TrackActions.js";
 
 export interface ITrackViewerCallbacks {
     noteLineTouchStart?: (event: TouchEvent) => void;
@@ -93,7 +93,7 @@ export class TrackViewer extends UIComponent<ITrackViewerProperties, ITrackViewe
                     undoManager={undoManager}
                 />
                 <Overlay name={overlayName}>
-                    <TrackControls
+                    <TrackActions
                         track={track}
                         overlayName={overlayName}
                         undoManager={undoManager}

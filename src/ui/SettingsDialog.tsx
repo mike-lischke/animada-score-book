@@ -5,20 +5,22 @@
 
 import { themeNames } from "../generated/theme-names.js";
 
-import { Component, ComponentChild, createRef } from "preact";
+import { ComponentChild, createRef } from "preact";
+
+import { Button } from "../components/ui/framework/Button.js";
+import { Codicon } from "../components/ui/framework/Codicon.js";
+import { Container } from "../components/ui/framework/Container.js";
 import { Dialog } from "../components/ui/framework/Dialog.js";
 import { Dropdown, type IDropdownItem } from "../components/ui/framework/Dropdown.js";
-import { AppStorage, type IUISettings } from "../core/AppStorage.js";
-import { Codicon } from "../components/ui/framework/Codicon.js";
 import { Icon } from "../components/ui/framework/Icon.js";
-import { Container } from "../components/ui/framework/Container.js";
 import { ChildAlignment, Orientation } from "../components/ui/framework/ui-types.js";
-import { Button } from "../components/ui/framework/Button.js";
+import { UIComponent } from "../components/ui/framework/UIComponent.js";
+import { AppStorage, type IUISettings } from "../core/AppStorage.js";
 import { clampValue } from "../core/utils.js";
-
-export interface ISettingsDialogProperties {
-    onSettingsChanged?: (settings: IUISettings) => void;
-}
+import { requisitions } from "../supplement/Requisitions.js";
+import { Grid } from "../components/ui/framework/Grid.js";
+import { GridCell } from "../components/ui/framework/GridCell.js";
+import { Label } from "../components/ui/framework/Label.js";
 
 interface ISettingsDialogState {
     /** Settings are they are currently. Might not yet be saved. */
@@ -28,10 +30,10 @@ interface ISettingsDialogState {
     previousSettings: IUISettings;
 }
 
-export class SettingsDialog extends Component<ISettingsDialogProperties, ISettingsDialogState> {
+export class SettingsDialog extends UIComponent<{}, ISettingsDialogState> {
     private dialogRef = createRef<Dialog>();
 
-    public constructor(props: ISettingsDialogProperties) {
+    public constructor(props: {}) {
         super(props);
 
         const currentSettings = AppStorage.loadUISettings() ?? {};
@@ -88,6 +90,7 @@ export class SettingsDialog extends Component<ISettingsDialogProperties, ISettin
         return (
             <Dialog
                 ref={this.dialogRef}
+                id="settingsDialog"
                 onClose={this.handleClose}
                 actions={[
                     <Button id="settings-button-cancel" value="cancel" caption="Cancel" />,
@@ -102,64 +105,66 @@ export class SettingsDialog extends Component<ISettingsDialogProperties, ISettin
                     <Icon src={Codicon.Gear} style={{ fontSize: "24px", marginRight: "8px" }} />
                     Settings
                 </Container>
-                <p className="py-4">Here you can change the settings of the application.</p>
-                <Dropdown
-                    caption={`Current Theme: ${currentTheme}`}
-                    items={themeItems}
-                    selectedItem={currentTheme}
-                />
+                <Grid columns={["auto", "1fr"]} id="settingsGrid" columnGap={16}>
+                    <GridCell className="settingName">
+                        <p className="py-4">Select Color Theme</p>
+                    </GridCell>
+                    <GridCell className="settingValue">
+                        <Dropdown
+                            caption={`Current Theme: ${currentTheme}`}
+                            items={themeItems}
+                            selectedItem={currentTheme}
+                        />
+                    </GridCell>
+                    <GridCell className="settingName">
+                        <p className="py-4">Track Viewer Zoom</p>
+                    </GridCell>
+                    <GridCell className="settingValue">
+                        <Label caption={`${currentViewerZoom}%`} style={{ marginRight: "8px" }} />
+                        <Button
+                            className="zoomButton"
+                            caption="-"
+                            onClick={() => {
+                                const newZoom = clampValue(currentViewerZoom - 10, 50, 150);
+                                if (newZoom !== currentViewerZoom) {
+                                    currentSettings.viewSettings ??= {};
+                                    currentSettings.viewSettings.arrangementViewSettings ??= {};
+                                    currentSettings.viewSettings.arrangementViewSettings.zoomLevel = newZoom;
+                                    this.setState({ currentSettings }, () => {
+                                        this.temporarySettingsChange();
+                                    });
+                                }
+                            }}
+                        />
 
-                <p className="py-4">Change the zoom level of the arrangement viewer.</p>
-                <Button
-                    round
-                    imageOnly
-                    className="zoomButton"
-                    onClick={() => {
-                        const newZoom = clampValue(currentViewerZoom - 10, 50, 150);
-                        if (newZoom !== currentViewerZoom) {
-                            currentSettings.viewSettings = currentSettings.viewSettings ?? {};
-                            currentSettings.viewSettings.arrangementViewSettings ??= {};
-                            currentSettings.viewSettings.arrangementViewSettings.zoomLevel = newZoom;
-                            this.setState({ currentSettings }, () => {
-                                this.temporarySettingsChange();
-                            });
-                        }
-                    }}
-                >
-                    <Icon src={Codicon.ZoomOut} />
-                </Button>
+                        <Button
+                            className="zoomButton"
+                            caption="+"
+                            onClick={() => {
+                                const newZoom = clampValue(currentViewerZoom + 10, 50, 150);
+                                if (newZoom !== currentViewerZoom) {
+                                    currentSettings.viewSettings ??= {};
+                                    currentSettings.viewSettings.arrangementViewSettings ??= {};
+                                    currentSettings.viewSettings.arrangementViewSettings.zoomLevel = newZoom;
+                                    this.setState({ currentSettings }, () => {
+                                        this.temporarySettingsChange();
+                                    });
+                                }
+                            }}
+                        />
 
-                <Button
-                    round
-                    imageOnly
-                    className="zoomButton"
-                    onClick={() => {
-                        const newZoom = clampValue(currentViewerZoom + 10, 50, 150);
-                        if (newZoom !== currentViewerZoom) {
-                            currentSettings.viewSettings = currentSettings.viewSettings ?? {};
-                            currentSettings.viewSettings.arrangementViewSettings ??= {};
-                            currentSettings.viewSettings.arrangementViewSettings.zoomLevel = newZoom;
-                            this.setState({ currentSettings }, () => {
-                                this.temporarySettingsChange();
-                            });
-                        }
-                    }}
-                >
-                    <Icon src={Codicon.ZoomIn} />
-                </Button>
-
-                <Button
-                    caption="Reset Zoom"
-                    className="zoomButton"
-                    onClick={() => {
-                        currentSettings.viewSettings = currentSettings.viewSettings ?? {};
-                        currentSettings.viewSettings.arrangementViewSettings ??= {};
-                        currentSettings.viewSettings.arrangementViewSettings.zoomLevel = 100;
-                        this.setState({ currentSettings });
-                    }}
-                >
-                    <Icon src={Codicon.ZoomIn} />
-                </Button>
+                        <Button
+                            caption="Reset"
+                            className="resetButton"
+                            onClick={() => {
+                                currentSettings.viewSettings ??= {};
+                                currentSettings.viewSettings.arrangementViewSettings ??= {};
+                                currentSettings.viewSettings.arrangementViewSettings.zoomLevel = 100;
+                                this.setState({ currentSettings });
+                            }}
+                        />
+                    </GridCell>
+                </Grid>
 
             </Dialog >
         );
@@ -175,7 +180,6 @@ export class SettingsDialog extends Component<ISettingsDialogProperties, ISettin
     }
 
     private handleClose = (returnValue: string): void => {
-        const { onSettingsChanged } = this.props;
         const { currentSettings, previousSettings } = this.state;
 
         if (returnValue === "cancel" || returnValue === "") {
@@ -183,20 +187,23 @@ export class SettingsDialog extends Component<ISettingsDialogProperties, ISettin
             document.documentElement.setAttribute("data-theme", previousSettings.theme ?? "Light+");
 
             const restoredSettings = JSON.parse(JSON.stringify(previousSettings)) as IUISettings;
-            this.setState({ currentSettings: restoredSettings });
+            this.setState({ currentSettings: restoredSettings }, () => {
+                void requisitions.execute("settingsChanged", restoredSettings);
+            });
         } else {
             const newPreviousSettings = JSON.parse(JSON.stringify(currentSettings)) as IUISettings;
             this.setState({ previousSettings: newPreviousSettings });
 
             AppStorage.saveUISettings(currentSettings);
-            onSettingsChanged?.(currentSettings);
+
+            // No need to notify about the settings change here because the settings are applied via
+            // temporarySettingsChange when changing individual settings.
         }
     };
 
     private temporarySettingsChange() {
-        const { onSettingsChanged } = this.props;
         const { currentSettings } = this.state;
 
-        onSettingsChanged?.(currentSettings);
+        void requisitions.execute("settingsChanged", currentSettings);
     }
 }

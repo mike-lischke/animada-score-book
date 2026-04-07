@@ -245,7 +245,7 @@ export class NoteViewer extends UIComponent<INoteViewerProps, INoteViewerState> 
             ? "var(--light-yellow)"    // Light up notes as the music plays
             : selected
                 ? note.track.instrument.color
-                : `color-mix(in hsl, ${note.track.instrument.color} 30%, transparent)`;
+                : `color-mix(in srgb, ${note.track.instrument.color} 50%, white)`;
     };
 
     private isCurrentlyPlaying(): boolean {
