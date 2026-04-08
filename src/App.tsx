@@ -53,6 +53,7 @@ import { MouseHandler } from "./ui/MouseHandler.js";
 import { ScoreLibrary } from "./ui/ScoreLibrary.js";
 import { SelectionManager } from "./ui/SelectionManager.js";
 import { SettingsDialog } from "./ui/SettingsDialog.js";
+import { requisitions } from "./supplement/Requisitions.js";
 
 enum DisplayMode {
     Standard,
@@ -64,7 +65,6 @@ interface IAppState {
     serializedArrangement?: ISerialisedArrangement;
 
     theme: string;
-    viewerZoom: number;
     editingTitle: boolean;
 
     displayMode: DisplayMode;
@@ -96,11 +96,9 @@ export class App extends UIComponent<{}, IAppState> {
 
         const settings = AppStorage.loadUISettings() ?? {};
         const theme = settings.theme ?? "Light+";
-        const viewerZoom = settings.viewSettings?.arrangementViewSettings?.zoomLevel ?? 100;
         this.state = {
             ready: false,
             theme,
-            viewerZoom,
             editingTitle: false,
             displayMode: DisplayMode.Standard,
             sidebarOpen: false,
@@ -118,8 +116,10 @@ export class App extends UIComponent<{}, IAppState> {
 
     public override componentDidMount() {
         const { theme } = this.state;
+
         document.documentElement.setAttribute("data-theme", theme);
         escapeStack.attach();
+        requisitions.register("settingsChanged", this.handleSettingsChanged);
 
         void this.dataModel.initialize().then(() => {
             const serializedArrangement =
@@ -140,10 +140,11 @@ export class App extends UIComponent<{}, IAppState> {
     public override componentWillUnmount() {
         super.componentWillUnmount();
         escapeStack.detach();
+        requisitions.unregister("settingsChanged", this.handleSettingsChanged);
     }
 
     public render() {
-        const { ready, displayMode, sidebarOpen, headerPinned, viewerZoom } = this.state;
+        const { ready, displayMode, sidebarOpen, headerPinned } = this.state;
 
         if (!ready) {
             return <ProgressIndicator />;
@@ -320,7 +321,6 @@ export class App extends UIComponent<{}, IAppState> {
                                     dataModel={this.dataModel}
                                     services={this.services}
                                     undoManager={this.undoManager!}
-                                    viewerZoom={viewerZoom}
                                 />
                             }
                             forceExpanded={headerPinned}
@@ -330,7 +330,7 @@ export class App extends UIComponent<{}, IAppState> {
                 <TooltipProvider />
                 <ValueDialog ref={this.valueDialogRef} />
                 <ConfirmDialog ref={this.confirmDialogRef} />
-                <SettingsDialog ref={this.settingsDialogRef} onSettingsChanged={this.handleSettingsChanged} />
+                <SettingsDialog ref={this.settingsDialogRef} />
             </ErrorBoundary>
         );
     }
@@ -353,10 +353,11 @@ export class App extends UIComponent<{}, IAppState> {
         this.settingsDialogRef.current?.open();
     };
 
-    private handleSettingsChanged = (settings: IUISettings) => {
+    private handleSettingsChanged = (settings: IUISettings): Promise<boolean> => {
         const theme = settings.theme ?? "light";
-        const viewerZoom = settings.viewSettings?.arrangementViewSettings?.zoomLevel ?? 100;
-        this.setState({ theme, viewerZoom });
+        this.setState({ theme });
+
+        return Promise.resolve(true);
     };
 
     private handleScoreLibraryAction = async (action: string, data?: ISbDmScoreFolder | ISbDmScore,

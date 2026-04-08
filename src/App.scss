@@ -12,7 +12,7 @@
 }
 
 :root {
-    --bar-decoration-color: rgba(188, 207, 67, 0.648);
+    --bar-decoration-color: rgb(72, 237, 188);
     --selection-background: rgba(79, 195, 247, 0.4);
 
     --note-height: 54pt;
@@ -257,6 +257,12 @@ h6 {
     transition: left 0.200s linear;
 }
 
+.note-width {
+    flex-basis: var(--note-height);
+    flex-grow: 1;
+    flex-shrink: 0;
+}
+
 .track-viewer > * {
     display: inline-block;
 }
@@ -264,7 +270,7 @@ h6 {
 .trackControlsList {
     overflow: hidden;
     flex: 0 0 calc(var(--note-height) + 6pt);
-    margin: 18pt 12px 0;
+    margin: 28px 12px 0;
     padding-left: 6px;
 }
 
@@ -274,9 +280,8 @@ h6 {
 
     flex-shrink: 0;
     border-radius: 50%;
-    border: 3px solid white;
-    box-shadow: 1px 2px 3pt 1pt #00000033;
-    margin: 8px 6px 8px 0;
+    border: 5px solid white;
+    margin: 10px 6px 10px 0;
 }
 
 .trackControls .trackInstrumentIcon {
@@ -291,12 +296,12 @@ h6 {
 }
 
 .guiderail-timing {
-    margin-top: -1.5pt;
+    flex-basis: calc(var(--note-height) + 4px);
     border-color: var(--color-neutral-content);
-}
 
-.guiderail-timing.odd-beat {
-    background-color: var(--bar-decoration-color);
+    &.odd-beat {
+        background-color: var(--color-base-300);
+    }
 }
 
 .guiderail-timing-content {
@@ -362,14 +367,6 @@ h6 {
     opacity: 0.5;
 }
 
-/* Effective note-widths must be hard-coded in JS as well */
-/* Update in TrackViewer.tsx if you change note dimensions */
-.note-width {
-    flex-basis: var(--note-height);
-    flex-grow: 1;
-    flex-shrink: 0;
-}
-
 .note-viewer {
     height: var(--note-height);
     text-align: center;
@@ -402,10 +399,7 @@ h6 {
     height: 100%;
     display: flex;
     justify-content: center;
-}
-
-.note-details-viewer > * {
-    align-self: center;
+    align-items: center;
 }
 
 .note-details-viewer .note-style-symbol {
@@ -809,4 +803,31 @@ h6 {
     background-color: var(--color-base-100);
     padding: 20px;
     height: 100%;
+}
+
+#settingsDialog #settingsGrid {
+    margin: 16px 0;
+
+    .settingName {
+        justify-items: center;
+    }
+
+    .settingValue {
+        align-items: center;
+        justify-content: flex-end;
+    }
+
+    .zoomButton {
+        border: none;
+        width: 32px;
+        height: 32px;
+        margin: 0 2px;
+    }
+
+    .resetButton {
+        border: none;
+        height: 32px;
+        margin-left: 8px;
+        padding: 0 12px;
+    }
 }

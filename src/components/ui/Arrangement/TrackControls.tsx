@@ -25,7 +25,7 @@ export class TrackControls extends UIComponent<ITrackControlsProperties> {
             return (
                 <Container
                     className="trackControls"
-                    style={{ backgroundColor: track.instrument.color }}
+                    style={{ borderColor: track.instrument.color }}
                     orientation={Orientation.LeftToRight}
                     mainAlignment={ChildAlignment.Center}
                     crossAlignment={ChildAlignment.Center}
