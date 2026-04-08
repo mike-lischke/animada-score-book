@@ -106,12 +106,12 @@ class Requisitions {
                 promises.push(callback(parameter));
             });
 
-            const results = await Promise.all(promises);
+            const results = await Promise.allSettled(promises);
 
             // Return a true value for the promise if at least one callback handled the request
             // (by returning true).
             return Promise.resolve(results.some((value) => {
-                return value;
+                return value.status === "fulfilled" && value.value;
             }));
         }
 
