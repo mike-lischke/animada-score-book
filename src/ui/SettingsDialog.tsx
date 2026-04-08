@@ -68,8 +68,9 @@ export class SettingsDialog extends UIComponent<{}, ISettingsDialogState> {
                 label: themeName,
                 onClick: () => {
                     currentSettings.theme = themeName;
-                    this.setState({ currentSettings });
-                    this.temporarySettingsChange();
+                    this.setState({ currentSettings }, () => {
+                        this.temporarySettingsChange();
+                    });
                 },
             });
         });
@@ -79,8 +80,9 @@ export class SettingsDialog extends UIComponent<{}, ISettingsDialogState> {
                 label: themeName,
                 onClick: () => {
                     currentSettings.theme = themeName;
-                    this.setState({ currentSettings });
-                    this.temporarySettingsChange();
+                    this.setState({ currentSettings }, () => {
+                        this.temporarySettingsChange();
+                    });
                 },
             });
         });

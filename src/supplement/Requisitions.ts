@@ -111,6 +111,11 @@ class Requisitions {
             // Return a true value for the promise if at least one callback handled the request
             // (by returning true).
             return Promise.resolve(results.some((value) => {
+                if (value.status === "rejected") {
+                    console.error(`Requisition callback for request type ${requestType} failed with error:`,
+                        value.reason);
+                }
+
                 return value.status === "fulfilled" && value.value;
             }));
         }
