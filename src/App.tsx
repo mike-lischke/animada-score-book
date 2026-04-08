@@ -64,7 +64,6 @@ interface IAppState {
     ready: boolean;
     serializedArrangement?: ISerialisedArrangement;
 
-    theme: string;
     editingTitle: boolean;
 
     displayMode: DisplayMode;
@@ -94,11 +93,8 @@ export class App extends UIComponent<{}, IAppState> {
     public constructor(props: {}) {
         super(props);
 
-        const settings = AppStorage.loadUISettings() ?? {};
-        const theme = settings.theme ?? "Light+";
         this.state = {
             ready: false,
-            theme,
             editingTitle: false,
             displayMode: DisplayMode.Standard,
             sidebarOpen: false,
@@ -115,8 +111,7 @@ export class App extends UIComponent<{}, IAppState> {
     }
 
     public override componentDidMount() {
-        const { theme } = this.state;
-
+        const theme = AppStorage.loadUISettings()?.theme ?? "Light+";
         document.documentElement.setAttribute("data-theme", theme);
         escapeStack.attach();
         requisitions.register("settingsChanged", this.handleSettingsChanged);
@@ -130,9 +125,9 @@ export class App extends UIComponent<{}, IAppState> {
     }
 
     public override shouldComponentUpdate(nextProps: {}, nextState: IAppState): boolean {
-        const { theme, displayMode, sidebarOpen, ready, headerPinned } = this.state;
+        const { displayMode, sidebarOpen, ready, headerPinned } = this.state;
 
-        return theme != nextState.theme || displayMode !== nextState.displayMode
+        return displayMode !== nextState.displayMode
             || sidebarOpen !== nextState.sidebarOpen || ready !== nextState.ready
             || headerPinned !== nextState.headerPinned;
     }
@@ -354,8 +349,8 @@ export class App extends UIComponent<{}, IAppState> {
     };
 
     private handleSettingsChanged = (settings: IUISettings): Promise<boolean> => {
-        const theme = settings.theme ?? "light";
-        this.setState({ theme });
+        const theme = settings.theme ?? "Light+";
+        document.documentElement.setAttribute("data-theme", theme);
 
         return Promise.resolve(true);
     };

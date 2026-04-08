@@ -16,6 +16,7 @@
         "resolveJsonModule": true,
         "isolatedModules": true,
         "noEmit": true,
+        "rootDir": "..",
         "noImplicitAny": true,
         "sourceRoot": "src",
         "strictNullChecks": true,
@@ -26,7 +27,6 @@
             "WebWorker"
         ],
         "skipLibCheck": true,
-        "allowSyntheticDefaultImports": false,
         "strictPropertyInitialization": true,
         "noFallthroughCasesInSwitch": false,
         "paths": {
@@ -36,10 +36,10 @@
             "react-dom": [
                 "../../node_modules/preact/compat/"
             ]
-        },
-        "baseUrl": "./",
+        }
     },
     "include": [
+        "../src/**/*",
         "**/*",
     ],
     "exclude": [],

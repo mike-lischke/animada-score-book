@@ -25,7 +25,6 @@
             "dom",
         ],
         "skipLibCheck": true,
-        "allowSyntheticDefaultImports": false,
         "strictPropertyInitialization": true,
         "noFallthroughCasesInSwitch": false,
         "paths": {

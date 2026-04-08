@@ -67,9 +67,10 @@ export class SettingsDialog extends UIComponent<{}, ISettingsDialogState> {
             themeItems.push({
                 label: themeName,
                 onClick: () => {
-                    document.documentElement.setAttribute("data-theme", themeName);
                     currentSettings.theme = themeName;
-                    this.setState({ currentSettings });
+                    this.setState({ currentSettings }, () => {
+                        this.temporarySettingsChange();
+                    });
                 },
             });
         });
@@ -78,9 +79,10 @@ export class SettingsDialog extends UIComponent<{}, ISettingsDialogState> {
             themeItems.push({
                 label: themeName,
                 onClick: () => {
-                    document.documentElement.setAttribute("data-theme", themeName);
                     currentSettings.theme = themeName;
-                    this.setState({ currentSettings });
+                    this.setState({ currentSettings }, () => {
+                        this.temporarySettingsChange();
+                    });
                 },
             });
         });
@@ -160,7 +162,9 @@ export class SettingsDialog extends UIComponent<{}, ISettingsDialogState> {
                                 currentSettings.viewSettings ??= {};
                                 currentSettings.viewSettings.arrangementViewSettings ??= {};
                                 currentSettings.viewSettings.arrangementViewSettings.zoomLevel = 100;
-                                this.setState({ currentSettings });
+                                this.setState({ currentSettings }, () => {
+                                    this.temporarySettingsChange();
+                                });
                             }}
                         />
                     </GridCell>
@@ -183,10 +187,8 @@ export class SettingsDialog extends UIComponent<{}, ISettingsDialogState> {
         const { currentSettings, previousSettings } = this.state;
 
         if (returnValue === "cancel" || returnValue === "") {
-            // Reset the theme to the original value if the user cancelled the dialog.
-            document.documentElement.setAttribute("data-theme", previousSettings.theme ?? "Light+");
-
             const restoredSettings = JSON.parse(JSON.stringify(previousSettings)) as IUISettings;
+            restoredSettings.theme ??= "Light+";
             this.setState({ currentSettings: restoredSettings }, () => {
                 void requisitions.execute("settingsChanged", restoredSettings);
             });

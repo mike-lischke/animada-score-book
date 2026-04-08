@@ -9,8 +9,10 @@ import {
     SbDmEntityType, type ISbDmArrangement, type ISbDmNote, type ISbDmTrack, type ITiming, type RealTime
 } from "../../src/core/ScoreBookDataModel.js";
 import type { INoteStyle, IPolyrhythm, ITimeParams, Mutable } from "../../src/core/types/general.js";
+import type { ICallbackEvent } from "../../src/player/types.js";
+import type { TimeCoordinator } from "../../src/player/TimeCoordinator.js";
 import { TrackPlayer } from "../../src/player/TrackPlayer.js";
-import type { ILoopInterval, ITimeCoordinator } from "../../src/player/types.js";
+import type { ILoopInterval } from "../../src/player/types.js";
 
 type Sub = (...args: unknown[]) => void;
 
@@ -20,6 +22,13 @@ const makeSubscribable = () => {
     return {
         subscribe: (cb: Sub) => {
             subs.push(cb);
+
+            return () => {
+                const i = subs.indexOf(cb);
+                if (i !== -1) {
+                    subs.splice(i, 1);
+                }
+            };
         },
         unsubscribe: (cb: Sub) => {
             const i = subs.indexOf(cb);
@@ -36,23 +45,33 @@ const makeSubscribable = () => {
  * @param realTimeLength The real time length of the arrangement.
  * @returns The stub coordinator.
  */
-const makeTimeCoordinator = (realTimeLength: RealTime = 4): ITimeCoordinator => {
+const makeTimeCoordinator = (realTimeLength: RealTime = 4): TimeCoordinator => {
     return {
         ...makeSubscribable(),
-        realTimeLength,
+        metrics: {
+            realTimeLength,
+            secondsPerBar: 1,
+            secondsPerStep: 0.1,
+            bars: 1,
+            beatsPerBar: 4,
+            stepsPerBar: 16,
+            stepsPerPulse: 2,
+        },
         convertToRealTime: (timing: ITiming) => {
             return ((timing.bar - 1) * 1) + ((timing.step - 1) * 0.1);
         },
         convertToLoopIntervals: () => {
             return [] as ILoopInterval[];
         },
-        convertToAudioTime: (realTime) => {
+        convertToAudioTime: (realTime: RealTime) => {
             return realTime;
         },
         convertToLoopProgress: () => {
             return 0;
-        }
-    };
+        },
+        reset: vi.fn(),
+        publish: vi.fn(),
+    } as unknown as TimeCoordinator;
 };
 
 const makeNote = (
@@ -83,7 +102,7 @@ const makeTrack = (
         pulse: "2/8",
         stepResolution: 16,
         timings: [],
-        isValid: () => {
+        isValid: (_timing: ITiming) => {
             return true;
         },
         ...makeSubscribable(),
@@ -94,8 +113,14 @@ const makeTrack = (
         title: "Test",
         timeParams,
         tracks: [] as ISbDmTrack[],
+        mainVolume: 100,
+        loop: false,
+        useMetronome: false,
+        countIn: false,
         ...makeSubscribable(),
-        addTrack: vi.fn(),
+        addTrack: vi.fn(() => {
+            return track;
+        }),
         removeTrack: vi.fn(),
         applyArrangementSnapshot: vi.fn(),
     };
@@ -116,7 +141,6 @@ const makeTrack = (
                 expandedOnce: false,
                 isLeaf: true,
             },
-            audioPath: "",
             range: [0, 10],
             displayOrder: 1,
             displayName: "Test",
@@ -125,9 +149,8 @@ const makeTrack = (
                 id: 1,
                 filePath: "",
             },
-            colourGroup: "blue",
+            color: "blue",
             noteStyles: {},
-            noteStyleCount: 0,
             ...makeSubscribable()
         },
         notes: [],
@@ -210,8 +233,8 @@ describe("TrackPlayer", () => {
         const player = new TrackPlayer(track, makeTimeCoordinator());
 
         const events = player.getEvents({ start: 0, end: 1 });
-        const polyCallback = events.find((e): e is { callback: () => void; realTime: number; } => {
-            return "callback" in e && e.realTime > 0;
+        const polyCallback = events.find((e): e is ICallbackEvent => {
+            return e.kind === "callback" && e.realTime > 0;
         });
         expect(polyCallback).toBeTruthy();
 

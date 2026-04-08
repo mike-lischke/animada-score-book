@@ -64,8 +64,14 @@ class Requisitions {
 
         const list = this.registry.get(requestType);
         if (list) {
+            if (callback === undefined) {
+                this.registry.delete(requestType);
+
+                return;
+            }
+
             const newList = list.filter((candidate) => {
-                return callback === undefined || candidate !== callback;
+                return candidate !== callback;
             });
 
             if (newList.length > 0) {
@@ -106,13 +112,23 @@ class Requisitions {
                 promises.push(callback(parameter));
             });
 
-            const results = await Promise.all(promises);
+            const results = await Promise.allSettled(promises);
+            let handled = false;
+
+            results.forEach((value) => {
+                if (value.status === "rejected") {
+                    console.error(`Requisition callback for request type ${requestType} failed with error:`,
+                        value.reason);
+
+                    return;
+                }
+
+                handled ||= value.value;
+            });
 
             // Return a true value for the promise if at least one callback handled the request
             // (by returning true).
-            return Promise.resolve(results.some((value) => {
-                return value;
-            }));
+            return Promise.resolve(handled);
         }
 
         return Promise.resolve(false);
