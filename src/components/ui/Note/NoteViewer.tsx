@@ -241,11 +241,19 @@ export class NoteViewer extends UIComponent<INoteViewerProps, INoteViewerState> 
     private useBackgroundColor = (isCurrent: boolean, selected: boolean): string => {
         const { note } = this.props;
 
-        return isCurrent
-            ? "var(--light-yellow)"    // Light up notes as the music plays
-            : selected
-                ? note.track.instrument.color
-                : `color-mix(in srgb, ${note.track.instrument.color} 50%, white)`;
+        if (isCurrent) {
+            return "var(--light-yellow)";    // Light up notes as the music plays
+        }
+
+        if (selected) {
+            return note.track.instrument.color;
+        }
+
+        if (note.noteStyle?.symbol) {
+            return `color-mix(in srgb, ${note.track.instrument.color} 50%, white)`;
+        }
+
+        return "transparent";
     };
 
     private isCurrentlyPlaying(): boolean {

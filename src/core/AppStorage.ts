@@ -28,11 +28,9 @@ export interface IUISettings {
     theme?: string;
 
     /**
-     * Initial score to load when the application starts.
-     * Undefined means start with an empty score. A string means to load the score from the given URL.
-     * If the string is empty, the application will try to load the last opened score from localStorage, if available.
+     * The score the user has currently opened - stored as snapshot.
      */
-    initialScore?: string;
+    currentScore?: string;
 
     /** UI element specific settings. */
     viewSettings?: IViewSettings;

@@ -119,7 +119,7 @@ export class App extends UIComponent<{}, IAppState> {
         void this.dataModel.initialize().then(() => {
             const serializedArrangement =
                 getSerialisedArrangementFromParams(new URL(window.location.href).searchParams);
-            this.loadScorebook(serializedArrangement ?? newSong);
+            this.loadScorebook(serializedArrangement);
             this.setState({ ready: true });
         });
     }
@@ -562,7 +562,7 @@ export class App extends UIComponent<{}, IAppState> {
         return true;
     };
 
-    private loadScorebook(arrangementToLoad: ISerialisedArrangement) {
+    private loadScorebook(arrangementToLoad?: ISerialisedArrangement) {
         if (this.arrangementPlayer) {
             const arrangementView = this.dataModel.arrangement!;
             arrangementView.timeParams.unsubscribe(this.handleTimeParamsChanged);
@@ -570,6 +570,19 @@ export class App extends UIComponent<{}, IAppState> {
             this.arrangementPlayer.dispose();
         }
 
+        if (!arrangementToLoad) {
+            // Try to load the last opened score from localStorage, if available.
+            const lastScoreString = AppStorage.loadUISettings()?.currentScore;
+            if (lastScoreString) {
+                try {
+                    arrangementToLoad = JSON.parse(lastScoreString) as ISerialisedArrangement;
+                } catch {
+                    // Failed to parse, ignore and start with a new song.
+                }
+            }
+        }
+
+        arrangementToLoad = arrangementToLoad ?? newSong;
         const arrangement = this.dataModel.loadArrangement(arrangementToLoad);
         this.undoManager = new UndoManager(this.dataModel);
         this.arrangementPlayer = new ArrangementPlayer(this.dataModel);
@@ -579,8 +592,13 @@ export class App extends UIComponent<{}, IAppState> {
             document.title = arrangement.title + " - Animada Score Book";
         }
 
-        this.setState({ serializedArrangement: arrangementToLoad });
-
+        this.setState({ serializedArrangement: arrangementToLoad }, () => {
+            if (arrangementToLoad === newSong) {
+                AppStorage.saveSetting("currentScore", undefined);
+            } else {
+                AppStorage.saveSetting("currentScore", JSON.stringify(arrangementToLoad));
+            }
+        });
     }
 
     private initEventHandlers(): void {
