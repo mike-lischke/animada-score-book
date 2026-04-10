@@ -125,6 +125,11 @@ export class BarTrackRow extends UIComponent<IBarTrackRowProps, IBarTrackRowStat
 
     /**
      * Determines which part of the polyrhythm bracket to render in this bar.
+     *
+     * @param polyrhythm The polyrhythm to evaluate.
+     * @param barNumber The current bar number.
+     *
+     * @returns a flag indicating whether this is the "start", "middle", "end", or "full" fragment of the polyrhythm.
      */
     private getFragmentType(polyrhythm: IPolyrhythm, barNumber: number): PolyrhythmFragmentType {
         const startBar = polyrhythm.start.timing.bar;
@@ -150,9 +155,14 @@ export class BarTrackRow extends UIComponent<IBarTrackRowProps, IBarTrackRowStat
      *
      * The polyrhythm's synthetic notes are distributed evenly across the steps it spans.
      * We find the fraction of steps that fall in this bar and return the corresponding slice.
+     *
+     * @param polyrhythm The polyrhythm for which to compute the note slice.
+     * @param barNumber The bar number for which to compute the slice.
+     * @param timeParams The arrangement's time parameters, needed to determine steps per bar.
+     *
+     * @returns An array of notes corresponding to the given bar.
      */
-    private computeNoteSlice(polyrhythm: IPolyrhythm, barNumber: number,
-        timeParams: ITimeParamsView): ISbDmNote[] {
+    private computeNoteSlice(polyrhythm: IPolyrhythm, barNumber: number, timeParams: ITimeParamsView): ISbDmNote[] {
         const { notes } = polyrhythm;
         if (notes.length === 0) {
             return [];
@@ -160,8 +170,8 @@ export class BarTrackRow extends UIComponent<IBarTrackRowProps, IBarTrackRowStat
 
         const stepsPerBar = calculateStepsPerBar(timeParams.timeSignature, timeParams.stepResolution);
 
-        const globalStep = (timing: { bar: number; step: number }) => {
-            return (timing.bar - 1) * stepsPerBar + (timing.step - 1);
+        const globalStep = (timing: { bar: number; step: number; }) => {
+            return ((timing.bar - 1) * stepsPerBar) + (timing.step - 1);
         };
 
         const polyStart = globalStep(polyrhythm.start.timing);
@@ -208,7 +218,7 @@ export class BarTrackRow extends UIComponent<IBarTrackRowProps, IBarTrackRowStat
      * correspond to the polyrhythm's boundaries in this bar.
      */
     private repositionFragments(): void {
-        const { track, barNumber, timeParams } = this.props;
+        const { track, barNumber } = this.props;
         const rowEl = this.rowRef.current;
         if (!rowEl) {
             return;
