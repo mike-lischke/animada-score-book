@@ -12,6 +12,7 @@ import type { UndoManager } from "../../../core/UndoManager.js";
 import type { ArrangementPlayer } from "../../../player/ArrangementPlayer.js";
 import type { ScoreBookUiServices } from "../../../player/types.js";
 import { requisitions } from "../../../supplement/Requisitions.js";
+import { BarViewer } from "../Bar/BarViewer.js";
 import { Container } from "../framework/Container.js";
 import { ChildAlignment, Orientation } from "../framework/ui-types.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
@@ -31,6 +32,7 @@ interface IArrangementViewerState {
     trackPlayerCount: number;
     autoFollowIsOn: boolean;
     viewerZoom: number;
+    viewMode: "track" | "bar";
 
     userMightBeTakingControl: boolean;
 }
@@ -74,6 +76,7 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
             noteWidth: 0,
             trackPlayerCount: props.arrangementPlayer.trackPlayers.size,
             autoFollowIsOn: true,
+            viewMode: "track",
             userMightBeTakingControl: false
         };
 
@@ -147,9 +150,84 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
 
     public override render(): JSX.Element {
         const { arrangementPlayer, dataModel, services, undoManager } = this.props;
-        const { autoFollowIsOn, viewerZoom } = this.state;
+        const { autoFollowIsOn, viewerZoom, viewMode } = this.state;
 
         const arrangement = dataModel.arrangement!;
+
+        const isBarMode = viewMode === "bar";
+        const barCount = arrangement.timeParams.length;
+
+        const contentHost = isBarMode
+            ? (
+                <Container
+                    id="trackViewerContentHost"
+                    orientation={Orientation.LeftToRight}
+                    crossAlignment={ChildAlignment.Start}
+                >
+                    {/* In bar mode the play-range highlight is intentionally kept invisible; playBeam still
+                        works. The ref must be attached to a mounted element so autoFollow can update it. */}
+                    <Container
+                        id="trackViewerDecorations"
+                        crossAlignment={ChildAlignment.Stretch}
+                        className="hidden"
+                    >
+                        <div id="playRange" ref={this.playRangeRef} />
+                    </Container>
+                    {Array.from({ length: barCount }, (_, i) => {
+                        const barNumber = i + 1;
+
+                        return (
+                            <BarViewer
+                                key={barNumber}
+                                barNumber={barNumber}
+                                arrangement={arrangement}
+                                arrangementPlayer={arrangementPlayer}
+                                services={services}
+                                undoManager={undoManager}
+                                dataModel={dataModel}
+                            />
+                        );
+                    })}
+                    <Container id="trackViewerDecorationOverlay" >
+                        <div id="playBeam" ref={this.playBeamRef} />
+                    </Container>
+                </Container>
+            )
+            : (
+                <Container
+                    id="trackViewerContentHost"
+                    orientation={Orientation.TopDown}
+                    crossAlignment={ChildAlignment.Start}
+                >
+                    <Container
+                        id="trackViewerDecorations"
+                        crossAlignment={ChildAlignment.Stretch}
+                    >
+                        <div id="playRange" ref={this.playRangeRef} />
+                    </Container>
+                    <GuideRail arrangementView={arrangement} />
+                    {
+                        arrangement.tracks.map((track) => {
+                            return arrangementPlayer.trackPlayers.get(track)!;
+                        }).map((trackPlayer) => {
+                            return (
+                                <TrackViewer
+                                    trackPlayer={trackPlayer}
+                                    callbacks={this.useTrackViewerTouchInterpretation()}
+                                    key={trackPlayer.track.id}
+                                    arrangementPlayer={arrangementPlayer}
+                                    dataModel={dataModel}
+                                    services={services}
+                                    undoManager={undoManager}
+                                />
+                            );
+                        })
+                    }
+                    <Container id="trackViewerDecorationOverlay" >
+                        <div id="playBeam" ref={this.playBeamRef} />
+                    </Container>
+                </Container>
+            );
 
         return (
             <Container
@@ -177,45 +255,26 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
                             onScroll={this.updateScrollShadows}
                             onWheel={autoFollowIsOn ? this.handleWheel : undefined}
                         >
-                            <Container
-                                id="trackViewerContentHost"
-                                orientation={Orientation.TopDown}
-                                crossAlignment={ChildAlignment.Start}
-                            >
-                                <Container
-                                    id="trackViewerDecorations"
-                                    crossAlignment={ChildAlignment.Stretch}
-                                >
-                                    <div id="playRange" ref={this.playRangeRef} />
-                                </Container>
-                                <GuideRail arrangementView={arrangement} />
-                                {
-                                    arrangement.tracks.map((track) => {
-                                        return arrangementPlayer.trackPlayers.get(track)!;
-                                    }).map((trackPlayer) => {
-                                        return (
-                                            <TrackViewer
-                                                trackPlayer={trackPlayer}
-                                                callbacks={this.useTrackViewerTouchInterpretation()}
-                                                key={trackPlayer.track.id}
-                                                arrangementPlayer={arrangementPlayer}
-                                                dataModel={dataModel}
-                                                services={services}
-                                                undoManager={undoManager}
-                                            />
-                                        );
-                                    })
-                                }
-                                <Container id="trackViewerDecorationOverlay" >
-                                    <div id="playBeam" ref={this.playBeamRef} />
-                                </Container>
-                            </Container>
+                            {contentHost}
                         </Container>
                     </Container>
                 </Container>
+                <button
+                    className="bar-view-toggle"
+                    onClick={this.toggleViewMode}
+                    title={isBarMode ? "Switch to track view" : "Switch to bar view"}
+                >
+                    {isBarMode ? "Track view" : "Bar view"}
+                </button>
             </Container >
         );
     }
+
+    private toggleViewMode = () => {
+        this.setState((prev) => {
+            return { viewMode: prev.viewMode === "track" ? "bar" : "track" };
+        });
+    };
 
     private handleResize = () => {
         this.updateScrollShadows();
