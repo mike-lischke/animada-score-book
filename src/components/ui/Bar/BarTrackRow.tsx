@@ -176,7 +176,8 @@ export class BarTrackRow extends UIComponent<IBarTrackRowProps, IBarTrackRowStat
         const barGlobalEnd = barNumber * stepsPerBar; // exclusive
 
         const overlapStart = Math.max(polyStart, barGlobalStart);
-        const overlapEnd = Math.min(polyEnd + 1, barGlobalEnd); // +1 to make polyEnd inclusive
+        // polyEnd is an inclusive step index; +1 converts it to an exclusive boundary for Math.min
+        const overlapEnd = Math.min(polyEnd + 1, barGlobalEnd);
         const stepsInBar = Math.max(0, overlapEnd - overlapStart);
 
         if (stepsInBar <= 0) {
