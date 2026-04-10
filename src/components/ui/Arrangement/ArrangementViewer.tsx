@@ -187,7 +187,6 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
                                     crossAlignment={ChildAlignment.Stretch}
                                 >
                                     <div id="playRange" ref={this.playRangeRef} />
-                                    <div id="playBeam" ref={this.playBeamRef} />
                                 </Container>
                                 <GuideRail arrangementView={arrangement} />
                                 {
@@ -207,9 +206,8 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
                                         );
                                     })
                                 }
-                                <Container
-                                    id="trackViewerSelectionOverlay"
-                                >
+                                <Container id="trackViewerDecorationOverlay" >
+                                    <div id="playBeam" ref={this.playBeamRef} />
                                 </Container>
                             </Container>
                         </Container>

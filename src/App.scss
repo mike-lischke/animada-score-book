@@ -219,7 +219,8 @@ h6 {
     margin: 8px 0;
 }
 
-#trackViewerDecorations {
+#trackViewerDecorations,
+#trackViewerDecorationOverlay {
     position: absolute;
     flex-grow: 1;
 
@@ -230,8 +231,8 @@ h6 {
 
     pointer-events: none;
 
-    background-image: linear-gradient(to right, var(--color-base-100) 3px, transparent 1px);
-    background-size: calc(16 * var(--note-height)) 100%;
+    background-image: linear-gradient(to right, var(--color-neutral) 3px, transparent 1px);
+    background-size: calc(16 * (var(--note-height) + 4px)) 100%;
 }
 
 #playBeam {
@@ -291,7 +292,6 @@ h6 {
 }
 
 .guiderail {
-    margin-left: calc(var(--track-meta-width) + 1.5pt);
     height: 20pt;
 }
 
