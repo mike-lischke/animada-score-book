@@ -196,10 +196,11 @@ export class BarTrackRow extends UIComponent<IBarTrackRowProps, IBarTrackRowStat
             sliceStart += Math.round(notes.length * (bSteps / totalSteps));
         }
 
-        const sliceCount = Math.min(notes.length - sliceStart,
-            Math.round(notes.length * (stepsInBar / totalSteps)));
+        const clampedSliceStart = Math.min(notes.length, Math.max(0, sliceStart));
+        const sliceCount = Math.max(0, Math.min(notes.length - clampedSliceStart,
+            Math.round(notes.length * (stepsInBar / totalSteps))));
 
-        return notes.slice(sliceStart, sliceStart + sliceCount);
+        return notes.slice(clampedSliceStart, clampedSliceStart + sliceCount);
     }
 
     /**
