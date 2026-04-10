@@ -164,15 +164,15 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
                     orientation={Orientation.LeftToRight}
                     crossAlignment={ChildAlignment.Start}
                 >
-                // In bar mode the play-range highlight is intentionally kept invisible; playBeam still
-                // works. The ref must be attached to a mounted element so autoFollow can update it.
-                <Container
-                    id="trackViewerDecorations"
-                    crossAlignment={ChildAlignment.Stretch}
-                    className="hidden"
-                >
-                    <div id="playRange" ref={this.playRangeRef} />
-                </Container>
+                    {/* In bar mode the play-range highlight is intentionally kept invisible; playBeam still
+                        works. The ref must be attached to a mounted element so autoFollow can update it. */}
+                    <Container
+                        id="trackViewerDecorations"
+                        crossAlignment={ChildAlignment.Stretch}
+                        className="hidden"
+                    >
+                        <div id="playRange" ref={this.playRangeRef} />
+                    </Container>
                     {Array.from({ length: barCount }, (_, i) => {
                         const barNumber = i + 1;
 
