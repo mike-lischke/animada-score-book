@@ -113,7 +113,7 @@ export class SettingsDialog extends UIComponent<{}, ISettingsDialogState> {
                     </GridCell>
                     <GridCell className="settingValue">
                         <Dropdown
-                            caption={`Current Theme: ${currentTheme}`}
+                            caption={currentTheme}
                             items={themeItems}
                             selectedItem={currentTheme}
                         />

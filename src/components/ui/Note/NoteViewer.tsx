@@ -264,7 +264,7 @@ export class NoteViewer extends UIComponent<INoteViewerProps, INoteViewerState> 
             return trackPlayer.currentPolyrhythmNote === note;
         }
 
-        if (arrangementPlayer.currentTiming === null) {
+        if (!arrangementPlayer.currentTiming) {
             return false;
         }
 

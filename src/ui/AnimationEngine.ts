@@ -46,7 +46,7 @@ export class AnimationEngine extends Publisher {
     private start() {
         if (this.realtimeProvider.state === "playing") {
             this.publish();
-            this.loop();
+            this.runAnimations();
         }
     }
 
@@ -60,10 +60,15 @@ export class AnimationEngine extends Publisher {
 
     private loop() {
         this.nextAnimationId = requestAnimationFrame(() => {
-            this.animations.forEach((animation) => {
-                animation(this.realtimeProvider.currentTime);
-            });
-            this.loop();
+            this.runAnimations();
         });
+    }
+
+    private runAnimations() {
+        const realTime = this.realtimeProvider.currentTime;
+        this.animations.forEach((animation) => {
+            animation(realTime);
+        });
+        this.loop();
     }
 }

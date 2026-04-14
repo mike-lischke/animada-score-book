@@ -11,12 +11,13 @@ import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.
 
 export interface ITrackControlsProperties extends ICommonUIProperties {
     tracks: ISbDmTrack[];
+    innerRef?: preact.RefObject<HTMLDivElement>;
 }
 
 /** Icon and track-specific controls. */
 export class TrackControls extends UIComponent<ITrackControlsProperties> {
     public render() {
-        const { tracks } = this.props;
+        const { tracks, innerRef } = this.props;
 
         const controls = tracks.map((track) => {
             const instrumentName = track.instrument.displayName;
@@ -43,7 +44,7 @@ export class TrackControls extends UIComponent<ITrackControlsProperties> {
         });
 
         return (
-            <Container className="trackControlsList" orientation={Orientation.TopDown}>
+            <Container innerRef={innerRef} className="trackControlsList" orientation={Orientation.TopDown}>
                 {controls}
             </Container>
         );

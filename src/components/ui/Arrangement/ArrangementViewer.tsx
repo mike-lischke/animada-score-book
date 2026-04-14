@@ -16,9 +16,9 @@ import { BarViewer } from "../Bar/BarViewer.js";
 import { Container } from "../framework/Container.js";
 import { ChildAlignment, Orientation } from "../framework/ui-types.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
-import { GuideRail } from "../GuideRail/GuideRail.js";
-import { TrackViewer, type ITrackViewerCallbacks } from "../Track/TrackViewer.js";
+import { type ITrackViewerCallbacks } from "../Track/TrackViewer.js";
 import { TrackControls } from "./TrackControls.js";
+import { clampValue } from "../../../core/utils.js";
 
 export interface IArrangementViewerProps extends ICommonUIProperties {
     arrangementPlayer: ArrangementPlayer;
@@ -28,21 +28,26 @@ export interface IArrangementViewerProps extends ICommonUIProperties {
 }
 
 interface IArrangementViewerState {
+    /** Determined from DOM, includes border and margin (@100% zoom). */
     noteWidth: number;
+
+    /** Determined from DOM, includes border and margin (@100% zoom). */
+    barWidth: number;
+
     trackPlayerCount: number;
     autoFollowIsOn: boolean;
     viewerZoom: number;
-    viewMode: "track" | "bar";
 
     userMightBeTakingControl: boolean;
 }
 
 export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArrangementViewerState> {
     private viewerRef = createRef<HTMLDivElement>();
-    private shadowRef = createRef<HTMLDivElement>();
     private playBeamRef = createRef<HTMLDivElement>();
     private playRangeRef = createRef<HTMLDivElement>();
     private trackViewerContainerRef = createRef<HTMLDivElement>();
+    private trackControlsRef = createRef<HTMLDivElement>();
+    private viewerContentHostRef = createRef<HTMLDivElement>();
 
     private contentWidthPublisher = new Publisher();
 
@@ -74,9 +79,9 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         this.state = {
             viewerZoom,
             noteWidth: 0,
+            barWidth: 0,
             trackPlayerCount: props.arrangementPlayer.trackPlayers.size,
             autoFollowIsOn: true,
-            viewMode: "track",
             userMightBeTakingControl: false
         };
 
@@ -104,8 +109,6 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         // Otherwise, set up the subscription which will turn it on again.
         this.addSubscription(arrangementPlayer.animationEngine, this.animationEngineSubscription, true);
 
-        this.updateScrollShadows();
-
         this.autoFollowTransitionDurationMs = this.getPlayRangeTransitionDurationMs();
         this.trackViewerContainerRef.current!.style.zoom = `${viewerZoom}%`;
     }
@@ -128,7 +131,6 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
             this.addSubscription(arrangementPlayer.animationEngine, this.animationEngineSubscription);
         }
 
-        this.updateScrollShadows();
         this.trackViewerContainerRef.current!.style.zoom = `${viewerZoom}%`;
     }
 
@@ -150,84 +152,45 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
 
     public override render(): JSX.Element {
         const { arrangementPlayer, dataModel, services, undoManager } = this.props;
-        const { autoFollowIsOn, viewerZoom, viewMode } = this.state;
+        const { autoFollowIsOn, viewerZoom } = this.state;
 
         const arrangement = dataModel.arrangement!;
 
-        const isBarMode = viewMode === "bar";
         const barCount = arrangement.timeParams.length;
 
-        const contentHost = isBarMode
-            ? (
+        const contentHost = (
+            <Container
+                id="trackViewerContentHost"
+                innerRef={this.viewerContentHostRef}
+                orientation={Orientation.LeftToRight}
+                crossAlignment={ChildAlignment.Start}
+            >
                 <Container
-                    id="trackViewerContentHost"
-                    orientation={Orientation.LeftToRight}
-                    crossAlignment={ChildAlignment.Start}
+                    id="trackViewerDecorations"
+                    crossAlignment={ChildAlignment.Stretch}
                 >
-                    {/* In bar mode the play-range highlight is intentionally kept invisible; playBeam still
-                        works. The ref must be attached to a mounted element so autoFollow can update it. */}
-                    <Container
-                        id="trackViewerDecorations"
-                        crossAlignment={ChildAlignment.Stretch}
-                        className="hidden"
-                    >
-                        <div id="playRange" ref={this.playRangeRef} />
-                    </Container>
-                    {Array.from({ length: barCount }, (_, i) => {
-                        const barNumber = i + 1;
+                    <div id="playRange" ref={this.playRangeRef} />
+                </Container>
+                {Array.from({ length: barCount }, (_, i) => {
+                    const barNumber = i + 1;
 
-                        return (
-                            <BarViewer
-                                key={barNumber}
-                                barNumber={barNumber}
-                                arrangement={arrangement}
-                                arrangementPlayer={arrangementPlayer}
-                                services={services}
-                                undoManager={undoManager}
-                                dataModel={dataModel}
-                            />
-                        );
-                    })}
-                    <Container id="trackViewerDecorationOverlay" >
-                        <div id="playBeam" ref={this.playBeamRef} />
-                    </Container>
+                    return (
+                        <BarViewer
+                            key={barNumber}
+                            barNumber={barNumber}
+                            arrangement={arrangement}
+                            arrangementPlayer={arrangementPlayer}
+                            services={services}
+                            undoManager={undoManager}
+                            dataModel={dataModel}
+                        />
+                    );
+                })}
+                <Container id="trackViewerDecorationOverlay" >
+                    <div id="playBeam" ref={this.playBeamRef} />
                 </Container>
-            )
-            : (
-                <Container
-                    id="trackViewerContentHost"
-                    orientation={Orientation.TopDown}
-                    crossAlignment={ChildAlignment.Start}
-                >
-                    <Container
-                        id="trackViewerDecorations"
-                        crossAlignment={ChildAlignment.Stretch}
-                    >
-                        <div id="playRange" ref={this.playRangeRef} />
-                    </Container>
-                    <GuideRail arrangementView={arrangement} />
-                    {
-                        arrangement.tracks.map((track) => {
-                            return arrangementPlayer.trackPlayers.get(track)!;
-                        }).map((trackPlayer) => {
-                            return (
-                                <TrackViewer
-                                    trackPlayer={trackPlayer}
-                                    callbacks={this.useTrackViewerTouchInterpretation()}
-                                    key={trackPlayer.track.id}
-                                    arrangementPlayer={arrangementPlayer}
-                                    dataModel={dataModel}
-                                    services={services}
-                                    undoManager={undoManager}
-                                />
-                            );
-                        })
-                    }
-                    <Container id="trackViewerDecorationOverlay" >
-                        <div id="playBeam" ref={this.playBeamRef} />
-                    </Container>
-                </Container>
-            );
+            </Container>
+        );
 
         return (
             <Container
@@ -242,127 +205,153 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
                     crossAlignment={ChildAlignment.Stretch}
                     style={{ zoom: `${viewerZoom}%` }}
                 >
-                    <TrackControls tracks={arrangement.tracks} />
+                    <TrackControls innerRef={this.trackControlsRef} tracks={arrangement.tracks} />
                     <Container
-                        id="trackViewerHostShadow"
-                        innerRef={this.shadowRef}
+                        className={`trackViewerHost`}
+                        innerRef={this.viewerRef}
+                        orientation={Orientation.TopDown}
+                        crossAlignment={ChildAlignment.Start}
+                        onWheel={autoFollowIsOn ? this.handleWheel : undefined}
                     >
-                        <Container
-                            className={`trackViewerHost`}
-                            innerRef={this.viewerRef}
-                            orientation={Orientation.TopDown}
-                            crossAlignment={ChildAlignment.Start}
-                            onScroll={this.updateScrollShadows}
-                            onWheel={autoFollowIsOn ? this.handleWheel : undefined}
-                        >
-                            {contentHost}
-                        </Container>
+                        {contentHost}
                     </Container>
                 </Container>
-                <button
-                    className="bar-view-toggle"
-                    onClick={this.toggleViewMode}
-                    title={isBarMode ? "Switch to track view" : "Switch to bar view"}
-                >
-                    {isBarMode ? "Track view" : "Bar view"}
-                </button>
             </Container >
         );
     }
 
-    private toggleViewMode = () => {
-        this.setState((prev) => {
-            return { viewMode: prev.viewMode === "track" ? "bar" : "track" };
-        });
-    };
-
     private handleResize = () => {
-        this.updateScrollShadows();
-        this.updateNoteWidth();
+        this.updateNoteAndBarWidths();
     };
 
-    private updateScrollShadows = () => {
-        if (!this.viewerRef.current || !this.shadowRef.current) {
-            return;
-        }
+    private updateNoteAndBarWidths = () => {
+        const contentHost = this.viewerContentHostRef.current;
+        const zoom = contentHost?.currentCSSZoom ?? 1;
 
-        const scrollLeft = this.viewerRef.current.scrollLeft;
-        const scrollWidth = this.viewerRef.current.scrollWidth;
-        const clientWidth = this.viewerRef.current.clientWidth;
-
-        this.shadowRef.current.classList.toggle("overflowingLeft", scrollLeft > 2);
-        this.shadowRef.current.classList.toggle("overflowingRight", scrollLeft + clientWidth < scrollWidth - 2);
-    };
-
-    private updateNoteWidth = () => {
-        this.setState({ noteWidth: this.getNoteWidth(this.viewerRef.current) });
+        this.setState({
+            noteWidth: this.getNoteWidth(this.viewerContentHostRef.current, zoom),
+            barWidth: this.getBarWidth(this.viewerContentHostRef.current, zoom)
+        });
     };
 
     private timeParamsSubscription = () => {
         return setTimeout(() => {
-            this.updateScrollShadows();
             this.contentWidthPublisher.publish();
-            this.updateNoteWidth();
+            this.updateNoteAndBarWidths();
         }, 0);
     };
 
-    private getNoteWidth(trackViewersWrapper: HTMLElement | null): number {
-        const noteViewer = trackViewersWrapper?.querySelector(".notes-wrapper .note-viewer");
-        if (!noteViewer) {
+    private getNoteWidth(parent: HTMLElement | null, zoom: number): number {
+        const noteViewers = parent?.querySelectorAll<HTMLElement>(".notes-wrapper .note-viewer");
+        if (!noteViewers || noteViewers.length === 0) {
             return 0;
-        } // In case there are no tracks
+        }
 
-        return noteViewer.clientWidth;
+        if (noteViewers.length >= 2) {
+            const firstRect = noteViewers[0].getBoundingClientRect();
+            const secondRect = noteViewers[1].getBoundingClientRect();
+
+            return (secondRect.left - firstRect.left) / zoom;
+        }
+
+        const rect = noteViewers[0].getBoundingClientRect();
+
+        return rect.width / zoom;
     }
 
+    private getBarWidth(parent: HTMLElement | null, zoom: number): number {
+        const barViewers = parent?.querySelectorAll<HTMLElement>(".bar-viewer");
+        if (!barViewers || barViewers.length === 0) {
+            return 0;
+        }
+
+        if (barViewers.length >= 2) {
+            const firstRect = barViewers[0].getBoundingClientRect();
+            const secondRect = barViewers[1].getBoundingClientRect();
+
+            return (secondRect.left - firstRect.left) / zoom;
+        }
+
+        const rect = barViewers[0].getBoundingClientRect();
+
+        return rect.width / zoom;
+    }
+
+    /**
+     * Sets the play beam position and, if auto-follow is on, scrolls the viewer to follow the play head.
+     * All computation is done at 100% zoom.
+     *
+     * @param realTime The current real time within the arrangement, provided by the animation engine.
+     */
     private autoFollow = (realTime: RealTime) => {
-        if (this.viewerRef.current && this.playBeamRef.current && this.playRangeRef.current) {
+        if (this.viewerRef.current && this.playBeamRef.current && this.playRangeRef.current &&
+            this.viewerContentHostRef.current) {
             const { arrangementPlayer } = this.props;
-            const { noteWidth } = this.state;
+            const { barWidth } = this.state;
+
+            const scoreMetrics = arrangementPlayer.scoreMetrics;
+
+            const viewer = this.viewerRef.current;
+            const contentHost = this.viewerContentHostRef.current;
+
+            const contentWidth = contentHost.scrollWidth;
+            const clientWidth = viewer.clientWidth - this.trackControlsRef.current!.offsetWidth;
+            const maxScroll = Math.max(0, contentWidth - clientWidth);
+
+            const secondsPerPulse =
+                (scoreMetrics.secondsPerBar / scoreMetrics.stepsPerBar) *
+                scoreMetrics.stepsPerPulse;
+
+            const pulseWidth = barWidth / scoreMetrics.pulsesPerBar;
 
             // 1. Update play beam continuously.
             const normalizedPosition = arrangementPlayer.convertToLoopProgress(realTime);
-            const scrollWidth = this.viewerRef.current.scrollWidth;
-            const position = Math.floor(normalizedPosition * scrollWidth);
-
+            const position = normalizedPosition * contentWidth;
             this.playBeamRef.current.style.left = `${position}px`;
 
             // 2. Calculate current pulse.
-            const scoreMetrics = arrangementPlayer.scoreMetrics;
-            const currentPulse = Math.floor(realTime /
-                (scoreMetrics.secondsPerBar / scoreMetrics.stepsPerBar * scoreMetrics.stepsPerPulse));
+            const currentPulse = Math.floor(realTime / secondsPerPulse);
 
             // 3. Update viewer scroll and play range only every 2 pulses.
-            // Check if we've moved at least 2 pulses ahead or looped back.
             const hasLoopedBack = currentPulse < this.lastPulse;
             const hasMoved2Pulses = currentPulse >= this.targetPulse + 2;
 
             if (hasLoopedBack || hasMoved2Pulses) {
                 this.targetPulse = currentPulse;
+                let clampedScroll = clampValue(position, 0, maxScroll);
+                const currentBar = Math.floor(currentPulse / scoreMetrics.pulsesPerBar);
+                const pulseIndexInBar = currentPulse % scoreMetrics.pulsesPerBar;
 
-                const clientWidth = this.viewerRef.current.clientWidth;
+                let playRangeLeft = (currentBar * barWidth) + (pulseIndexInBar * pulseWidth);
+                let playRangeWidth = pulseWidth * 2;
 
-                // Calculate play range dimensions (2 pulses wide).
-                const playRangeWidth = 2 * noteWidth * (scoreMetrics.stepsPerBar / scoreMetrics.stepsPerPulse);
-
-                // Scroll to center the play range in the viewer.
-                const desiredScroll = Math.floor(position + (playRangeWidth / 2)) - (clientWidth / 2);
-                const maxScroll = scrollWidth - clientWidth;
-                const clampedScroll = Math.max(0, Math.min(desiredScroll, maxScroll));
-
-                const playRangeLeft = Math.max(0, currentPulse * scoreMetrics.stepsPerPulse * noteWidth);
-
-                this.playRangeRef.current.style.left = `${Math.floor(playRangeLeft)}px`;
+                // Depending on the position in a bar, we want to shift the play range a bit so that it
+                // aligns more nicely with the notes. Without these adjustments, the play range would start
+                // and end right on note borders (which doesn't look good).
+                if (pulseIndexInBar > 1) {
+                    playRangeLeft -= 8;
+                    clampedScroll -= 8;
+                } else {
+                    playRangeLeft += 4;
+                    playRangeWidth -= 6;
+                    clampedScroll += 4;
+                }
+                this.playRangeRef.current.style.left = `${playRangeLeft}px`;
                 this.playRangeRef.current.style.width = `${playRangeWidth}px`;
 
-                this.animateViewerScroll(clampedScroll, this.autoFollowTransitionDurationMs);
+                this.animateViewerScroll(clampedScroll);
             }
 
-            // Update lastPulse to track where we are.
             this.lastPulse = currentPulse;
         }
     };
 
+    /**
+     * Helper to determine the duration of the CSS transition for the play range, so that we can use the same duration
+     * for our JS scroll animation.
+     *
+     * @returns The duration of the CSS transition in milliseconds.
+     */
     private getPlayRangeTransitionDurationMs(): number {
         if (!this.playRangeRef.current) {
             return 0;
@@ -387,12 +376,13 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         return maxDuration;
     }
 
-    private animateViewerScroll(targetLeft: number, durationMs: number): void {
+    private animateViewerScroll(targetLeft: number): void {
         const viewer = this.viewerRef.current;
         if (!viewer) {
             return;
         }
 
+        const durationMs = this.autoFollowTransitionDurationMs;
         if (this.scrollAnimationFrameId !== 0) {
             cancelAnimationFrame(this.scrollAnimationFrameId);
             this.scrollAnimationFrameId = 0;
@@ -401,7 +391,6 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         const startLeft = viewer.scrollLeft;
         if (durationMs <= 0 || Math.abs(targetLeft - startLeft) < 0.5) {
             viewer.scrollLeft = targetLeft;
-            this.updateScrollShadows();
 
             return;
         }
@@ -414,7 +403,6 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
             const easedProgress = this.easeInOut(progress);
 
             viewer.scrollLeft = startLeft + ((targetLeft - startLeft) * easedProgress);
-            this.updateScrollShadows();
 
             if (progress < 1) {
                 this.scrollAnimationFrameId = requestAnimationFrame(step);

@@ -43,6 +43,22 @@ export class BarViewer extends UIComponent<IBarViewerProps, IBarViewerState> {
         };
     }
 
+    public override componentDidUpdate(previousProps: Readonly<IBarViewerProps>): void {
+        const { arrangement } = this.props;
+        if (arrangement !== previousProps.arrangement) {
+            this.removeSubscription(previousProps.arrangement, this.arrangementChanged);
+            this.removeSubscription(previousProps.arrangement.timeParams, this.timeParamsChanged);
+
+            this.addSubscription(arrangement, this.arrangementChanged);
+            this.addSubscription(arrangement.timeParams, this.timeParamsChanged);
+
+            this.setState({
+                tracks: [...arrangement.tracks],
+                barDivisibility: this.getBarDivisibility(arrangement),
+            });
+        }
+    }
+
     public override componentDidMount(): void {
         const { arrangement } = this.props;
         this.addSubscription(arrangement, this.arrangementChanged);

@@ -38,8 +38,8 @@ export class ArrangementPlayer extends Publisher {
     private metronome: Metronome;
     private readonly timeCoordinator: TimeCoordinator;
 
-    private timing: ITiming | null = null;
-    private callbackEvents: ICallbackEvent[] | null = null;
+    private timing?: ITiming;
+    private callbackEvents: ICallbackEvent[] = [];
     private disposed = false;
 
     /** The AudioContext used for playback. */
@@ -103,9 +103,9 @@ export class ArrangementPlayer extends Publisher {
      * The most recent `ITiming` reached during playback. `null` when stopped or before playback.
      * Updated via callback events generated from `arrangement.timeParams.timings`.
      *
-     * @returns The current timing or `null` if none.
+     * @returns The current timing or `undefined` if none.
      */
-    public get currentTiming(): ITiming | null {
+    public get currentTiming(): ITiming | undefined {
         return this.timing;
     }
 
@@ -132,7 +132,7 @@ export class ArrangementPlayer extends Publisher {
      * Resets `currentTiming` and informs all track players via `onStop()`.
      */
     public onStop = (): void => {
-        this.timing = null;
+        this.timing = undefined;
         this.publish();
         for (const player of this.trackPlayers.values()) {
             player.onStop();
@@ -226,8 +226,8 @@ export class ArrangementPlayer extends Publisher {
         // Pretend we have covered all events before the interval start.
         this.timeCovered = interval?.start ?? 0;
 
-        await this.iteration();
         this.publish();
+        void this.iteration();
     }
 
     /** Stops current playback. */
@@ -253,7 +253,6 @@ export class ArrangementPlayer extends Publisher {
             this.#state = "stopped";
 
             this.onStop();
-            this.publish();
         }
     }
 
@@ -311,13 +310,12 @@ export class ArrangementPlayer extends Publisher {
         if (interval.start >= this.endOffset) {
             // We stop playback here, but wait for a moment to let the last events fire.
             await sleep(80);
-            void sleep(80).then(() => {
-                this.stop();
-                // If we were supposed to loop, start again immediately.
-                if (this.dataModel.arrangement!.loop) {
-                    return this.play(this.currentInterval);
-                }
-            });
+            this.stop();
+
+            // If we were supposed to loop, start again immediately.
+            if (this.dataModel.arrangement!.loop) {
+                return this.play(this.currentInterval);
+            }
 
             return;
         }
@@ -382,7 +380,7 @@ export class ArrangementPlayer extends Publisher {
         const loopIntervals: ILoopInterval[] = this.timeCoordinator.convertToLoopIntervals(interval);
 
         loopIntervals.forEach(({ loopNumber, start, end }) => {
-            this.callbackEvents?.filter(({ realTime }) => {
+            this.callbackEvents.filter(({ realTime }) => {
                 return realTime >= start && realTime < end;
             }).forEach((audioEvent) => {
                 return eventsInInterval.push({

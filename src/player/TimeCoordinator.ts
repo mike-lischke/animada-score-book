@@ -31,6 +31,9 @@ export interface IScoreMetrics {
     /** How many beats are in a bar? */
     beatsPerBar: number,
 
+    /** How many pulses are in a bar? */
+    pulsesPerBar: number,
+
     /** How many steps are in a bar? */
     stepsPerBar: number,
 
@@ -193,10 +196,15 @@ export class TimeCoordinator extends Publisher {
         const oldTempo = this.cachedTempo;
         const newTempo = this.timeParams.tempo;
         const audioTime = this.realtimeProvider.currentTime;
-        const oldOffsetTime = audioTime + this.internalOffset;
-        const newOffsetTime = oldOffsetTime * (oldTempo / newTempo);
-        this.internalOffset = newOffsetTime - audioTime;
-        this.cachedTempo = newTempo;
+        if (audioTime > -1) {
+            const oldOffsetTime = audioTime + this.internalOffset;
+            const newOffsetTime = oldOffsetTime * (oldTempo / newTempo);
+            this.internalOffset = newOffsetTime - audioTime;
+            this.cachedTempo = newTempo;
+        } else {
+            this.internalOffset = 0;
+            this.cachedTempo = newTempo;
+        }
     };
 
     /**
@@ -247,6 +255,7 @@ export class TimeCoordinator extends Publisher {
             secondsPerBar,
             secondsPerStep,
             bars: this.timeParams.length,
+            pulsesPerBar: stepsPerBar / stepsPerPulse,
             beatsPerBar,
             stepsPerBar,
             stepsPerPulse,
