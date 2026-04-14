@@ -403,7 +403,7 @@ describe("ArrangementPlayer", () => {
 
         // Call onStop and assert reset + forwarding.
         player.onStop();
-        expect(player.currentTiming).toBeNull();
+        expect(player.currentTiming).toBeUndefined();
 
         const tps = Array.from(player.trackPlayers.values()) as Array<TrackPlayer & { stopped: boolean; }>;
         tps.forEach((tp) => {
