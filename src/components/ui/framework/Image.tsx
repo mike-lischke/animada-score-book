@@ -111,7 +111,7 @@ export class Image extends UIComponent<IImageProperties, IImageState> {
             this.setState({ loaded: true });
         });
 
-        return <div className="skeleton h-32 w-32"></div>;
+        return null;
     }
 
     /**
