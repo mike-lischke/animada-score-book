@@ -115,13 +115,3 @@ Object.defineProperty(globalThis, "DOMRect", {
         };
     }),
 });
-
-Object.defineProperty(HTMLElement.prototype, "innerText", {
-    get() {
-        return (this as HTMLElement).textContent;
-    },
-
-    set(value: string) {
-        (this as HTMLElement).textContent = value;
-    },
-});
