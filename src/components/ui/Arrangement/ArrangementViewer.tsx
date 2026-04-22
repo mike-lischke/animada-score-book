@@ -9,6 +9,7 @@ import { AppStorage, type IUISettings } from "../../../core/AppStorage.js";
 import { Publisher } from "../../../core/Publisher.js";
 import type { RealTime, ScoreBookDataModel } from "../../../core/ScoreBookDataModel.js";
 import type { UndoManager } from "../../../core/UndoManager.js";
+import { clampValue } from "../../../core/utils.js";
 import type { ArrangementPlayer } from "../../../player/ArrangementPlayer.js";
 import type { ScoreBookUiServices } from "../../../player/types.js";
 import { requisitions } from "../../../supplement/Requisitions.js";
@@ -16,23 +17,21 @@ import { BarViewer } from "../Bar/BarViewer.js";
 import { Container } from "../framework/Container.js";
 import { ChildAlignment, Orientation } from "../framework/ui-types.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
-import { type ITrackViewerCallbacks } from "../Track/TrackViewer.js";
+import { Minimap, type IVisibleBarRange } from "../Minimap/Minimap.js";
 import { TrackControls } from "./TrackControls.js";
-import { clampValue } from "../../../core/utils.js";
 
 export interface IArrangementViewerProps extends ICommonUIProperties {
     arrangementPlayer: ArrangementPlayer;
     dataModel: ScoreBookDataModel;
     services: ScoreBookUiServices;
     undoManager: UndoManager;
+
+    onIntervalChange?: (startBar: number, endBar: number) => void;
 }
 
 interface IArrangementViewerState {
     /** Determined from DOM, includes border and margin (@100% zoom). */
     noteWidth: number;
-
-    /** Determined from DOM, includes border and margin (@100% zoom). */
-    barWidth: number;
 
     trackPlayerCount: number;
     autoFollowIsOn: boolean;
@@ -44,10 +43,10 @@ interface IArrangementViewerState {
 export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArrangementViewerState> {
     private viewerRef = createRef<HTMLDivElement>();
     private playBeamRef = createRef<HTMLDivElement>();
-    private playRangeRef = createRef<HTMLDivElement>();
     private trackViewerContainerRef = createRef<HTMLDivElement>();
     private trackControlsRef = createRef<HTMLDivElement>();
     private viewerContentHostRef = createRef<HTMLDivElement>();
+    private minimapRef = createRef<Minimap>();
 
     private contentWidthPublisher = new Publisher();
 
@@ -79,7 +78,6 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         this.state = {
             viewerZoom,
             noteWidth: 0,
-            barWidth: 0,
             trackPlayerCount: props.arrangementPlayer.trackPlayers.size,
             autoFollowIsOn: true,
             userMightBeTakingControl: false
@@ -109,8 +107,9 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         // Otherwise, set up the subscription which will turn it on again.
         this.addSubscription(arrangementPlayer.animationEngine, this.animationEngineSubscription, true);
 
-        this.autoFollowTransitionDurationMs = this.getPlayRangeTransitionDurationMs();
+        this.autoFollowTransitionDurationMs = 50;
         this.trackViewerContainerRef.current!.style.zoom = `${viewerZoom}%`;
+        this.handleTrackViewerScroll();
     }
 
     public override componentDidUpdate(prevProps: IArrangementViewerProps, prevState: IArrangementViewerState): void {
@@ -129,9 +128,12 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
                 arrangementPlayer.animationEngine.connect(this.autoFollow);
             }
             this.addSubscription(arrangementPlayer.animationEngine, this.animationEngineSubscription);
+
+            this.autoFollow(0);
         }
 
         this.trackViewerContainerRef.current!.style.zoom = `${viewerZoom}%`;
+        this.handleTrackViewerScroll();
     }
 
     public override componentWillUnmount(): void {
@@ -169,7 +171,6 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
                     id="trackViewerDecorations"
                     crossAlignment={ChildAlignment.Stretch}
                 >
-                    <div id="playRange" ref={this.playRangeRef} />
                 </Container>
                 {Array.from({ length: barCount }, (_, i) => {
                     const barNumber = i + 1;
@@ -207,75 +208,41 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
                 >
                     <TrackControls innerRef={this.trackControlsRef} tracks={arrangement.tracks} />
                     <Container
-                        className={`trackViewerHost`}
-                        innerRef={this.viewerRef}
                         orientation={Orientation.TopDown}
-                        crossAlignment={ChildAlignment.Start}
-                        onWheel={autoFollowIsOn ? this.handleWheel : undefined}
+                        style={{ overflow: "auto" }}
                     >
-                        {contentHost}
+                        <Container
+                            id="trackViewerHost"
+                            innerRef={this.viewerRef}
+                            orientation={Orientation.TopDown}
+                            crossAlignment={ChildAlignment.Start}
+                            onWheel={autoFollowIsOn ? this.handleWheel : undefined}
+                            onScroll={this.handleTrackViewerScroll}
+                        >
+                            {contentHost}
+                        </Container>
                     </Container>
                 </Container>
+                <Minimap
+                    ref={this.minimapRef}
+                    arrangement={arrangement}
+                    scoreMetrics={arrangementPlayer.scoreMetrics}
+                    onViewportMoved={this.handleViewportMoved}
+                    onSelectionChanged={this.handleIntervalChange}
+                />
             </Container >
         );
     }
 
     private handleResize = () => {
-        this.updateNoteAndBarWidths();
-    };
-
-    private updateNoteAndBarWidths = () => {
-        const contentHost = this.viewerContentHostRef.current;
-        const zoom = contentHost?.currentCSSZoom ?? 1;
-
-        this.setState({
-            noteWidth: this.getNoteWidth(this.viewerContentHostRef.current, zoom),
-            barWidth: this.getBarWidth(this.viewerContentHostRef.current, zoom)
-        });
+        this.handleTrackViewerScroll();
     };
 
     private timeParamsSubscription = () => {
         return setTimeout(() => {
             this.contentWidthPublisher.publish();
-            this.updateNoteAndBarWidths();
         }, 0);
     };
-
-    private getNoteWidth(parent: HTMLElement | null, zoom: number): number {
-        const noteViewers = parent?.querySelectorAll<HTMLElement>(".notes-wrapper .note-viewer");
-        if (!noteViewers || noteViewers.length === 0) {
-            return 0;
-        }
-
-        if (noteViewers.length >= 2) {
-            const firstRect = noteViewers[0].getBoundingClientRect();
-            const secondRect = noteViewers[1].getBoundingClientRect();
-
-            return (secondRect.left - firstRect.left) / zoom;
-        }
-
-        const rect = noteViewers[0].getBoundingClientRect();
-
-        return rect.width / zoom;
-    }
-
-    private getBarWidth(parent: HTMLElement | null, zoom: number): number {
-        const barViewers = parent?.querySelectorAll<HTMLElement>(".bar-viewer");
-        if (!barViewers || barViewers.length === 0) {
-            return 0;
-        }
-
-        if (barViewers.length >= 2) {
-            const firstRect = barViewers[0].getBoundingClientRect();
-            const secondRect = barViewers[1].getBoundingClientRect();
-
-            return (secondRect.left - firstRect.left) / zoom;
-        }
-
-        const rect = barViewers[0].getBoundingClientRect();
-
-        return rect.width / zoom;
-    }
 
     /**
      * Sets the play beam position and, if auto-follow is on, scrolls the viewer to follow the play head.
@@ -284,12 +251,8 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
      * @param realTime The current real time within the arrangement, provided by the animation engine.
      */
     private autoFollow = (realTime: RealTime) => {
-        if (this.viewerRef.current && this.playBeamRef.current && this.playRangeRef.current &&
-            this.viewerContentHostRef.current) {
+        if (this.viewerRef.current && this.playBeamRef.current && this.viewerContentHostRef.current) {
             const { arrangementPlayer } = this.props;
-            const { barWidth } = this.state;
-
-            const scoreMetrics = arrangementPlayer.scoreMetrics;
 
             const viewer = this.viewerRef.current;
             const contentHost = this.viewerContentHostRef.current;
@@ -298,131 +261,24 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
             const clientWidth = viewer.clientWidth - this.trackControlsRef.current!.offsetWidth;
             const maxScroll = Math.max(0, contentWidth - clientWidth);
 
-            const secondsPerPulse =
-                (scoreMetrics.secondsPerBar / scoreMetrics.stepsPerBar) *
-                scoreMetrics.stepsPerPulse;
-
-            const pulseWidth = barWidth / scoreMetrics.pulsesPerBar;
-
-            // 1. Update play beam continuously.
+            // Update play beam continuously.
             const normalizedPosition = arrangementPlayer.convertToLoopProgress(realTime);
-            const position = normalizedPosition * contentWidth;
+            const position = Math.floor(normalizedPosition * contentWidth);
             this.playBeamRef.current.style.left = `${position}px`;
 
-            // 2. Calculate current pulse.
-            const currentPulse = Math.floor(realTime / secondsPerPulse);
-
-            // 3. Update viewer scroll and play range only every 2 pulses.
-            const hasLoopedBack = currentPulse < this.lastPulse;
-            const hasMoved2Pulses = currentPulse >= this.targetPulse + 2;
-
-            if (hasLoopedBack || hasMoved2Pulses) {
-                this.targetPulse = currentPulse;
-                let clampedScroll = clampValue(position, 0, maxScroll);
-                const currentBar = Math.floor(currentPulse / scoreMetrics.pulsesPerBar);
-                const pulseIndexInBar = currentPulse % scoreMetrics.pulsesPerBar;
-
-                let playRangeLeft = (currentBar * barWidth) + (pulseIndexInBar * pulseWidth);
-                let playRangeWidth = pulseWidth * 2;
-
-                // Depending on the position in a bar, we want to shift the play range a bit so that it
-                // aligns more nicely with the notes. Without these adjustments, the play range would start
-                // and end right on note borders (which doesn't look good).
-                if (pulseIndexInBar > 1) {
-                    playRangeLeft -= 8;
-                    clampedScroll -= 8;
-                } else {
-                    playRangeLeft += 4;
-                    playRangeWidth -= 6;
-                    clampedScroll += 4;
-                }
-                this.playRangeRef.current.style.left = `${playRangeLeft}px`;
-                this.playRangeRef.current.style.width = `${playRangeWidth}px`;
-
-                this.animateViewerScroll(clampedScroll);
+            // If the play beam gets close to the end of the visible area, scroll so that the beam is at the left
+            // edge of the viewer.
+            if (position < viewer.scrollLeft || position > viewer.scrollLeft + clientWidth) {
+                viewer.scrollLeft = clampValue(position, 0, maxScroll);
             }
-
-            this.lastPulse = currentPulse;
         }
     };
 
-    /**
-     * Helper to determine the duration of the CSS transition for the play range, so that we can use the same duration
-     * for our JS scroll animation.
-     *
-     * @returns The duration of the CSS transition in milliseconds.
-     */
-    private getPlayRangeTransitionDurationMs(): number {
-        if (!this.playRangeRef.current) {
-            return 0;
-        }
-
-        const style = getComputedStyle(this.playRangeRef.current);
-        const durations = style.transitionDuration.split(",").map((value) => {
-            return value.trim();
-        });
-        let maxDuration = 0;
-
-        for (const duration of durations) {
-            const parsed = Number.parseFloat(duration);
-            if (Number.isNaN(parsed)) {
-                continue;
-            }
-
-            const durationInMs = duration.endsWith("ms") ? parsed : parsed * 1000;
-            maxDuration = Math.max(maxDuration, durationInMs);
-        }
-
-        return maxDuration;
-    }
-
-    private animateViewerScroll(targetLeft: number): void {
-        const viewer = this.viewerRef.current;
-        if (!viewer) {
-            return;
-        }
-
-        const durationMs = this.autoFollowTransitionDurationMs;
-        if (this.scrollAnimationFrameId !== 0) {
-            cancelAnimationFrame(this.scrollAnimationFrameId);
-            this.scrollAnimationFrameId = 0;
-        }
-
-        const startLeft = viewer.scrollLeft;
-        if (durationMs <= 0 || Math.abs(targetLeft - startLeft) < 0.5) {
-            viewer.scrollLeft = targetLeft;
-
-            return;
-        }
-
-        const startTime = performance.now();
-
-        const step = (now: number) => {
-            const elapsed = now - startTime;
-            const progress = Math.min(1, elapsed / durationMs);
-            const easedProgress = this.easeInOut(progress);
-
-            viewer.scrollLeft = startLeft + ((targetLeft - startLeft) * easedProgress);
-
-            if (progress < 1) {
-                this.scrollAnimationFrameId = requestAnimationFrame(step);
-            } else {
-                this.scrollAnimationFrameId = 0;
-            }
-        };
-
-        this.scrollAnimationFrameId = requestAnimationFrame(step);
-    }
-
-    private easeInOut(progress: number): number {
-        // Linear easing to match CSS transition timing function.
-        return progress;
-    }
-
     private animationEngineSubscription = () => {
         const { arrangementPlayer } = this.props;
+        const { autoFollowIsOn } = this.state;
 
-        if (arrangementPlayer.state === "playing") {
+        if (arrangementPlayer.state === "playing" && !autoFollowIsOn) {
             this.setState({ autoFollowIsOn: true });
         }
     };
@@ -430,65 +286,6 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
     private handleWheel = (event: WheelEvent) => {
         if (event.deltaX > 6) {
             this.setState({ autoFollowIsOn: false });
-        }
-    };
-
-    private useTrackViewerTouchInterpretation(): ITrackViewerCallbacks {
-        // Touchscreens:
-        // If user touches the tracks while we're auto-following
-        // If they are scrolling up or down, we do nothing
-        // If they are scrolling left or right, we stop auto-following
-        // If they hold for a whole second, we stop auto-following
-
-        const { userMightBeTakingControl, autoFollowIsOn } = this.state;
-
-        if (!autoFollowIsOn) {
-            return {
-                noteLineTouchStart: undefined,
-                noteLineTouchMove: undefined,
-                noteLineTouchEnd: undefined
-            };
-        }
-
-        if (userMightBeTakingControl) {
-            return {
-                noteLineTouchStart: undefined,
-                noteLineTouchMove: (event: TouchEvent) => {
-                    if (Math.abs(this.lastX - event.touches[0].pageX) > 10) {
-                        this.setState({ autoFollowIsOn: false });
-                        clearTimeout(this.stopAutoFollowTimeoutId);
-                        this.setState({ userMightBeTakingControl: false });
-
-                        return;
-                    }
-
-                    if (Math.abs(this.lastY - event.touches[0].pageY) > 10) {
-                        clearTimeout(this.stopAutoFollowTimeoutId);
-                        this.setState({ userMightBeTakingControl: false });
-                    }
-                },
-                noteLineTouchEnd: () => {
-                    this.setState({ userMightBeTakingControl: false });
-                }
-            };
-        } else {
-            return {
-                noteLineTouchStart: (event: TouchEvent) => {
-                    if (event.touches.length != 1) {
-                        return;
-                    }
-
-                    this.lastY = event.touches[0].pageY;
-                    this.lastX = event.touches[0].pageX;
-                    this.stopAutoFollowTimeoutId = setTimeout(() => {
-                        this.setState({ autoFollowIsOn: false });
-                    }, 1000);
-
-                    this.setState({ userMightBeTakingControl: true });
-                },
-                noteLineTouchMove: undefined,
-                noteLineTouchEnd: undefined
-            };
         }
     };
 
@@ -501,4 +298,66 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
 
         return Promise.resolve(true);
     };
+
+    private handleViewportMoved = (newScrollLeft: number) => {
+        if (this.viewerRef.current) {
+            const scrollRange = this.viewerContentHostRef.current!.scrollWidth - this.viewerRef.current.clientWidth;
+            this.viewerRef.current.scrollLeft = clampValue(newScrollLeft * scrollRange, 0, scrollRange);
+        }
+    };
+
+    private handleIntervalChange = (selectionStartBar: number, selectionEndBar: number) => {
+        const { onIntervalChange } = this.props;
+
+        onIntervalChange?.(selectionStartBar, selectionEndBar);
+    };
+
+    private handleTrackViewerScroll = () => {
+        const host = this.viewerRef.current;
+        if (!host) {
+            return;
+        }
+
+        const style = window.getComputedStyle(host);
+        const hostLeftPadding = parseFloat(style.paddingLeft) || 0;
+        const bars = this.getVisibleBarRange(host, hostLeftPadding) ?? { startBar: 1, endBar: 1 };
+
+        const visibleContentWidth = host.clientWidth - hostLeftPadding;
+        const totalContentWidth = host.scrollWidth - hostLeftPadding;
+        const maxScrollLeft = host.scrollWidth - host.clientWidth;
+
+        const viewportWidth = totalContentWidth > 0 ? visibleContentWidth / totalContentWidth : 1;
+
+        const viewportPosition = maxScrollLeft > 0 ? host.scrollLeft / maxScrollLeft : 0;
+        this.minimapRef.current?.handleTrackViewerScrolled(viewportWidth, viewportPosition, bars);
+    };
+
+    private getVisibleBarRange(scrollHost: HTMLElement, leftPadding: number): IVisibleBarRange | null {
+        const hostRect = scrollHost.getBoundingClientRect();
+        const zoom = scrollHost.currentCSSZoom || 1;
+        const viewportLeft = hostRect.left + (leftPadding * zoom);
+        const viewportRight = hostRect.right;
+
+        const barElements = Array.from(scrollHost.querySelectorAll<HTMLElement>(".bar-viewer[data-bar]"));
+
+        const visibleBars = barElements.filter((barEl) => {
+            const rect = barEl.getBoundingClientRect();
+
+            // Horizontal overlap with the visible area of the scroll host means this bar is visible.
+            return rect.right > viewportLeft && rect.left < viewportRight;
+        });
+
+        if (visibleBars.length === 0) {
+            return null;
+        }
+
+        const startBar = Number(visibleBars[0].dataset.bar);
+        const endBar = Number(visibleBars[visibleBars.length - 1].dataset.bar);
+
+        return {
+            startBar,
+            endBar,
+        };
+    }
+
 }

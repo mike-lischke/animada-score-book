@@ -89,12 +89,19 @@ h6 {
 }
 
 
-.trackViewerHost {
+#trackViewerHost {
     padding-bottom: 15px;
     overflow-x: auto;
     flex: 1 1 auto;
     min-width: 0;
     padding-left: 100px;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    touch-action: pan-x;
+
+    &::-webkit-scrollbar {
+        display: none;
+    }
 }
 
 #trackViewerContentHost {
@@ -208,15 +215,14 @@ h6 {
 }
 
 #playBeam {
-    width: 3px;
+    width: calc(var(--note-height) / 6);
     border: none;
     background-color: var(--color-primary);
+    border-radius: 16px;
     position: absolute;
     top: 0;
     bottom: 0;
     left: -500px;
-
-    z-index: 5;
 }
 
 #playRange {
@@ -230,7 +236,7 @@ h6 {
     bottom: 0;
     left: -500px;
 
-    transition: left 0.200s linear;
+    transition: left 0.050s linear;
 }
 
 .note-width {
@@ -282,14 +288,13 @@ h6 {
     border-color: var(--color-neutral-content);
 
     &.odd-beat {
-        background-color: var(--color-base-300);
+        background-color: var(--color-neutral);
     }
 }
 
 .guiderail-timing-content {
     padding: 2px 0 0 12px;
-    color: var(--color-neutral);
-    font-size: 90%;
+    color: var(--color-neutral-content);
 }
 
 @media only screen and (min-width: 1000px) {
@@ -329,7 +334,6 @@ h6 {
 
 .polyrhythm-viewer .delete-polyrhythm-wrapper {
     height: var(--note-height);
-    border: var(--thick-border);
 
     /* Apply some negative margins to collapse borders */
     margin-top: calc(-1 * 1.5pt);
@@ -417,7 +421,6 @@ h6 {
 
 .polyrhythm-fragment .delete-polyrhythm-wrapper {
     height: var(--note-height);
-    border: var(--thick-border);
     margin-top: calc(-1 * 1.5pt);
     margin-bottom: calc(-1 * 1.5pt);
     margin-left: calc(-1 * 1.5pt);
@@ -893,5 +896,109 @@ h6 {
         height: 32px;
         margin-left: 8px;
         padding: 0 12px;
+    }
+}
+
+.arrangementViewer .minimap {
+    height: 80px;
+    margin: 0 20px 0 0;
+
+    background-color: var(--color-base-100);
+
+    #minimapScrollHost {
+        height: 60px;
+        overflow: hidden;
+        flex: 1 1 auto;
+        min-width: 0;
+
+        touch-action: none;
+        scrollbar-width: none;
+
+        &::-webkit-scrollbar {
+            display: none;
+        }
+    }
+
+    .mini-bar-track-row {
+        pointer-events: none;
+    }
+
+    .mini-bar-viewer {
+        padding-right: 8px;
+        margin-right: 8px;
+        border-right: 1px solid var(--color-neutral);
+        pointer-events: none;
+    }
+
+    .mini-note-viewer {
+        width: var(--note-height);
+        height: var(--note-height);
+        margin: 4px;
+        border-radius: 8px;
+        pointer-events: none;
+    }
+
+    #minimapViewportMarker {
+        position: absolute;
+        display: none;
+        pointer-events: auto;
+        touch-action: none;
+        user-select: none;
+
+        height: 68px;
+        top: -4px;
+
+        border: 1px solid color-mix(in srgb, var(--color-base-300) 10%, var(--color-neutral-content));
+        border-radius: 6px;
+        background-color: color-mix(in srgb, var(--color-base-300) 50%, transparent);
+        z-index: 4;
+
+        cursor: grab;
+
+        #barNumber {
+            font-size: 30px;
+            font-weight: bold;
+            color: var(--color-neutral-content);
+            user-select: none;
+            pointer-events: none;
+        }
+    }
+
+    #minimapBarSelector {
+        position: absolute;
+        display: none;
+        pointer-events: none;
+
+        height: 68px;
+        top: -4px;
+
+        border: 2px solid color-mix(in srgb, var(--color-info) 25%, white);
+        border-radius: 4px;
+        background-color: color-mix(in srgb, var(--color-secondary) 20%, transparent);
+        box-sizing: border-box;
+        z-index: 3;
+    }
+
+    .minimap-bar-selector-handle {
+        position: absolute;
+        display: none;
+        top: -6px;
+        width: 12px;
+        height: 72px;
+        margin-left: -6px;
+
+        pointer-events: auto;
+        touch-action: none;
+        user-select: none;
+        cursor: ew-resize;
+
+        border-radius: 999px;
+        background-color: color-mix(in srgb, var(--color-secondary) 50%, white);
+        box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-base-100) 65%, transparent);
+        z-index: 5;
+    }
+
+    .minimap-viewport-marker:active {
+        cursor: grabbing;
     }
 }

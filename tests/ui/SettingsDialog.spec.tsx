@@ -3,21 +3,33 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { cleanup, render, type RenderResult } from "@testing-library/preact";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { IUISettings } from "../../src/core/AppStorage.js";
 import { AppStorage } from "../../src/core/AppStorage.js";
 import { requisitions } from "../../src/supplement/Requisitions.js";
 import { SettingsDialog } from "../../src/ui/SettingsDialog.js";
 
-interface ISettingsDialogTestInstance extends SettingsDialog {
-    dialogRef: { current: { open: () => void; } | null; };
-    handleClose: (returnValue: string) => void;
-    temporarySettingsChange: () => void;
+class TestableSettingsDialog extends SettingsDialog {
+    public testHandleClose(returnValue: string): void {
+        // @ts-expect-error, because we are accessing a private method.
+        this.handleClose(returnValue);
+    }
+
+    public testTemporarySettingsChange(): void {
+        // @ts-expect-error, because we are accessing a private method.
+        this.temporarySettingsChange();
+    }
+
+    public testSetDialogOpenHandler(open: () => void): void {
+        // @ts-expect-error, because we are accessing a private field.
+        this.dialogRef.current = { open };
+    }
 }
 
-const installSynchronousSetState = (dialog: SettingsDialog): void => {
-    const instance = dialog as SettingsDialog & {
+const installSynchronousSetState = (dialog: TestableSettingsDialog): void => {
+    const instance = dialog as TestableSettingsDialog & {
         setState: (update: Partial<SettingsDialog["state"]>, callback?: () => void) => void;
     };
 
@@ -28,8 +40,24 @@ const installSynchronousSetState = (dialog: SettingsDialog): void => {
 };
 
 describe.sequential("SettingsDialog (class)", () => {
+    let renderResult: RenderResult | null;
+
+    const createDialog = (): TestableSettingsDialog => {
+        const dialog = new TestableSettingsDialog({});
+        installSynchronousSetState(dialog);
+
+        return dialog;
+    };
+
     beforeEach(() => {
         vi.restoreAllMocks();
+        renderResult = null;
+    });
+
+    afterEach(() => {
+        renderResult?.unmount();
+        cleanup();
+        renderResult = null;
     });
 
     it("open loads settings, applies the default theme, and opens the dialog", () => {
@@ -37,10 +65,9 @@ describe.sequential("SettingsDialog (class)", () => {
             viewSettings: { arrangementViewSettings: { zoomLevel: 120 } },
         });
 
-        const dialog = new SettingsDialog({}) as ISettingsDialogTestInstance;
+        const dialog = createDialog();
         const openSpy = vi.fn();
-        installSynchronousSetState(dialog);
-        dialog.dialogRef.current = { open: openSpy };
+        dialog.testSetDialogOpenHandler(openSpy);
 
         dialog.open();
 
@@ -61,8 +88,7 @@ describe.sequential("SettingsDialog (class)", () => {
             viewSettings: { arrangementViewSettings: { zoomLevel: 90 } },
         };
 
-        const dialog = new SettingsDialog({}) as ISettingsDialogTestInstance;
-        installSynchronousSetState(dialog);
+        const dialog = createDialog();
         dialog.state = {
             currentSettings: {
                 theme: "Light+",
@@ -71,7 +97,7 @@ describe.sequential("SettingsDialog (class)", () => {
             previousSettings: JSON.parse(JSON.stringify(originalSettings)) as IUISettings,
         };
 
-        dialog.handleClose("cancel");
+        dialog.testHandleClose("cancel");
         await Promise.resolve();
 
         expect(dialog.state.currentSettings).toEqual(originalSettings);
@@ -88,8 +114,7 @@ describe.sequential("SettingsDialog (class)", () => {
         });
         const executeSpy = vi.spyOn(requisitions, "execute").mockResolvedValue(true);
 
-        const dialog = new SettingsDialog({}) as ISettingsDialogTestInstance;
-        installSynchronousSetState(dialog);
+        const dialog = createDialog();
         dialog.state = {
             currentSettings: {
                 theme: "Quiet Light",
@@ -101,7 +126,7 @@ describe.sequential("SettingsDialog (class)", () => {
             },
         };
 
-        dialog.handleClose("save");
+        dialog.testHandleClose("save");
 
         expect(saveSpy).toHaveBeenCalledWith({
             theme: "Quiet Light",
@@ -115,7 +140,7 @@ describe.sequential("SettingsDialog (class)", () => {
     it("temporarySettingsChange forwards the current settings to requisitions", () => {
         const executeSpy = vi.spyOn(requisitions, "execute").mockResolvedValue(true);
 
-        const dialog = new SettingsDialog({}) as ISettingsDialogTestInstance;
+        const dialog = createDialog();
         dialog.state = {
             currentSettings: {
                 theme: "Solarized Light",
@@ -124,11 +149,26 @@ describe.sequential("SettingsDialog (class)", () => {
             previousSettings: {},
         };
 
-        dialog.temporarySettingsChange();
+        dialog.testTemporarySettingsChange();
 
         expect(executeSpy).toHaveBeenCalledWith("settingsChanged", {
             theme: "Solarized Light",
             viewSettings: { arrangementViewSettings: { zoomLevel: 105 } },
         });
+    });
+
+    it("renders the settings dialog structure", () => {
+        renderResult = render(<TestableSettingsDialog />);
+
+        expect(renderResult.container.querySelector("#settingsDialog")).toBeTruthy();
+        expect(renderResult.container.querySelector("#settingsGrid")).toBeTruthy();
+        expect(renderResult.container.querySelector("#settings-button-cancel")).toBeTruthy();
+        expect(renderResult.container.querySelector("#settings-button-save")).toBeTruthy();
+    });
+
+    it("matches snapshot for default rendering", () => {
+        renderResult = render(<TestableSettingsDialog />);
+
+        expect(renderResult.container.firstElementChild).toMatchSnapshot();
     });
 });

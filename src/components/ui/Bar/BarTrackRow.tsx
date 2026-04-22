@@ -53,6 +53,7 @@ export class BarTrackRow extends UIComponent<IBarTrackRowProps, IBarTrackRowStat
     public override componentDidMount(): void {
         const { track } = this.props;
         this.addSubscription(track, this.trackChanged);
+        this.repositionFragments();
     }
 
     public override componentDidUpdate(prevProps: IBarTrackRowProps, prevState: IBarTrackRowState): void {
@@ -312,7 +313,7 @@ export class BarTrackRow extends UIComponent<IBarTrackRowProps, IBarTrackRowStat
             }
 
             fragmentEl.style.left = `${startLeft}px`;
-            fragmentEl.style.width = `calc(${endRight - startLeft}px - var(--thick-border-width, 3pt))`;
+            fragmentEl.style.width = `${endRight - startLeft}px`;
         }
     }
 }

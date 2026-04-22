@@ -47,13 +47,13 @@ import { convertErrorToString } from "./core/utils.js";
 import { ArrangementPlayer } from "./player/ArrangementPlayer.js";
 import type { ScoreBookUiServices } from "./player/types.js";
 import { escapeStack } from "./supplement/EscapeStack.js";
+import { requisitions } from "./supplement/Requisitions.js";
 import { emptySongString } from "./ui/index.js";
 import { ModeManager } from "./ui/ModeManager.js";
 import { MouseHandler } from "./ui/MouseHandler.js";
 import { ScoreLibrary } from "./ui/ScoreLibrary.js";
 import { SelectionManager } from "./ui/SelectionManager.js";
 import { SettingsDialog } from "./ui/SettingsDialog.js";
-import { requisitions } from "./supplement/Requisitions.js";
 
 enum DisplayMode {
     Standard,
@@ -70,6 +70,8 @@ interface IAppState {
     sidebarOpen: boolean;
 
     headerPinned: boolean;
+
+    currentPlayRange?: { startBar: number; endBar: number; };
 }
 
 const newSong: ISerialisedArrangement = { composition: emptySongString, version: 2, title: "New Song" };
@@ -316,6 +318,7 @@ export class App extends UIComponent<{}, IAppState> {
                                     dataModel={this.dataModel}
                                     services={this.services}
                                     undoManager={this.undoManager!}
+                                    onIntervalChange={this.handleIntervalChange}
                                 />
                             }
                             forceExpanded={headerPinned}
@@ -629,7 +632,13 @@ export class App extends UIComponent<{}, IAppState> {
             case " ": {
                 if (this.arrangementPlayer) {
                     if (this.arrangementPlayer.state === "stopped") {
-                        void this.arrangementPlayer.play();
+                        const { currentPlayRange } = this.state;
+                        if (currentPlayRange) {
+                            void this.arrangementPlayer.playBars(currentPlayRange.startBar,
+                                currentPlayRange.endBar - currentPlayRange.startBar + 1);
+                        } else {
+                            void this.arrangementPlayer.play();
+                        }
                     } else {
                         this.arrangementPlayer.stop();
                     }
@@ -704,5 +713,14 @@ export class App extends UIComponent<{}, IAppState> {
 
     private handleTimeParamsChanged = () => {
         this.forceUpdate();
+    };
+
+    private handleIntervalChange = (selectionStartBar: number, selectionEndBar: number) => {
+        this.arrangementPlayer?.stop();
+        if (selectionStartBar > 0 && selectionEndBar > 0) {
+            this.setState({ currentPlayRange: { startBar: selectionStartBar, endBar: selectionEndBar } });
+        } else {
+            this.setState({ currentPlayRange: undefined });
+        }
     };
 }

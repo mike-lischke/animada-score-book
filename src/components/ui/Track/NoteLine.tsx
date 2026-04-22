@@ -136,6 +136,6 @@ export class NoteLine extends UIComponent<INoteLineProperties, INoteLineState> {
         }
 
         polyrhythmViewer.style.left = `${startLeft}px`;
-        polyrhythmViewer.style.width = `calc(${endLeft - startLeft}px - var(--thick-border-width)`;
+        polyrhythmViewer.style.width = `calc(${endLeft - startLeft}px`;
     }
 };

@@ -1,0 +1,712 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`Minimap (component) > edge cases > matches snapshot for empty arrangement 1`] = `
+<div
+  class="container minimap"
+  style="flex-direction: row; align-items: stretch;"
+>
+  <div
+    class="container"
+    id="minimapScrollHost"
+    style="flex-direction: column; justify-content: flex-start; align-items: flex-start;"
+  >
+    <div
+      class="container"
+      id="minimapContentHost"
+      style="flex-direction: row;"
+    >
+      <div
+        class="container"
+        id="minimapZoomHost"
+        style="flex-direction: row;"
+      />
+    </div>
+  </div>
+  <div
+    class="container"
+    id="minimapViewportMarker"
+    style="flex-direction: row; justify-content: center; align-items: center;"
+  >
+    <span
+      id="barNumber"
+    >
+      1
+    </span>
+  </div>
+  <div
+    id="minimapBarSelector"
+  />
+  <div
+    class="minimap-bar-selector-handle"
+    id="minimapBarSelectorStartHandle"
+  />
+  <div
+    class="minimap-bar-selector-handle"
+    id="minimapBarSelectorEndHandle"
+  />
+</div>
+`;
+
+exports[`Minimap (component) > handleTrackViewerScrolled > handles normalized viewport position at start 1`] = `
+<div
+  class="container minimap"
+  style="flex-direction: row; align-items: stretch;"
+>
+  <div
+    class="container"
+    id="minimapScrollHost"
+    style="flex-direction: column; justify-content: flex-start; align-items: flex-start;"
+  >
+    <div
+      class="container"
+      id="minimapContentHost"
+      style="flex-direction: row;"
+    >
+      <div
+        class="container"
+        id="minimapZoomHost"
+        style="flex-direction: row;"
+      >
+        <div
+          class="mini-bar-viewer"
+          data-bar="1"
+        >
+          <div
+            class="bar-track-row mini-bar-track-row"
+          >
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+          </div>
+          <div
+            class="bar-track-row mini-bar-track-row"
+          >
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+          </div>
+        </div>
+        <div
+          class="mini-bar-viewer"
+          data-bar="2"
+        >
+          <div
+            class="bar-track-row mini-bar-track-row"
+          >
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+          </div>
+          <div
+            class="bar-track-row mini-bar-track-row"
+          >
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+          </div>
+        </div>
+        <div
+          class="mini-bar-viewer"
+          data-bar="3"
+        >
+          <div
+            class="bar-track-row mini-bar-track-row"
+          >
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+          </div>
+          <div
+            class="bar-track-row mini-bar-track-row"
+          >
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+          </div>
+        </div>
+        <div
+          class="mini-bar-viewer"
+          data-bar="4"
+        >
+          <div
+            class="bar-track-row mini-bar-track-row"
+          >
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+          </div>
+          <div
+            class="bar-track-row mini-bar-track-row"
+          >
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+          </div>
+        </div>
+        <div
+          class="mini-bar-viewer"
+          data-bar="5"
+        >
+          <div
+            class="bar-track-row mini-bar-track-row"
+          >
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+          </div>
+          <div
+            class="bar-track-row mini-bar-track-row"
+          >
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+          </div>
+        </div>
+        <div
+          class="mini-bar-viewer"
+          data-bar="6"
+        >
+          <div
+            class="bar-track-row mini-bar-track-row"
+          >
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+          </div>
+          <div
+            class="bar-track-row mini-bar-track-row"
+          >
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+          </div>
+        </div>
+        <div
+          class="mini-bar-viewer"
+          data-bar="7"
+        >
+          <div
+            class="bar-track-row mini-bar-track-row"
+          >
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+          </div>
+          <div
+            class="bar-track-row mini-bar-track-row"
+          >
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+          </div>
+        </div>
+        <div
+          class="mini-bar-viewer"
+          data-bar="8"
+        >
+          <div
+            class="bar-track-row mini-bar-track-row"
+          >
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+          </div>
+          <div
+            class="bar-track-row mini-bar-track-row"
+          >
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+            <div
+              class="mini-note-viewer"
+              style="background-color: color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100));"
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div
+    class="container"
+    id="minimapViewportMarker"
+    style="flex-direction: row; justify-content: center; align-items: center;"
+  >
+    <span
+      id="barNumber"
+    >
+      1
+    </span>
+  </div>
+  <div
+    id="minimapBarSelector"
+  />
+  <div
+    class="minimap-bar-selector-handle"
+    id="minimapBarSelectorStartHandle"
+  />
+  <div
+    class="minimap-bar-selector-handle"
+    id="minimapBarSelectorEndHandle"
+  />
+</div>
+`;

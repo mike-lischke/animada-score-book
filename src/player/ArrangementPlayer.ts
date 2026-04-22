@@ -731,42 +731,48 @@ export class ArrangementPlayer extends Publisher {
 
         // Count in happens in two steps: first we have 2 counts in one bar and then 4 counts in the next bar.
         // Which gives us the "1-2, 1-2-3-4" pattern (for 2/4 and 4/4) before the music starts.
+        let realTime = 0;
         let noteStyle = numberSounds.noteStyles["1"];
-        const audioEvent: IAudioEvent = {
+        let audioEvent: IAudioEvent = {
             kind: "audio",
-            realTime: 0,
+            realTime,
             audioBuffer: noteStyle.audioBuffer!,
             note: {} as ISbDmNote,
         };
         this.scheduleAudioEvent(audioEvent);
 
         noteStyle = numberSounds.noteStyles["2"];
-        audioEvent.realTime += metrics.secondsPerBar / 2;
-        audioEvent.audioBuffer = noteStyle.audioBuffer!;
-        this.scheduleAudioEvent(audioEvent);
-
-        noteStyle = numberSounds.noteStyles["1"];
-        audioEvent.realTime += metrics.secondsPerBar / 2;
-        audioEvent.audioBuffer = noteStyle.audioBuffer!;
-        this.scheduleAudioEvent(audioEvent);
-
-        noteStyle = numberSounds.noteStyles["2"];
-        audioEvent.realTime += metrics.secondsPerBar / 4;
-        audioEvent.audioBuffer = noteStyle.audioBuffer!;
+        realTime += metrics.secondsPerBar / 4;
+        audioEvent = {
+            kind: "audio",
+            realTime,
+            audioBuffer: noteStyle.audioBuffer!,
+            note: {} as ISbDmNote,
+        };
         this.scheduleAudioEvent(audioEvent);
 
         noteStyle = numberSounds.noteStyles["3"];
-        audioEvent.realTime += metrics.secondsPerBar / 4;
-        audioEvent.audioBuffer = noteStyle.audioBuffer!;
+        realTime += metrics.secondsPerBar / 4;
+        audioEvent = {
+            kind: "audio",
+            realTime,
+            audioBuffer: noteStyle.audioBuffer!,
+            note: {} as ISbDmNote,
+        };
         this.scheduleAudioEvent(audioEvent);
 
         noteStyle = numberSounds.noteStyles["4"];
-        audioEvent.realTime += metrics.secondsPerBar / 4;
-        audioEvent.audioBuffer = noteStyle.audioBuffer!;
+        realTime += metrics.secondsPerBar / 4;
+        audioEvent = {
+            kind: "audio",
+            realTime,
+            audioBuffer: noteStyle.audioBuffer!,
+            note: {} as ISbDmNote,
+        };
         this.scheduleAudioEvent(audioEvent);
 
         // Wait for the count-in to finish before resolving.
-        await waitFor(metrics.secondsPerBar * 2000, () => {
+        await waitFor(metrics.secondsPerBar * 1000, () => {
             return this.#state !== "counting";
         });
     }

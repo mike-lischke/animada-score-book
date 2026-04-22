@@ -86,10 +86,17 @@ export interface ICommonUIProperties {
 
     /** Clicks can be triggered by both mouse and keyboard events. */
     onClick?: ClickEventCallback;
-    onDoubleClick?: MouseEventCallback;
+    onDblClick?: MouseEventCallback;
     onKeyDown?: KeyboardEventCallback;
     onKeyUp?: KeyboardEventCallback;
     onKeyPress?: KeyboardEventCallback;
+    onPointerDown?: PointerEventCallback;
+    onPointerUp?: PointerEventCallback;
+    onPointerMove?: PointerEventCallback;
+    onPointerEnter?: PointerEventCallback;
+    onPointerLeave?: PointerEventCallback;
+    onDragStart?: DragEventCallback;
+    onDragEnd?: DragEventCallback;
 
     onScroll?: GenericEventHandler<HTMLElement>;
     onWheel?: WheelEventHandler<HTMLElement>;

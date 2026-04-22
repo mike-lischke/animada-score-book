@@ -81,7 +81,9 @@ export class AppStorage {
 
     public static loadUISettings(): IUISettings | null {
         if (!this.#hasLocalStorage) {
-            console.warn("LocalStorage is not available. UI settings cannot be loaded.");
+            if (!import.meta.env.VITEST) {
+                console.warn("LocalStorage is not available. UI settings cannot be loaded.");
+            }
 
             return null;
         }

@@ -1,0 +1,218 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`SettingsDialog (class) > matches snapshot for default rendering 1`] = `
+<dialog
+  class="dialog modal"
+  id="settingsDialog"
+>
+  <div
+    class="modal-box"
+  >
+    <div
+      class="container font-bold text-lg"
+      style="flex-direction: row; align-items: center;"
+    >
+      <div
+        class="icon codicon codicon-gear"
+        style="font-size: 24px; margin-right: 8px;"
+      />
+      Settings
+    </div>
+    <div
+      class="grid"
+      id="settingsGrid"
+      style="grid-template-columns: auto 1fr; column-gap: 16px;"
+    >
+      <div
+        class="container gridCell settingName"
+        style="flex-direction: row;"
+      >
+        <p
+          class="py-4"
+        >
+          Select Color Theme
+        </p>
+      </div>
+      <div
+        class="container gridCell settingValue"
+        style="flex-direction: row;"
+      >
+        <div
+          class="dropdownHost"
+        >
+          <button
+            class="btn"
+            popovertarget="popover-4"
+            style="anchor-name: --anchor-3;"
+          >
+            Light+
+          </button>
+          <ul
+            class="dropdown menu w-52 rounded-box bg-base-100 shadow-sm"
+            id="popover-4"
+            popover="auto"
+            style="position-anchor: --anchor-3;"
+          >
+            <li
+              class=""
+            >
+              <a>
+                Light High Contrast
+              </a>
+            </li>
+            <li
+              class="selected"
+            >
+              <a>
+                Light+
+              </a>
+            </li>
+            <li
+              class=""
+            >
+              <a>
+                Quiet Light
+              </a>
+            </li>
+            <li
+              class=""
+            >
+              <a>
+                Solarized Light
+              </a>
+            </li>
+            <li
+              class=""
+            >
+              <a>
+                ──────────
+              </a>
+            </li>
+            <li
+              class=""
+            >
+              <a>
+                Abyss
+              </a>
+            </li>
+            <li
+              class=""
+            >
+              <a>
+                Dark High Contrast
+              </a>
+            </li>
+            <li
+              class=""
+            >
+              <a>
+                Kimbie Dark
+              </a>
+            </li>
+            <li
+              class=""
+            >
+              <a>
+                Monokai
+              </a>
+            </li>
+            <li
+              class=""
+            >
+              <a>
+                Monokai Dimmed
+              </a>
+            </li>
+            <li
+              class=""
+            >
+              <a>
+                Dark+
+              </a>
+            </li>
+            <li
+              class=""
+            >
+              <a>
+                Red
+              </a>
+            </li>
+            <li
+              class=""
+            >
+              <a>
+                Solarized Dark
+              </a>
+            </li>
+            <li
+              class=""
+            >
+              <a>
+                Tomorrow Night Blue
+              </a>
+            </li>
+          </ul>
+        </div>
+      </div>
+      <div
+        class="container gridCell settingName"
+        style="flex-direction: row;"
+      >
+        <p
+          class="py-4"
+        >
+          Track Viewer Zoom
+        </p>
+      </div>
+      <div
+        class="container gridCell settingValue"
+        style="flex-direction: row;"
+      >
+        <span
+          class="label"
+          style="margin-right: 8px;"
+        >
+          100%
+        </span>
+        <button
+          class="btn zoomButton"
+        >
+          -
+        </button>
+        <button
+          class="btn zoomButton"
+        >
+          +
+        </button>
+        <button
+          class="btn resetButton"
+        >
+          Reset
+        </button>
+      </div>
+    </div>
+    <div
+      class="modal-action"
+    >
+      <form
+        method="dialog"
+      >
+        <button
+          class="btn"
+          id="settings-button-cancel"
+          value="cancel"
+        >
+          Cancel
+        </button>
+        <button
+          class="btn"
+          id="settings-button-save"
+          value="save"
+        >
+          Save
+        </button>
+      </form>
+    </div>
+  </div>
+</dialog>
+`;
