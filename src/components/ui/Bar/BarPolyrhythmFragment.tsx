@@ -26,6 +26,7 @@ export interface IBarPolyrhythmFragmentProps extends ICommonUIProperties {
 
     trackPlayer: TrackPlayer;
     arrangementPlayer: ArrangementPlayer;
+    touchEditingEnabled: boolean;
     services: ScoreBookUiServices;
     undoManager: UndoManager;
     dataModel: ScoreBookDataModel;
@@ -55,7 +56,7 @@ export class BarPolyrhythmFragment
 
     public override render(): ComponentChild {
         const { polyrhythm, barNumber, noteSlice, fragmentType, trackPlayer, arrangementPlayer, services,
-            undoManager, dataModel } = this.props;
+            touchEditingEnabled, undoManager, dataModel } = this.props;
         const { deleteMode } = this.state;
 
         const isStartOrFull = fragmentType === "start" || fragmentType === "full";
@@ -89,6 +90,7 @@ export class BarPolyrhythmFragment
                                 key={note.id}
                                 trackPlayer={trackPlayer}
                                 arrangementPlayer={arrangementPlayer}
+                                touchHoldEnabled={touchEditingEnabled}
                                 dataModel={dataModel}
                                 services={services}
                                 undoManager={undoManager}

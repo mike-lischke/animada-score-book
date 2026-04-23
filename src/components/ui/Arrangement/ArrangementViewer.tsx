@@ -25,6 +25,7 @@ export interface IArrangementViewerProps extends ICommonUIProperties {
     dataModel: ScoreBookDataModel;
     services: ScoreBookUiServices;
     undoManager: UndoManager;
+    touchEditingEnabled: boolean;
 
     onIntervalChange?: (startBar: number, endBar: number) => void;
 }
@@ -153,7 +154,7 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
     }
 
     public override render(): JSX.Element {
-        const { arrangementPlayer, dataModel, services, undoManager } = this.props;
+        const { arrangementPlayer, dataModel, services, touchEditingEnabled, undoManager } = this.props;
         const { autoFollowIsOn, viewerZoom } = this.state;
 
         const arrangement = dataModel.arrangement!;
@@ -181,6 +182,7 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
                             barNumber={barNumber}
                             arrangement={arrangement}
                             arrangementPlayer={arrangementPlayer}
+                            touchEditingEnabled={touchEditingEnabled}
                             services={services}
                             undoManager={undoManager}
                             dataModel={dataModel}

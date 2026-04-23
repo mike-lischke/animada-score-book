@@ -23,6 +23,7 @@ export interface IBarTrackRowProps extends ICommonUIProperties {
 
     trackPlayer: TrackPlayer;
     arrangementPlayer: ArrangementPlayer;
+    touchEditingEnabled: boolean;
     services: ScoreBookUiServices;
     undoManager: UndoManager;
     dataModel: ScoreBookDataModel;
@@ -62,8 +63,8 @@ export class BarTrackRow extends UIComponent<IBarTrackRowProps, IBarTrackRowStat
     }
 
     public override render(): ComponentChild {
-        const { track, barNumber, timeParams, trackPlayer, arrangementPlayer, services, undoManager,
-            dataModel } = this.props;
+        const { track, barNumber, timeParams, trackPlayer, arrangementPlayer, services, touchEditingEnabled,
+            undoManager, dataModel } = this.props;
         const { notes } = this.state;
 
         const barNotes = notes.filter((n) => {
@@ -90,6 +91,7 @@ export class BarTrackRow extends UIComponent<IBarTrackRowProps, IBarTrackRowStat
                                 key={`${p.id}-${barNumber}`}
                                 trackPlayer={trackPlayer}
                                 arrangementPlayer={arrangementPlayer}
+                                touchEditingEnabled={touchEditingEnabled}
                                 services={services}
                                 undoManager={undoManager}
                                 dataModel={dataModel}
@@ -105,6 +107,7 @@ export class BarTrackRow extends UIComponent<IBarTrackRowProps, IBarTrackRowStat
                                 key={note.id}
                                 trackPlayer={trackPlayer}
                                 arrangementPlayer={arrangementPlayer}
+                                touchHoldEnabled={touchEditingEnabled}
                                 services={services}
                                 undoManager={undoManager}
                                 dataModel={dataModel}

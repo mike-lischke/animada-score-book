@@ -29,6 +29,7 @@ export interface INoteViewerProps extends ICommonUIProperties {
     undoManager: UndoManager;
     arrangementPlayer: ArrangementPlayer;
     dataModel: ScoreBookDataModel;
+    touchHoldEnabled?: boolean;
 }
 
 interface INoteViewerState {
@@ -119,11 +120,17 @@ export class NoteViewer extends UIComponent<INoteViewerProps, INoteViewerState> 
     }
 
     public override render(): ComponentChild {
-        const { note } = this.props;
+        const { note, touchHoldEnabled = true } = this.props;
         const { isCurrent, selected, noteStyle } = this.state;
 
         const classString = this.useClasses();
         const backgroundColor = this.useBackgroundColor(isCurrent, selected);
+
+        const noteDetails = (
+            <div className="note-details-viewer">
+                <NoteStyleSymbolViewer noteStyle={noteStyle} />
+            </div>
+        );
 
         return (
             <div
@@ -135,14 +142,16 @@ export class NoteViewer extends UIComponent<INoteViewerProps, INoteViewerState> 
                 onMouseMove={this.handleMouseMove}
                 style={{ backgroundColor: backgroundColor }}
             >
-                <TouchHoldDetector
-                    holdLength={1100}
-                    callback={this.handleTouchHold}
-                >
-                    <div className="note-details-viewer">
-                        <NoteStyleSymbolViewer noteStyle={noteStyle} />
-                    </div>
-                </TouchHoldDetector>
+                {touchHoldEnabled
+                    ? (
+                        <TouchHoldDetector
+                            holdLength={1100}
+                            callback={this.handleTouchHold}
+                        >
+                            {noteDetails}
+                        </TouchHoldDetector>
+                    )
+                    : noteDetails}
             </div >
         );
     }

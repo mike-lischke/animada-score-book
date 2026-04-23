@@ -18,6 +18,7 @@ export interface IBarViewerProps extends ICommonUIProperties {
     barNumber: number;
     arrangement: ISbDmArrangement;
     arrangementPlayer: ArrangementPlayer;
+    touchEditingEnabled: boolean;
     services: ScoreBookUiServices;
     undoManager: UndoManager;
     dataModel: ScoreBookDataModel;
@@ -66,7 +67,8 @@ export class BarViewer extends UIComponent<IBarViewerProps, IBarViewerState> {
     }
 
     public override render(): ComponentChild {
-        const { barNumber, arrangement, arrangementPlayer, services, undoManager, dataModel } = this.props;
+        const { barNumber, arrangement, arrangementPlayer, services, touchEditingEnabled, undoManager,
+            dataModel } = this.props;
         const { tracks, barDivisibility } = this.state;
 
         return (
@@ -90,6 +92,7 @@ export class BarViewer extends UIComponent<IBarViewerProps, IBarViewerState> {
                             timeParams={arrangement.timeParams}
                             trackPlayer={trackPlayer}
                             arrangementPlayer={arrangementPlayer}
+                            touchEditingEnabled={touchEditingEnabled}
                             services={services}
                             undoManager={undoManager}
                             dataModel={dataModel}

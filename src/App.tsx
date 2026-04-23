@@ -318,6 +318,7 @@ export class App extends UIComponent<{}, IAppState> {
                                     dataModel={this.dataModel}
                                     services={this.services}
                                     undoManager={this.undoManager!}
+                                    touchEditingEnabled={displayMode === DisplayMode.Editing}
                                     onIntervalChange={this.handleIntervalChange}
                                 />
                             }
