@@ -415,14 +415,19 @@ export class App extends UIComponent<{}, IAppState> {
 
                         // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
                         if (navigator.clipboard?.readText) {
-                            const clipboardText = await navigator.clipboard.readText();
-                            if (clipboardText && clipboardText.trim().length > 0) {
-                                try {
-                                    new URL(clipboardText);
-                                    content = clipboardText;
-                                } catch {
-                                    // Not a valid URL, ignore.
+                            try {
+                                const clipboardText = await navigator.clipboard.readText();
+                                if (clipboardText && clipboardText.trim().length > 0) {
+                                    try {
+                                        new URL(clipboardText);
+                                        content = clipboardText;
+                                    } catch {
+                                        // Not a valid URL, ignore.
+                                    }
                                 }
+                            } catch {
+                                // Clipboard access denied (e.g. iOS permission not granted) — proceed
+                                // with an empty pre-fill so the user can still type the URL manually.
                             }
                         }
 

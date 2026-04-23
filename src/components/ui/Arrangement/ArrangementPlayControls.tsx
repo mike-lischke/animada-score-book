@@ -243,13 +243,41 @@ export class ArrangementPlayControls
 
     private startRecording = () => {
         const { arrangementPlayer, dataModel } = this.props;
-        void arrangementPlayer.renderToBlob().then((blob) => {
+        void arrangementPlayer.renderToBlob().then(async (blob) => {
+            const fileName = `${dataModel.arrangement!.title}.mp3`;
+
+            if (typeof navigator.share === "function" && typeof navigator.canShare === "function") {
+                const exportFile = new File([blob], fileName, { type: "audio/mpeg" });
+                if (navigator.canShare({ files: [exportFile] })) {
+                    try {
+                        await navigator.share({
+                            files: [exportFile],
+                            title: fileName,
+                        });
+
+                        return;
+                    } catch (error) {
+                        if (!(error instanceof DOMException) || error.name !== "AbortError") {
+                            console.warn("File share failed, falling back to direct download.", error);
+                        } else {
+                            return;
+                        }
+                    }
+                }
+            }
+
             const url = URL.createObjectURL(blob);
             const a = document.createElement("a");
             a.href = url;
-            a.download = `${dataModel.arrangement!.title}.mp3`;
+            a.download = fileName;
+            a.rel = "noopener";
+            a.target = "_blank";
             a.click();
-            URL.revokeObjectURL(url);
+
+            // Keep the URL alive briefly so Safari can consume it before revoking.
+            window.setTimeout(() => {
+                URL.revokeObjectURL(url);
+            }, 1000);
         });
     };
 };

@@ -5,6 +5,7 @@
 
 import { Publisher } from "../core/Publisher.js";
 import type { ISbDmNote, ISbDmTrack, ITiming, RealTime, ScoreBookDataModel } from "../core/ScoreBookDataModel.js";
+import { getSharedAudioContext } from "../core/audio-context.js";
 import { sleep, waitFor } from "../core/utils.js";
 import { AnimationEngine } from "../ui/AnimationEngine.js";
 import { AudioBufferPlayer } from "./AudioBufferPlayer.js";
@@ -42,11 +43,7 @@ export class ArrangementPlayer extends Publisher {
     private callbackEvents: ICallbackEvent[] = [];
     private disposed = false;
 
-    /** The AudioContext used for playback. */
-    private readonly mainAudioContext = new AudioContext();
-
-    /** We swap this out for a different context, when recording. */
-    private audioContext: BaseAudioContext = this.mainAudioContext;
+    private audioContext: BaseAudioContext = getSharedAudioContext();
 
     private nextIterationId?: ReturnType<typeof setTimeout>;
     private loopBoundaryTimeoutId: ReturnType<typeof setTimeout> | null = null;
@@ -276,7 +273,7 @@ export class ArrangementPlayer extends Publisher {
         const { MP3Export } = await import("../supplement/MP3Export.js");
 
         const scheduleSong = (ctx: BaseAudioContext): void => {
-            this.audioContext = ctx as AudioContext;
+            this.audioContext = ctx;
             this.offset = this.audioContext.currentTime;
             this.clearScheduledEvents();
 
@@ -289,7 +286,7 @@ export class ArrangementPlayer extends Publisher {
             // Add 1 second tail to allow the last notes to finish playing (important for resonant instruments).
             return await mp3Exporter.exportSongToMp3(songDuration + 1, scheduleSong);
         } finally {
-            this.audioContext = this.mainAudioContext;
+            this.audioContext = getSharedAudioContext();
             this.clearScheduledEvents();
         }
     };

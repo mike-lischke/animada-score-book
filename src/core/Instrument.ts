@@ -6,6 +6,7 @@
 import { LoadAudioError, type LoadAudioStage } from "./LoadAudioError.js";
 import { Publisher } from "./Publisher.js";
 import type { IInstrumentMeta } from "./ScoreBookDataModel.js";
+import { getSharedAudioContext } from "./audio-context.js";
 import { SbDmEntityType, type ISbDmInstrument, type ISbDmInstrumentImage } from "./ScoreBookDataModel.js";
 import type { INoteStyle } from "./types/general.js";
 import { getNewId } from "./utils.js";
@@ -37,7 +38,7 @@ export class Instrument extends Publisher implements ISbDmInstrument {
     private static readonly soundBasePath = "sounds";
 
     /** Shared audio context used to decode instrument audio buffers. */
-    private static readonly audioCtx = new AudioContext();
+    private static readonly audioCtx = getSharedAudioContext();
 
     public constructor(instrumentMeta: IInstrumentMeta) {
         super();

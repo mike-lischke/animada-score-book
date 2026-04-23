@@ -6,6 +6,7 @@
 import { createRef, type ComponentChild } from "preact";
 
 import type { ISbDmNote, ScoreBookDataModel } from "../../../core/ScoreBookDataModel.js";
+import { getSharedAudioContext } from "../../../core/audio-context.js";
 import type { INoteStyle } from "../../../core/types/general.js";
 import type { UndoManager } from "../../../core/UndoManager.js";
 import { isSameTiming } from "../../../core/utils.js";
@@ -17,7 +18,7 @@ import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.
 import { TouchHoldDetector } from "../TouchHoldDetector.js";
 import { NoteStyleSymbolViewer } from "./NoteStyleSymbolViewer.js";
 
-const audioContext = new AudioContext();
+const audioContext = getSharedAudioContext();
 const baseNoteClasses = "note-viewer note-width";
 
 export interface INoteViewerProps extends ICommonUIProperties {
