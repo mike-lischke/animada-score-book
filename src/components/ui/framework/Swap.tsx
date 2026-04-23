@@ -15,11 +15,14 @@ export interface ISwapProperties extends ICommonUIProperties {
 
     /** Optional callback that is called when the swap state changes. */
     onChange?: (isOn: boolean) => void;
+
+    /** Optional controlled state for the swap input. */
+    isOn?: boolean;
 }
 
 export class Swap extends UIComponent<ISwapProperties> {
     public override render(): ComponentChild {
-        const { id, offContent, onContent, onChange } = this.props;
+        const { id, offContent, onContent, onChange, isOn } = this.props;
 
         const className = this.generateFinalClassName([
             "btn",
@@ -33,6 +36,7 @@ export class Swap extends UIComponent<ISwapProperties> {
                 <input
                     type="checkbox"
                     id={id}
+                    checked={isOn}
                     onChange={(event) => {
                         onChange?.(event.currentTarget.checked);
                     }}

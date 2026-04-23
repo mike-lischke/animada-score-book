@@ -326,12 +326,15 @@ export class Minimap extends UIComponent<IMinimapProps> {
 
         // Step 1: adjust the marker width to match the width of a bar.
         const contentWidth = minimapContentHost.getBoundingClientRect().width;
-        const viewportWidth = normalizedViewportWidth * contentWidth;
+        const hostWidth = minimapScrollHost.getBoundingClientRect().width;
+        const safeViewportWidth = clampValue(normalizedViewportWidth, 0, 1) * contentWidth;
+        const viewportWidth = clampValue(safeViewportWidth, 1, hostWidth);
         marker.style.width = `${viewportWidth}px`;
 
         // Step 2: move the marker to the correct horizontal position based on the given normalized position.
-        const hostWidth = minimapScrollHost.getBoundingClientRect().width;
-        marker.style.left = `${Math.floor(normalizedViewportPosition * (hostWidth - viewportWidth))}px`;
+        const markerScrollWidth = Math.max(0, hostWidth - viewportWidth);
+        const safeViewportPosition = clampValue(normalizedViewportPosition, 0, 1);
+        marker.style.left = `${safeViewportPosition * markerScrollWidth}px`;
 
         // Step 3: update the bar number displayed in the marker.
         if (bars.startBar === bars.endBar) {

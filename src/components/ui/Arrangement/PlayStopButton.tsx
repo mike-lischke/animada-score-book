@@ -42,6 +42,7 @@ export class PlayStopButton extends UIComponent<IPlayStopButtonProperties> {
             <Swap
                 id={id}
                 className={className}
+                isOn={isPlaying}
                 offContent={
                     <Image
                         src={PredefinedImage.PlayImage}

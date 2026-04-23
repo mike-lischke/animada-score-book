@@ -71,8 +71,13 @@ export class BarViewer extends UIComponent<IBarViewerProps, IBarViewerState> {
             dataModel } = this.props;
         const { tracks, barDivisibility } = this.state;
 
+        const metrics = arrangementPlayer.scoreMetrics;
+        const barWidthStyle: preact.CSSProperties = {
+            "--steps-per-bar": metrics.stepsPerBar.toString(),
+        };
+
         return (
-            <div className="bar-viewer" data-bar={barNumber}>
+            <div className="bar-viewer" data-bar={barNumber} style={barWidthStyle}>
                 <BarGuideRail
                     barNumber={barNumber}
                     timeParams={arrangement.timeParams}

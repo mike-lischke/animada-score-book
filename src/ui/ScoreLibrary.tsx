@@ -279,6 +279,12 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
     private handleScoreTreeRowClick = (event: UIEvent, row: RowComponent): void => {
         const entry = row.getData() as ISbDmScoreFolder | ISbDmScore;
         if (entry.type === SbDmEntityType.Score) {
+            if (event instanceof MouseEvent && event.detail >= 2) {
+                this.handleActionClick(event, "load", entry);
+
+                return;
+            }
+
             const params = new URLSearchParams(entry.content);
             const serialisedArrangement = getSerialisedArrangementFromParams(params);
             if (serialisedArrangement) {
