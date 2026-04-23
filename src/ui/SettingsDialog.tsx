@@ -116,6 +116,7 @@ export class SettingsDialog extends UIComponent<{}, ISettingsDialogState> {
                             caption={currentTheme}
                             items={themeItems}
                             selectedItem={currentTheme}
+                            closeOnSelect
                         />
                     </GridCell>
                     <GridCell className="settingName">

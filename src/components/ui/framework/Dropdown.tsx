@@ -20,6 +20,9 @@ export interface IDropdownProperties extends ICommonUIProperties {
     icon?: ComponentChild;
     selectedItem?: string;
     items: IDropdownItem[];
+
+    /** If true, the dropdown closes automatically after an item is selected. Defaults to false. */
+    closeOnSelect?: boolean;
 }
 
 export class Dropdown extends UIComponent<IDropdownProperties> {
@@ -27,7 +30,7 @@ export class Dropdown extends UIComponent<IDropdownProperties> {
     private popoverId = `popover-${getNewId()}`;
 
     public render(): ComponentChild {
-        const { caption, icon, items, selectedItem } = this.props;
+        const { caption, closeOnSelect, icon, items, selectedItem } = this.props;
 
         const children = items.map((item, index) => {
             return (
@@ -35,7 +38,12 @@ export class Dropdown extends UIComponent<IDropdownProperties> {
                     key={index}
                     className={item.label === selectedItem ? "selected" : ""}
                 >
-                    <a onClick={item.onClick}>
+                    <a onClick={(e) => {
+                        item.onClick?.(e);
+                        if (closeOnSelect) {
+                            document.getElementById(this.popoverId)?.hidePopover();
+                        }
+                    }}>
                         {item.icon && <span className="inline-flex w-6 h-6 items-center justify-center">
                             {item.icon}
                         </span>}
