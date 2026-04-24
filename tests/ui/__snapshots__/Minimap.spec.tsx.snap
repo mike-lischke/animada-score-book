@@ -26,6 +26,9 @@ exports[`Minimap (component) > edge cases > matches snapshot for empty arrangeme
     class="container"
     id="minimapViewportMarker"
     style="flex-direction: row; justify-content: center; align-items: center;"
+  />
+  <div
+    id="minimapViewportLabel"
   >
     <span
       id="barNumber"
@@ -690,6 +693,9 @@ exports[`Minimap (component) > handleTrackViewerScrolled > handles normalized vi
     class="container"
     id="minimapViewportMarker"
     style="flex-direction: row; justify-content: center; align-items: center;"
+  />
+  <div
+    id="minimapViewportLabel"
   >
     <span
       id="barNumber"

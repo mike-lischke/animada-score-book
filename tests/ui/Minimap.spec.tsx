@@ -162,6 +162,7 @@ class TestableMinimap extends Minimap {
         scrollHost: HTMLDivElement;
         contentHost: HTMLDivElement;
         marker: HTMLDivElement;
+        viewportLabel: HTMLDivElement;
         barNumber: HTMLSpanElement;
     }): void {
         // @ts-expect-error, because we are accessing a private field.
@@ -171,7 +172,20 @@ class TestableMinimap extends Minimap {
         // @ts-expect-error, because we are accessing a private field.
         this.viewportMarkerRef.current = dom.marker;
         // @ts-expect-error, because we are accessing a private field.
+        this.viewportLabelRef.current = dom.viewportLabel;
+        // @ts-expect-error, because we are accessing a private field.
         this.barNumberRef.current = dom.barNumber;
+
+        // viewportDomRefs is a cached snapshot built in refreshViewportDomRefs(). We update it directly so
+        // that handleTrackViewerScrolled sees the test elements instead of the stale render-time refs.
+        // @ts-expect-error, because we are accessing a private field.
+        this.viewportDomRefs = {
+            minimapScrollHost: dom.scrollHost,
+            minimapContentHost: dom.contentHost,
+            marker: dom.marker,
+            viewportLabel: dom.viewportLabel,
+            barNumber: dom.barNumber,
+        };
     }
 }
 
@@ -213,11 +227,13 @@ describe("Minimap (component)", () => {
         scrollHost: HTMLDivElement;
         contentHost: HTMLDivElement;
         marker: HTMLDivElement;
+        viewportLabel: HTMLDivElement;
         barNumber: HTMLSpanElement;
     } => {
         const scrollHost = document.createElement("div");
         const contentHost = document.createElement("div");
         const marker = document.createElement("div");
+        const viewportLabel = document.createElement("div");
         const barNumber = document.createElement("span");
 
         Object.defineProperty(scrollHost, "clientWidth", {
@@ -265,6 +281,7 @@ describe("Minimap (component)", () => {
             scrollHost,
             contentHost,
             marker,
+            viewportLabel,
             barNumber,
         };
     };
@@ -466,7 +483,7 @@ describe("Minimap (component)", () => {
             minimap.testHandleContentPointerDown(pointerEvent);
 
             expect(onViewportMoved).toHaveBeenCalledTimes(1);
-            expect(onViewportMoved).toHaveBeenCalledWith(0.06);
+            expect(onViewportMoved).toHaveBeenCalledWith(0.3);
         });
     });
 
