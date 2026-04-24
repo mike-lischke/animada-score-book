@@ -9,7 +9,6 @@ import { UIComponent, type ICommonUIProperties } from "./UIComponent.js";
 
 interface ISliderProperties extends ICommonUIProperties {
     vertical?: boolean;
-    handleSize?: number;
 
     value: number;
     min?: number;
@@ -24,7 +23,6 @@ export class Slider extends UIComponent<ISliderProperties> {
     public static override defaultProps = {
         disabled: false,
         vertical: false,
-        handleSize: 30,
     };
 
     private sliderRef = createRef<HTMLInputElement>();

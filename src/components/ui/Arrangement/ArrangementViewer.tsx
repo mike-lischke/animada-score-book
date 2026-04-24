@@ -158,8 +158,8 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         const { autoFollowIsOn, viewerZoom } = this.state;
 
         const arrangement = dataModel.arrangement!;
-
-        const barCount = arrangement.timeParams.length;
+        const metrics = arrangementPlayer.scoreMetrics;
+        const barCount = metrics.bars;
 
         const contentHost = (
             <Container
@@ -268,10 +268,32 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
             const position = Math.floor(normalizedPosition * contentWidth);
             this.playBeamRef.current.style.left = `${position}px`;
 
-            // If the play beam gets close to the end of the visible area, scroll so that the beam is at the left
-            // edge of the viewer.
+            // If the play beam gets close to the end of the visible area, scroll with intelligent snapping.
             if (position < viewer.scrollLeft || position > viewer.scrollLeft + clientWidth) {
-                viewer.scrollLeft = clampValue(position, 0, maxScroll);
+                const metrics = arrangementPlayer.scoreMetrics;
+                const totalBars = metrics.bars;
+                const totalSteps = totalBars * metrics.stepsPerBar;
+                const stepWidthPixels = contentWidth / totalSteps;
+                const barWidthPixels = stepWidthPixels * metrics.stepsPerBar;
+                const halfBarWidthPixels = barWidthPixels / 2;
+                const pulseWidthPixels = stepWidthPixels * metrics.stepsPerPulse;
+
+                // Determine the grid size based on available space
+                let gridWidthPixels: number;
+                if (barWidthPixels <= clientWidth) {
+                    // Whole bars visible: snap to bar boundaries
+                    gridWidthPixels = barWidthPixels;
+                } else if (halfBarWidthPixels <= clientWidth) {
+                    // At least half a bar visible: snap to half-bar boundaries
+                    gridWidthPixels = halfBarWidthPixels;
+                } else {
+                    // Less than half a bar visible: snap to pulse boundaries
+                    gridWidthPixels = pulseWidthPixels;
+                }
+
+                // Calculate the snapped scroll position
+                const snappedScroll = Math.floor(position / gridWidthPixels) * gridWidthPixels;
+                viewer.scrollLeft = clampValue(snappedScroll, 0, maxScroll);
             }
         }
     };
