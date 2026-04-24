@@ -42,12 +42,21 @@ interface IBarBoundary {
 
 type SelectorHandle = "start" | "end";
 
+interface IViewportDomRefs {
+    minimapScrollHost: HTMLDivElement;
+    minimapContentHost: HTMLDivElement;
+    marker: HTMLDivElement;
+    viewportLabel: HTMLDivElement;
+    barNumber: HTMLSpanElement;
+}
+
 export class Minimap extends UIComponent<IMinimapProps> {
     private minimapRef = createRef<HTMLDivElement>();
     private minimapScrollHostRef = createRef<HTMLDivElement>();
     private contentHostRef = createRef<HTMLDivElement>();
     private zoomHostRef = createRef<HTMLDivElement>();
     private viewportMarkerRef = createRef<HTMLDivElement>();
+    private viewportLabelRef = createRef<HTMLDivElement>();
     private barNumberRef = createRef<HTMLSpanElement>();
 
     private barSelectorRef = createRef<HTMLDivElement>();
@@ -55,6 +64,7 @@ export class Minimap extends UIComponent<IMinimapProps> {
     private barSelectorEndHandleRef = createRef<HTMLDivElement>();
 
     private viewportMarkerAnimationFrame?: number;
+    private viewportDomRefs?: IViewportDomRefs;
 
     private isDraggingViewportMarker = false;
     private markerDragOffsetX = 0;
@@ -71,6 +81,7 @@ export class Minimap extends UIComponent<IMinimapProps> {
 
     /** Initializes zoom and cached bar geometry after the minimap has mounted. */
     public override componentDidMount(): void {
+        this.refreshViewportDomRefs();
         this.updateZoomLevel();
     }
 
@@ -89,6 +100,7 @@ export class Minimap extends UIComponent<IMinimapProps> {
             || previousBarCount !== barCount;
 
         super.componentDidUpdate(previousProps, this.state);
+        this.refreshViewportDomRefs();
 
         if (arrangementStructureChanged && this.selectionState.selectorIsActive) {
             this.setSelectionState(false);
@@ -117,6 +129,8 @@ export class Minimap extends UIComponent<IMinimapProps> {
             cancelAnimationFrame(this.viewportMarkerAnimationFrame);
             this.viewportMarkerAnimationFrame = undefined;
         }
+
+        this.viewportDomRefs = undefined;
     }
 
     /**
@@ -167,9 +181,10 @@ export class Minimap extends UIComponent<IMinimapProps> {
                     mainAlignment={ChildAlignment.Center}
                     crossAlignment={ChildAlignment.Center}
                     innerRef={this.viewportMarkerRef}
-                >
+                />
+                <div id="minimapViewportLabel" ref={this.viewportLabelRef}>
                     <span id="barNumber" ref={this.barNumberRef}>1</span>
-                </Container>
+                </div>
                 <div id="minimapBarSelector" ref={this.barSelectorRef}></div>
                 <div id="minimapBarSelectorStartHandle"
                     className="minimap-bar-selector-handle"
@@ -197,7 +212,7 @@ export class Minimap extends UIComponent<IMinimapProps> {
         this.updateViewportMarker(viewportWidth, viewportPosition, bars);
 
         // Scroll the minimap to the given position too.
-        const minimapScrollHost = this.minimapScrollHostRef.current;
+        const minimapScrollHost = this.viewportDomRefs?.minimapScrollHost;
         if (minimapScrollHost) {
             const scrollLeft = viewportPosition * (minimapScrollHost.scrollWidth - minimapScrollHost.clientWidth);
             minimapScrollHost.scrollLeft = scrollLeft;
@@ -208,6 +223,29 @@ export class Minimap extends UIComponent<IMinimapProps> {
             this.updateSelectorPosition();
         }
     };
+
+    /** Refreshes the DOM refs used by viewport marker/label updates. */
+    private refreshViewportDomRefs(): void {
+        const minimapScrollHost = this.minimapScrollHostRef.current;
+        const minimapContentHost = this.contentHostRef.current;
+        const marker = this.viewportMarkerRef.current;
+        const viewportLabel = this.viewportLabelRef.current;
+        const barNumber = this.barNumberRef.current;
+
+        if (!minimapScrollHost || !minimapContentHost || !marker || !viewportLabel || !barNumber) {
+            this.viewportDomRefs = undefined;
+
+            return;
+        }
+
+        this.viewportDomRefs = {
+            minimapScrollHost,
+            minimapContentHost,
+            marker,
+            viewportLabel,
+            barNumber,
+        };
+    }
 
     /**
      * Converts an absolute scroll left position to a relative position between 0 and 1, based on the given
@@ -306,41 +344,58 @@ export class Minimap extends UIComponent<IMinimapProps> {
      */
     private updateViewportMarker = (normalizedViewportWidth: number, normalizedViewportPosition: number,
         bars: IVisibleBarRange): void => {
-        // The given position is a normalized value between 0 and 1, representing the scroll position of the
-        // track viewer. We need to convert this to an absolute scroll left value for the viewport marker.
-        const minimapScrollHost = this.minimapScrollHostRef.current;
-        const minimapContentHost = this.contentHostRef.current;
-        const marker = this.viewportMarkerRef.current;
-        if (!minimapScrollHost || !minimapContentHost || !marker) {
+        const domRefs = this.viewportDomRefs;
+        if (!domRefs) {
             return;
         }
+
+        // The given position is a normalized value between 0 and 1, representing the scroll position of the
+        // track viewer. We need to convert this to an absolute scroll left value for the viewport marker.
+        const {
+            minimapScrollHost,
+            minimapContentHost,
+            marker,
+            viewportLabel,
+            barNumber,
+        } = domRefs;
 
         // Hide the viewport marker if the content is not scrollable, to avoid showing an empty marker.
         if (normalizedViewportWidth >= 1) {
             marker.style.display = "none";
+            viewportLabel.style.display = "none";
 
             return;
         } else {
             marker.style.display = "flex";
+            viewportLabel.style.display = "block";
         }
 
         // Step 1: adjust the marker width to match the width of a bar.
         const contentWidth = minimapContentHost.getBoundingClientRect().width;
         const hostWidth = minimapScrollHost.getBoundingClientRect().width;
+        const effectiveMinimapWidth = Math.min(contentWidth, hostWidth);
         const safeViewportWidth = clampValue(normalizedViewportWidth, 0, 1) * contentWidth;
-        const viewportWidth = clampValue(safeViewportWidth, 1, hostWidth);
+        const viewportWidth = clampValue(safeViewportWidth, 1, Math.max(1, effectiveMinimapWidth));
         marker.style.width = `${viewportWidth}px`;
 
         // Step 2: move the marker to the correct horizontal position based on the given normalized position.
-        const markerScrollWidth = Math.max(0, hostWidth - viewportWidth);
+        const markerScrollWidth = Math.max(0, effectiveMinimapWidth - viewportWidth);
         const safeViewportPosition = clampValue(normalizedViewportPosition, 0, 1);
-        marker.style.left = `${safeViewportPosition * markerScrollWidth}px`;
+        const markerLeft = safeViewportPosition * markerScrollWidth;
+        marker.style.left = `${markerLeft}px`;
+
+        // Keep the label centered over the marker, independent from marker width.
+        viewportLabel.style.left = `${markerLeft + (viewportWidth / 2)}px`;
 
         // Step 3: update the bar number displayed in the marker.
         if (bars.startBar === bars.endBar) {
-            this.barNumberRef.current!.textContent = bars.startBar.toString();
+            barNumber.textContent = bars.startBar.toString();
+        } else if (viewportWidth < 72) {
+            barNumber.textContent = bars.startBar.toString();
+        } else if (viewportWidth < 110) {
+            barNumber.textContent = `${bars.startBar}-${bars.endBar}`;
         } else {
-            this.barNumberRef.current!.textContent = `${bars.startBar} - ${bars.endBar}`;
+            barNumber.textContent = `${bars.startBar} - ${bars.endBar}`;
         }
     };
 
@@ -432,8 +487,12 @@ export class Minimap extends UIComponent<IMinimapProps> {
         const { onViewportMoved } = this.props;
 
         const scrollHostRect = minimapScrollHost.getBoundingClientRect();
-        const contentX = (event.clientX - scrollHostRect.left) + minimapScrollHost.scrollLeft;
-        const position = contentX / minimapContentHost.getBoundingClientRect().width;
+        const contentWidth = minimapContentHost.getBoundingClientRect().width;
+        const hostWidth = minimapScrollHost.getBoundingClientRect().width;
+        const effectiveMinimapWidth = Math.min(contentWidth, hostWidth);
+        const contentX = clampValue((event.clientX - scrollHostRect.left) + minimapScrollHost.scrollLeft,
+            0, effectiveMinimapWidth);
+        const position = this.toRelativePosition(contentX, effectiveMinimapWidth);
 
         onViewportMoved?.(position);
     };
@@ -444,7 +503,7 @@ export class Minimap extends UIComponent<IMinimapProps> {
      * @param event The pointer event that began the drag.
      */
     private beginViewportMarkerDrag(event: PointerEvent): void {
-        const marker = this.viewportMarkerRef.current;
+        const marker = this.viewportDomRefs?.marker;
         if (!marker) {
             return;
         }
@@ -724,16 +783,18 @@ export class Minimap extends UIComponent<IMinimapProps> {
             return;
         }
 
-        const minimapScrollHost = this.minimapScrollHostRef.current;
-        const marker = this.viewportMarkerRef.current;
+        const minimapScrollHost = this.viewportDomRefs?.minimapScrollHost;
+        const marker = this.viewportDomRefs?.marker;
         if (!minimapScrollHost || !marker) {
             return;
         }
 
         const scrollHostRect = minimapScrollHost.getBoundingClientRect();
         const markerLeft = (event.clientX - scrollHostRect.left) - this.markerDragOffsetX;
+        const contentWidth = this.viewportDomRefs?.minimapContentHost.getBoundingClientRect().width ?? 0;
+        const effectiveMinimapWidth = Math.min(scrollHostRect.width, contentWidth);
         const markerWidth = marker.getBoundingClientRect().width;
-        const markerScrollWidth = Math.max(0, scrollHostRect.width - markerWidth);
+        const markerScrollWidth = Math.max(0, effectiveMinimapWidth - markerWidth);
         const position = this.toRelativePosition(markerLeft, markerScrollWidth);
 
         const { onViewportMoved } = this.props;

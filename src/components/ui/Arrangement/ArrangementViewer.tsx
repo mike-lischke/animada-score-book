@@ -303,7 +303,7 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
 
     private handleViewportMoved = (newScrollLeft: number) => {
         if (this.viewerRef.current) {
-            const scrollRange = this.viewerContentHostRef.current!.scrollWidth - this.viewerRef.current.clientWidth;
+            const scrollRange = this.viewerRef.current.scrollWidth - this.viewerRef.current.clientWidth;
             this.viewerRef.current.scrollLeft = clampValue(newScrollLeft * scrollRange, 0, scrollRange);
         }
     };

@@ -967,6 +967,9 @@ h6 {
 }
 
 .arrangementViewer .minimap {
+    --minimap-marker-top: -4px;
+    --minimap-marker-height: 68px;
+
     height: 80px;
     margin: 0 20px 0 0;
 
@@ -1012,8 +1015,8 @@ h6 {
         touch-action: none;
         user-select: none;
 
-        height: 68px;
-        top: -4px;
+        height: var(--minimap-marker-height);
+        top: var(--minimap-marker-top);
 
         border: 1px solid color-mix(in srgb, var(--color-base-300) 10%, var(--color-neutral-content));
         border-radius: 6px;
@@ -1021,11 +1024,25 @@ h6 {
         z-index: 4;
 
         cursor: grab;
+    }
+
+    #minimapViewportLabel {
+        position: absolute;
+        display: none;
+        top: calc(var(--minimap-marker-top) + (var(--minimap-marker-height) / 2));
+        transform: translate(-50%, -50%);
+        pointer-events: none;
+        user-select: none;
+        z-index: 6;
 
         #barNumber {
-            font-size: 30px;
+            display: inline-block;
+            font-size: 24px;
             font-weight: bold;
+            line-height: 1;
             color: var(--color-neutral-content);
+            text-shadow: 0 1px 2px color-mix(in srgb, var(--color-base-100) 50%, black);
+            white-space: nowrap;
             user-select: none;
             pointer-events: none;
         }
@@ -1036,8 +1053,8 @@ h6 {
         display: none;
         pointer-events: none;
 
-        height: 68px;
-        top: -4px;
+        height: var(--minimap-marker-height);
+        top: var(--minimap-marker-top);
 
         border: 2px solid color-mix(in srgb, var(--color-info) 25%, white);
         border-radius: 4px;
