@@ -117,6 +117,7 @@ export class App extends UIComponent<{}, IAppState> {
         document.documentElement.setAttribute("data-theme", theme);
         escapeStack.attach();
         requisitions.register("settingsChanged", this.handleSettingsChanged);
+        requisitions.register("playRangeChanged", this.handlePlayRangeChanged);
 
         void this.dataModel.initialize().then(() => {
             const serializedArrangement =
@@ -138,6 +139,7 @@ export class App extends UIComponent<{}, IAppState> {
         super.componentWillUnmount();
         escapeStack.detach();
         requisitions.unregister("settingsChanged", this.handleSettingsChanged);
+        requisitions.unregister("playRangeChanged", this.handlePlayRangeChanged);
     }
 
     public render() {
@@ -719,7 +721,7 @@ export class App extends UIComponent<{}, IAppState> {
         this.forceUpdate();
     };
 
-    private playRangeChanged = (range: { from: number; to: number; } | undefined): Promise<boolean> => {
+    private handlePlayRangeChanged = (range: { from: number; to: number; } | undefined): Promise<boolean> => {
         this.currentPlayRange = range ? { startBar: range.from, endBar: range.to } : undefined;
         this.forceUpdate();
 

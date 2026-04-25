@@ -731,11 +731,12 @@ export class ArrangementPlayer extends Publisher {
         // Which gives us the "1-2, 1-2-3-4" pattern (for 2/4 and 4/4) before the music starts.
         let realTime = 0;
         let noteStyle = numberSounds.noteStyles["1"];
+        const tempNote = { track: { volume: 1 } } as ISbDmNote;
         let audioEvent: IAudioEvent = {
             kind: "audio",
             realTime,
             audioBuffer: noteStyle.audioBuffer!,
-            note: {} as ISbDmNote,
+            note: tempNote,
         };
         this.scheduleAudioEvent(audioEvent);
 
@@ -745,7 +746,7 @@ export class ArrangementPlayer extends Publisher {
             kind: "audio",
             realTime,
             audioBuffer: noteStyle.audioBuffer!,
-            note: {} as ISbDmNote,
+            note: tempNote,
         };
         this.scheduleAudioEvent(audioEvent);
 
@@ -755,7 +756,7 @@ export class ArrangementPlayer extends Publisher {
             kind: "audio",
             realTime,
             audioBuffer: noteStyle.audioBuffer!,
-            note: {} as ISbDmNote,
+            note: tempNote,
         };
         this.scheduleAudioEvent(audioEvent);
 
@@ -765,12 +766,14 @@ export class ArrangementPlayer extends Publisher {
             kind: "audio",
             realTime,
             audioBuffer: noteStyle.audioBuffer!,
-            note: {} as ISbDmNote,
+            note: tempNote,
         };
         this.scheduleAudioEvent(audioEvent);
 
-        // Wait for the count-in to finish before resolving.
-        await waitFor(metrics.secondsPerBar * 1000, () => {
+        // Wait for the count-in to finish before resolving. Add 10 ms to ensure the last count-in sound has time to
+        // play before we start the main playback loop, which also schedules sounds at the very beginning of
+        // the arrangement.
+        await waitFor((metrics.secondsPerBar * 1000) + 10, () => {
             return this.#state !== "counting";
         });
     }

@@ -863,18 +863,21 @@ export class Minimap extends UIComponent<IMinimapProps> {
             return;
         }
 
-        const scrollHostRect = minimapScrollHost.getBoundingClientRect();
-        const scrollLeft = minimapScrollHost.scrollLeft;
+        // Use offsetLeft/offsetWidth (unscaled layout coordinates) and multiply by the zoom factor to obtain
+        // visual content coordinates. This is consistent with how barNumberFromClientX computes contentX via
+        // clientX and scrollLeft, and avoids a cross-browser inconsistency where iOS Safari can return
+        // unscaled values from getBoundingClientRect() for elements inside a CSS zoom-ed ancestor.
+        const zoomFactor = parseFloat(this.zoomHostRef.current?.style.zoom ?? "100%") / 100;
+        const safeZoomFactor = Number.isFinite(zoomFactor) && zoomFactor > 0 ? zoomFactor : 1;
 
         this.barBoundaryCache = Array.from(minimap.querySelectorAll<HTMLElement>(".mini-bar-viewer"))
             .map((element) => {
                 const barNumber = Number.parseInt(element.dataset.bar ?? "0", 10);
-                const rect = element.getBoundingClientRect();
 
                 return {
                     bar: barNumber,
-                    contentLeft: (rect.left - scrollHostRect.left) + scrollLeft,
-                    contentRight: (rect.right - scrollHostRect.left) + scrollLeft,
+                    contentLeft: element.offsetLeft * safeZoomFactor,
+                    contentRight: (element.offsetLeft + element.offsetWidth) * safeZoomFactor,
                 };
             })
             .filter((entry) => {
