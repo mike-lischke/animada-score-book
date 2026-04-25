@@ -8,6 +8,7 @@ import { createRef, type ComponentChild } from "preact";
 import type { ISbDmArrangement } from "../../../core/ScoreBookDataModel.js";
 import { clampValue } from "../../../core/utils.js";
 import type { IScoreMetrics } from "../../../player/TimeCoordinator.js";
+import { requisitions } from "../../../supplement/Requisitions.js";
 import { Container } from "../framework/Container.js";
 import { ChildAlignment, Orientation } from "../framework/ui-types.js";
 import type { ICommonUIProperties } from "../framework/UIComponent.js";
@@ -24,7 +25,6 @@ interface IMinimapProps extends ICommonUIProperties {
     scoreMetrics: IScoreMetrics;
 
     onViewportMoved?: (position: number) => void;
-    onSelectionChanged?: (startBar: number, endBar: number) => void;
 }
 
 interface ISelectionState {
@@ -32,6 +32,7 @@ interface ISelectionState {
     selectionStartBar: number;
     selectionEndBar: number;
     activeSelectorHandle?: SelectorHandle;
+    selectorDragOffsetBars?: number;
 }
 
 interface IBarBoundary {
@@ -60,6 +61,7 @@ export class Minimap extends UIComponent<IMinimapProps> {
     private barNumberRef = createRef<HTMLSpanElement>();
 
     private barSelectorRef = createRef<HTMLDivElement>();
+    private barSelectorLabelRef = createRef<HTMLDivElement>();
     private barSelectorStartHandleRef = createRef<HTMLDivElement>();
     private barSelectorEndHandleRef = createRef<HTMLDivElement>();
 
@@ -67,14 +69,19 @@ export class Minimap extends UIComponent<IMinimapProps> {
     private viewportDomRefs?: IViewportDomRefs;
 
     private isDraggingViewportMarker = false;
+    private isDraggingSelectorRange = false;
     private markerDragOffsetX = 0;
     private activePointerId?: number;
+    private lastMarkerTouchTapTime = 0;
+    private lastMarkerTouchTapX = 0;
+    private lastMarkerTouchTapY = 0;
 
     private readonly selectionState: ISelectionState = {
         selectorIsActive: false,
         selectionStartBar: 0,
         selectionEndBar: 0,
         activeSelectorHandle: undefined,
+        selectorDragOffsetBars: undefined,
     };
 
     private barBoundaryCache: IBarBoundary[] = [];
@@ -186,6 +193,7 @@ export class Minimap extends UIComponent<IMinimapProps> {
                     <span id="barNumber" ref={this.barNumberRef}>1</span>
                 </div>
                 <div id="minimapBarSelector" ref={this.barSelectorRef}></div>
+                <div id="minimapBarSelectorLabel" ref={this.barSelectorLabelRef}></div>
                 <div id="minimapBarSelectorStartHandle"
                     className="minimap-bar-selector-handle"
                     ref={this.barSelectorStartHandleRef}
@@ -420,6 +428,81 @@ export class Minimap extends UIComponent<IMinimapProps> {
     }
 
     /**
+     * Resolves drag target when selection overlay and viewport marker overlap.
+     *
+     * Desktop: viewport marker stays default target, with Shift as an explicit selector-drag override.
+     * Touch/Pen: bottom area drags selection, top area drags viewport marker.
+     *
+     * @param event The pointer event that initiated the interaction.
+     * @param pointerInsideSelector Whether the pointer is inside the selector overlay.
+     * @param pointerInsideViewportMarker Whether the pointer is inside the viewport marker.
+     * @returns True if the selector range should be dragged; otherwise viewport marker handling applies.
+     */
+    private shouldDragSelectorRange(event: PointerEvent, pointerInsideSelector: boolean,
+        pointerInsideViewportMarker: boolean): boolean {
+        if (!pointerInsideSelector) {
+            return false;
+        }
+
+        if (!pointerInsideViewportMarker) {
+            return true;
+        }
+
+        if (event.shiftKey) {
+            return true;
+        }
+
+        if (event.pointerType !== "touch" && event.pointerType !== "pen") {
+            return false;
+        }
+
+        const markerRect = this.viewportMarkerRef.current?.getBoundingClientRect();
+        if (!markerRect) {
+            return true;
+        }
+
+        const markerRelativeY = event.clientY - markerRect.top;
+
+        // On mobile, top area controls viewport drag, bottom area controls range drag.
+        return markerRelativeY > (markerRect.height * 0.45);
+    }
+
+    /**
+     * Returns true when a touch/pen pointer down qualifies as a double-tap on the viewport marker.
+     *
+     * @param event The pointer event originating from the marker.
+     * @returns True if the event is the second tap within temporal/spatial thresholds.
+     */
+    private isTouchDoubleTapOnMarker(event: PointerEvent): boolean {
+        if (event.pointerType !== "touch" && event.pointerType !== "pen") {
+            return false;
+        }
+
+        const now = event.timeStamp;
+        const deltaTime = now - this.lastMarkerTouchTapTime;
+        const deltaX = event.clientX - this.lastMarkerTouchTapX;
+        const deltaY = event.clientY - this.lastMarkerTouchTapY;
+        const distance = Math.hypot(deltaX, deltaY);
+
+        const maxDoubleTapDelayMs = 350;
+        const maxDoubleTapDistancePx = 24;
+
+        const isDoubleTap = deltaTime > 0
+            && deltaTime <= maxDoubleTapDelayMs
+            && distance <= maxDoubleTapDistancePx;
+
+        this.lastMarkerTouchTapTime = now;
+        this.lastMarkerTouchTapX = event.clientX;
+        this.lastMarkerTouchTapY = event.clientY;
+
+        if (isDoubleTap) {
+            this.lastMarkerTouchTapTime = 0;
+        }
+
+        return isDoubleTap;
+    }
+
+    /**
      * Dispatches pointer interactions to selector handles, the viewport marker, or the minimap content.
      *
      * @param event The pointer event originating from the minimap.
@@ -439,10 +522,29 @@ export class Minimap extends UIComponent<IMinimapProps> {
             return;
         }
 
-        if (this.isPointInsideElement(event, this.viewportMarkerRef.current)) {
+        const pointerInsideViewportMarker = this.isPointInsideElement(event, this.viewportMarkerRef.current);
+        const pointerInsideSelector = this.selectionState.selectorIsActive
+            && this.isPointInsideElement(event, this.barSelectorRef.current);
+
+        if (this.shouldDragSelectorRange(event, pointerInsideSelector, pointerInsideViewportMarker)) {
+            this.beginSelectorRangeDrag(event);
+
+            return;
+        }
+
+        if (pointerInsideViewportMarker) {
+            if (this.isTouchDoubleTapOnMarker(event)) {
+                this.setSelectionState(!this.selectionState.selectorIsActive);
+                event.preventDefault();
+                event.stopPropagation();
+
+                return;
+            }
+
             if (event.detail !== 2) {
                 this.beginViewportMarkerDrag(event);
             } else {
+                this.setSelectionState(!this.selectionState.selectorIsActive);
                 event.preventDefault();
                 event.stopPropagation();
             }
@@ -527,11 +629,13 @@ export class Minimap extends UIComponent<IMinimapProps> {
         const { selectionStartBar, selectionEndBar } = this.selectionState;
 
         const selector = this.barSelectorRef.current;
+        const selectorLabel = this.barSelectorLabelRef.current;
         const startHandle = this.barSelectorStartHandleRef.current;
         const endHandle = this.barSelectorEndHandleRef.current;
         const minimap = this.minimapRef.current;
+        const minimapScrollHost = this.minimapScrollHostRef.current;
 
-        if (!selector || !startHandle || !endHandle || !minimap) {
+        if (!selector || !selectorLabel || !startHandle || !endHandle || !minimap || !minimapScrollHost) {
             return;
         }
 
@@ -545,18 +649,31 @@ export class Minimap extends UIComponent<IMinimapProps> {
         }
 
         const minimapRect = minimap.getBoundingClientRect();
-        const startRect = startBarElement.getBoundingClientRect();
-        const endRect = endBarElement.getBoundingClientRect();
+        const scrollHostRect = minimapScrollHost.getBoundingClientRect();
+        const hostOffsetLeft = scrollHostRect.left - minimapRect.left;
+        const zoomFactor = parseFloat(this.zoomHostRef.current?.style.zoom ?? "100%") / 100;
+        const safeZoomFactor = Number.isFinite(zoomFactor) && zoomFactor > 0 ? zoomFactor : 1;
 
-        const left = Math.floor(startRect.left - minimapRect.left);
-        const right = Math.ceil(endRect.right - minimapRect.left);
+        // offsetLeft/offsetWidth are in unscaled layout coordinates. Convert to visual coordinates by applying zoom.
+        const startContentLeft = startBarElement.offsetLeft;
+        const endContentRight = endBarElement.offsetLeft + endBarElement.offsetWidth;
+        const visualScrollLeft = minimapScrollHost.scrollLeft;
+
+        const left = Math.floor(hostOffsetLeft + (startContentLeft * safeZoomFactor) - visualScrollLeft);
+        const right = Math.ceil(hostOffsetLeft + (endContentRight * safeZoomFactor) - visualScrollLeft);
         const width = Math.max(1, right - left);
 
         selector.style.left = `${left}px`;
         selector.style.width = `${width}px`;
+        selectorLabel.style.left = `${left + (width / 2)}px`;
 
         startHandle.style.left = `${left}px`;
         endHandle.style.left = `${left + width}px`;
+
+        const selectedBars = (selectionEndBar - selectionStartBar) + 1;
+        selectorLabel.textContent = selectedBars === 1
+            ? `${selectionStartBar} (1 bar)`
+            : `${selectionStartBar} - ${selectionEndBar} (${selectedBars} bars)`;
     }
 
     /**
@@ -570,20 +687,22 @@ export class Minimap extends UIComponent<IMinimapProps> {
         }
 
         const selector = this.barSelectorRef.current;
+        const selectorLabel = this.barSelectorLabelRef.current;
         const startHandle = this.barSelectorStartHandleRef.current;
         const endHandle = this.barSelectorEndHandleRef.current;
 
-        if (!selector || !startHandle || !endHandle) {
+        if (!selector || !selectorLabel || !startHandle || !endHandle) {
             return;
         }
 
-        const { arrangement, onSelectionChanged } = this.props;
+        const { arrangement } = this.props;
 
         if (active) {
             const barCount = arrangement.timeParams.length;
             if (barCount <= 0) {
                 this.selectionState.selectorIsActive = false;
                 selector.style.display = "none";
+                selectorLabel.style.display = "none";
                 startHandle.style.display = "none";
                 endHandle.style.display = "none";
 
@@ -604,17 +723,22 @@ export class Minimap extends UIComponent<IMinimapProps> {
             this.updateSelectorPosition();
 
             selector.style.display = "block";
+            selectorLabel.style.display = "block";
             startHandle.style.display = "block";
             endHandle.style.display = "block";
 
-            onSelectionChanged?.(this.selectionState.selectionStartBar, this.selectionState.selectionEndBar);
+            void requisitions.execute("playRangeChanged", {
+                from: this.selectionState.selectionStartBar,
+                to: this.selectionState.selectionEndBar,
+            });
         } else {
             this.selectionState.selectorIsActive = false;
             selector.style.display = "none";
+            selectorLabel.style.display = "none";
             startHandle.style.display = "none";
             endHandle.style.display = "none";
 
-            onSelectionChanged?.(0, 0);
+            void requisitions.execute("playRangeChanged", undefined);
         }
 
         window.getSelection()?.removeAllRanges();
@@ -635,7 +759,36 @@ export class Minimap extends UIComponent<IMinimapProps> {
 
         this.selectionState.activeSelectorHandle = handle;
         this.activePointerId = event.pointerId;
+
         handleElement.setPointerCapture(event.pointerId);
+
+        document.addEventListener("pointermove", this.handleDocumentPointerMove);
+        document.addEventListener("pointerup", this.handleDocumentPointerUp);
+        document.addEventListener("pointercancel", this.handleDocumentPointerUp);
+
+        event.preventDefault();
+        event.stopPropagation();
+    }
+
+    /**
+     * Starts dragging the full selected bar range as a single block.
+     *
+     * @param event The pointer event that started the drag.
+     */
+    private beginSelectorRangeDrag(event: PointerEvent): void {
+        const pointerBar = this.barNumberFromClientX(event.clientX, "start");
+        if (pointerBar === undefined) {
+            return;
+        }
+
+        this.isDraggingSelectorRange = true;
+        this.activePointerId = event.pointerId;
+        this.selectionState.selectorDragOffsetBars = pointerBar - this.selectionState.selectionStartBar;
+
+        const selector = this.barSelectorRef.current;
+        if (selector) {
+            selector.setPointerCapture(event.pointerId);
+        }
 
         document.addEventListener("pointermove", this.handleDocumentPointerMove);
         document.addEventListener("pointerup", this.handleDocumentPointerUp);
@@ -656,7 +809,9 @@ export class Minimap extends UIComponent<IMinimapProps> {
         }
 
         this.isDraggingViewportMarker = false;
+        this.isDraggingSelectorRange = false;
         this.selectionState.activeSelectorHandle = undefined;
+        this.selectionState.selectorDragOffsetBars = undefined;
         this.activePointerId = undefined;
 
         document.removeEventListener("pointermove", this.handleDocumentPointerMove);
@@ -680,15 +835,18 @@ export class Minimap extends UIComponent<IMinimapProps> {
 
         const scrollHostRect = minimapScrollHost.getBoundingClientRect();
         const contentX = (clientX - scrollHostRect.left) + minimapScrollHost.scrollLeft;
+        const firstBoundary = this.barBoundaryCache[0];
+        const lastBoundary = this.barBoundaryCache[this.barBoundaryCache.length - 1];
+        const clampedContentX = clampValue(contentX, firstBoundary.contentLeft, lastBoundary.contentRight);
 
         // Get the first bar who's right bound is >= the given coordinate.
         const firstBar = this.barBoundaryCache.find((boundary) => {
-            return contentX <= boundary.contentRight;
-        }) ?? this.barBoundaryCache[0];
+            return clampedContentX <= boundary.contentRight;
+        }) ?? lastBoundary;
 
         // If we are in the left half of this bar, we can return it immediately as the closest match,
         // otherwise we return the next bar.
-        if (contentX <= (firstBar.contentLeft + firstBar.contentRight) / 2) {
+        if (clampedContentX <= (firstBar.contentLeft + firstBar.contentRight) / 2) {
             return handle === "end" ? firstBar.bar - 1 : firstBar.bar;
         }
 
@@ -731,7 +889,7 @@ export class Minimap extends UIComponent<IMinimapProps> {
      * @param handle The handle that is currently being dragged.
      */
     private handleSelectorHandleDrag(event: PointerEvent, handle: SelectorHandle): void {
-        const { arrangement, onSelectionChanged } = this.props;
+        const { arrangement } = this.props;
 
         const barNumber = this.barNumberFromClientX(event.clientX, handle);
         if (barNumber === undefined) {
@@ -759,7 +917,46 @@ export class Minimap extends UIComponent<IMinimapProps> {
 
         this.updateSelectorPosition();
 
-        onSelectionChanged?.(this.selectionState.selectionStartBar, this.selectionState.selectionEndBar);
+        void requisitions.execute("playRangeChanged", {
+            from: this.selectionState.selectionStartBar,
+            to: this.selectionState.selectionEndBar
+        });
+    }
+
+    /**
+     * Moves the current selected bar range without changing its length.
+     *
+     * @param event The pointer event driving the drag.
+     */
+    private handleSelectorRangeDrag(event: PointerEvent): void {
+        const { arrangement } = this.props;
+
+        const pointerBar = this.barNumberFromClientX(event.clientX, "start");
+        if (pointerBar === undefined) {
+            return;
+        }
+
+        const barCount = arrangement.timeParams.length;
+        const span = this.selectionState.selectionEndBar - this.selectionState.selectionStartBar;
+        const offsetBars = this.selectionState.selectorDragOffsetBars ?? 0;
+
+        const desiredStart = pointerBar - offsetBars;
+        const clampedStart = clampValue(desiredStart, 1, Math.max(1, barCount - span));
+        const clampedEnd = clampedStart + span;
+
+        if (clampedStart === this.selectionState.selectionStartBar
+            && clampedEnd === this.selectionState.selectionEndBar) {
+            return;
+        }
+
+        this.selectionState.selectionStartBar = clampedStart;
+        this.selectionState.selectionEndBar = clampedEnd;
+
+        this.updateSelectorPosition();
+        void requisitions.execute("playRangeChanged", {
+            from: this.selectionState.selectionStartBar,
+            to: this.selectionState.selectionEndBar
+        });
     }
 
     /**
@@ -775,6 +972,12 @@ export class Minimap extends UIComponent<IMinimapProps> {
         const { activeSelectorHandle } = this.selectionState;
         if (activeSelectorHandle) {
             this.handleSelectorHandleDrag(event, activeSelectorHandle);
+
+            return;
+        }
+
+        if (this.isDraggingSelectorRange) {
+            this.handleSelectorRangeDrag(event);
 
             return;
         }
@@ -799,6 +1002,8 @@ export class Minimap extends UIComponent<IMinimapProps> {
 
         const { onViewportMoved } = this.props;
         onViewportMoved?.(position);
+
+        event.preventDefault();
     };
 
 }

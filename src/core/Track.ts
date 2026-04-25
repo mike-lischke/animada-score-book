@@ -17,6 +17,7 @@ export class Track extends Publisher implements ISbDmTrack {
     public readonly type = SbDmEntityType.Track;
     public readonly notes: ISbDmNote[] = [];
     public readonly polyrhythms: IPolyrhythm[] = [];
+
     public name = "";
     public volume = 1.0;
 
@@ -172,8 +173,8 @@ export class Track extends Publisher implements ISbDmTrack {
 
         const initialPolyrhythmCount = this.polyrhythms.length;
 
-        // Iterate from earliest polyrhtyhms to latest
-        // Therefore, if we consider a nested polyrhythm, we know its root polyrhythms have already been checked
+        // Iterate from earliest polyrhythms to latest.
+        // Therefore, if we consider a nested polyrhythm, we know its root polyrhythms have already been checked.
         let index = 0;
         while (index < this.polyrhythms.length) {
             const { start, end } = this.polyrhythms[index];

@@ -5,7 +5,6 @@
 
 import { createRef } from "preact";
 
-import { clampValue } from "../../../core/utils.js";
 import { UIComponent, type ICommonUIProperties } from "./UIComponent.js";
 
 export interface CollapsingTopContainerProperties extends ICommonUIProperties {
@@ -88,9 +87,6 @@ export class CollapsingTopContainer extends UIComponent<CollapsingTopContainerPr
                 <div
                     id="bottom"
                     ref={this.bottomRef}
-                    style={{
-                        overflow: "auto",
-                    }}
                     onScroll={this.handleBottomScroll}
                 >
                     {bottom}
@@ -176,21 +172,20 @@ export class CollapsingTopContainer extends UIComponent<CollapsingTopContainerPr
 
         const scrollTop = Math.max(0, forceExpanded ? 0 : bottomEl.scrollTop);
 
-        const fadeEnd = Math.max(1, this.topHeight / 2);
-        const collapseAt = fadeEnd;
+        // Switch from large to collapsed header at the exact scroll position where the top edge of
+        // the content aligns with the bottom edge of the collapsed header.
+        // Before this point the large header stays fully visible; no gradual fade.
+        const switchAt = Math.max(0, this.topHeight - this.collapsedTopHeight);
+        const isCollapsed = scrollTop >= switchAt;
 
-        const opacity = 1 - clampValue(scrollTop / fadeEnd, 0, 1);
-        const topInactive = scrollTop >= fadeEnd;
-        const collapsedVisible = scrollTop >= collapseAt;
+        topEl.style.opacity = isCollapsed ? "0" : "1";
+        topEl.inert = isCollapsed;
+        topEl.style.pointerEvents = isCollapsed ? "none" : "auto";
+        topEl.style.visibility = isCollapsed ? "hidden" : "visible";
 
-        topEl.style.opacity = opacity.toString();
-        topEl.inert = topInactive;
-        topEl.style.pointerEvents = topInactive ? "none" : "auto";
-        topEl.style.visibility = opacity <= 0 ? "hidden" : "visible";
-
-        collapsedTopEl.style.opacity = collapsedVisible ? "1" : "0";
-        collapsedTopEl.style.visibility = collapsedVisible ? "visible" : "hidden";
-        collapsedTopEl.inert = !collapsedVisible;
-        collapsedTopEl.style.pointerEvents = collapsedVisible ? "auto" : "none";
+        collapsedTopEl.style.opacity = isCollapsed ? "1" : "0";
+        collapsedTopEl.style.visibility = isCollapsed ? "visible" : "hidden";
+        collapsedTopEl.inert = !isCollapsed;
+        collapsedTopEl.style.pointerEvents = isCollapsed ? "auto" : "none";
     }
 }

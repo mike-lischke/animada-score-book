@@ -972,6 +972,7 @@ h6 {
 
     height: 80px;
     margin: 0 20px 0 0;
+    touch-action: none;
 
     background-color: var(--color-base-100);
 
@@ -1051,7 +1052,9 @@ h6 {
     #minimapBarSelector {
         position: absolute;
         display: none;
-        pointer-events: none;
+        pointer-events: auto;
+        touch-action: none;
+        user-select: none;
 
         height: var(--minimap-marker-height);
         top: var(--minimap-marker-top);
@@ -1061,6 +1064,27 @@ h6 {
         background-color: color-mix(in srgb, var(--color-neutral) 20%, transparent);
         box-sizing: border-box;
         z-index: 3;
+        cursor: grab;
+    }
+
+    #minimapBarSelectorLabel {
+        position: absolute;
+        display: none;
+        top: calc(var(--minimap-marker-top) - 14px);
+        transform: translate(-50%, -100%);
+        pointer-events: none;
+        user-select: none;
+        z-index: 6;
+
+        font-size: 12px;
+        font-weight: 700;
+        line-height: 1;
+        color: var(--color-info-content);
+        background-color: color-mix(in srgb, var(--color-info) 75%, black 10%);
+        border: 1px solid color-mix(in srgb, var(--color-info-content) 25%, transparent);
+        border-radius: 999px;
+        padding: 4px 8px;
+        white-space: nowrap;
     }
 
     .minimap-bar-selector-handle {

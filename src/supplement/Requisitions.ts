@@ -13,12 +13,15 @@ export type IRequisitionCallbackValues<K extends keyof IRequestTypeMap> = Parame
 /** A map of request types to their corresponding callback signatures. A callback must only have a single parameter. */
 export interface IRequestTypeMap {
     "settingsChanged": (settings: IUISettings) => Promise<boolean>;
+    "playRangeChanged": (range?: { from: number; to: number; }) => Promise<boolean>;
 }
+
+type CallbackType = IRequestTypeMap[keyof IRequestTypeMap];
 
 /** A central hub for managing requisitions/events/notifications. */
 class Requisitions {
     /** A list of callbacks associated with a specific request. */
-    private registry = new Map<keyof IRequestTypeMap, Array<IRequestTypeMap[keyof IRequestTypeMap]>>();
+    private registry = new Map<keyof IRequestTypeMap, CallbackType[]>();
 
     /**
      * Registers a callback with a given request type for later execution.
@@ -109,7 +112,10 @@ class Requisitions {
         if (list) {
             const promises: Array<Promise<boolean>> = [];
             list.forEach((callback) => {
-                promises.push(callback(parameter));
+                // See here why we have to cast:
+                // https://stackoverflow.com/questions/55933800/typescript-unexpected-intersection.
+                // And we need to cast to `never` because simple types intersect to `never`.
+                promises.push(callback(parameter as never));
             });
 
             const results = await Promise.allSettled(promises);

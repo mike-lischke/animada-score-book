@@ -9,15 +9,19 @@ import type { ArrangementPlayer } from "../../../player/ArrangementPlayer.js";
 import { Image, PredefinedImage } from "../framework/Image.js";
 import { Swap } from "../framework/Swap.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
+import { requisitions } from "../../../supplement/Requisitions.js";
 
 export interface IPlayStopButtonProperties extends ICommonUIProperties {
     arrangementPlayer: ArrangementPlayer;
 }
 
 export class PlayStopButton extends UIComponent<IPlayStopButtonProperties> {
+    private currentPlayRange?: { startBar: number; endBar: number; };
+
     public override componentDidMount(): void {
         const { arrangementPlayer } = this.props;
         this.addSubscription(arrangementPlayer, this.playStateChanged);
+        requisitions.register("playRangeChanged", this.playRangeChanged);
     }
 
     public override componentDidUpdate(previousProps: Readonly<IPlayStopButtonProperties>): void {
@@ -26,6 +30,10 @@ export class PlayStopButton extends UIComponent<IPlayStopButtonProperties> {
             this.removeSubscription(previousProps.arrangementPlayer, this.playStateChanged);
             this.addSubscription(arrangementPlayer, this.playStateChanged);
         }
+    }
+
+    public override componentWillUnmount(): void {
+        requisitions.unregister("playRangeChanged", this.playRangeChanged);
     }
 
     public override render(): ComponentChild {
@@ -60,7 +68,12 @@ export class PlayStopButton extends UIComponent<IPlayStopButtonProperties> {
                 }
                 onChange={(isOn) => {
                     if (isOn) {
-                        void arrangementPlayer.play();
+                        if (this.currentPlayRange) {
+                            void arrangementPlayer.playBars(this.currentPlayRange.startBar,
+                                this.currentPlayRange.endBar - this.currentPlayRange.startBar + 1);
+                        } else {
+                            void arrangementPlayer.play();
+                        }
                     } else {
                         arrangementPlayer.stop();
                     }
@@ -72,5 +85,11 @@ export class PlayStopButton extends UIComponent<IPlayStopButtonProperties> {
 
     private playStateChanged = () => {
         this.forceUpdate();
+    };
+
+    private playRangeChanged = (range: { from: number; to: number; } | undefined): Promise<boolean> => {
+        this.currentPlayRange = range ? { startBar: range.from, endBar: range.to } : undefined;
+
+        return Promise.resolve(true);
     };
 }

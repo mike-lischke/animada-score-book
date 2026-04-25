@@ -188,12 +188,12 @@ export class Tabview extends UIComponent<ITabviewProperties, ITabviewState> {
 
         const content: ComponentChild[] = [];
         pages.forEach((page) => {
-            const acitve = page.id === selectedId;
+            const active = page.id === selectedId;
             content.push(
                 <CachedTabPage
                     key={page.id}
                     id={page.id}
-                    active={acitve}
+                    active={active}
                     content={page.content}
                 />
             );

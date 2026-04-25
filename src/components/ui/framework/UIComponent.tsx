@@ -3,7 +3,7 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import "./component-styles.css";
+import "./component-styles.scss";
 
 import cx from "classnames";
 import {

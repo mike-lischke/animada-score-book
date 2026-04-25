@@ -582,8 +582,9 @@ export class ArrangementPlayer extends Publisher {
     }
 
     private scheduleAudioEvent(audioEvent: IAudioEvent): void {
+        const volume = (this.dataModel.arrangement!.mainVolume / 100) * audioEvent.note.track.volume;
         const audioBufferPlayer = new AudioBufferPlayer(audioEvent.audioBuffer, this.audioContext,
-            audioEvent.realTime + this.offset, this.dataModel.arrangement!.mainVolume / 100);
+            audioEvent.realTime + this.offset, volume);
         const audioEventReference = { audioEvent, audioBufferPlayer };
         this.scheduledAudioEvents.push(audioEventReference);
 

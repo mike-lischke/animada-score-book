@@ -70,8 +70,6 @@ interface IAppState {
     sidebarOpen: boolean;
 
     headerPinned: boolean;
-
-    currentPlayRange?: { startBar: number; endBar: number; };
 }
 
 const newSong: ISerialisedArrangement = { composition: emptySongString, version: 2, title: "New Song" };
@@ -91,6 +89,8 @@ export class App extends UIComponent<{}, IAppState> {
     private mouseHandler?: MouseHandler;
 
     private justFinishedEditingTitle = false;
+
+    private currentPlayRange?: { startBar: number; endBar: number; };
 
     public constructor(props: {}) {
         super(props);
@@ -319,7 +319,6 @@ export class App extends UIComponent<{}, IAppState> {
                                     services={this.services}
                                     undoManager={this.undoManager!}
                                     touchEditingEnabled={displayMode === DisplayMode.Editing}
-                                    onIntervalChange={this.handleIntervalChange}
                                 />
                             }
                             forceExpanded={headerPinned}
@@ -638,10 +637,9 @@ export class App extends UIComponent<{}, IAppState> {
             case " ": {
                 if (this.arrangementPlayer) {
                     if (this.arrangementPlayer.state === "stopped") {
-                        const { currentPlayRange } = this.state;
-                        if (currentPlayRange) {
-                            void this.arrangementPlayer.playBars(currentPlayRange.startBar,
-                                currentPlayRange.endBar - currentPlayRange.startBar + 1);
+                        if (this.currentPlayRange) {
+                            void this.arrangementPlayer.playBars(this.currentPlayRange.startBar,
+                                this.currentPlayRange.endBar - this.currentPlayRange.startBar + 1);
                         } else {
                             void this.arrangementPlayer.play();
                         }
@@ -721,12 +719,10 @@ export class App extends UIComponent<{}, IAppState> {
         this.forceUpdate();
     };
 
-    private handleIntervalChange = (selectionStartBar: number, selectionEndBar: number) => {
-        this.arrangementPlayer?.stop();
-        if (selectionStartBar > 0 && selectionEndBar > 0) {
-            this.setState({ currentPlayRange: { startBar: selectionStartBar, endBar: selectionEndBar } });
-        } else {
-            this.setState({ currentPlayRange: undefined });
-        }
+    private playRangeChanged = (range: { from: number; to: number; } | undefined): Promise<boolean> => {
+        this.currentPlayRange = range ? { startBar: range.from, endBar: range.to } : undefined;
+        this.forceUpdate();
+
+        return Promise.resolve(true);
     };
 }

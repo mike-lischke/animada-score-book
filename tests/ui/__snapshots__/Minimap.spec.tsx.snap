@@ -40,6 +40,9 @@ exports[`Minimap (component) > edge cases > matches snapshot for empty arrangeme
     id="minimapBarSelector"
   />
   <div
+    id="minimapBarSelectorLabel"
+  />
+  <div
     class="minimap-bar-selector-handle"
     id="minimapBarSelectorStartHandle"
   />
@@ -50,7 +53,7 @@ exports[`Minimap (component) > edge cases > matches snapshot for empty arrangeme
 </div>
 `;
 
-exports[`Minimap (component) > handleTrackViewerScrolled > handles normalized viewport position at start 1`] = `
+exports[`Minimap (component) > initialization > matches snapshot for default rendering 1`] = `
 <div
   class="container minimap"
   style="flex-direction: row; align-items: stretch;"
@@ -705,6 +708,9 @@ exports[`Minimap (component) > handleTrackViewerScrolled > handles normalized vi
   </div>
   <div
     id="minimapBarSelector"
+  />
+  <div
+    id="minimapBarSelectorLabel"
   />
   <div
     class="minimap-bar-selector-handle"

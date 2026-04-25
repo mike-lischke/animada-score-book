@@ -11,6 +11,7 @@ import {
     SbDmEntityType, type ISbDmArrangement, type ISbDmTimeParams, type ISbDmTrack
 } from "../../src/core/ScoreBookDataModel.js";
 import type { IScoreMetrics } from "../../src/player/TimeCoordinator.js";
+import { requisitions } from "../../src/supplement/Requisitions.js";
 
 /**
  * Creates a minimal mock ISbDmTimeParams for testing.
@@ -189,7 +190,7 @@ class TestableMinimap extends Minimap {
     }
 }
 
-describe("Minimap (component)", () => {
+describe.sequential("Minimap (component)", () => {
     let result: RenderResult | null;
     let arrangement: ISbDmArrangement;
     let scoreMetrics: IScoreMetrics;
@@ -198,7 +199,6 @@ describe("Minimap (component)", () => {
     const renderMinimap = (props: {
         arrangement?: ISbDmArrangement;
         onViewportMoved?: (position: number) => void;
-        onSelectionChanged?: (startBar: number, endBar: number) => void;
     } = {}): void => {
         minimapRef = null;
 
@@ -210,11 +210,20 @@ describe("Minimap (component)", () => {
                 arrangement={props.arrangement ?? arrangement}
                 scoreMetrics={scoreMetrics}
                 onViewportMoved={props.onViewportMoved}
-                onSelectionChanged={props.onSelectionChanged}
             />
         );
 
         expect(minimapRef).toBeTruthy();
+    };
+
+    const registerPlayRangeChangedHandler = () => {
+        const handler = vi.fn((_range?: { from: number; to: number; }) => {
+            return Promise.resolve(true);
+        });
+
+        requisitions.register("playRangeChanged", handler);
+
+        return handler;
     };
 
     const getMinimap = (): TestableMinimap => {
@@ -287,6 +296,7 @@ describe("Minimap (component)", () => {
     };
 
     beforeEach(() => {
+        requisitions.unregister("playRangeChanged");
         arrangement = makeArrangement(8, 2);
         scoreMetrics = makeScoreMetrics();
         result = null;
@@ -296,6 +306,7 @@ describe("Minimap (component)", () => {
     afterEach(() => {
         result?.unmount();
         cleanup();
+        requisitions.unregister("playRangeChanged");
         result = null;
         minimapRef = null;
     });
@@ -393,8 +404,8 @@ describe("Minimap (component)", () => {
         });
 
         it("clears selection when arrangement structure changes", () => {
-            const onSelectionChanged = vi.fn();
-            renderMinimap({ onSelectionChanged });
+            const playRangeChanged = registerPlayRangeChangedHandler();
+            renderMinimap();
             const minimap = getMinimap();
             minimap.testSetSelectionState(true);
 
@@ -406,11 +417,11 @@ describe("Minimap (component)", () => {
                     }}
                     arrangement={newArrangement}
                     scoreMetrics={scoreMetrics}
-                    onSelectionChanged={onSelectionChanged}
                 />
             );
 
-            expect(onSelectionChanged).toHaveBeenCalledWith(0, 0);
+            expect(playRangeChanged).toHaveBeenNthCalledWith(1, { from: 1, to: 1 });
+            expect(playRangeChanged).toHaveBeenNthCalledWith(2, undefined);
         });
 
         it("handles track count change", () => {
@@ -444,6 +455,7 @@ describe("Minimap (component)", () => {
             expect(result?.container.querySelector(".minimap")).toBeTruthy();
             expect(document.querySelector("#minimapViewportMarker")).toBeTruthy();
             expect(document.querySelector("#minimapBarSelector")).toBeTruthy();
+            expect(document.querySelector("#minimapBarSelectorLabel")).toBeTruthy();
             expect(document.querySelector("#minimapBarSelectorStartHandle")).toBeTruthy();
             expect(document.querySelector("#minimapBarSelectorEndHandle")).toBeTruthy();
         });
@@ -452,10 +464,12 @@ describe("Minimap (component)", () => {
             renderMinimap();
 
             const selector = document.querySelector<HTMLElement>("#minimapBarSelector")!;
+            const selectorLabel = document.querySelector<HTMLElement>("#minimapBarSelectorLabel")!;
             const startHandle = document.querySelector<HTMLElement>("#minimapBarSelectorStartHandle")!;
             const endHandle = document.querySelector<HTMLElement>("#minimapBarSelectorEndHandle")!;
 
             expect(selector.style.display).toBe("");
+            expect(selectorLabel.style.display).toBe("");
             expect(startHandle.style.display).toBe("");
             expect(endHandle.style.display).toBe("");
         });
@@ -527,23 +541,22 @@ describe("Minimap (component)", () => {
         });
     });
 
-    describe("callback props", () => {
-        it("calls onSelectionChanged when selector is toggled", () => {
-            const onSelectionChanged = vi.fn();
-            renderMinimap({ onSelectionChanged });
+    describe("selection requisitions", () => {
+        it("calls playRangeChanged when selector is toggled", () => {
+            const playRangeChanged = registerPlayRangeChangedHandler();
+            renderMinimap();
             const minimap = getMinimap();
 
             minimap.testSetSelectionState(true);
             minimap.testSetSelectionState(false);
 
-            expect(onSelectionChanged).toHaveBeenCalledWith(1, 1);
-            expect(onSelectionChanged).toHaveBeenCalledWith(0, 0);
+            expect(playRangeChanged).toHaveBeenNthCalledWith(1, { from: 1, to: 1 });
+            expect(playRangeChanged).toHaveBeenNthCalledWith(2, undefined);
         });
 
-        it("handles undefined callbacks gracefully", () => {
+        it("handles missing playRangeChanged handlers gracefully", () => {
             renderMinimap({
                 onViewportMoved: undefined,
-                onSelectionChanged: undefined,
             });
             const minimap = getMinimap();
 

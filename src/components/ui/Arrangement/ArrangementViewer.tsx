@@ -26,8 +26,6 @@ export interface IArrangementViewerProps extends ICommonUIProperties {
     services: ScoreBookUiServices;
     undoManager: UndoManager;
     touchEditingEnabled: boolean;
-
-    onIntervalChange?: (startBar: number, endBar: number) => void;
 }
 
 interface IArrangementViewerState {
@@ -230,7 +228,6 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
                     arrangement={arrangement}
                     scoreMetrics={arrangementPlayer.scoreMetrics}
                     onViewportMoved={this.handleViewportMoved}
-                    onSelectionChanged={this.handleIntervalChange}
                 />
             </Container >
         );
@@ -271,28 +268,34 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
             // If the play beam gets close to the end of the visible area, scroll with intelligent snapping.
             if (position < viewer.scrollLeft || position > viewer.scrollLeft + clientWidth) {
                 const metrics = arrangementPlayer.scoreMetrics;
-                const totalBars = metrics.bars;
-                const totalSteps = totalBars * metrics.stepsPerBar;
-                const stepWidthPixels = contentWidth / totalSteps;
+                const stepWidthPixels = contentWidth / (metrics.bars * metrics.stepsPerBar);
                 const barWidthPixels = stepWidthPixels * metrics.stepsPerBar;
-                const halfBarWidthPixels = barWidthPixels / 2;
                 const pulseWidthPixels = stepWidthPixels * metrics.stepsPerPulse;
 
-                // Determine the grid size based on available space
-                let gridWidthPixels: number;
+                // Half-bar splits use beat-level granularity so odd time signatures snap musically.
+                // Even meters split symmetrically (2+2, 3+3 for 6/8), odd meters asymmetrically
+                // using ceil+floor: 3+2 for 5/4, 4+3 for 7/8, 2+1 for 3/4.
+                const beatWidthPixels = barWidthPixels / metrics.beatsPerBar;
+                const firstHalfWidth = Math.ceil(metrics.beatsPerBar / 2) * beatWidthPixels;
+                const secondHalfWidth = Math.floor(metrics.beatsPerBar / 2) * beatWidthPixels;
+
+                let snappedScroll: number;
+
                 if (barWidthPixels <= clientWidth) {
-                    // Whole bars visible: snap to bar boundaries
-                    gridWidthPixels = barWidthPixels;
-                } else if (halfBarWidthPixels <= clientWidth) {
-                    // At least half a bar visible: snap to half-bar boundaries
-                    gridWidthPixels = halfBarWidthPixels;
+                    // Full bar visible: snap to bar boundaries.
+                    snappedScroll = Math.floor(position / barWidthPixels) * barWidthPixels;
+                } else if (secondHalfWidth <= clientWidth) {
+                    // At least the smaller half fits: snap within each bar to the two half-sections.
+                    const barIndex = Math.floor(position / barWidthPixels);
+                    const posInBar = position - (barIndex * barWidthPixels);
+                    const barStart = barIndex * barWidthPixels;
+
+                    snappedScroll = posInBar < firstHalfWidth ? barStart : barStart + firstHalfWidth;
                 } else {
-                    // Less than half a bar visible: snap to pulse boundaries
-                    gridWidthPixels = pulseWidthPixels;
+                    // Not enough space for a half-bar: snap to pulse boundaries.
+                    snappedScroll = Math.floor(position / pulseWidthPixels) * pulseWidthPixels;
                 }
 
-                // Calculate the snapped scroll position
-                const snappedScroll = Math.floor(position / gridWidthPixels) * gridWidthPixels;
                 viewer.scrollLeft = clampValue(snappedScroll, 0, maxScroll);
             }
         }
@@ -328,12 +331,6 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
             const scrollRange = this.viewerRef.current.scrollWidth - this.viewerRef.current.clientWidth;
             this.viewerRef.current.scrollLeft = clampValue(newScrollLeft * scrollRange, 0, scrollRange);
         }
-    };
-
-    private handleIntervalChange = (selectionStartBar: number, selectionEndBar: number) => {
-        const { onIntervalChange } = this.props;
-
-        onIntervalChange?.(selectionStartBar, selectionEndBar);
     };
 
     private handleTrackViewerScroll = () => {
