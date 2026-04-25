@@ -91,6 +91,8 @@ export class App extends UIComponent<{}, IAppState> {
     private justFinishedEditingTitle = false;
 
     private currentPlayRange?: { startBar: number; endBar: number; };
+    private selectedThemePreference = "Light+";
+    private systemThemeQuery = window.matchMedia("(prefers-color-scheme: dark)");
 
     public constructor(props: {}) {
         super(props);
@@ -113,8 +115,9 @@ export class App extends UIComponent<{}, IAppState> {
     }
 
     public override componentDidMount() {
-        const theme = AppStorage.loadUISettings()?.theme ?? "Light+";
-        document.documentElement.setAttribute("data-theme", theme);
+        this.selectedThemePreference = AppStorage.loadUISettings()?.theme ?? "Light+";
+        this.applyThemePreference(this.selectedThemePreference);
+        this.systemThemeQuery.addEventListener("change", this.handleSystemThemeChange);
         escapeStack.attach();
         requisitions.register("settingsChanged", this.handleSettingsChanged);
         requisitions.register("playRangeChanged", this.handlePlayRangeChanged);
@@ -137,6 +140,7 @@ export class App extends UIComponent<{}, IAppState> {
 
     public override componentWillUnmount() {
         super.componentWillUnmount();
+        this.systemThemeQuery.removeEventListener("change", this.handleSystemThemeChange);
         escapeStack.detach();
         requisitions.unregister("settingsChanged", this.handleSettingsChanged);
         requisitions.unregister("playRangeChanged", this.handlePlayRangeChanged);
@@ -354,11 +358,24 @@ export class App extends UIComponent<{}, IAppState> {
     };
 
     private handleSettingsChanged = (settings: IUISettings): Promise<boolean> => {
-        const theme = settings.theme ?? "Light+";
-        document.documentElement.setAttribute("data-theme", theme);
+        this.applyThemePreference(settings.theme);
 
         return Promise.resolve(true);
     };
+
+    private handleSystemThemeChange = (): void => {
+        if (this.selectedThemePreference === "Auto") {
+            this.applyThemePreference("Auto");
+        }
+    };
+
+    private applyThemePreference(themePreference?: string): void {
+        this.selectedThemePreference = themePreference ?? "Light+";
+        const appliedTheme = this.selectedThemePreference === "Auto"
+            ? (this.systemThemeQuery.matches ? "Dark+" : "Light+")
+            : this.selectedThemePreference;
+        document.documentElement.setAttribute("data-theme", appliedTheme);
+    }
 
     private handleScoreLibraryAction = async (action: string, data?: ISbDmScoreFolder | ISbDmScore,
         parent?: ISbDmScoreFolder): Promise<boolean> => {

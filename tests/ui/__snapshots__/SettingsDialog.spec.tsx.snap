@@ -57,6 +57,20 @@ exports[`SettingsDialog (class) > matches snapshot for default rendering 1`] = `
               class=""
             >
               <a>
+                Auto
+              </a>
+            </li>
+            <li
+              class=""
+            >
+              <a>
+                ──────────
+              </a>
+            </li>
+            <li
+              class=""
+            >
+              <a>
                 Light High Contrast
               </a>
             </li>

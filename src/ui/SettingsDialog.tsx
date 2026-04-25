@@ -63,6 +63,17 @@ export class SettingsDialog extends UIComponent<{}, ISettingsDialogState> {
 
         const themeItems: IDropdownItem[] = [];
 
+        themeItems.push({
+            label: "Auto",
+            onClick: () => {
+                currentSettings.theme = "Auto";
+                this.setState({ currentSettings }, () => {
+                    this.temporarySettingsChange();
+                });
+            },
+        });
+        themeItems.push({ label: "──────────" }); // Separator
+
         lightThemes.forEach((themeName: string) => {
             themeItems.push({
                 label: themeName,
