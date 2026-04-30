@@ -82,6 +82,9 @@ export interface ICommonUIProperties {
     /** Tooltip text to show in a custom tooltip. */
     "data-tooltip"?: string;
 
+    /** Accessible label, equivalent to the alt attribute on images. */
+    alt?: string;
+
     /** Some often used input events: */
 
     /** Clicks can be triggered by both mouse and keyboard events. */

@@ -24,12 +24,6 @@ export interface ICallbackEvent extends IEventDetails {
     callback(): void;
 }
 
-export type MuteFilter = (audioEvent: IAudioEvent) => boolean;
-export interface IMuteEvent extends IEventDetails {
-    kind: "mute";
-    muteFilter: MuteFilter;
-}
-
 export interface IMetronomeEvent extends IEventDetails {
     kind: "metronome";
 
@@ -40,14 +34,12 @@ export interface IMetronomeEvent extends IEventDetails {
     isAccent: boolean;
 }
 
-export type Event = ICallbackEvent | IAudioEvent | IMuteEvent | IMetronomeEvent;
+export type Event = ICallbackEvent | IAudioEvent | IMetronomeEvent;
 
 export interface IEventSource extends ISubscribable {
     getEvents(interval: IInterval): Event[];
     onStop(): void;
 }
-
-export type SoloMute = null | "solo" | "mute";
 
 export interface IInterval {
     start: RealTime;

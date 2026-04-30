@@ -224,7 +224,6 @@ export class App extends UIComponent<{}, IAppState> {
                                 <Container
                                     orientation={Orientation.LeftToRight}
                                     crossAlignment={ChildAlignment.Center}
-                                    className="bg-base-100"
                                 >
                                     <Container
                                         id="headerContent"

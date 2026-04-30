@@ -81,7 +81,7 @@ export class ArrangementEditControls
         const modeManager = services.modeManager;
 
         // TODO: move this to a score creation dialog. Changing that in an existing score makes no sense.
-        const signatureSelect = (
+        /*const signatureSelect = (
             <Container className="time-control" crossAlignment={ChildAlignment.Center}>
                 <select
                     id="time-signature-select"
@@ -94,7 +94,7 @@ export class ArrangementEditControls
                     <option>7/8</option>
                 </select><span>time</span>
             </Container>
-        );
+        );*/
 
         return (
             <Container

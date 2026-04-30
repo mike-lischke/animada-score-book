@@ -13,8 +13,7 @@ import { Metronome } from "./Metronome.js";
 import { TimeCoordinator, type IScoreMetrics } from "./TimeCoordinator.js";
 import { TrackPlayer } from "./TrackPlayer.js";
 import {
-    Event, ICallbackEvent, IInterval, ILoopInterval, type IAudioEvent, type IMetronomeEvent, type IMuteEvent,
-    type MuteFilter
+    Event, ICallbackEvent, IInterval, ILoopInterval, type IAudioEvent, type IMetronomeEvent,
 } from "./types.js";
 
 export type PlayerPlayState = "counting" | "playing" | "stopped";
@@ -30,9 +29,6 @@ export type PlayerPlayState = "counting" | "playing" | "stopped";
  */
 export class ArrangementPlayer extends Publisher {
     public readonly trackPlayers = new Map<ISbDmTrack, TrackPlayer>();
-    public readonly audibleTrackPlayers = new Map<ISbDmTrack, TrackPlayer>();
-
-    public readonly audibleTrackPlayersPublisher: Publisher = new Publisher();
 
     public readonly animationEngine: AnimationEngine;
 
@@ -71,7 +67,6 @@ export class ArrangementPlayer extends Publisher {
         callbackEvent: ICallbackEvent,
         timeoutId: ReturnType<typeof setTimeout>;
     }> = [];
-    private scheduledMuteEvents: Array<{ muteEvent: IMuteEvent, timeoutId: ReturnType<typeof setTimeout>; }> = [];
 
     #state: PlayerPlayState = "stopped";
 
@@ -86,7 +81,6 @@ export class ArrangementPlayer extends Publisher {
         this.timeCoordinator = new TimeCoordinator(this.dataModel.arrangement!.timeParams, this);
 
         this.updateTrackPlayers();
-        this.updateAudibleTrackPlayers();
         this.dataModel.arrangement!.subscribe(this.updateTrackPlayers);
 
         this.updateCallbackEvents();
@@ -119,6 +113,13 @@ export class ArrangementPlayer extends Publisher {
     public convertToLoopProgress(realTime: RealTime): number {
         if (this.disposed) {
             return 0;
+        }
+
+        // During non-loop playback we intentionally delay stop() a little so trailing audio can finish.
+        // Clamp visual progress to just before the playback end to avoid a brief wrap into the next bar.
+        if (!this.dataModel.arrangement!.loop && this.endOffset > 0) {
+            const visualEndTime = Math.max(0, this.endOffset - 0.0001);
+            realTime = Math.min(realTime, visualEndTime);
         }
 
         return this.timeCoordinator.convertToLoopProgress(realTime);
@@ -154,14 +155,8 @@ export class ArrangementPlayer extends Publisher {
         this.dataModel.arrangement!.unsubscribe(this.updateTrackPlayers);
         this.dataModel.arrangement!.timeParams.unsubscribe(this.updateCallbackEvents);
 
-        // Unsubscribe from all track players and clear references.
-        for (const player of this.trackPlayers.values()) {
-            player.unsubscribe(this.updateAudibleTrackPlayers);
-            player.dispose();
-        }
         this.metronome.dispose();
         this.trackPlayers.clear();
-        this.audibleTrackPlayers.clear();
     }
 
     /**
@@ -268,14 +263,25 @@ export class ArrangementPlayer extends Publisher {
     public renderToBlob = async (): Promise<Blob> => {
         this.currentInterval = undefined;
         const songDuration = this.timeCoordinator.metrics.realTimeLength;
+        const countInDuration = this.dataModel.arrangement!.countIn
+            ? this.timeCoordinator.metrics.secondsPerBar
+            : 0;
 
         // Load MP3 export dependencies only when the user requests an export.
         const { MP3Export } = await import("../supplement/MP3Export.js");
 
         const scheduleSong = (ctx: BaseAudioContext): void => {
             this.audioContext = ctx;
-            this.offset = this.audioContext.currentTime;
             this.clearScheduledEvents();
+
+            if (countInDuration > 0) {
+                // Schedule count-in sounds at the very start of the recording.
+                this.offset = 0;
+                this.scheduleCountInAudioEvents();
+            }
+
+            // Shift all song events forward by the count-in duration.
+            this.offset = countInDuration;
 
             // Offline rendering must pre-schedule all audio events before startRendering() begins.
             this.scheduleAudioEventsForOfflineRender(songDuration);
@@ -284,7 +290,7 @@ export class ArrangementPlayer extends Publisher {
         const mp3Exporter = new MP3Export();
         try {
             // Add 1 second tail to allow the last notes to finish playing (important for resonant instruments).
-            return await mp3Exporter.exportSongToMp3(songDuration + 1, scheduleSong);
+            return await mp3Exporter.exportSongToMp3(songDuration + countInDuration + 1, scheduleSong);
         } finally {
             this.audioContext = getSharedAudioContext();
             this.clearScheduledEvents();
@@ -329,7 +335,7 @@ export class ArrangementPlayer extends Publisher {
     }
 
     /**
-     * @returns all events within the given interval, including audio, mute, and callback events.
+     * @returns all events within the given interval, including audio and callback events.
      *
      * @param interval The real-time interval [start, end) to query.
      */
@@ -342,7 +348,7 @@ export class ArrangementPlayer extends Publisher {
 
         loopIntervals.forEach((loopInterval) => {
             const { loopNumber } = loopInterval;
-            this.audibleTrackPlayers.forEach((trackPlayer) => {
+            this.trackPlayers.forEach((trackPlayer) => {
                 trackPlayer.getEvents(loopInterval).forEach((event) => {
                     return events.push({
                         ...event,
@@ -400,9 +406,7 @@ export class ArrangementPlayer extends Publisher {
         for (const trackPlayer of this.trackPlayers.values()) {
             if (!this.dataModel.arrangement!.tracks.includes(trackPlayer.track)) {
                 trackPlayer.dispose();
-                trackPlayer.unsubscribe(this.updateAudibleTrackPlayers);
                 this.trackPlayers.delete(trackPlayer.track);
-                this.audibleTrackPlayers.delete(trackPlayer.track);
                 somethingChanged = true;
             }
         }
@@ -411,13 +415,11 @@ export class ArrangementPlayer extends Publisher {
             if (!this.trackPlayers.get(track)) {
                 const trackPlayer = new TrackPlayer(track, this.timeCoordinator);
                 this.trackPlayers.set(track, trackPlayer);
-                trackPlayer.subscribe(this.updateAudibleTrackPlayers);
                 somethingChanged = true;
             }
         }
 
         if (somethingChanged) {
-            this.updateAudibleTrackPlayers();
             this.publish();
         }
     };
@@ -438,60 +440,6 @@ export class ArrangementPlayer extends Publisher {
                 identifier: timing
             };
         });
-    };
-
-    /**
-     * Recalculates the set of audible track players based on `solo`/`mute` state
-     * and publishes when changes occur.
-     */
-    private updateAudibleTrackPlayers = (): void => {
-        const calculatedAudibleTrackPlayers = this.calculateAudibleTrackPlayers(this.trackPlayers);
-
-        let somethingChanged = false;
-
-        for (const [view, track] of this.trackPlayers) {
-            const shouldBeAudible = calculatedAudibleTrackPlayers.includes(track);
-            const current = this.audibleTrackPlayers.get(view);
-            if (shouldBeAudible) {
-                if (current !== track) {
-                    this.audibleTrackPlayers.set(view, track);
-                    somethingChanged = true;
-                }
-            } else if (current !== undefined) {
-                this.audibleTrackPlayers.delete(view);
-                somethingChanged = true;
-            }
-        }
-
-        if (somethingChanged) {
-            this.audibleTrackPlayersPublisher.publish();
-        }
-    };
-
-    /**
-     * Filters track players to those that are audible. If any track is soloed, only soloed tracks are audible;
-     * otherwise all unmuted tracks are audible.
-     *
-     * @param trackPlayers The complete set of track players to consider.
-     * @returns The list of audible track players in their current state.
-     */
-    private calculateAudibleTrackPlayers(trackPlayers: Map<ISbDmTrack, TrackPlayer>): TrackPlayer[] {
-        const soloedTracksPlayers: TrackPlayer[] = [];
-        const unmutedTracksPlayers: TrackPlayer[] = [];
-
-        trackPlayers.forEach((trackPlayer) => {
-            if (trackPlayer.soloMute === "solo") {
-                soloedTracksPlayers.push(trackPlayer);
-            } else if (trackPlayer.soloMute === null) {
-                unmutedTracksPlayers.push(trackPlayer);
-            }
-        });
-
-        if (soloedTracksPlayers.length) {
-            return soloedTracksPlayers;
-        }
-
-        return unmutedTracksPlayers;
     };
 
     private async ensureContextIsRunning(): Promise<void> {
@@ -518,10 +466,6 @@ export class ArrangementPlayer extends Publisher {
                     this.scheduleCallbackEvent(event);
                     break;
                 }
-                case "mute": {
-                    this.scheduleMuteEvent(event);
-                    break;
-                }
 
                 case "metronome": {
                     this.scheduleMetronomeEvent(event);
@@ -540,7 +484,6 @@ export class ArrangementPlayer extends Publisher {
      */
     private scheduleAudioEventsForOfflineRender(songDuration: number): void {
         let intervalStart = 0;
-        const muteEvents: IMuteEvent[] = [];
 
         // Use the same look-ahead chunk size as live playback, but schedule synchronously.
         // We could schedule all events in one go, but this is more memory efficient for long songs and doesn't
@@ -557,11 +500,6 @@ export class ArrangementPlayer extends Publisher {
                         break;
                     }
 
-                    case "mute": {
-                        muteEvents.push(event);
-                        break;
-                    }
-
                     case "metronome": {
                         this.scheduleMetronomeEvent(event);
                         break;
@@ -573,16 +511,10 @@ export class ArrangementPlayer extends Publisher {
 
             intervalStart = intervalEnd;
         }
-
-        // Apply all mute events immediately after audio events are scheduled.
-        // In offline rendering, we don't use setTimeout; we just apply the mute directly.
-        for (const muteEvent of muteEvents) {
-            this.muteUsingFilter(muteEvent.muteFilter);
-        }
     }
 
     private scheduleAudioEvent(audioEvent: IAudioEvent): void {
-        const volume = (this.dataModel.arrangement!.mainVolume / 100) * audioEvent.note.track.volume;
+        const volume = (this.dataModel.arrangement!.mainVolume / 100) * audioEvent.note.track.effectiveVolume;
         const audioBufferPlayer = new AudioBufferPlayer(audioEvent.audioBuffer, this.audioContext,
             audioEvent.realTime + this.offset, volume);
         const audioEventReference = { audioEvent, audioBufferPlayer };
@@ -662,29 +594,6 @@ export class ArrangementPlayer extends Publisher {
         // They are also getting unscheduled by clearScheduledEvents, which does clearTimeout
     }
 
-    private scheduleMuteEvent(muteEvent: IMuteEvent): void {
-        const ms = Math.max(this.getMsFromNow(muteEvent.realTime), 0);
-        const scheduledMuteEvent = {
-            muteEvent,
-            timeoutId: setTimeout(() => {
-                this.muteUsingFilter(muteEvent.muteFilter);
-                this.removeFromMuteSchedule(scheduledMuteEvent);
-            }, ms)
-        };
-
-        this.scheduledMuteEvents.push(scheduledMuteEvent);
-    }
-
-    private removeFromMuteSchedule(muteEventReference: {
-        muteEvent: IMuteEvent,
-        timeoutId: ReturnType<typeof setTimeout>;
-    }): void {
-        const scheduleIndex = this.scheduledMuteEvents.indexOf(muteEventReference);
-        if (scheduleIndex !== -1) {
-            this.scheduledMuteEvents.splice(scheduleIndex, 1);
-        }
-    }
-
     private clearScheduledEvents(): void {
         this.scheduledAudioEvents.forEach(({ audioBufferPlayer }) => {
             audioBufferPlayer.stop();
@@ -694,27 +603,12 @@ export class ArrangementPlayer extends Publisher {
             clearTimeout(timeoutId);
         });
 
-        this.scheduledMuteEvents.forEach(({ timeoutId }) => {
-            clearTimeout(timeoutId);
-        });
-
         this.scheduledAudioEvents.splice(0);
         this.scheduledCallbackEvents.splice(0);
-        this.scheduledMuteEvents.splice(0);
     }
 
     private getMsFromNow(time: number): number {
         return (time - this.currentTime) * 1000;
-    }
-
-    private muteUsingFilter(muteFilter: MuteFilter): void {
-        this.scheduledAudioEvents
-            .filter((audioEventReference) => {
-                return this.hasStarted(audioEventReference) && muteFilter(audioEventReference.audioEvent);
-            })
-            .forEach((ref) => {
-                this.stopAudioAndUnschedule(ref);
-            });
     }
 
     private hasStarted(
@@ -723,52 +617,30 @@ export class ArrangementPlayer extends Publisher {
         return audioEventReference.audioEvent.realTime <= this.currentTime;
     }
 
-    private async countIn(): Promise<void> {
+    private scheduleCountInAudioEvents(): void {
         const metrics = this.timeCoordinator.metrics;
         const numberSounds = this.dataModel.numberSounds!;
+        const tempNote = { track: { effectiveVolume: 1 } } as ISbDmNote;
+
+        let realTime = 0;
+        for (const key of ["1", "2", "3", "4"]) {
+            const noteStyle = numberSounds.noteStyles[key];
+            this.scheduleAudioEvent({
+                kind: "audio",
+                realTime,
+                audioBuffer: noteStyle.audioBuffer!,
+                note: tempNote,
+            });
+            realTime += metrics.secondsPerBar / 4;
+        }
+    }
+
+    private async countIn(): Promise<void> {
+        const metrics = this.timeCoordinator.metrics;
 
         // Count in happens in two steps: first we have 2 counts in one bar and then 4 counts in the next bar.
         // Which gives us the "1-2, 1-2-3-4" pattern (for 2/4 and 4/4) before the music starts.
-        let realTime = 0;
-        let noteStyle = numberSounds.noteStyles["1"];
-        const tempNote = { track: { volume: 1 } } as ISbDmNote;
-        let audioEvent: IAudioEvent = {
-            kind: "audio",
-            realTime,
-            audioBuffer: noteStyle.audioBuffer!,
-            note: tempNote,
-        };
-        this.scheduleAudioEvent(audioEvent);
-
-        noteStyle = numberSounds.noteStyles["2"];
-        realTime += metrics.secondsPerBar / 4;
-        audioEvent = {
-            kind: "audio",
-            realTime,
-            audioBuffer: noteStyle.audioBuffer!,
-            note: tempNote,
-        };
-        this.scheduleAudioEvent(audioEvent);
-
-        noteStyle = numberSounds.noteStyles["3"];
-        realTime += metrics.secondsPerBar / 4;
-        audioEvent = {
-            kind: "audio",
-            realTime,
-            audioBuffer: noteStyle.audioBuffer!,
-            note: tempNote,
-        };
-        this.scheduleAudioEvent(audioEvent);
-
-        noteStyle = numberSounds.noteStyles["4"];
-        realTime += metrics.secondsPerBar / 4;
-        audioEvent = {
-            kind: "audio",
-            realTime,
-            audioBuffer: noteStyle.audioBuffer!,
-            note: tempNote,
-        };
-        this.scheduleAudioEvent(audioEvent);
+        this.scheduleCountInAudioEvents();
 
         // Wait for the count-in to finish before resolving. Add 10 ms to ensure the last count-in sound has time to
         // play before we start the main playback loop, which also schedules sounds at the very beginning of

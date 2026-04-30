@@ -31,9 +31,11 @@ export class Metronome extends Publisher implements IEventSource {
         const pulsesPerBar = stepsPerBar / stepsPerPulse;
         const secondsPerPulse = secondsPerBar / pulsesPerBar;
         const { start, end } = interval;
+        const tolerance = Math.max(secondsPerPulse * 1e-9, Number.EPSILON);
 
-        const firstPulseIndex = Math.ceil(start / secondsPerPulse);
-        const lastPulseIndex = Math.floor((end - Number.EPSILON) / secondsPerPulse);
+        // Keep [start, end) semantics stable under floating-point rounding.
+        const firstPulseIndex = Math.ceil((start - tolerance) / secondsPerPulse);
+        const lastPulseIndex = Math.floor((end - tolerance) / secondsPerPulse);
 
         for (let pulseIndex = firstPulseIndex; pulseIndex <= lastPulseIndex; pulseIndex++) {
             const realTime: RealTime = pulseIndex * secondsPerPulse;

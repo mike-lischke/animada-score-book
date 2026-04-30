@@ -20,6 +20,7 @@ export class Track extends Publisher implements ISbDmTrack {
 
     public name = "";
     public volume = 1.0;
+    public effectiveVolume = 1;
 
     /**
      * Creates a new `Track` bound to an arrangement and instrument.

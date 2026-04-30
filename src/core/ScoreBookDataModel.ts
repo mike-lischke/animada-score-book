@@ -177,7 +177,16 @@ export interface ISbDmTrack extends ISbDmCommon, ISubscribable {
 
     readonly arrangement: ISbDmArrangement;
     readonly instrument: ISbDmInstrument;
+
+    /** The volume of the track (0-1), selected by the user. */
     readonly volume: number;
+
+    /**
+     * The effective volume of the track, created by combining the track volume with the relative volume
+     * between multiple tracks.
+     */
+    readonly effectiveVolume: number;
+
     readonly notes: ISbDmNote[];
     readonly polyrhythms: IPolyrhythm[];
 

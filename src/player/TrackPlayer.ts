@@ -6,21 +6,19 @@
 import { Publisher } from "../core/Publisher.js";
 import type { ISbDmNote, ISbDmTrack, RealTime } from "../core/ScoreBookDataModel.js";
 import type { IPolyrhythm } from "../core/types/general.js";
-import { getMuteEvents } from "./Muting.js";
 import type { TimeCoordinator } from "./TimeCoordinator.js";
-import { Event, ICallbackEvent, IInterval, SoloMute, type IEventSource } from "./types.js";
+import { Event, ICallbackEvent, IInterval } from "./types.js";
 
 /**
  * Coordinates playback for a single track.
  *
  * - Caches real-time positions for notes based on `timeCoordinator`.
- * - Produces audio, mute, and callback events for time intervals.
+ * - Produces audio and callback events for time intervals.
  * - Publishes the currently playing polyrhythm note for UI highlighting.
  * - Keeps caches in sync with instrument load state, track edits, and timing changes.
- * - Exposes `soloMute` to participate in arrangement-wide audible filtering.
  * - Provides a robust lifecycle via `onStop()` and `dispose()`.
  */
-export class TrackPlayer extends Publisher implements IEventSource {
+export class TrackPlayer {
     public readonly track: ISbDmTrack;
 
     /** Publishes when the current polyrhythm note changes (for UI highlighting). */
@@ -32,7 +30,6 @@ export class TrackPlayer extends Publisher implements IEventSource {
     private cachedPolyrhythms: IPolyrhythm[] = [];
     private _currentPolyrhythmNote: ISbDmNote | null = null;
 
-    private currentSoloMute: SoloMute = null;
     private disposed = false;
 
     private setupNotes: (() => void) | null = null;
@@ -48,7 +45,6 @@ export class TrackPlayer extends Publisher implements IEventSource {
      * @param timeCoordinator Converts score timings to real-time and provides loop/length context.
      */
     public constructor(track: ISbDmTrack, timeCoordinator: TimeCoordinator) {
-        super();
         this.track = track;
         this.timeCoordinator = timeCoordinator;
 
@@ -76,27 +72,6 @@ export class TrackPlayer extends Publisher implements IEventSource {
     }
 
     /**
-     * Current solo/mute state used by the arrangement to determine audible tracks.
-     *
-     * @returns The current solo/mute state.
-     */
-    public get soloMute(): SoloMute {
-        return this.currentSoloMute;
-    }
-
-    /**
-     * Updates the solo/mute state and publishes a change to subscribers.
-     *
-     * @param newSoloMute The new state: `null` (normal), "solo", or "mute".
-     */
-    public set soloMute(newSoloMute: SoloMute) {
-        if (newSoloMute !== this.currentSoloMute) {
-            this.currentSoloMute = newSoloMute;
-            this.publish();
-        }
-    }
-
-    /**
      * The note currently playing inside a polyrhythm, or `null` if none.
      *
      * @returns The current polyrhythm note, if any.
@@ -106,7 +81,7 @@ export class TrackPlayer extends Publisher implements IEventSource {
     }
 
     /**
-     * Builds all events (audio, mute, and callbacks) for the given real-time interval.
+     * Builds all events (audio and callbacks) for the given real-time interval.
      * Returns an empty list if the instrument is not loaded or the player is disposed.
      *
      * @param interval The real-time interval for which to retrieve events. `end` is treated as exclusive.
@@ -132,7 +107,6 @@ export class TrackPlayer extends Publisher implements IEventSource {
                 if (note.noteStyle) {
                     events.push(this.getAudioEvent(note, time));
                 }
-                events.push(...getMuteEvents(note, time));
                 events.push(this.getCurrentPolyrhythmNoteEvent(note, time));
             }
         }

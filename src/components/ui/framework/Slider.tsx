@@ -29,6 +29,7 @@ export class Slider extends UIComponent<ISliderProperties> {
 
     public render(): ComponentChild {
         const { id, vertical, "data-tooltip": dataTooltip, min, max, value, style, onChange } = this.props;
+
         const className = this.generateFinalClassName([
             "range",
             this.classFromProperty(vertical, "vertical"),
@@ -52,5 +53,4 @@ export class Slider extends UIComponent<ISliderProperties> {
             />
         );
     }
-
 }

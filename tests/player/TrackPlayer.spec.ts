@@ -130,6 +130,7 @@ const makeTrack = (
         id: 1,
         name: "Track 1",
         volume: 1,
+        effectiveVolume: 1,
         arrangement,
         instrument: {
             type: SbDmEntityType.Instrument,
@@ -244,22 +245,6 @@ describe("TrackPlayer", () => {
 
         player.onStop();
         expect(player.currentPolyrhythmNote).toBeNull();
-    });
-
-    it("publishes on soloMute change only when value changes", () => {
-        const track = makeTrack({ instrumentLoaded: true });
-        const player = new TrackPlayer(track, makeTimeCoordinator());
-
-        let publishCount = 0;
-        player.subscribe(() => {
-            publishCount++;
-        });
-
-        player.soloMute = "solo";
-        player.soloMute = "solo"; // no change
-        player.soloMute = null;
-
-        expect(publishCount).toBe(2);
     });
 
     it("returns no events after dispose", () => {

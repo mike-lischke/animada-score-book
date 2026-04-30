@@ -94,25 +94,6 @@ h6 {
 }
 
 
-#trackViewerHost {
-    padding-bottom: 15px;
-    overflow-x: auto;
-    flex: 1 1 auto;
-    min-width: 0;
-    padding-left: 100px;
-    scrollbar-width: none;
-    -ms-overflow-style: none;
-    touch-action: pan-x;
-
-    &::-webkit-scrollbar {
-        display: none;
-    }
-}
-
-#trackViewerContentHost {
-    padding-top: 12px;
-}
-
 #mainArrangementTitle {
     display: block;
     font-size: clamp(12pt, 20pt, 20pt);
@@ -205,48 +186,9 @@ h6 {
     margin: 8px 0;
 }
 
-#trackViewerDecorations,
-#trackViewerDecorationOverlay {
-    position: absolute;
-    flex-grow: 1;
-    overflow: hidden;
-
-    left: 0;
-    top: 4px;
-    right: 0;
-    bottom: 0;
-
-    pointer-events: none;
-}
-
-#playBeam {
-    width: calc(var(--note-height) / 6);
-    border: none;
-    background-color: var(--color-primary);
-    border-radius: 16px;
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    left: -500px;
-}
-
-#playRange {
-    width: 0;
-    background-color: oklch(95% 0.20043 108 / 0.15);
-    border: 1px solid oklch(91% 0.2 107);
-    border-radius: 12px;
-
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    left: -500px;
-
-    transition: left 0.050s linear;
-}
-
 .note-width {
     flex-basis: var(--note-height);
-    flex-grow: 0;
+    flex-grow: 1;
     flex-shrink: 0;
 }
 
@@ -257,30 +199,170 @@ h6 {
 #trackViewerContainer {
     margin-right: 30px;
 
-    .trackControlsList {
-        position: absolute;
-        overflow: hidden;
-        flex: 0 0 calc(var(--note-height) + 6pt);
-        padding: 40px 24px 0 8px;
-        z-index: 1;
-        background: linear-gradient(to right, var(--color-base-100), var(--color-base-100) 70%, transparent 100%);
+    #trackViewerHost {
+        padding: 10px 0;
+        overflow-x: auto;
+        flex: 1 1 auto;
+        min-width: 0;
+        scrollbar-width: none;
+        -ms-overflow-style: none;
+        touch-action: pan-x;
+
+        &::-webkit-scrollbar {
+            display: none;
+        }
+
+        #trackViewerContentHost {
+            padding-top: 0;
+
+            #trackViewerDecorations,
+            #trackViewerDecorationOverlay {
+                position: absolute;
+                flex-grow: 1;
+                overflow: hidden;
+
+                left: 0;
+                top: 0;
+                right: 0;
+                bottom: 0;
+
+                pointer-events: none;
+            }
+
+            #playBeam {
+                width: calc(var(--note-height) / 6);
+                border: none;
+                background-color: var(--color-primary);
+                border-radius: 16px;
+                position: absolute;
+                top: 0;
+                bottom: 0;
+                left: -500px;
+            }
+
+            #playRange {
+                width: 0;
+                background-color: oklch(95% 0.20043 108 / 0.15);
+                border: 1px solid oklch(91% 0.2 107);
+                border-radius: 12px;
+
+                position: absolute;
+                top: 0;
+                bottom: 0;
+                left: -500px;
+
+                transition: left 0.050s linear;
+            }
+        }
     }
-}
 
-.trackControls {
-    width: var(--note-height);
-    height: var(--note-height);
+    .trackControlsList {
+        --track-controls-collapsed-width: 90px;
+        --track-controls-expanded-width: clamp(200px, 24vw, 300px);
 
-    flex-shrink: 0;
-    border-radius: 50%;
-    border: 5px solid white;
-    margin: 10px 6px 10px 0;
-}
+        overflow: hidden;
 
-.trackControls .trackInstrumentIcon {
-    mask-size: contain;
-    background-color: var(--color-neutral);
-    flex: 1 0 auto;
+        flex: 0 0 var(--track-controls-collapsed-width);
+        width: var(--track-controls-expanded-width);
+        min-width: 0;
+        min-height: 0;
+        padding: 7px 10px;
+        margin-bottom: 20px;
+        z-index: 1;
+
+        background: linear-gradient(to right, var(--color-base-100), var(--color-base-100) 70%, transparent 100%);
+
+        transition: width 0.2s ease, flex-basis 0.2s ease;
+
+        &.expanded {
+            flex-basis: var(--track-controls-expanded-width);
+            width: var(--track-controls-expanded-width);
+
+            .trackControlsPanel {
+                transform: translateX(0);
+            }
+        }
+    }
+
+    .trackControlsPanel {
+        min-width: 0;
+
+        .trackControls {
+            align-self: flex-end;
+            width: calc(var(--track-controls-expanded-width) - 20px);
+            height: var(--note-height);
+            margin-bottom: 20px;
+
+            flex-shrink: 0;
+
+            &:last-child {
+                margin-bottom: 0;
+            }
+        }
+
+        .trackControls .trackInstrumentShell {
+            width: 70px;
+            height: 70px;
+            border-radius: 50%;
+            border: 4px solid white;
+        }
+
+        .trackControls .trackInstrumentIcon {
+            width: 40px;
+            mask-size: contain;
+            background-color: var(--color-base-content);
+            flex: 0 0 auto;
+        }
+
+        .trackControls .trackSliderArea {
+            flex: 1 1 auto;
+            min-width: 0;
+            margin-right: 10px;
+        }
+
+        .trackControls .trackInstrumentName {
+            font-size: 0.9rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            width: 100%;
+            margin-bottom: 2px;
+        }
+
+        .trackControls .trackVolumeSlider {
+            width: calc(100% - 16px);
+            margin: 0 8px;
+        }
+
+        .trackControls .trackVolumeLegend {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            width: calc(100% - 16px);
+            margin: 3px 8px 0;
+            font-size: 0.75rem;
+            color: var(--color-base-content);
+            user-select: none;
+        }
+
+        .trackControls .trackVolumeLegendLeft {
+            text-align: left;
+        }
+
+        .trackControls .trackVolumeLegendRight {
+            text-align: right;
+        }
+    }
+
+    .trackControlsHeader {
+        height: 30px;
+        min-width: 0;
+    }
+
+    .trackControlsToggle {
+        height: 24px;
+        min-height: 24px;
+        justify-content: flex-start;
+    }
 }
 
 .guiderail {
@@ -448,7 +530,6 @@ h6 {
 }
 
 .note-viewer {
-    box-sizing: border-box;
     height: var(--note-height);
     text-align: center;
     line-height: var(--note-height);
@@ -1062,7 +1143,6 @@ h6 {
         border: 2px solid color-mix(in srgb, var(--color-info) 25%, white);
         border-radius: 4px;
         background-color: color-mix(in srgb, var(--color-neutral) 20%, transparent);
-        box-sizing: border-box;
         z-index: 3;
         cursor: grab;
     }

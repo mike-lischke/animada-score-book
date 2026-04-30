@@ -114,7 +114,7 @@ export class TrackViewer extends UIComponent<ITrackViewerProperties, ITrackViewe
         const { trackPlayer, arrangementPlayer } = this.props;
 
         this.setState({
-            audible: arrangementPlayer.audibleTrackPlayers.has(trackPlayer.track),
+            audible: arrangementPlayer.trackPlayers.has(trackPlayer.track),
         });
     };
 }

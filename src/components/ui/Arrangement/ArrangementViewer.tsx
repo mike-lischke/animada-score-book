@@ -208,19 +208,14 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
                 >
                     <TrackControls innerRef={this.trackControlsRef} tracks={arrangement.tracks} />
                     <Container
+                        id="trackViewerHost"
+                        innerRef={this.viewerRef}
                         orientation={Orientation.TopDown}
-                        style={{ overflow: "auto" }}
+                        crossAlignment={ChildAlignment.Start}
+                        onWheel={autoFollowIsOn ? this.handleWheel : undefined}
+                        onScroll={this.handleTrackViewerScroll}
                     >
-                        <Container
-                            id="trackViewerHost"
-                            innerRef={this.viewerRef}
-                            orientation={Orientation.TopDown}
-                            crossAlignment={ChildAlignment.Start}
-                            onWheel={autoFollowIsOn ? this.handleWheel : undefined}
-                            onScroll={this.handleTrackViewerScroll}
-                        >
-                            {contentHost}
-                        </Container>
+                        {contentHost}
                     </Container>
                 </Container>
                 <Minimap
@@ -257,7 +252,7 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
             const contentHost = this.viewerContentHostRef.current;
 
             const contentWidth = contentHost.scrollWidth;
-            const clientWidth = viewer.clientWidth - this.trackControlsRef.current!.offsetWidth;
+            const clientWidth = viewer.clientWidth;
             const maxScroll = Math.max(0, contentWidth - clientWidth);
 
             // Update play beam continuously.

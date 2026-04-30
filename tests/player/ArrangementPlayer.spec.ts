@@ -118,7 +118,6 @@ vi.mock("../../src/player/TimeCoordinator.js", () => {
 // Mock TrackPlayer used inside ArrangementPlayer
 vi.mock("../../src/player/TrackPlayer.js", () => {
     class MockTrackPlayer {
-        public soloMute: null | "solo" | "mute" = null;
         public readonly currentPolyrhythmNotePublisher = makeSubscribable();
         public stopped = false;
         private readonly subs = makeSubscribable();
@@ -235,6 +234,7 @@ const makeArrangement = (trackCount: number): ISbDmArrangement & { _publish: () 
             id: i + 1,
             name: `Track ${i + 1}`,
             volume: 1,
+            effectiveVolume: 1,
             arrangement: undefined as unknown as ISbDmArrangement,
             instrument,
             notes: [],
@@ -250,6 +250,7 @@ const makeArrangement = (trackCount: number): ISbDmArrangement & { _publish: () 
             clear: vi.fn(),
             ...trackSubs
         };
+
         const noteStyle: INoteStyle = {
             id: "x",
             instrument: instrument as unknown as INoteStyle["instrument"],
@@ -296,34 +297,11 @@ import type { TimeCoordinator } from "../../src/player/TimeCoordinator.js";
 import type { TrackPlayer } from "../../src/player/TrackPlayer.js";
 
 describe("ArrangementPlayer", () => {
-    it("creates track players and computes audible set (no solo)", () => {
+    it("creates track players", () => {
         const arrangement = makeArrangement(2);
         const dm = new TestScoreBookDataModel(arrangement);
         const player = new ArrangementPlayer(dm);
         expect(player.trackPlayers.size).toBe(2);
-
-        // Initially all unmuted => both audible
-        expect(player.audibleTrackPlayers.size).toBe(2);
-    });
-
-    it("audible set reacts to solo/mute changes via subscriptions", () => {
-        const arrangement = makeArrangement(3);
-        const dm = new TestScoreBookDataModel(arrangement);
-        const player = new ArrangementPlayer(dm);
-        const tps = Array.from(player.trackPlayers.values()) as Array<TrackPlayer & { publish: () => void; }>;
-
-        // Solo the second track
-        tps[1].soloMute = "solo";
-        tps[1].publish();
-        expect(player.audibleTrackPlayers.size).toBe(1);
-
-        // Remove solo, mute first track
-        tps[1].soloMute = null;
-        tps[1].publish();
-        tps[0].soloMute = "mute";
-        tps[0].publish();
-        // Two audible (tracks 2 and 3)
-        expect(player.audibleTrackPlayers.size).toBe(2);
     });
 
     it("updates track player set when arrangement tracks change", () => {
@@ -339,6 +317,7 @@ describe("ArrangementPlayer", () => {
             id: 99,
             name: "New Track",
             volume: 1,
+            effectiveVolume: 1,
             arrangement,
             instrument: currentInstrument,
             notes: arrangement.tracks[0].notes,
@@ -409,5 +388,20 @@ describe("ArrangementPlayer", () => {
         tps.forEach((tp) => {
             expect(tp.stopped).toBe(true);
         });
+    });
+
+    it("clamps loop progress at interval end during non-loop playback", () => {
+        const arrangement = makeArrangement(1);
+        arrangement.loop = false;
+        const dm = new TestScoreBookDataModel(arrangement);
+        const player = new ArrangementPlayer(dm);
+
+        // @ts-expect-error Accessing internal for test purposes
+        player.endOffset = 1;
+
+        // Without clamping, this would wrap to 0.02 for a loop length of 1.
+        const progress = player.convertToLoopProgress(1.02);
+        expect(progress).toBeGreaterThan(0.99);
+        expect(progress).toBeLessThan(1);
     });
 });
