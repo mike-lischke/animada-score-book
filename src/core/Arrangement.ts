@@ -142,14 +142,15 @@ export class Arrangement extends Publisher implements ISbDmArrangement {
         this.applyTimeParams(arrangementSnapshot);
         this.title = arrangementSnapshot.title ?? "Untitled Arrangement";
 
-        // Remove tracks that aren't in the snapshot
-        this.tracks.forEach((track) => {
+        // Remove tracks that aren't in the snapshot. Iterate backwards because removeTrack mutates this.tracks.
+        for (let trackIndex = this.tracks.length - 1; trackIndex >= 0; trackIndex--) {
+            const track = this.tracks[trackIndex]!;
             if (!arrangementSnapshot.tracks.some((trackSnapshot) => {
                 return trackSnapshot.id === track.id;
             })) {
                 this.removeTrack(track);
             }
-        });
+        }
 
         // Add missing tracks
         arrangementSnapshot.tracks.forEach((trackSnapshot) => {
