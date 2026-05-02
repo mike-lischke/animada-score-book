@@ -134,11 +134,13 @@ export class BarViewer extends UIComponent<IBarViewerProps, IBarViewerState> {
 
     private handleTrackViewModeToggled = (trackViewMode: "grid" | "staff") => {
         this.setState({ trackViewMode });
+
         return Promise.resolve(true);
     };
 
     private getBarDivisibility(arrangement: ISbDmArrangement): BarDivisibility {
         const beatsPerBar = Number(arrangement.timeParams.timeSignature.split("/")[0]);
+
         if (beatsPerBar % 4 === 0) {
             return 4;
         }

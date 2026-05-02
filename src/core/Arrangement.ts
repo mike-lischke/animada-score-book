@@ -12,8 +12,9 @@ import { polyrhythmNumberToCharacter, urlNumberToCharacter } from "./serialisati
 import { convertToBaseN, urlDecodeNumber } from "./serialisation/numeric_functions.js";
 import { TimeParams } from "./TimeParams.js";
 import { Track } from "./Track.js";
-import type { IPolyrhythm, ITimeParams } from "./types/general.js";
-import type { IArrangementSnapshot, IPolyrhythmSnapshot, ISerialisedArrangement, ITrackSnapshot } from "./types/general.js";
+import type {
+    IArrangementSnapshot, IPolyrhythm, IPolyrhythmSnapshot, ISerialisedArrangement, ITimeParams, ITrackSnapshot
+} from "./types/general.js";
 import { calculateStepsPerBar, getNewId } from "./utils.js";
 
 export class Arrangement extends Publisher implements ISbDmArrangement {

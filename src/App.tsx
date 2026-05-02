@@ -41,7 +41,7 @@ import {
     SbDmEntityType, ScoreBookDataModel, type ISbDmScore, type ISbDmScoreFolder
 } from "./core/ScoreBookDataModel.js";
 import { getSerialisedArrangementFromParams } from "./core/serialisation/url.js";
-import type { ISerialisedArrangement } from "./core/types/general.js";
+import type { IArrangementSnapshot, ISerialisedArrangement } from "./core/types/general.js";
 import { UndoManager } from "./core/UndoManager.js";
 import { convertErrorToString } from "./core/utils.js";
 import { ArrangementPlayer } from "./player/ArrangementPlayer.js";
@@ -85,6 +85,7 @@ export class App extends UIComponent<{}, IAppState> {
     private services: ScoreBookUiServices;
     private arrangementPlayer?: ArrangementPlayer;
     private undoManager?: UndoManager;
+    private stopCurrentScoreAutoSave?: () => void;
 
     private mouseHandler?: MouseHandler;
 
@@ -140,6 +141,8 @@ export class App extends UIComponent<{}, IAppState> {
 
     public override componentWillUnmount() {
         super.componentWillUnmount();
+        this.stopCurrentScoreAutoSave?.();
+        this.stopCurrentScoreAutoSave = undefined;
         this.systemThemeQuery.removeEventListener("change", this.handleSystemThemeChange);
         escapeStack.detach();
         requisitions.unregister("settingsChanged", this.handleSettingsChanged);
@@ -589,6 +592,8 @@ export class App extends UIComponent<{}, IAppState> {
     };
 
     private loadScorebook(arrangementToLoad?: ISerialisedArrangement) {
+        let snapshotToLoad: IArrangementSnapshot | undefined;
+
         if (this.arrangementPlayer) {
             const arrangementView = this.dataModel.arrangement!;
             arrangementView.timeParams.unsubscribe(this.handleTimeParamsChanged);
@@ -596,21 +601,34 @@ export class App extends UIComponent<{}, IAppState> {
             this.arrangementPlayer.dispose();
         }
 
+        this.stopCurrentScoreAutoSave?.();
+        this.stopCurrentScoreAutoSave = undefined;
+
         if (!arrangementToLoad) {
             // Try to load the last opened score from localStorage, if available.
             const lastScoreString = AppStorage.loadUISettings()?.currentScore;
             if (lastScoreString) {
                 try {
-                    arrangementToLoad = JSON.parse(lastScoreString) as ISerialisedArrangement;
+                    const parsed = JSON.parse(lastScoreString) as ISerialisedArrangement | IArrangementSnapshot;
+                    if (this.isSerialisedArrangement(parsed)) {
+                        arrangementToLoad = parsed;
+                    } else if (this.isArrangementSnapshot(parsed)) {
+                        snapshotToLoad = parsed;
+                    }
                 } catch {
                     // Failed to parse, ignore and start with a new song.
                 }
             }
         }
 
-        arrangementToLoad = arrangementToLoad ?? newSong;
-        const arrangement = this.dataModel.loadArrangement(arrangementToLoad);
+        const resolvedArrangementToLoad = arrangementToLoad ?? newSong;
+        const arrangement = snapshotToLoad
+            ? this.dataModel.loadArrangementFromSnapshot(snapshotToLoad)
+            : this.dataModel.loadArrangement(resolvedArrangementToLoad);
         this.undoManager = new UndoManager(this.dataModel);
+        this.stopCurrentScoreAutoSave = this.undoManager.topics.currentState.subscribe(() => {
+            AppStorage.saveSetting("currentScore", JSON.stringify(this.undoManager!.currentState));
+        });
         this.arrangementPlayer = new ArrangementPlayer(this.dataModel);
         this.dataModel.arrangement!.timeParams.subscribe(this.handleTimeParamsChanged);
 
@@ -618,13 +636,36 @@ export class App extends UIComponent<{}, IAppState> {
             document.title = arrangement.title + " - Animada Score Book";
         }
 
-        this.setState({ serializedArrangement: arrangementToLoad }, () => {
-            if (arrangementToLoad === newSong) {
+        this.setState({ serializedArrangement: resolvedArrangementToLoad }, () => {
+            if (snapshotToLoad) {
+                AppStorage.saveSetting("currentScore", JSON.stringify(snapshotToLoad));
+            } else if (resolvedArrangementToLoad === newSong) {
                 AppStorage.saveSetting("currentScore", undefined);
             } else {
-                AppStorage.saveSetting("currentScore", JSON.stringify(arrangementToLoad));
+                AppStorage.saveSetting("currentScore", JSON.stringify(resolvedArrangementToLoad));
             }
         });
+    }
+
+    private isSerialisedArrangement(data: unknown): data is ISerialisedArrangement {
+        if (!data || typeof data !== "object") {
+            return false;
+        }
+
+        const candidate = data as Partial<ISerialisedArrangement>;
+
+        return typeof candidate.composition === "string"
+            && typeof candidate.version === "number";
+    }
+
+    private isArrangementSnapshot(data: unknown): data is IArrangementSnapshot {
+        if (!data || typeof data !== "object") {
+            return false;
+        }
+
+        const candidate = data as Partial<IArrangementSnapshot>;
+
+        return !!candidate.timeParams && Array.isArray(candidate.tracks);
     }
 
     private initEventHandlers(): void {

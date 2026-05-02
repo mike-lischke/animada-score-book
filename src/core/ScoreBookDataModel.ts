@@ -348,6 +348,13 @@ export class ScoreBookDataModel extends Publisher {
         return this.data.arrangement;
     }
 
+    public loadArrangementFromSnapshot(snapshot: IArrangementSnapshot): ISbDmArrangement {
+        this.data.arrangement = Arrangement.fromSnapshot(snapshot, this.data.instruments);
+        this.publish();
+
+        return this.data.arrangement;
+    }
+
     /**
      * Adds a new score folder to the data model.
      *
