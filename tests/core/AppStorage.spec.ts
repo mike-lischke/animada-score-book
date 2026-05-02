@@ -60,6 +60,34 @@ describe.sequential("AppStorage", () => {
         expect(AppStorage.sessionId).toBe("session-storage-id");
     });
 
+    it("duplicates latest session into a new session id when tab has no own session", async () => {
+        const now = Date.now();
+
+        const AppStorage = await importFreshAppStorage(() => {
+            localStorage.setItem(`${sessionSettingsPrefix}latest`, JSON.stringify({
+                currentScore: "latest-song",
+                viewSettings: { arrangementViewSettings: { zoomLevel: 111 } },
+            }));
+            localStorage.setItem(`${sessionMetaPrefix}latest`, String(now));
+        });
+
+        expect(AppStorage.sessionId).not.toBe("latest");
+
+        const clonedSessionKey = `${sessionSettingsPrefix}${AppStorage.sessionId}`;
+        expect(localStorage.getItem(clonedSessionKey)).toBe(JSON.stringify({
+            currentScore: "latest-song",
+            viewSettings: { arrangementViewSettings: { zoomLevel: 111 } },
+        }));
+        expect(AppStorage.loadUISettings()?.currentScore).toBe("latest-song");
+    });
+
+    it("creates a brand new session only when no prior session exists", async () => {
+        const AppStorage = await importFreshAppStorage();
+
+        expect(AppStorage.sessionId.length).toBeGreaterThan(0);
+        expect(localStorage.getItem(`${sessionSettingsPrefix}${AppStorage.sessionId}`)).toBeNull();
+    });
+
     it("splits global and session-scoped settings on save", async () => {
         const AppStorage = await importFreshAppStorage(() => {
             window.history.replaceState({ sessionId: "split-session" }, "");

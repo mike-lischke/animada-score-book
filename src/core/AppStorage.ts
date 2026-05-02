@@ -80,7 +80,7 @@ export class AppStorage {
     ]);
 
     /** Active session identifier used for session-scoped storage keys. */
-    static #sessionId: string = AppStorage.#resolveExistingSessionId() ?? AppStorage.#generateSessionId();
+    static #sessionId = "";
 
     /**
      * Whether localStorage is available and writable in the current environment.
@@ -110,9 +110,12 @@ export class AppStorage {
         if (this.#hasLocalStorage) {
             // Remove legacy global session id key from old implementations.
             localStorage.removeItem(this.#sessionStorageKey);
+            this.#sessionId = this.#resolveInitialSessionId();
             this.#persistSessionId();
             this.#touchSession(this.#sessionId);
             this.#cleanupSessions();
+        } else {
+            this.#sessionId = window.crypto.randomUUID();
         }
     }
 
@@ -230,6 +233,79 @@ export class AppStorage {
 
         return sessionStorage.getItem(this.#sessionStorageKey)
             ?? undefined;
+    }
+
+    /**
+     * Resolves the initial session for the current tab.
+     *
+     * - Reuses the tab's existing session, if available.
+     * - Otherwise clones the newest known session into a new session id.
+     * - Creates a new session only if no prior session exists.
+     *
+     * @returns The session id to use for this tab.
+     */
+    static #resolveInitialSessionId(): string {
+        const existingSessionId = this.#resolveExistingSessionId();
+        if (existingSessionId) {
+            return existingSessionId;
+        }
+
+        const latestSessionId = this.#findLatestSessionId();
+        if (!latestSessionId) {
+            return this.#generateSessionId();
+        }
+
+        const newSessionId = this.#generateSessionId();
+        this.#cloneSessionSettings(latestSessionId, newSessionId);
+
+        return newSessionId;
+    }
+
+    /**
+     * Finds the most recently used stored session id.
+     *
+     * @returns The latest session id, or undefined if no stored session exists.
+     */
+    static #findLatestSessionId(): string | undefined {
+        let latest: { id: string; updatedAt: number; } | undefined;
+
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (!key?.startsWith(this.#sessionSettingsKeyPrefix)
+                || key.startsWith(this.#sessionMetaKeyPrefix)) {
+                continue;
+            }
+
+            const id = key.slice(this.#sessionSettingsKeyPrefix.length);
+            if (!id) {
+                continue;
+            }
+
+            const updatedAtRaw = localStorage.getItem(this.#getSessionMetaKey(id));
+            const updatedAtParsed = Number(updatedAtRaw);
+            const updatedAt = Number.isFinite(updatedAtParsed) ? updatedAtParsed : 0;
+
+            if (!latest || updatedAt > latest.updatedAt) {
+                latest = { id, updatedAt };
+            }
+        }
+
+        return latest?.id;
+    }
+
+    /**
+     * Clones session-scoped settings from one session id to another.
+     *
+     * @param sourceSessionId The source session id.
+     * @param targetSessionId The target session id.
+     */
+    static #cloneSessionSettings(sourceSessionId: string, targetSessionId: string): void {
+        const sourceKey = `${this.#sessionSettingsKeyPrefix}${sourceSessionId}`;
+        const targetKey = `${this.#sessionSettingsKeyPrefix}${targetSessionId}`;
+        const sourceSettings = this.#loadSettingsByKey(sourceKey) ?? {};
+
+        localStorage.setItem(targetKey, JSON.stringify(sourceSettings));
+        localStorage.setItem(this.#getSessionMetaKey(targetSessionId), String(Date.now()));
     }
 
     /**
