@@ -4,6 +4,8 @@
         "*.postcss": "postcss"
     },
     "chat.tools.terminal.autoApprove": {
-        "npx tsc": true
+        "npx tsc": true,
+        "npm run -s tsc": true,
+        "npm run -s lint": true
     },
 }

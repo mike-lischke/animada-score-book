@@ -622,9 +622,10 @@ export class App extends UIComponent<{}, IAppState> {
         }
 
         const resolvedArrangementToLoad = arrangementToLoad ?? newSong;
-        const arrangement = snapshotToLoad
-            ? this.dataModel.loadArrangementFromSnapshot(snapshotToLoad)
-            : this.dataModel.loadArrangement(resolvedArrangementToLoad);
+        const arrangement = this.dataModel.loadArrangement(resolvedArrangementToLoad);
+        if (snapshotToLoad) {
+            arrangement.applyArrangementSnapshot(snapshotToLoad, this.dataModel.instruments);
+        }
         this.undoManager = new UndoManager(this.dataModel);
         this.stopCurrentScoreAutoSave = this.undoManager.topics.currentState.subscribe(() => {
             AppStorage.saveSetting("currentScore", JSON.stringify(this.undoManager!.currentState));

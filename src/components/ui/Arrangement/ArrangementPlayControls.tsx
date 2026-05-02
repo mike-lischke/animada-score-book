@@ -3,13 +3,14 @@
 * Licensed under the MIT License. See License.txt in the project root for license information.
 */
 
-import type { ComponentChild } from "preact";
+import { type ComponentChild, createRef } from "preact";
 
 import { AppStorage } from "../../../core/AppStorage.js";
 import type { ScoreBookDataModel } from "../../../core/ScoreBookDataModel.js";
 import type { UndoManager } from "../../../core/UndoManager.js";
 import type { ArrangementPlayer } from "../../../player/ArrangementPlayer.js";
 import type { ScoreBookUiServices } from "../../../player/types.js";
+import { isMobile } from "../../../ui/index.js";
 import { Button } from "../framework/Button.js";
 import { Checkbox } from "../framework/Checkbox.js";
 import { Codicon } from "../framework/Codicon.js";
@@ -18,12 +19,14 @@ import { FieldSet } from "../framework/FieldSet.js";
 import { Icon } from "../framework/Icon.js";
 import { Image, PredefinedImage } from "../framework/Image.js";
 import { Label } from "../framework/Label.js";
+import { ProgressIndicator } from "../framework/ProgressIndicator.js";
 import { Slider } from "../framework/Slider.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
 import { ChildAlignment, Orientation } from "../framework/ui-types.js";
 import { PlayStopButton } from "./PlayStopButton.js";
 import { Grid } from "../framework/Grid.js";
 import { GridCell } from "../framework/GridCell.js";
+import { Dialog } from "../framework/Dialog.js";
 
 export interface IArrangementPlayControlsProperties extends ICommonUIProperties {
     arrangementPlayer: ArrangementPlayer,
@@ -38,10 +41,13 @@ interface IArrangementPlayControlsState {
 
     currentVolume: number;
     currentTempo: number;
+    recordingInProgress: boolean;
 }
 
 export class ArrangementPlayControls
     extends UIComponent<IArrangementPlayControlsProperties, IArrangementPlayControlsState> {
+    private recordingDialogRef = createRef<Dialog>();
+
     public constructor(props: IArrangementPlayControlsProperties) {
         super(props);
 
@@ -51,6 +57,7 @@ export class ArrangementPlayControls
             title: arrangementView.title,
             currentVolume: arrangementView.mainVolume,
             currentTempo: arrangementView.timeParams.tempo,
+            recordingInProgress: false,
         };
     }
 
@@ -64,17 +71,24 @@ export class ArrangementPlayControls
     public override componentDidUpdate(previousProps: Readonly<IArrangementPlayControlsProperties>,
         previousState: Readonly<IArrangementPlayControlsState>): void {
         const { dataModel } = this.props;
+        const { recordingInProgress } = this.state;
 
         const arrangement = dataModel.arrangement!;
         if (previousState.currentTempo !== arrangement.timeParams.tempo) {
             this.setState({ currentTempo: arrangement.timeParams.tempo });
+        }
+
+        if (!previousState.recordingInProgress && recordingInProgress) {
+            this.recordingDialogRef.current?.open();
+        } else if (previousState.recordingInProgress && !recordingInProgress) {
+            this.recordingDialogRef.current?.close(true);
         }
     }
 
     public override shouldComponentUpdate(nextProps: Readonly<IArrangementPlayControlsProperties>,
         nextState: Readonly<IArrangementPlayControlsState>): boolean {
         const { arrangementPlayer, dataModel } = this.props;
-        const { editingTitle, title, currentVolume, currentTempo } = this.state;
+        const { editingTitle, title, currentVolume, currentTempo, recordingInProgress } = this.state;
 
         if (arrangementPlayer !== nextProps.arrangementPlayer) {
             return true;
@@ -100,12 +114,16 @@ export class ArrangementPlayControls
             return true;
         }
 
+        if (recordingInProgress !== nextState.recordingInProgress) {
+            return true;
+        }
+
         return false;
     }
 
     public override render(): ComponentChild {
         const { arrangementPlayer, dataModel, undoManager } = this.props;
-        const { currentVolume, currentTempo } = this.state;
+        const { currentVolume, currentTempo, recordingInProgress } = this.state;
 
         const arrangementView = dataModel.arrangement!;
 
@@ -122,7 +140,10 @@ export class ArrangementPlayControls
                             round
                             id="recordButton"
                             data-tooltip="Record your song and export it as an MP3 file."
-                            onClick={this.startRecording}
+                            disabled={recordingInProgress}
+                            onClick={() => {
+                                void this.startRecording();
+                            }}
                         >
                             <Image key="recordButton" src={PredefinedImage.Record} data-tooltip="inherit" />
                         </Button>
@@ -230,6 +251,22 @@ export class ArrangementPlayControls
                         </Container>
                     </FieldSet>
                 </GridCell>
+                <Dialog
+                    id="recordingDialog"
+                    ref={this.recordingDialogRef}
+                    caption="Recording Arrangement"
+                    className="recordingDialog"
+                    onClose={this.handleRecordingDialogClose}
+                >
+                    <Container
+                        orientation={Orientation.TopDown}
+                        gap={10}
+                        style={{ minWidth: "280px" }}
+                    >
+                        <Label caption="Please wait while the MP3 file is being created..." />
+                        <ProgressIndicator linear indicatorHeight={8} style={{ flex: "0 0 auto" }} />
+                    </Container>
+                </Dialog>
             </Grid >
         );
     }
@@ -241,12 +278,20 @@ export class ArrangementPlayControls
         this.setState({ title: arrangement.title });
     };
 
-    private startRecording = () => {
+    private startRecording = async () => {
         const { arrangementPlayer, dataModel } = this.props;
-        void arrangementPlayer.renderToBlob().then(async (blob) => {
+        if (this.state.recordingInProgress) {
+            return;
+        }
+
+        this.setState({ recordingInProgress: true });
+
+        try {
+            const blob = await arrangementPlayer.renderToBlob();
             const fileName = `${dataModel.arrangement!.title}.mp3`;
 
-            if (typeof navigator.share === "function" && typeof navigator.canShare === "function") {
+            if (isMobile && typeof navigator.share === "function"
+                && typeof navigator.canShare === "function") {
                 const exportFile = new File([blob], fileName, { type: "audio/mpeg" });
                 if (navigator.canShare({ files: [exportFile] })) {
                     try {
@@ -275,9 +320,22 @@ export class ArrangementPlayControls
             a.click();
 
             // Keep the URL alive briefly so Safari can consume it before revoking.
-            window.setTimeout(() => {
+            setTimeout(() => {
                 URL.revokeObjectURL(url);
             }, 1000);
-        });
+        } catch (error) {
+            console.error("Recording export failed", error);
+            alert("The recording could not be exported. Please try again.");
+        } finally {
+            this.setState({ recordingInProgress: false });
+        }
+    };
+
+    private handleRecordingDialogClose = (): void => {
+        if (this.state.recordingInProgress) {
+            setTimeout(() => {
+                this.recordingDialogRef.current?.open();
+            }, 0);
+        }
     };
 };
