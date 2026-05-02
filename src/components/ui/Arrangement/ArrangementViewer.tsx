@@ -260,20 +260,23 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
             const position = Math.floor(normalizedPosition * contentWidth);
             this.playBeamRef.current.style.left = `${position}px`;
 
-            // If the play beam gets close to the end of the visible area, scroll with intelligent snapping.
-            if (position < viewer.scrollLeft || position > viewer.scrollLeft + clientWidth) {
-                const metrics = arrangementPlayer.scoreMetrics;
-                const stepWidthPixels = contentWidth / (metrics.bars * metrics.stepsPerBar);
-                const barWidthPixels = stepWidthPixels * metrics.stepsPerBar;
-                const pulseWidthPixels = stepWidthPixels * metrics.stepsPerPulse;
+            // Also trigger as soon as the beam enters a right-edge partial bar, to avoid late double scrolling.
+            const metrics = arrangementPlayer.scoreMetrics;
+            const stepWidthPixels = contentWidth / (metrics.bars * metrics.stepsPerBar);
+            const barWidthPixels = stepWidthPixels * metrics.stepsPerBar;
+            const pulseWidthPixels = stepWidthPixels * metrics.stepsPerPulse;
 
-                // Half-bar splits use beat-level granularity so odd time signatures snap musically.
-                // Even meters split symmetrically (2+2, 3+3 for 6/8), odd meters asymmetrically
-                // using ceil+floor: 3+2 for 5/4, 4+3 for 7/8, 2+1 for 3/4.
-                const beatWidthPixels = barWidthPixels / metrics.beatsPerBar;
-                const firstHalfWidth = Math.ceil(metrics.beatsPerBar / 2) * beatWidthPixels;
-                const secondHalfWidth = Math.floor(metrics.beatsPerBar / 2) * beatWidthPixels;
+            // Half-bar splits use beat-level granularity so odd time signatures snap musically.
+            // Even meters split symmetrically (2+2, 3+3 for 6/8), odd meters asymmetrically
+            // using ceil+floor: 3+2 for 5/4, 4+3 for 7/8, 2+1 for 3/4.
+            const beatWidthPixels = barWidthPixels / metrics.beatsPerBar;
+            const firstHalfWidth = Math.ceil(metrics.beatsPerBar / 2) * beatWidthPixels;
+            const secondHalfWidth = Math.floor(metrics.beatsPerBar / 2) * beatWidthPixels;
 
+            const rightPartialBarStart = this.getRightPartialBarStart(viewer.scrollLeft, clientWidth, barWidthPixels);
+            const reachedRightPartialBar = position >= rightPartialBarStart;
+
+            if (position < viewer.scrollLeft || position > viewer.scrollLeft + clientWidth || reachedRightPartialBar) {
                 let snappedScroll: number;
 
                 if (barWidthPixels <= clientWidth) {
@@ -295,6 +298,32 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
             }
         }
     };
+
+    /**
+     * @param scrollLeft The scrollLeft of the viewer, at 100% zoom.
+     * @param clientWidth The clientWidth of the viewer, at 100% zoom.
+     * @param barWidthPixels The width of a bar in pixels, at 100% zoom.
+     *
+     * @returns the start x-position (at 100% zoom) of the rightmost partially visible bar, if any.
+     */
+    private getRightPartialBarStart(scrollLeft: number, clientWidth: number, barWidthPixels: number): number {
+        if (barWidthPixels <= 0 || clientWidth <= barWidthPixels) {
+            return Number.MAX_SAFE_INTEGER;
+        }
+
+        const viewportRight = scrollLeft + clientWidth;
+        const epsilon = 0.5;
+        const remainder = viewportRight % barWidthPixels;
+
+        // If viewportRight lands exactly on a bar boundary, there is no partial rightmost bar.
+        if (remainder <= epsilon || barWidthPixels - remainder <= epsilon) {
+            return Number.MAX_SAFE_INTEGER;
+        }
+
+        const rightPartialBarStart = viewportRight - remainder;
+
+        return rightPartialBarStart > scrollLeft + epsilon ? rightPartialBarStart : Number.MAX_SAFE_INTEGER;
+    }
 
     private animationEngineSubscription = () => {
         const { arrangementPlayer } = this.props;

@@ -5,7 +5,10 @@
 
 import type { ISbDmTrack } from "../../../core/ScoreBookDataModel.js";
 import type { Mutable } from "../../../core/types/general.js";
+import { AppStorage } from "../../../core/AppStorage.js";
+import { requisitions } from "../../../supplement/Requisitions.js";
 import { Button } from "../framework/Button.js";
+import { CheckState, Toggle } from "../framework/Toggle.js";
 import { Codicon } from "../framework/Codicon.js";
 import { Container } from "../framework/Container.js";
 import { Icon } from "../framework/Icon.js";
@@ -20,6 +23,7 @@ export interface ITrackControlsProperties extends ICommonUIProperties {
 
 interface ITrackControlsState {
     mixerExpanded: boolean;
+    trackViewMode: "grid" | "staff";
 }
 
 /** Icon and track-specific controls. */
@@ -27,8 +31,12 @@ export class TrackControls extends UIComponent<ITrackControlsProperties, ITrackC
     public constructor(props: ITrackControlsProperties) {
         super(props);
 
+        const settings = AppStorage.loadUISettings() ?? {};
+        const trackViewMode = settings.viewSettings?.arrangementViewSettings?.displayMode ?? "grid";
+
         this.state = {
             mixerExpanded: false,
+            trackViewMode,
         };
     }
 
@@ -45,7 +53,7 @@ export class TrackControls extends UIComponent<ITrackControlsProperties, ITrackC
 
     public render() {
         const { tracks, innerRef } = this.props;
-        const { mixerExpanded } = this.state;
+        const { mixerExpanded, trackViewMode } = this.state;
 
         const listClassName = this.generateFinalClassName([
             "trackControlsList",
@@ -116,6 +124,11 @@ export class TrackControls extends UIComponent<ITrackControlsProperties, ITrackC
                     >
                         <Icon src={Codicon.Settings} width={16} height={16} alt="Collapse mixer" />
                     </Button>
+                    <Toggle
+                        className="trackViewModeToggle toggle-xs"
+                        checkState={trackViewMode === "staff" ? CheckState.Checked : CheckState.Unchecked}
+                        onChange={this.handleTrackViewModeToggle}
+                    />
                 </Container>
                 <Container
                     className="trackControlsPanel"
@@ -132,6 +145,19 @@ export class TrackControls extends UIComponent<ITrackControlsProperties, ITrackC
         this.setState((previousState) => {
             return { mixerExpanded: !previousState.mixerExpanded };
         });
+    };
+
+    private handleTrackViewModeToggle = (_e: InputEvent, checkState: CheckState) => {
+        const mode = checkState === CheckState.Checked ? "staff" : "grid";
+
+        const settings = AppStorage.loadUISettings() ?? {};
+        settings.viewSettings ??= {};
+        settings.viewSettings.arrangementViewSettings ??= {};
+        settings.viewSettings.arrangementViewSettings.displayMode = mode;
+        AppStorage.saveUISettings(settings);
+
+        this.setState({ trackViewMode: mode });
+        void requisitions.execute("trackViewModeToggled", mode);
     };
 
     private handleTrackVolumeChange = (track: ISbDmTrack, value: number) => {

@@ -10,6 +10,9 @@ export interface IArrangementViewSettings {
     /** The zoom level of the arrangement in its viewer (in percentage). */
     zoomLevel?: number;
 
+    /** The current note display mode of the arrangement viewer. */
+    displayMode?: "grid" | "staff";
+
     /** The position of the current play range in the arrangement. */
     playRangePosition?: number;
 

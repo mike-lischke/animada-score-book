@@ -14,6 +14,7 @@ export type IRequisitionCallbackValues<K extends keyof IRequestTypeMap> = Parame
 export interface IRequestTypeMap {
     "settingsChanged": (settings: IUISettings) => Promise<boolean>;
     "playRangeChanged": (range?: { from: number; to: number; }) => Promise<boolean>;
+    "trackViewModeToggled": (mode: "grid" | "staff") => Promise<boolean>;
 }
 
 type CallbackType = IRequestTypeMap[keyof IRequestTypeMap];

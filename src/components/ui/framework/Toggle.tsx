@@ -49,7 +49,7 @@ export class Toggle extends UIComponent<IToggleProperties> {
     }
 
     public render(): ComponentChild {
-        const { id = "" } = this.props;
+        const { id } = this.props;
         const className = this.generateFinalClassName([
             "toggle",
         ]);

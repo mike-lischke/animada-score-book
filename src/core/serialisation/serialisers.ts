@@ -3,7 +3,7 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import type { IArrangementSnapshot, ISerialisedArrangement, ITrackSnapshot } from "../types/snapshots.js";
+import type { IArrangementSnapshot, ISerialisedArrangement, ITrackSnapshot } from "../types/general.js";
 import { polyrhythmCharacterToNumber, serialisationVersion, urlCharacterToNumber } from "./constants.js";
 import { interpretAsBaseN, urlEncodeNumber } from "./numeric_functions.js";
 

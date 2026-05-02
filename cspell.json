@@ -10,6 +10,7 @@
         "animada",
         "Atabaque",
         "Banandrum",
+        "barline",
         "bateria",
         "Caixa",
         "Capoeira",
@@ -49,6 +50,8 @@
         "tamborims",
         "Timbau",
         "Três",
+        "tuplet",
+        "tuplets",
         "Whippies"
     ],
     "ignoreWords": [

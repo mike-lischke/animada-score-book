@@ -12,7 +12,7 @@ import type { IScoreDBEntry, ISoundLibFsNode } from "./DatabaseTypes.js";
 import { Instrument } from "./Instrument.js";
 import { Publisher } from "./Publisher.js";
 import type { INoteStyle, INoteStyleSymbol, IPolyrhythm, ISubscribable, Mutable } from "./types/general.js";
-import type { IArrangementSnapshot, ISerialisedArrangement } from "./types/snapshots.js";
+import type { IArrangementSnapshot, ISerialisedArrangement } from "./types/general.js";
 import { getNewId } from "./utils.js";
 
 /**

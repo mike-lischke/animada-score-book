@@ -7,8 +7,10 @@ import type { ComponentChild } from "preact";
 
 import type { ISbDmArrangement, ISbDmTrack, ScoreBookDataModel } from "../../../core/ScoreBookDataModel.js";
 import type { UndoManager } from "../../../core/UndoManager.js";
+import { AppStorage } from "../../../core/AppStorage.js";
 import type { ArrangementPlayer } from "../../../player/ArrangementPlayer.js";
 import type { ScoreBookUiServices } from "../../../player/types.js";
+import { requisitions } from "../../../supplement/Requisitions.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
 import { type BarDivisibility } from "../GuideRail/GuideRail.js";
 import { BarGuideRail } from "./BarGuideRail.js";
@@ -27,6 +29,7 @@ export interface IBarViewerProps extends ICommonUIProperties {
 interface IBarViewerState {
     tracks: ISbDmTrack[];
     barDivisibility: BarDivisibility;
+    trackViewMode: "grid" | "staff";
 }
 
 /**
@@ -38,9 +41,12 @@ export class BarViewer extends UIComponent<IBarViewerProps, IBarViewerState> {
         super(props);
 
         const { arrangement } = props;
+        const settings = AppStorage.loadUISettings() ?? {};
+        const trackViewMode = settings.viewSettings?.arrangementViewSettings?.displayMode ?? "grid";
         this.state = {
             tracks: [...arrangement.tracks],
             barDivisibility: this.getBarDivisibility(arrangement),
+            trackViewMode,
         };
     }
 
@@ -64,20 +70,26 @@ export class BarViewer extends UIComponent<IBarViewerProps, IBarViewerState> {
         const { arrangement } = this.props;
         this.addSubscription(arrangement, this.arrangementChanged);
         this.addSubscription(arrangement.timeParams, this.timeParamsChanged);
+        requisitions.register("trackViewModeToggled", this.handleTrackViewModeToggled);
+    }
+
+    public override componentWillUnmount(): void {
+        super.componentWillUnmount();
+        requisitions.unregister("trackViewModeToggled", this.handleTrackViewModeToggled);
     }
 
     public override render(): ComponentChild {
         const { barNumber, arrangement, arrangementPlayer, services, touchEditingEnabled, undoManager,
             dataModel } = this.props;
-        const { tracks, barDivisibility } = this.state;
+        const { tracks, barDivisibility, trackViewMode } = this.state;
 
-        const metrics = arrangementPlayer.scoreMetrics;
-        const barWidthStyle: preact.CSSProperties = {
-            "--steps-per-bar": metrics.stepsPerBar.toString(),
-        };
+        const className = this.generateFinalClassName([
+            "bar-viewer",
+            this.classFromProperty(trackViewMode === "staff", "staff-mode"),
+        ]);
 
         return (
-            <div className="bar-viewer" data-bar={barNumber} style={barWidthStyle}>
+            <div className={className} data-bar={barNumber}>
                 <BarGuideRail
                     barNumber={barNumber}
                     timeParams={arrangement.timeParams}
@@ -118,6 +130,11 @@ export class BarViewer extends UIComponent<IBarViewerProps, IBarViewerState> {
         this.setState({
             barDivisibility: this.getBarDivisibility(arrangement),
         });
+    };
+
+    private handleTrackViewModeToggled = (trackViewMode: "grid" | "staff") => {
+        this.setState({ trackViewMode });
+        return Promise.resolve(true);
     };
 
     private getBarDivisibility(arrangement: ISbDmArrangement): BarDivisibility {

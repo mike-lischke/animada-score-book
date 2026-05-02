@@ -6,9 +6,7 @@
 import { Publisher } from "./Publisher.js";
 import { getArrangementSnapshot } from "./serialisation/snapshots.js";
 import type { EditCommand, EditCommand_ArrangementTitle, EditCommand_Note } from "./types/edit_commands.js";
-import type { INoteStyle, ISubscribable } from "./types/general.js";
-import type { IArrangementSnapshot } from "./types/snapshots.js";
-// Note cycling squash logic is implemented as private methods inside the stack.
+import type { IArrangementSnapshot, INoteStyle, ISubscribable } from "./types/general.js";
 import type { ISbDmArrangement } from "./ScoreBookDataModel.js";
 import { exists } from "./utils.js";
 

@@ -3,7 +3,7 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import type { IArrangementSnapshot, ISerialisedArrangement } from "../types/snapshots.js";
+import type { IArrangementSnapshot, ISerialisedArrangement } from "../types/general.js";
 import { baseUrl } from "./constants.js";
 import { serialiseArrangementSnapshot } from "./serialisers.js";
 

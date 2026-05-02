@@ -41,7 +41,7 @@ import {
     SbDmEntityType, ScoreBookDataModel, type ISbDmScore, type ISbDmScoreFolder
 } from "./core/ScoreBookDataModel.js";
 import { getSerialisedArrangementFromParams } from "./core/serialisation/url.js";
-import type { ISerialisedArrangement } from "./core/types/snapshots.js";
+import type { ISerialisedArrangement } from "./core/types/general.js";
 import { UndoManager } from "./core/UndoManager.js";
 import { convertErrorToString } from "./core/utils.js";
 import { ArrangementPlayer } from "./player/ArrangementPlayer.js";

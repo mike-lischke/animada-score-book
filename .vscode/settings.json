@@ -3,4 +3,7 @@
         "*.tailwind.css": "tailwindcss",
         "*.postcss": "postcss"
     },
+    "chat.tools.terminal.autoApprove": {
+        "npx tsc": true
+    },
 }

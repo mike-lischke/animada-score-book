@@ -5,7 +5,7 @@
 
 import type { ISbDmArrangement, ISbDmTrack } from "../ScoreBookDataModel.js";
 import type { IPolyrhythm } from "../types/general.js";
-import type { IArrangementSnapshot, IPolyrhythmSnapshot, ITrackSnapshot } from "../types/snapshots.js";
+import type { IArrangementSnapshot, IPolyrhythmSnapshot, ITrackSnapshot } from "../types/general.js";
 
 export const getArrangementSnapshot = (arrangementView: Readonly<ISbDmArrangement>): IArrangementSnapshot => {
     const { timeSignature, tempo, length, pulse, stepResolution } = arrangementView.timeParams;
@@ -37,9 +37,9 @@ const getPolyrhythmSnapshots = (track: ISbDmTrack): IPolyrhythmSnapshot[] => {
     const polyrhythmSnapshots: IPolyrhythmSnapshot[] = [];
     const polyrhythmsToIgnore: IPolyrhythm[] = [];
 
-    // We do polyrhythms in reverse order in order to support nested polyrhthms
+    // We do polyrhythms in reverse order in order to support nested polyrhythms.
     // When we rebuild the polyrhythms one-by-one, the note-iterator is going to change after each one
-    // When we serialise, we have to mimic that behaviour in reverse
+    // When we serialise, we have to mimic that behavior in reverse.
 
     for (let polyrhythmIndex = track.polyrhythms.length - 1; polyrhythmIndex >= 0; polyrhythmIndex--) {
         const polyrhythm = track.polyrhythms[polyrhythmIndex];

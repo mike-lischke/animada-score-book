@@ -11,6 +11,14 @@
     font-display: swap;
 }
 
+@font-face {
+    font-family: "Petaluma Script";
+    src: url("/fonts/PetalumaScript.woff2") format("woff2");
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+}
+
 :root {
     --bar-decoration-color: rgb(72, 237, 188);
     --selection-background: rgba(79, 195, 247, 0.4);
@@ -363,11 +371,24 @@ h6 {
         min-height: 24px;
         justify-content: flex-start;
     }
+
+    .trackViewModeToggle {
+        margin-left: 8px;
+    }
+
+    .trackViewModeToggle input[type="checkbox"] {
+        width: 32px;
+        height: 18px;
+    }
 }
 
 .guiderail {
     height: 20pt;
     margin-left: 2px;
+}
+
+.bar-viewer.staff-mode .guiderail {
+    visibility: hidden;
 }
 
 .guiderail-timing {
@@ -464,9 +485,194 @@ h6 {
     margin: 8px 0;
 }
 
+.bar-track-row.grid-mode {
+    margin: 8px 0;
+}
+
+.bar-track-row.staff-mode {
+    margin: 10px 0;
+}
+
 .bar-track-row .notes-wrapper {
     display: flex;
     width: 100%;
+}
+
+.staff-note-viewer {
+    --staff-note-prefix-width: 58px;
+    --staff-barline-height: calc(var(--note-height) * 0.2);
+
+    position: relative;
+    width: 100%;
+    min-height: var(--note-height);
+}
+
+.staff-note-viewer-middle-line {
+    position: absolute;
+    top: 50%;
+    left: 0;
+    right: 0;
+    border-top: 1px solid var(--color-base-content);
+    transform: translateY(-50%);
+}
+
+.staff-note-viewer-prefix {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: var(--staff-note-prefix-width);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    color: var(--color-base-content);
+    pointer-events: none;
+}
+
+.staff-note-viewer-neutral-clef {
+    width: 8px;
+    height: var(--staff-barline-height);
+    border-left: 3px solid currentColor;
+    border-right: 3px solid currentColor;
+    border-radius: 1px;
+}
+
+.staff-note-viewer-time-signature {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-width: 20px;
+    font-family: "Petaluma Script", "Fairytale", serif;
+    font-size: 16px;
+    font-weight: 400;
+    line-height: 1;
+    padding-top: 2px;
+}
+
+.staff-note-viewer-time-signature .top,
+.staff-note-viewer-time-signature .bottom {
+    display: block;
+    background: var(--color-base-100);
+    padding: 0 1px;
+}
+
+.staff-note-viewer-common-time {
+    display: block;
+    width: auto;
+    height: 40px;
+}
+
+.staff-note-viewer-final-barline {
+    position: absolute;
+    top: 50%;
+    right: 0;
+    width: 6px;
+    height: var(--staff-barline-height);
+    pointer-events: none;
+    transform: translateY(-50%);
+}
+
+.staff-note-viewer-final-barline::before,
+.staff-note-viewer-final-barline::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    background: var(--color-base-content);
+}
+
+.staff-note-viewer-final-barline::before {
+    right: 4px;
+    width: 1.5px;
+}
+
+.staff-note-viewer-final-barline::after {
+    right: 0;
+    width: 3px;
+}
+
+/* Runs: flex row of proportional-width note / rest segments */
+.staff-note-viewer-runs {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+}
+
+.staff-note-viewer.first-bar .staff-note-viewer-runs {
+    left: var(--staff-note-prefix-width);
+}
+
+.staff-note-viewer-run {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    flex-shrink: 0;
+}
+
+.staff-note-viewer-run.beam-right::before,
+.staff-note-viewer-run.beam-right::after {
+    content: "";
+    position: absolute;
+    left: calc(50% + 5px);
+    right: calc(-50% - 5px);
+    height: 3px;
+    background: var(--color-base-content);
+    pointer-events: none;
+    z-index: 2;
+}
+
+.staff-note-viewer-run.beam-right::before {
+    top: calc(50% - 36px);
+}
+
+.staff-note-viewer-run.beam-right::after {
+    top: calc(50% - 31px);
+}
+
+.staff-note-viewer-tuplets {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+}
+
+.staff-note-viewer-tuplet-number {
+    position: absolute;
+    top: calc(50% - 55px);
+    transform: translateX(-50%);
+    display: inline-block;
+    min-width: 11px;
+    text-align: center;
+    font-size: 16px;
+    font-weight: 700;
+    line-height: 1;
+    color: var(--color-base-content);
+    background: var(--color-base-100);
+    padding: 0 2px;
+    z-index: 2;
+}
+
+/* Note symbol: 16th-note SVG icon */
+.staff-note-viewer-note-symbol {
+    display: block;
+    width: auto;
+    height: 50px;
+    opacity: 0.85;
+
+    /* The note head is in the lower part of this SVG; lift it so the head center sits on the middle line. */
+    transform: translateY(-14.5px);
+}
+
+/* Rest symbol: 16th-rest SVG icon */
+.staff-note-viewer-rest-symbol {
+    display: block;
+    width: auto;
+    height: 40px;
+    opacity: 0.7;
 }
 
 /* Polyrhythm fragment: an absolutely-positioned slice of a polyrhythm within a bar */

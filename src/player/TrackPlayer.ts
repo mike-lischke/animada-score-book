@@ -271,9 +271,7 @@ export class TrackPlayer {
             }
         }
 
-        const endTime = nextNote
-            ? this.noteTimes.get(nextNote)!
-            : this.timeCoordinator.metrics.realTimeLength;
+        const endTime = nextNote ? this.noteTimes.get(nextNote)! : this.timeCoordinator.metrics.realTimeLength;
 
         const realTimeLength = endTime - startTime;
         const timePerNote = realTimeLength / polyrhythm.notes.length;
