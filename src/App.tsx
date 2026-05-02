@@ -35,12 +35,11 @@ import { DrawerSidebar } from "./components/ui/framework/DrawerSidebar.js";
 import { Icon } from "./components/ui/framework/Icon.js";
 import { TooltipProvider } from "./components/ui/framework/Tooltip.js";
 import { Overlay } from "./components/ui/Overlay.js";
-import { ShareButton } from "./components/ui/ShareButton.js";
 import { AppStorage, type IUISettings } from "./core/AppStorage.js";
 import {
     SbDmEntityType, ScoreBookDataModel, type ISbDmScore, type ISbDmScoreFolder
 } from "./core/ScoreBookDataModel.js";
-import { getSerialisedArrangementFromParams } from "./core/serialisation/url.js";
+import { BananaDrumUrlImporter } from "./core/serialisation/BananaDrumUrlImporter.js";
 import type { IArrangementSnapshot, ISerialisedArrangement } from "./core/types/general.js";
 import { UndoManager } from "./core/UndoManager.js";
 import { convertErrorToString } from "./core/utils.js";
@@ -124,9 +123,11 @@ export class App extends UIComponent<{}, IAppState> {
         requisitions.register("playRangeChanged", this.handlePlayRangeChanged);
 
         void this.dataModel.initialize().then(() => {
-            const serializedArrangement =
-                getSerialisedArrangementFromParams(new URL(window.location.href).searchParams);
-            this.loadScorebook(serializedArrangement);
+            const arrangementSnapshot = BananaDrumUrlImporter.getArrangementSnapshotFromParams(
+                new URL(window.location.href).searchParams,
+                this.dataModel.instruments
+            );
+            this.loadScorebook(arrangementSnapshot);
             this.setState({ ready: true });
         });
     }
@@ -265,7 +266,6 @@ export class App extends UIComponent<{}, IAppState> {
                                             >
                                                 <Icon src={timbauImage} width={24} height={24} data-tooltip="inherit" />
                                             </Button>
-                                            <ShareButton />
                                         </Container>
                                         <Container
                                             id="appTitleContainer"
@@ -548,9 +548,12 @@ export class App extends UIComponent<{}, IAppState> {
 
                 if (data.type === SbDmEntityType.Score) {
                     const params = new URLSearchParams(data.content);
-                    const serializedArrangement = getSerialisedArrangementFromParams(params);
+                    const arrangementSnapshot = BananaDrumUrlImporter.getArrangementSnapshotFromParams(
+                        params,
+                        this.dataModel.instruments
+                    );
 
-                    this.loadScorebook(serializedArrangement ?? newSong);
+                    this.loadScorebook(arrangementSnapshot ?? newSong);
                 }
 
                 break;
@@ -591,8 +594,17 @@ export class App extends UIComponent<{}, IAppState> {
         return true;
     };
 
-    private loadScorebook(arrangementToLoad?: ISerialisedArrangement) {
+    private loadScorebook(scoreToLoad?: ISerialisedArrangement | IArrangementSnapshot) {
+        let arrangementToLoad: ISerialisedArrangement | undefined;
         let snapshotToLoad: IArrangementSnapshot | undefined;
+
+        if (scoreToLoad) {
+            if (this.isArrangementSnapshot(scoreToLoad)) {
+                snapshotToLoad = scoreToLoad;
+            } else {
+                arrangementToLoad = scoreToLoad;
+            }
+        }
 
         if (this.arrangementPlayer) {
             const arrangementView = this.dataModel.arrangement!;
@@ -604,7 +616,7 @@ export class App extends UIComponent<{}, IAppState> {
         this.stopCurrentScoreAutoSave?.();
         this.stopCurrentScoreAutoSave = undefined;
 
-        if (!arrangementToLoad) {
+        if (!arrangementToLoad && !snapshotToLoad) {
             // Try to load the last opened score from localStorage, if available.
             const lastScoreString = AppStorage.loadUISettings()?.currentScore;
             if (lastScoreString) {

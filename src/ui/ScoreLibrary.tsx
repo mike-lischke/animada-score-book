@@ -23,7 +23,7 @@ import { Arrangement } from "../core/Arrangement.js";
 import {
     SbDmEntityType, type ISbDmScore, type ISbDmScoreFolder, type ScoreBookDataModel
 } from "../core/ScoreBookDataModel.js";
-import { getSerialisedArrangementFromParams } from "../core/serialisation/url.js";
+import { BananaDrumUrlImporter } from "../core/serialisation/BananaDrumUrlImporter.js";
 
 export interface IScoreLibraryProperties extends ICommonUIProperties {
     dataModel: ScoreBookDataModel;
@@ -286,12 +286,12 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
             }
 
             const params = new URLSearchParams(entry.content);
-            const serialisedArrangement = getSerialisedArrangementFromParams(params);
-            if (serialisedArrangement) {
+            const snapshot = BananaDrumUrlImporter.getArrangementSnapshotFromParams(params, this.props.dataModel.instruments);
+            if (snapshot) {
                 const { dataModel } = this.props;
 
                 const instruments = dataModel.instruments;
-                const arrangement = Arrangement.fromSerialized(serialisedArrangement, instruments);
+                const arrangement = Arrangement.fromSnapshot(snapshot, instruments);
                 arrangement.title = entry.name;
                 this.setState({ currentScore: entry });
 
