@@ -144,7 +144,7 @@ export class Arrangement extends Publisher implements ISbDmArrangement {
 
         // Remove tracks that aren't in the snapshot. Iterate backwards because removeTrack mutates this.tracks.
         for (let trackIndex = this.tracks.length - 1; trackIndex >= 0; trackIndex--) {
-            const track = this.tracks[trackIndex]!;
+            const track = this.tracks[trackIndex];
             if (!arrangementSnapshot.tracks.some((trackSnapshot) => {
                 return trackSnapshot.id === track.id;
             })) {
@@ -200,6 +200,10 @@ export class Arrangement extends Publisher implements ISbDmArrangement {
             }
         });
 
+        // Normalise legacy cross-bar polyrhythms so they are always contained within a single bar.
+        // If data is already normalised, this is a no-op.
+        this.normaliseTrackPolyrhythms(track);
+
         let noteIndex = 0;
         for (const note of track.getNoteIterator()) {
             const noteStyleId = trackSnapshot.notes[noteIndex];
@@ -210,6 +214,123 @@ export class Arrangement extends Publisher implements ISbDmArrangement {
             noteIndex++;
         }
     };
+
+    private normaliseTrackPolyrhythms(track: ISbDmTrack): void {
+        let polyrhythmIndex = 0;
+        while (polyrhythmIndex < track.polyrhythms.length) {
+            const polyrhythm = track.polyrhythms[polyrhythmIndex];
+            const noteSource = polyrhythm.start.polyrhythm?.notes ?? track.notes;
+
+            const startNoteIndex = noteSource.indexOf(polyrhythm.start);
+            const endNoteIndex = noteSource.indexOf(polyrhythm.end);
+            if (startNoteIndex === -1 || endNoteIndex === -1 || startNoteIndex > endNoteIndex) {
+                polyrhythmIndex++;
+                continue;
+            }
+
+            const segments: Array<{ startNoteIndex: number; endNoteIndex: number; noteCount: number; }> = [];
+            let segmentStart = startNoteIndex;
+            for (let noteIndex = startNoteIndex + 1; noteIndex <= endNoteIndex; noteIndex++) {
+                if (noteSource[noteIndex].timing.bar !== noteSource[noteIndex - 1].timing.bar) {
+                    const segmentEnd = noteIndex - 1;
+                    segments.push({
+                        startNoteIndex: segmentStart,
+                        endNoteIndex: segmentEnd,
+                        noteCount: segmentEnd - segmentStart + 1,
+                    });
+                    segmentStart = noteIndex;
+                }
+            }
+
+            segments.push({
+                startNoteIndex: segmentStart,
+                endNoteIndex,
+                noteCount: endNoteIndex - segmentStart + 1,
+            });
+
+            if (segments.length === 1) {
+                polyrhythmIndex++;
+                continue;
+            }
+
+            const segmentLengths = this.distributePolyrhythmLength(polyrhythm.notes.length,
+                segments.map((segment) => {
+                    return segment.noteCount;
+                }));
+
+            track.removePolyrhythm(polyrhythm);
+            const insertIndex = polyrhythmIndex;
+            segments.forEach((segment, segmentIndex) => {
+                track.addPolyrhythm(
+                    noteSource[segment.startNoteIndex],
+                    noteSource[segment.endNoteIndex],
+                    segmentLengths[segmentIndex],
+                    segmentIndex === 0 ? polyrhythm.id : undefined,
+                    insertIndex + segmentIndex,
+                );
+            });
+
+            polyrhythmIndex += segments.length;
+        }
+    }
+
+    private distributePolyrhythmLength(totalLength: number, segmentNoteCounts: number[]): number[] {
+        if (segmentNoteCounts.length === 0) {
+            return [];
+        }
+
+        if (segmentNoteCounts.length === 1) {
+            return [totalLength];
+        }
+
+        if (totalLength < segmentNoteCounts.length) {
+            return segmentNoteCounts.map(() => {
+                return 1;
+            });
+        }
+
+        const totalSegmentNotes = segmentNoteCounts.reduce((sum, noteCount) => {
+            return sum + noteCount;
+        }, 0);
+
+        const remainingLength = totalLength - segmentNoteCounts.length;
+        const segmentLengths = segmentNoteCounts.map(() => {
+            return 1;
+        });
+
+        const extraInfos = segmentNoteCounts.map((noteCount, index) => {
+            const rawExtraLength = remainingLength * noteCount / totalSegmentNotes;
+            const baseExtraLength = Math.floor(rawExtraLength);
+            segmentLengths[index] += baseExtraLength;
+
+            return {
+                index,
+                fractionalPart: rawExtraLength - baseExtraLength,
+            };
+        });
+
+        let assignedLength = segmentLengths.reduce((sum, length) => {
+            return sum + length;
+        }, 0);
+        const sortedByFractionalPart = extraInfos.sort((a, b) => {
+            if (a.fractionalPart !== b.fractionalPart) {
+                return b.fractionalPart - a.fractionalPart;
+            }
+
+            return a.index - b.index;
+        });
+
+        for (const { index } of sortedByFractionalPart) {
+            if (assignedLength >= totalLength) {
+                break;
+            }
+
+            segmentLengths[index]++;
+            assignedLength++;
+        }
+
+        return segmentLengths;
+    }
 
     // Return the start and end Note objects for a polyrhythm we want to add to a Track
     private getStartAndEndNotes(track: ISbDmTrack, polyrhythmSnapshot: IPolyrhythmSnapshot,

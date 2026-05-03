@@ -72,4 +72,89 @@ describe("Arrangement", () => {
 
         expect(arrangement.tracks).toHaveLength(0);
     });
+
+    it("splits cross-bar polyrhythms when loading a snapshot", () => {
+        const instruments = [
+            createInstrument("0", 0, 0),
+        ];
+
+        const snapshot: IArrangementSnapshot = {
+            title: "Cross Bar",
+            timeParams: {
+                timeSignature: "4/4",
+                tempo: 120,
+                length: 2,
+                pulse: "1/4",
+                stepResolution: 16,
+            },
+            tracks: [
+                {
+                    id: 100,
+                    instrumentId: "0",
+                    notes: Array.from({ length: 35 }).fill("0"),
+                    polyrhythms: [
+                        {
+                            id: 999,
+                            start: 14,
+                            end: 18,
+                            length: 8,
+                        },
+                    ],
+                },
+            ]
+        };
+
+        const arrangement = Arrangement.fromSnapshot(snapshot, instruments);
+        const track = arrangement.tracks[0]!;
+
+        expect(track.polyrhythms).toHaveLength(2);
+        expect(track.polyrhythms[0].id).toEqual(999);
+        expect(track.polyrhythms[0].start.timing.bar).toEqual(1);
+        expect(track.polyrhythms[0].end.timing.bar).toEqual(1);
+        expect(track.polyrhythms[1].start.timing.bar).toEqual(2);
+        expect(track.polyrhythms[1].end.timing.bar).toEqual(2);
+        expect(track.polyrhythms[0].notes).toHaveLength(3);
+        expect(track.polyrhythms[1].notes).toHaveLength(5);
+    });
+
+    it("keeps already single-bar polyrhythms unchanged", () => {
+        const instruments = [
+            createInstrument("0", 0, 0),
+        ];
+
+        const snapshot: IArrangementSnapshot = {
+            title: "Already Normalized",
+            timeParams: {
+                timeSignature: "4/4",
+                tempo: 120,
+                length: 2,
+                pulse: "1/4",
+                stepResolution: 16,
+            },
+            tracks: [
+                {
+                    id: 100,
+                    instrumentId: "0",
+                    notes: Array.from({ length: 33 }).fill("0"),
+                    polyrhythms: [
+                        {
+                            id: 200,
+                            start: 10,
+                            end: 12,
+                            length: 4,
+                        },
+                    ],
+                },
+            ]
+        };
+
+        const arrangement = Arrangement.fromSnapshot(snapshot, instruments);
+        const track = arrangement.tracks[0]!;
+
+        expect(track.polyrhythms).toHaveLength(1);
+        expect(track.polyrhythms[0].id).toEqual(200);
+        expect(track.polyrhythms[0].start.timing.bar).toEqual(1);
+        expect(track.polyrhythms[0].end.timing.bar).toEqual(1);
+        expect(track.polyrhythms[0].notes).toHaveLength(4);
+    });
 });
