@@ -17,7 +17,7 @@ import { requisitions } from "../../../supplement/Requisitions.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
 import { NoteViewer } from "../Note/NoteViewer.js";
 import { StaffNoteViewer } from "../Note/StaffNoteViewer.js";
-import { BarPolyrhythmFragment, type PolyrhythmFragmentType } from "./BarPolyrhythmFragment.js";
+import { BarPolyrhythmFragment } from "./BarPolyrhythmFragment.js";
 
 export interface IBarTrackRowProps extends ICommonUIProperties {
     track: ISbDmTrack;
@@ -90,7 +90,7 @@ export class BarTrackRow extends UIComponent<IBarTrackRowProps, IBarTrackRowStat
         });
 
         const touchingPolyrhythms = track.polyrhythms.filter((p) => {
-            return p.start.timing.bar <= barNumber && p.end.timing.bar >= barNumber;
+            return p.start.timing.bar === barNumber;
         });
 
         const staffBarData = this.computeStaffBarData(barNotes, touchingPolyrhythms, barNumber, timeParams);
@@ -106,15 +106,11 @@ export class BarTrackRow extends UIComponent<IBarTrackRowProps, IBarTrackRowStat
                     ? (
                         <div className="polyrhythms-wrapper">
                             {touchingPolyrhythms.map((p) => {
-                                const noteSlice = this.computeNoteSlice(p, barNumber, timeParams);
-                                const fragmentType = this.getFragmentType(p, barNumber);
-
                                 return (
                                     <BarPolyrhythmFragment
                                         polyrhythm={p}
                                         barNumber={barNumber}
-                                        noteSlice={noteSlice}
-                                        fragmentType={fragmentType}
+                                        noteSlice={p.notes}
                                         key={`${p.id}-${barNumber}`}
                                         trackPlayer={trackPlayer}
                                         arrangementPlayer={arrangementPlayer}
@@ -176,96 +172,6 @@ export class BarTrackRow extends UIComponent<IBarTrackRowProps, IBarTrackRowStat
     };
 
     /**
-     * Determines which part of the polyrhythm bracket to render in this bar.
-     *
-     * @param polyrhythm The polyrhythm to evaluate.
-     * @param barNumber The current bar number.
-     *
-     * @returns a flag indicating whether this is the "start", "middle", "end", or "full" fragment of the polyrhythm.
-     */
-    private getFragmentType(polyrhythm: IPolyrhythm, barNumber: number): PolyrhythmFragmentType {
-        const startBar = polyrhythm.start.timing.bar;
-        const endBar = polyrhythm.end.timing.bar;
-
-        if (startBar === endBar) {
-            return "full";
-        }
-
-        if (barNumber === startBar) {
-            return "start";
-        }
-
-        if (barNumber === endBar) {
-            return "end";
-        }
-
-        return "middle";
-    }
-
-    /**
-     * Computes which subset of `polyrhythm.notes` corresponds to the given bar.
-     *
-     * The polyrhythm's synthetic notes are distributed evenly across the steps it spans.
-     * We find the fraction of steps that fall in this bar and return the corresponding slice.
-     *
-     * @param polyrhythm The polyrhythm for which to compute the note slice.
-     * @param barNumber The bar number for which to compute the slice.
-     * @param timeParams The arrangement's time parameters, needed to determine steps per bar.
-     *
-     * @returns An array of notes corresponding to the given bar.
-     */
-    private computeNoteSlice(polyrhythm: IPolyrhythm, barNumber: number, timeParams: ITimeParamsView): ISbDmNote[] {
-        const { notes } = polyrhythm;
-        if (notes.length === 0) {
-            return [];
-        }
-
-        const stepsPerBar = calculateStepsPerBar(timeParams.timeSignature, timeParams.stepResolution);
-
-        const globalStep = (timing: { bar: number; step: number; }) => {
-            return ((timing.bar - 1) * stepsPerBar) + (timing.step - 1);
-        };
-
-        const polyStart = globalStep(polyrhythm.start.timing);
-        const polyEnd = globalStep(polyrhythm.end.timing);
-        const totalSteps = polyEnd - polyStart + 1;
-
-        if (totalSteps <= 0) {
-            return notes;
-        }
-
-        const barGlobalStart = (barNumber - 1) * stepsPerBar;
-        const barGlobalEnd = barNumber * stepsPerBar; // exclusive
-
-        const overlapStart = Math.max(polyStart, barGlobalStart);
-        // polyEnd is an inclusive step index; +1 converts it to an exclusive boundary for Math.min
-        const overlapEnd = Math.min(polyEnd + 1, barGlobalEnd);
-        const stepsInBar = Math.max(0, overlapEnd - overlapStart);
-
-        if (stepsInBar <= 0) {
-            return [];
-        }
-
-        // Calculate slice boundaries using prior-bars accumulation to avoid rounding drift.
-        let sliceStart = 0;
-        for (let b = polyrhythm.start.timing.bar; b < barNumber; b++) {
-            const bGlobalStart = (b - 1) * stepsPerBar;
-            const bGlobalEnd = b * stepsPerBar;
-            const bOverlapStart = Math.max(polyStart, bGlobalStart);
-            const bOverlapEnd = Math.min(polyEnd + 1, bGlobalEnd);
-            const bSteps = Math.max(0, bOverlapEnd - bOverlapStart);
-
-            sliceStart += Math.round(notes.length * (bSteps / totalSteps));
-        }
-
-        const clampedSliceStart = Math.min(notes.length, Math.max(0, sliceStart));
-        const sliceCount = Math.max(0, Math.min(notes.length - clampedSliceStart,
-            Math.round(notes.length * (stepsInBar / totalSteps))));
-
-        return notes.slice(clampedSliceStart, clampedSliceStart + sliceCount);
-    }
-
-    /**
      * @param barNotes The regular notes in the current bar.
      * @param touchingPolyrhythms All polyrhythms that overlap the current bar.
      * @param barNumber The current bar number.
@@ -286,17 +192,16 @@ export class BarTrackRow extends UIComponent<IBarTrackRowProps, IBarTrackRowStat
             return note.noteStyle !== undefined;
         });
         const fullBarPolyrhythmSlices = touchingPolyrhythms.map((polyrhythm) => {
-            const overlap = this.getPolyrhythmBarOverlap(polyrhythm, barNumber, stepsPerBar);
-            if (overlap?.startStep !== 1 || overlap.stepsInBar !== stepsPerBar) {
+            const overlap = this.getPolyrhythmBarOverlap(polyrhythm);
+            if (overlap.startStep !== 1 || overlap.stepsInBar !== stepsPerBar) {
                 return undefined;
             }
 
-            const noteSlice = this.computeNoteSlice(polyrhythm, barNumber, timeParams);
-            if (noteSlice.length === 0) {
+            if (polyrhythm.notes.length === 0) {
                 return undefined;
             }
 
-            return noteSlice;
+            return polyrhythm.notes;
         }).filter((slice): slice is ISbDmNote[] => {
             return slice !== undefined;
         });
@@ -326,12 +231,8 @@ export class BarTrackRow extends UIComponent<IBarTrackRowProps, IBarTrackRowStat
         }
 
         for (const polyrhythm of touchingPolyrhythms) {
-            const overlap = this.getPolyrhythmBarOverlap(polyrhythm, barNumber, stepsPerBar);
-            if (!overlap) {
-                continue;
-            }
-
-            const noteSlice = this.computeNoteSlice(polyrhythm, barNumber, timeParams);
+            const overlap = this.getPolyrhythmBarOverlap(polyrhythm);
+            const noteSlice = polyrhythm.notes;
             if (noteSlice.length === 0) {
                 continue;
             }
@@ -369,28 +270,10 @@ export class BarTrackRow extends UIComponent<IBarTrackRowProps, IBarTrackRowStat
 
     private getPolyrhythmBarOverlap(
         polyrhythm: IPolyrhythm,
-        barNumber: number,
-        stepsPerBar: number,
-    ): { startStep: number; stepsInBar: number; } | undefined {
-        const globalStep = (timing: { bar: number; step: number; }) => {
-            return ((timing.bar - 1) * stepsPerBar) + (timing.step - 1);
-        };
-
-        const polyStart = globalStep(polyrhythm.start.timing);
-        const polyEnd = globalStep(polyrhythm.end.timing);
-        const barGlobalStart = (barNumber - 1) * stepsPerBar;
-        const barGlobalEnd = barNumber * stepsPerBar;
-
-        const overlapStart = Math.max(polyStart, barGlobalStart);
-        const overlapEnd = Math.min(polyEnd + 1, barGlobalEnd);
-        const stepsInBar = Math.max(0, overlapEnd - overlapStart);
-        if (stepsInBar <= 0) {
-            return undefined;
-        }
-
+    ): { startStep: number; stepsInBar: number; } {
         return {
-            startStep: (overlapStart - barGlobalStart) + 1,
-            stepsInBar,
+            startStep: polyrhythm.start.timing.step,
+            stepsInBar: polyrhythm.end.timing.step - polyrhythm.start.timing.step + 1,
         };
     }
 
@@ -406,7 +289,7 @@ export class BarTrackRow extends UIComponent<IBarTrackRowProps, IBarTrackRowStat
         }
 
         for (const polyrhythm of track.polyrhythms) {
-            if (polyrhythm.start.timing.bar > barNumber || polyrhythm.end.timing.bar < barNumber) {
+            if (polyrhythm.start.timing.bar !== barNumber) {
                 continue;
             }
 
@@ -417,78 +300,25 @@ export class BarTrackRow extends UIComponent<IBarTrackRowProps, IBarTrackRowStat
                 continue;
             }
 
-            const fragmentType = this.getFragmentType(polyrhythm, barNumber);
+            const startNote = document.getElementById(`note-${polyrhythm.start.id}`);
+            const endNote = document.getElementById(`note-${polyrhythm.end.id}`);
+            if (!startNote || !endNote) {
+                continue;
+            }
 
-            let startLeft: number;
-            let endRight: number;
-
-            switch (fragmentType) {
-                case "full": {
-                    const startNote = document.getElementById(`note-${polyrhythm.start.id}`);
-                    const endNote = document.getElementById(`note-${polyrhythm.end.id}`);
-                    if (!startNote || !endNote) {
-                        continue;
-                    }
-
-                    startLeft = startNote.offsetLeft;
-                    if (polyrhythm.start.polyrhythm) {
-                        const parentFrag = startNote.closest<HTMLDivElement>(".polyrhythm-fragment");
-                        if (parentFrag) {
-                            startLeft += parentFrag.offsetLeft;
-                        }
-                    }
-
-                    endRight = endNote.offsetLeft + endNote.offsetWidth;
-                    if (polyrhythm.end.polyrhythm) {
-                        const parentFrag = endNote.closest<HTMLDivElement>(".polyrhythm-fragment");
-                        if (parentFrag) {
-                            endRight += parentFrag.offsetLeft;
-                        }
-                    }
-
-                    break;
+            let startLeft = startNote.offsetLeft;
+            if (polyrhythm.start.polyrhythm) {
+                const parentFrag = startNote.closest<HTMLDivElement>(".polyrhythm-fragment");
+                if (parentFrag) {
+                    startLeft += parentFrag.offsetLeft;
                 }
+            }
 
-                case "start": {
-                    const startNote = document.getElementById(`note-${polyrhythm.start.id}`);
-                    if (!startNote) {
-                        continue;
-                    }
-
-                    startLeft = startNote.offsetLeft;
-                    if (polyrhythm.start.polyrhythm) {
-                        const parentFrag = startNote.closest<HTMLDivElement>(".polyrhythm-fragment");
-                        if (parentFrag) {
-                            startLeft += parentFrag.offsetLeft;
-                        }
-                    }
-
-                    endRight = rowEl.offsetWidth;
-                    break;
-                }
-
-                case "end": {
-                    const endNote = document.getElementById(`note-${polyrhythm.end.id}`);
-                    if (!endNote) {
-                        continue;
-                    }
-
-                    startLeft = 0;
-                    endRight = endNote.offsetLeft + endNote.offsetWidth;
-                    if (polyrhythm.end.polyrhythm) {
-                        const parentFrag = endNote.closest<HTMLDivElement>(".polyrhythm-fragment");
-                        if (parentFrag) {
-                            endRight += parentFrag.offsetLeft;
-                        }
-                    }
-
-                    break;
-                }
-
-                default: { // "middle"
-                    startLeft = 0;
-                    endRight = rowEl.offsetWidth;
-                    break;
+            let endRight = endNote.offsetLeft + endNote.offsetWidth;
+            if (polyrhythm.end.polyrhythm) {
+                const parentFrag = endNote.closest<HTMLDivElement>(".polyrhythm-fragment");
+                if (parentFrag) {
+                    endRight += parentFrag.offsetLeft;
                 }
             }
 

@@ -15,14 +15,10 @@ import { Button } from "../framework/Button.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
 import { NoteViewer } from "../Note/NoteViewer.js";
 
-/** Determines which ends of the polyrhythm bracket are drawn in this bar. */
-export type PolyrhythmFragmentType = "start" | "middle" | "end" | "full";
-
 export interface IBarPolyrhythmFragmentProps extends ICommonUIProperties {
     polyrhythm: IPolyrhythm;
     barNumber: number;
     noteSlice: ISbDmNote[];
-    fragmentType: PolyrhythmFragmentType;
 
     trackPlayer: TrackPlayer;
     arrangementPlayer: ArrangementPlayer;
@@ -55,22 +51,18 @@ export class BarPolyrhythmFragment
     }
 
     public override render(): ComponentChild {
-        const { polyrhythm, barNumber, noteSlice, fragmentType, trackPlayer, arrangementPlayer, services,
+        const { polyrhythm, barNumber, noteSlice, trackPlayer, arrangementPlayer, services,
             touchEditingEnabled, undoManager, dataModel } = this.props;
         const { deleteMode } = this.state;
-
-        const isStartOrFull = fragmentType === "start" || fragmentType === "full";
 
         if (deleteMode) {
             return (
                 <div
                     id={`bar-polyrhythm-${polyrhythm.id}-${barNumber}`}
-                    className={`polyrhythm-fragment frag-${fragmentType}`}
+                    className="polyrhythm-fragment frag-full"
                 >
                     <div className="delete-polyrhythm-wrapper">
-                        {isStartOrFull && (
-                            <Button onClick={this.deleteClicked}>Delete</Button>
-                        )}
+                        <Button onClick={this.deleteClicked}>Delete</Button>
                     </div>
                 </div>
             );
@@ -79,7 +71,7 @@ export class BarPolyrhythmFragment
         return (
             <div
                 id={`bar-polyrhythm-${polyrhythm.id}-${barNumber}`}
-                className={`polyrhythm-fragment frag-${fragmentType}`}
+                className="polyrhythm-fragment frag-full"
             >
                 <div className="polyrhythm-decoration" />
                 <div className="polyrhythm-notes-wrapper">
