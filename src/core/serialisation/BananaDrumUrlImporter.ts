@@ -7,9 +7,16 @@ import type { ISbDmInstrument } from "../ScoreBookDataModel.js";
 import type {
     IArrangementSnapshot, IPolyrhythmSnapshot, ISerialisedArrangement, ITrackSnapshot
 } from "../types/general.js";
+import { isNaturalNumber } from "./snapshot-version.js";
 import { calculateStepsPerBar, getNewId } from "../utils.js";
 import { polyrhythmNumberToCharacter, urlNumberToCharacter } from "./constants.js";
 import { convertToBaseN, urlDecodeNumber } from "./numeric_functions.js";
+
+// BananaDrum is a fixed legacy wire format. We always map it into our internal snapshot v1.
+// This intentionally does not follow arrangementSnapshotVersion, because future snapshot versions
+// may drop support for older states while this importer keeps a stable, explicit legacy transform.
+const bananaDrumTargetSnapshotVersion = 1;
+const bananaDrumDefaultSerialisedVersion = 1;
 
 /**
  * Handles imports of legacy BananaDrum share links.
@@ -31,6 +38,9 @@ export class BananaDrumUrlImporter {
 
     public static getArrangementSnapshot(serialisedArrangement: ISerialisedArrangement,
         instruments: ISbDmInstrument[]): IArrangementSnapshot {
+        const serialisedVersion: number = isNaturalNumber(serialisedArrangement.version)
+            ? serialisedArrangement.version
+            : bananaDrumDefaultSerialisedVersion;
         const { title, composition } = serialisedArrangement;
         const chunks = composition.split(".");
 
@@ -46,23 +56,30 @@ export class BananaDrumUrlImporter {
             timeParams.length;
         const tracks = chunks.slice(5)
             .map((serialisedTrack) => {
-                return this.deserialiseTrack(serialisedTrack, baseNoteCount, serialisedArrangement.version,
+                return this.deserialiseTrack(serialisedTrack, baseNoteCount, serialisedVersion,
                     instruments);
             });
 
-        return { title, timeParams, tracks };
+        // BananaDrum payloads are legacy imports in our internal snapshot semantics.
+        return { version: bananaDrumTargetSnapshotVersion, title, timeParams, tracks };
     }
 
     private static getSerialisedArrangementFromParams(
         searchParams: URLSearchParams): ISerialisedArrangement | undefined {
         const title = searchParams.get("t") ?? undefined;
 
+        const versionParamValue = searchParams.get("v");
+        const explicitVersion = versionParamValue == null ? undefined : Number(versionParamValue);
+        const resolvedExplicitVersion = isNaturalNumber(explicitVersion)
+            ? explicitVersion
+            : undefined;
+
         if (searchParams.get("a2")) {
-            return { composition: searchParams.get("a2")!, version: 2, title };
+            return { composition: searchParams.get("a2")!, version: resolvedExplicitVersion ?? 2, title };
         }
 
         if (searchParams.get("a")) {
-            return { composition: searchParams.get("a")!, version: 1, title };
+            return { composition: searchParams.get("a")!, version: resolvedExplicitVersion ?? 1, title };
         }
 
         return undefined;

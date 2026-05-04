@@ -47,6 +47,7 @@ describe("Arrangement", () => {
         ];
 
         const originalSnapshot: IArrangementSnapshot = {
+            version: 1,
             title: "Original",
             timeParams: {
                 timeSignature: "4/4",
@@ -79,6 +80,7 @@ describe("Arrangement", () => {
         ];
 
         const snapshot: IArrangementSnapshot = {
+            version: 1,
             title: "Cross Bar",
             timeParams: {
                 timeSignature: "4/4",
@@ -123,6 +125,7 @@ describe("Arrangement", () => {
         ];
 
         const snapshot: IArrangementSnapshot = {
+            version: 1,
             title: "Already Normalized",
             timeParams: {
                 timeSignature: "4/4",

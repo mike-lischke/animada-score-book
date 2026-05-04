@@ -4,6 +4,7 @@
  */
 
 import type { ISbDmArrangement, ISbDmTrack } from "../ScoreBookDataModel.js";
+import { arrangementSnapshotVersion } from "./snapshot-version.js";
 import type { IPolyrhythm } from "../types/general.js";
 import type { IArrangementSnapshot, IPolyrhythmSnapshot, ITrackSnapshot } from "../types/general.js";
 
@@ -11,6 +12,7 @@ export const getArrangementSnapshot = (arrangementView: Readonly<ISbDmArrangemen
     const { timeSignature, tempo, length, pulse, stepResolution } = arrangementView.timeParams;
 
     return {
+        version: arrangementSnapshotVersion,
         title: arrangementView.title,
         timeParams: { timeSignature, tempo, length, pulse, stepResolution },
         tracks: arrangementView.tracks.map(getTrackSnapshot)

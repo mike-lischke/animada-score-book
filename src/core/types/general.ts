@@ -63,6 +63,8 @@ declare global {
 // Tab state preservation may require saving objects into history.state, so must be serializable/simple.
 
 export interface IArrangementSnapshot {
+    /** Snapshot schema version. Must always be a natural number. */
+    version: number;
     title?: string;
     timeParams: ITimeParamsSnapshot;
     tracks: ITrackSnapshot[];
@@ -95,5 +97,6 @@ export interface ITimeParamsSnapshot {
 export interface ISerialisedArrangement {
     title?: string;
     composition: string;
-    version: number;
+    /** Serialisation format version. Missing values are interpreted as version 1. */
+    version?: number;
 }

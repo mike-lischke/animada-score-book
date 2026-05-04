@@ -40,6 +40,7 @@ import {
     SbDmEntityType, ScoreBookDataModel, type ISbDmScore, type ISbDmScoreFolder
 } from "./core/ScoreBookDataModel.js";
 import { BananaDrumUrlImporter } from "./core/serialisation/BananaDrumUrlImporter.js";
+import { isNaturalNumber } from "./core/serialisation/snapshot-version.js";
 import type { IArrangementSnapshot, ISerialisedArrangement } from "./core/types/general.js";
 import { UndoManager } from "./core/UndoManager.js";
 import { convertErrorToString } from "./core/utils.js";
@@ -668,7 +669,7 @@ export class App extends UIComponent<{}, IAppState> {
         const candidate = data as Partial<ISerialisedArrangement>;
 
         return typeof candidate.composition === "string"
-            && typeof candidate.version === "number";
+            && (candidate.version === undefined || isNaturalNumber(candidate.version));
     }
 
     private isArrangementSnapshot(data: unknown): data is IArrangementSnapshot {
@@ -678,7 +679,9 @@ export class App extends UIComponent<{}, IAppState> {
 
         const candidate = data as Partial<IArrangementSnapshot>;
 
-        return !!candidate.timeParams && Array.isArray(candidate.tracks);
+        return !!candidate.timeParams
+            && Array.isArray(candidate.tracks)
+            && isNaturalNumber(candidate.version);
     }
 
     private initEventHandlers(): void {
