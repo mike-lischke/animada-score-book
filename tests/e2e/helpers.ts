@@ -1,7 +1,11 @@
+/// <reference types="node" />
+
 /*
  * Copyright (c) Mike Lischke. All rights reserved.
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
+
+import { readFileSync } from "node:fs";
 
 import { expect, type Page } from "@playwright/test";
 
@@ -137,7 +141,11 @@ export const expectGridBarSignature = async (page: Page, barNumber: number,
     expect(actualSignature).toEqual(expectedSignature);
 };
 
-export const expectGridBarDomSnapshot = async (page: Page, barNumber: number, snapshotName: string): Promise<void> => {
+export const expectGridBarDomSnapshot = async (
+    page: Page,
+    barNumber: number,
+    snapshotRelativePath: string
+): Promise<void> => {
     const barDomSnapshot = await page.evaluate((currentBarNumber) => {
         const bar = document.querySelector(`.bar-viewer[data-bar="${currentBarNumber}"]`);
         if (!bar) {
@@ -167,8 +175,11 @@ export const expectGridBarDomSnapshot = async (page: Page, barNumber: number, sn
         }).join("\n");
     }, barNumber);
 
+    const expectedSnapshotPath = new URL(snapshotRelativePath, import.meta.url);
+    const expectedSnapshot = readFileSync(expectedSnapshotPath, "utf8");
+
     expect(barDomSnapshot).not.toBeNull();
-    expect(barDomSnapshot!).toMatchSnapshot(snapshotName);
+    expect(barDomSnapshot!).toBe(expectedSnapshot);
 };
 
 export const expectPlaybackToMove = async (page: Page): Promise<void> => {

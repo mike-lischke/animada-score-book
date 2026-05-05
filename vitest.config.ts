@@ -1,4 +1,4 @@
-import { defineConfig } from "vitest/config";
+import { configDefaults, defineConfig } from "vitest/config";
 
 export default defineConfig({
     test: {
@@ -13,5 +13,6 @@ export default defineConfig({
         testTimeout: 10000,
         setupFiles: ["./tests/setup.ts"],
         environment: "jsdom",
+        exclude: [...configDefaults.exclude, "tests/e2e/**"],
     }
 });

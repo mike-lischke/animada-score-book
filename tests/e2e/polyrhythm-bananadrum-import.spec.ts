@@ -47,6 +47,10 @@ test.describe("BananaDrum polyrhythm import", () => {
         await ensureGridMode(page);
         await expectGridModePolyrhythmNotes(page);
         await expectGridBarSignature(page, 3, beijaFlorBar3GridSignature);
-        await expectGridBarDomSnapshot(page, 3, "beija-flor-bar-3-grid-dom.txt");
+        await expectGridBarDomSnapshot(
+            page,
+            3,
+            "./polyrhythm-bananadrum-import.spec.ts-snapshots/beija-flor-bar-3-grid-dom.txt"
+        );
     });
 });
