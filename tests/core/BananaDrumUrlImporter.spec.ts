@@ -76,4 +76,13 @@ describe("BananaDrumUrlImporter versioning", () => {
         const snapshot = BananaDrumUrlImporter.getArrangementSnapshotFromParams(params, instruments)!;
         expect(snapshot.version).toEqual(1);
     });
+
+    it("preserves imported titles verbatim", () => {
+        const params = new URLSearchParams(
+            "t=Beija%20Flor%202004%20%20-%20%20Bossa%201%20(H-Break)&a2=4-4.110.1.1-4.16.00.10.20.30.50.60.70.80.90"
+        );
+
+        const snapshot = BananaDrumUrlImporter.getArrangementSnapshotFromParams(params, instruments)!;
+        expect(snapshot.title).toEqual("Beija Flor 2004  -  Bossa 1 (H-Break)");
+    });
 });
