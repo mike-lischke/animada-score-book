@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { IUISettings } from "../../src/core/AppStorage.js";
 import { AppStorage } from "../../src/core/AppStorage.js";
+import * as utils from "../../src/core/utils.js";
 import { requisitions } from "../../src/supplement/Requisitions.js";
 import { SettingsDialog } from "../../src/ui/SettingsDialog.js";
 
@@ -51,6 +52,8 @@ describe.sequential("SettingsDialog (class)", () => {
 
     beforeEach(() => {
         vi.restoreAllMocks();
+        let nextId = 3;
+        vi.spyOn(utils, "getNewId").mockImplementation(() => nextId++);
         renderResult = null;
     });
 
