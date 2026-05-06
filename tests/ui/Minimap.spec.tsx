@@ -52,6 +52,7 @@ const makeTrack = (arrangement: ISbDmArrangement): ISbDmTrack => {
         id: 1,
         name: "Test Track",
         volume: 1,
+        effectiveVolume: 1,
         arrangement,
         instrument: {
             type: SbDmEntityType.Instrument,

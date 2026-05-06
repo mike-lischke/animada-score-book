@@ -36,6 +36,7 @@ export default tseslint.config(
                         "build/*.ts",
                         "vitest.config.ts",
                         "tailwind.config.mjs",
+                        "playwright.config.ts",
                     ],
                     defaultProject: "tsconfig.json",
                 },

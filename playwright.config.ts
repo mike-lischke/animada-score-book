@@ -7,6 +7,7 @@ export default defineConfig({
         timeout: 10_000,
     },
     fullyParallel: true,
+    // eslint-disable-next-line no-restricted-syntax
     retries: process.env.CI ? 1 : 0,
     reporter: [["list"], ["html", { open: "never" }]],
     use: {
@@ -27,4 +28,5 @@ export default defineConfig({
             use: { ...devices["Desktop Chrome"] },
         },
     ],
+    snapshotPathTemplate: "__snapshots__/{testFilePath}/{arg}{ext}",
 });
