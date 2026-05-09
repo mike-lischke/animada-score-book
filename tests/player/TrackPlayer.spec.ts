@@ -6,10 +6,10 @@
 import { describe, expect, it, vi } from "vitest";
 
 import {
-    SbDmEntityType, type ISbDmArrangement, type ISbDmNote, type ISbDmTrack, type ITiming, type RealTime
+    SbDmEntityType, type ISbDmArrangement, type ISbDmNoteEvent, type ISbDmTrack,
+    type ISbDmTrackMeasure, type ITiming, type RealTime
 } from "../../src/core/ScoreBookDataModel.js";
-import type { INoteStyle, IPolyrhythm, ITimeParams, Mutable } from "../../src/core/types/general.js";
-import type { ICallbackEvent } from "../../src/player/types.js";
+import type { INoteStyle, ITimeParams, Mutable } from "../../src/core/types/general.js";
 import type { TimeCoordinator } from "../../src/player/TimeCoordinator.js";
 import { TrackPlayer } from "../../src/player/TrackPlayer.js";
 import type { ILoopInterval } from "../../src/player/types.js";
@@ -60,6 +60,9 @@ const makeTimeCoordinator = (realTimeLength: RealTime = 4): TimeCoordinator => {
         convertToRealTime: (timing: ITiming) => {
             return ((timing.bar - 1) * 1) + ((timing.step - 1) * 0.1);
         },
+        convertEventToRealTime: (event: ISbDmNoteEvent) => {
+            return event.start.numerator / event.start.denominator;
+        },
         convertToLoopIntervals: () => {
             return [] as ILoopInterval[];
         },
@@ -78,22 +81,22 @@ const makeNote = (
     track: ISbDmTrack,
     timing: ITiming,
     noteStyle?: INoteStyle,
-    polyrhythm?: IPolyrhythm
-): ISbDmNote => {
+): ISbDmNoteEvent => {
     return {
-        type: SbDmEntityType.Note,
-        //id: `${timing.bar}:${timing.step}`,
+        type: SbDmEntityType.NoteEvent,
         id: Math.floor(Math.random() * 100000),
-        timing,
+        measureNumber: 1,
+        start: { numerator: timing.step - 1, denominator: 16 },
+        duration: { numerator: 1, denominator: 16 },
         track,
+        timing,
         noteStyle,
-        polyrhythm,
-        ...makeSubscribable()
     };
 };
 
 const makeTrack = (
-    opts?: { instrumentLoaded?: boolean; withPolyrhythmNote?: boolean; }): ISbDmTrack & { _notes: ISbDmNote[]; } => {
+    opts?: { instrumentLoaded?: boolean; withPolyrhythmNote?: boolean; }
+): ISbDmTrack & { _notes: ISbDmNoteEvent[]; } => {
     const instrumentLoaded = opts?.instrumentLoaded ?? true;
     const timeParams: ITimeParams = {
         timeSignature: "4/4",
@@ -125,7 +128,7 @@ const makeTrack = (
         applyArrangementSnapshot: vi.fn(),
     };
 
-    const track: Mutable<ISbDmTrack> & { _notes: ISbDmNote[]; } = {
+    const track: Mutable<ISbDmTrack> & { _notes: ISbDmNoteEvent[]; } = {
         type: SbDmEntityType.Track,
         id: 1,
         name: "Track 1",
@@ -154,8 +157,7 @@ const makeTrack = (
             noteStyles: {},
             ...makeSubscribable()
         },
-        notes: [],
-        polyrhythms: [],
+        measures: [],
         getNoteAt: () => {
             return undefined;
         },
@@ -164,8 +166,6 @@ const makeTrack = (
         },
         ...makeSubscribable(),
         _notes: [],
-        addPolyrhythm: vi.fn(),
-        removePolyrhythm: vi.fn(),
         clear: vi.fn(),
     };
 
@@ -179,20 +179,37 @@ const makeTrack = (
     } as INoteStyle;
     const note = makeNote(track, { bar: 1, step: 1 }, noteStyle);
     track._notes.push(note);
-    track.notes = track._notes;
 
     if (opts?.withPolyrhythmNote) {
-        // Minimal polyrhythm view object
-        const poly: IPolyrhythm = {
-            id: 1,
-            start: undefined as unknown as ISbDmNote,
-            end: undefined as unknown as ISbDmNote,
-            notes: []
-        };
-        const polyNote = makeNote(track, { bar: 1, step: 2 }, noteStyle, poly);
+        const polyNote = makeNote(track, { bar: 1, step: 2 }, noteStyle);
         track._notes.push(polyNote);
-        track.notes = track._notes;
     }
+
+    const measureEvents: ISbDmNoteEvent[] = track._notes.map((currentNote, index) => {
+        return {
+            type: SbDmEntityType.NoteEvent,
+            id: currentNote.id,
+            measureNumber: 1,
+            start: {
+                numerator: index,
+                denominator: track._notes.length,
+            },
+            duration: {
+                numerator: 1,
+                denominator: track._notes.length,
+            },
+            track,
+            timing: currentNote.timing,
+            noteStyle: currentNote.noteStyle,
+        };
+    });
+    const measure: ISbDmTrackMeasure = {
+        type: SbDmEntityType.TrackMeasure,
+        id: 1,
+        number: 1,
+        events: measureEvents,
+    };
+    track.measures = [measure];
 
     return track;
 };
@@ -206,19 +223,15 @@ describe("TrackPlayer", () => {
         expect(events.length).toBe(0);
     });
 
-    it("emits audio and callback events for notes in interval", () => {
+    it("emits audio events for notes in interval", () => {
         const track = makeTrack({ instrumentLoaded: true });
         const player = new TrackPlayer(track, makeTimeCoordinator());
 
         const events = player.getEvents({ start: 0, end: 1 });
 
-        // Expect an audio event and a callback event for the first note
+        // Expect at least one audio event for the first note.
         expect(events.some((e) => {
             return "audioBuffer" in e;
-        })).toBe(true);
-
-        expect(events.some((e) => {
-            return "callback" in e;
         })).toBe(true);
 
         // All events should be within the interval and ordered
@@ -227,24 +240,6 @@ describe("TrackPlayer", () => {
             expect(events[i].realTime).toBeGreaterThanOrEqual(0);
             expect(events[i].realTime).toBeLessThan(1);
         }
-    });
-
-    it("updates currentPolyrhythmNote via callback and resets onStop", () => {
-        const track = makeTrack({ instrumentLoaded: true, withPolyrhythmNote: true });
-        const player = new TrackPlayer(track, makeTimeCoordinator());
-
-        const events = player.getEvents({ start: 0, end: 1 });
-        const polyCallback = events.find((e): e is ICallbackEvent => {
-            return e.kind === "callback" && e.realTime > 0;
-        });
-        expect(polyCallback).toBeTruthy();
-
-        // Fire the callback to simulate play
-        polyCallback!.callback();
-        expect(player.currentPolyrhythmNote).toBe(track._notes[1]);
-
-        player.onStop();
-        expect(player.currentPolyrhythmNote).toBeNull();
     });
 
     it("returns no events after dispose", () => {

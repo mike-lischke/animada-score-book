@@ -53,7 +53,9 @@ describe.sequential("SettingsDialog (class)", () => {
     beforeEach(() => {
         vi.restoreAllMocks();
         let nextId = 3;
-        vi.spyOn(utils, "getNewId").mockImplementation(() => nextId++);
+        vi.spyOn(utils, "getNewId").mockImplementation(() => {
+            return nextId++;
+        });
         renderResult = null;
     });
 
@@ -170,6 +172,11 @@ describe.sequential("SettingsDialog (class)", () => {
     });
 
     it("matches snapshot for default rendering", () => {
+        let nextId = 1;
+        vi.spyOn(utils, "getNewId").mockImplementation(() => {
+            return nextId++;
+        });
+
         renderResult = render(<TestableSettingsDialog />);
 
         expect(renderResult.container.firstElementChild).toMatchSnapshot();

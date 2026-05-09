@@ -3,17 +3,15 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import { AppStorage } from "./AppStorage.js";
 import { Publisher } from "./Publisher.js";
 import {
-    SbDmEntityType, type ISbDmArrangement, type ISbDmInstrument, type ISbDmNote, type ISbDmTrack
+    SbDmEntityType, type ISbDmArrangement, type ISbDmInstrument, type ISbDmNoteEvent, type ISbDmTrack,
+    type ISbDmTrackMeasure
 } from "./ScoreBookDataModel.js";
-import { BananaDrumUrlImporter } from "./serialisation/BananaDrumUrlImporter.js";
 import { TimeParams } from "./TimeParams.js";
 import { Track } from "./Track.js";
-import type {
-    IArrangementSnapshot, IPolyrhythm, IPolyrhythmSnapshot, ISerialisedArrangement, ITimeParams, ITrackSnapshot
-} from "./types/general.js";
+import type { IArrangementSnapshot, IFraction, ITimeParams, ITrackSnapshot } from "./types/general.js";
+import { compareFractions, reduceFraction, subtractFractions } from "./serialisation/numeric-functions.js";
 import { getNewId } from "./utils.js";
 
 export class Arrangement extends Publisher implements ISbDmArrangement {
@@ -39,28 +37,7 @@ export class Arrangement extends Publisher implements ISbDmArrangement {
         super();
     }
 
-    public static fromSerialized(serialized: ISerialisedArrangement, instruments: ISbDmInstrument[]): Arrangement {
-        const snapshot = BananaDrumUrlImporter.getArrangementSnapshot(serialized, instruments);
-        const tps = snapshot.timeParams;
-        const timeParams = new TimeParams(tps.timeSignature, tps.tempo, tps.length, tps.pulse, tps.stepResolution);
-        const arrangement = new Arrangement();
-        arrangement.timeParams = timeParams;
-
-        const settings = AppStorage.loadUISettings();
-        if (settings) {
-            arrangement.loop = settings.loop ?? false;
-            arrangement.mainVolume = settings.masterVolume ?? 100;
-            arrangement.useMetronome = settings.metronome ?? false;
-            arrangement.countIn = settings.countIn ?? false;
-        }
-        arrangement.applyArrangementSnapshot(snapshot, instruments);
-
-        return arrangement;
-    }
-
     /**
-     * For testing only.
-     *
      * @param snapshot The arrangement snapshot to create the arrangement from.
      * @param instruments The available instruments.
      * @returns The created arrangement.
@@ -71,7 +48,7 @@ export class Arrangement extends Publisher implements ISbDmArrangement {
         const arrangement = new Arrangement();
         arrangement.timeParams = timeParams;
 
-        arrangement.applyArrangementSnapshot(snapshot, instruments);
+        arrangement.applyCurrentArrangementSnapshot(snapshot, instruments);
 
         return arrangement;
     }
@@ -137,6 +114,11 @@ export class Arrangement extends Publisher implements ISbDmArrangement {
     }
 
     public applyArrangementSnapshot(arrangementSnapshot: IArrangementSnapshot, instruments: ISbDmInstrument[]): void {
+        this.applyCurrentArrangementSnapshot(arrangementSnapshot, instruments);
+    };
+
+    private applyCurrentArrangementSnapshot(arrangementSnapshot: IArrangementSnapshot,
+        instruments: ISbDmInstrument[]): void {
         // applyTimeParams is redundant when loading Animada Score Book, since we just created the Arrangement with the
         // same TPs. However, applying the full snapshot is required for Undo/Redo.
         this.applyTimeParams(arrangementSnapshot);
@@ -163,7 +145,7 @@ export class Arrangement extends Publisher implements ISbDmArrangement {
             })!;
 
             track ??= this.addTrack(instrument, trackSnapshot.id);
-            this.applyTrackSnapshot(track, trackSnapshot);
+            this.applyTrackSnapshot(track as Track, trackSnapshot);
         });
     };
 
@@ -176,182 +158,117 @@ export class Arrangement extends Publisher implements ISbDmArrangement {
         this.timeParams.stepResolution = arrangementSnapshot.timeParams.stepResolution;
     };
 
-    private applyTrackSnapshot(track: ISbDmTrack, trackSnapshot: ITrackSnapshot): void {
-        // First we remove polyrhythms, since this won't affect indexing.
-        let polyrhythmIndex = 0;
-        while (polyrhythmIndex < track.polyrhythms.length) {
-            const polyrhythm = track.polyrhythms[polyrhythmIndex];
+    private applyTrackSnapshot(track: Track, trackSnapshot: ITrackSnapshot): void {
+        const stepsPerBar = this.getStepsPerBar();
+        const pulseFraction = this.parsePulseFraction();
+        const measureEnd: IFraction = { numerator: 1, denominator: 1 };
 
-            if (!trackSnapshot.polyrhythms.some((polyrhythmSnapshot) => {
-                return polyrhythmSnapshot.id === polyrhythm.id;
-            })) {
-                track.removePolyrhythm(polyrhythm);
-            } else {
-                polyrhythmIndex++;
-            }
-        }
-
-        // Then we add missing polyrhythms, being careful to specify ID and index
-        trackSnapshot.polyrhythms.forEach((polyrhythmSnapshot, polyrhythmIndex) => {
-            const polyrhythmAtIndex = track.polyrhythms[polyrhythmIndex] as IPolyrhythm | undefined;
-            if (polyrhythmSnapshot.id !== polyrhythmAtIndex?.id) {
-                const [start, end] = this.getStartAndEndNotes(track, polyrhythmSnapshot, polyrhythmIndex);
-                track.addPolyrhythm(start, end, polyrhythmSnapshot.length, polyrhythmSnapshot.id, polyrhythmIndex);
-            }
-        });
-
-        // Normalise legacy cross-bar polyrhythms so they are always contained within a single bar.
-        // If data is already normalised, this is a no-op.
-        this.normaliseTrackPolyrhythms(track);
-
-        let noteIndex = 0;
-        for (const note of track.getNoteIterator()) {
-            const noteStyleId = trackSnapshot.notes[noteIndex];
-            const noteStyle = noteStyleId === "0"
-                ? undefined
-                : track.instrument.noteStyles[noteStyleId];
-            note.noteStyle = noteStyle;
-            noteIndex++;
-        }
-    };
-
-    private normaliseTrackPolyrhythms(track: ISbDmTrack): void {
-        let polyrhythmIndex = 0;
-        while (polyrhythmIndex < track.polyrhythms.length) {
-            const polyrhythm = track.polyrhythms[polyrhythmIndex];
-            const noteSource = polyrhythm.start.polyrhythm?.notes ?? track.notes;
-
-            const startNoteIndex = noteSource.indexOf(polyrhythm.start);
-            const endNoteIndex = noteSource.indexOf(polyrhythm.end);
-            if (startNoteIndex === -1 || endNoteIndex === -1 || startNoteIndex > endNoteIndex) {
-                polyrhythmIndex++;
-                continue;
-            }
-
-            const segments: Array<{ startNoteIndex: number; endNoteIndex: number; noteCount: number; }> = [];
-            let segmentStart = startNoteIndex;
-            for (let noteIndex = startNoteIndex + 1; noteIndex <= endNoteIndex; noteIndex++) {
-                if (noteSource[noteIndex].timing.bar !== noteSource[noteIndex - 1].timing.bar) {
-                    const segmentEnd = noteIndex - 1;
-                    segments.push({
-                        startNoteIndex: segmentStart,
-                        endNoteIndex: segmentEnd,
-                        noteCount: segmentEnd - segmentStart + 1,
-                    });
-                    segmentStart = noteIndex;
+        const newMeasures: ISbDmTrackMeasure[] = trackSnapshot.measures.map((measureSnapshot) => {
+            // Drop redundant grid-aligned rest events: they carry no sound and exactly fill one
+            // grid slot, so they're reconstructed on demand by Track.getNoteAt. Polyrhythm-shaped
+            // rest events (non-grid duration) are preserved because their duration encodes the
+            // polyrhythm structure.
+            const filteredSnapshotEvents = measureSnapshot.events.filter((event) => {
+                if (event.noteStyleId !== "0") {
+                    return true;
                 }
-            }
 
-            segments.push({
-                startNoteIndex: segmentStart,
-                endNoteIndex,
-                noteCount: endNoteIndex - segmentStart + 1,
+                return !this.isGridSlotDuration(event.duration, stepsPerBar);
             });
 
-            if (segments.length === 1) {
-                polyrhythmIndex++;
-                continue;
-            }
+            const events: ISbDmNoteEvent[] = filteredSnapshotEvents.map((event, index) => {
+                // Extend grid-aligned sounding notes to absorb the rest gap that follows them
+                // within their pulse. This stores the truthful effective duration in the data
+                // model (a 16th hit followed by silence within a pulse becomes a quarter note
+                // when no other events follow in that pulse). Polyrhythm-shaped events keep
+                // their duration.
+                let duration = event.duration;
+                if (event.noteStyleId !== "0" && this.isGridMultipleDuration(duration, stepsPerBar)) {
+                    const nextStart = filteredSnapshotEvents[index + 1]?.start ?? measureEnd;
+                    const pulseEnd = this.pulseBoundaryAfter(event.start, pulseFraction);
+                    const limit = compareFractions(nextStart, pulseEnd) < 0 ? nextStart : pulseEnd;
+                    const extendedDuration = subtractFractions(limit, event.start);
+                    if (compareFractions(extendedDuration, duration) > 0) {
+                        duration = extendedDuration;
+                    }
+                }
 
-            const segmentLengths = this.distributePolyrhythmLength(polyrhythm.notes.length,
-                segments.map((segment) => {
-                    return segment.noteCount;
-                }));
-
-            track.removePolyrhythm(polyrhythm);
-            const insertIndex = polyrhythmIndex;
-            segments.forEach((segment, segmentIndex) => {
-                track.addPolyrhythm(
-                    noteSource[segment.startNoteIndex],
-                    noteSource[segment.endNoteIndex],
-                    segmentLengths[segmentIndex],
-                    segmentIndex === 0 ? polyrhythm.id : undefined,
-                    insertIndex + segmentIndex,
-                );
+                return {
+                    id: getNewId(),
+                    type: SbDmEntityType.NoteEvent,
+                    measureNumber: measureSnapshot.number,
+                    start: event.start,
+                    duration,
+                    track,
+                    timing: this.timingForEventStart(event.start, measureSnapshot.number, stepsPerBar),
+                    noteStyle: event.noteStyleId === "0"
+                        ? undefined
+                        : track.instrument.noteStyles[event.noteStyleId],
+                };
             });
-
-            polyrhythmIndex += segments.length;
-        }
-    }
-
-    private distributePolyrhythmLength(totalLength: number, segmentNoteCounts: number[]): number[] {
-        if (segmentNoteCounts.length === 0) {
-            return [];
-        }
-
-        if (segmentNoteCounts.length === 1) {
-            return [totalLength];
-        }
-
-        if (totalLength < segmentNoteCounts.length) {
-            return segmentNoteCounts.map(() => {
-                return 1;
-            });
-        }
-
-        const totalSegmentNotes = segmentNoteCounts.reduce((sum, noteCount) => {
-            return sum + noteCount;
-        }, 0);
-
-        const remainingLength = totalLength - segmentNoteCounts.length;
-        const segmentLengths = segmentNoteCounts.map(() => {
-            return 1;
-        });
-
-        const extraInfos = segmentNoteCounts.map((noteCount, index) => {
-            const rawExtraLength = remainingLength * noteCount / totalSegmentNotes;
-            const baseExtraLength = Math.floor(rawExtraLength);
-            segmentLengths[index] += baseExtraLength;
 
             return {
-                index,
-                fractionalPart: rawExtraLength - baseExtraLength,
+                id: this.getTrackMeasureId(track, measureSnapshot.number),
+                type: SbDmEntityType.TrackMeasure,
+                number: measureSnapshot.number,
+                events,
             };
         });
 
-        let assignedLength = segmentLengths.reduce((sum, length) => {
-            return sum + length;
-        }, 0);
-        const sortedByFractionalPart = extraInfos.sort((a, b) => {
-            if (a.fractionalPart !== b.fractionalPart) {
-                return b.fractionalPart - a.fractionalPart;
-            }
-
-            return a.index - b.index;
-        });
-
-        for (const { index } of sortedByFractionalPart) {
-            if (assignedLength >= totalLength) {
-                break;
-            }
-
-            segmentLengths[index]++;
-            assignedLength++;
-        }
-
-        return segmentLengths;
+        track.measures.splice(0, track.measures.length, ...newMeasures);
+        track.publish();
     }
 
-    // Return the start and end Note objects for a polyrhythm we want to add to a Track
-    private getStartAndEndNotes(track: ISbDmTrack, polyrhythmSnapshot: IPolyrhythmSnapshot,
-        polyrhythmIndex: number): [ISbDmNote, ISbDmNote] {
+    private isGridSlotDuration(duration: IFraction, stepsPerBar: number): boolean {
+        // duration === 1 / stepsPerBar  ⇔  numerator * stepsPerBar === denominator
+        return duration.numerator * stepsPerBar === duration.denominator;
+    }
 
-        // We have to ignore later polyrhythms so that our start and end indexes are applied correctly
-        const polyrhythmsToIgnore = track.polyrhythms.slice(polyrhythmIndex);
-        const startEndNotes: ISbDmNote[] = [];
-        let index = 0;
+    private isGridMultipleDuration(duration: IFraction, stepsPerBar: number): boolean {
+        // duration === k / stepsPerBar (integer k ≥ 1) ⇔ numerator * stepsPerBar % denominator === 0
+        return (duration.numerator * stepsPerBar) % duration.denominator === 0;
+    }
 
-        for (const note of track.getNoteIterator(polyrhythmsToIgnore)) {
-            if (index === polyrhythmSnapshot.start) {
-                startEndNotes[0] = note;
-            }
-            if (index === polyrhythmSnapshot.end) {
-                startEndNotes[1] = note;
-                break;
-            }
-            index++;
+    private parsePulseFraction(): IFraction {
+        const [numerator, denominator] = this.timeParams.pulse.split("/").map(Number);
+        if (!Number.isFinite(numerator) || !Number.isFinite(denominator) || denominator === 0) {
+            return { numerator: 1, denominator: 4 };
         }
 
-        return startEndNotes as [ISbDmNote, ISbDmNote];
-    };
+        return reduceFraction(numerator, denominator);
+    }
+
+    private pulseBoundaryAfter(start: IFraction, pulse: IFraction): IFraction {
+        // Smallest k * pulse strictly greater than start, capped at the measure end (1/1).
+        const startInPulses = (start.numerator * pulse.denominator) / (start.denominator * pulse.numerator);
+        const nextK = Math.floor(startInPulses) + 1;
+        const candidate = reduceFraction(nextK * pulse.numerator, pulse.denominator);
+        const measureEnd: IFraction = { numerator: 1, denominator: 1 };
+
+        return compareFractions(candidate, measureEnd) < 0 ? candidate : measureEnd;
+    }
+
+    private getStepsPerBar(): number {
+        const { timings } = this.timeParams;
+        let stepsPerBar = 0;
+        for (const timing of timings) {
+            if (timing.bar === 1 && timing.step > stepsPerBar) {
+                stepsPerBar = timing.step;
+            }
+        }
+
+        return stepsPerBar > 0 ? stepsPerBar : 1;
+    }
+
+    private timingForEventStart(start: { numerator: number; denominator: number; }, measureNumber: number,
+        stepsPerBar: number): { bar: number; step: number; } {
+        const stepIndex = (start.numerator * stepsPerBar) / start.denominator;
+        const step = Math.floor(stepIndex) + 1;
+
+        return { bar: measureNumber, step };
+    }
+
+    private getTrackMeasureId(track: Track, measureNumber: number): number {
+        return (track.id * 10_000) + measureNumber;
+    }
 };

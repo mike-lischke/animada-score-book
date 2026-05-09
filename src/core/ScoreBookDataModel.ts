@@ -3,15 +3,17 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-// Temporarily load instruments from bateria-instruments until we have a proper backend.
-import { bateriaInstruments } from "../bateria-instruments.js";
-import { numberSounds } from "../support-sounds.js";
 import { Arrangement } from "./Arrangement.js";
+import { AppStorage } from "./AppStorage.js";
+import { ArrangementSnapshotMigrator } from "./serialisation/migration/ArrangementSnapshotMigrator.js";
+import { stringifyPackedArrangement, tryParsePackedArrangement } from "./serialisation/snapshot-packing.js";
 
 import type { IScoreDBEntry, ISoundLibFsNode } from "./DatabaseTypes.js";
 import { Instrument } from "./Instrument.js";
 import { Publisher } from "./Publisher.js";
-import type { INoteStyle, INoteStyleSymbol, IPolyrhythm, ISubscribable, Mutable } from "./types/general.js";
+import type {
+    IFraction, INoteStyle, INoteStyleSymbol, ISubscribable, Mutable
+} from "./types/general.js";
 import type { IArrangementSnapshot, ISerialisedArrangement } from "./types/general.js";
 import { getNewId } from "./utils.js";
 
@@ -26,28 +28,164 @@ export interface ITiming {
 
 export type RealTime = number;
 
-export type MutingRule = MutingRuleSimple | IMutingRuleOtherInstrument;
+/** If a hand plays a note, how is it played? */
+export enum HandTechnique {
+    Thumb,
+    Fingers,
+    Heel,
+    Palm,
 
-export interface IMutingRuleOtherInstrument {
-    name: "otherInstrument";
-    id: string;
+    Open,
+    Slap,
+
+    Friction,
 }
 
-export type MutingRuleSimple = string;
+/** How to strike the instrument. */
+export enum StickTechnique {
+    /** Normal play type. Goes together with `SoundType.Normal`. */
+    DrumHead,
+
+    /** A hit on the rim of the drum. Goes together with `SoundType.Cross`. */
+    Rim,
+
+    /** A hit on rim and head together. Goes together with `SoundType.Cross`. */
+    RimShot,
+
+    /** A hit on the shell of the drum. Goes together with `SoundType.Cross`. */
+    Body,
+
+    /**
+     * A hit created by resting the stick on the head and clicking on the edge of the drum on the other side.
+     * Goes together with `SoundType.Cross`.
+     */
+    CrossClick,
+
+    /** A roll played by bouncing the stick on the drum head. Goes together with `SoundType.Normal`. */
+    PressRoll,
+}
+
+export enum ExcitationMode {
+    /** Sound produced by striking with hand or stick (e.g. drums, bells). */
+    Struck,
+
+    /** Sound produced by shaking the instrument (e.g. chocalho, shekere, Ganzá, Caxixi). */
+    Shaken,
+
+    /** Sound produced by scraping a beater across a ridged surface (e.g. reco-reco, guiro). */
+    Scraped,
+
+    /** Sound produced by friction against a membrane or internal rod (e.g. cuica and other friction drums). */
+    Friction,
+
+    /** Sound produced by blowing air through the instrument (e.g. Apito). */
+    Blown,
+
+    /** Sound produced by the human voice (e.g. spoken numbers, count-ins, vocal cues). */
+    Vocal,
+}
+
+export type TechniqueType =
+    | { handTechnique: HandTechnique, stickTechnique?: never; }
+    | { handTechnique?: never, stickTechnique: StickTechnique; };
+
+export enum Damping {
+    /** The hit is open, allowing the sound to resonate, i.e. the hand or stick leaves the drumhead. */
+    Open,
+
+    /** The hit is muted, dampening the sound, i.e. the hand or stick stays on the drumhead. */
+    Muted,
+
+    /** If the damping is applied over more than one note, it starts here. */
+    Start,
+
+    /** If the damping is applied over more than one note, it ends here. */
+    End,
+}
+
+export enum HandType {
+    /** For right-handed people this is the right hand (vice-versa for left-handed people). */
+    Strong,
+
+    /** For right-handed people this is the left hand (vice-versa for left-handed people). */
+    Weak
+}
+
+/** How to play a note. */
+export enum SoundType {
+    /**
+     * A filled note, for all pitched sounds, i.e. hits on the drum head, bells, Cuicas etc.
+     */
+    Normal,
+
+    /** A cross for all unpitched sounds, rimshots etc. */
+    Cross,
+}
 
 /** Information about a note style. */
+export type StruckCharacteristics = {
+    excitationMode: ExcitationMode.Struck;
+    damping?: Damping;
+    soundType?: SoundType;
+} & TechniqueType;
+
+export interface ShakenCharacteristics {
+    excitationMode: ExcitationMode.Shaken;
+    damping?: never;
+    soundType?: SoundType;
+    handTechnique?: never;
+    stickTechnique?: never;
+}
+
+export interface ScrapedCharacteristics {
+    excitationMode: ExcitationMode.Scraped;
+    damping?: never;
+    soundType?: SoundType;
+    handTechnique?: never;
+    stickTechnique?: never;
+}
+
+export interface FrictionCharacteristics {
+    excitationMode: ExcitationMode.Friction;
+    damping?: Damping;
+    soundType?: SoundType;
+    handTechnique?: HandTechnique;
+    stickTechnique?: never;
+}
+
+export interface BlownCharacteristics {
+    excitationMode: ExcitationMode.Blown;
+    damping?: never;
+    soundType?: SoundType;
+    handTechnique?: never;
+    stickTechnique?: never;
+}
+
+/**
+ * Characteristics for vocal/spoken samples (e.g. count-ins, number cues). These are not produced
+ * on a physical instrument, so no technique or damping applies.
+ */
+export interface VocalCharacteristics {
+    excitationMode: ExcitationMode.Vocal;
+    damping?: never;
+    soundType?: never;
+    handTechnique?: never;
+    stickTechnique?: never;
+}
+
+export type NoteCharacteristics =
+    | StruckCharacteristics
+    | ShakenCharacteristics
+    | ScrapedCharacteristics
+    | FrictionCharacteristics
+    | BlownCharacteristics
+    | VocalCharacteristics;
+
 export interface INoteStyleMeta {
-    /** The unique identifier for the note style. Single digit or character, can't be 0. */
     readonly id: string;
-
-    /** The name of the source file. */
     readonly file: string;
-
-    /** The muting rules for this note style. */
-    readonly muting?: MutingRule | MutingRule[];
-
-    /** The symbol associated with the note style. */
     readonly symbol?: INoteStyleSymbol;
+    readonly characteristics: NoteCharacteristics;
 }
 
 /** Defines the structure of the instrument metadata. */
@@ -109,6 +247,8 @@ export enum SbDmEntityType {
     Score,
     ScoreFolder,
     Track,
+    TrackMeasure,
+    NoteEvent,
     Instrument,
     InstrumentImage,
     Arrangement,
@@ -163,11 +303,12 @@ export interface ISbDmScoreFolder extends ISbDmVisual {
     name: string;
 }
 
+/** A score entry in the score library. */
 export interface ISbDmScore extends ISbDmVisual {
     readonly type: SbDmEntityType.Score;
     readonly parent?: ISbDmScoreFolder;
     name: string;
-    readonly content: string;
+    content: string;
     readonly description?: string;
 }
 
@@ -187,23 +328,28 @@ export interface ISbDmTrack extends ISbDmCommon, ISubscribable {
      */
     readonly effectiveVolume: number;
 
-    readonly notes: ISbDmNote[];
-    readonly polyrhythms: IPolyrhythm[];
+    readonly measures: ISbDmTrackMeasure[];
 
-    getNoteAt(timing: ITiming): ISbDmNote | undefined;
-    getNoteIterator(polyrhythmsToIgnore?: IPolyrhythm[]): IterableIterator<ISbDmNote>;
-    addPolyrhythm(start: ISbDmNote, end: ISbDmNote, length: number, id?: number, index?: number): void;
-    removePolyrhythm(polyrhythm: IPolyrhythm): void;
+    getNoteAt(timing: ITiming): ISbDmNoteEvent | undefined;
+    getNoteIterator(): IterableIterator<ISbDmNoteEvent>;
     clear(): void;
 }
 
-export interface ISbDmNote extends ISbDmCommon, ISubscribable {
-    readonly type: SbDmEntityType.Note;
-    readonly timing: ITiming;
-    readonly track: ISbDmTrack;
-    polyrhythm?: IPolyrhythm;
+export interface ISbDmTrackMeasure extends ISbDmCommon {
+    readonly type: SbDmEntityType.TrackMeasure;
+    readonly number: number;
+    readonly events: ISbDmNoteEvent[];
+}
 
-    /** Reference to related structures. If unassigned it means this note is a rest. */
+export interface ISbDmNoteEvent extends ISbDmCommon {
+    readonly type: SbDmEntityType.NoteEvent;
+    readonly measureNumber: number;
+    readonly start: IFraction;
+    readonly duration: IFraction;
+    readonly track: ISbDmTrack;
+    readonly timing: ITiming;
+
+    /** Reference to related structures. If unassigned this event represents a rest. */
     noteStyle?: INoteStyle;
 }
 
@@ -291,7 +437,7 @@ export type ScoreBookDataModelEntry =
     | ISbDmTrack
     | ISbDmInstrument
     | ISbDmArrangement
-    | ISbDmNote
+    | ISbDmNoteEvent
     | ISbDmInstrumentImage
     ;
 
@@ -299,6 +445,14 @@ export type ScoreBookDataModelEntry =
  * A data model to share score book data between components.
  */
 export class ScoreBookDataModel extends Publisher {
+    /**
+     * Indicates whether the current session is allowed to mutate scores on the backend.
+     * Until proper user management exists this defaults to `true`. Read-only viewers will
+     * later set this to `false` so opportunistic rewrites (e.g. legacy → compact migration)
+     * are skipped.
+     */
+    public canWriteScores = true;
+
     private data: IScoreBookDataModelData = {
         soundLib: [],
         scoreLib: [],
@@ -339,10 +493,12 @@ export class ScoreBookDataModel extends Publisher {
     }
 
     public loadArrangement(serializedArrangement: ISerialisedArrangement): ISbDmArrangement {
-        this.data.arrangement = Arrangement.fromSerialized(
+        const currentSnapshot = ArrangementSnapshotMigrator.migrateSerialized(
             serializedArrangement,
-            this.data.instruments
+            this.data.instruments,
         );
+        this.data.arrangement = Arrangement.fromSnapshot(currentSnapshot, this.data.instruments);
+        this.applyArrangementPlaybackSettings(this.data.arrangement);
         this.publish();
 
         return this.data.arrangement;
@@ -350,6 +506,7 @@ export class ScoreBookDataModel extends Publisher {
 
     public loadArrangementFromSnapshot(snapshot: IArrangementSnapshot): ISbDmArrangement {
         this.data.arrangement = Arrangement.fromSnapshot(snapshot, this.data.instruments);
+        this.applyArrangementPlaybackSettings(this.data.arrangement);
         this.publish();
 
         return this.data.arrangement;
@@ -447,6 +604,65 @@ export class ScoreBookDataModel extends Publisher {
         }
     }
 
+    /**
+     * Decodes a score's stored `content` to the current arrangement snapshot.
+     *
+     * Two on-the-wire formats are supported transparently:
+     *  - **Compact JSON** (current): `IPackedArrangement` produced by `stringifyPackedArrangement`.
+     *  - **Legacy BananaDrum** URL parameters: kept for backwards compatibility with previously
+     *    imported scores.
+     *
+     * When a legacy entry is read and the session has write permission (`canWriteScores`),
+     * the decoded snapshot is opportunistically written back to the backend in compact form,
+     * so subsequent loads avoid the legacy decode path. The rewrite runs asynchronously and
+     * is fire-and-forget; failures are silently ignored (the legacy content remains valid).
+     *
+     * @param score The score entry whose content should be decoded.
+     * @returns The decoded arrangement snapshot, or `undefined` if the content is not in any
+     *     recognised format.
+     */
+    public decodeScoreContent(score: ISbDmScore): IArrangementSnapshot | undefined {
+        const compact = tryParsePackedArrangement(score.content);
+        if (compact) {
+            return compact;
+        }
+
+        // Legacy BananaDrum content. The wire data is URL-encoded query parameters.
+        const params = new URLSearchParams(score.content);
+        const snapshot = ArrangementSnapshotMigrator.migrateFromParams(params, this.data.instruments);
+        if (!snapshot) {
+            return undefined;
+        }
+
+        if (this.canWriteScores) {
+            void this.rewriteScoreAsCompact(score, snapshot);
+        }
+
+        return snapshot;
+    }
+
+    /**
+     * Persists a new `content` payload for an existing score.
+     *
+     * On success the in-memory entry is updated so subsequent reads see the new format.
+     *
+     * @param score The score entry whose content should be replaced.
+     * @param content The new content string to persist.
+     */
+    public async updateScoreContent(score: ISbDmScore, content: string): Promise<void> {
+        const res = await fetch(`/api.php?action=updateScore`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id: score.id, content }),
+        });
+
+        if (!res.ok) {
+            throw new Error(`HTTP ${res.statusText} (${res.status})`);
+        }
+
+        score.content = content;
+    }
+
     public async renameEntry(entry: ISbDmScoreFolder | ISbDmScore, newName: string): Promise<void> {
         const res = await fetch(`/api.php?action=renameEntry`, {
             method: "POST",
@@ -506,6 +722,14 @@ export class ScoreBookDataModel extends Publisher {
         return this.data.instruments.find((inst) => {
             return inst.id === id;
         });
+    }
+
+    private async rewriteScoreAsCompact(score: ISbDmScore, snapshot: IArrangementSnapshot): Promise<void> {
+        try {
+            await this.updateScoreContent(score, stringifyPackedArrangement(snapshot));
+        } catch {
+            // Opportunistic rewrite — keep the legacy content if the backend call fails.
+        }
     }
 
     /**
@@ -571,20 +795,20 @@ export class ScoreBookDataModel extends Publisher {
         });
     }
 
-    private loadInstruments(): Promise<void> {
+    private async loadInstruments(): Promise<void> {
         this.data.instruments = [];
 
+        const { bateriaInstruments } = await import("../bateria-instruments.js");
         bateriaInstruments.forEach((packedInstrument) => {
             this.data.instruments.push(new Instrument(packedInstrument));
         });
-
-        return Promise.resolve();
     };
 
     private async loadNumberSounds(): Promise<void> {
+        // Dynamic import to break the circular dependency: support-sounds.ts imports the
+        // ExcitationMode enum value from this module.
+        const { numberSounds } = await import("../support-sounds.js");
         this.data.numberSounds = new Instrument(numberSounds);
-
-        return Promise.resolve();
     }
 
     private async updateScoreLibFolder(list: Array<ISbDmScoreFolder | ISbDmScore>,
@@ -641,4 +865,17 @@ export class ScoreBookDataModel extends Publisher {
 
         return Promise.resolve();
     }
+
+    private applyArrangementPlaybackSettings(arrangement: ISbDmArrangement): void {
+        const settings = AppStorage.loadUISettings();
+        if (!settings) {
+            return;
+        }
+
+        arrangement.loop = settings.loop ?? false;
+        arrangement.mainVolume = settings.masterVolume ?? 100;
+        arrangement.useMetronome = settings.metronome ?? false;
+        arrangement.countIn = settings.countIn ?? false;
+    };
+
 }

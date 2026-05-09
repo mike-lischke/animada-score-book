@@ -4,7 +4,7 @@
  */
 
 import { Publisher } from "../core/Publisher.js";
-import type { ISbDmNote, ISbDmTrack, ITiming, RealTime, ScoreBookDataModel } from "../core/ScoreBookDataModel.js";
+import type { ISbDmNoteEvent, ISbDmTrack, ITiming, RealTime, ScoreBookDataModel } from "../core/ScoreBookDataModel.js";
 import { getSharedAudioContext } from "../core/audio-context.js";
 import { sleep, waitFor } from "../core/utils.js";
 import { AnimationEngine } from "../ui/AnimationEngine.js";
@@ -514,7 +514,7 @@ export class ArrangementPlayer extends Publisher {
     }
 
     private scheduleAudioEvent(audioEvent: IAudioEvent): void {
-        const volume = (this.dataModel.arrangement!.mainVolume / 100) * audioEvent.note.track.effectiveVolume;
+        const volume = (this.dataModel.arrangement!.mainVolume / 100) * audioEvent.event.track.effectiveVolume;
         const audioBufferPlayer = new AudioBufferPlayer(audioEvent.audioBuffer, this.audioContext,
             audioEvent.realTime + this.offset, volume);
         const audioEventReference = { audioEvent, audioBufferPlayer };
@@ -620,7 +620,7 @@ export class ArrangementPlayer extends Publisher {
     private scheduleCountInAudioEvents(): void {
         const metrics = this.timeCoordinator.metrics;
         const numberSounds = this.dataModel.numberSounds!;
-        const tempNote = { track: { effectiveVolume: 1 } } as ISbDmNote;
+        const tempEvent = { track: { effectiveVolume: 1 } } as unknown as ISbDmNoteEvent;
 
         let realTime = 0;
         for (const key of ["1", "2", "3", "4"]) {
@@ -629,7 +629,7 @@ export class ArrangementPlayer extends Publisher {
                 kind: "audio",
                 realTime,
                 audioBuffer: noteStyle.audioBuffer!,
-                note: tempNote,
+                event: tempEvent,
             });
             realTime += metrics.secondsPerBar / 4;
         }

@@ -3,6 +3,8 @@
 * Licensed under the MIT License. See License.txt in the project root for license information.
 */
 
+import { uuid } from "../string-helpers.js";
+
 export interface IArrangementViewSettings {
     /** The scroll position of the arrangement in its viewer. */
     scrollPosition?: number;
@@ -115,7 +117,7 @@ export class AppStorage {
             this.#touchSession(this.#sessionId);
             this.#cleanupSessions();
         } else {
-            this.#sessionId = window.crypto.randomUUID();
+            this.#sessionId = uuid();
         }
     }
 
@@ -322,7 +324,7 @@ export class AppStorage {
      * @returns A generated session id that does not collide with existing session setting keys.
      */
     static #generateSessionId(): string {
-        let id = window.crypto.randomUUID();
+        let id = uuid();
 
         for (let i = 0; localStorage.getItem(`${this.#sessionSettingsKeyPrefix}${id}`) && i < 100; i++) {
             id = id + "-";

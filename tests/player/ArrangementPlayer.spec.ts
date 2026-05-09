@@ -5,7 +5,7 @@
 
 import { describe, expect, it, vi } from "vitest";
 
-import type { INoteStyle, IPolyrhythm, ITimeParams, Mutable } from "../../src/core/types/general.js";
+import type { INoteStyle, ITimeParams, Mutable } from "../../src/core/types/general.js";
 import type { ICallbackEvent, IInterval, ILoopInterval, } from "../../src/player/types.js";
 
 // Simple subscribable helper with publish capability for tests
@@ -118,19 +118,21 @@ vi.mock("../../src/player/TimeCoordinator.js", () => {
 // Mock TrackPlayer used inside ArrangementPlayer
 vi.mock("../../src/player/TrackPlayer.js", () => {
     class MockTrackPlayer {
-        public readonly currentPolyrhythmNotePublisher = makeSubscribable();
         public stopped = false;
         private readonly subs = makeSubscribable();
         public constructor(public track: ISbDmTrack, _tc: TimeCoordinator) { }
 
-        public get currentPolyrhythmNote(): ISbDmNote | null {
-            return null;
-        }
-
         public getEvents(interval: IInterval) {
             const events = [] as Array<{ realTime: RealTime; } & (Record<string, unknown>)>;
             const t = interval.start;
-            events.push({ realTime: t, audioBuffer: {} as AudioBuffer, note: this.track.notes[0] });
+            let firstEvent: ISbDmNoteEvent | undefined;
+            for (const event of this.track.getNoteIterator()) {
+                firstEvent = event;
+                break;
+            }
+            if (firstEvent) {
+                events.push({ realTime: t, audioBuffer: {} as AudioBuffer, event: firstEvent });
+            }
             events.push({
                 realTime: t,
                 callback: () => {
@@ -167,16 +169,16 @@ vi.mock("../../src/player/TrackPlayer.js", () => {
 });
 
 // Build simple track/arrangement factories
-const makeNote = (track: ISbDmTrack, timing: ITiming, noteStyle?: INoteStyle,
-    polyrhythm?: IPolyrhythm): ISbDmNote => {
+const makeNote = (track: ISbDmTrack, timing: ITiming, noteStyle?: INoteStyle): ISbDmNoteEvent => {
     return {
-        type: SbDmEntityType.Note,
+        type: SbDmEntityType.NoteEvent,
         id: getNewId(),
-        timing,
+        measureNumber: 1,
+        start: { numerator: timing.step - 1, denominator: 16 },
+        duration: { numerator: 1, denominator: 16 },
         track,
+        timing,
         noteStyle,
-        polyrhythm,
-        ...makeSubscribable()
     };
 };
 
@@ -229,6 +231,7 @@ const makeArrangement = (trackCount: number): ISbDmArrangement & { _publish: () 
             ...makeSubscribable()
         };
 
+        const notes: ISbDmNoteEvent[] = [];
         const track: ISbDmTrack = {
             type: SbDmEntityType.Track,
             id: i + 1,
@@ -237,16 +240,15 @@ const makeArrangement = (trackCount: number): ISbDmArrangement & { _publish: () 
             effectiveVolume: 1,
             arrangement: undefined as unknown as ISbDmArrangement,
             instrument,
-            notes: [],
-            polyrhythms: [],
+            measures: [],
             getNoteAt: () => {
                 return undefined;
             },
             getNoteIterator: function* () {
-                yield* this.notes;
+                for (const note of notes) {
+                    yield note;
+                }
             },
-            addPolyrhythm: vi.fn(),
-            removePolyrhythm: vi.fn(),
             clear: vi.fn(),
             ...trackSubs
         };
@@ -256,7 +258,23 @@ const makeArrangement = (trackCount: number): ISbDmArrangement & { _publish: () 
             instrument: instrument as unknown as INoteStyle["instrument"],
             audioBuffer: {} as AudioBuffer
         } as INoteStyle;
-        track.notes.push(makeNote(track, { bar: 1, step: 1 }, noteStyle));
+        const sourceNote = makeNote(track, { bar: 1, step: 1 }, noteStyle);
+        notes.push(sourceNote);
+        track.measures.push({
+            type: SbDmEntityType.TrackMeasure,
+            id: getNewId(),
+            number: 1,
+            events: [{
+                type: SbDmEntityType.NoteEvent,
+                id: sourceNote.id,
+                measureNumber: 1,
+                start: { numerator: 0, denominator: 1 },
+                duration: { numerator: 1, denominator: 1 },
+                track: track as unknown as ISbDmTrack,
+                timing: { bar: 1, step: 1 },
+                noteStyle: sourceNote.noteStyle,
+            }],
+        });
         tracks.push(track);
     }
 
@@ -288,8 +306,8 @@ const makeArrangement = (trackCount: number): ISbDmArrangement & { _publish: () 
 
 // Import after mocks
 import {
-    SbDmEntityType, ScoreBookDataModel, type ISbDmArrangement, type ISbDmInstrument, type ISbDmNote, type ISbDmTrack,
-    type ITiming, type RealTime
+    SbDmEntityType, ScoreBookDataModel, type ISbDmArrangement, type ISbDmInstrument, type ISbDmNoteEvent,
+    type ISbDmTrack, type ITiming, type RealTime
 } from "../../src/core/ScoreBookDataModel.js";
 import { ArrangementPlayer } from "../../src/player/ArrangementPlayer.js";
 import { getNewId } from "../../src/core/utils.js";
@@ -320,16 +338,13 @@ describe("ArrangementPlayer", () => {
             effectiveVolume: 1,
             arrangement,
             instrument: currentInstrument,
-            notes: arrangement.tracks[0].notes,
-            polyrhythms: [],
+            measures: arrangement.tracks[0].measures,
             getNoteAt: () => {
                 return undefined;
             },
             getNoteIterator: function* () {
-                yield* this.notes;
+                yield* [];
             },
-            addPolyrhythm: vi.fn(),
-            removePolyrhythm: vi.fn(),
             clear: vi.fn(),
             ...makeSubscribable()
         };

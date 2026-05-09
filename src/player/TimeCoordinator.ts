@@ -4,7 +4,7 @@
  */
 
 import { Publisher } from "../core/Publisher.js";
-import type { ITiming, RealTime } from "../core/ScoreBookDataModel.js";
+import type { ISbDmNoteEvent, ITiming, RealTime } from "../core/ScoreBookDataModel.js";
 import type { ITimeParams } from "../core/types/general.js";
 import type { IRealtimeProvider } from "../ui/AnimationEngine.js";
 import { IInterval, ILoopInterval } from "./types.js";
@@ -98,6 +98,18 @@ export class TimeCoordinator extends Publisher {
     public convertToRealTime(timing: ITiming): RealTime {
         return (this.#metrics.secondsPerBar * (timing.bar - 1)) + (this.#metrics.secondsPerStep * (timing.step - 1));
     };
+
+    /**
+     * Converts a fractional measure event position to real time.
+     *
+     * @param event The note event to convert.
+     * @returns The real-time position.
+     */
+    public convertEventToRealTime(event: ISbDmNoteEvent): RealTime {
+        const { measureNumber, start } = event;
+
+        return this.#metrics.secondsPerBar * ((measureNumber - 1) + (start.numerator / start.denominator));
+    }
 
     /**
      * Takes an interval whose times may be beyond the end of the loop
@@ -243,6 +255,9 @@ export class TimeCoordinator extends Publisher {
         // Lay some ground work...
         const stepsPerBeat = stepResolution / beatUnit;
         const stepsPerBar = stepsPerBeat * beatsPerBar;
+        if (!Number.isInteger(stepsPerBar) || stepsPerBar < 1) {
+            throw new Error(`Incompatible time grid: ${timeSignature} with step resolution ${stepResolution}`);
+        }
         const stepsPerPulse = stepResolution * pulseFrequency / pulseResolution;
         const secondsPerPulse = 60 / tempo;
 

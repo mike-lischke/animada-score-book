@@ -8,6 +8,7 @@
 import type { ComponentChild } from "preact";
 
 import type { INoteStyle } from "../../../core/types/general.js";
+import { Icon } from "../framework/Icon.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
 // import { Icon } from "../framework/Icon.js";
 
@@ -27,7 +28,7 @@ export class NoteStyleSymbolViewer extends UIComponent<INoteStyleSymbolViewerPro
         const { symbol } = noteStyle;
         if (symbol) {
             if (symbol.src) {
-                return <img className="note-style-symbol" src={symbol.src} alt={symbol.string} />;
+                return <Icon className="note-style-symbol" src={symbol.src} alt={symbol.string} />;
             }
             if (symbol.string) {
                 return <span className="note-style-symbol">{symbol.string}</span>;

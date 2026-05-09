@@ -7,6 +7,10 @@
         "npx tsc": true,
         "npm run -s tsc": true,
         "npm run -s lint": true,
-        "npx -y ts-prune": true
+        "npx -y ts-prune": true,
+        "npm run -s test": true,
+        "npx eslint": true,
+        "mv": true,
+        "npx vitest": true
     },
 }

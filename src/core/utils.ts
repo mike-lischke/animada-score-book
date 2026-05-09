@@ -66,15 +66,6 @@ export const getNewId = (): number => {
     return nextId++;
 };
 
-export const calculateStepsPerBar = (timeSignature: string, stepResolution: number): number => {
-    const [beatsPerBar, beatNoteValue] = timeSignature.split("/").map((value: string) => {
-        return Number(value);
-    });
-    const stepsPerBeat = stepResolution / beatNoteValue;
-
-    return stepsPerBeat * beatsPerBar;
-};
-
 /**
  * Converts an optional value to a string expression for use in CSS.
  *

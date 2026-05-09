@@ -9,6 +9,7 @@ import { render } from "preact";
 
 import { App } from "./App.js";
 import { Container } from "./components/ui/framework/Container.js";
+import { Icon } from "./components/ui/framework/Icon.js";
 import { Message } from "./components/ui/framework/Message.js";
 import { ChildAlignment, MessageType, Orientation } from "./components/ui/framework/ui-types.js";
 import { LoadAudioError } from "./core/LoadAudioError.js";
@@ -101,10 +102,10 @@ try {
                 orientation={Orientation.TopDown}
                 crossAlignment={ChildAlignment.Center}
             >
-                <img
+                <Icon
                     src={logo}
                     alt="App Icon"
-                    style="width: 300px; height: 300px; margin-bottom: 20px;"
+                    style={{ width: "300px", height: "300px", marginBottom: "20px" }}
                 />
                 <p>
                     <b>Animada Score Book</b> needs your permission to play sound on iOS devices.

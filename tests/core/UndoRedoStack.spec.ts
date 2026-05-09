@@ -5,15 +5,17 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
+import { SbDmEntityType, type ISbDmArrangement, type ISbDmTimeParams } from "../../src/core/ScoreBookDataModel.js";
 import { UndoRedoStack } from "../../src/core/UndoRedoStack.js";
-import type { IArrangementView, ITimeParamsView } from "../../src/core/types/general.js";
+import type { IArrangementSnapshot } from "../../src/core/types/general.js";
 import type { EditCommand, EditCommand_ArrangementTitle } from "../../src/core/types/edit_commands.js";
 
 // Mock getArrangementSnapshot to return a simple snapshot
 vi.mock("../../src/core/serialisation/snapshots.js", () => {
     return {
-        getArrangementSnapshot: (_arr: IArrangementView) => {
-            return {
+        getArrangementSnapshot: (_arr: ISbDmArrangement) => {
+            const snapshot: IArrangementSnapshot = {
+                version: 1,
                 title: _arr.title,
                 timeParams: {
                     timeSignature: "4/4",
@@ -24,11 +26,13 @@ vi.mock("../../src/core/serialisation/snapshots.js", () => {
                 },
                 tracks: []
             };
+
+            return snapshot;
         }
     };
 });
 
-const stubTimeParams: ITimeParamsView = {
+const stubTimeParams: ISbDmTimeParams = {
     timeSignature: "4/4",
     tempo: 120,
     length: 1,
@@ -42,11 +46,20 @@ const stubTimeParams: ITimeParamsView = {
     unsubscribe: vi.fn(),
 };
 
-const makeArrangement = (title: string): IArrangementView => {
+const makeArrangement = (title: string): ISbDmArrangement => {
     return {
+        type: SbDmEntityType.Arrangement,
+        id: 1,
         title,
         timeParams: stubTimeParams,
         tracks: [],
+        mainVolume: 1,
+        loop: false,
+        useMetronome: false,
+        countIn: false,
+        addTrack: vi.fn(),
+        removeTrack: vi.fn(),
+        applyArrangementSnapshot: vi.fn(),
         subscribe: vi.fn(),
         unsubscribe: vi.fn(),
     };

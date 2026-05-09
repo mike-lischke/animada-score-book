@@ -3,9 +3,13 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import type { ISbDmTrack, ITiming } from "./ScoreBookDataModel.js";
+import type { ISbDmNoteEvent, ITiming } from "./ScoreBookDataModel.js";
 import type { INoteStyle } from "./types/general.js";
 import { isSameTiming } from "./utils.js";
+
+interface ITrackWithNotes {
+    readonly notes: ISbDmNoteEvent[];
+}
 
 interface ICopyRequest {
     start: ITiming,
@@ -20,7 +24,7 @@ interface IPasteRequest {
 export class TrackClipboard {
     private buffer: Array<INoteStyle | undefined> = [];
 
-    public constructor(private track: ISbDmTrack) {
+    public constructor(private track: ITrackWithNotes) {
     }
 
     public get length() {

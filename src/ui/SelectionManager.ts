@@ -4,11 +4,11 @@
 */
 
 import { Publisher } from "../core/Publisher.js";
-import type { ISbDmNote, ISbDmTrack } from "../core/ScoreBookDataModel.js";
+import type { ISbDmNoteEvent, ISbDmTrack } from "../core/ScoreBookDataModel.js";
 
 interface ITrackSelection {
-    selectedNotes: Set<ISbDmNote>;
-    range: [ISbDmNote | null, ISbDmNote | null];
+    selectedNotes: Set<ISbDmNoteEvent>;
+    range: [ISbDmNoteEvent | null, ISbDmNoteEvent | null];
 }
 
 /** Manages note selections across tracks and publishes selection changes. */
@@ -16,9 +16,9 @@ export class SelectionManager extends Publisher {
     /** Current selections per track, including selected notes and range per track. */
     public readonly selections: Map<ISbDmTrack, ITrackSelection> = new Map<ISbDmTrack, ITrackSelection>();
 
-    private anchor: ISbDmNote | null = null;
-    private lastClickedNote: ISbDmNote | null = null;
-    private lastMouseDownNote: ISbDmNote | null = null;
+    private anchor: ISbDmNoteEvent | null = null;
+    private lastClickedNote: ISbDmNoteEvent | null = null;
+    private lastMouseDownNote: ISbDmNoteEvent | null = null;
 
     /**
      * Checks if a note is currently selected.
@@ -26,7 +26,7 @@ export class SelectionManager extends Publisher {
      * @param note The note to check.
      * @returns True if the note is selected.
      */
-    public isSelected(note: ISbDmNote): boolean {
+    public isSelected(note: ISbDmNoteEvent): boolean {
         if (!this.selections.has(note.track)) {
             return false;
         }
@@ -41,7 +41,7 @@ export class SelectionManager extends Publisher {
      *
      * @param clickedNote The clicked note.
      */
-    public handleClick(clickedNote: ISbDmNote): void {
+    public handleClick(clickedNote: ISbDmNoteEvent): void {
         // Special case: deselect when clicking the anchor if it's the only note selected.
         // This mirrors the legacy behavior where a second click on the anchor toggles it off.
         if (clickedNote === this.anchor && this.selections.size === 1) {
@@ -80,10 +80,10 @@ export class SelectionManager extends Publisher {
             });
             this.deselectUntilNoMoreSelected(trackSelection, noteIterator);
         } else {
-            const anchorISbDmNoteer = document.getElementById(`note-${this.anchor!.id}`);
-            const clickedISbDmNoteer = document.getElementById(`note-${clickedNote.id}`);
-            const { left: anchorLeft, right: anchorRight } = anchorISbDmNoteer!.getBoundingClientRect();
-            const { left: clickedNoteLeft, right: clickedNoteRight } = clickedISbDmNoteer!.getBoundingClientRect();
+            const anchorISbDmNoteEvent = document.getElementById(`note-${this.anchor!.id}`);
+            const clickedISbDmNoteEvent = document.getElementById(`note-${clickedNote.id}`);
+            const { left: anchorLeft, right: anchorRight } = anchorISbDmNoteEvent!.getBoundingClientRect();
+            const { left: clickedNoteLeft, right: clickedNoteRight } = clickedISbDmNoteEvent!.getBoundingClientRect();
             const leftBound = anchorLeft < clickedNoteLeft ? anchorLeft : clickedNoteLeft;
             const rightBound = anchorRight > clickedNoteRight ? anchorRight : clickedNoteRight;
 
@@ -100,7 +100,7 @@ export class SelectionManager extends Publisher {
 
                 if (knownNote) {
                     const leftEdgeTest = knownNoteIsOnLeftEdge
-                        ? (note: ISbDmNote) => {
+                        ? (note: ISbDmNoteEvent) => {
                             return note === knownNote;
                         }
                         : this.getAboutHalfCoveredTest(leftBound, rightBound);
@@ -136,7 +136,7 @@ export class SelectionManager extends Publisher {
      *
      * @param note The note where the mouse was pressed.
      */
-    public handleMouseDown(note: ISbDmNote): void {
+    public handleMouseDown(note: ISbDmNoteEvent): void {
         this.lastMouseDownNote = note;
     }
 
@@ -145,7 +145,7 @@ export class SelectionManager extends Publisher {
      *
      * @param note The note reached by the drag.
      */
-    public handleDragSelect(note: ISbDmNote): void {
+    public handleDragSelect(note: ISbDmNoteEvent): void {
         if (this.anchor !== this.lastMouseDownNote) {
             this.restartSelection(this.lastMouseDownNote);
         }
@@ -165,7 +165,7 @@ export class SelectionManager extends Publisher {
         }
     }
 
-    private restartSelection(note: ISbDmNote | null): void {
+    private restartSelection(note: ISbDmNoteEvent | null): void {
         this.selections.clear();
 
         if (note) {
@@ -176,7 +176,7 @@ export class SelectionManager extends Publisher {
         this.publish();
     }
 
-    private recalcSelectedTracks(clickedNote: ISbDmNote): void {
+    private recalcSelectedTracks(clickedNote: ISbDmNoteEvent): void {
         const allTracks = this.anchor!.track.arrangement.tracks;
         const anchorTrackIndex = allTracks.indexOf(this.anchor!.track);
         const clickedTrackIndex = allTracks.indexOf(clickedNote.track);
@@ -198,10 +198,10 @@ export class SelectionManager extends Publisher {
         }
     }
 
-    private createTrackSelection(note?: ISbDmNote): ITrackSelection {
+    private createTrackSelection(note?: ISbDmNoteEvent): ITrackSelection {
         if (note) {
             return {
-                selectedNotes: new Set<ISbDmNote>().add(note),
+                selectedNotes: new Set<ISbDmNoteEvent>().add(note),
                 range: [note, note]
             };
         }
@@ -212,10 +212,10 @@ export class SelectionManager extends Publisher {
         };
     }
 
-    private getAboutHalfCoveredTest(leftBound: number, rightBound: number): ((note: ISbDmNote) => boolean) {
+    private getAboutHalfCoveredTest(leftBound: number, rightBound: number): ((note: ISbDmNoteEvent) => boolean) {
         const selectionWidth = rightBound - leftBound;
 
-        return (note: ISbDmNote) => {
+        return (note: ISbDmNoteEvent) => {
             const testElement = document.getElementById(`note-${note.id}`)!;
             const { left, right, width } = testElement.getBoundingClientRect();
 
@@ -247,8 +247,8 @@ export class SelectionManager extends Publisher {
         };
     }
 
-    private deselectUntilMatch(trackSelection: ITrackSelection, iterator: IterableIterator<ISbDmNote>,
-        matches: (note: ISbDmNote) => boolean): void {
+    private deselectUntilMatch(trackSelection: ITrackSelection, iterator: IterableIterator<ISbDmNoteEvent>,
+        matches: (note: ISbDmNoteEvent) => boolean): void {
         while (true) {
             const next = iterator.next();
             if (next.done) {
@@ -272,8 +272,8 @@ export class SelectionManager extends Publisher {
 
     private selectUntilMatch(
         trackSelection: ITrackSelection,
-        iterator: IterableIterator<ISbDmNote>,
-        matches: (note: ISbDmNote) => boolean
+        iterator: IterableIterator<ISbDmNoteEvent>,
+        matches: (note: ISbDmNoteEvent) => boolean
     ): void {
         while (true) {
             const next = iterator.next();
@@ -294,8 +294,8 @@ export class SelectionManager extends Publisher {
 
     private selectUntilNoMoreMatches(
         trackSelection: ITrackSelection,
-        iterator: IterableIterator<ISbDmNote>,
-        matches: (note: ISbDmNote) => boolean
+        iterator: IterableIterator<ISbDmNoteEvent>,
+        matches: (note: ISbDmNoteEvent) => boolean
     ): void {
         while (true) {
             const next = iterator.next();
@@ -316,7 +316,8 @@ export class SelectionManager extends Publisher {
         }
     }
 
-    private deselectUntilNoMoreSelected(trackSelection: ITrackSelection, iterator: IterableIterator<ISbDmNote>): void {
+    private deselectUntilNoMoreSelected(trackSelection: ITrackSelection,
+        iterator: IterableIterator<ISbDmNoteEvent>): void {
         while (true) {
             const next = iterator.next();
             if (next.done) {

@@ -3,16 +3,22 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 
 import {
-    SbDmEntityType, type ISbDmArrangement, type ISbDmNote, type ISbDmTrack, type ITiming
+    SbDmEntityType, type ISbDmArrangement, type ISbDmNoteEvent, type ITiming
 } from "../../src/core/ScoreBookDataModel.js";
 import { TrackClipboard } from "../../src/core/TrackClipboard.js";
-import type { INoteStyle, Mutable } from "../../src/core/types/general.js";
+import type { INoteStyle } from "../../src/core/types/general.js";
+
+interface ITrackWithNotesTestStub {
+    notes: ISbDmNoteEvent[];
+    getNoteAt: (timing: ITiming) => ISbDmNoteEvent | undefined;
+    getNoteIterator: () => IterableIterator<ISbDmNoteEvent>;
+}
 
 describe("TrackClipboard", () => {
-    let mockTrack: Mutable<ISbDmTrack>;
+    let mockTrack: ITrackWithNotesTestStub;
     let target: TrackClipboard;
 
     const makeNoteStyle = (id: string): INoteStyle => {
@@ -32,7 +38,7 @@ describe("TrackClipboard", () => {
                     id: 1,
                     filePath: "path/to/image.png",
                 },
-                colourGroup: "blue",
+                color: "blue",
                 noteStyles: {},
                 state: {
                     initialized: true,
@@ -40,10 +46,12 @@ describe("TrackClipboard", () => {
                     expanded: false,
                     expandedOnce: false,
                 },
-                audioPath: "path/to/audio",
                 range: [21, 108],
-                noteStyleCount: 1,
-                subscribe: () => { /* no-op */ },
+                subscribe: () => {
+                    return () => {
+                        return undefined;
+                    };
+                },
                 unsubscribe: () => { /* no-op */ },
             }
         };
@@ -57,14 +65,7 @@ describe("TrackClipboard", () => {
         // Minimal track stub with notes and getNoteAt.
         // Minimal track stub
         mockTrack = {
-            type: SbDmEntityType.Track,
-            id: 1,
-            name: "Track 1",
-            volume: 1,
-            arrangement: {} as unknown as ISbDmArrangement,
-            instrument: makeNoteStyle("1").instrument,
             notes: [],
-            polyrhythms: [],
             getNoteAt: (timing: ITiming) => {
                 // Simplified: timings are contiguous and start at step 1
                 return mockTrack.notes[timing.step - 1];
@@ -72,23 +73,18 @@ describe("TrackClipboard", () => {
             getNoteIterator: () => {
                 return mockTrack.notes.values();
             },
-            addPolyrhythm: vi.fn(),
-            removePolyrhythm: vi.fn(),
-            clear: vi.fn(),
-            subscribe: vi.fn(),
-            unsubscribe: vi.fn(),
         };
 
-        const notes: ISbDmNote[] = new Array(10).fill(null).map((_, i) => {
+        const notes: ISbDmNoteEvent[] = new Array(10).fill(null).map((_, i) => {
             return {
-                type: SbDmEntityType.Note,
+                type: SbDmEntityType.NoteEvent,
                 id: i + 1,
-                typeId: String(i + 1),
+                measureNumber: 1,
+                start: { numerator: i, denominator: 10 },
+                duration: { numerator: 1, denominator: 10 },
                 timing: makeTiming(i + 1),
-                track: mockTrack,
+                track: mockTrack as unknown as ISbDmArrangement["tracks"][number],
                 noteStyle: makeNoteStyle(String(i + 1)),
-                subscribe: vi.fn(),
-                unsubscribe: vi.fn(),
             };
         });
 

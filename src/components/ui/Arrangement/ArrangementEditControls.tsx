@@ -13,6 +13,7 @@ import { Container } from "../framework/Container.js";
 import { ChildAlignment } from "../framework/ui-types.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
 import { Overlay } from "../Overlay.js";
+import { PolyrhythmEventGroupBuilder } from "../PolyrhythmEventGroupBuilder.js";
 import { SelectionControls } from "../SelectionControls.js";
 import { Separator } from "../Separator.js";
 import { UndoRedoControls } from "./UndoRedoControls.js";
@@ -43,9 +44,9 @@ export class ArrangementEditControls
         const { arePolyrhythms } = this.state;
 
         const arrangement = dataModel.arrangement!;
+        this.addSubscription(services.selectionManager, this.onSelectionChange);
         this.addSubscription(arrangement, this.arrangementCallback);
         this.addSubscription(arrangement, this.trackUpdate);
-        this.addSubscription(services.selectionManager, this.onSelectionChange);
 
         arrangement.tracks.forEach((track) => {
             track.subscribe(this.arrangementCallback);
@@ -113,21 +114,19 @@ export class ArrangementEditControls
                 <Separator />
                 <UndoRedoControls undoManager={undoManager} />
 
-                {
-                    arePolyrhythms
-                        ? (
-                            <>
-                                <Button
-                                    onClick={() => {
-                                        modeManager.deletePolyrhythmMode = true;
-                                        Overlay.toggleOverlay("delete_polyrhythms", "show");
-                                    }}
-                                >Delete polyrhythms...</Button>
-                                <Separator />
-                            </>
-                        )
-                        : (<></>)
-                }
+                {arePolyrhythms
+                    ? (
+                        <>
+                            <Button
+                                onClick={() => {
+                                    modeManager.deletePolyrhythmMode = true;
+                                    Overlay.toggleOverlay("delete_polyrhythms", "show");
+                                }}
+                            >Delete polyrhythms...</Button>
+                            <Separator />
+                        </>
+                    )
+                    : null}
 
                 <Overlay name="clear_tracks">
                     <div style={{
@@ -176,6 +175,7 @@ export class ArrangementEditControls
                         </Button>
                     </div>
                 </Overlay>
+
                 <Overlay name="selection_controls">
                     <SelectionControls
                         dataModel={dataModel}
@@ -189,8 +189,13 @@ export class ArrangementEditControls
     }
 
     private hasPolyrhythms(arrangement: ISbDmArrangement): boolean {
+        const stepsPerBar = Math.max(
+            1,
+            Math.round(arrangement.timeParams.timings.length / arrangement.timeParams.length),
+        );
+
         for (const track of arrangement.tracks) {
-            if (track.polyrhythms.length) {
+            if (new PolyrhythmEventGroupBuilder(track, stepsPerBar).hasGroups()) {
                 return true;
             }
         }
@@ -209,7 +214,7 @@ export class ArrangementEditControls
 
             services.modeManager.deletePolyrhythmMode = false;
         }
-        this.setState({ arePolyrhythms: arePolyrhythms });
+        this.setState({ arePolyrhythms });
     };
 
     private trackUpdate = (): void => {

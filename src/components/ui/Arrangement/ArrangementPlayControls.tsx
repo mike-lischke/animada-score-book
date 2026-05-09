@@ -280,7 +280,9 @@ export class ArrangementPlayControls
 
     private startRecording = async () => {
         const { arrangementPlayer, dataModel } = this.props;
-        if (this.state.recordingInProgress) {
+        const { recordingInProgress } = this.state;
+
+        if (recordingInProgress) {
             return;
         }
 
@@ -332,7 +334,9 @@ export class ArrangementPlayControls
     };
 
     private handleRecordingDialogClose = (): void => {
-        if (this.state.recordingInProgress) {
+        const { recordingInProgress } = this.state;
+
+        if (recordingInProgress) {
             setTimeout(() => {
                 this.recordingDialogRef.current?.open();
             }, 0);

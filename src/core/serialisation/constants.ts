@@ -166,17 +166,3 @@ export const polyrhythmNumberToCharacter: Record<number, string> = {
     9: "9",
     10: "-"
 };
-
-export const polyrhythmCharacterToNumber: Record<string, bigint> = {
-    "0": 0n,
-    "1": 1n,
-    "2": 2n,
-    "3": 3n,
-    "4": 4n,
-    "5": 5n,
-    "6": 6n,
-    "7": 7n,
-    "8": 8n,
-    "9": 9n,
-    "-": 10n
-};

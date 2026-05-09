@@ -20,9 +20,8 @@ export const edit = (command: EditCommand): boolean => {
             return editArrangement(command as EditCommand_Arrangement);
         }
 
-        case "EditCommand_TrackRemovePolyrhythm":
         case "EditCommand_TrackClear":
-            return editTrack(command as EditCommand_Track);
+            return editTrack(command);
 
         case "EditCommand_TimeParamsTimeSignature":
         case "EditCommand_TimeParamsTempo":
@@ -103,33 +102,11 @@ const editArrangement = (command: EditCommand_Arrangement): boolean => {
         return changedAnyNotes;
     }
 
-    if (command.type === "EditCommand_ArrangementAddPolyrhythms") {
-        command.addPolyrhythms.selection.forEach(({ range }) => {
-            const [start, end] = range;
-            const track = start!.track;
-            track.addPolyrhythm(start!, end!, command.addPolyrhythms.length);
-        });
-
-        return true;
-    }
-
     return false;
 };
 
 const editTrack = (command: EditCommand_Track): boolean => {
     const track = command.track;
-
-    if (command.type === "EditCommand_TrackRemovePolyrhythm") {
-        if (track.polyrhythms.find((polyrhythm) => {
-            return polyrhythm === command.removePolyrhythm;
-        })) {
-            track.removePolyrhythm(command.removePolyrhythm);
-
-            return true;
-        }
-
-        return false;
-    }
 
     for (const note of track.getNoteIterator()) {
         if (note.noteStyle) {
@@ -181,14 +158,8 @@ const editTimeParams = (command: EditCommand_TimeParams): boolean => {
     return false;
 };
 
-const editNote = (command: EditCommand_Note): boolean => {
-    const note = command.note;
-
-    if (note.noteStyle !== command.noteStyle) {
-        note.noteStyle = command.noteStyle;
-
-        return true;
-    }
-
+const editNote = (_command: EditCommand_Note): boolean => {
+    // Note editing is temporarily disabled while the data model migrates from ISbDmNote
+    // to ISbDmNoteEvent. Re-enable once a measure-event-aware edit path is in place.
     return false;
 };

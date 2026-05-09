@@ -95,7 +95,8 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         setTimeout(this.handleResize, 0);
         this.resizeObserver.observe(this.viewerRef.current!);
 
-        const arrangement = this.props.dataModel.arrangement!;
+        const { dataModel } = this.props;
+        const arrangement = dataModel.arrangement!;
         this.addSubscription(arrangement.timeParams, this.timeParamsSubscription, true);
 
         // If desired, turn on auto-follow like so.
@@ -255,16 +256,27 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
             const clientWidth = viewer.clientWidth;
             const maxScroll = Math.max(0, contentWidth - clientWidth);
 
-            // Update play beam continuously.
-            const normalizedPosition = arrangementPlayer.convertToLoopProgress(realTime);
-            const position = Math.floor(normalizedPosition * contentWidth);
-            this.playBeamRef.current.style.left = `${position}px`;
-
-            // Also trigger as soon as the beam enters a right-edge partial bar, to avoid late double scrolling.
+            // In staff mode the first bar carries a non-musical prefix (clef + time signature),
+            // so its musical content is squeezed into less width than the other bars. We mirror
+            // that layout in the play beam mapping: bar 1's musical span runs from the actual
+            // measured left edge of bar 1's runs container to the bar 1 / bar 2 boundary; bars
+            // 2..N each map [k*barWidth, (k+1)*barWidth]. Without this correction the beam
+            // would start at the very left (over the clef) and lag throughout bar 1.
             const metrics = arrangementPlayer.scoreMetrics;
             const stepWidthPixels = contentWidth / (metrics.bars * metrics.stepsPerBar);
             const barWidthPixels = stepWidthPixels * metrics.stepsPerBar;
             const pulseWidthPixels = stepWidthPixels * metrics.stepsPerPulse;
+            const firstBarMusicStartPx = this.measureFirstBarMusicStartPx();
+
+            // Update play beam continuously.
+            const normalizedPosition = arrangementPlayer.convertToLoopProgress(realTime);
+            const totalProgress = normalizedPosition * metrics.bars;
+            const playBarIndex = Math.min(metrics.bars - 1, Math.floor(totalProgress));
+            const fractionInBar = totalProgress - playBarIndex;
+            const barStartPx = playBarIndex === 0 ? firstBarMusicStartPx : playBarIndex * barWidthPixels;
+            const barEndPx = (playBarIndex + 1) * barWidthPixels;
+            const position = Math.floor(barStartPx + (fractionInBar * (barEndPx - barStartPx)));
+            this.playBeamRef.current.style.left = `${position}px`;
 
             // Half-bar splits use beat-level granularity so odd time signatures snap musically.
             // Even meters split symmetrically (2+2, 3+3 for 6/8), odd meters asymmetrically
@@ -323,6 +335,31 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         const rightPartialBarStart = viewportRight - remainder;
 
         return rightPartialBarStart > scrollLeft + epsilon ? rightPartialBarStart : Number.MAX_SAFE_INTEGER;
+    }
+
+    /**
+     * Returns the horizontal offset (in px, relative to the content host) at which the first
+     * bar's musical content begins — i.e. the left edge of bar 1's `.staff-note-viewer-runs`
+     * container. This already accounts for any non-musical prefix (clef + time signature) plus
+     * the bar's own internal padding, so the play beam can be lined up exactly with the first
+     * note slot. Returns 0 when no staff-mode first bar is rendered (grid mode), so the beam
+     * remains aligned with the bar's outer edge.
+     *
+     * @returns Offset in pixels from contentHost's left edge.
+     */
+    private measureFirstBarMusicStartPx(): number {
+        const host = this.viewerContentHostRef.current;
+        if (!host) {
+            return 0;
+        }
+        const runs = host.querySelector<HTMLElement>(".staff-note-viewer.first-bar .staff-note-viewer-runs");
+        if (!runs) {
+            return 0;
+        }
+        const hostRect = host.getBoundingClientRect();
+        const runsRect = runs.getBoundingClientRect();
+
+        return runsRect.left - hostRect.left;
     }
 
     private animationEngineSubscription = () => {

@@ -3,7 +3,7 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import type { INoteStyleMeta, ISbDmInstrument, ISbDmNote, ITiming } from "../ScoreBookDataModel.js";
+import type { INoteStyleMeta, ISbDmInstrument, ITiming } from "../ScoreBookDataModel.js";
 
 export interface INoteStyle extends Omit<INoteStyleMeta, "file"> {
     /** The audio buffer associated with this note style. Null while the instrument is loading. */
@@ -40,11 +40,9 @@ export interface ITimeParams extends ISubscribable {
     isValid(timing: ITiming): boolean;
 }
 
-export interface IPolyrhythm {
-    id: number;
-    start: ISbDmNote;
-    end: ISbDmNote;
-    notes: ISbDmNote[];
+export interface IFraction {
+    numerator: number;
+    denominator: number;
 }
 
 /** Make all entries in type T mutable. */
@@ -73,15 +71,18 @@ export interface IArrangementSnapshot {
 export interface ITrackSnapshot {
     id: number;
     instrumentId: string;
-    notes: string[];
-    polyrhythms: IPolyrhythmSnapshot[];
+    measures: ITrackMeasureSnapshot[];
 }
 
-export interface IPolyrhythmSnapshot {
-    id: number;
-    start: number;
-    end: number;
-    length: number;
+export interface ITrackMeasureSnapshot {
+    number: number;
+    events: INoteEventSnapshot[];
+}
+
+export interface INoteEventSnapshot {
+    start: IFraction;
+    duration: IFraction;
+    noteStyleId: string;
 }
 
 export interface ITimeParamsSnapshot {
@@ -92,11 +93,17 @@ export interface ITimeParamsSnapshot {
     stepResolution: number;
 }
 
-// The main purpose of this object is to turn into a shareable link
-// So the properties line up with what will be separate query params
+/**
+ * The format used to in URLs from BananaDrum and snapshots from the backend and internally (undo/redo,
+ * app storage etc.).
+ */
 export interface ISerialisedArrangement {
     title?: string;
     composition: string;
-    /** Serialisation format version. Missing values are interpreted as version 1. */
+
+    /**
+     * Snapshot schema version of the payload (same meaning as `IArrangementSnapshot.version`).
+     * Missing values are interpreted as version 1 (legacy BananaDrum-encoded composition).
+     */
     version?: number;
 }

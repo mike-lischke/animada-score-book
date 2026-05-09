@@ -414,12 +414,21 @@ h6 {
 }
 
 .note-line {
+    position: relative;
     transition: opacity 0.2s;
     overflow-x: hidden;
 }
 
 .note-line .notes-wrapper {
     display: flex;
+}
+
+.note-line .polyrhythms-wrapper,
+.bar-track-row .polyrhythms-wrapper {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    pointer-events: none;
 }
 
 .note-line .polyrhythm-viewer {
@@ -512,8 +521,9 @@ h6 {
     top: 50%;
     left: 0;
     right: 0;
-    border-top: 1px solid var(--color-base-content);
+    border-top: 1px solid var(--color-base-300);
     transform: translateY(-50%);
+    z-index: -1;
 }
 
 .staff-note-viewer-prefix {
@@ -526,15 +536,15 @@ h6 {
     align-items: center;
     justify-content: center;
     gap: 10px;
-    color: var(--color-base-content);
+    color: var(--color-base-300);
     pointer-events: none;
 }
 
 .staff-note-viewer-neutral-clef {
     width: 8px;
     height: var(--staff-barline-height);
-    border-left: 3px solid currentColor;
-    border-right: 3px solid currentColor;
+    border-left: 3px solid var(--color-base-content);
+    border-right: 3px solid var(--color-base-content);
     border-radius: 1px;
 }
 
@@ -614,30 +624,27 @@ h6 {
     flex-shrink: 0;
 }
 
-.staff-note-viewer-run.beam-right::before,
-.staff-note-viewer-run.beam-right::after {
-    content: "";
+/* Beam stroke attached to a beamed note. Position (top, left/right, width) is set inline by
+   StaffNoteViewer.renderBeamSegments per beam segment (shared vs partial, level 1..3). */
+.staff-note-viewer-beam {
     position: absolute;
-    left: calc(50% + 5px);
-    right: calc(-50% - 5px);
     height: 3px;
     background: var(--color-base-content);
     pointer-events: none;
     z-index: 2;
 }
 
-.staff-note-viewer-run.beam-right::before {
-    top: calc(50% - 36px);
-}
-
-.staff-note-viewer-run.beam-right::after {
-    top: calc(50% - 31px);
-}
-
 .staff-note-viewer-tuplets {
     position: absolute;
     inset: 0;
     pointer-events: none;
+}
+
+/* In the first bar the prefix (clef + time signature) sits to the left of the runs area; the
+   tuplets layer must align with the runs, not with the bar's outer edge, so its bracket
+   percentages refer to the same horizontal extent as the noteheads. */
+.staff-note-viewer.first-bar .staff-note-viewer-tuplets {
+    left: var(--staff-note-prefix-width);
 }
 
 .staff-note-viewer-tuplet-number {
@@ -656,12 +663,42 @@ h6 {
     z-index: 2;
 }
 
+/*
+ * Tuplet bracket: drawn when the tuplet pulse is not covered by a continuous beam (e.g. a
+ * triplet of 8th-note + 8th-rest + 8th-rest). Spans the pulse horizontally with a thin top
+ * line and short downward ticks at each end; the number sits centered, breaking the line.
+ */
+.staff-note-viewer-tuplet-bracket {
+    position: absolute;
+    top: calc(50% - 55px);
+    height: 9px;
+    border-top: 1.5px solid var(--color-base-content);
+    border-left: 1.5px solid var(--color-base-content);
+    border-right: 1.5px solid var(--color-base-content);
+    border-bottom: 0;
+    box-sizing: border-box;
+    color: var(--color-base-content);
+    z-index: 2;
+    pointer-events: none;
+}
+
+.staff-note-viewer-tuplet-bracket > .staff-note-viewer-tuplet-text {
+    position: absolute;
+    top: -10px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 16px;
+    font-weight: 700;
+    line-height: 1;
+    background: var(--color-base-100);
+    padding: 0 3px;
+}
+
 /* Note symbol: 16th-note SVG icon */
 .staff-note-viewer-note-symbol {
     display: block;
-    width: auto;
-    height: 50px;
-    opacity: 0.85;
+    width: 25px;
+    height: 60px;
 
     /* The note head is in the lower part of this SVG; lift it so the head center sits on the middle line. */
     transform: translateY(-14.5px);
@@ -670,9 +707,36 @@ h6 {
 /* Rest symbol: 16th-rest SVG icon */
 .staff-note-viewer-rest-symbol {
     display: block;
-    width: auto;
+    width: 22px;
     height: 40px;
-    opacity: 0.7;
+}
+
+/* Augmentation dots are absolutely positioned so they don't displace the centered note / rest
+   glyph in the flex slot. Without this, flex centering would shift the glyph left by half the
+   dot+gap width, opening a gap between the note stem and any beam (which anchors at slot center). */
+
+/* Augmentation dot drawn next to a grouped rest icon (no dotted-rest SVGs exist). */
+.staff-note-viewer-rest-dot {
+    position: absolute;
+    /* Rest icons have some transparent padding on the right; offset so the dot reads as adjacent. */
+    left: calc(50% + 8px);
+    top: calc(50% + 6px);
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: var(--color-base-content);
+}
+
+/* Augmentation dot drawn next to a dotted note glyph (no dotted-note SVGs exist). */
+.staff-note-viewer-note-dot {
+    position: absolute;
+    /* Just past the right edge of the 25px-wide notehead icon (centered in slot). */
+    left: calc(50% + 8px);
+    top: calc(50% + 4px);
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: var(--color-base-content);
 }
 
 /* Polyrhythm fragment: an absolutely-positioned slice of a polyrhythm within a bar */
@@ -768,6 +832,15 @@ h6 {
     display: flex;
     justify-content: center;
     align-items: center;
+}
+
+/* Polyrhythm notes: anchor symbols to the left edge of their flex cell so the i-th note's
+   on-screen position matches its actual time position (i/N of the pulse), rather than the
+   cell's center. With centered symbols the first note appeared delayed relative to playback
+   — most visible at low BPMs — because each note sat in the middle of its 1/N subdivision. */
+.polyrhythm-fragment .note-details-viewer,
+.polyrhythm-viewer .note-details-viewer {
+    justify-content: flex-start;
 }
 
 .note-details-viewer .note-style-symbol {

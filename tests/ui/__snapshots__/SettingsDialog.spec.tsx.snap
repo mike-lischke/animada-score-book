@@ -42,16 +42,16 @@ exports[`SettingsDialog (class) > matches snapshot for default rendering 1`] = `
         >
           <button
             class="btn"
-            popovertarget="popover-4"
-            style="anchor-name: --anchor-3;"
+            popovertarget="popover-2"
+            style="anchor-name: --anchor-1;"
           >
             Light+
           </button>
           <ul
             class="dropdown menu w-52 rounded-box bg-base-100 shadow-sm"
-            id="popover-4"
+            id="popover-2"
             popover="auto"
-            style="position-anchor: --anchor-3;"
+            style="position-anchor: --anchor-1;"
           >
             <li
               class=""

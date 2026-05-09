@@ -12,14 +12,16 @@
     "scripts": {
         "dev": "vite --host",
         "build": "npm run generate-themes && vite build",
-        "serve:e2e": "node build/serve-dist.mjs",
+        "watch": "npm run watch:src & npm run watch:tests & wait",
+        "watch:src": "tsc --noEmit --watch",
+        "watch:tests": "tsc -p tests/tsconfig.json --noEmit --watch",
         "test": "vitest --no-watch",
+        "lint": "eslint 'src/**/*.{ts,tsx}' 'tests/**/*.{ts,tsx}'",
         "test:e2e": "playwright test",
         "test:e2e:headed": "playwright test --headed",
         "test:e2e:ui": "playwright test --ui",
+        "serve:e2e": "node build/serve-dist.mjs",
         "playwright:install": "playwright install chromium",
-        "lint": "eslint 'src/**/*.{ts,tsx}'",
-        "watch": "tsc --noEmit --watch",
         "generate-themes": "tsx build/generate-daisyui-themes.ts"
     },
     "dependencies": {

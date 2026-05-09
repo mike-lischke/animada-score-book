@@ -23,7 +23,7 @@ test.describe("Snapshot compatibility polyrhythm flow", () => {
         const storedSnapshot = JSON.parse(storedCurrentScore) as
             { version: number; title?: string; tracks: unknown[]; };
 
-        expect(storedSnapshot.version).toBe(1);
+        expect(storedSnapshot.version).toBe(2);
         expect(storedSnapshot.title).toBe(beijaFlorTitle);
         expect(storedSnapshot.title).not.toBe(beijaFlorDisplayedTitle);
         expect(Array.isArray(storedSnapshot.tracks)).toBeTruthy();

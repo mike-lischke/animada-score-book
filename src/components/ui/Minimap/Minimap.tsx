@@ -146,7 +146,7 @@ export class Minimap extends UIComponent<IMinimapProps> {
      * @returns The rendered minimap content.
      */
     public override render(): ComponentChild {
-        const { arrangement } = this.props;
+        const { arrangement, scoreMetrics } = this.props;
 
         const className = this.generateFinalClassName(["minimap"]);
         const barCount = arrangement.timeParams.length;
@@ -176,6 +176,7 @@ export class Minimap extends UIComponent<IMinimapProps> {
                                         key={barNumber}
                                         barNumber={barNumber}
                                         arrangement={arrangement}
+                                        stepsPerBar={scoreMetrics.stepsPerBar}
                                     />
                                 );
                             })}

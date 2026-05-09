@@ -3,13 +3,12 @@
 * Licensed under the MIT License. See License.txt in the project root for license information.
 */
 
-import { createRef, type ComponentChild } from "preact";
+import type { ComponentChild } from "preact";
 
-import type { ISbDmNote, ScoreBookDataModel } from "../../../core/ScoreBookDataModel.js";
 import { getSharedAudioContext } from "../../../core/audio-context.js";
+import type { ISbDmNoteEvent, ScoreBookDataModel } from "../../../core/ScoreBookDataModel.js";
 import type { INoteStyle } from "../../../core/types/general.js";
 import type { UndoManager } from "../../../core/UndoManager.js";
-import { isSameTiming } from "../../../core/utils.js";
 import type { ArrangementPlayer } from "../../../player/ArrangementPlayer.js";
 import { AudioBufferPlayer } from "../../../player/AudioBufferPlayer.js";
 import type { TrackPlayer } from "../../../player/TrackPlayer.js";
@@ -22,7 +21,7 @@ const audioContext = getSharedAudioContext();
 const baseNoteClasses = "note-viewer note-width";
 
 export interface INoteViewerProps extends ICommonUIProperties {
-    note: ISbDmNote;
+    note: ISbDmNoteEvent;
 
     trackPlayer: TrackPlayer,
     services: ScoreBookUiServices;
@@ -30,6 +29,7 @@ export interface INoteViewerProps extends ICommonUIProperties {
     arrangementPlayer: ArrangementPlayer;
     dataModel: ScoreBookDataModel;
     touchHoldEnabled?: boolean;
+    elementRef?: (element: HTMLDivElement | null) => void;
 }
 
 interface INoteViewerState {
@@ -39,11 +39,7 @@ interface INoteViewerState {
 }
 
 export class NoteViewer extends UIComponent<INoteViewerProps, INoteViewerState> {
-    //private timingChangeUnsubscribe?: () => void;
     private selectionChangeUnsubscribe?: () => void;
-    private noteStyleChangeUnsubscribe?: () => void;
-
-    private readonly viewerRef = createRef<HTMLDivElement>();
 
     public constructor(props: INoteViewerProps) {
         super(props);
@@ -111,16 +107,21 @@ export class NoteViewer extends UIComponent<INoteViewerProps, INoteViewerState> 
         this.addSubscriptions();
     }
 
+    public override componentDidUpdate(prevProps: INoteViewerProps): void {
+        const { note } = this.props;
+        if (prevProps.note !== note || prevProps.note.noteStyle !== note.noteStyle) {
+            this.setState({ noteStyle: note.noteStyle });
+        }
+    }
+
     public override componentWillUnmount(): void {
         super.componentWillUnmount();
 
-        //this.timingChangeUnsubscribe?.();
         this.selectionChangeUnsubscribe?.();
-        this.noteStyleChangeUnsubscribe?.();
     }
 
     public override render(): ComponentChild {
-        const { note, touchHoldEnabled = true } = this.props;
+        const { elementRef, note, touchHoldEnabled = true } = this.props;
         const { isCurrent, selected, noteStyle } = this.state;
 
         const classString = this.useClasses();
@@ -134,7 +135,7 @@ export class NoteViewer extends UIComponent<INoteViewerProps, INoteViewerState> 
 
         return (
             <div
-                ref={this.viewerRef}
+                ref={elementRef}
                 id={`note-${note.id}`}
                 className={classString}
                 onClick={this.handleClick}
@@ -157,26 +158,11 @@ export class NoteViewer extends UIComponent<INoteViewerProps, INoteViewerState> 
     }
 
     private addSubscriptions(): void {
-        const { note, services } = this.props;
+        const { services } = this.props;
         const { selectionManager } = services;
 
-        /*const timingPublisher = note.polyrhythm
-            ? trackPlayer.currentPolyrhythmNotePublisher
-            : arrangementPlayer.currentTimingPublisher;
-
-        this.timingChangeUnsubscribe = timingPublisher.subscribe(this.timingChanged);*/
         this.selectionChangeUnsubscribe = selectionManager.subscribe(this.selectionChanged);
-        this.noteStyleChangeUnsubscribe = note.subscribe(this.noteStyleChanged);
     }
-
-    private timingChanged = (): void => {
-        // No longer used. We keep it around for now in case we need to use it in the future.
-    };
-
-    private noteStyleChanged = (): void => {
-        const { note } = this.props;
-        this.setState({ noteStyle: note.noteStyle });
-    };
 
     private selectionChanged = (): void => {
         const { note, services } = this.props;
@@ -229,13 +215,8 @@ export class NoteViewer extends UIComponent<INoteViewerProps, INoteViewerState> 
     private useClasses(): string {
         const { note } = this.props;
 
-        const inPolyrhythm = note.polyrhythm !== undefined;
         const { bar, step } = note.timing;
         const { timeSignature, stepResolution } = note.track.arrangement.timeParams;
-
-        if (inPolyrhythm) {
-            return baseNoteClasses;
-        }
 
         const classes = [baseNoteClasses];
 
@@ -266,21 +247,6 @@ export class NoteViewer extends UIComponent<INoteViewerProps, INoteViewerState> 
         return "transparent";
     };
 
-    private isCurrentlyPlaying(): boolean {
-        const { arrangementPlayer, trackPlayer } = this.props;
-        const { note } = this.props;
-
-        if (note.polyrhythm) {
-            return trackPlayer.currentPolyrhythmNote === note;
-        }
-
-        if (!arrangementPlayer.currentTiming) {
-            return false;
-        }
-
-        return isSameTiming(arrangementPlayer.currentTiming, note.timing);
-    }
-
     private cycleNoteStyle() {
         const { note, undoManager, dataModel } = this.props;
         const noteStyle = this.getNextNoteStyle(note);
@@ -293,7 +259,7 @@ export class NoteViewer extends UIComponent<INoteViewerProps, INoteViewerState> 
         }
     }
 
-    private getNextNoteStyle(note: ISbDmNote): INoteStyle | undefined {
+    private getNextNoteStyle(note: ISbDmNoteEvent): INoteStyle | undefined {
         const noteStyles = note.track.instrument.noteStyles;
         const noteStyleIds = Object.keys(noteStyles);
         if (!note.noteStyle) {

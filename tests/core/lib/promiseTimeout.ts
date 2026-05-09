@@ -4,7 +4,7 @@
  */
 
 export const promiseTimeout = (callback: () => void, time: number) => {
-    return new Promise<void>(resolve => {
+    return new Promise<void>((resolve) => {
         return setTimeout(() => {
             callback();
             resolve();

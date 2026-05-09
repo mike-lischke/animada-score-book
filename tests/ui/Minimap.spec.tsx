@@ -8,7 +8,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { Minimap, type IVisibleBarRange } from "../../src/components/ui/Minimap/Minimap.js";
 import {
-    SbDmEntityType, type ISbDmArrangement, type ISbDmTimeParams, type ISbDmTrack
+    SbDmEntityType, type ISbDmArrangement, type ISbDmNoteEvent, type ISbDmTimeParams,
+    type ISbDmTrack, type ISbDmTrackMeasure
 } from "../../src/core/ScoreBookDataModel.js";
 import type { IScoreMetrics } from "../../src/player/TimeCoordinator.js";
 import { requisitions } from "../../src/supplement/Requisitions.js";
@@ -77,12 +78,9 @@ const makeTrack = (arrangement: ISbDmArrangement): ISbDmTrack => {
             unsubscribe: vi.fn(),
             range: [21, 108],
         },
-        notes: [],
-        polyrhythms: [],
+        measures: [],
         subscribe: vi.fn(),
         unsubscribe: vi.fn(),
-        addPolyrhythm: vi.fn(),
-        removePolyrhythm: vi.fn(),
         clear: vi.fn(),
         getNoteAt: () => {
             return undefined;
@@ -91,6 +89,34 @@ const makeTrack = (arrangement: ISbDmArrangement): ISbDmTrack => {
             // Empty iterator for test.
         },
     };
+};
+
+const makePolyrhythmFixture = (
+    track: ISbDmTrack,
+): { measure: ISbDmTrackMeasure; } => {
+    const event = {
+        type: SbDmEntityType.NoteEvent,
+        id: 11,
+        measureNumber: 1,
+        start: { numerator: 0, denominator: 1 },
+        duration: { numerator: 1, denominator: 8 },
+        track,
+        timing: { bar: 1, step: 1 },
+        noteStyle: {
+            id: "1",
+            audioBuffer: null,
+            instrument: track.instrument,
+        },
+    } as ISbDmNoteEvent;
+
+    const measure = {
+        type: SbDmEntityType.TrackMeasure,
+        id: 13,
+        number: 1,
+        events: [event],
+    } as ISbDmTrackMeasure;
+
+    return { measure };
 };
 
 /**
@@ -144,8 +170,8 @@ const makeScoreMetrics = (): IScoreMetrics => {
         bars: 8,
         beatsPerBar: 4,
         pulsesPerBar: 4,
-        stepsPerBar: 32,
-        stepsPerPulse: 8,
+        stepsPerBar: 8,
+        stepsPerPulse: 2,
     };
 };
 
@@ -517,6 +543,20 @@ describe.sequential("Minimap (component)", () => {
 
             const barViewers = result?.container.querySelectorAll(".mini-bar-viewer");
             expect(barViewers?.length).toBe(1);
+        });
+
+        it("renders bars with only polyrhythm notes as active", () => {
+            const polyrhythmArrangement = makeArrangement(1, 1);
+            const track = polyrhythmArrangement.tracks[0];
+            const { measure } = makePolyrhythmFixture(track);
+            (track as { measures: ISbDmTrackMeasure[]; }).measures = [measure];
+
+            renderMinimap({ arrangement: polyrhythmArrangement });
+
+            const activeMiniNotes = result?.container.querySelectorAll(
+                ".mini-bar-track-row .mini-note-viewer[style*='blue']"
+            );
+            expect(activeMiniNotes?.length).toBeGreaterThan(0);
         });
 
         it("handles arrangement with no tracks", () => {

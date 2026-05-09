@@ -5,7 +5,6 @@
 
 import { Publisher } from "./Publisher.js";
 import type { ISbDmTimeParams, ITiming } from "./ScoreBookDataModel.js";
-import { calculateStepsPerBar } from "./utils.js";
 
 /**
  * Encapsulates timing parameters for an arrangement and publishes changes.
@@ -35,6 +34,14 @@ export class TimeParams extends Publisher implements ISbDmTimeParams {
     public constructor(timeSignature: string, tempo: number, length: number, pulse: string, stepResolution: number) {
         super();
 
+        if (!this.validateTimeSignature(timeSignature)) {
+            throw new Error("Invalid time signature");
+        }
+
+        if (!this.validateStepGridCompatibility(timeSignature, stepResolution)) {
+            throw new Error("Incompatible time signature and step resolution");
+        }
+
         this.signature = timeSignature;
         this.resolution = stepResolution;
         this.usedTempo = tempo;
@@ -49,7 +56,7 @@ export class TimeParams extends Publisher implements ISbDmTimeParams {
      */
     public regenerateTimings() {
         this.timings.length = 0;
-        const stepsPerBar = calculateStepsPerBar(this.timeSignature, this.resolution);
+        const stepsPerBar = this.calculateStepsPerBar(this.timeSignature, this.resolution);
 
         for (let bar = 1; bar <= this.usedLength; bar++) {
             for (let step = 1; step <= stepsPerBar; step++) {
@@ -75,6 +82,10 @@ export class TimeParams extends Publisher implements ISbDmTimeParams {
     public set timeSignature(newTimeSignature: string) {
         if (!this.validateTimeSignature(newTimeSignature)) {
             throw new Error("Invalid time signature");
+        }
+
+        if (!this.validateStepGridCompatibility(newTimeSignature, this.resolution)) {
+            throw new Error("Incompatible time signature and step resolution");
         }
 
         if (newTimeSignature !== this.signature) {
@@ -180,6 +191,10 @@ export class TimeParams extends Publisher implements ISbDmTimeParams {
             throw new Error("Invalid step resolution");
         }
 
+        if (!this.validateStepGridCompatibility(this.signature, newStepResolution)) {
+            throw new Error("Incompatible time signature and step resolution");
+        }
+
         if (newStepResolution !== this.resolution) {
             this.resolution = newStepResolution;
             this.regenerateTimings();
@@ -200,11 +215,7 @@ export class TimeParams extends Publisher implements ISbDmTimeParams {
             return false;
         } // timing falls outside the arrangement entirely
 
-        const [beatsPerBar, beatUnit] = this.timeSignature.split("/").map((value) => {
-            return Number(value);
-        });
-        const stepsPerBeat = this.resolution / beatUnit;
-        const stepsPerBar = stepsPerBeat * beatsPerBar;
+        const stepsPerBar = this.calculateStepsPerBar(this.timeSignature, this.resolution);
         if (step > stepsPerBar) {
             return false;
         }
@@ -332,4 +343,42 @@ export class TimeParams extends Publisher implements ISbDmTimeParams {
 
         return true;
     };
+
+    /**
+     * Validates that a time signature and step resolution produce a natural number of steps per bar.
+     *
+     * @param timeSignature The time signature to validate.
+     * @param stepResolution The step resolution to validate.
+     * @returns True if the combination defines a valid step grid.
+     */
+    private validateStepGridCompatibility(timeSignature: string, stepResolution: number): boolean {
+        try {
+            this.calculateStepsPerBar(timeSignature, stepResolution);
+
+            return true;
+        } catch {
+            return false;
+        }
+    }
+
+    /**
+     * Calculates the number of steps per bar for a given signature/resolution combination.
+     *
+     * @param timeSignature The time signature in the form beats/unit.
+     * @param stepResolution The step resolution.
+     * @returns The number of steps per bar.
+     */
+    private calculateStepsPerBar(timeSignature: string, stepResolution: number): number {
+        const [beatsPerBar, beatUnit] = timeSignature.split("/").map((value) => {
+            return Number(value);
+        });
+
+        const stepsPerBeat = stepResolution / beatUnit;
+        const stepsPerBar = stepsPerBeat * beatsPerBar;
+        if (!Number.isInteger(stepsPerBar) || stepsPerBar < 1) {
+            throw new Error(`Incompatible time grid: ${timeSignature} with step resolution ${stepResolution}`);
+        }
+
+        return stepsPerBar;
+    }
 };

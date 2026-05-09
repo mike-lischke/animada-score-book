@@ -29,7 +29,10 @@ export class CachedTabPage extends UIComponent<ICachedTabPageProps, ICachedTabPa
     }
 
     public override componentDidMount() {
-        if (this.props.active && !this.state.hasMountedOnce) {
+        const { active } = this.props;
+        const { hasMountedOnce } = this.state;
+
+        if (active && !hasMountedOnce) {
             this.setState({ hasMountedOnce: true });
         }
     }
@@ -37,13 +40,16 @@ export class CachedTabPage extends UIComponent<ICachedTabPageProps, ICachedTabPa
     public override componentDidUpdate(prevProps: ICachedTabPageProps, prevState: ICachedTabPageState) {
         super.componentDidUpdate(prevProps, prevState);
 
-        if (this.props.active && !prevProps.active && !this.state.hasMountedOnce) {
+        const { active } = this.props;
+        const { hasMountedOnce } = this.state;
+
+        if (active && !prevProps.active && !hasMountedOnce) {
             this.setState({ hasMountedOnce: true });
         }
     }
 
     public render() {
-        const { active, content } = this.props;
+        const { active, content, id } = this.props;
         const { hasMountedOnce } = this.state;
 
         if (!hasMountedOnce) {
@@ -56,7 +62,7 @@ export class CachedTabPage extends UIComponent<ICachedTabPageProps, ICachedTabPa
             <Container
                 className="cachedTabPage"
                 orientation={Orientation.TopDown}
-                data-tab-id={this.props.id}
+                data-tab-id={id}
                 style={{ display: active ? "flex" : "none", width: "100%", height: "100%" }}
             >
                 {content}

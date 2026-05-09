@@ -4,9 +4,17 @@
  */
 
 import type { ISbDmArrangement, ISbDmTrack } from "../ScoreBookDataModel.js";
-import { arrangementSnapshotVersion } from "./snapshot-version.js";
-import type { IPolyrhythm } from "../types/general.js";
-import type { IArrangementSnapshot, IPolyrhythmSnapshot, ITrackSnapshot } from "../types/general.js";
+import type {
+    IArrangementSnapshot, INoteEventSnapshot, ITrackMeasureSnapshot, ITrackSnapshot
+} from "../types/general.js";
+
+/** Current internal arrangement snapshot schema version. */
+
+export const arrangementSnapshotVersion = 2;
+
+export const isNaturalNumber = (value: unknown): value is number => {
+    return typeof value === "number" && Number.isInteger(value) && value >= 1;
+};
 
 export const getArrangementSnapshot = (arrangementView: Readonly<ISbDmArrangement>): IArrangementSnapshot => {
     const { timeSignature, tempo, length, pulse, stepResolution } = arrangementView.timeParams;
@@ -23,52 +31,23 @@ const getTrackSnapshot = (track: ISbDmTrack): ITrackSnapshot => {
     return {
         id: track.id,
         instrumentId: track.instrument.typeId,
-        notes: getNotesAsChars(track),
-        polyrhythms: getPolyrhythmSnapshots(track)
+        measures: getMeasureSnapshots(track),
     };
 };
 
-const getNotesAsChars = (track: ISbDmTrack): string[] => {
-    return Array.from(track.getNoteIterator())
-        .map((note) => {
-            return note.noteStyle?.id ?? "0";
-        }); // For rests, note.noteStyle is null, and '0' is reserved for this on all instruments
-};
+const getMeasureSnapshots = (track: ISbDmTrack): ITrackMeasureSnapshot[] => {
+    return track.measures.map((measure) => {
+        return {
+            number: measure.number,
+            events: measure.events.map((event) => {
+                const eventSnapshot: INoteEventSnapshot = {
+                    start: event.start,
+                    duration: event.duration,
+                    noteStyleId: event.noteStyle?.id ?? "0",
+                };
 
-const getPolyrhythmSnapshots = (track: ISbDmTrack): IPolyrhythmSnapshot[] => {
-    const polyrhythmSnapshots: IPolyrhythmSnapshot[] = [];
-    const polyrhythmsToIgnore: IPolyrhythm[] = [];
-
-    // We do polyrhythms in reverse order in order to support nested polyrhythms.
-    // When we rebuild the polyrhythms one-by-one, the note-iterator is going to change after each one
-    // When we serialise, we have to mimic that behavior in reverse.
-
-    for (let polyrhythmIndex = track.polyrhythms.length - 1; polyrhythmIndex >= 0; polyrhythmIndex--) {
-        const polyrhythm = track.polyrhythms[polyrhythmIndex];
-        polyrhythmsToIgnore.push(polyrhythm);
-        let start = 0;
-        let end = Number.MAX_SAFE_INTEGER;
-
-        const noteIterator = track.getNoteIterator(polyrhythmsToIgnore);
-        let noteIndex = 0;
-        for (const note of noteIterator) {
-            if (note === polyrhythm.start) {
-                start = noteIndex;
-            }
-            if (note === polyrhythm.end) {
-                end = noteIndex;
-                break;
-            }
-            noteIndex++;
-        }
-
-        polyrhythmSnapshots.unshift({
-            id: polyrhythm.id,
-            start,
-            end,
-            length: polyrhythm.notes.length
-        });
-    }
-
-    return polyrhythmSnapshots;
+                return eventSnapshot;
+            }),
+        };
+    });
 };

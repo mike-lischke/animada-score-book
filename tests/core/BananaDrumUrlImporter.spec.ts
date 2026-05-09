@@ -3,10 +3,10 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
-import { BananaDrumUrlImporter } from "../../src/core/serialisation/BananaDrumUrlImporter.js";
 import { SbDmEntityType, type ISbDmInstrument } from "../../src/core/ScoreBookDataModel.js";
+import { BananaDrumUrlImporter } from "../../src/core/serialisation/migration/BananaDrumUrlImporter.js";
 
 const createInstrument = (typeId: string, id: number, displayOrder: number): ISbDmInstrument => {
     return {
@@ -25,15 +25,14 @@ const createInstrument = (typeId: string, id: number, displayOrder: number): ISb
             expandedOnce: false,
         },
         noteStyles: {},
-        subscribe: vi.fn(() => {
+        subscribe: () => {
+            return () => {
+                return undefined;
+            };
+        },
+        unsubscribe: () => {
             return undefined;
-        }),
-        unsubscribe: vi.fn(() => {
-            return undefined;
-        }),
-        publish: vi.fn(() => {
-            return undefined;
-        }),
+        },
     };
 };
 

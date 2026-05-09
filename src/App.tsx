@@ -39,8 +39,11 @@ import { AppStorage, type IUISettings } from "./core/AppStorage.js";
 import {
     SbDmEntityType, ScoreBookDataModel, type ISbDmScore, type ISbDmScoreFolder
 } from "./core/ScoreBookDataModel.js";
-import { BananaDrumUrlImporter } from "./core/serialisation/BananaDrumUrlImporter.js";
-import { isNaturalNumber } from "./core/serialisation/snapshot-version.js";
+import { ArrangementSnapshotMigrator } from "./core/serialisation/migration/ArrangementSnapshotMigrator.js";
+import {
+    stringifyPackedArrangement
+} from "./core/serialisation/snapshot-packing.js";
+import { isNaturalNumber } from "./core/serialisation/snapshots.js";
 import type { IArrangementSnapshot, ISerialisedArrangement } from "./core/types/general.js";
 import { UndoManager } from "./core/UndoManager.js";
 import { convertErrorToString } from "./core/utils.js";
@@ -72,7 +75,7 @@ interface IAppState {
     headerPinned: boolean;
 }
 
-const newSong: ISerialisedArrangement = { composition: emptySongString, version: 2, title: "New Song" };
+const newSong: ISerialisedArrangement = { composition: emptySongString, version: 1, title: "New Song" };
 
 export class App extends UIComponent<{}, IAppState> {
     private scoreLibraryRef = createRef<DrawerSidebar>();
@@ -120,11 +123,12 @@ export class App extends UIComponent<{}, IAppState> {
         this.applyThemePreference(this.selectedThemePreference);
         this.systemThemeQuery.addEventListener("change", this.handleSystemThemeChange);
         escapeStack.attach();
+
         requisitions.register("settingsChanged", this.handleSettingsChanged);
         requisitions.register("playRangeChanged", this.handlePlayRangeChanged);
 
         void this.dataModel.initialize().then(() => {
-            const arrangementSnapshot = BananaDrumUrlImporter.getArrangementSnapshotFromParams(
+            const arrangementSnapshot = ArrangementSnapshotMigrator.migrateFromParams(
                 new URL(window.location.href).searchParams,
                 this.dataModel.instruments
             );
@@ -483,7 +487,20 @@ export class App extends UIComponent<{}, IAppState> {
                                 try {
                                     const params = new URL(url).searchParams;
                                     const title = params.get("t") ?? "Imported Score";
-                                    await this.dataModel.addScore(title, params.toString(), parent);
+
+                                    // Migrate the BananaDrum link to the current snapshot
+                                    // format and store it in the compact V2 wire format.
+                                    const snapshot = ArrangementSnapshotMigrator.migrateFromParams(
+                                        params,
+                                        this.dataModel.instruments,
+                                    );
+                                    if (!snapshot) {
+                                        throw new Error("URL does not contain a recognised score payload");
+                                    }
+
+                                    snapshot.title = title;
+                                    const content = stringifyPackedArrangement(snapshot);
+                                    await this.dataModel.addScore(title, content, parent);
 
                                     return true;
                                 } catch (error) {
@@ -548,12 +565,7 @@ export class App extends UIComponent<{}, IAppState> {
                 });
 
                 if (data.type === SbDmEntityType.Score) {
-                    const params = new URLSearchParams(data.content);
-                    const arrangementSnapshot = BananaDrumUrlImporter.getArrangementSnapshotFromParams(
-                        params,
-                        this.dataModel.instruments
-                    );
-
+                    const arrangementSnapshot = this.dataModel.decodeScoreContent(data);
                     this.loadScorebook(arrangementSnapshot ?? newSong);
                 }
 
@@ -637,7 +649,8 @@ export class App extends UIComponent<{}, IAppState> {
         const resolvedArrangementToLoad = arrangementToLoad ?? newSong;
         const arrangement = this.dataModel.loadArrangement(resolvedArrangementToLoad);
         if (snapshotToLoad) {
-            arrangement.applyArrangementSnapshot(snapshotToLoad, this.dataModel.instruments);
+            const currentSnapshot = ArrangementSnapshotMigrator.migrate(snapshotToLoad, this.dataModel.instruments);
+            arrangement.applyArrangementSnapshot(currentSnapshot, this.dataModel.instruments);
         }
         this.undoManager = new UndoManager(this.dataModel);
         this.stopCurrentScoreAutoSave = this.undoManager.topics.currentState.subscribe(() => {

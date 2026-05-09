@@ -46,7 +46,9 @@ export class TrackControls extends UIComponent<ITrackControlsProperties, ITrackC
 
     public override componentDidUpdate(prevProps: ITrackControlsProperties, prevState: ITrackControlsState): void {
         super.componentDidUpdate(prevProps, prevState);
-        if (prevProps.tracks !== this.props.tracks) {
+
+        const { tracks } = this.props;
+        if (prevProps.tracks !== tracks) {
             this.recomputeEffectiveVolumes();
         }
     }

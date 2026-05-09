@@ -228,7 +228,9 @@ export class TooltipProvider extends UIComponent<ITooltipProviderProperties, ITo
     };
 
     private handleDocumentKeyUp = (e: KeyboardEvent): void => {
-        if (this.state.target && e.key === KeyboardKeys.Escape) {
+        const { target } = this.state;
+
+        if (target && e.key === KeyboardKeys.Escape) {
             this.setState({ target: undefined });
         }
     };

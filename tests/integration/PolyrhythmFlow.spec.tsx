@@ -10,10 +10,13 @@ import { BarTrackRow } from "../../src/components/ui/Bar/BarTrackRow.js";
 import { Overlay } from "../../src/components/ui/Overlay.js";
 import { NoteLine } from "../../src/components/ui/Track/NoteLine.js";
 import { Arrangement } from "../../src/core/Arrangement.js";
+import { Track } from "../../src/core/Track.js";
 import {
     SbDmEntityType, ScoreBookDataModel, type ISbDmArrangement, type ISbDmInstrument
 } from "../../src/core/ScoreBookDataModel.js";
-import type { IArrangementSnapshot, INoteStyle } from "../../src/core/types/general.js";
+import { ArrangementSnapshotMigrator } from "../../src/core/serialisation/migration/ArrangementSnapshotMigrator.js";
+import type { ILegacyArrangementSnapshot } from "../../src/core/serialisation/migration/migration-types.js";
+import type { INoteStyle } from "../../src/core/types/general.js";
 import { TimeCoordinator } from "../../src/player/TimeCoordinator.js";
 import { TrackPlayer } from "../../src/player/TrackPlayer.js";
 import type { ScoreBookUiServices } from "../../src/player/types.js";
@@ -106,7 +109,7 @@ describe.sequential("Polyrhythm UI Integration", () => {
     it("renders existing polyrhythms in note line and bar view", async () => {
         const instrument = createInstrumentWithNoteStyle("0", 0, 0);
 
-        const snapshot: IArrangementSnapshot = {
+        const snapshot: ILegacyArrangementSnapshot = {
             version: 1,
             title: "Display",
             timeParams: {
@@ -122,17 +125,28 @@ describe.sequential("Polyrhythm UI Integration", () => {
                 notes: Array.from({ length: 16 }, () => {
                     return "0";
                 }),
-                polyrhythms: [],
+                polyrhythms: [{
+                    id: 901,
+                    start: 0,
+                    end: 3,
+                    length: 7,
+                }],
             }],
         };
 
-        const arrangement = Arrangement.fromSnapshot(snapshot, [instrument]);
-        const track = arrangement.tracks[0];
-        const start = track.getNoteAt({ bar: 1, step: 1 })!;
-        const end = track.getNoteAt({ bar: 1, step: 4 })!;
-        track.addPolyrhythm(start, end, 7);
-        track.polyrhythms[0].notes.forEach((note) => {
-            note.noteStyle = instrument.noteStyles["1"];
+        const arrangement = Arrangement.fromSnapshot(
+            ArrangementSnapshotMigrator.migrate(snapshot, [instrument]), [instrument]);
+        const track = arrangement.tracks[0] as Track;
+
+        const stepsPerBar = 16;
+        track.measures[0].events.forEach((event, index) => {
+            const isPolyrhythmEvent = !(event.duration.numerator === 1
+                && event.duration.denominator === stepsPerBar);
+            if (!isPolyrhythmEvent) {
+                return;
+            }
+
+            track.measures[0].events[index] = { ...event, noteStyle: instrument.noteStyles["1"] };
         });
 
         const dataModel = new TestScoreBookDataModel(arrangement, [instrument]);
@@ -203,7 +217,7 @@ describe.sequential("Polyrhythm UI Integration", () => {
     it("plays polyrhythm note events through TrackPlayer", () => {
         const instrument = createInstrumentWithNoteStyle("0", 0, 0);
 
-        const snapshot: IArrangementSnapshot = {
+        const snapshot: ILegacyArrangementSnapshot = {
             version: 1,
             title: "Playback",
             timeParams: {
@@ -219,15 +233,28 @@ describe.sequential("Polyrhythm UI Integration", () => {
                 notes: Array.from({ length: 16 }, () => {
                     return "0";
                 }),
-                polyrhythms: [],
+                polyrhythms: [{
+                    id: 902,
+                    start: 0,
+                    end: 3,
+                    length: 5,
+                }],
             }],
         };
 
-        const arrangement = Arrangement.fromSnapshot(snapshot, [instrument]);
-        const track = arrangement.tracks[0];
-        track.addPolyrhythm(track.getNoteAt({ bar: 1, step: 1 })!, track.getNoteAt({ bar: 1, step: 4 })!, 5);
-        track.polyrhythms[0].notes.forEach((note) => {
-            note.noteStyle = instrument.noteStyles["1"];
+        const arrangement = Arrangement.fromSnapshot(
+            ArrangementSnapshotMigrator.migrate(snapshot, [instrument]), [instrument]);
+        const track = arrangement.tracks[0] as Track;
+
+        const stepsPerBar = 16;
+        track.measures[0].events.forEach((event, index) => {
+            const isPolyrhythmEvent = !(event.duration.numerator === 1
+                && event.duration.denominator === stepsPerBar);
+            if (!isPolyrhythmEvent) {
+                return;
+            }
+
+            track.measures[0].events[index] = { ...event, noteStyle: instrument.noteStyles["1"] };
         });
 
         const timeCoordinator = new TimeCoordinator(arrangement.timeParams, createRealtimeProvider());
@@ -237,21 +264,8 @@ describe.sequential("Polyrhythm UI Integration", () => {
         const audioEvents = events.filter((event) => {
             return event.kind === "audio";
         });
-        const callbackEvents = events.filter((event) => {
-            return event.kind === "callback";
-        });
 
         expect(audioEvents.length).toBe(5);
-        expect(callbackEvents.length).toBeGreaterThanOrEqual(5);
-
-        for (const callbackEvent of callbackEvents) {
-            callbackEvent.callback();
-            if (trackPlayer.currentPolyrhythmNote) {
-                break;
-            }
-        }
-
-        expect(trackPlayer.currentPolyrhythmNote).toBe(track.polyrhythms[0].notes[0]);
 
         trackPlayer.dispose();
     });

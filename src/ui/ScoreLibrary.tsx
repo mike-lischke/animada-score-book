@@ -23,7 +23,6 @@ import { Arrangement } from "../core/Arrangement.js";
 import {
     SbDmEntityType, type ISbDmScore, type ISbDmScoreFolder, type ScoreBookDataModel
 } from "../core/ScoreBookDataModel.js";
-import { BananaDrumUrlImporter } from "../core/serialisation/BananaDrumUrlImporter.js";
 
 export interface IScoreLibraryProperties extends ICommonUIProperties {
     dataModel: ScoreBookDataModel;
@@ -285,8 +284,9 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
                 return;
             }
 
-            const params = new URLSearchParams(entry.content);
-            const snapshot = BananaDrumUrlImporter.getArrangementSnapshotFromParams(params, this.props.dataModel.instruments);
+            const { dataModel } = this.props;
+
+            const snapshot = dataModel.decodeScoreContent(entry);
             if (snapshot) {
                 const { dataModel } = this.props;
 

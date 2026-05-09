@@ -3,45 +3,79 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import type { ISbDmInstrument } from "../ScoreBookDataModel.js";
+import type { ISbDmInstrument } from "../../ScoreBookDataModel.js";
+import type { ISerialisedArrangement } from "../../types/general.js";
 import type {
-    IArrangementSnapshot, IPolyrhythmSnapshot, ISerialisedArrangement, ITrackSnapshot
-} from "../types/general.js";
-import { isNaturalNumber } from "./snapshot-version.js";
-import { calculateStepsPerBar, getNewId } from "../utils.js";
-import { polyrhythmNumberToCharacter, urlNumberToCharacter } from "./constants.js";
-import { convertToBaseN, urlDecodeNumber } from "./numeric_functions.js";
-
-// BananaDrum is a fixed legacy wire format. We always map it into our internal snapshot v1.
-// This intentionally does not follow arrangementSnapshotVersion, because future snapshot versions
-// may drop support for older states while this importer keeps a stable, explicit legacy transform.
-const bananaDrumTargetSnapshotVersion = 1;
-const bananaDrumDefaultSerialisedVersion = 1;
+    ILegacyArrangementSnapshot, ILegacyPolyrhythmSnapshot, ILegacyTrackSnapshot
+} from "./migration-types.js";
+import { getNewId } from "../../utils.js";
+import { polyrhythmNumberToCharacter, urlNumberToCharacter } from "../constants.js";
+import { convertToBaseN, urlDecodeNumber } from "../numeric-functions.js";
 
 /**
- * Handles imports of legacy BananaDrum share links.
+ * BananaDrum has two on-the-wire encodings of the same legacy data shape:
+ *  - `a`  — original encoding.
+ *  - `a2` — Animada-era encoding with a compacted polyrhythm string.
  *
- * This class is intentionally isolated from the app's internal snapshot format so that
- * all BananaDrum-to-snapshot transformations live in a single place.
+ * Both decode into our schema version 1 (legacy notes + polyrhythms).
+ */
+type BdEncoding = 1 | 2;
+
+/**
+ * Handles imports of BananaDrum-style share links and serialised arrangements.
+ *
+ * BananaDrum is a wire format only; it always produces a legacy (schema v1) snapshot.
  */
 export class BananaDrumUrlImporter {
+    /**
+     * Extracts a `BananaDrum` payload from URL search params and decodes it into a legacy snapshot.
+     *
+     * @param searchParams The URL search params to read.
+     * @param instruments The available instruments.
+     * @returns A legacy snapshot, or undefined if no BananaDrum payload was found.
+     */
     public static getArrangementSnapshotFromParams(
         searchParams: URLSearchParams,
-        instruments: ISbDmInstrument[]): IArrangementSnapshot | undefined {
-        const serialisedArrangement = this.getSerialisedArrangementFromParams(searchParams);
-        if (!serialisedArrangement) {
-            return undefined;
+        instruments: ISbDmInstrument[]): ILegacyArrangementSnapshot | undefined {
+        const title = searchParams.get("t") ?? undefined;
+
+        const a2 = searchParams.get("a2");
+        if (a2) {
+            return this.decode(a2, 2, instruments, title);
         }
 
-        return this.getArrangementSnapshot(serialisedArrangement, instruments);
+        const a = searchParams.get("a");
+        if (a) {
+            return this.decode(a, 1, instruments, title);
+        }
+
+        return undefined;
     }
 
+    /**
+     * Decodes a BananaDrum-encoded `ISerialisedArrangement` into a legacy snapshot.
+     *
+     * Backends and shared links may persist arrangements as a `composition` string. Such
+     * payloads are always BananaDrum-encoded, but the encoding variant cannot be inferred
+     * from the wire data alone, so it is provided explicitly via `bdEncoding`.
+     *
+     * @param serialisedArrangement The arrangement payload to decode.
+     * @param bdEncoding The BananaDrum encoding variant of `composition`.
+     * @param instruments The available instruments.
+     * @returns A legacy snapshot.
+     */
     public static getArrangementSnapshot(serialisedArrangement: ISerialisedArrangement,
-        instruments: ISbDmInstrument[]): IArrangementSnapshot {
-        const serialisedVersion: number = isNaturalNumber(serialisedArrangement.version)
-            ? serialisedArrangement.version
-            : bananaDrumDefaultSerialisedVersion;
-        const { title, composition } = serialisedArrangement;
+        bdEncoding: BdEncoding, instruments: ISbDmInstrument[]): ILegacyArrangementSnapshot {
+        return this.decode(
+            serialisedArrangement.composition,
+            bdEncoding,
+            instruments,
+            serialisedArrangement.title,
+        );
+    }
+
+    private static decode(composition: string, bdEncoding: BdEncoding, instruments: ISbDmInstrument[],
+        title: string | undefined): ILegacyArrangementSnapshot {
         const chunks = composition.split(".");
 
         const timeParams = {
@@ -52,41 +86,17 @@ export class BananaDrumUrlImporter {
             stepResolution: Number(chunks[4])
         };
 
-        const baseNoteCount = calculateStepsPerBar(timeParams.timeSignature, timeParams.stepResolution) *
+        const baseNoteCount = this.calculateStepsPerBar(timeParams.timeSignature, timeParams.stepResolution) *
             timeParams.length;
-        const tracks = chunks.slice(5)
-            .map((serialisedTrack) => {
-                return this.deserialiseTrack(serialisedTrack, baseNoteCount, serialisedVersion,
-                    instruments);
-            });
+        const tracks = chunks.slice(5).map((serialisedTrack) => {
+            return this.deserialiseTrack(serialisedTrack, baseNoteCount, bdEncoding, instruments);
+        });
 
-        // BananaDrum payloads are legacy imports in our internal snapshot semantics.
-        return { version: bananaDrumTargetSnapshotVersion, title, timeParams, tracks };
+        return { version: 1, title, timeParams, tracks };
     }
 
-    private static getSerialisedArrangementFromParams(
-        searchParams: URLSearchParams): ISerialisedArrangement | undefined {
-        const title = searchParams.get("t") ?? undefined;
-
-        const versionParamValue = searchParams.get("v");
-        const explicitVersion = versionParamValue == null ? undefined : Number(versionParamValue);
-        const resolvedExplicitVersion = isNaturalNumber(explicitVersion)
-            ? explicitVersion
-            : undefined;
-
-        if (searchParams.get("a2")) {
-            return { composition: searchParams.get("a2")!, version: resolvedExplicitVersion ?? 2, title };
-        }
-
-        if (searchParams.get("a")) {
-            return { composition: searchParams.get("a")!, version: resolvedExplicitVersion ?? 1, title };
-        }
-
-        return undefined;
-    }
-
-    private static deserialiseTrack(serialisedTrack: string, baseNoteCount: number, version: number,
-        instruments: ISbDmInstrument[]): ITrackSnapshot {
+    private static deserialiseTrack(serialisedTrack: string, baseNoteCount: number, bdEncoding: BdEncoding,
+        instruments: ISbDmInstrument[]): ILegacyTrackSnapshot {
         const instrumentId = serialisedTrack[0];
         const instrument = instruments.find((inst) => {
             return inst.typeId === instrumentId;
@@ -99,7 +109,7 @@ export class BananaDrumUrlImporter {
 
         const serialisedNotes = serialisedTrack.substring(1, splitterIndex);
         const serialisedPolyrhythms = serialisedTrack.substring(splitterIndex + 1);
-        const polyrhythms = this.deserialisePolyrhythms(serialisedPolyrhythms, version);
+        const polyrhythms = this.deserialisePolyrhythms(serialisedPolyrhythms, bdEncoding);
         const trackNoteCount = this.getNoteCountWithPolyrhythms(baseNoteCount, polyrhythms);
         const notes = this.deserialiseNotes(serialisedNotes, instrument, trackNoteCount);
 
@@ -110,21 +120,22 @@ export class BananaDrumUrlImporter {
      * Deserializes legacy polyrhythm chunks from BananaDrum serialisation.
      *
      * @param serialisedPolyrhythms The serialised polyrhythms string.
-     * @param version The serialisation version.
+     * @param bdEncoding The BananaDrum encoding variant.
      *
      * @returns The deserialized polyrhythm snapshots.
      */
-    private static deserialisePolyrhythms(serialisedPolyrhythms: string, version: number): IPolyrhythmSnapshot[] {
+    private static deserialisePolyrhythms(serialisedPolyrhythms: string,
+        bdEncoding: BdEncoding): ILegacyPolyrhythmSnapshot[] {
         if (serialisedPolyrhythms === "") {
             return [];
         }
 
-        // On version 2, we compacted the string. See comment above.
-        if (version >= 2) {
+        // The Animada-era encoding (`a2`) compacts the polyrhythm string; unpack it first.
+        if (bdEncoding >= 2) {
             serialisedPolyrhythms = this.unpackPolyrhythmString(serialisedPolyrhythms);
         }
 
-        const interpretChunk = version >= 2
+        const interpretChunk = bdEncoding >= 2
             ? (chunk: string) => {
                 return Number(chunk);
             }
@@ -133,7 +144,7 @@ export class BananaDrumUrlImporter {
             };
 
         const chunks = serialisedPolyrhythms.split("-");
-        const polyrhythmSnapshots: IPolyrhythmSnapshot[] = [];
+        const polyrhythmSnapshots: ILegacyPolyrhythmSnapshot[] = [];
 
         // Each polyrhythm is encoded in 3 chunks.
         for (let chunkIndex = 0; chunkIndex < chunks.length; chunkIndex += 3) {
@@ -171,7 +182,7 @@ export class BananaDrumUrlImporter {
     }
 
     private static getNoteCountWithPolyrhythms(baseNoteCount: number,
-        polyrhythmSnapshots: IPolyrhythmSnapshot[]): number {
+        polyrhythmSnapshots: ILegacyPolyrhythmSnapshot[]): number {
         return polyrhythmSnapshots
             .map(({ start, end, length }) => {
                 return length + start - end - 1;
@@ -201,5 +212,26 @@ export class BananaDrumUrlImporter {
         return musicInBaseN.map((noteStyleNumber) => {
             return urlNumberToCharacter[noteStyleNumber];
         });
+    }
+
+    /**
+     * Calculates steps per bar for legacy import parsing.
+     *
+     * @param timeSignature The time signature in beats/unit format.
+     * @param stepResolution The step resolution.
+     * @returns The number of steps per bar.
+     */
+    private static calculateStepsPerBar(timeSignature: string, stepResolution: number): number {
+        const [beatsPerBar, beatUnit] = timeSignature.split("/").map((value) => {
+            return Number(value);
+        });
+
+        const stepsPerBeat = stepResolution / beatUnit;
+        const stepsPerBar = stepsPerBeat * beatsPerBar;
+        if (!Number.isInteger(stepsPerBar) || stepsPerBar < 1) {
+            throw new Error(`Incompatible time grid: ${timeSignature} with step resolution ${stepResolution}`);
+        }
+
+        return stepsPerBar;
     }
 }

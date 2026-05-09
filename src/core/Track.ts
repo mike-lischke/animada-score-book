@@ -3,293 +3,185 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import { Note } from "./Note.js";
 import { Publisher } from "./Publisher.js";
 import {
-    SbDmEntityType, type ISbDmArrangement, type ISbDmInstrument, type ISbDmNote, type ISbDmTrack,
-    type ITiming
+    SbDmEntityType, type ISbDmArrangement, type ISbDmInstrument, type ISbDmNoteEvent, type ISbDmTrack,
+    type ISbDmTrackMeasure, type ITiming
 } from "./ScoreBookDataModel.js";
-import { TrackClipboard } from "./TrackClipboard.js";
-import type { IPolyrhythm } from "./types/general.js";
-import { exists, getNewId, isSameTiming } from "./utils.js";
+import { reduceFraction } from "./serialisation/numeric-functions.js";
+import { getNewId } from "./utils.js";
 
+/**
+ * A track holds its content as a list of {@link ISbDmTrackMeasure} entries (one per bar).
+ * Measure events are the single source of truth for note placement, duration and style.
+ *
+ * Tracks created via {@link Arrangement.addTrack} start with empty measures. Snapshot
+ * application replaces measure contents wholesale; runtime editing happens directly on
+ * the {@link ISbDmNoteEvent} objects returned by {@link getNoteAt} and
+ * {@link getNoteIterator} (synthesised rest events for empty grid slots are inserted into
+ * the measure on demand by the editing code).
+ */
 export class Track extends Publisher implements ISbDmTrack {
     public readonly type = SbDmEntityType.Track;
-    public readonly notes: ISbDmNote[] = [];
-    public readonly polyrhythms: IPolyrhythm[] = [];
+    public readonly measures: ISbDmTrackMeasure[] = [];
 
     public name = "";
     public volume = 1.0;
     public effectiveVolume = 1;
 
-    /**
-     * Creates a new `Track` bound to an arrangement and instrument.
-     *
-     * - Initializes notes for all timings in the arrangement as rests.
-     * - Subscribes to arrangement and time parameter changes to keep notes/polyrhythms in sync.
-     *
-     * @param arrangement The owning arrangement.
-     * @param instrument The instrument assigned to this track.
-     * @param id Optional explicit track id; if omitted a new id is generated.
-     */
     public constructor(public readonly arrangement: ISbDmArrangement, public readonly instrument: ISbDmInstrument,
         public readonly id = getNewId()) {
         super();
 
-        this.arrangement = arrangement;
-
-        // Initialise all Notes as rests.
-        this.arrangement.timeParams.timings.forEach((timing) => {
-            this.notes.push(new Note(this, timing));
-        });
-
-        this.arrangement.timeParams.subscribe(this.handleTimeParamsChange);
-        this.arrangement.subscribe(this.destroySelfIfNeeded);
-    }
-
-    /**
-     * Finds the note at the given timing.
-     *
-     * @param timing The timing to search for.
-     * @returns The note at the timing or undefined if none exists.
-     */
-    public getNoteAt(timing: ITiming): ISbDmNote | undefined {
-        for (const note of this.notes) {
-            if (isSameTiming(note.timing, timing)) {
-                return note;
-            }
-        }
-    };
-
-    /**
-     * Clears all notes and polyrhythm notes to rests (undefined note-style).
-     * Publishes a change after completion.
-     */
-    public clear() {
-        this.notes.forEach((note) => {
-            note.noteStyle = undefined;
-        });
-
-        this.polyrhythms.forEach(({ notes }) => {
-            notes.forEach((note) => {
-                note.noteStyle = undefined;
-            });
-        });
-    };
-
-    /**
-     * Adds a polyrhythm to this track.
-     *
-     * @param start The starting note of the polyrhythm.
-     * @param end The ending note of the polyrhythm.
-     * @param length The number of notes inside the polyrhythm (must be >= 1).
-     * @param id Optional explicit polyrhythm id, otherwise a new id is generated.
-     * @param index Optional insertion index; if omitted the polyrhythm is appended.
-     */
-    public addPolyrhythm(start: ISbDmNote, end: ISbDmNote, length: number, id: number = getNewId(), index?: number) {
-        if (length < 1) {
-            return;
-        }
-
-        const polyrhythm: IPolyrhythm = { start, end, id, notes: [] };
-
-        polyrhythm.notes = Array.from(Array(length))
-            .map((_, index) => {
-                return new Note(this, { bar: 1, step: index }, polyrhythm);
-            });
-
-        if (exists(index)) {
-            this.polyrhythms.splice(index, 0, polyrhythm);
-        } else {
-            this.polyrhythms.push(polyrhythm);
-        }
-
-        this.publish();
-    };
-
-    /**
-     * Removes a polyrhythm from this track and publishes a change.
-     *
-     * @param polyrhythm The polyrhythm to remove.
-     */
-    public removePolyrhythm = (polyrhythm: IPolyrhythm) => {
-        this.polyrhythms.splice(this.polyrhythms.indexOf(polyrhythm), 1);
-        this.publish();
-    };
-
-    /**
-     * Ensures the track contains notes for all timings, inserting rests where missing.
-     * Keeps `notes` sorted by timing.
-     */
-    public fillInRests = (): void => {
-        const timingsWithNoNotes = this.arrangement.timeParams.timings.filter((timing) => {
-            return !this.notes.some((note) => {
-                return isSameTiming(note.timing, timing);
-            });
-        });
-
-        if (timingsWithNoNotes.length) {
-            timingsWithNoNotes.forEach((timing) => {
-                this.notes.push(new Note(this, timing));
-            });
-
-            this.notes.sort((a, b) => {
-                return (a.timing.bar - b.timing.bar) || (a.timing.step - b.timing.step);
-            });
-        }
-    };
-
-    /**
-     * Copies the initial composition (first `originalNoteCount` notes) and repeats it
-     * to fill the track. Uses `TrackClipboard` to respect rests and note-styles.
-     *
-     * @param originalNoteCount The number of notes that form the base composition.
-     */
-    public copyComposition(originalNoteCount: number): void {
-        const lastTiming = this.notes[originalNoteCount - 1].timing;
-
-        const clipboard = new TrackClipboard(this);
-        clipboard.copy({
-            start: { bar: 1, step: 1 },
-            end: lastTiming
-        });
-
-        let numNotesCovered = clipboard.length;
-
-        while (numNotesCovered < this.notes.length) {
-            const pasteStart = this.notes[numNotesCovered].timing;
-            clipboard.paste({ start: pasteStart });
-            numNotesCovered += clipboard.length;
-        }
-    };
-
-    /**
-     * Removes polyrhythms that reference notes no longer present or nested polyrhythms
-     * that have been deleted. Publishes if any were removed.
-     */
-    public removeBrokenPolyrhythms = () => {
-        if (!this.polyrhythms.length) {
-            return;
-        }
-
-        const initialPolyrhythmCount = this.polyrhythms.length;
-
-        // Iterate from earliest polyrhythms to latest.
-        // Therefore, if we consider a nested polyrhythm, we know its root polyrhythms have already been checked.
-        let index = 0;
-        while (index < this.polyrhythms.length) {
-            const { start, end } = this.polyrhythms[index];
-
-            if (start.polyrhythm) {
-                if (!this.polyrhythms.includes(start.polyrhythm)) {
-                    this.polyrhythms.splice(index, 1);
-                    continue;
-                }
-            } else if (!this.notes.includes(start)) {
-                this.polyrhythms.splice(index, 1);
-                continue;
-            }
-
-            if (end.polyrhythm) {
-                if (!this.polyrhythms.includes(end.polyrhythm)) {
-                    this.polyrhythms.splice(index, 1);
-                    continue;
-                }
-            } else if (!this.notes.includes(end)) {
-                this.polyrhythms.splice(index, 1);
-                continue;
-            }
-
-            index++;
-        }
-
-        if (this.polyrhythms.length < initialPolyrhythmCount) {
-            this.publish();
-        }
-    };
-
-    /**
-     * The note-iterator is what makes polyrhythms work.
-     * Iterates notes in playback/serialization order, traversing into polyrhythms where present.
-     * Use `polyrhythmsToIgnore` to skip traversal into specific polyrhythms (e.g., during serialization).
-     *
-     * @param polyrhythmsToIgnore Optional list of polyrhythms to treat as plain notes.
-     * @yields {INote} The next note in iteration order.
-     */
-    public *getNoteIterator(polyrhythmsToIgnore: IPolyrhythm[] = []) {
-        let index = 0;
-        let currentNoteSource = this.notes;
-        let note = currentNoteSource[index] as (ISbDmNote | undefined);
-
-        while (note) {
-            // First, ascend polyrhythms until we reach a visible note
-            // Could speed this up with a map
-            // eslint-disable-next-line no-loop-func
-            const linkedPolyrhythmUp = this.polyrhythms.find((polyrhythm) => {
-                return polyrhythm.start === note;
-            });
-
-            if (linkedPolyrhythmUp && !polyrhythmsToIgnore.includes(linkedPolyrhythmUp)) {
-                currentNoteSource = linkedPolyrhythmUp.notes;
-                index = 0;
-            } else {
-                yield note;
-
-                // If we're at the end of a polyrhythm, descend until we're not
-                while (note.polyrhythm && !currentNoteSource[index + 1]) {
-                    note = note.polyrhythm.end;
-                    currentNoteSource = note.polyrhythm?.notes ?? note.track.notes;
-                    index = currentNoteSource.indexOf(note);
-                }
-
-                index++;
-            }
-
-            note = currentNoteSource[index];
+        // Initialise with empty measures matching the current arrangement length.
+        for (let measureNumber = 1; measureNumber <= this.arrangement.timeParams.length; measureNumber++) {
+            this.measures.push(this.createEmptyMeasure(measureNumber));
         }
     }
 
     /**
-     * Handles changes in time parameters: removes invalid notes, inserts new rests, and
-     * replicates composition when the arrangement length increases. Also cleans up broken polyrhythms.
-     * Publishes changes when the note set changes.
+     * Returns the note event at the given grid timing, or a synthesised rest event when
+     * the slot is empty. Returns undefined when the timing is out of range or covered by
+     * a non-grid (polyrhythm-shaped) event.
+     *
+     * @param timing The bar/step position to look up.
+     * @returns The matching event, a synthesised rest, or undefined.
      */
-    private handleTimeParamsChange = () => {
-        const originalNoteCount = this.notes.length;
-
-        // Remove invalid notes, e.g. arrangement has shortened
-        let index = 0;
-        while (index < this.notes.length) {
-            if (!this.arrangement.timeParams.isValid(this.notes[index].timing)) {
-                this.notes.splice(index, 1);
-            } else {
-                index++;
-            }
+    public getNoteAt(timing: ITiming): ISbDmNoteEvent | undefined {
+        const measure = this.measures[timing.bar - 1] as ISbDmTrackMeasure | undefined;
+        if (!measure) {
+            return undefined;
         }
 
-        this.fillInRests(); // Fill in new notes, e.g. arrangement has lengthened
-
-        if (originalNoteCount !== this.notes.length) {
-            if (this.notes.length > originalNoteCount) {
-                this.copyComposition(originalNoteCount);
-            }
-            this.publish();
+        const stepsPerBar = this.getStepsPerBar();
+        if (timing.step < 1 || timing.step > stepsPerBar) {
+            return undefined;
         }
 
-        this.removeBrokenPolyrhythms();
-    };
+        const expectedStart = reduceFraction(timing.step - 1, stepsPerBar);
+
+        // Find an event that starts exactly at this grid slot. Grid-aligned notes may carry an
+        // extended duration (a multiple of 1/stepsPerBar) when they absorb the rest gap that
+        // follows them within their pulse — these are still considered the "note at this slot".
+        // Polyrhythm-shaped events (non-grid durations) are excluded here; they're surfaced via
+        // the overlap branch below as synthesised rests so the grid view doesn't render them.
+        const event = measure.events.find((candidate) => {
+            const sameStart = candidate.start.numerator === expectedStart.numerator
+                && candidate.start.denominator === expectedStart.denominator;
+            if (!sameStart) {
+                return false;
+            }
+
+            // duration === k / stepsPerBar (integer k ≥ 1)
+            return (candidate.duration.numerator * stepsPerBar) % candidate.duration.denominator === 0;
+        });
+
+        if (event) {
+            return event;
+        }
+
+        // The step is either uncovered or covered by a non-grid (polyrhythm-shaped) event.
+        // We can only tell the two apart by checking whether *any* event overlaps the slot.
+        const slotEnd = reduceFraction(timing.step, stepsPerBar);
+        const overlapped = measure.events.some((candidate) => {
+            const candidateEndNumerator = (candidate.start.numerator * candidate.duration.denominator)
+                + (candidate.duration.numerator * candidate.start.denominator);
+            const candidateEndDenominator = candidate.start.denominator * candidate.duration.denominator;
+            // candidate.start < slotEnd && candidateEnd > slot.start
+            const startsBeforeSlotEnd = (candidate.start.numerator * slotEnd.denominator)
+                < (slotEnd.numerator * candidate.start.denominator);
+            const endsAfterSlotStart = (candidateEndNumerator * expectedStart.denominator)
+                > (expectedStart.numerator * candidateEndDenominator);
+
+            return startsBeforeSlotEnd && endsAfterSlotStart;
+        });
+
+        if (overlapped) {
+            // Covered by a polyrhythm-shaped event: don't render a grid slot here.
+            // Return a transient rest placeholder so the UI grid still has 16 slots,
+            // but mark the event in a way that can be detected by editors. The current
+            // UI consumers filter by event presence, so we return a placeholder rest.
+            return this.createSynthesisedRest(measure, timing);
+        }
+
+        return this.createSynthesisedRest(measure, timing);
+    }
 
     /**
-     * Unsubscribes when the track is removed from the arrangement.
+     * Iterates note events for every measure event in playback order. Includes only
+     * actually stored events — empty grid slots are not yielded.
+     *
+     * @yields {ISbDmNoteEvent} Each stored note event in measure order.
      */
-    private destroySelfIfNeeded = () => {
-        // Check track still exists
-        if (this.arrangement.tracks.includes(this)) {
-            return;
+    public *getNoteIterator(): IterableIterator<ISbDmNoteEvent> {
+        for (const measure of this.measures) {
+            for (const event of measure.events) {
+                yield event;
+            }
+        }
+    }
+
+    /**
+     * Clears every measure event by setting its `noteStyle` to undefined. Publishes once.
+     */
+    public clear(): void {
+        for (const measure of this.measures) {
+            for (const event of measure.events) {
+                if (event.noteStyle !== undefined) {
+                    event.noteStyle = undefined;
+                }
+            }
+        }
+        this.publish();
+    }
+
+    private createEmptyMeasure(measureNumber: number): ISbDmTrackMeasure {
+        return {
+            id: this.getMeasureId(measureNumber),
+            type: SbDmEntityType.TrackMeasure,
+            number: measureNumber,
+            events: [],
+        };
+    }
+
+    private createSynthesisedRest(measure: ISbDmTrackMeasure, timing: ITiming): ISbDmNoteEvent {
+        const stepsPerBar = this.getStepsPerBar();
+
+        return {
+            id: this.getRestPlaceholderId(timing),
+            type: SbDmEntityType.NoteEvent,
+            measureNumber: measure.number,
+            start: reduceFraction(timing.step - 1, stepsPerBar),
+            duration: reduceFraction(1, stepsPerBar),
+            track: this,
+            timing,
+            noteStyle: undefined,
+        };
+    }
+
+    private getMeasureId(measureNumber: number): number {
+        return (this.id * 10_000) + measureNumber;
+    }
+
+    private getRestPlaceholderId(timing: ITiming): number {
+        // Deterministic id within this track. Offset keeps the value distinct from event ids
+        // (which come from getNewId()) and from measure ids (this.id * 10_000 + n).
+        return (this.id * 1_000_000) + (timing.bar * 1_000) + timing.step;
+    }
+
+    private getStepsPerBar(): number {
+        const stepsPerBar = this.arrangement.timeParams.timings.reduce((maxStep, timing) => {
+            if (timing.bar !== 1) {
+                return maxStep;
+            }
+
+            return Math.max(maxStep, timing.step);
+        }, 0);
+
+        if (stepsPerBar < 1) {
+            throw new Error("Invalid arrangement timings: expected at least one step in bar 1");
         }
 
-        // ... otherwise unsubscribe from everything
-        this.arrangement.timeParams.unsubscribe(this.handleTimeParamsChange);
-        this.arrangement.unsubscribe(this.destroySelfIfNeeded);
-    };
+        return stepsPerBar;
+    }
 }

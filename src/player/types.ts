@@ -3,7 +3,7 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import type { ISbDmNote, RealTime } from "../core/ScoreBookDataModel.js";
+import type { ISbDmNoteEvent, RealTime } from "../core/ScoreBookDataModel.js";
 import type { ISubscribable } from "../core/types/general.js";
 import type { ModeManager } from "../ui/ModeManager.js";
 import type { SelectionManager } from "../ui/SelectionManager.js";
@@ -16,7 +16,7 @@ export interface IEventDetails {
 export interface IAudioEvent extends IEventDetails {
     kind: "audio";
     audioBuffer: AudioBuffer;
-    note: ISbDmNote; // In the future, this could be a more general "source" property
+    event: ISbDmNoteEvent;
 }
 
 export interface ICallbackEvent extends IEventDetails {

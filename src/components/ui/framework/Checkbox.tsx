@@ -23,7 +23,7 @@ export class Checkbox extends UIComponent<ICheckboxProperties> {
     }
 
     public render(): ComponentChild {
-        const { id, checked, disabled, "data-tooltip": dataTooltip, style } = this.props;
+        const { id, checked, disabled, "data-tooltip": dataTooltip, style, onChange } = this.props;
         const className = this.generateFinalClassName(["checkbox"]);
 
         return (
@@ -36,7 +36,7 @@ export class Checkbox extends UIComponent<ICheckboxProperties> {
                 disabled={disabled}
                 style={style}
                 onChange={(event) => {
-                    return this.props.onChange?.(event.currentTarget.checked);
+                    return onChange?.(event.currentTarget.checked);
                 }}
             />
         );

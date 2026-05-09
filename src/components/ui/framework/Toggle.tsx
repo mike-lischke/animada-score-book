@@ -49,7 +49,7 @@ export class Toggle extends UIComponent<IToggleProperties> {
     }
 
     public render(): ComponentChild {
-        const { id } = this.props;
+        const { id, checkState } = this.props;
         const className = this.generateFinalClassName([
             "toggle",
         ]);
@@ -60,7 +60,7 @@ export class Toggle extends UIComponent<IToggleProperties> {
                 ref={this.toggleRef}
                 className={className}
                 type="checkbox"
-                checked={this.props.checkState === CheckState.Checked}
+                checked={checkState === CheckState.Checked}
                 onInput={this.handleInput}
             />
         );

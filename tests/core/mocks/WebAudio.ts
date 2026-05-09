@@ -4,17 +4,17 @@
  */
 
 export class AudioContextMock {
-    timestamp: number;
-    contextTime: number;
-    running: boolean;
+    public timestamp: number;
+    public contextTime: number;
+    public running: boolean;
 
-    constructor() {
+    public constructor() {
         this.timestamp = Date.now();
         this.contextTime = 0;
         this.running = true;
     }
 
-    suspend() {
+    public suspend(): void {
         if (this.running) {
             this.running = false;
             this.contextTime += Date.now() - this.timestamp;
@@ -22,20 +22,20 @@ export class AudioContextMock {
         }
     }
 
-    resume() {
+    public resume(): void {
         if (!this.running) {
             this.running = true;
             this.timestamp = Date.now();
         }
     }
 
-    get currentTime() {
+    public get currentTime(): number {
         return (this.running ? this.contextTime + Date.now() - this.timestamp : this.contextTime) / 1000;
     }
 
-    decodeAudioData(arrayBuffer: ArrayBuffer): Promise<AudioBufferMock> {
+    public decodeAudioData(arrayBuffer: ArrayBuffer): Promise<AudioBufferMock> {
         const audioBufferMock = new AudioBufferMock();
-        const promise = new Promise(resolve => {
+        const promise = new Promise<AudioBufferMock>((resolve) => {
             resolve(audioBufferMock);
         });
 
@@ -46,7 +46,11 @@ export class AudioContextMock {
 export class AudioBufferMock { };
 
 export class AudioBufferSourceNodeMock {
-    connect() { }
+    public connect(): void {
+        return;
+    }
 
-    start() { }
+    public start(): void {
+        return;
+    }
 };

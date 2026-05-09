@@ -45,8 +45,11 @@ export class PopoverSlider extends UIComponent<IPopoverSliderProperties, IPopove
     }
 
     public override componentDidUpdate(prevProps: IPopoverSliderProperties) {
-        if (prevProps.value !== this.props.value && !this.state.open) {
-            this.setState({ internalValue: this.props.value });
+        const { value } = this.props;
+        const { open } = this.state;
+
+        if (prevProps.value !== value && !open) {
+            this.setState({ internalValue: value });
         }
     }
 
@@ -144,10 +147,10 @@ export class PopoverSlider extends UIComponent<IPopoverSliderProperties, IPopove
     };
 
     private handleSliderInput = (ev: Event) => {
-        const { onChange } = this.props;
+        const { min = 0, onChange } = this.props;
 
         const target = ev.currentTarget as HTMLInputElement;
-        const value = Number(target.value || this.props.min);
+        const value = Number(target.value || min);
         this.setState({ internalValue: value }, () => {
             onChange?.(value);
         });

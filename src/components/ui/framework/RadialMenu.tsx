@@ -48,7 +48,9 @@ export class RadialMenu extends UIComponent<IRadialMenuProps, IRadialMenuState> 
     }
 
     public close(): void {
-        if (this.state.open) {
+        const { open } = this.state;
+
+        if (open) {
             this.setState({ currentRadius: 0 });
             setTimeout(() => {
                 this.setState({ open: false });

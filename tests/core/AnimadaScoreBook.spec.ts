@@ -6,11 +6,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { Arrangement } from "../../src/core/Arrangement.js";
+import { ArrangementSnapshotMigrator } from "../../src/core/serialisation/migration/ArrangementSnapshotMigrator.js";
 import {
-    ScoreBookDataModel, type ISbDmArrangement, type ISbDmInstrument, type ISbDmNote
+    ScoreBookDataModel, type ISbDmArrangement, type ISbDmInstrument, type ISbDmNoteEvent
 } from "../../src/core/ScoreBookDataModel.js";
 import type { EditCommand } from "../../src/core/types/edit_commands.js";
-import type { IArrangementSnapshot } from "../../src/core/types/snapshots.js";
+import type { IArrangementSnapshot } from "../../src/core/types/general.js";
 import { UndoManager } from "../../src/core/UndoManager.js";
 
 class TestScoreBookDataModel extends ScoreBookDataModel {
@@ -60,7 +61,18 @@ vi.mock("../../src/core/UndoRedoStack.js", () => {
         public canUndo = false;
         public canRedo = false;
         public topics = { canUndo: new TestPublisher(), canRedo: new TestPublisher() };
-        public currentState = { title: "Snapshot" } as unknown as IArrangementSnapshot;
+        public currentState: IArrangementSnapshot = {
+            version: 1,
+            title: "Snapshot",
+            timeParams: {
+                timeSignature: "4/4",
+                tempo: 120,
+                length: 1,
+                pulse: "1/4",
+                stepResolution: 8,
+            },
+            tracks: [],
+        };
         public handleEdit = vi.fn((_cmd: EditCommand, _old?: unknown) => {
             this.canUndo = true;
             this.topics.canUndo.publish();
@@ -103,6 +115,7 @@ const editModule = (
 
 describe("AnimadaScoreBook", () => {
     const snapshot: IArrangementSnapshot = {
+        version: 1,
         title: "Initial",
         timeParams: {
             timeSignature: "4/4",
@@ -114,7 +127,7 @@ describe("AnimadaScoreBook", () => {
         tracks: []
     };
 
-    const arrangement = Arrangement.fromSnapshot(snapshot, []);
+    const arrangement = Arrangement.fromSnapshot(ArrangementSnapshotMigrator.migrate(snapshot, []), []);
     arrangement.applyArrangementSnapshot = vi.fn();
     const dm = new TestScoreBookDataModel(arrangement);
 
@@ -145,7 +158,7 @@ describe("AnimadaScoreBook", () => {
         // Use a note edit to exercise oldValue extraction.
         const cmd: EditCommand = {
             type: "EditCommand_Note",
-            note: { noteStyle: { id: "ns", audioBuffer: null, instrument: {} as ISbDmInstrument } } as ISbDmNote,
+            note: { noteStyle: { id: "ns", audioBuffer: null, instrument: {} as ISbDmInstrument } } as ISbDmNoteEvent,
         };
         manager.edit(cmd);
         expect(editModule.edit).toHaveBeenCalledOnce();

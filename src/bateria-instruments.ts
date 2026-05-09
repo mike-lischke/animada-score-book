@@ -30,7 +30,9 @@ import repiWithWhippiesIcon from "./assets/images/instrument-icons/repi with whi
 import tamborimIcon from "./assets/images/instrument-icons/tamborim.svg";
 import timbauIcon from "./assets/images/instrument-icons/timbau.svg";
 
-import type { IInstrumentMeta } from "./core/ScoreBookDataModel.js";
+import {
+    Damping, ExcitationMode, HandTechnique, StickTechnique, type IInstrumentMeta
+} from "./core/ScoreBookDataModel.js";
 
 export const pastelColors: string[] = [
     "hsl(  0, 100%, 75%)",
@@ -68,6 +70,10 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             symbol: {
                 src: arrowDownIcon,
                 string: "low"
+            },
+            characteristics: {
+                excitationMode: ExcitationMode.Struck,
+                stickTechnique: StickTechnique.DrumHead
             }
         },
         {
@@ -76,6 +82,10 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             symbol: {
                 src: arrowUpIcon,
                 string: "high"
+            },
+            characteristics: {
+                excitationMode: ExcitationMode.Struck,
+                stickTechnique: StickTechnique.DrumHead
             }
         }
     ],
@@ -93,6 +103,10 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             symbol: {
                 src: arrowDownWithLineIcon,
                 string: "low"
+            },
+            characteristics: {
+                excitationMode: ExcitationMode.Struck,
+                stickTechnique: StickTechnique.DrumHead
             }
         },
         {
@@ -101,6 +115,10 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             symbol: {
                 src: arrowHalfDownIcon,
                 string: "high"
+            },
+            characteristics: {
+                excitationMode: ExcitationMode.Struck,
+                stickTechnique: StickTechnique.DrumHead
             }
         },
         {
@@ -109,6 +127,10 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             symbol: {
                 src: arrowHalfUpIcon,
                 string: "low"
+            },
+            characteristics: {
+                excitationMode: ExcitationMode.Struck,
+                stickTechnique: StickTechnique.DrumHead
             }
         },
         {
@@ -117,6 +139,10 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             symbol: {
                 src: arrowUpWithLineIcon,
                 string: "high"
+            },
+            characteristics: {
+                excitationMode: ExcitationMode.Struck,
+                stickTechnique: StickTechnique.DrumHead
             }
         }
     ],
@@ -134,6 +160,9 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             symbol: {
                 src: xBigIcon,
                 string: "accent"
+            },
+            characteristics: {
+                excitationMode: ExcitationMode.Shaken
             }
         },
         {
@@ -142,6 +171,9 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             symbol: {
                 src: xSmallIcon,
                 string: "ghost"
+            },
+            characteristics: {
+                excitationMode: ExcitationMode.Shaken
             }
         }
     ],
@@ -159,6 +191,10 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             symbol: {
                 src: xBigIcon,
                 string: "accent"
+            },
+            characteristics: {
+                excitationMode: ExcitationMode.Struck,
+                stickTechnique: StickTechnique.DrumHead
             }
         },
         {
@@ -167,6 +203,10 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             symbol: {
                 src: xSmallIcon,
                 string: "ghost"
+            },
+            characteristics: {
+                excitationMode: ExcitationMode.Struck,
+                stickTechnique: StickTechnique.DrumHead
             }
         }
     ],
@@ -184,6 +224,10 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             symbol: {
                 src: xBigIcon,
                 string: "center"
+            },
+            characteristics: {
+                excitationMode: ExcitationMode.Struck,
+                stickTechnique: StickTechnique.DrumHead
             }
         },
         {
@@ -192,6 +236,10 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             symbol: {
                 src: xSmallIcon,
                 string: "edge"
+            },
+            characteristics: {
+                excitationMode: ExcitationMode.Struck,
+                stickTechnique: StickTechnique.DrumHead
             }
         },
         {
@@ -200,6 +248,10 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             symbol: {
                 src: sunriseRaiseIcon,
                 string: "rimshot"
+            },
+            characteristics: {
+                excitationMode: ExcitationMode.Struck,
+                stickTechnique: StickTechnique.RimShot
             }
         },
         {
@@ -208,6 +260,10 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             symbol: {
                 src: rimIcon,
                 string: "rim"
+            },
+            characteristics: {
+                excitationMode: ExcitationMode.Struck,
+                stickTechnique: StickTechnique.Rim
             }
         },
         {
@@ -216,6 +272,10 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             symbol: {
                 src: tripleSlashIcon,
                 string: "buzz"
+            },
+            characteristics: {
+                excitationMode: ExcitationMode.Struck,
+                stickTechnique: StickTechnique.PressRoll
             }
         },
         {
@@ -224,6 +284,10 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             symbol: {
                 src: oBigIcon,
                 string: "hand"
+            },
+            characteristics: {
+                excitationMode: ExcitationMode.Struck,
+                handTechnique: HandTechnique.Open
             }
         },
         {
@@ -232,6 +296,10 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             symbol: {
                 src: sunRaysIcon,
                 string: "slap"
+            },
+            characteristics: {
+                excitationMode: ExcitationMode.Struck,
+                handTechnique: HandTechnique.Slap
             }
         }
     ],
@@ -249,6 +317,10 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             symbol: {
                 src: xBigIcon,
                 string: "accent"
+            },
+            characteristics: {
+                excitationMode: ExcitationMode.Struck,
+                stickTechnique: StickTechnique.DrumHead
             }
         },
         {
@@ -257,6 +329,10 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             symbol: {
                 src: xSmallIcon,
                 string: "ghost"
+            },
+            characteristics: {
+                excitationMode: ExcitationMode.Struck,
+                stickTechnique: StickTechnique.DrumHead
             }
         }
     ],
@@ -274,6 +350,10 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             symbol: {
                 src: xBigIcon,
                 string: "accent"
+            },
+            characteristics: {
+                excitationMode: ExcitationMode.Struck,
+                stickTechnique: StickTechnique.DrumHead
             }
         },
         {
@@ -282,6 +362,10 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             symbol: {
                 src: xSmallIcon,
                 string: "ghost"
+            },
+            characteristics: {
+                excitationMode: ExcitationMode.Struck,
+                stickTechnique: StickTechnique.DrumHead
             }
         },
         {
@@ -290,6 +374,10 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             symbol: {
                 src: tripleSlashIcon,
                 string: "buzz"
+            },
+            characteristics: {
+                excitationMode: ExcitationMode.Struck,
+                stickTechnique: StickTechnique.PressRoll
             }
         },
         {
@@ -298,6 +386,10 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             symbol: {
                 src: sunriseRaiseIcon,
                 string: "rimshot"
+            },
+            characteristics: {
+                excitationMode: ExcitationMode.Struck,
+                stickTechnique: StickTechnique.RimShot
             }
         },
     ],
@@ -315,6 +407,10 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             symbol: {
                 src: oBigIcon,
                 string: "open"
+            },
+            characteristics: {
+                excitationMode: ExcitationMode.Struck,
+                handTechnique: HandTechnique.Open
             }
         },
         {
@@ -323,6 +419,10 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             symbol: {
                 src: sunRaysIcon,
                 string: "slap"
+            },
+            characteristics: {
+                excitationMode: ExcitationMode.Struck,
+                handTechnique: HandTechnique.Slap
             }
         },
         {
@@ -331,6 +431,10 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             symbol: {
                 src: oBigClosedIcon,
                 string: "bass"
+            },
+            characteristics: {
+                excitationMode: ExcitationMode.Struck,
+                handTechnique: HandTechnique.Heel
             }
         }
     ],
@@ -345,19 +449,27 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
         {
             id: "1",
             file: "High_Surdo_Accent.mp3",
-            muting: "sameTrack",
             symbol: {
                 src: oBigIcon,
                 string: "accent"
+            },
+            characteristics: {
+                excitationMode: ExcitationMode.Struck,
+                stickTechnique: StickTechnique.DrumHead,
+                damping: Damping.Open
             }
         },
         {
             id: "2",
             file: "High_Surdo_Muted.mp3",
-            muting: "sameTrack",
             symbol: {
                 src: oBigClosedIcon,
                 string: "muted"
+            },
+            characteristics: {
+                excitationMode: ExcitationMode.Struck,
+                stickTechnique: StickTechnique.DrumHead,
+                damping: Damping.Muted
             }
         }
     ],
@@ -372,19 +484,27 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
         {
             id: "1",
             file: "Mid_Surdo_Accent.mp3",
-            muting: ["sameTrack", { name: "otherInstrument", id: "9" }],
             symbol: {
                 src: oBigIcon,
                 string: "accent"
+            },
+            characteristics: {
+                excitationMode: ExcitationMode.Struck,
+                stickTechnique: StickTechnique.DrumHead,
+                damping: Damping.Open
             }
         },
         {
             id: "2",
             file: "Mid_Surdo_Muted.mp3",
-            muting: "sameTrack",
             symbol: {
                 src: oBigClosedIcon,
                 string: "muted"
+            },
+            characteristics: {
+                excitationMode: ExcitationMode.Struck,
+                stickTechnique: StickTechnique.DrumHead,
+                damping: Damping.Muted
             }
         }
     ],
@@ -399,19 +519,27 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
         {
             id: "1",
             file: "Low_Surdo_Accent.mp3",
-            muting: ["sameTrack", { name: "otherInstrument", id: "8" }],
             symbol: {
                 src: oBigIcon,
                 string: "accent"
+            },
+            characteristics: {
+                excitationMode: ExcitationMode.Struck,
+                stickTechnique: StickTechnique.DrumHead,
+                damping: Damping.Open
             }
         },
         {
             id: "2",
             file: "Low_Surdo_Muted.mp3",
-            muting: "sameTrack",
             symbol: {
                 src: oBigClosedIcon,
                 string: "muted"
+            },
+            characteristics: {
+                excitationMode: ExcitationMode.Struck,
+                stickTechnique: StickTechnique.DrumHead,
+                damping: Damping.Muted
             }
         }
     ],

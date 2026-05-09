@@ -6,7 +6,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
-    SbDmEntityType, type ISbDmArrangement, type ISbDmNote, type ISbDmTrack
+    SbDmEntityType, type ISbDmArrangement, type ISbDmNoteEvent, type ISbDmTrack
 } from "../../src/core/ScoreBookDataModel.js";
 import type { Mutable } from "../../src/core/types/general.js";
 import { SelectionManager } from "../../src/ui/SelectionManager.js";
@@ -44,12 +44,13 @@ const makeArrangement = (tracks: ISbDmTrack[]): ISbDmArrangement => {
     return arrangement;
 };
 
-const makeTrack = (notes: Array<Mutable<ISbDmNote>>, arrangement: ISbDmArrangement): ISbDmTrack => {
+const makeTrack = (notes: Array<Mutable<ISbDmNoteEvent>>, arrangement: ISbDmArrangement): ISbDmTrack => {
     const track: ISbDmTrack = {
         type: SbDmEntityType.Track,
         id: Math.floor(Math.random() * 1000),
         name: "track",
         volume: 1,
+        effectiveVolume: 1,
         arrangement,
         instrument: {
             type: SbDmEntityType.Instrument,
@@ -74,12 +75,9 @@ const makeTrack = (notes: Array<Mutable<ISbDmNote>>, arrangement: ISbDmArrangeme
             unsubscribe: vi.fn(),
             range: [21, 108],
         },
-        notes,
-        polyrhythms: [],
+        measures: [],
         subscribe: vi.fn(),
         unsubscribe: vi.fn(),
-        addPolyrhythm: vi.fn(),
-        removePolyrhythm: vi.fn(),
         clear: vi.fn(),
         getNoteAt: () => {
             return undefined;
@@ -98,22 +96,23 @@ const makeTrack = (notes: Array<Mutable<ISbDmNote>>, arrangement: ISbDmArrangeme
     return track;
 };
 
-const makeNote = (id: number): Mutable<ISbDmNote> => {
+const makeNote = (id: number): Mutable<ISbDmNoteEvent> => {
     return {
-        type: SbDmEntityType.Note,
+        type: SbDmEntityType.NoteEvent,
         id,
+        measureNumber: 1,
+        start: { numerator: 0, denominator: 1 },
+        duration: { numerator: 1, denominator: 1 },
         timing: { bar: 1, step: 1 },
         track: undefined as unknown as ISbDmTrack,
-        subscribe: vi.fn(),
-        unsubscribe: vi.fn(),
     };
 };
 
 describe("SelectionManager (class)", () => {
     let manager: SelectionManager;
     let track: ISbDmTrack;
-    let noteA: Mutable<ISbDmNote>;
-    let noteB: Mutable<ISbDmNote>;
+    let noteA: Mutable<ISbDmNoteEvent>;
+    let noteB: Mutable<ISbDmNoteEvent>;
 
     beforeEach(() => {
         noteA = makeNote(1);

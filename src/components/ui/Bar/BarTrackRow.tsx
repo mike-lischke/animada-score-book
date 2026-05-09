@@ -6,14 +6,15 @@
 import { createRef, type ComponentChild } from "preact";
 
 import { AppStorage } from "../../../core/AppStorage.js";
-import type { ISbDmNote, ISbDmTrack, ITimeParamsView, ScoreBookDataModel } from "../../../core/ScoreBookDataModel.js";
-import type { IPolyrhythm } from "../../../core/types/general.js";
+import type {
+    ISbDmNoteEvent, ISbDmTrack, ITimeParamsView, ScoreBookDataModel
+} from "../../../core/ScoreBookDataModel.js";
 import type { UndoManager } from "../../../core/UndoManager.js";
-import { calculateStepsPerBar } from "../../../core/utils.js";
 import type { ArrangementPlayer } from "../../../player/ArrangementPlayer.js";
 import type { TrackPlayer } from "../../../player/TrackPlayer.js";
 import type { ScoreBookUiServices } from "../../../player/types.js";
 import { requisitions } from "../../../supplement/Requisitions.js";
+import { PolyrhythmEventGroupBuilder, type IEventPolyrhythmGroup } from "../PolyrhythmEventGroupBuilder.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
 import { NoteViewer } from "../Note/NoteViewer.js";
 import { StaffNoteViewer } from "../Note/StaffNoteViewer.js";
@@ -33,13 +34,13 @@ export interface IBarTrackRowProps extends ICommonUIProperties {
 }
 
 interface IBarTrackRowState {
-    notes: ISbDmNote[];
-    polyrhythms: IPolyrhythm[];
+    notes: ISbDmNoteEvent[];
+    polyrhythmGroups: IEventPolyrhythmGroup[];
     trackViewMode: "grid" | "staff";
 }
 
 interface IStaffBarData {
-    notes: Array<Pick<ISbDmNote, "timing" | "noteStyle">>;
+    notes: Array<Pick<ISbDmNoteEvent, "timing" | "noteStyle" | "start" | "duration">>;
     slotCount: number;
 }
 
@@ -49,16 +50,16 @@ interface IStaffBarData {
  */
 export class BarTrackRow extends UIComponent<IBarTrackRowProps, IBarTrackRowState> {
     private rowRef = createRef<HTMLDivElement>();
+    private noteElements = new Map<number, HTMLDivElement>();
+    private fragmentElements = new Map<string, HTMLDivElement>();
 
     public constructor(props: IBarTrackRowProps) {
         super(props);
 
-        const { track } = props;
         const settings = AppStorage.loadUISettings() ?? {};
         const trackViewMode = settings.viewSettings?.arrangementViewSettings?.displayMode ?? "grid";
         this.state = {
-            notes: [...track.notes],
-            polyrhythms: [...track.polyrhythms],
+            ...this.getTrackDisplayData(props.track),
             trackViewMode,
         };
     }
@@ -81,19 +82,20 @@ export class BarTrackRow extends UIComponent<IBarTrackRowProps, IBarTrackRowStat
     }
 
     public override render(): ComponentChild {
-        const { track, barNumber, timeParams, trackPlayer, arrangementPlayer, services, touchEditingEnabled,
-            undoManager, dataModel } = this.props;
-        const { notes, trackViewMode } = this.state;
+        const { arrangementPlayer, barNumber, dataModel, services, timeParams, touchEditingEnabled,
+            track, trackPlayer, undoManager } = this.props;
+        const { notes, polyrhythmGroups, trackViewMode } = this.state;
 
-        const barNotes = notes.filter((n) => {
-            return n.timing.bar === barNumber;
+        const barNotes = notes.filter((note) => {
+            return note.timing.bar === barNumber;
         });
 
-        const touchingPolyrhythms = track.polyrhythms.filter((p) => {
-            return p.start.timing.bar === barNumber;
+        const touchingGroups = polyrhythmGroups.filter((group) => {
+            return group.measureNumber === barNumber;
         });
 
-        const staffBarData = this.computeStaffBarData(barNotes, touchingPolyrhythms, barNumber, timeParams);
+        const staffBarData = this.computeStaffBarData(barNotes, touchingGroups, barNumber,
+            arrangementPlayer.scoreMetrics.stepsPerBar);
         const rowClassName = this.generateFinalClassName([
             "bar-track-row",
             this.classFromProperty(trackViewMode === "grid", "grid-mode"),
@@ -105,13 +107,14 @@ export class BarTrackRow extends UIComponent<IBarTrackRowProps, IBarTrackRowStat
                 {trackViewMode !== "staff"
                     ? (
                         <div className="polyrhythms-wrapper">
-                            {touchingPolyrhythms.map((p) => {
+                            {touchingGroups.map((group) => {
                                 return (
                                     <BarPolyrhythmFragment
-                                        polyrhythm={p}
-                                        barNumber={barNumber}
-                                        noteSlice={p.notes}
-                                        key={`${p.id}-${barNumber}`}
+                                        group={group}
+                                        key={group.key}
+                                        instrumentColor={track.instrument.color}
+                                        elementRef={this.getFragmentElementRef(group.key)}
+                                        noteElementRef={this.getNoteElementRef}
                                         trackPlayer={trackPlayer}
                                         arrangementPlayer={arrangementPlayer}
                                         touchEditingEnabled={touchEditingEnabled}
@@ -142,6 +145,7 @@ export class BarTrackRow extends UIComponent<IBarTrackRowProps, IBarTrackRowStat
                                     <NoteViewer
                                         note={note}
                                         key={note.id}
+                                        elementRef={this.getNoteElementRef(note.id)}
                                         trackPlayer={trackPlayer}
                                         arrangementPlayer={arrangementPlayer}
                                         touchHoldEnabled={touchEditingEnabled}
@@ -160,8 +164,7 @@ export class BarTrackRow extends UIComponent<IBarTrackRowProps, IBarTrackRowStat
     private trackChanged = () => {
         const { track } = this.props;
         this.setState({
-            notes: [...track.notes],
-            polyrhythms: [...track.polyrhythms],
+            ...this.getTrackDisplayData(track),
         });
     };
 
@@ -171,38 +174,29 @@ export class BarTrackRow extends UIComponent<IBarTrackRowProps, IBarTrackRowStat
         return Promise.resolve(true);
     };
 
-    /**
-     * @param barNotes The regular notes in the current bar.
-     * @param touchingPolyrhythms All polyrhythms that overlap the current bar.
-     * @param barNumber The current bar number.
-     * @param timeParams The arrangement timing parameters.
-     * @returns Staff notes and the slot count used for rendering this bar.
-     */
     private computeStaffBarData(
-        barNotes: readonly ISbDmNote[],
-        touchingPolyrhythms: readonly IPolyrhythm[],
+        barNotes: readonly ISbDmNoteEvent[],
+        touchingGroups: readonly IEventPolyrhythmGroup[],
         barNumber: number,
-        timeParams: ITimeParamsView,
+        stepsPerBar: number,
     ): IStaffBarData {
-        const stepsPerBar = calculateStepsPerBar(timeParams.timeSignature, timeParams.stepResolution);
-
         // If a full-bar polyrhythm is the only sounding source, render using its own subdivision count
-        // (e.g. 12 tuplet notes in 4/4) instead of forcing the default grid resolution.
+        // instead of forcing the default grid resolution.
         const baseHasSoundingNotes = barNotes.some((note) => {
             return note.noteStyle !== undefined;
         });
-        const fullBarPolyrhythmSlices = touchingPolyrhythms.map((polyrhythm) => {
-            const overlap = this.getPolyrhythmBarOverlap(polyrhythm);
+        const fullBarPolyrhythmSlices = touchingGroups.map((group) => {
+            const overlap = this.getPolyrhythmBarOverlap(group);
             if (overlap.startStep !== 1 || overlap.stepsInBar !== stepsPerBar) {
                 return undefined;
             }
 
-            if (polyrhythm.notes.length === 0) {
+            if (group.events.length === 0) {
                 return undefined;
             }
 
-            return polyrhythm.notes;
-        }).filter((slice): slice is ISbDmNote[] => {
+            return group.events;
+        }).filter((slice): slice is IEventPolyrhythmGroup["events"] => {
             return slice !== undefined;
         });
 
@@ -211,41 +205,54 @@ export class BarTrackRow extends UIComponent<IBarTrackRowProps, IBarTrackRowStat
                 return current.length > longest.length ? current : longest;
             });
 
-            const staffNotes = primarySlice.map((note, index) => {
+            const polyStepsPerBar = primarySlice.length;
+            const staffNotes = primarySlice.map((event, index) => {
                 return {
                     timing: { bar: barNumber, step: index + 1 },
-                    noteStyle: note.noteStyle,
+                    noteStyle: event.noteStyle,
+                    start: { numerator: index, denominator: polyStepsPerBar },
+                    duration: { numerator: 1, denominator: polyStepsPerBar },
                 };
             });
 
             return {
                 notes: staffNotes,
-                slotCount: primarySlice.length,
+                slotCount: polyStepsPerBar,
             };
         }
 
-        const noteByStep = new Map<number, Pick<ISbDmNote, "timing" | "noteStyle">>();
+        const noteByStep = new Map<number, IStaffBarData["notes"][number]>();
 
         for (const note of barNotes) {
-            noteByStep.set(note.timing.step, { timing: note.timing, noteStyle: note.noteStyle });
-        }
-
-        for (const polyrhythm of touchingPolyrhythms) {
-            const overlap = this.getPolyrhythmBarOverlap(polyrhythm);
-            const noteSlice = polyrhythm.notes;
-            if (noteSlice.length === 0) {
+            // Only forward sounding notes; rests are derived from gaps in the staff viewer.
+            if (!note.noteStyle) {
                 continue;
             }
 
-            for (let index = 0; index < noteSlice.length; index++) {
-                const polyNote = noteSlice[index];
-                if (!polyNote.noteStyle) {
+            noteByStep.set(note.timing.step, {
+                timing: note.timing,
+                noteStyle: note.noteStyle,
+                start: note.start,
+                duration: note.duration,
+            });
+        }
+
+        for (const group of touchingGroups) {
+            const overlap = this.getPolyrhythmBarOverlap(group);
+            const eventSlice = group.events;
+            if (eventSlice.length === 0) {
+                continue;
+            }
+
+            for (let index = 0; index < eventSlice.length; index++) {
+                const polyEvent = eventSlice[index];
+                if (!polyEvent.noteStyle) {
                     continue;
                 }
 
                 const relativeStep = Math.min(
                     overlap.stepsInBar - 1,
-                    Math.floor((index * overlap.stepsInBar) / noteSlice.length),
+                    Math.floor((index * overlap.stepsInBar) / eventSlice.length),
                 );
                 const step = overlap.startStep + relativeStep;
                 const existing = noteByStep.get(step);
@@ -253,9 +260,12 @@ export class BarTrackRow extends UIComponent<IBarTrackRowProps, IBarTrackRowStat
                     continue;
                 }
 
+                // Polyrhythm-derived staff notes occupy a single grid slot for layout purposes.
                 noteByStep.set(step, {
                     timing: { bar: barNumber, step },
-                    noteStyle: polyNote.noteStyle,
+                    noteStyle: polyEvent.noteStyle,
+                    start: { numerator: step - 1, denominator: stepsPerBar },
+                    duration: { numerator: 1, denominator: stepsPerBar },
                 });
             }
         }
@@ -268,62 +278,82 @@ export class BarTrackRow extends UIComponent<IBarTrackRowProps, IBarTrackRowStat
         };
     }
 
-    private getPolyrhythmBarOverlap(
-        polyrhythm: IPolyrhythm,
-    ): { startStep: number; stepsInBar: number; } {
+    private getTrackDisplayData(track: ISbDmTrack): Pick<IBarTrackRowState, "notes" | "polyrhythmGroups"> {
+        const { arrangementPlayer } = this.props;
+        const notes = track.arrangement.timeParams.timings
+            .map((timing) => {
+                return track.getNoteAt(timing);
+            })
+            .filter((note): note is ISbDmNoteEvent => {
+                return note !== undefined;
+            });
+
         return {
-            startStep: polyrhythm.start.timing.step,
-            stepsInBar: polyrhythm.end.timing.step - polyrhythm.start.timing.step + 1,
+            notes,
+            polyrhythmGroups: new PolyrhythmEventGroupBuilder(track, arrangementPlayer.scoreMetrics.stepsPerBar)
+                .build(),
         };
     }
 
-    /**
-     * Positions each polyrhythm fragment absolutely within the row, based on which track notes
-     * correspond to the polyrhythm's boundaries in this bar.
-     */
+    private getPolyrhythmBarOverlap(group: IEventPolyrhythmGroup): { startStep: number; stepsInBar: number; } {
+        return {
+            startStep: group.startStep,
+            stepsInBar: group.stepsInBar,
+        };
+    }
+
     private repositionFragments(): void {
-        const { track, barNumber } = this.props;
+        const { barNumber } = this.props;
+        const { polyrhythmGroups } = this.state;
         const rowEl = this.rowRef.current;
         if (!rowEl) {
             return;
         }
 
-        for (const polyrhythm of track.polyrhythms) {
-            if (polyrhythm.start.timing.bar !== barNumber) {
+        for (const group of polyrhythmGroups) {
+            if (group.measureNumber !== barNumber) {
                 continue;
             }
 
-            const fragmentEl = rowEl.querySelector<HTMLDivElement>(
-                `#bar-polyrhythm-${polyrhythm.id}-${barNumber}`
-            );
+            const fragmentEl = this.fragmentElements.get(group.key);
             if (!fragmentEl) {
                 continue;
             }
 
-            const startNote = document.getElementById(`note-${polyrhythm.start.id}`);
-            const endNote = document.getElementById(`note-${polyrhythm.end.id}`);
+            const startNote = this.noteElements.get(group.startNoteId);
+            const endNote = this.noteElements.get(group.endNoteId);
             if (!startNote || !endNote) {
                 continue;
             }
 
-            let startLeft = startNote.offsetLeft;
-            if (polyrhythm.start.polyrhythm) {
-                const parentFrag = startNote.closest<HTMLDivElement>(".polyrhythm-fragment");
-                if (parentFrag) {
-                    startLeft += parentFrag.offsetLeft;
-                }
-            }
-
-            let endRight = endNote.offsetLeft + endNote.offsetWidth;
-            if (polyrhythm.end.polyrhythm) {
-                const parentFrag = endNote.closest<HTMLDivElement>(".polyrhythm-fragment");
-                if (parentFrag) {
-                    endRight += parentFrag.offsetLeft;
-                }
-            }
+            const rowRect = rowEl.getBoundingClientRect();
+            const startRect = startNote.getBoundingClientRect();
+            const endRect = endNote.getBoundingClientRect();
+            const startLeft = startRect.left - rowRect.left;
+            const endRight = endRect.right - rowRect.left;
 
             fragmentEl.style.left = `${startLeft}px`;
             fragmentEl.style.width = `${endRight - startLeft}px`;
         }
     }
+
+    private getNoteElementRef = (noteId: number) => {
+        return (element: HTMLDivElement | null) => {
+            if (element) {
+                this.noteElements.set(noteId, element);
+            } else {
+                this.noteElements.delete(noteId);
+            }
+        };
+    };
+
+    private getFragmentElementRef = (groupKey: string) => {
+        return (element: HTMLDivElement | null) => {
+            if (element) {
+                this.fragmentElements.set(groupKey, element);
+            } else {
+                this.fragmentElements.delete(groupKey);
+            }
+        };
+    };
 }

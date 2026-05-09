@@ -47,8 +47,9 @@ export class ArrangementTitle extends UIComponent<IArrangementTitleProps, IArran
         super.componentDidUpdate(prevProps, prevState);
 
         const { arrangement } = this.props;
+        const { title } = this.state;
 
-        if (arrangement.title !== this.state.title) {
+        if (arrangement.title !== title) {
             this.setState({ title: arrangement.title, inputValue: arrangement.title });
         }
     }

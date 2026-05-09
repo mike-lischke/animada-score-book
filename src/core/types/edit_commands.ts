@@ -3,8 +3,8 @@
 * Licensed under the MIT License. See License.txt in the project root for license information.
 */
 
-import type { ISbDmArrangement, ISbDmInstrument, ISbDmNote, ISbDmTrack } from "../ScoreBookDataModel.js";
-import type { INoteStyle, IPolyrhythm, ITimeParams } from "./general.js";
+import type { ISbDmArrangement, ISbDmInstrument, ISbDmNoteEvent, ISbDmTrack } from "../ScoreBookDataModel.js";
+import type { INoteStyle, ITimeParams } from "./general.js";
 
 /* eslint-disable @typescript-eslint/naming-convention */
 
@@ -35,7 +35,7 @@ export interface EditCommand_ArrangementClear {
 export interface EditCommand_ArrangementClearSelection {
     type: "EditCommand_ArrangementClearSelection";
     arrangement: Readonly<ISbDmArrangement>;
-    clearSelection: Map<ISbDmTrack, { selectedNotes: Set<ISbDmNote>; }>;
+    clearSelection: Map<ISbDmTrack, { selectedNotes: Set<ISbDmNoteEvent>; }>;
 }
 
 export interface EditCommand_ArrangementAddPolyrhythms {
@@ -43,14 +43,8 @@ export interface EditCommand_ArrangementAddPolyrhythms {
     arrangement: Readonly<ISbDmArrangement>;
     addPolyrhythms: {
         length: number;
-        selection: Map<ISbDmTrack, { range: [ISbDmNote | null, ISbDmNote | null]; }>;
+        selection: Map<ISbDmTrack, { range: [ISbDmNoteEvent | null, ISbDmNoteEvent | null]; }>;
     };
-}
-
-export interface EditCommand_TrackRemovePolyrhythm {
-    type: "EditCommand_TrackRemovePolyrhythm";
-    track: ISbDmTrack;
-    removePolyrhythm: IPolyrhythm;
 }
 
 export interface EditCommand_TrackClear {
@@ -61,7 +55,7 @@ export interface EditCommand_TrackClear {
 
 export interface EditCommand_Note {
     type: "EditCommand_Note";
-    note: ISbDmNote;
+    note: ISbDmNoteEvent;
     noteStyle?: INoteStyle;
 }
 
@@ -99,7 +93,6 @@ export type EditCommand_Arrangement =
     | EditCommand_ArrangementClearSelection;
 
 export type EditCommand_Track =
-    EditCommand_TrackRemovePolyrhythm
     | EditCommand_TrackClear;
 
 export type EditCommand_TimeParams =
