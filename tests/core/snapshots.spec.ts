@@ -10,7 +10,7 @@ import { SbDmEntityType, type ISbDmInstrument } from "../../src/core/ScoreBookDa
 import { ArrangementSnapshotMigrator } from "../../src/core/serialisation/migration/ArrangementSnapshotMigrator.js";
 import { getArrangementSnapshot } from "../../src/core/serialisation/snapshots.js";
 import type { ILegacyArrangementSnapshot } from "../../src/core/serialisation/migration/migration-types.js";
-import type { Mutable } from "../../src/core/types/general.js";
+import type { INoteStyle, Mutable } from "../../src/core/types/general.js";
 
 const createInstrument = (typeId: string, id: number, displayOrder: number): ISbDmInstrument => {
     return {
@@ -47,7 +47,7 @@ describe("snapshots", () => {
             id: "1",
             audioBuffer: null,
             instrument,
-        };
+        } as INoteStyle;
         (instrument as Mutable<ISbDmInstrument>).noteStyles = { "1": noteStyle };
 
         const sourceSnapshot: ILegacyArrangementSnapshot = {

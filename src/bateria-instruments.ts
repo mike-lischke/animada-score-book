@@ -31,7 +31,7 @@ import tamborimIcon from "./assets/images/instrument-icons/tamborim.svg";
 import timbauIcon from "./assets/images/instrument-icons/timbau.svg";
 
 import {
-    Damping, ExcitationMode, HandTechnique, StickTechnique, type IInstrumentMeta
+    Damping, ExcitationMode, HandTechnique, NoteDisplayType, StickTechnique, type IInstrumentMeta
 } from "./core/ScoreBookDataModel.js";
 
 export const pastelColors: string[] = [
@@ -73,7 +73,9 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
-                stickTechnique: StickTechnique.DrumHead
+                stickTechnique: StickTechnique.Normal,
+                damping: Damping.Open,
+                displayType: NoteDisplayType.Normal
             }
         },
         {
@@ -85,7 +87,9 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
-                stickTechnique: StickTechnique.DrumHead
+                stickTechnique: StickTechnique.Normal,
+                damping: Damping.Open,
+                displayType: NoteDisplayType.Normal
             }
         }
     ],
@@ -106,7 +110,9 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
-                stickTechnique: StickTechnique.DrumHead
+                stickTechnique: StickTechnique.Normal,
+                damping: Damping.Open,
+                displayType: NoteDisplayType.Normal
             }
         },
         {
@@ -118,7 +124,9 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
-                stickTechnique: StickTechnique.DrumHead
+                stickTechnique: StickTechnique.Normal,
+                damping: Damping.Open,
+                displayType: NoteDisplayType.Normal
             }
         },
         {
@@ -130,7 +138,9 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
-                stickTechnique: StickTechnique.DrumHead
+                stickTechnique: StickTechnique.Normal,
+                damping: Damping.Open,
+                displayType: NoteDisplayType.Normal
             }
         },
         {
@@ -142,7 +152,9 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
-                stickTechnique: StickTechnique.DrumHead
+                stickTechnique: StickTechnique.Normal,
+                damping: Damping.Open,
+                displayType: NoteDisplayType.Normal
             }
         }
     ],
@@ -162,7 +174,8 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
                 string: "accent"
             },
             characteristics: {
-                excitationMode: ExcitationMode.Shaken
+                excitationMode: ExcitationMode.Shaken,
+                displayType: NoteDisplayType.Cross
             }
         },
         {
@@ -173,7 +186,8 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
                 string: "ghost"
             },
             characteristics: {
-                excitationMode: ExcitationMode.Shaken
+                excitationMode: ExcitationMode.Shaken,
+                displayType: NoteDisplayType.Cross
             }
         }
     ],
@@ -194,7 +208,9 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
-                stickTechnique: StickTechnique.DrumHead
+                stickTechnique: StickTechnique.Normal,
+                damping: Damping.Open,
+                displayType: NoteDisplayType.Normal
             }
         },
         {
@@ -206,7 +222,9 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
-                stickTechnique: StickTechnique.DrumHead
+                stickTechnique: StickTechnique.Normal,
+                damping: Damping.Open,
+                displayType: NoteDisplayType.Normal
             }
         }
     ],
@@ -227,7 +245,9 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
-                stickTechnique: StickTechnique.DrumHead
+                stickTechnique: StickTechnique.Normal,
+                damping: Damping.Open,
+                displayType: NoteDisplayType.Normal
             }
         },
         {
@@ -239,7 +259,9 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
-                stickTechnique: StickTechnique.DrumHead
+                stickTechnique: StickTechnique.Normal,
+                damping: Damping.Open,
+                displayType: NoteDisplayType.Normal
             }
         },
         {
@@ -251,7 +273,9 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
-                stickTechnique: StickTechnique.RimShot
+                stickTechnique: StickTechnique.RimShot,
+                damping: Damping.Open,
+                displayType: NoteDisplayType.Cross
             }
         },
         {
@@ -263,7 +287,9 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
-                stickTechnique: StickTechnique.Rim
+                stickTechnique: StickTechnique.Rim,
+                damping: Damping.Open,
+                displayType: NoteDisplayType.Cross
             }
         },
         {
@@ -275,7 +301,9 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
-                stickTechnique: StickTechnique.PressRoll
+                stickTechnique: StickTechnique.PressRoll,
+                damping: Damping.Open,
+                displayType: NoteDisplayType.Normal
             }
         },
         {
@@ -287,7 +315,9 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
-                handTechnique: HandTechnique.Open
+                handTechnique: HandTechnique.Open,
+                damping: Damping.Open,
+                displayType: NoteDisplayType.Normal
             }
         },
         {
@@ -299,7 +329,9 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
-                handTechnique: HandTechnique.Slap
+                handTechnique: HandTechnique.Slap,
+                damping: Damping.Open,
+                displayType: NoteDisplayType.Normal
             }
         }
     ],
@@ -320,7 +352,9 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
-                stickTechnique: StickTechnique.DrumHead
+                stickTechnique: StickTechnique.Normal,
+                damping: Damping.Open,
+                displayType: NoteDisplayType.Normal
             }
         },
         {
@@ -332,7 +366,9 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
-                stickTechnique: StickTechnique.DrumHead
+                stickTechnique: StickTechnique.Normal,
+                damping: Damping.Open,
+                displayType: NoteDisplayType.Normal
             }
         }
     ],
@@ -353,7 +389,9 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
-                stickTechnique: StickTechnique.DrumHead
+                stickTechnique: StickTechnique.Normal,
+                damping: Damping.Open,
+                displayType: NoteDisplayType.Normal
             }
         },
         {
@@ -365,7 +403,9 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
-                stickTechnique: StickTechnique.DrumHead
+                stickTechnique: StickTechnique.Normal,
+                damping: Damping.Open,
+                displayType: NoteDisplayType.Normal
             }
         },
         {
@@ -377,7 +417,9 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
-                stickTechnique: StickTechnique.PressRoll
+                stickTechnique: StickTechnique.PressRoll,
+                damping: Damping.Open,
+                displayType: NoteDisplayType.Normal
             }
         },
         {
@@ -389,7 +431,9 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
-                stickTechnique: StickTechnique.RimShot
+                stickTechnique: StickTechnique.RimShot,
+                damping: Damping.Open,
+                displayType: NoteDisplayType.Cross
             }
         },
     ],
@@ -410,7 +454,9 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
-                handTechnique: HandTechnique.Open
+                handTechnique: HandTechnique.Open,
+                damping: Damping.Open,
+                displayType: NoteDisplayType.Normal
             }
         },
         {
@@ -422,7 +468,9 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
-                handTechnique: HandTechnique.Slap
+                handTechnique: HandTechnique.Slap,
+                damping: Damping.Open,
+                displayType: NoteDisplayType.Normal
             }
         },
         {
@@ -434,7 +482,9 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
-                handTechnique: HandTechnique.Heel
+                handTechnique: HandTechnique.Heel,
+                damping: Damping.Open,
+                displayType: NoteDisplayType.Normal
             }
         }
     ],
@@ -455,8 +505,9 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
-                stickTechnique: StickTechnique.DrumHead,
-                damping: Damping.Open
+                stickTechnique: StickTechnique.Normal,
+                damping: Damping.Open,
+                displayType: NoteDisplayType.Normal
             }
         },
         {
@@ -468,8 +519,9 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
-                stickTechnique: StickTechnique.DrumHead,
-                damping: Damping.Muted
+                stickTechnique: StickTechnique.Normal,
+                damping: Damping.Muted,
+                displayType: NoteDisplayType.Normal
             }
         }
     ],
@@ -490,8 +542,9 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
-                stickTechnique: StickTechnique.DrumHead,
-                damping: Damping.Open
+                stickTechnique: StickTechnique.Normal,
+                damping: Damping.Open,
+                displayType: NoteDisplayType.Normal
             }
         },
         {
@@ -503,8 +556,9 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
-                stickTechnique: StickTechnique.DrumHead,
-                damping: Damping.Muted
+                stickTechnique: StickTechnique.Normal,
+                damping: Damping.Muted,
+                displayType: NoteDisplayType.Normal
             }
         }
     ],
@@ -525,8 +579,9 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
-                stickTechnique: StickTechnique.DrumHead,
-                damping: Damping.Open
+                stickTechnique: StickTechnique.Normal,
+                damping: Damping.Open,
+                displayType: NoteDisplayType.Normal
             }
         },
         {
@@ -538,8 +593,9 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
-                stickTechnique: StickTechnique.DrumHead,
-                damping: Damping.Muted
+                stickTechnique: StickTechnique.Normal,
+                damping: Damping.Muted,
+                displayType: NoteDisplayType.Normal
             }
         }
     ],

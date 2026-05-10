@@ -80,7 +80,7 @@ const createInstrumentWithNoteStyle = (typeId: string, id: number, displayOrder:
         id: "1",
         audioBuffer: null,
         instrument,
-    };
+    } as INoteStyle;
 
     return instrument;
 };

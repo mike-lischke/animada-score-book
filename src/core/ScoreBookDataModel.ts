@@ -44,7 +44,7 @@ export enum HandTechnique {
 /** How to strike the instrument. */
 export enum StickTechnique {
     /** Normal play type. Goes together with `SoundType.Normal`. */
-    DrumHead,
+    Normal,
 
     /** A hit on the rim of the drum. Goes together with `SoundType.Cross`. */
     Rim,
@@ -90,10 +90,10 @@ export type TechniqueType =
     | { handTechnique?: never, stickTechnique: StickTechnique; };
 
 export enum Damping {
-    /** The hit is open, allowing the sound to resonate, i.e. the hand or stick leaves the drumhead. */
+    /** The hit is open, allowing the sound to resonate. */
     Open,
 
-    /** The hit is muted, dampening the sound, i.e. the hand or stick stays on the drumhead. */
+    /** The hit is muted, dampening the sound. */
     Muted,
 
     /** If the damping is applied over more than one note, it starts here. */
@@ -111,8 +111,8 @@ export enum HandType {
     Weak
 }
 
-/** How to play a note. */
-export enum SoundType {
+/** What type of note head is displayed. */
+export enum NoteDisplayType {
     /**
      * A filled note, for all pitched sounds, i.e. hits on the drum head, bells, Cuicas etc.
      */
@@ -125,14 +125,14 @@ export enum SoundType {
 /** Information about a note style. */
 export type StruckCharacteristics = {
     excitationMode: ExcitationMode.Struck;
-    damping?: Damping;
-    soundType?: SoundType;
+    damping: Damping;
+    displayType: NoteDisplayType;
 } & TechniqueType;
 
 export interface ShakenCharacteristics {
     excitationMode: ExcitationMode.Shaken;
     damping?: never;
-    soundType?: SoundType;
+    displayType: NoteDisplayType;
     handTechnique?: never;
     stickTechnique?: never;
 }
@@ -140,23 +140,23 @@ export interface ShakenCharacteristics {
 export interface ScrapedCharacteristics {
     excitationMode: ExcitationMode.Scraped;
     damping?: never;
-    soundType?: SoundType;
+    displayType: NoteDisplayType;
     handTechnique?: never;
     stickTechnique?: never;
 }
 
 export interface FrictionCharacteristics {
     excitationMode: ExcitationMode.Friction;
-    damping?: Damping;
-    soundType?: SoundType;
-    handTechnique?: HandTechnique;
+    damping: Damping;
+    displayType: NoteDisplayType;
+    handTechnique: HandTechnique.Friction;
     stickTechnique?: never;
 }
 
 export interface BlownCharacteristics {
     excitationMode: ExcitationMode.Blown;
     damping?: never;
-    soundType?: SoundType;
+    displayType: NoteDisplayType;
     handTechnique?: never;
     stickTechnique?: never;
 }
@@ -168,7 +168,7 @@ export interface BlownCharacteristics {
 export interface VocalCharacteristics {
     excitationMode: ExcitationMode.Vocal;
     damping?: never;
-    soundType?: never;
+    displayType?: never;
     handTechnique?: never;
     stickTechnique?: never;
 }

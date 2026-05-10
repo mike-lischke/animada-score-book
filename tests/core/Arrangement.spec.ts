@@ -11,7 +11,7 @@ import { SbDmEntityType, type ISbDmInstrument } from "../../src/core/ScoreBookDa
 import { ArrangementSnapshotMigrator } from "../../src/core/serialisation/migration/ArrangementSnapshotMigrator.js";
 import type { ILegacyArrangementSnapshot } from "../../src/core/serialisation/migration/migration-types.js";
 import { getArrangementSnapshot } from "../../src/core/serialisation/snapshots.js";
-import type { IArrangementSnapshot, Mutable } from "../../src/core/types/general.js";
+import type { IArrangementSnapshot, INoteStyle, Mutable } from "../../src/core/types/general.js";
 
 const createInstrument = (typeId: string, id: number, displayOrder: number): ISbDmInstrument => {
     return {
@@ -179,7 +179,7 @@ describe("Arrangement", () => {
             id: "1",
             audioBuffer: null,
             instrument,
-        };
+        } as INoteStyle;
         (instrument as Mutable<ISbDmInstrument>).noteStyles = { "1": hitStyle };
 
         const snapshot: IArrangementSnapshot = {
@@ -286,7 +286,7 @@ describe("Arrangement", () => {
             id: "1",
             audioBuffer: null,
             instrument,
-        };
+        } as INoteStyle;
         (instrument as Mutable<ISbDmInstrument>).noteStyles = { "1": hitStyle };
 
         const legacySnapshot: ILegacyArrangementSnapshot = {
