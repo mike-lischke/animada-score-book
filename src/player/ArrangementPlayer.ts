@@ -13,14 +13,14 @@ import { Metronome } from "./Metronome.js";
 import { TimeCoordinator, type IScoreMetrics } from "./TimeCoordinator.js";
 import { TrackPlayer } from "./TrackPlayer.js";
 import {
-    Event, ICallbackEvent, IInterval, ILoopInterval, type IAudioEvent, type IMetronomeEvent,
+    Event, ICallbackEvent, IInterval, type IAudioEvent, type IMetronomeEvent,
 } from "./types.js";
 
 export type PlayerPlayState = "counting" | "playing" | "stopped";
 
 /**
- * Coordinates playback for an `IArrangementView` by aggregating events from all `TrackPlayer`s,
- * converting times across loops, and publishing UI-relevant updates (current timing and audible tracks).
+ * Coordinates playback for an `IArrangementView` by aggregating events from all `TrackPlayer`s and
+ * publishing UI-relevant updates (current timing and audible tracks).
  *
  * Lifecycle:
  * - Construct with an arrangement to subscribe to changes.
@@ -311,8 +311,8 @@ export class ArrangementPlayer extends Publisher {
 
         // Stop playback if the covered time has reached the end of the current interval.
         if (interval.start >= this.endOffset) {
-            // We stop playback here, but wait for a moment to let the last events fire.
-            await sleep(80);
+            // We stop playback here, but wait for the next run-loop to let the last events fire.
+            await sleep(10);
             this.stop();
 
             // If we were supposed to loop, start again immediately.
@@ -344,28 +344,17 @@ export class ArrangementPlayer extends Publisher {
             return [];
         }
         const events: Event[] = [];
-        const loopIntervals: ILoopInterval[] = this.timeCoordinator.convertToLoopIntervals(interval);
-
-        loopIntervals.forEach((loopInterval) => {
-            const { loopNumber } = loopInterval;
-            this.trackPlayers.forEach((trackPlayer) => {
-                trackPlayer.getEvents(loopInterval).forEach((event) => {
-                    return events.push({
-                        ...event,
-                        realTime: this.timeCoordinator.convertToAudioTime(event.realTime, loopNumber)
-                    });
-                });
+        this.trackPlayers.forEach((trackPlayer) => {
+            trackPlayer.getEvents(interval).forEach((event) => {
+                events.push(event);
             });
-
-            if (this.dataModel.arrangement!.useMetronome) {
-                this.metronome.getEvents(loopInterval).forEach((event) => {
-                    return events.push({
-                        ...event,
-                        realTime: this.timeCoordinator.convertToAudioTime(event.realTime, loopNumber)
-                    });
-                });
-            }
         });
+
+        if (this.dataModel.arrangement!.useMetronome) {
+            this.metronome.getEvents(interval).forEach((event) => {
+                events.push(event);
+            });
+        }
 
         events.push(...this.getCallbackEvents(interval));
 
@@ -373,24 +362,18 @@ export class ArrangementPlayer extends Publisher {
     };
 
     /**
-     * Builds callback events for a given interval across loops, updating `currentTiming` when fired.
+     * Builds callback events for a given interval, updating `currentTiming` when fired.
      *
      * @param interval The real-time interval [start, end) to query.
-     * @returns Callback events aligned to audio time within loop context.
+     * @returns Callback events aligned to audio time.
      */
     private getCallbackEvents = (interval: IInterval): ICallbackEvent[] => {
         const eventsInInterval: ICallbackEvent[] = [];
-        const loopIntervals: ILoopInterval[] = this.timeCoordinator.convertToLoopIntervals(interval);
 
-        loopIntervals.forEach(({ loopNumber, start, end }) => {
-            this.callbackEvents.filter(({ realTime }) => {
-                return realTime >= start && realTime < end;
-            }).forEach((audioEvent) => {
-                return eventsInInterval.push({
-                    ...audioEvent,
-                    realTime: this.timeCoordinator.convertToAudioTime(audioEvent.realTime, loopNumber)
-                });
-            });
+        this.callbackEvents.filter(({ realTime }) => {
+            return realTime >= interval.start && realTime < interval.end;
+        }).forEach((audioEvent) => {
+            eventsInInterval.push(audioEvent);
         });
 
         return eventsInInterval;

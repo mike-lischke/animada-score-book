@@ -56,7 +56,10 @@ export interface ISplitterPane {
 }
 
 /** Record for pane resizes. */
-export type ISplitterPaneSizeInfo = Pick<IPanePositionData, "id" | "currentSize">;
+export interface ISplitterPaneSizeInfo {
+    id: string;
+    currentSize: number;
+}
 
 interface ISplitContainerProperties extends ICommonUIProperties {
     panes: ISplitterPane[];

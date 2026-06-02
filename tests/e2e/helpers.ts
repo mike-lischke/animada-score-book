@@ -65,8 +65,7 @@ export const expectImportedPolyrhythmSong = async (page: Page): Promise<void> =>
         return normalizeWhitespace(title ?? "");
     }).toBe(beijaFlorDisplayedTitle);
     await expect(page.locator("#trackViewerHost")).toBeVisible();
-    await expect(page.locator(".bar-track-row .note-viewer").first()).toBeVisible();
-    await expect(page.locator(".bar-track-row .polyrhythm-fragment").first()).toBeVisible();
+    await expect(page.locator(".grid-measure-row .note-viewer").first()).toBeVisible();
 };
 
 export const ensureGridMode = async (page: Page): Promise<void> => {
@@ -78,13 +77,11 @@ export const ensureGridMode = async (page: Page): Promise<void> => {
     }
 
     await expect(trackViewToggle).not.toBeChecked();
-    await expect(page.locator(".bar-track-row.grid-mode").first()).toBeVisible();
+    await expect(page.locator(".grid-measure-row").first()).toBeVisible();
 };
 
 export const expectGridModePolyrhythmNotes = async (page: Page): Promise<void> => {
-    await expect(page.locator(".bar-track-row.grid-mode .notes-wrapper .note-viewer").first()).toBeVisible();
-    await expect(page.locator(".bar-track-row.grid-mode .polyrhythm-fragment").first()).toBeVisible();
-    await expect(page.locator(".bar-track-row.grid-mode .polyrhythm-fragment .note-viewer").first()).toBeVisible();
+    await expect(page.locator(".grid-measure-row .note-viewer").first()).toBeVisible();
 };
 
 export interface IBarTrackGridSignature {
@@ -97,25 +94,25 @@ export interface IBarTrackGridSignature {
 export const expectGridBarSignature = async (page: Page, barNumber: number,
     expectedSignature: IBarTrackGridSignature[]): Promise<void> => {
     const actualSignature = await page.evaluate((currentBarNumber) => {
-        const bar = document.querySelector(`.bar-viewer[data-bar="${currentBarNumber}"]`);
+        const bar = document.querySelector(`.grid-measure-viewer[data-bar="${currentBarNumber}"]`);
         if (!bar) {
             return null;
         }
 
-        const rows = Array.from(bar.querySelectorAll(".bar-track-row.grid-mode"));
+        const rows = Array.from(bar.querySelectorAll(".grid-measure-row"));
 
         return rows.map((row) => {
-            const baseNotes = Array.from(row.querySelectorAll(".notes-wrapper > .note-viewer"));
+            const baseNotes = Array.from(row.querySelectorAll(":scope > .note-viewer"));
             const basePattern = baseNotes
                 .map((noteElement) => {
                     return noteElement.querySelector(".note-style-symbol") ? "x" : "-";
                 })
                 .join("");
 
-            const fragments = Array.from(row.querySelectorAll(".polyrhythm-fragment"));
+            const fragments = Array.from(row.querySelectorAll(":scope > .subdivision"));
             const fragmentPatterns = fragments.map((fragmentElement) => {
                 const fragmentNotes = Array.from(
-                    fragmentElement.querySelectorAll(".polyrhythm-notes-wrapper > .note-viewer")
+                    fragmentElement.querySelectorAll(":scope > .note-viewer")
                 );
 
                 return fragmentNotes
@@ -142,7 +139,7 @@ export const expectGridBarDomSnapshot = async (
     barNumber: number
 ): Promise<void> => {
     const barDomSnapshot = await page.evaluate((currentBarNumber) => {
-        const bar = document.querySelector(`.bar-viewer[data-bar="${currentBarNumber}"]`);
+        const bar = document.querySelector(`.grid-measure-viewer[data-bar="${currentBarNumber}"]`);
         if (!bar) {
             return null;
         }
@@ -163,7 +160,7 @@ export const expectGridBarDomSnapshot = async (
             image.removeAttribute("src");
         }
 
-        const rows = Array.from(barClone.querySelectorAll<HTMLElement>(".bar-track-row.grid-mode"));
+        const rows = Array.from(barClone.querySelectorAll<HTMLElement>(".grid-measure-row"));
 
         return rows.map((row) => {
             return row.outerHTML;
@@ -181,20 +178,23 @@ export const expectPlaybackToMove = async (page: Page): Promise<void> => {
     await expect(playbackToggle).toBeVisible();
     await expect(playBeam).toBeVisible();
 
-    const initialLeft = await playBeam.evaluate((element) => {
-        return Number.parseFloat((element as HTMLElement).style.left || "0");
-    });
+    const readBeamX = async (): Promise<number> => {
+        return playBeam.evaluate((element) => {
+            return (element as HTMLElement).getBoundingClientRect().left;
+        });
+    };
+
+    const initialX = await readBeamX();
+    expect(Number.isFinite(initialX)).toBeTruthy();
 
     await playbackToggle.check({ force: true });
     await expect(playbackToggle).toBeChecked();
 
     await expect.poll(async () => {
-        const left = await playBeam.evaluate((element) => {
-            return Number.parseFloat((element as HTMLElement).style.left || "0");
-        });
+        const currentX = await readBeamX();
 
-        return left !== initialLeft;
-    }).toBeTruthy();
+        return Math.abs(currentX - initialX);
+    }).toBeGreaterThan(1);
 
     await playbackToggle.uncheck({ force: true });
     await expect(playbackToggle).not.toBeChecked();

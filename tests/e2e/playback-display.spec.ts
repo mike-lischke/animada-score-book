@@ -16,7 +16,7 @@ test("renders arrangement UI and note grid", async ({ page }) => {
 
     await expect(page.locator("#appRoot")).toBeVisible();
     await expect(page.locator("#trackViewerHost")).toBeVisible();
-    await expect(page.locator(".bar-track-row .note-viewer").first()).toBeVisible();
+    await expect(page.locator(".grid-measure-row .note-viewer").first()).toBeVisible();
 });
 
 test("playback button starts and stops playback", async ({ page }) => {

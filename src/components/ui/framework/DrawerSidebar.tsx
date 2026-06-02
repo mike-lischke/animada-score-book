@@ -21,9 +21,33 @@ export interface IDrawerSidebarProps {
     onOpenChange?: (open: boolean) => void;
 }
 
-export class DrawerSidebar extends UIComponent<IDrawerSidebarProps> {
+interface IDrawerSidebarState {
+    /** Whether the sidebar has ever been opened. Used to defer rendering of sidebarContent. */
+    everOpened: boolean;
+}
+
+export class DrawerSidebar extends UIComponent<IDrawerSidebarProps, IDrawerSidebarState> {
+    public constructor(props: IDrawerSidebarProps) {
+        super(props);
+
+        this.state = {
+            everOpened: props.open || props.alwaysOpen === true,
+        };
+    }
+
+    public override componentDidUpdate(prevProps: IDrawerSidebarProps, prevState: IDrawerSidebarState): void {
+        super.componentDidUpdate(prevProps, prevState);
+
+        const { open, alwaysOpen } = this.props;
+
+        if (!this.state.everOpened && (open || alwaysOpen === true)) {
+            this.setState({ everOpened: true });
+        }
+    }
+
     public render(): ComponentChild {
         const { id, open, alwaysOpen, sidebarContent, children } = this.props;
+        const { everOpened } = this.state;
 
         return (
             <div id={id} className={`drawer ${alwaysOpen ? "drawer-open" : ""}`}>
@@ -43,7 +67,7 @@ export class DrawerSidebar extends UIComponent<IDrawerSidebarProps> {
                 <div className="drawer-side">
                     <label htmlFor={`${id}-toggle`} aria-label="close sidebar" className="drawer-overlay" />
                     <Container className="drawer-sidebar-content">
-                        {sidebarContent}
+                        {(open || alwaysOpen === true || everOpened) ? sidebarContent : null}
                     </Container>
                 </div>
             </div>

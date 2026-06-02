@@ -3,26 +3,21 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import { cleanup, render, waitFor } from "@testing-library/preact";
+import { cleanup, render } from "@testing-library/preact";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { BarTrackRow } from "../../src/components/ui/Bar/BarTrackRow.js";
+import { GridMeasureRow } from "../../src/components/ui/Bar/Grid/GridMeasureRow.js";
 import { Overlay } from "../../src/components/ui/Overlay.js";
-import { NoteLine } from "../../src/components/ui/Track/NoteLine.js";
-import { Arrangement } from "../../src/core/Arrangement.js";
-import { Track } from "../../src/core/Track.js";
 import {
     SbDmEntityType, ScoreBookDataModel, type ISbDmArrangement, type ISbDmInstrument
 } from "../../src/core/ScoreBookDataModel.js";
-import { ArrangementSnapshotMigrator } from "../../src/core/serialisation/migration/ArrangementSnapshotMigrator.js";
-import type { ILegacyArrangementSnapshot } from "../../src/core/serialisation/migration/migration-types.js";
+import { ArrangementMigrator } from "../../src/core/serialisation/migration/ArrangementMigrator.js";
+import type { ILegacyArrangementSnapshot } from "../../src/core/serialisation/migration/legacy-snapshot-types.js";
+import { Track } from "../../src/core/Track.js";
 import type { INoteStyle } from "../../src/core/types/general.js";
 import { TimeCoordinator } from "../../src/player/TimeCoordinator.js";
 import { TrackPlayer } from "../../src/player/TrackPlayer.js";
-import type { ScoreBookUiServices } from "../../src/player/types.js";
 import type { IRealtimeProvider } from "../../src/ui/AnimationEngine.js";
-import { ModeManager } from "../../src/ui/ModeManager.js";
-import { SelectionManager } from "../../src/ui/SelectionManager.js";
 
 class TestScoreBookDataModel extends ScoreBookDataModel {
     private readonly testArrangement: ISbDmArrangement;
@@ -106,8 +101,8 @@ describe.sequential("Polyrhythm UI Integration", () => {
         cleanup();
     });
 
-    it("renders existing polyrhythms in note line and bar view", async () => {
-        const instrument = createInstrumentWithNoteStyle("0", 0, 0);
+    it("renders existing polyrhythms in bar view", () => {
+        const instrument = createInstrumentWithNoteStyle("1", 0, 0);
 
         const snapshot: ILegacyArrangementSnapshot = {
             version: 1,
@@ -121,9 +116,9 @@ describe.sequential("Polyrhythm UI Integration", () => {
             },
             tracks: [{
                 id: 100,
-                instrumentId: "0",
+                instrumentId: "1",
                 notes: Array.from({ length: 16 }, () => {
-                    return "0";
+                    return "1";
                 }),
                 polyrhythms: [{
                     id: 901,
@@ -134,84 +129,23 @@ describe.sequential("Polyrhythm UI Integration", () => {
             }],
         };
 
-        const arrangement = Arrangement.fromSnapshot(
-            ArrangementSnapshotMigrator.migrate(snapshot, [instrument]), [instrument]);
+        const arrangement = ArrangementMigrator.migrateToArrangement(
+            snapshot, [instrument]).arrangement;
         const track = arrangement.tracks[0] as Track;
 
-        const stepsPerBar = 16;
-        track.measures[0].events.forEach((event, index) => {
-            const isPolyrhythmEvent = !(event.duration.numerator === 1
-                && event.duration.denominator === stepsPerBar);
-            if (!isPolyrhythmEvent) {
-                return;
-            }
-
-            track.measures[0].events[index] = { ...event, noteStyle: instrument.noteStyles["1"] };
-        });
-
         const dataModel = new TestScoreBookDataModel(arrangement, [instrument]);
-        const undoManager = { edit: vi.fn() };
-
-        const selectionManager = new SelectionManager();
-        const services: ScoreBookUiServices = {
-            selectionManager,
-            modeManager: new ModeManager(selectionManager),
-        };
-
-        const timeCoordinator = new TimeCoordinator(arrangement.timeParams, createRealtimeProvider());
-        const trackPlayer = new TrackPlayer(track, timeCoordinator);
-
-        const arrangementPlayer = {
-            scoreMetrics: {
-                realTimeLength: 4,
-                secondsPerBar: 4,
-                secondsPerStep: 0.25,
-                bars: 1,
-                beatsPerBar: 4,
-                pulsesPerBar: 4,
-                stepsPerBar: 16,
-                stepsPerPulse: 4,
-            },
-            currentTimingPublisher: { subscribe: vi.fn(), unsubscribe: vi.fn() },
-            trackPlayers: new Map(),
-        };
 
         const result = render(
-            <>
-                <NoteLine
-                    track={track}
-                    callbacks={{}}
-                    trackPlayer={trackPlayer}
-                    arrangementPlayer={arrangementPlayer as never}
-                    services={services}
-                    undoManager={undoManager as never}
-                    dataModel={dataModel}
-                />
-                <BarTrackRow
-                    track={track}
-                    barNumber={1}
-                    timeParams={arrangement.timeParams}
-                    trackPlayer={trackPlayer}
-                    arrangementPlayer={arrangementPlayer as never}
-                    touchEditingEnabled={false}
-                    services={services}
-                    undoManager={undoManager as never}
-                    dataModel={dataModel}
-                />
-            </>
+            <GridMeasureRow
+                measure={track.measures[0]}
+                track={track}
+                dataModel={dataModel}
+                pulsesPerBar={4}
+            />
         );
 
-        await waitFor(() => {
-            const polyrhythmViewers = result.container.querySelectorAll(".note-line .polyrhythm-viewer");
-            expect(polyrhythmViewers.length).toBe(1);
-        });
-
-        await waitFor(() => {
-            const fragments = result.container.querySelectorAll(".bar-track-row .polyrhythm-fragment");
-            expect(fragments.length).toBe(1);
-        });
-
-        trackPlayer.dispose();
+        const subdivisions = result.container.querySelectorAll(".grid-measure-row .subdivision");
+        expect(subdivisions.length).toBe(1);
     });
 
     it("plays polyrhythm note events through TrackPlayer", () => {
@@ -242,9 +176,12 @@ describe.sequential("Polyrhythm UI Integration", () => {
             }],
         };
 
-        const arrangement = Arrangement.fromSnapshot(
-            ArrangementSnapshotMigrator.migrate(snapshot, [instrument]), [instrument]);
+        const arrangement = ArrangementMigrator.migrateToArrangement(
+            snapshot, [instrument]).arrangement;
         const track = arrangement.tracks[0] as Track;
+
+        const timeCoordinator = new TimeCoordinator(arrangement.timeParams, createRealtimeProvider());
+        const trackPlayer = new TrackPlayer(track, timeCoordinator);
 
         const stepsPerBar = 16;
         track.measures[0].events.forEach((event, index) => {
@@ -256,9 +193,6 @@ describe.sequential("Polyrhythm UI Integration", () => {
 
             track.measures[0].events[index] = { ...event, noteStyle: instrument.noteStyles["1"] };
         });
-
-        const timeCoordinator = new TimeCoordinator(arrangement.timeParams, createRealtimeProvider());
-        const trackPlayer = new TrackPlayer(track, timeCoordinator);
 
         const events = trackPlayer.getEvents({ start: 0, end: timeCoordinator.metrics.realTimeLength });
         const audioEvents = events.filter((event) => {

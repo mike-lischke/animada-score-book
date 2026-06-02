@@ -12,6 +12,9 @@ export enum PredefinedImage {
     CountIn,
     Metronome,
     Record,
+
+    // Notation
+    CommonTime,
 }
 
 export interface IImageBaseProps extends ICommonUIProperties {
@@ -59,6 +62,9 @@ export class Image extends UIComponent<IImageProperties, IImageState> {
         [PredefinedImage.CountIn]: new URL("../../../assets/images/icons/count-in.svg", import.meta.url).href,
         [PredefinedImage.Metronome]: new URL("../../../assets/images/icons/metronome.svg", import.meta.url).href,
         [PredefinedImage.Record]: new URL("../../../assets/images/icons/record.svg", import.meta.url).href,
+
+        // Notation
+        [PredefinedImage.CommonTime]: new URL("../../../assets/images/notes/common-time.svg", import.meta.url).href,
     };
 
     public render(): ComponentChild {

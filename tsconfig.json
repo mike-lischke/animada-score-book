@@ -43,6 +43,7 @@
     },
     "include": [
         "src/**/*",
+        "build/**/*.ts",
         "eslint.config.mjs",
         "vite.config.ts",
     ],

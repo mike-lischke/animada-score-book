@@ -51,7 +51,7 @@ export class Button extends UIComponent<IButtonProperties> {
     public render(): ComponentChild {
         const {
             id, children, caption, style, orientation, round, imageOnly, disabled, isDefault, title, role,
-            "data-tooltip": dataTooltip, name, value, popoverTarget, onClick
+            name, value, popoverTarget, onClick
         } = this.props;
         const className = this.generateFinalClassName([
             "btn",
@@ -77,7 +77,7 @@ export class Button extends UIComponent<IButtonProperties> {
             role={role}
             name={name}
             value={value}
-            data-tooltip={dataTooltip}
+            {...this.dataAttributes()}
             popoverTarget={popoverTarget}
             onClick={onClick}
         >

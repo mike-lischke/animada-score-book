@@ -5,11 +5,11 @@
 
 import type { ComponentChild } from "preact";
 
-import type { ITimeParamsView } from "../../../core/ScoreBookDataModel.js";
-import { Container } from "../framework/Container.js";
-import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
-import { TimingViewer } from "../GuideRail/TimingViewer.js";
-import { type BarDivisibility } from "../GuideRail/GuideRail.js";
+import type { ITimeParamsView } from "../../../../core/ScoreBookDataModel.js";
+import { Container } from "../../framework/Container.js";
+import { UIComponent, type ICommonUIProperties } from "../../framework/UIComponent.js";
+import { TimingViewer } from "../../GuideRail/TimingViewer.js";
+import { type BarDivisibility } from "../../GuideRail/GuideRail.js";
 
 export interface IBarGuideRailProps extends ICommonUIProperties {
     barNumber: number;

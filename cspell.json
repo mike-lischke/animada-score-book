@@ -39,6 +39,7 @@
         "Oito",
         "optimisation",
         "Polyrhythm",
+        "polyrhythmic",
         "polyrhythms",
         "prefresh",
         "Quatro",
@@ -82,9 +83,12 @@
         "oklab",
         "oklch",
         "parentid",
+        "ihbrp",
         "rgba",
+        "svgs",
         "tableholder",
-        "wavesurfer"
+        "wavesurfer",
+        "xlink"
     ],
     "import": []
 }

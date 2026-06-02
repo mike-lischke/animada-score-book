@@ -18,7 +18,7 @@ import { getNewId } from "./utils.js";
  * Tracks created via {@link Arrangement.addTrack} start with empty measures. Snapshot
  * application replaces measure contents wholesale; runtime editing happens directly on
  * the {@link ISbDmNoteEvent} objects returned by {@link getNoteAt} and
- * {@link getNoteIterator} (synthesised rest events for empty grid slots are inserted into
+ * {@link notes} (synthesised rest events for empty grid slots are inserted into
  * the measure on demand by the editing code).
  */
 export class Track extends Publisher implements ISbDmTrack {
@@ -108,17 +108,21 @@ export class Track extends Publisher implements ISbDmTrack {
     }
 
     /**
-     * Iterates note events for every measure event in playback order. Includes only
-     * actually stored events — empty grid slots are not yielded.
+     * Iterates all note events for every measure in playback order, including rest events
+     * (events where `noteStyle` is `undefined`).
      *
-     * @yields {ISbDmNoteEvent} Each stored note event in measure order.
+     * @returns An iterator over each stored note event in measure order.
      */
-    public *getNoteIterator(): IterableIterator<ISbDmNoteEvent> {
-        for (const measure of this.measures) {
-            for (const event of measure.events) {
-                yield event;
+    public get notes(): IterableIterator<ISbDmNoteEvent> {
+        const measures = this.measures;
+
+        return (function* () {
+            for (const measure of measures) {
+                for (const event of measure.events) {
+                    yield event;
+                }
             }
-        }
+        })();
     }
 
     /**
@@ -136,10 +140,24 @@ export class Track extends Publisher implements ISbDmTrack {
     }
 
     private createEmptyMeasure(measureNumber: number): ISbDmTrackMeasure {
+        const stepsPerBar = this.getStepsPerBar();
+        const { timeSignature } = this.arrangement.timeParams;
+        const [beats, beatUnits] = timeSignature.split("/").map(Number);
+
         return {
             id: this.getMeasureId(measureNumber),
             type: SbDmEntityType.TrackMeasure,
             number: measureNumber,
+            meter: {
+                beats,
+                beatUnits,
+                stepResolution: stepsPerBar,
+                beatGroups: [stepsPerBar],
+            },
+            steps: Array.from({ length: stepsPerBar }, (_, index) => {
+                return { index };
+            }),
+            subdivisions: [],
             events: [],
         };
     }

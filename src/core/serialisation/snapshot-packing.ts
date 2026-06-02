@@ -4,7 +4,8 @@
  */
 
 import type {
-    IArrangementSnapshot, INoteEventSnapshot, ITimeParamsSnapshot, ITrackMeasureSnapshot, ITrackSnapshot
+    IArrangementSnapshot, IMeterSnapshot, ITimeParamsBase, ITrackMeasureSnapshot, ITrackSnapshot,
+    ISubdivision
 } from "../types/general.js";
 import { arrangementSnapshotVersion, isNaturalNumber } from "./snapshots.js";
 
@@ -13,18 +14,18 @@ import { arrangementSnapshotVersion, isNaturalNumber } from "./snapshots.js";
  *
  * The structure is identical in information content to `IArrangementSnapshot`, but uses
  * single-character object keys and tuple arrays for repetitive structures (tracks, measures,
- * events). When JSON-stringified this is significantly smaller than the verbose snapshot,
+ * steps, tuplets). When JSON-stringified this is significantly smaller than the verbose snapshot,
  * while still being trivially inspectable and forward-/backward-compatible via the `v` field.
  *
  * Layout:
  * ```text
- * { v, t?, p, k }
+ * { v, t?, p, k, l? }
  *   v          schema version (matches IArrangementSnapshot.version)
  *   t          optional title
  *   p          packed time params:  [timeSignature, tempo, length, pulse, stepResolution]
  *   k          tracks: [ [id, instrumentId, measures], ... ]
- *     measure: [ number, [event, ...] ]
- *     event:   [ startN, startD, durN, durD, noteStyleId ]
+ *     measure: [ number, meter, steps, tuplets ]
+ *   l          optional measure labels: { measureNumber: label, ... }
  * ```
  */
 export interface IPackedArrangement {
@@ -32,6 +33,8 @@ export interface IPackedArrangement {
     t?: string;
     p: PackedTimeParams;
     k: PackedTrack[];
+    /** Per-measure section labels, keyed by 1-based measure number (as string after JSON round-trip). */
+    l?: Record<number, string>;
 }
 
 export type PackedTimeParams = [
@@ -42,15 +45,23 @@ export type PackedTimeParams = [
     stepResolution: number,
 ];
 
-export type PackedNoteEvent = [
-    startNumerator: number,
-    startDenominator: number,
-    durationNumerator: number,
-    durationDenominator: number,
-    noteStyleId: string,
+export type PackedMeter = [
+    numerator: number,
+    denominator: number,
+    stepResolution: number,
+    beatGroups: number[],
 ];
 
-export type PackedMeasure = [number: number, events: PackedNoteEvent[]];
+export type PackedSubdivision = [
+    id: number,
+    startStep: number,
+    actual: number,
+    normal: number,
+    parentSubdivisionId?: number,
+    isTuplet?: boolean,
+];
+
+export type PackedMeasure = [number: number, meter: PackedMeter, steps: string[], subdivisions: PackedSubdivision[]];
 
 export type PackedTrack = [id: number, instrumentId: string, measures: PackedMeasure[]];
 
@@ -78,6 +89,10 @@ export const packArrangementSnapshot = (snapshot: IArrangementSnapshot): IPacked
         packed.t = snapshot.title;
     }
 
+    if (snapshot.measureLabels && Object.keys(snapshot.measureLabels).length > 0) {
+        packed.l = { ...snapshot.measureLabels };
+    }
+
     return packed;
 };
 
@@ -101,6 +116,15 @@ export const unpackArrangementSnapshot = (packed: IPackedArrangement): IArrangem
 
     if (packed.t !== undefined) {
         snapshot.title = packed.t;
+    }
+
+    if (packed.l !== undefined) {
+        // JSON round-trips object keys as strings; convert back to numbers.
+        snapshot.measureLabels = Object.fromEntries(
+            Object.entries(packed.l).map(([k, v]) => {
+                return [Number(k), v];
+            }),
+        );
     }
 
     return snapshot;
@@ -163,7 +187,7 @@ export const tryParsePackedArrangement = (content: string): IArrangementSnapshot
     }
 };
 
-const packTimeParams = (timeParams: ITimeParamsSnapshot): PackedTimeParams => {
+const packTimeParams = (timeParams: ITimeParamsBase): PackedTimeParams => {
     return [
         timeParams.timeSignature,
         timeParams.tempo,
@@ -173,7 +197,7 @@ const packTimeParams = (timeParams: ITimeParamsSnapshot): PackedTimeParams => {
     ];
 };
 
-const unpackTimeParams = (packed: PackedTimeParams): ITimeParamsSnapshot => {
+const unpackTimeParams = (packed: PackedTimeParams): ITimeParamsBase => {
     const [timeSignature, tempo, length, pulse, stepResolution] = packed;
 
     return { timeSignature, tempo, length, pulse, stepResolution };
@@ -190,31 +214,79 @@ const unpackTrack = (packed: PackedTrack): ITrackSnapshot => {
 };
 
 const packMeasure = (measure: ITrackMeasureSnapshot): PackedMeasure => {
-    return [measure.number, measure.events.map(packEvent)];
-};
-
-const unpackMeasure = (packed: PackedMeasure): ITrackMeasureSnapshot => {
-    const [number, events] = packed;
-
-    return { number, events: events.map(unpackEvent) };
-};
-
-const packEvent = (event: INoteEventSnapshot): PackedNoteEvent => {
     return [
-        event.start.numerator,
-        event.start.denominator,
-        event.duration.numerator,
-        event.duration.denominator,
-        event.noteStyleId,
+        measure.number,
+        packMeter(measure.meter),
+        measure.steps.map((step) => {
+            return step.noteStyleId ?? "";
+        }),
+        measure.subdivisions.map(packSubdivision),
     ];
 };
 
-const unpackEvent = (packed: PackedNoteEvent): INoteEventSnapshot => {
-    const [startNumerator, startDenominator, durationNumerator, durationDenominator, noteStyleId] = packed;
+const unpackMeasure = (packed: PackedMeasure): ITrackMeasureSnapshot => {
+    const [number, meter, steps, subdivisions] = packed;
 
     return {
-        start: { numerator: startNumerator, denominator: startDenominator },
-        duration: { numerator: durationNumerator, denominator: durationDenominator },
-        noteStyleId,
+        number,
+        meter: unpackMeter(meter),
+        steps: steps.map((noteStyleId, index) => {
+            return { index, noteStyleId: noteStyleId || undefined };
+        }),
+        subdivisions: subdivisions.map(unpackSubdivision),
+    };
+};
+
+const packMeter = (meter: IMeterSnapshot): PackedMeter => {
+    return [
+        meter.beats,
+        meter.beatUnits,
+        meter.stepResolution,
+        [...meter.beatGroups],
+    ];
+};
+
+const unpackMeter = (packed: PackedMeter): IMeterSnapshot => {
+    const [numerator, denominator, stepResolution, beatGroups] = packed;
+
+    return {
+        beats: numerator,
+        beatUnits: denominator,
+        stepResolution,
+        beatGroups: [...beatGroups],
+    };
+};
+
+const packSubdivision = (subdivision: ISubdivision): PackedSubdivision => {
+    const result: PackedSubdivision = [
+        subdivision.id,
+        subdivision.startStep,
+        subdivision.actual,
+        subdivision.normal,
+    ];
+    if (subdivision.parentSubdivisionId != null) {
+        result.push(subdivision.parentSubdivisionId);
+    } else if (subdivision.isTuplet) {
+        // isTuplet is at index 5; push undefined placeholder for index 4.
+        result.push(undefined);
+    }
+    if (subdivision.isTuplet) {
+        result.push(true);
+    }
+
+    return result;
+};
+
+const unpackSubdivision = (packed: PackedSubdivision): ISubdivision => {
+    const [id, startStep, actual, normal, parentSubdivisionId, isTuplet] = packed;
+
+    return {
+        id,
+        startStep,
+        actual,
+        normal,
+        // Normalize null → undefined: JSON turns undefined array elements into null.
+        parentSubdivisionId: parentSubdivisionId ?? undefined,
+        isTuplet: isTuplet ?? false,
     };
 };

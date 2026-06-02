@@ -3,8 +3,7 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import type { ITimeParamsSnapshot } from "../../types/general.js";
-import type { Note } from "./Note.js";
+import type { ITimeParamsBase } from "../../types/general.js";
 
 // Legacy snapshot types kept around solely for migrating older persisted/shared formats
 // (snapshot version 1) into the current internal snapshot format. They must never escape
@@ -14,7 +13,7 @@ export interface ILegacyArrangementSnapshot {
     /** Snapshot schema version. For legacy snapshots this is < the current version. */
     version: number;
     title?: string;
-    timeParams: ITimeParamsSnapshot;
+    timeParams: ITimeParamsBase;
     tracks: ILegacyTrackSnapshot[];
 }
 
@@ -30,9 +29,4 @@ export interface ILegacyPolyrhythmSnapshot {
     start: number;
     end: number;
     length: number;
-} export interface IPolyrhythm {
-    id: number;
-    start: Note;
-    end: Note;
-    notes: Note[];
 }

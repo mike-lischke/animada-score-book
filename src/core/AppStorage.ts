@@ -15,6 +15,9 @@ export interface IArrangementViewSettings {
     /** The current note display mode of the arrangement viewer. */
     displayMode?: "grid" | "staff";
 
+    /** Whether to animate transitions when toggling between grid and staff mode. */
+    animateModeTransitions?: boolean;
+
     /** The position of the current play range in the arrangement. */
     playRangePosition?: number;
 

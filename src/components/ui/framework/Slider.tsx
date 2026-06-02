@@ -28,7 +28,7 @@ export class Slider extends UIComponent<ISliderProperties> {
     private sliderRef = createRef<HTMLInputElement>();
 
     public render(): ComponentChild {
-        const { id, vertical, "data-tooltip": dataTooltip, min, max, value, style, onChange } = this.props;
+        const { id, vertical, min, max, value, style, onChange } = this.props;
 
         const className = this.generateFinalClassName([
             "range",
@@ -40,7 +40,7 @@ export class Slider extends UIComponent<ISliderProperties> {
                 id={id}
                 ref={this.sliderRef}
                 className={className}
-                data-tooltip={dataTooltip}
+                {...this.dataAttributes()}
                 type="range"
                 min={min}
                 max={max}

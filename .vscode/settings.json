@@ -11,6 +11,9 @@
         "npm run -s test": true,
         "npx eslint": true,
         "mv": true,
-        "npx vitest": true
+        "npx vitest": true,
+        "npx playwright": true,
+        "git checkout": true,
+        "npx tsx": true
     },
 }

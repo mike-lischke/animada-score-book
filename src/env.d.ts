@@ -12,3 +12,7 @@ interface ImportMetaEnv {
 interface ImportMeta {
     readonly env: ImportMetaEnv;
 }
+
+interface CSSStyleDeclaration {
+    zoom: string;
+}

@@ -11,18 +11,19 @@
     "version": "1.0.0",
     "scripts": {
         "dev": "vite --host",
-        "build": "npm run generate-themes && vite build",
+        "build": "npm run fix-svgs && npm run generate-themes && vite build",
         "watch": "npm run watch:src & npm run watch:tests & wait",
         "watch:src": "tsc --noEmit --watch",
         "watch:tests": "tsc -p tests/tsconfig.json --noEmit --watch",
         "test": "vitest --no-watch",
-        "lint": "eslint 'src/**/*.{ts,tsx}' 'tests/**/*.{ts,tsx}'",
+        "lint": "eslint 'src/**/*.{ts,tsx}' 'tests/**/*.{ts,tsx}' 'build/**/*.{ts,mjs}'",
         "test:e2e": "playwright test",
         "test:e2e:headed": "playwright test --headed",
         "test:e2e:ui": "playwright test --ui",
-        "serve:e2e": "node build/serve-dist.mjs",
+        "serve:e2e": "tsx build/serve-dist.ts",
         "playwright:install": "playwright install chromium",
-        "generate-themes": "tsx build/generate-daisyui-themes.ts"
+        "generate-themes": "tsx build/generate-daisyui-themes.ts",
+        "fix-svgs": "tsx build/fix-svg-attributes.ts"
     },
     "dependencies": {
         "@mediabunny/mp3-encoder": "1.39.1",
@@ -37,7 +38,7 @@
     },
     "devDependencies": {
         "@eslint/js": "9.39.4",
-        "@playwright/test": "^1.59.1",
+        "@playwright/test": "1.59.1",
         "@preact/preset-vite": "2.10.3",
         "@stylistic/eslint-plugin": "5.10.0",
         "@stylistic/eslint-plugin-ts": "4.4.1",
@@ -53,6 +54,7 @@
         "eslint-plugin-prefer-arrow": "1.2.3",
         "globals": "17.4.0",
         "jsdom": "27.4.0",
+        "node-html-parser": "7.1.0",
         "sass-embedded": "1.98.0",
         "tsx": "4.21.0",
         "typescript": "5.9.3",

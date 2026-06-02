@@ -10,6 +10,7 @@ import "./tailwind.css";
 import timbauImage from "./assets/images/instrument-icons/timbau.svg";
 
 import { createRef } from "preact";
+import { lazy, Suspense } from "preact/compat";
 
 import { ErrorBoundary } from "./components/ui/ErrorBoundary.js";
 import { Button } from "./components/ui/framework/Button.js";
@@ -39,24 +40,28 @@ import { AppStorage, type IUISettings } from "./core/AppStorage.js";
 import {
     SbDmEntityType, ScoreBookDataModel, type ISbDmScore, type ISbDmScoreFolder
 } from "./core/ScoreBookDataModel.js";
-import { ArrangementSnapshotMigrator } from "./core/serialisation/migration/ArrangementSnapshotMigrator.js";
+import { ArrangementMigrator } from "./core/serialisation/migration/ArrangementMigrator.js";
 import {
-    stringifyPackedArrangement
+    stringifyPackedArrangement, tryParsePackedArrangement
 } from "./core/serialisation/snapshot-packing.js";
-import { isNaturalNumber } from "./core/serialisation/snapshots.js";
-import type { IArrangementSnapshot, ISerialisedArrangement } from "./core/types/general.js";
+import type { IArrangementSnapshot } from "./core/types/general.js";
 import { UndoManager } from "./core/UndoManager.js";
+import { Arrangement } from "./core/Arrangement.js";
 import { convertErrorToString } from "./core/utils.js";
 import { ArrangementPlayer } from "./player/ArrangementPlayer.js";
 import type { ScoreBookUiServices } from "./player/types.js";
 import { escapeStack } from "./supplement/EscapeStack.js";
 import { requisitions } from "./supplement/Requisitions.js";
-import { emptySongString } from "./ui/index.js";
 import { ModeManager } from "./ui/ModeManager.js";
 import { MouseHandler } from "./ui/MouseHandler.js";
-import { ScoreLibrary } from "./ui/ScoreLibrary.js";
 import { SelectionManager } from "./ui/SelectionManager.js";
 import { SettingsDialog } from "./ui/SettingsDialog.js";
+
+const ScoreLibrary = lazy(() => {
+    return import("./ui/ScoreLibrary.js").then((m) => {
+        return { default: m.ScoreLibrary };
+    });
+});
 
 enum DisplayMode {
     Standard,
@@ -65,17 +70,12 @@ enum DisplayMode {
 
 interface IAppState {
     ready: boolean;
-    serializedArrangement?: ISerialisedArrangement;
-
     editingTitle: boolean;
-
     displayMode: DisplayMode;
     sidebarOpen: boolean;
 
     headerPinned: boolean;
 }
-
-const newSong: ISerialisedArrangement = { composition: emptySongString, version: 1, title: "New Song" };
 
 export class App extends UIComponent<{}, IAppState> {
     private scoreLibraryRef = createRef<DrawerSidebar>();
@@ -88,7 +88,6 @@ export class App extends UIComponent<{}, IAppState> {
     private services: ScoreBookUiServices;
     private arrangementPlayer?: ArrangementPlayer;
     private undoManager?: UndoManager;
-    private stopCurrentScoreAutoSave?: () => void;
 
     private mouseHandler?: MouseHandler;
 
@@ -128,11 +127,9 @@ export class App extends UIComponent<{}, IAppState> {
         requisitions.register("playRangeChanged", this.handlePlayRangeChanged);
 
         void this.dataModel.initialize().then(() => {
-            const arrangementSnapshot = ArrangementSnapshotMigrator.migrateFromParams(
-                new URL(window.location.href).searchParams,
-                this.dataModel.instruments
-            );
-            this.loadScorebook(arrangementSnapshot);
+            const params = new URL(window.location.href).searchParams;
+            const hasBananaDrum = params.has("a") || params.has("a2");
+            this.loadScorebook(hasBananaDrum ? params : undefined);
             this.setState({ ready: true });
         });
     }
@@ -147,8 +144,6 @@ export class App extends UIComponent<{}, IAppState> {
 
     public override componentWillUnmount() {
         super.componentWillUnmount();
-        this.stopCurrentScoreAutoSave?.();
-        this.stopCurrentScoreAutoSave = undefined;
         this.systemThemeQuery.removeEventListener("change", this.handleSystemThemeChange);
         escapeStack.detach();
         requisitions.unregister("settingsChanged", this.handleSettingsChanged);
@@ -200,7 +195,7 @@ export class App extends UIComponent<{}, IAppState> {
         }
 
         const bars = scoreMetrics.bars === 1 ? "1 bar" : `${scoreMetrics.bars} bars`;
-        const scoreStats = `${scoreMetrics.beatsPerBar}/${scoreMetrics.beatsPerBar} • ${bars} • ` +
+        const scoreStats = `${scoreMetrics.beatsPerBar}/${scoreMetrics.beatUnit} • ${bars} • ` +
             `${Math.round(100 * scoreMetrics.realTimeLength) / 100} s`;
 
         return (
@@ -215,10 +210,12 @@ export class App extends UIComponent<{}, IAppState> {
                         ref={this.scoreLibraryRef}
                         open={sidebarOpen}
                         sidebarContent={
-                            <ScoreLibrary
-                                onAction={this.handleScoreLibraryAction}
-                                dataModel={this.dataModel}
-                            />
+                            <Suspense fallback={<ProgressIndicator />}>
+                                <ScoreLibrary
+                                    onAction={this.handleScoreLibraryAction}
+                                    dataModel={this.dataModel}
+                                />
+                            </Suspense>
                         }
                         onOpenChange={(open) => {
                             this.setState({ sidebarOpen: open }, () => {
@@ -488,18 +485,15 @@ export class App extends UIComponent<{}, IAppState> {
                                     const params = new URL(url).searchParams;
                                     const title = params.get("t") ?? "Imported Score";
 
-                                    // Migrate the BananaDrum link to the current snapshot
-                                    // format and store it in the compact V2 wire format.
-                                    const snapshot = ArrangementSnapshotMigrator.migrateFromParams(
+                                    // Migrate the BananaDrum link to the current
+                                    // schema version and store the result as a
+                                    // compact V2 snapshot.
+                                    const { arrangement } = ArrangementMigrator.migrateToArrangement(
                                         params,
                                         this.dataModel.instruments,
                                     );
-                                    if (!snapshot) {
-                                        throw new Error("URL does not contain a recognised score payload");
-                                    }
-
-                                    snapshot.title = title;
-                                    const content = stringifyPackedArrangement(snapshot);
+                                    arrangement.title = title;
+                                    const content = stringifyPackedArrangement(arrangement.toSnapshot());
                                     await this.dataModel.addScore(title, content, parent);
 
                                     return true;
@@ -565,8 +559,7 @@ export class App extends UIComponent<{}, IAppState> {
                 });
 
                 if (data.type === SbDmEntityType.Score) {
-                    const arrangementSnapshot = this.dataModel.decodeScoreContent(data);
-                    this.loadScorebook(arrangementSnapshot ?? newSong);
+                    this.loadScorebook(data);
                 }
 
                 break;
@@ -607,55 +600,37 @@ export class App extends UIComponent<{}, IAppState> {
         return true;
     };
 
-    private loadScorebook(scoreToLoad?: ISerialisedArrangement | IArrangementSnapshot) {
-        let arrangementToLoad: ISerialisedArrangement | undefined;
-        let snapshotToLoad: IArrangementSnapshot | undefined;
+    private loadScorebook(source?: URLSearchParams | ISbDmScore) {
+        let resolvedSource: IArrangementSnapshot | URLSearchParams | ISbDmScore | undefined;
 
-        if (scoreToLoad) {
-            if (this.isArrangementSnapshot(scoreToLoad)) {
-                snapshotToLoad = scoreToLoad;
-            } else {
-                arrangementToLoad = scoreToLoad;
-            }
-        }
-
-        if (this.arrangementPlayer) {
-            const arrangementView = this.dataModel.arrangement!;
-            arrangementView.timeParams.unsubscribe(this.handleTimeParamsChanged);
-
-            this.arrangementPlayer.dispose();
-        }
-
-        this.stopCurrentScoreAutoSave?.();
-        this.stopCurrentScoreAutoSave = undefined;
-
-        if (!arrangementToLoad && !snapshotToLoad) {
-            // Try to load the last opened score from localStorage, if available.
+        if (source) {
+            resolvedSource = source;
+        } else {
+            // Try to load the last opened score from localStorage, if available and no other source is provided.
             const lastScoreString = AppStorage.loadUISettings()?.currentScore;
             if (lastScoreString) {
                 try {
-                    const parsed = JSON.parse(lastScoreString) as ISerialisedArrangement | IArrangementSnapshot;
-                    if (this.isSerialisedArrangement(parsed)) {
-                        arrangementToLoad = parsed;
-                    } else if (this.isArrangementSnapshot(parsed)) {
-                        snapshotToLoad = parsed;
-                    }
+                    resolvedSource = tryParsePackedArrangement(lastScoreString);
                 } catch {
-                    // Failed to parse, ignore and start with a new song.
+                    // Remove the invalid score from storage to prevent future errors, and proceed without loading.
+                    AppStorage.saveSetting("currentScore", undefined);
                 }
             }
         }
 
-        const resolvedArrangementToLoad = arrangementToLoad ?? newSong;
-        const arrangement = this.dataModel.loadArrangement(resolvedArrangementToLoad);
-        if (snapshotToLoad) {
-            const currentSnapshot = ArrangementSnapshotMigrator.migrate(snapshotToLoad, this.dataModel.instruments);
-            arrangement.applyArrangementSnapshot(currentSnapshot, this.dataModel.instruments);
+        let arrangement = this.dataModel.arrangement!;
+        if (resolvedSource) {
+            if (this.arrangementPlayer) {
+                const arrangementView = this.dataModel.arrangement!;
+                arrangementView.timeParams.unsubscribe(this.handleTimeParamsChanged);
+
+                this.arrangementPlayer.dispose();
+            }
+
+            arrangement = this.dataModel.loadArrangement(resolvedSource);
         }
+
         this.undoManager = new UndoManager(this.dataModel);
-        this.stopCurrentScoreAutoSave = this.undoManager.topics.currentState.subscribe(() => {
-            AppStorage.saveSetting("currentScore", JSON.stringify(this.undoManager!.currentState));
-        });
         this.arrangementPlayer = new ArrangementPlayer(this.dataModel);
         this.dataModel.arrangement!.timeParams.subscribe(this.handleTimeParamsChanged);
 
@@ -663,38 +638,8 @@ export class App extends UIComponent<{}, IAppState> {
             document.title = arrangement.title + " - Animada Score Book";
         }
 
-        this.setState({ serializedArrangement: resolvedArrangementToLoad }, () => {
-            if (snapshotToLoad) {
-                AppStorage.saveSetting("currentScore", JSON.stringify(snapshotToLoad));
-            } else if (resolvedArrangementToLoad === newSong) {
-                AppStorage.saveSetting("currentScore", undefined);
-            } else {
-                AppStorage.saveSetting("currentScore", JSON.stringify(resolvedArrangementToLoad));
-            }
-        });
-    }
-
-    private isSerialisedArrangement(data: unknown): data is ISerialisedArrangement {
-        if (!data || typeof data !== "object") {
-            return false;
-        }
-
-        const candidate = data as Partial<ISerialisedArrangement>;
-
-        return typeof candidate.composition === "string"
-            && (candidate.version === undefined || isNaturalNumber(candidate.version));
-    }
-
-    private isArrangementSnapshot(data: unknown): data is IArrangementSnapshot {
-        if (!data || typeof data !== "object") {
-            return false;
-        }
-
-        const candidate = data as Partial<IArrangementSnapshot>;
-
-        return !!candidate.timeParams
-            && Array.isArray(candidate.tracks)
-            && isNaturalNumber(candidate.version);
+        AppStorage.saveSetting("currentScore", stringifyPackedArrangement((arrangement as Arrangement).toSnapshot()),
+        );
     }
 
     private initEventHandlers(): void {

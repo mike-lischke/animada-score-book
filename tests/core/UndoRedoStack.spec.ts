@@ -15,7 +15,7 @@ vi.mock("../../src/core/serialisation/snapshots.js", () => {
     return {
         getArrangementSnapshot: (_arr: ISbDmArrangement) => {
             const snapshot: IArrangementSnapshot = {
-                version: 1,
+                version: 2,
                 title: _arr.title,
                 timeParams: {
                     timeSignature: "4/4",
@@ -62,6 +62,7 @@ const makeArrangement = (title: string): ISbDmArrangement => {
         applyArrangementSnapshot: vi.fn(),
         subscribe: vi.fn(),
         unsubscribe: vi.fn(),
+        measureLabels: {},
     };
 };
 

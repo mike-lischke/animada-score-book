@@ -13,7 +13,6 @@ import { Container } from "../framework/Container.js";
 import { ChildAlignment } from "../framework/ui-types.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
 import { Overlay } from "../Overlay.js";
-import { PolyrhythmEventGroupBuilder } from "../PolyrhythmEventGroupBuilder.js";
 import { SelectionControls } from "../SelectionControls.js";
 import { Separator } from "../Separator.js";
 import { UndoRedoControls } from "./UndoRedoControls.js";
@@ -194,13 +193,13 @@ export class ArrangementEditControls
             Math.round(arrangement.timeParams.timings.length / arrangement.timeParams.length),
         );
 
-        for (const track of arrangement.tracks) {
-            if (new PolyrhythmEventGroupBuilder(track, stepsPerBar).hasGroups()) {
-                return true;
-            }
-        }
-
-        return false;
+        return arrangement.tracks.some((track) => {
+            return track.measures.some((measure) => {
+                return measure.events.some((event) => {
+                    return (event.duration.numerator * stepsPerBar) % event.duration.denominator !== 0;
+                });
+            });
+        });
     }
 
     private arrangementCallback = () => {

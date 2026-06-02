@@ -33,7 +33,6 @@ export default tseslint.config(
                 projectService: {
                     allowDefaultProject: [
                         "eslint.config.mjs",
-                        "build/*.ts",
                         "vitest.config.ts",
                         "tailwind.config.mjs",
                         "playwright.config.ts",
@@ -90,7 +89,7 @@ export default tseslint.config(
                 "warn",
             ],
             "no-loop-func": [
-                "warn",
+                "off",
             ],
             "no-multi-str": [
                 "warn",

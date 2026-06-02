@@ -85,8 +85,10 @@ const makeTrack = (arrangement: ISbDmArrangement): ISbDmTrack => {
         getNoteAt: () => {
             return undefined;
         },
-        getNoteIterator: function* () {
-            // Empty iterator for test.
+        get notes() {
+            return (function* () {
+                // Empty iterator for test.
+            })();
         },
     };
 };
@@ -113,6 +115,16 @@ const makePolyrhythmFixture = (
         type: SbDmEntityType.TrackMeasure,
         id: 13,
         number: 1,
+        meter: {
+            beats: 4,
+            beatUnits: 4,
+            stepResolution: 8,
+            beatGroups: [2, 2, 2, 2],
+        },
+        steps: Array.from({ length: 8 }, (_, index) => {
+            return { index, noteStyleId: index === 0 ? "1" : undefined };
+        }),
+        subdivisions: [],
         events: [event],
     } as ISbDmTrackMeasure;
 
@@ -143,6 +155,7 @@ const makeArrangement = (barCount: number, trackCount: number): ISbDmArrangement
         applyArrangementSnapshot: vi.fn(),
         subscribe: vi.fn(),
         unsubscribe: vi.fn(),
+        measureLabels: {},
     };
 
     // Add tracks after arrangement is created
@@ -169,6 +182,7 @@ const makeScoreMetrics = (): IScoreMetrics => {
         secondsPerStep: 0.25,
         bars: 8,
         beatsPerBar: 4,
+        beatUnit: 4,
         pulsesPerBar: 4,
         stepsPerBar: 8,
         stepsPerPulse: 2,

@@ -28,7 +28,7 @@ export class SplitSlider extends UIComponent<ISplitSliderProperties> {
     public render(): ComponentChild {
         const {
             id, value, fillValue, splitPoint, min = 0, max = 100, style, disabled,
-            "data-tooltip": dataTooltip, showFill = true,
+            showFill = true,
         } = this.props;
         const className = this.generateFinalClassName([
             "slider-split",
@@ -46,7 +46,7 @@ export class SplitSlider extends UIComponent<ISplitSliderProperties> {
                 id={id}
                 className={className}
                 style={style}
-                data-tooltip={dataTooltip}
+                {...this.dataAttributes()}
                 role="slider"
                 aria-valuemin={min}
                 aria-valuemax={max}

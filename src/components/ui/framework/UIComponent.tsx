@@ -207,4 +207,13 @@ export abstract class UIComponent<P extends ICommonUIProperties = {}, S = {}>
 
         return c;
     }
+
+    /** @returns An object with all `data-*` props, ready to be spread onto a DOM element. */
+    protected dataAttributes(): Record<string, string | number | undefined> {
+        return Object.fromEntries(
+            Object.entries(this.props).filter(([key]) => {
+                return key.startsWith("data-");
+            }),
+        ) as Record<string, string | number | undefined>;
+    }
 }

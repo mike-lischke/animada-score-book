@@ -41,7 +41,7 @@ export class Container extends UIComponent<IContainerProperties> {
             id, children, style, orientation, mainAlignment, crossAlignment, wrap, innerRef,
             onClick, onDblClick, onPointerDown, onPointerUp, onPointerMove, onPointerEnter, onPointerLeave,
             onDragStart, onDragEnd,
-            title, "data-tooltip": dataTooltip, gap, onScroll,
+            title, gap, onScroll,
         } = this.props;
 
         const newStyle = {
@@ -74,7 +74,7 @@ export class Container extends UIComponent<IContainerProperties> {
                 onDragStart={onDragStart}
                 onDragEnd={onDragEnd}
                 title={title}
-                data-tooltip={dataTooltip}
+                {...this.dataAttributes()}
             >
                 {children}
             </ div>

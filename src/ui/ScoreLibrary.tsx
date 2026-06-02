@@ -19,7 +19,6 @@ import { RadialMenu } from "../components/ui/framework/RadialMenu.js";
 import { SetDataAction, TreeGrid, type ITreeGridOptions } from "../components/ui/framework/TreeGrid.js";
 import { UIComponent, type ICommonUIProperties } from "../components/ui/framework/UIComponent.js";
 import { ChildAlignment, Orientation, SelectionType } from "../components/ui/framework/ui-types.js";
-import { Arrangement } from "../core/Arrangement.js";
 import {
     SbDmEntityType, type ISbDmScore, type ISbDmScoreFolder, type ScoreBookDataModel
 } from "../core/ScoreBookDataModel.js";
@@ -33,8 +32,6 @@ export interface IScoreLibraryProperties extends ICommonUIProperties {
 interface IScoreLibraryState {
     /** The URL of an audio or video file. */
     url?: string;
-
-    currentScore?: ISbDmScore;
 }
 
 /**
@@ -255,7 +252,6 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
                         const scores = dataModel.scoreLib;
                         void tree?.setData(scores, SetDataAction.Replace);
 
-                        this.setState({ currentScore: undefined });
                         break;
                     }
 
@@ -283,23 +279,7 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
 
                 return;
             }
-
-            const { dataModel } = this.props;
-
-            const snapshot = dataModel.decodeScoreContent(entry);
-            if (snapshot) {
-                const { dataModel } = this.props;
-
-                const instruments = dataModel.instruments;
-                const arrangement = Arrangement.fromSnapshot(snapshot, instruments);
-                arrangement.title = entry.name;
-                this.setState({ currentScore: entry });
-
-                return;
-            }
         }
-
-        this.setState({ currentScore: undefined });
     };
 
     private handleScoreTreeRowExpanded = (row: RowComponent): void => {

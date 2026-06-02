@@ -8,9 +8,11 @@ import { describe, expect, it, vi } from "vitest";
 import { Arrangement } from "../../src/core/Arrangement.js";
 import { Track } from "../../src/core/Track.js";
 import { SbDmEntityType, type ISbDmInstrument } from "../../src/core/ScoreBookDataModel.js";
-import { ArrangementSnapshotMigrator } from "../../src/core/serialisation/migration/ArrangementSnapshotMigrator.js";
-import type { ILegacyArrangementSnapshot } from "../../src/core/serialisation/migration/migration-types.js";
+import { ArrangementMigrator } from "../../src/core/serialisation/migration/ArrangementMigrator.js";
+import type { ILegacyArrangementSnapshot } from "../../src/core/serialisation/migration/legacy-snapshot-types.js";
 import type { INoteStyle } from "../../src/core/types/general.js";
+import { TimeCoordinator } from "../../src/player/TimeCoordinator.js";
+import { TrackPlayer } from "../../src/player/TrackPlayer.js";
 
 const createInstrument = (typeId: string, id: number, displayOrder: number): ISbDmInstrument => {
     return {
@@ -38,6 +40,30 @@ const createInstrument = (typeId: string, id: number, displayOrder: number): ISb
             return undefined;
         }),
     };
+};
+
+const hydrateMeasureEvents = (arrangement: Arrangement): void => {
+    const noop = () => {
+        return;
+    };
+    const timeCoordinator = new TimeCoordinator(arrangement.timeParams, {
+        state: "stopped",
+        get currentTime() {
+            return -1;
+        },
+        subscribe: () => {
+            return () => {
+                return undefined;
+            };
+        },
+        unsubscribe: noop,
+    });
+    const players = arrangement.tracks.map((track) => {
+        return new TrackPlayer(track, timeCoordinator);
+    });
+    players.forEach((player) => {
+        player.dispose();
+    });
 };
 
 describe("Track", () => {
@@ -74,8 +100,8 @@ describe("Track", () => {
             }],
         };
 
-        const arrangement = Arrangement.fromSnapshot(ArrangementSnapshotMigrator.migrate(snapshot, [instrument]),
-            [instrument]);
+        const arrangement = ArrangementMigrator.migrateToArrangement(snapshot, [instrument]).arrangement;
+        hydrateMeasureEvents(arrangement);
         const track = arrangement.tracks[0] as Track;
 
         expect(track.measures).toHaveLength(2);
@@ -91,12 +117,14 @@ describe("Track", () => {
             // Note absorbs the rest gap up to the next pulse boundary (1/4) → quarter note.
             duration: { numerator: 1, denominator: 4 },
         });
+
         expect(firstMeasure.events[1]).toMatchObject({
             measureNumber: 1,
             start: { numerator: 1, denominator: 2 },
             // Note on a pulse start with no following event extends to the next pulse boundary.
             duration: { numerator: 1, denominator: 4 },
         });
+
         expect(secondMeasure.events[0]).toMatchObject({
             measureNumber: 2,
             start: { numerator: 1, denominator: 4 },
@@ -151,10 +179,13 @@ describe("Track", () => {
                 }],
             }],
         };
+
         // Mark the polyrhythm's three sub-notes as sounding by modifying the result post-migration:
         // the migrator emits one event per polyrhythm note; we then set their noteStyle directly.
-        const arrangement = Arrangement.fromSnapshot(
-            ArrangementSnapshotMigrator.migrate(snapshot, [instrument]), [instrument]);
+        const arrangement = ArrangementMigrator.migrateToArrangement(
+            snapshot, [instrument],
+        ).arrangement;
+        hydrateMeasureEvents(arrangement);
         const track = arrangement.tracks[0] as Track;
 
         const stepsPerBar = 16;

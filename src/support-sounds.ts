@@ -3,9 +3,9 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import { ExcitationMode, type IInstrumentMeta, type VocalCharacteristics } from "./core/ScoreBookDataModel.js";
+import { ExcitationMode, type IInstrumentMeta, type IVocalCharacteristics } from "./core/ScoreBookDataModel.js";
 
-const vocalCharacteristics: VocalCharacteristics = { excitationMode: ExcitationMode.Vocal };
+const vocalCharacteristics: IVocalCharacteristics = { excitationMode: ExcitationMode.Vocal };
 
 /** Portuguese number sounds. */
 const numberSoundsPT: IInstrumentMeta = {

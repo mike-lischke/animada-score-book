@@ -52,9 +52,9 @@ export class Instrument extends Publisher implements ISbDmInstrument {
         this.color = color;
 
         const loadPromises: Array<Promise<AudioBuffer>> = [];
-        variants.forEach(({ id, file, symbol, characteristics }) => {
+        variants.forEach(({ id, file, symbol, characteristics, noteLine }) => {
             this.noteStyles[id] = {
-                id, symbol, audioBuffer: null, instrument: this, characteristics
+                id, symbol, audioBuffer: null, instrument: this, characteristics, noteLine,
             };
             loadPromises.push(
                 Instrument.loadAudio(file).then((audioBuffer) => {

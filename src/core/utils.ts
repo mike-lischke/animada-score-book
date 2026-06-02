@@ -29,6 +29,34 @@ export const exists = <T>(value: T | undefined | null): value is T => {
 };
 
 /**
+ * @returns A set of prime factors. Returns an empty set for n ≤ 1.
+ *
+ * @param n The number to factorize (must be > 0).
+ */
+export const primeFactors = (n: number): Set<number> => {
+    const factors = new Set<number>();
+    if (n <= 1) {
+        return factors;
+    }
+
+    let remaining = n;
+    let divisor = 2;
+    while (divisor * divisor <= remaining) {
+        while (remaining % divisor === 0) {
+            factors.add(divisor);
+            remaining /= divisor;
+        }
+        divisor++;
+    }
+
+    if (remaining > 1) {
+        factors.add(remaining);
+    }
+
+    return factors;
+};
+
+/**
  * A helper function to asynchronously wait for a specific time. The call allows to run other JS code
  * while waiting for the timeout.
  *

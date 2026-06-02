@@ -3,7 +3,6 @@ import { configDefaults, defineConfig } from "vitest/config";
 export default defineConfig({
     test: {
         logHeapUsage: true,
-        isolate: false,
         pool: "threads",
         reporters: [["default", { summary: false }]],
         slowTestThreshold: 5000,

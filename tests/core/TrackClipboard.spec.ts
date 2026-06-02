@@ -6,7 +6,8 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
 import {
-    SbDmEntityType, type ISbDmArrangement, type ISbDmNoteEvent, type ITiming
+    Damping, ExcitationMode, HandTechnique, NoteDisplayType, SbDmEntityType, type ISbDmArrangement,
+    type ISbDmNoteEvent, type ITiming
 } from "../../src/core/ScoreBookDataModel.js";
 import { TrackClipboard } from "../../src/core/TrackClipboard.js";
 import type { INoteStyle } from "../../src/core/types/general.js";
@@ -14,7 +15,6 @@ import type { INoteStyle } from "../../src/core/types/general.js";
 interface ITrackWithNotesTestStub {
     notes: ISbDmNoteEvent[];
     getNoteAt: (timing: ITiming) => ISbDmNoteEvent | undefined;
-    getNoteIterator: () => IterableIterator<ISbDmNoteEvent>;
 }
 
 describe("TrackClipboard", () => {
@@ -25,7 +25,6 @@ describe("TrackClipboard", () => {
         return {
             id,
             symbol: undefined,
-            muting: undefined,
             audioBuffer: null,
             instrument: {
                 id: 1,
@@ -53,7 +52,13 @@ describe("TrackClipboard", () => {
                     };
                 },
                 unsubscribe: () => { /* no-op */ },
-            }
+            },
+            characteristics: {
+                excitationMode: ExcitationMode.Struck,
+                damping: Damping.Open,
+                displayType: NoteDisplayType.Oval,
+                handTechnique: HandTechnique.Thumb,
+            },
         };
     };
 
@@ -69,9 +74,6 @@ describe("TrackClipboard", () => {
             getNoteAt: (timing: ITiming) => {
                 // Simplified: timings are contiguous and start at step 1
                 return mockTrack.notes[timing.step - 1];
-            },
-            getNoteIterator: () => {
-                return mockTrack.notes.values();
             },
         };
 

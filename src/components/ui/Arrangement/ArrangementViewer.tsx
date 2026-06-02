@@ -13,7 +13,9 @@ import { clampValue } from "../../../core/utils.js";
 import type { ArrangementPlayer } from "../../../player/ArrangementPlayer.js";
 import type { ScoreBookUiServices } from "../../../player/types.js";
 import { requisitions } from "../../../supplement/Requisitions.js";
-import { BarViewer } from "../Bar/BarViewer.js";
+import { GridMeasureViewer } from "../Bar/Grid/GridMeasureViewer.js";
+import { StaffBarViewer } from "../Bar/Staff/StaffBarViewer.js";
+import { StaffPrefixViewer } from "../Bar/Staff/StaffPrefixViewer.js";
 import { Container } from "../framework/Container.js";
 import { ChildAlignment, Orientation } from "../framework/ui-types.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
@@ -35,6 +37,7 @@ interface IArrangementViewerState {
     trackPlayerCount: number;
     autoFollowIsOn: boolean;
     viewerZoom: number;
+    trackViewMode: "grid" | "staff";
 
     userMightBeTakingControl: boolean;
 }
@@ -79,6 +82,7 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
             noteWidth: 0,
             trackPlayerCount: props.arrangementPlayer.trackPlayers.size,
             autoFollowIsOn: true,
+            trackViewMode: settings.viewSettings?.arrangementViewSettings?.displayMode ?? "grid",
             userMightBeTakingControl: false
         };
 
@@ -91,6 +95,7 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         const { autoFollowIsOn, viewerZoom } = this.state;
 
         requisitions.register("settingsChanged", this.handleSettingsChanged);
+        requisitions.register("trackViewModeToggled", this.handleTrackViewModeToggled);
 
         setTimeout(this.handleResize, 0);
         this.resizeObserver.observe(this.viewerRef.current!);
@@ -150,48 +155,84 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         }
 
         requisitions.unregister("settingsChanged", this.handleSettingsChanged);
+        requisitions.unregister("trackViewModeToggled", this.handleTrackViewModeToggled);
     }
 
     public override render(): JSX.Element {
         const { arrangementPlayer, dataModel, services, touchEditingEnabled, undoManager } = this.props;
-        const { autoFollowIsOn, viewerZoom } = this.state;
+        const { autoFollowIsOn, trackViewMode, viewerZoom } = this.state;
 
         const arrangement = dataModel.arrangement!;
         const metrics = arrangementPlayer.scoreMetrics;
         const barCount = metrics.bars;
 
-        const contentHost = (
-            <Container
-                id="trackViewerContentHost"
-                innerRef={this.viewerContentHostRef}
-                orientation={Orientation.LeftToRight}
-                crossAlignment={ChildAlignment.Start}
-            >
+        const renderBars = (mode: "grid" | "staff") => {
+            let lastLabel: string | undefined;
+
+            return (
+                <>
+                    {mode === "staff"
+                        ? (
+                            <StaffPrefixViewer
+                                arrangement={arrangement}
+                                timeSignature={arrangement.timeParams.timeSignature}
+                            />
+                        )
+                        : null}
+                    {Array.from({ length: barCount }, (_, i) => {
+                        const barNumber = i + 1;
+                        const barViewerProps = {
+                            barNumber,
+                            arrangement,
+                            arrangementPlayer,
+                            touchEditingEnabled,
+                            services,
+                            undoManager,
+                            dataModel,
+                        };
+
+                        if (mode === "staff") {
+                            const ownLabel = arrangement.measureLabels[barNumber] as string | undefined;
+                            const inheritedLabel = ownLabel === undefined ? lastLabel : undefined;
+                            if (ownLabel !== undefined) {
+                                lastLabel = ownLabel;
+                            }
+
+                            return (
+                                <StaffBarViewer
+                                    key={barNumber}
+                                    {...barViewerProps}
+                                    ownLabel={ownLabel}
+                                    inheritedLabel={inheritedLabel}
+                                />
+                            );
+                        }
+
+                        return (
+                            <GridMeasureViewer
+                                key={barNumber}
+                                measureNumber={barNumber}
+                                scoreMetrics={metrics}
+                                {...barViewerProps}
+                            />
+                        );
+                    })}
+                </>
+            );
+        };
+
+        const contentHostContent = (
+            <>
                 <Container
                     id="trackViewerDecorations"
                     crossAlignment={ChildAlignment.Stretch}
                 >
                 </Container>
-                {Array.from({ length: barCount }, (_, i) => {
-                    const barNumber = i + 1;
-
-                    return (
-                        <BarViewer
-                            key={barNumber}
-                            barNumber={barNumber}
-                            arrangement={arrangement}
-                            arrangementPlayer={arrangementPlayer}
-                            touchEditingEnabled={touchEditingEnabled}
-                            services={services}
-                            undoManager={undoManager}
-                            dataModel={dataModel}
-                        />
-                    );
-                })}
+                {renderBars(trackViewMode)}
                 <Container id="trackViewerDecorationOverlay" >
                     <div id="playBeam" ref={this.playBeamRef} />
                 </Container>
-            </Container>
+            </>
         );
 
         return (
@@ -216,7 +257,14 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
                         onWheel={autoFollowIsOn ? this.handleWheel : undefined}
                         onScroll={this.handleTrackViewerScroll}
                     >
-                        {contentHost}
+                        <Container
+                            id="trackViewerContentHost"
+                            innerRef={this.viewerContentHostRef}
+                            orientation={Orientation.LeftToRight}
+                            crossAlignment={ChildAlignment.Start}
+                        >
+                            {contentHostContent}
+                        </Container>
                     </Container>
                 </Container>
                 <Minimap
@@ -256,26 +304,17 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
             const clientWidth = viewer.clientWidth;
             const maxScroll = Math.max(0, contentWidth - clientWidth);
 
-            // In staff mode the first bar carries a non-musical prefix (clef + time signature),
-            // so its musical content is squeezed into less width than the other bars. We mirror
-            // that layout in the play beam mapping: bar 1's musical span runs from the actual
-            // measured left edge of bar 1's runs container to the bar 1 / bar 2 boundary; bars
-            // 2..N each map [k*barWidth, (k+1)*barWidth]. Without this correction the beam
-            // would start at the very left (over the clef) and lag throughout bar 1.
             const metrics = arrangementPlayer.scoreMetrics;
-            const stepWidthPixels = contentWidth / (metrics.bars * metrics.stepsPerBar);
-            const barWidthPixels = stepWidthPixels * metrics.stepsPerBar;
+            const prefixWidthPixels = this.state.trackViewMode === "staff" ? this.measureStaffPrefixWidthPx() : 0;
+            const musicalContentWidth = Math.max(0, contentWidth - prefixWidthPixels);
+            const barWidthPixels = metrics.bars > 0 ? musicalContentWidth / metrics.bars : 0;
+            const stepWidthPixels = barWidthPixels / metrics.stepsPerBar;
             const pulseWidthPixels = stepWidthPixels * metrics.stepsPerPulse;
-            const firstBarMusicStartPx = this.measureFirstBarMusicStartPx();
 
             // Update play beam continuously.
             const normalizedPosition = arrangementPlayer.convertToLoopProgress(realTime);
             const totalProgress = normalizedPosition * metrics.bars;
-            const playBarIndex = Math.min(metrics.bars - 1, Math.floor(totalProgress));
-            const fractionInBar = totalProgress - playBarIndex;
-            const barStartPx = playBarIndex === 0 ? firstBarMusicStartPx : playBarIndex * barWidthPixels;
-            const barEndPx = (playBarIndex + 1) * barWidthPixels;
-            const position = Math.floor(barStartPx + (fractionInBar * (barEndPx - barStartPx)));
+            const position = Math.floor(prefixWidthPixels + (totalProgress * barWidthPixels));
             this.playBeamRef.current.style.left = `${position}px`;
 
             // Half-bar splits use beat-level granularity so odd time signatures snap musically.
@@ -338,28 +377,19 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
     }
 
     /**
-     * Returns the horizontal offset (in px, relative to the content host) at which the first
-     * bar's musical content begins — i.e. the left edge of bar 1's `.staff-note-viewer-runs`
-     * container. This already accounts for any non-musical prefix (clef + time signature) plus
-     * the bar's own internal padding, so the play beam can be lined up exactly with the first
-     * note slot. Returns 0 when no staff-mode first bar is rendered (grid mode), so the beam
-     * remains aligned with the bar's outer edge.
+     * Returns the width of the dedicated staff prefix column in pixels at 100% zoom.
      *
-     * @returns Offset in pixels from contentHost's left edge.
+     * @returns Prefix column width in px.
      */
-    private measureFirstBarMusicStartPx(): number {
+    private measureStaffPrefixWidthPx(): number {
         const host = this.viewerContentHostRef.current;
         if (!host) {
             return 0;
         }
-        const runs = host.querySelector<HTMLElement>(".staff-note-viewer.first-bar .staff-note-viewer-runs");
-        if (!runs) {
-            return 0;
-        }
-        const hostRect = host.getBoundingClientRect();
-        const runsRect = runs.getBoundingClientRect();
 
-        return runsRect.left - hostRect.left;
+        const prefix = host.querySelector<HTMLElement>(".staff-prefix-viewer");
+
+        return prefix?.offsetWidth ?? 0;
     }
 
     private animationEngineSubscription = () => {
@@ -378,10 +408,17 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
     };
 
     private handleSettingsChanged = (settings: IUISettings): Promise<boolean> => {
-        const { viewerZoom } = this.state;
-        const newZoom = settings.viewSettings?.arrangementViewSettings?.zoomLevel ?? 100;
-        if (newZoom !== viewerZoom) {
-            this.setState({ viewerZoom: newZoom });
+        const { viewerZoom, trackViewMode } = this.state;
+
+        const viewSettings = settings.viewSettings?.arrangementViewSettings;
+        const newZoom = viewSettings?.zoomLevel ?? 100;
+        const newTrackViewMode = viewSettings?.displayMode ?? "grid";
+
+        if (newZoom !== viewerZoom || newTrackViewMode !== trackViewMode) {
+            this.setState({
+                viewerZoom: newZoom,
+                trackViewMode: newTrackViewMode,
+            });
         }
 
         return Promise.resolve(true);
@@ -392,6 +429,18 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
             const scrollRange = this.viewerRef.current.scrollWidth - this.viewerRef.current.clientWidth;
             this.viewerRef.current.scrollLeft = clampValue(newScrollLeft * scrollRange, 0, scrollRange);
         }
+    };
+
+    private handleTrackViewModeToggled = (newTrackViewMode: "grid" | "staff") => {
+        const { trackViewMode: currentMode } = this.state;
+
+        if (currentMode === newTrackViewMode) {
+            return Promise.resolve(true);
+        }
+
+        this.setState({ trackViewMode: newTrackViewMode });
+
+        return Promise.resolve(true);
     };
 
     private handleTrackViewerScroll = () => {
@@ -416,11 +465,12 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
 
     private getVisibleBarRange(scrollHost: HTMLElement, leftPadding: number): IVisibleBarRange | null {
         const hostRect = scrollHost.getBoundingClientRect();
-        const zoom = scrollHost.currentCSSZoom || 1;
+        const zoom = scrollHost.currentCSSZoom;
         const viewportLeft = hostRect.left + (leftPadding * zoom);
         const viewportRight = hostRect.right;
 
-        const barElements = Array.from(scrollHost.querySelectorAll<HTMLElement>(".bar-viewer[data-bar]"));
+        const selector = ".bar-viewer[data-bar], .grid-measure-viewer[data-bar]";
+        const barElements = Array.from(scrollHost.querySelectorAll<HTMLElement>(selector));
 
         const visibleBars = barElements.filter((barEl) => {
             const rect = barEl.getBoundingClientRect();

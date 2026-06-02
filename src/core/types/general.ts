@@ -29,12 +29,7 @@ export interface IPublisher extends ISubscribable {
     publish(): void;
 }
 
-export interface ITimeParams extends ISubscribable {
-    timeSignature: string;
-    tempo: number;
-    length: number;
-    pulse: string;
-    stepResolution: number;
+export interface ITimeParams extends ISubscribable, ITimeParamsBase {
     timings: ITiming[];
 
     isValid(timing: ITiming): boolean;
@@ -50,22 +45,22 @@ export type Mutable<T> = {
     -readonly [P in keyof T]: T[P]
 };
 
-declare global {
-    /** Holds the dev server base URL. */
-    // eslint-disable-next-line @typescript-eslint/naming-convention
-    var BASE_URL: string;
+export interface ITimeParamsBase {
+    timeSignature: string;
+    tempo: number;
+    length: number;
+    pulse: string;
+    stepResolution: number;
 }
 
-// The goal here is to have intermediate objects which capture the state of the composition.
-// They will be used for share links, undo/redo, and tab state preservation.
-// Tab state preservation may require saving objects into history.state, so must be serializable/simple.
-
 export interface IArrangementSnapshot {
-    /** Snapshot schema version. Must always be a natural number. */
     version: number;
     title?: string;
-    timeParams: ITimeParamsSnapshot;
+    timeParams: ITimeParamsBase;
     tracks: ITrackSnapshot[];
+
+    /** Optional per-measure section labels, keyed by 1-based measure number. */
+    measureLabels?: Record<number, string>;
 }
 
 export interface ITrackSnapshot {
@@ -76,34 +71,47 @@ export interface ITrackSnapshot {
 
 export interface ITrackMeasureSnapshot {
     number: number;
-    events: INoteEventSnapshot[];
+    meter: IMeterSnapshot;
+    steps: IMeasureStep[];
+    subdivisions: ISubdivision[];
 }
 
-export interface INoteEventSnapshot {
-    start: IFraction;
-    duration: IFraction;
-    noteStyleId: string;
-}
-
-export interface ITimeParamsSnapshot {
-    timeSignature: string;
-    tempo: number;
-    length: number;
-    pulse: string;
+export interface IMeterSnapshot {
+    beats: number;
+    beatUnits: number;
     stepResolution: number;
+    beatGroups: number[];
+}
+
+export interface IMeasureStep {
+    index: number;
+    noteStyleId?: string;
 }
 
 /**
- * The format used to in URLs from BananaDrum and snapshots from the backend and internally (undo/redo,
- * app storage etc.).
+ * A subdivision of one or more grid steps. Subdivisions are the primary mechanism for
+ * creating note values shorter than a single grid step.
+ *
+ * When {@link isTuplet} is true the subdivision represents a genuine tuplet (e.g. 3:2,
+ * 5:4) and should be rendered with a bracket and number in staff notation. When false
+ * it is a simple rhythmic subdivision (e.g. a step split into 2, 4, or 8 equal parts
+ * in a simple meter) and needs no tuplet notation.
  */
-export interface ISerialisedArrangement {
-    title?: string;
-    composition: string;
+export interface ISubdivision {
+    id: number;
 
-    /**
-     * Snapshot schema version of the payload (same meaning as `IArrangementSnapshot.version`).
-     * Missing values are interpreted as version 1 (legacy BananaDrum-encoded composition).
-     */
-    version?: number;
+    /** 0-based index into the measure's visible steps array. */
+    startStep: number;
+
+    /** Number of subdivisions inside this group. */
+    actual: number;
+
+    /** Number of parent steps this subdivision replaces. */
+    normal: number;
+
+    /** ID of the parent subdivision, if nested. */
+    parentSubdivisionId?: number;
+
+    /** Whether this subdivision is a real tuplet requiring bracket/number notation. */
+    isTuplet: boolean;
 }

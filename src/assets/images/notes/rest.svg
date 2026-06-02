@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0" y="0" width="60" height="120" viewBox="0, 0, 60, 120">
+  <g id="rest">
+    <path d="M10,72 L50,72 L50,60 L10,60 z" fill="currentColor" id="full-rest" style="display: var(--rest-show-whole, none)"/>
+    <path d="M10,48 L50,48 L50,60 L10,60 z" fill="currentColor" id="half-rest" style="display: var(--rest-show-half, none)"/>
+    <g id="4th-rest" style="display: var(--rest-show-quarter, none)">
+      <g id="upper-part">
+        <path d="M24.938,24.517 L40.353,45.587 C25.863,62.105 34.656,68.909 38.244,78.456 L21.549,54.152 C31.201,42.741 27.336,33.944 23.894,25.084 C23.892,25.08 24.937,24.523 24.938,24.517 z" fill="currentColor"/>
+        <path d="M24.938,24.517 L40.353,45.587 C25.863,62.105 34.656,68.909 38.244,78.456 L21.549,54.152 C31.201,42.741 27.336,33.944 23.894,25.084 C23.892,25.08 24.937,24.523 24.938,24.517 z" fill-opacity="0" stroke="currentColor" stroke-width="1.646"/>
+      </g>
+      <g id="lower-part">
+        <path d="M36.92,75.743 C19.15,59.823 12.327,80.573 29.836,95.483 C27.583,91.617 21.08,72.625 37.789,78.412" fill="currentColor"/>
+        <path d="M36.92,75.743 C19.15,59.823 12.327,80.573 29.836,95.483 C27.583,91.617 21.08,72.625 37.789,78.412" fill-opacity="0" stroke="currentColor" stroke-width="1.097"/>
+      </g>
+    </g>
+    <g id="8th-rest" style="display: var(--rest-show-eighth, none)">
+      <path d="M31.254,44.33 C31.257,48.414 27.947,51.726 23.863,51.726 C19.779,51.726 16.469,48.414 16.472,44.33 C16.469,40.246 19.779,36.934 23.863,36.934 C27.947,36.934 31.257,40.246 31.254,44.33 z" fill="currentColor" id="head"/>
+      <path d="M29.438,80.8 C29.438,79.82 41.128,39.393 41.128,39.393" fill-opacity="0" stroke="currentColor" stroke-width="3" id="stem"/>
+      <path d="M23.419,50.286 C28.889,50.661 39.139,49.277 40.988,39.778 C38.632,43.491 38.549,50.726 24.852,47.548" fill-opacity="0" stroke="currentColor" stroke-width="3" id="bow"/>
+    </g>
+    <g id="16th-rest" style="display: var(--rest-show-sixteenth, none)">
+      <g id="lower-part">
+        <path d="M27.391,56.604 C27.394,60.688 24.084,64 20,64 C15.916,64 12.606,60.688 12.609,56.604 C12.606,52.52 15.916,49.208 20,49.208 C24.084,49.208 27.394,52.52 27.391,56.604 z" fill="currentColor" id="lower-head"/>
+        <path d="M26.55,93 C26.55,92.02 38.241,51.593 38.241,51.593" fill-opacity="0" stroke="currentColor" stroke-width="3" id="lower-stem"/>
+        <path d="M20.532,62.486 C26.001,62.861 36.251,61.477 38.101,51.978 C35.745,55.691 35.661,62.926 21.965,59.748" fill-opacity="0" stroke="currentColor" stroke-width="3" id="lower-bow"/>
+      </g>
+      <g id="upper-part">
+        <path d="M34.391,32.5 C34.394,36.584 31.084,39.896 27,39.896 C22.916,39.896 19.606,36.584 19.609,32.5 C19.606,28.416 22.916,25.104 27,25.104 C31.084,25.104 34.394,28.416 34.391,32.5 z" fill="currentColor" id="upper-head"/>
+        <path d="M38.178,51.938 C38.178,50.958 45,27.594 45,27.594" fill-opacity="0" stroke="currentColor" stroke-width="3" id="upper-stem"/>
+        <path d="M27.291,38.488 C32.76,38.862 43.01,37.478 44.86,27.979 C42.504,31.693 42.42,38.928 28.724,35.75" fill-opacity="0" stroke="currentColor" stroke-width="3" id="upper-bow"/>
+      </g>
+    </g>
+    <g id="32nd-rest" style="display: var(--rest-show-thirty-second, none)">
+      <g id="lower-part">
+        <path d="M22.8,105 C22.8,104.02 34.491,63.593 34.491,63.593" fill-opacity="0" stroke="currentColor" stroke-width="3" id="path3189"/>
+        <path d="M16.782,74.487 C22.251,74.861 32.501,73.477 34.351,63.978 C31.995,67.692 31.911,74.927 18.215,71.749" fill-opacity="0" stroke="currentColor" stroke-width="3" id="path3191"/>
+        <path d="M24.391,68.5 C24.394,72.584 21.084,75.896 17,75.896 C12.916,75.896 9.606,72.584 9.609,68.5 C9.606,64.416 12.916,61.104 17,61.104 C21.084,61.104 24.394,64.416 24.391,68.5 z" fill="currentColor" id="lower-head"/>
+      </g>
+      <g id="middle-part">
+        <path d="M34.428,63.939 C34.428,62.959 41.25,39.595 41.25,39.595" fill-opacity="0" stroke="currentColor" stroke-width="3" id="path3189-7"/>
+        <path d="M23.541,50.488 C29.01,50.863 39.26,49.479 41.11,39.98 C38.754,43.693 38.67,50.928 24.974,47.75" fill-opacity="0" stroke="currentColor" stroke-width="3" id="path3191-6"/>
+        <path d="M30.891,44.5 C30.894,48.584 27.584,51.896 23.5,51.896 C19.416,51.896 16.106,48.584 16.109,44.5 C16.106,40.416 19.416,37.104 23.5,37.104 C27.584,37.104 30.894,40.416 30.891,44.5 z" fill="currentColor" id="middle-head"/>
+      </g>
+      <g id="upper-part">
+        <path d="M41.178,39.908 C41.178,38.928 48,15.564 48,15.564" fill-opacity="0" stroke="currentColor" stroke-width="3" id="path3189-7-7"/>
+        <path d="M30.291,26.458 C35.76,26.832 46.01,25.448 47.86,15.949 C45.504,19.662 45.42,26.897 31.724,23.719" fill-opacity="0" stroke="currentColor" stroke-width="3" id="path3191-6-3"/>
+        <path d="M37.391,20.5 C37.394,24.584 34.084,27.896 30,27.896 C25.916,27.896 22.606,24.584 22.609,20.5 C22.606,16.416 25.916,13.104 30,13.104 C34.084,13.104 37.394,16.416 37.391,20.5 z" fill="currentColor" id="upper-head"/>
+      </g>
+    </g>
+    <path d="M51,76.396 C51.002,78.823 49.034,80.792 46.607,80.792 C44.18,80.792 42.212,78.823 42.214,76.396 C42.212,73.969 44.18,72 46.607,72 C49.034,72 51.002,73.969 51,76.396 z" fill="currentColor" id="dot" style="display: var(--rest-show-dot, none)"/>
+  </g>
+</svg>

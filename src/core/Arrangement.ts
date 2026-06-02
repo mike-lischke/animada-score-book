@@ -5,13 +5,12 @@
 
 import { Publisher } from "./Publisher.js";
 import {
-    SbDmEntityType, type ISbDmArrangement, type ISbDmInstrument, type ISbDmNoteEvent, type ISbDmTrack,
+    SbDmEntityType, type ISbDmArrangement, type ISbDmInstrument, type ISbDmTrack,
     type ISbDmTrackMeasure
 } from "./ScoreBookDataModel.js";
 import { TimeParams } from "./TimeParams.js";
 import { Track } from "./Track.js";
-import type { IArrangementSnapshot, IFraction, ITimeParams, ITrackSnapshot } from "./types/general.js";
-import { compareFractions, reduceFraction, subtractFractions } from "./serialisation/numeric-functions.js";
+import type { IArrangementSnapshot, ITimeParams, ITrackSnapshot } from "./types/general.js";
 import { getNewId } from "./utils.js";
 
 export class Arrangement extends Publisher implements ISbDmArrangement {
@@ -23,6 +22,9 @@ export class Arrangement extends Publisher implements ISbDmArrangement {
 
     public timeParams!: ITimeParams;
 
+    /** Per-measure section labels, keyed by 1-based measure number. */
+    public measureLabels: Record<number, string> = {};
+
     public mainVolume = 100;
     public loop = false;
     public useMetronome = false;
@@ -31,26 +33,71 @@ export class Arrangement extends Publisher implements ISbDmArrangement {
     private titleString: string | undefined;
 
     /**
-     * Private constructor. Use the factory method to create new Arrangements.
+     * Creates an empty arrangement with one bar, no notes, and a default set of
+     * tracks. Mirrors the legacy `emptySongString` encoding:
+     * 4/4, 110 bpm, 1 bar, 16th-note step resolution.
+     *
+     * @param instruments The available instruments (only those matching the default
+     *                    type-ids will receive a track).
+     * @returns A new arrangement ready for editing.
      */
-    private constructor() {
-        super();
+    public static emptyArrangement(instruments: ISbDmInstrument[]): Arrangement {
+        const arrangement = new Arrangement();
+        arrangement.timeParams = new TimeParams("4/4", 110, 1, "1/4", 16);
+
+        // Default instrument type-ids from the legacy emptySongString.
+        const typeIds = ["0", "1", "2", "3", "5", "6", "7", "8", "9"];
+        for (const typeId of typeIds) {
+            const instrument = instruments.find((inst) => {
+                return inst.typeId === typeId;
+            });
+
+            if (instrument) {
+                arrangement.addTrack(instrument);
+            }
+        }
+
+        return arrangement;
     }
 
     /**
-     * @param snapshot The arrangement snapshot to create the arrangement from.
-     * @param instruments The available instruments.
-     * @returns The created arrangement.
+     * Produces a snapshot suitable for compact storage via {@link stringifyPackedArrangement}.
+     *
+     * @returns An arrangement snapshot reflecting the current state.
      */
-    public static fromSnapshot(snapshot: IArrangementSnapshot, instruments: ISbDmInstrument[]): Arrangement {
-        const tps = snapshot.timeParams;
-        const timeParams = new TimeParams(tps.timeSignature, tps.tempo, tps.length, tps.pulse, tps.stepResolution);
-        const arrangement = new Arrangement();
-        arrangement.timeParams = timeParams;
-
-        arrangement.applyCurrentArrangementSnapshot(snapshot, instruments);
-
-        return arrangement;
+    public toSnapshot(): IArrangementSnapshot {
+        return {
+            version: 2,
+            title: this.titleString,
+            timeParams: {
+                timeSignature: this.timeParams.timeSignature,
+                tempo: this.timeParams.tempo,
+                length: this.timeParams.length,
+                pulse: this.timeParams.pulse,
+                stepResolution: this.timeParams.stepResolution,
+            },
+            tracks: this.tracks.map((track) => {
+                return {
+                    id: track.id,
+                    instrumentId: track.instrument.typeId,
+                    measures: track.measures.map((measure) => {
+                        return {
+                            number: measure.number,
+                            meter: { ...measure.meter },
+                            steps: measure.steps.map((step) => {
+                                return { ...step };
+                            }),
+                            subdivisions: measure.subdivisions.map((sub) => {
+                                return { ...sub };
+                            }),
+                        };
+                    }),
+                };
+            }),
+            measureLabels: Object.keys(this.measureLabels).length > 0
+                ? { ...this.measureLabels }
+                : undefined,
+        };
     }
 
     /**
@@ -64,12 +111,14 @@ export class Arrangement extends Publisher implements ISbDmArrangement {
         const index = this.tracks.findIndex((track) => {
             return track.instrument.displayOrder > instrument.displayOrder;
         });
+
         const track = new Track(this, instrument, id);
         if (index === -1) {
             this.tracks.push(track);
         } else {
             this.tracks.splice(index, 0, track);
         }
+
         this.publish();
 
         return track;
@@ -114,15 +163,13 @@ export class Arrangement extends Publisher implements ISbDmArrangement {
     }
 
     public applyArrangementSnapshot(arrangementSnapshot: IArrangementSnapshot, instruments: ISbDmInstrument[]): void {
-        this.applyCurrentArrangementSnapshot(arrangementSnapshot, instruments);
-    };
-
-    private applyCurrentArrangementSnapshot(arrangementSnapshot: IArrangementSnapshot,
-        instruments: ISbDmInstrument[]): void {
         // applyTimeParams is redundant when loading Animada Score Book, since we just created the Arrangement with the
         // same TPs. However, applying the full snapshot is required for Undo/Redo.
         this.applyTimeParams(arrangementSnapshot);
         this.title = arrangementSnapshot.title ?? "Untitled Arrangement";
+        this.measureLabels = arrangementSnapshot.measureLabels
+            ? { ...arrangementSnapshot.measureLabels }
+            : {};
 
         // Remove tracks that aren't in the snapshot. Iterate backwards because removeTrack mutates this.tracks.
         for (let trackIndex = this.tracks.length - 1; trackIndex >= 0; trackIndex--) {
@@ -149,7 +196,11 @@ export class Arrangement extends Publisher implements ISbDmArrangement {
         });
     };
 
-    // Apply all timeParams without checking if they've changed. TP does this check and won't publish redundantly
+    /**
+     * Apply all timeParams without checking if they've changed. TP does this check and won't publish redundantly
+     *
+     * @param arrangementSnapshot The snapshot containing the time parameters to apply.
+     */
     private applyTimeParams(arrangementSnapshot: IArrangementSnapshot): void {
         this.timeParams.timeSignature = arrangementSnapshot.timeParams.timeSignature;
         this.timeParams.tempo = arrangementSnapshot.timeParams.tempo;
@@ -159,59 +210,27 @@ export class Arrangement extends Publisher implements ISbDmArrangement {
     };
 
     private applyTrackSnapshot(track: Track, trackSnapshot: ITrackSnapshot): void {
-        const stepsPerBar = this.getStepsPerBar();
-        const pulseFraction = this.parsePulseFraction();
-        const measureEnd: IFraction = { numerator: 1, denominator: 1 };
-
         const newMeasures: ISbDmTrackMeasure[] = trackSnapshot.measures.map((measureSnapshot) => {
-            // Drop redundant grid-aligned rest events: they carry no sound and exactly fill one
-            // grid slot, so they're reconstructed on demand by Track.getNoteAt. Polyrhythm-shaped
-            // rest events (non-grid duration) are preserved because their duration encodes the
-            // polyrhythm structure.
-            const filteredSnapshotEvents = measureSnapshot.events.filter((event) => {
-                if (event.noteStyleId !== "0") {
-                    return true;
-                }
-
-                return !this.isGridSlotDuration(event.duration, stepsPerBar);
-            });
-
-            const events: ISbDmNoteEvent[] = filteredSnapshotEvents.map((event, index) => {
-                // Extend grid-aligned sounding notes to absorb the rest gap that follows them
-                // within their pulse. This stores the truthful effective duration in the data
-                // model (a 16th hit followed by silence within a pulse becomes a quarter note
-                // when no other events follow in that pulse). Polyrhythm-shaped events keep
-                // their duration.
-                let duration = event.duration;
-                if (event.noteStyleId !== "0" && this.isGridMultipleDuration(duration, stepsPerBar)) {
-                    const nextStart = filteredSnapshotEvents[index + 1]?.start ?? measureEnd;
-                    const pulseEnd = this.pulseBoundaryAfter(event.start, pulseFraction);
-                    const limit = compareFractions(nextStart, pulseEnd) < 0 ? nextStart : pulseEnd;
-                    const extendedDuration = subtractFractions(limit, event.start);
-                    if (compareFractions(extendedDuration, duration) > 0) {
-                        duration = extendedDuration;
-                    }
-                }
-
-                return {
-                    id: getNewId(),
-                    type: SbDmEntityType.NoteEvent,
-                    measureNumber: measureSnapshot.number,
-                    start: event.start,
-                    duration,
-                    track,
-                    timing: this.timingForEventStart(event.start, measureSnapshot.number, stepsPerBar),
-                    noteStyle: event.noteStyleId === "0"
-                        ? undefined
-                        : track.instrument.noteStyles[event.noteStyleId],
-                };
-            });
+            const beatGroupsCandidate = (measureSnapshot.meter as { beatGroups?: unknown; }).beatGroups;
+            const beatGroups = Array.isArray(beatGroupsCandidate)
+                ? [...(beatGroupsCandidate as number[])]
+                : [measureSnapshot.meter.stepResolution];
 
             return {
                 id: this.getTrackMeasureId(track, measureSnapshot.number),
                 type: SbDmEntityType.TrackMeasure,
                 number: measureSnapshot.number,
-                events,
+                meter: {
+                    ...measureSnapshot.meter,
+                    beatGroups,
+                },
+                steps: measureSnapshot.steps.map((step) => {
+                    return { ...step };
+                }),
+                subdivisions: measureSnapshot.subdivisions.map((subdivision) => {
+                    return { ...subdivision };
+                }),
+                events: [],
             };
         });
 
@@ -219,56 +238,7 @@ export class Arrangement extends Publisher implements ISbDmArrangement {
         track.publish();
     }
 
-    private isGridSlotDuration(duration: IFraction, stepsPerBar: number): boolean {
-        // duration === 1 / stepsPerBar  ⇔  numerator * stepsPerBar === denominator
-        return duration.numerator * stepsPerBar === duration.denominator;
-    }
-
-    private isGridMultipleDuration(duration: IFraction, stepsPerBar: number): boolean {
-        // duration === k / stepsPerBar (integer k ≥ 1) ⇔ numerator * stepsPerBar % denominator === 0
-        return (duration.numerator * stepsPerBar) % duration.denominator === 0;
-    }
-
-    private parsePulseFraction(): IFraction {
-        const [numerator, denominator] = this.timeParams.pulse.split("/").map(Number);
-        if (!Number.isFinite(numerator) || !Number.isFinite(denominator) || denominator === 0) {
-            return { numerator: 1, denominator: 4 };
-        }
-
-        return reduceFraction(numerator, denominator);
-    }
-
-    private pulseBoundaryAfter(start: IFraction, pulse: IFraction): IFraction {
-        // Smallest k * pulse strictly greater than start, capped at the measure end (1/1).
-        const startInPulses = (start.numerator * pulse.denominator) / (start.denominator * pulse.numerator);
-        const nextK = Math.floor(startInPulses) + 1;
-        const candidate = reduceFraction(nextK * pulse.numerator, pulse.denominator);
-        const measureEnd: IFraction = { numerator: 1, denominator: 1 };
-
-        return compareFractions(candidate, measureEnd) < 0 ? candidate : measureEnd;
-    }
-
-    private getStepsPerBar(): number {
-        const { timings } = this.timeParams;
-        let stepsPerBar = 0;
-        for (const timing of timings) {
-            if (timing.bar === 1 && timing.step > stepsPerBar) {
-                stepsPerBar = timing.step;
-            }
-        }
-
-        return stepsPerBar > 0 ? stepsPerBar : 1;
-    }
-
-    private timingForEventStart(start: { numerator: number; denominator: number; }, measureNumber: number,
-        stepsPerBar: number): { bar: number; step: number; } {
-        const stepIndex = (start.numerator * stepsPerBar) / start.denominator;
-        const step = Math.floor(stepIndex) + 1;
-
-        return { bar: measureNumber, step };
-    }
-
     private getTrackMeasureId(track: Track, measureNumber: number): number {
-        return (track.id * 10_000) + measureNumber;
+        return (track.id * 100) + measureNumber;
     }
 };

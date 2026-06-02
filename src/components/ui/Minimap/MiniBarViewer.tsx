@@ -6,7 +6,6 @@
 import type { ComponentChild } from "preact";
 
 import type { ISbDmArrangement } from "../../../core/ScoreBookDataModel.js";
-import { PolyrhythmEventGroupBuilder, type IEventPolyrhythmGroup } from "../PolyrhythmEventGroupBuilder.js";
 import type { ICommonUIProperties } from "../framework/UIComponent.js";
 import { UIComponent } from "../framework/UIComponent.js";
 
@@ -25,10 +24,6 @@ export class MiniBarViewer extends UIComponent<IMiniBarViewerProps> {
             <div className={className} data-bar={barNumber}>
                 {arrangement.tracks.map((track) => {
                     const events = barNumber - 1 < track.measures.length ? track.measures[barNumber - 1].events : [];
-                    const touchingGroups = new PolyrhythmEventGroupBuilder(track, stepsPerBar)
-                        .build().filter((group) => {
-                            return group.measureNumber === barNumber;
-                        });
 
                     const activeSteps = new Set<number>();
                     for (const event of events) {
@@ -40,15 +35,13 @@ export class MiniBarViewer extends UIComponent<IMiniBarViewerProps> {
                         activeSteps.add(step);
                     }
 
-                    const polyrhythmSteps = this.getPolyrhythmStepsInBar(touchingGroups);
-
                     const neutralColor = `color-mix(in srgb, var(--color-base-200) 30%, var(--color-base-100))`;
 
                     return (
                         <div key={track.id} className="bar-track-row mini-bar-track-row">
                             {Array.from({ length: stepsPerBar }, (_, index) => {
                                 const step = index + 1;
-                                const isActive = activeSteps.has(step) || polyrhythmSteps.has(step);
+                                const isActive = activeSteps.has(step);
 
                                 return (
                                     <div
@@ -67,27 +60,4 @@ export class MiniBarViewer extends UIComponent<IMiniBarViewerProps> {
         );
     }
 
-    private getPolyrhythmStepsInBar(groups: IEventPolyrhythmGroup[]): Set<number> {
-        const activeSteps = new Set<number>();
-
-        for (const group of groups) {
-            if (group.events.length === 0) {
-                continue;
-            }
-
-            for (let index = 0; index < group.events.length; index++) {
-                if (!group.events[index]?.noteStyle) {
-                    continue;
-                }
-
-                const relativeStep = Math.min(
-                    group.stepsInBar - 1,
-                    Math.floor((index * group.stepsInBar) / group.events.length)
-                );
-                activeSteps.add(group.startStep + relativeStep);
-            }
-        }
-
-        return activeSteps;
-    }
 }

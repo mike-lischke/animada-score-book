@@ -5,12 +5,14 @@
 
 import { describe, expect, it, vi } from "vitest";
 
-import { Arrangement } from "../../src/core/Arrangement.js";
-import { SbDmEntityType, type ISbDmInstrument } from "../../src/core/ScoreBookDataModel.js";
-import { ArrangementSnapshotMigrator } from "../../src/core/serialisation/migration/ArrangementSnapshotMigrator.js";
-import { getArrangementSnapshot } from "../../src/core/serialisation/snapshots.js";
-import type { ILegacyArrangementSnapshot } from "../../src/core/serialisation/migration/migration-types.js";
-import type { INoteStyle, Mutable } from "../../src/core/types/general.js";
+import { Arrangement } from "../../../src/core/Arrangement.js";
+import { SbDmEntityType, type ISbDmInstrument } from "../../../src/core/ScoreBookDataModel.js";
+import { ArrangementMigrator } from "../../../src/core/serialisation/migration/ArrangementMigrator.js";
+import { getArrangementSnapshot } from "../../../src/core/serialisation/snapshots.js";
+import type { ILegacyArrangementSnapshot } from "../../../src/core/serialisation/migration/legacy-snapshot-types.js";
+import type { INoteStyle, Mutable } from "../../../src/core/types/general.js";
+import { TimeCoordinator } from "../../../src/player/TimeCoordinator.js";
+import { TrackPlayer } from "../../../src/player/TrackPlayer.js";
 
 const createInstrument = (typeId: string, id: number, displayOrder: number): ISbDmInstrument => {
     return {
@@ -38,6 +40,33 @@ const createInstrument = (typeId: string, id: number, displayOrder: number): ISb
             return undefined;
         }),
     };
+};
+
+const hydrateMeasureEvents = (arrangement: Arrangement): void => {
+    const noop = () => {
+        return;
+    };
+
+    const timeCoordinator = new TimeCoordinator(arrangement.timeParams, {
+        state: "stopped",
+        get currentTime() {
+            return -1;
+        },
+        subscribe: () => {
+            return () => {
+                return undefined;
+            };
+        },
+        unsubscribe: noop,
+    });
+
+    const players = arrangement.tracks.map((track) => {
+        return new TrackPlayer(track, timeCoordinator);
+    });
+
+    players.forEach((player) => {
+        player.dispose();
+    });
 };
 
 describe("snapshots", () => {
@@ -75,9 +104,10 @@ describe("snapshots", () => {
             }],
         };
 
-        const arrangement = Arrangement.fromSnapshot(ArrangementSnapshotMigrator.migrate(sourceSnapshot, [instrument]),
-            [instrument]);
+        const arrangement = ArrangementMigrator.migrateToArrangement(sourceSnapshot, [instrument]).arrangement;
+        hydrateMeasureEvents(arrangement);
         const firstTrack = arrangement.tracks[0];
+
         // Polyrhythm-shaped events have a duration whose denominator differs from stepsPerBar (here 8).
         const stepsPerBar = 8;
         const polyrhythmEventIndex = firstTrack.measures[0].events.findIndex((event) => {
@@ -102,16 +132,17 @@ describe("snapshots", () => {
         expect("measures" in track).toBe(true);
         if ("measures" in track) {
             expect("polyrhythms" in track).toBe(false);
-            expect(track.measures[0]?.events).toContainEqual({
-                start: { numerator: 0, denominator: 1 },
-                duration: { numerator: 1, denominator: 12 },
-                noteStyleId: "0",
-            });
-            expect(track.measures[0]?.events).toContainEqual({
-                start: { numerator: 1, denominator: 12 },
-                duration: { numerator: 1, denominator: 12 },
-                noteStyleId: "1",
-            });
+            expect(track.measures[0]?.subdivisions).toContainEqual(expect.objectContaining({
+                startStep: 0,
+                actual: 3,
+                normal: 2,
+                isTuplet: true,
+            }));
+            expect(track.measures[0]?.steps.slice(0, 3)).toEqual([
+                { index: 0, noteStyleId: undefined },
+                { index: 1, noteStyleId: "1" },
+                { index: 2, noteStyleId: undefined },
+            ]);
         }
     });
 });

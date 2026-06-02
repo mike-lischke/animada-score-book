@@ -70,7 +70,7 @@ export class SelectionManager extends Publisher {
 
         if (this.selections.size === 1) {
             const trackSelection = this.selections.get(this.anchor!.track)!;
-            const noteIterator = this.anchor!.track.getNoteIterator();
+            const noteIterator = this.anchor!.track.notes;
 
             this.deselectUntilMatch(trackSelection, noteIterator, (note) => {
                 return note === this.anchor || note === clickedNote;
@@ -90,7 +90,7 @@ export class SelectionManager extends Publisher {
             // In this case, we know no track contains both anchor and clickedNote. Some may not include either.
             for (const track of this.selections.keys()) {
                 const trackSelection = this.selections.get(track)!;
-                const noteIterator = track.getNoteIterator();
+                const noteIterator = track.notes;
                 const [knownNote, knownNoteIsOnLeftEdge, knownNoteIsOnRightEdge] =
                     this.anchor!.track === track
                         ? [this.anchor, anchorLeft === leftBound, anchorRight === rightBound]

@@ -12,7 +12,6 @@ import {
 import type { INoteStyle, ITimeParams, Mutable } from "../../src/core/types/general.js";
 import type { TimeCoordinator } from "../../src/player/TimeCoordinator.js";
 import { TrackPlayer } from "../../src/player/TrackPlayer.js";
-import type { ILoopInterval } from "../../src/player/types.js";
 
 type Sub = (...args: unknown[]) => void;
 
@@ -62,9 +61,6 @@ const makeTimeCoordinator = (realTimeLength: RealTime = 4): TimeCoordinator => {
         },
         convertEventToRealTime: (event: ISbDmNoteEvent) => {
             return event.start.numerator / event.start.denominator;
-        },
-        convertToLoopIntervals: () => {
-            return [] as ILoopInterval[];
         },
         convertToAudioTime: (realTime: RealTime) => {
             return realTime;
@@ -126,6 +122,7 @@ const makeTrack = (
         }),
         removeTrack: vi.fn(),
         applyArrangementSnapshot: vi.fn(),
+        measureLabels: {}
     };
 
     const track: Mutable<ISbDmTrack> & { _notes: ISbDmNoteEvent[]; } = {
@@ -161,8 +158,12 @@ const makeTrack = (
         getNoteAt: () => {
             return undefined;
         },
-        getNoteIterator: function* () {
-            yield* this._notes;
+        get notes() {
+            const ns = this._notes;
+
+            return (function* () {
+                yield* ns;
+            })();
         },
         ...makeSubscribable(),
         _notes: [],
@@ -207,6 +208,16 @@ const makeTrack = (
         type: SbDmEntityType.TrackMeasure,
         id: 1,
         number: 1,
+        meter: {
+            beats: 4,
+            beatUnits: 4,
+            stepResolution: track._notes.length,
+            beatGroups: [track._notes.length],
+        },
+        steps: track._notes.map((currentNote, index) => {
+            return { index, noteStyleId: currentNote.noteStyle?.id };
+        }),
+        subdivisions: [],
         events: measureEvents,
     };
     track.measures = [measure];

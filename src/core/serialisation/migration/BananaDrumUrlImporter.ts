@@ -4,74 +4,248 @@
  */
 
 import type { ISbDmInstrument } from "../../ScoreBookDataModel.js";
-import type { ISerialisedArrangement } from "../../types/general.js";
-import type {
-    ILegacyArrangementSnapshot, ILegacyPolyrhythmSnapshot, ILegacyTrackSnapshot
-} from "./migration-types.js";
+import { TimeParams } from "../../TimeParams.js";
 import { getNewId } from "../../utils.js";
 import { polyrhythmNumberToCharacter, urlNumberToCharacter } from "../constants.js";
 import { convertToBaseN, urlDecodeNumber } from "../numeric-functions.js";
+import type {
+    ILegacyArrangementSnapshot, ILegacyPolyrhythmSnapshot, ILegacyTrackSnapshot
+} from "./legacy-snapshot-types.js";
+
+/**
+ * Calculates steps per bar for legacy import parsing.
+ *
+ * @param timeSignature The time signature in beats/unit format.
+ * @param stepResolution The step resolution.
+ *
+ * @returns The number of steps per bar.
+ */
+const calculateStepsPerBar = (timeSignature: string, stepResolution: number): number => {
+    const [beatsPerBar, beatUnit] = timeSignature.split("/").map((value) => {
+        return Number(value);
+    });
+
+    const stepsPerBeat = stepResolution / beatUnit;
+    const stepsPerBar = stepsPerBeat * beatsPerBar;
+    if (!Number.isInteger(stepsPerBar) || stepsPerBar < 1) {
+        throw new Error(`Incompatible time grid: ${timeSignature} with step resolution ${stepResolution}`);
+    }
+
+    return stepsPerBar;
+};
 
 /**
  * BananaDrum has two on-the-wire encodings of the same legacy data shape:
  *  - `a`  — original encoding.
- *  - `a2` — Animada-era encoding with a compacted polyrhythm string.
+ *  - `a2` — compacted polyrhythm string.
  *
  * Both decode into our schema version 1 (legacy notes + polyrhythms).
  */
 type BdEncoding = 1 | 2;
 
-/**
- * Handles imports of BananaDrum-style share links and serialised arrangements.
- *
- * BananaDrum is a wire format only; it always produces a legacy (schema v1) snapshot.
- */
-export class BananaDrumUrlImporter {
-    /**
-     * Extracts a `BananaDrum` payload from URL search params and decodes it into a legacy snapshot.
-     *
-     * @param searchParams The URL search params to read.
-     * @param instruments The available instruments.
-     * @returns A legacy snapshot, or undefined if no BananaDrum payload was found.
-     */
-    public static getArrangementSnapshotFromParams(
-        searchParams: URLSearchParams,
-        instruments: ISbDmInstrument[]): ILegacyArrangementSnapshot | undefined {
-        const title = searchParams.get("t") ?? undefined;
+interface Timing {
+    bar: number;   // 1-indexed
+    step: number;  // 0-indexed within the bar
+}
 
-        const a2 = searchParams.get("a2");
-        if (a2) {
-            return this.decode(a2, 2, instruments, title);
+export class LegacyNote {
+    public polyrhythm: LegacyPolyrhythm | undefined;
+
+    public constructor(
+        public readonly track: LegacyTrack,
+        public readonly timing: Timing,
+        public noteStyle: string | undefined,
+    ) { }
+}
+
+export class LegacyPolyrhythm {
+    public readonly notes: LegacyNote[];
+
+    public constructor(
+        public readonly id: number,
+        public readonly start: LegacyNote,
+        public readonly end: LegacyNote,
+        public readonly length: number,
+    ) {
+        this.notes = Array.from({ length }, (_, i) => {
+            return new LegacyNote(start.track, { bar: 1, step: i }, undefined);
+        });
+
+        for (const note of this.notes) {
+            note.polyrhythm = this;
+        }
+    }
+}
+
+export class LegacyTrack {
+    public readonly notes: LegacyNote[] = [];
+    public readonly polyrhythms: LegacyPolyrhythm[] = [];
+
+    public constructor(
+        public readonly id: number,
+        public readonly instrumentId: string,
+        public readonly totalSteps: number,
+        public readonly stepsPerBar: number,
+    ) {
+        for (let step = 0; step < totalSteps; step++) {
+            const bar = Math.floor(step / stepsPerBar) + 1;
+            const stepInBar = step % stepsPerBar;
+            this.notes.push(new LegacyNote(this, { bar, step: stepInBar }, undefined));
+        }
+    }
+
+    public *getNoteIterator(polyrhythmsToIgnore: LegacyPolyrhythm[] = []): Generator<LegacyNote> {
+        let currentSource: LegacyNote[] = this.notes;
+        let index = 0;
+        let note: LegacyNote | undefined;
+
+        while (index < currentSource.length) {
+            note = currentSource[index];
+            const linkedUp = this.polyrhythms.find((p) => {
+                return p.start === note && !polyrhythmsToIgnore.includes(p);
+            });
+            if (linkedUp) {
+                currentSource = linkedUp.notes;
+                index = 0;
+                continue;
+            }
+
+            yield note;
+
+            let current: LegacyNote = note;
+            while (current.polyrhythm && index + 1 >= currentSource.length) {
+                const pr = current.polyrhythm;
+                current = pr.end;
+                currentSource = current.polyrhythm?.notes ?? current.track.notes;
+                index = currentSource.indexOf(current);
+            }
+
+            index++;
+        }
+    }
+
+    public addPolyrhythm(start: LegacyNote, end: LegacyNote, length: number,
+        id: number, insertIndex?: number): LegacyPolyrhythm {
+        const polyrhythm = new LegacyPolyrhythm(id, start, end, length);
+        if (insertIndex != null) {
+            this.polyrhythms.splice(insertIndex, 0, polyrhythm);
+        } else {
+            this.polyrhythms.push(polyrhythm);
         }
 
-        const a = searchParams.get("a");
-        if (a) {
-            return this.decode(a, 1, instruments, title);
-        }
+        return polyrhythm;
+    }
+}
 
-        return undefined;
+/** Lightweight re-implementation of the original BananaDrum `Arrangement` runtime model. */
+export class LegacyArrangement {
+    public readonly tracks: LegacyTrack[] = [];
+    public readonly timeParams: TimeParams;
+    public readonly snapshot: ILegacyArrangementSnapshot;
+    public title: string;
+
+    public constructor(snapshot: ILegacyArrangementSnapshot) {
+        this.snapshot = snapshot;
+        this.title = snapshot.title ?? "Untitled Arrangement";
+
+        const tp = snapshot.timeParams;
+        this.timeParams = new TimeParams(
+            tp.timeSignature, tp.tempo, tp.length, tp.pulse, tp.stepResolution,
+        );
+
+        const stepsPerBar = calculateStepsPerBar(
+            tp.timeSignature, tp.stepResolution,
+        );
+        const totalSteps = stepsPerBar * tp.length;
+
+        for (const trackSnapshot of snapshot.tracks) {
+            const track = new LegacyTrack(trackSnapshot.id, trackSnapshot.instrumentId, totalSteps, stepsPerBar);
+
+            for (let i = 0; i < trackSnapshot.polyrhythms.length; i++) {
+                const polySnapshot = trackSnapshot.polyrhythms[i];
+                const polyrhythmsToIgnore = track.polyrhythms.slice(i);
+
+                const [start, end] = this.findStartEndNotes(
+                    track, polySnapshot, polyrhythmsToIgnore,
+                );
+
+                track.addPolyrhythm(start, end, polySnapshot.length, polySnapshot.id, i);
+            }
+
+            let noteIndex = 0;
+            for (const note of track.getNoteIterator()) {
+                const styleId = trackSnapshot.notes[noteIndex];
+                note.noteStyle = styleId !== "0" ? styleId : undefined;
+                noteIndex++;
+            }
+
+            this.tracks.push(track);
+        }
     }
 
     /**
-     * Decodes a BananaDrum-encoded `ISerialisedArrangement` into a legacy snapshot.
+     * Finds the start and end notes for a polyrhythm within a legacy track,
+     * ignoring polyrhythms that appear after the target in insertion order.
      *
-     * Backends and shared links may persist arrangements as a `composition` string. Such
-     * payloads are always BananaDrum-encoded, but the encoding variant cannot be inferred
-     * from the wire data alone, so it is provided explicitly via `bdEncoding`.
+     * @param track               The legacy track to search.
+     * @param polySnapshot        The polyrhythm snapshot to locate notes for.
+     * @param polyrhythmsToIgnore  Polyrhythms to skip during iteration.
      *
-     * @param serialisedArrangement The arrangement payload to decode.
-     * @param bdEncoding The BananaDrum encoding variant of `composition`.
-     * @param instruments The available instruments.
-     * @returns A legacy snapshot.
+     * @returns A tuple of `[startNote, endNote]`.
+     * @internal
      */
-    public static getArrangementSnapshot(serialisedArrangement: ISerialisedArrangement,
-        bdEncoding: BdEncoding, instruments: ISbDmInstrument[]): ILegacyArrangementSnapshot {
-        return this.decode(
-            serialisedArrangement.composition,
-            bdEncoding,
-            instruments,
-            serialisedArrangement.title,
-        );
+    private findStartEndNotes(track: LegacyTrack, polySnapshot: ILegacyPolyrhythmSnapshot,
+        polyrhythmsToIgnore: LegacyPolyrhythm[]): [LegacyNote, LegacyNote] {
+        const result: LegacyNote[] = [];
+        let index = 0;
+
+        for (const note of track.getNoteIterator(polyrhythmsToIgnore)) {
+            if (index === polySnapshot.start) {
+                result[0] = note;
+            }
+
+            if (index === polySnapshot.end) {
+                result[1] = note;
+                break;
+            }
+            index++;
+        }
+
+        return result as [LegacyNote, LegacyNote];
+    };
+
+}
+
+/** Handles imports of BananaDrum-style share links. */
+export class BananaDrumUrlImporter {
+    /**
+     * Creates a {@link LegacyArrangement} (schema version 1) from URL search params.
+     *
+     * @param searchParams The URL search params to read.
+     * @param instruments The available instruments.
+     * @returns A fully constructed legacy arrangement, or undefined if no BananaDrum payload was found.
+     */
+    public static getArrangementFromParams(searchParams: URLSearchParams,
+        instruments: ISbDmInstrument[]): LegacyArrangement | undefined {
+        const title = searchParams.get("t") ?? undefined;
+
+        let legacySnapshot: ILegacyArrangementSnapshot | undefined;
+
+        const a2 = searchParams.get("a2");
+        if (a2) {
+            legacySnapshot = this.decode(a2, 2, instruments, title);
+        } else {
+            const a = searchParams.get("a");
+            if (a) {
+                legacySnapshot = this.decode(a, 1, instruments, title);
+            }
+        }
+
+        if (!legacySnapshot) {
+            return undefined;
+        }
+
+        return new LegacyArrangement(legacySnapshot);
     }
 
     private static decode(composition: string, bdEncoding: BdEncoding, instruments: ISbDmInstrument[],
@@ -86,7 +260,7 @@ export class BananaDrumUrlImporter {
             stepResolution: Number(chunks[4])
         };
 
-        const baseNoteCount = this.calculateStepsPerBar(timeParams.timeSignature, timeParams.stepResolution) *
+        const baseNoteCount = calculateStepsPerBar(timeParams.timeSignature, timeParams.stepResolution) *
             timeParams.length;
         const tracks = chunks.slice(5).map((serialisedTrack) => {
             return this.deserialiseTrack(serialisedTrack, baseNoteCount, bdEncoding, instruments);
@@ -130,7 +304,7 @@ export class BananaDrumUrlImporter {
             return [];
         }
 
-        // The Animada-era encoding (`a2`) compacts the polyrhythm string; unpack it first.
+        // The `a2` encoding compacts the polyrhythm string; unpack it first.
         if (bdEncoding >= 2) {
             serialisedPolyrhythms = this.unpackPolyrhythmString(serialisedPolyrhythms);
         }
@@ -161,6 +335,7 @@ export class BananaDrumUrlImporter {
 
     /**
      * @param packedPolyrhythmsString The compacted polyrhythm string.
+     *
      * @returns a string like 0-7-6-2-13-19...
      */
     private static unpackPolyrhythmString(packedPolyrhythmsString: string): string {
@@ -199,7 +374,7 @@ export class BananaDrumUrlImporter {
         trackNoteCount: number): string[] {
         const notesAsNumber = urlDecodeNumber(serialisedNotes);
 
-        const base = BigInt(Object.keys(instrument.noteStyles).length + 1); // + 1 for rests
+        const base = BigInt(Object.keys(instrument.noteStyles).length + 1); // +1 for rests
         const musicInBaseN = convertToBaseN(notesAsNumber, base);
 
         // Since the notes are concatenated into a number, any rests at the start become leading zeroes, and disappear
@@ -212,26 +387,5 @@ export class BananaDrumUrlImporter {
         return musicInBaseN.map((noteStyleNumber) => {
             return urlNumberToCharacter[noteStyleNumber];
         });
-    }
-
-    /**
-     * Calculates steps per bar for legacy import parsing.
-     *
-     * @param timeSignature The time signature in beats/unit format.
-     * @param stepResolution The step resolution.
-     * @returns The number of steps per bar.
-     */
-    private static calculateStepsPerBar(timeSignature: string, stepResolution: number): number {
-        const [beatsPerBar, beatUnit] = timeSignature.split("/").map((value) => {
-            return Number(value);
-        });
-
-        const stepsPerBeat = stepResolution / beatUnit;
-        const stepsPerBar = stepsPerBeat * beatsPerBar;
-        if (!Number.isInteger(stepsPerBar) || stepsPerBar < 1) {
-            throw new Error(`Incompatible time grid: ${timeSignature} with step resolution ${stepResolution}`);
-        }
-
-        return stepsPerBar;
     }
 }

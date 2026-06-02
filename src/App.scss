@@ -23,7 +23,7 @@
     --bar-decoration-color: rgb(72, 237, 188);
     --selection-background: rgba(79, 195, 247, 0.4);
 
-    --note-height: 54pt;
+    --note-height: 80px;
 }
 
 body {
@@ -64,10 +64,6 @@ h6 {
     }
 }
 
-.display-linebreak {
-    white-space: pre-line;
-}
-
 .separator {
     width: 8px;
     height: 100%;
@@ -88,17 +84,6 @@ h6 {
     padding: 15px;
     overflow-x: hidden;
     overflow-y: auto;
-
-    &::after {
-        content: "";
-        position: absolute;
-        top: 0;
-        right: 0;
-        bottom: 0;
-        width: 80px;
-        pointer-events: none;
-        background: linear-gradient(to left, var(--color-base-100), transparent 100%);
-    }
 }
 
 
@@ -190,18 +175,10 @@ h6 {
     display: none;
 }
 
-.track-viewer {
-    margin: 8px 0;
-}
-
 .note-width {
     flex-basis: var(--note-height);
     flex-grow: 1;
     flex-shrink: 0;
-}
-
-.track-viewer > * {
-    display: inline-block;
 }
 
 #trackViewerContainer {
@@ -211,7 +188,7 @@ h6 {
         padding: 10px 0;
         overflow-x: auto;
         flex: 1 1 auto;
-        min-width: 0;
+        min-width: 600px;
         scrollbar-width: none;
         -ms-overflow-style: none;
         touch-action: pan-x;
@@ -222,6 +199,7 @@ h6 {
 
         #trackViewerContentHost {
             padding-top: 0;
+            min-width: 100%;
 
             #trackViewerDecorations,
             #trackViewerDecorationOverlay {
@@ -261,6 +239,79 @@ h6 {
 
                 transition: left 0.050s linear;
             }
+
+            .grid-measure-viewer {
+                border-right: 2px solid var(--color-base-300);
+            }
+
+            .grid-measure-beam {
+                height: 20pt;
+                margin-bottom: 5px;
+                position: relative;
+                overflow: hidden;
+
+                // Horizontal beam; left/right endpoints are set via CSS vars from GridMeasureBeam.tsx
+                // so that edge measures start/end exactly at the measured beat positions.
+                &::before {
+                    content: '';
+                    position: absolute;
+                    top: 0;
+                    left: var(--beam-left, 0);
+                    right: var(--beam-right, 0);
+                    height: 5px;
+                    background-color: var(--color-base-content);
+                }
+            }
+
+            .grid-measure-number {
+                position: absolute;
+                top: 10px;
+                font-size: 11px;
+                color: var(--color-base-content);
+                pointer-events: none;
+            }
+
+            .grid-measure-beat {
+                position: absolute;
+                top: 0;
+                height: 100%;
+                border-left: 1px solid var(--color-base-content);
+
+                &.bar-start {
+                    border-left-width: 2px;
+                }
+            }
+
+            .grid-measure-row {
+                margin: 2px 8px 14px 8px;
+            }
+
+            .subdivision {
+                position: relative;
+                padding: 4px 0 4px 0;
+
+                // Bracket color: neutral gray, level 1 ≈ #ccc (83 % L) getting 15 % darker
+                // per nesting level. Fixed lightness guarantees light → dark on every theme.
+                --subdivision-color: oklch(calc(83% - (var(--current-level, 1) - 1) * 15%) 0 0);
+
+                &::before {
+                    content: '';
+                    position: absolute;
+                    top: 2px;
+                    left: 0;
+                    right: 0;
+                    bottom: 2px;
+                    border-top: 3px solid var(--subdivision-color);
+                    border-bottom: 3px solid var(--subdivision-color);
+                    border-radius: 6px;
+                    pointer-events: none;
+                    z-index: 1;
+                }
+
+                > .note-viewer {
+                    height: calc(var(--note-height) - var(--current-level) * 8px);
+                }
+            }
         }
     }
 
@@ -269,6 +320,7 @@ h6 {
         --track-controls-expanded-width: clamp(200px, 24vw, 300px);
 
         overflow: hidden;
+        gap: 12px;
 
         flex: 0 0 var(--track-controls-collapsed-width);
         width: var(--track-controls-expanded-width);
@@ -413,29 +465,6 @@ h6 {
     }
 }
 
-.note-line {
-    position: relative;
-    transition: opacity 0.2s;
-    overflow-x: hidden;
-}
-
-.note-line .notes-wrapper {
-    display: flex;
-}
-
-.note-line .polyrhythms-wrapper,
-.bar-track-row .polyrhythms-wrapper {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    pointer-events: none;
-}
-
-.note-line .polyrhythm-viewer {
-    position: absolute;
-    padding-left: calc(1.5pt + 4px);
-}
-
 .polyrhythm-viewer .polyrhythm-decoration {
     position: absolute;
     width: calc(100% - 2 * 1.5pt);
@@ -449,27 +478,6 @@ h6 {
     width: 100%;
 }
 
-.polyrhythm-viewer .delete-polyrhythm-wrapper {
-    height: var(--note-height);
-
-    /* Apply some negative margins to collapse borders */
-    margin-top: calc(-1 * 1.5pt);
-    margin-bottom: calc(-1 * 1.5pt);
-    margin-left: calc(-1 * 1.5pt);
-    width: 100%;
-    text-align: center;
-    line-height: var(--note-height);
-    background-color: var(--lightest-green);
-}
-
-.polyrhythm-viewer .delete-polyrhythm-wrapper.shrouded {
-    background-color: var(--color-base-200);
-}
-
-.track-viewer.inaudible .note-line {
-    opacity: 0.5;
-}
-
 /* BarViewer: one column per bar, laid out horizontally */
 .bar-viewer {
     --bar-step-width: calc(var(--note-height) + 5px);
@@ -479,10 +487,104 @@ h6 {
 
     display: flex;
     flex-direction: column;
-    flex-shrink: 0;
-    width: calc((var(--bar-step-width) * var(--steps-per-bar)));
+    flex: 1;
+    min-width: calc(var(--steps-per-bar) * var(--note-height));
     border-right: 2px solid var(--color-base-300);
     padding: 0 8px;
+}
+
+/* Staff-mode bars use the same per-bar min-width as grid-mode bars so the
+   horizontal positions stay aligned across both modes; this is required for
+   the auto-follow play head to track measures correctly. */
+
+.staff-prefix-viewer {
+    flex-shrink: 0;
+    width: 48px;
+    margin: 0 -8px 0 8px;
+    padding-top: calc(20pt + 5px);
+}
+
+.staff-measure-beam {
+    height: 20pt;
+    margin-bottom: 5px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    overflow: hidden;
+}
+
+.staff-measure-number {
+    flex-shrink: 0;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1.2;
+    border: 1.5px solid var(--color-base-content);
+    border-radius: 2px;
+    padding: 1px 4px;
+}
+
+.staff-measure-label {
+    font-size: 11px;
+    color: var(--color-base-content);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+
+    &.inherited {
+        opacity: 0.35;
+    }
+}
+
+.staff-prefix-row {
+    position: relative;
+    min-height: var(--note-height);
+    margin: 10px 0;
+}
+
+.staff-prefix-middle-line {
+    position: absolute;
+    top: 50%;
+    left: 0;
+    right: 0;
+    border-top: 1px solid var(--color-base-300);
+    transform: translateY(-50%);
+    z-index: -1;
+}
+
+.staff-prefix-clef {
+    margin: 0 8px;
+    width: 8px;
+    height: calc(var(--note-height) * 0.2);
+    border-left: 3px solid var(--color-base-content);
+    border-right: 3px solid var(--color-base-content);
+    flex-shrink: 0;
+}
+
+.staff-prefix-time-signature {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    font-family: "Petaluma Script", "Fairytale", serif;
+    font-size: 16px;
+    font-weight: 400;
+    line-height: 1;
+
+    flex-shrink: 0;
+}
+
+.staff-prefix-time-signature .top,
+.staff-prefix-time-signature .bottom {
+    display: block;
+    background: var(--color-base-100);
+    padding: 0 1px;
+}
+
+.staff-prefix-common-time {
+    display: block;
+    width: 20px;
+    height: 36px;
 }
 
 /* BarTrackRow: one track's note row within a bar column */
@@ -494,17 +596,8 @@ h6 {
     margin: 8px 0;
 }
 
-.bar-track-row.grid-mode {
-    margin: 8px 0;
-}
-
 .bar-track-row.staff-mode {
     margin: 10px 0;
-}
-
-.bar-track-row .notes-wrapper {
-    display: flex;
-    width: 100%;
 }
 
 .staff-note-viewer {
@@ -516,14 +609,17 @@ h6 {
     min-height: var(--note-height);
 }
 
-.staff-note-viewer-middle-line {
+.staff-note-viewer-line {
     position: absolute;
-    top: 50%;
     left: 0;
     right: 0;
     border-top: 1px solid var(--color-base-300);
-    transform: translateY(-50%);
     z-index: -1;
+}
+
+.staff-note-viewer-custom-stem {
+    pointer-events: none;
+    z-index: 1;
 }
 
 .staff-note-viewer-prefix {
@@ -540,24 +636,15 @@ h6 {
     pointer-events: none;
 }
 
-.staff-note-viewer-neutral-clef {
-    width: 8px;
-    height: var(--staff-barline-height);
-    border-left: 3px solid var(--color-base-content);
-    border-right: 3px solid var(--color-base-content);
-    border-radius: 1px;
-}
-
 .staff-note-viewer-time-signature {
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    min-width: 20px;
+    width: 20px;
     font-family: "Petaluma Script", "Fairytale", serif;
     font-size: 16px;
     font-weight: 400;
-    line-height: 1;
     padding-top: 2px;
 }
 
@@ -566,12 +653,6 @@ h6 {
     display: block;
     background: var(--color-base-100);
     padding: 0 1px;
-}
-
-.staff-note-viewer-common-time {
-    display: block;
-    width: auto;
-    height: 40px;
 }
 
 .staff-note-viewer-final-barline {
@@ -611,24 +692,20 @@ h6 {
     align-items: center;
 }
 
-.staff-note-viewer.first-bar .staff-note-viewer-runs {
-    left: var(--staff-note-prefix-width);
-}
-
 .staff-note-viewer-run {
+    flex: 1 0 auto;
     position: relative;
     display: flex;
     align-items: center;
     justify-content: center;
     height: 100%;
-    flex-shrink: 0;
 }
 
 /* Beam stroke attached to a beamed note. Position (top, left/right, width) is set inline by
    StaffNoteViewer.renderBeamSegments per beam segment (shared vs partial, level 1..3). */
 .staff-note-viewer-beam {
     position: absolute;
-    height: 3px;
+    height: 4px;
     background: var(--color-base-content);
     pointer-events: none;
     z-index: 2;
@@ -640,16 +717,8 @@ h6 {
     pointer-events: none;
 }
 
-/* In the first bar the prefix (clef + time signature) sits to the left of the runs area; the
-   tuplets layer must align with the runs, not with the bar's outer edge, so its bracket
-   percentages refer to the same horizontal extent as the noteheads. */
-.staff-note-viewer.first-bar .staff-note-viewer-tuplets {
-    left: var(--staff-note-prefix-width);
-}
-
 .staff-note-viewer-tuplet-number {
     position: absolute;
-    top: calc(50% - 55px);
     transform: translateX(-50%);
     display: inline-block;
     min-width: 11px;
@@ -663,28 +732,43 @@ h6 {
     z-index: 2;
 }
 
+.staff-note-viewer-tuplet-number.staff-note-viewer-tuplet-above {
+    top: calc(50% - 58px);
+}
+
+.staff-note-viewer-tuplet-number.staff-note-viewer-tuplet-below {
+    top: calc(50% + 8px);
+}
+
 /*
- * Tuplet bracket: drawn when the tuplet pulse is not covered by a continuous beam (e.g. a
- * triplet of 8th-note + 8th-rest + 8th-rest). Spans the pulse horizontally with a thin top
- * line and short downward ticks at each end; the number sits centered, breaking the line.
+ * Tuplet bracket: used in addition to the number when the tuplet is visually embedded
+ * in surrounding material. Spans from first to last tuplet child center.
  */
 .staff-note-viewer-tuplet-bracket {
     position: absolute;
-    top: calc(50% - 55px);
     height: 9px;
-    border-top: 1.5px solid var(--color-base-content);
     border-left: 1.5px solid var(--color-base-content);
     border-right: 1.5px solid var(--color-base-content);
-    border-bottom: 0;
     box-sizing: border-box;
     color: var(--color-base-content);
     z-index: 2;
     pointer-events: none;
 }
 
+.staff-note-viewer-tuplet-bracket.staff-note-viewer-tuplet-above {
+    top: calc(50% - 55px);
+    border-top: 1.5px solid var(--color-base-content);
+    border-bottom: 0;
+}
+
+.staff-note-viewer-tuplet-bracket.staff-note-viewer-tuplet-below {
+    top: calc(50% + 9px);
+    border-top: 0;
+    border-bottom: 1.5px solid var(--color-base-content);
+}
+
 .staff-note-viewer-tuplet-bracket > .staff-note-viewer-tuplet-text {
     position: absolute;
-    top: -10px;
     left: 50%;
     transform: translateX(-50%);
     font-size: 16px;
@@ -694,14 +778,305 @@ h6 {
     padding: 0 3px;
 }
 
-/* Note symbol: 16th-note SVG icon */
+.staff-note-viewer-tuplet-bracket.staff-note-viewer-tuplet-above > .staff-note-viewer-tuplet-text {
+    top: -10px;
+}
+
+.staff-note-viewer-tuplet-bracket.staff-note-viewer-tuplet-below > .staff-note-viewer-tuplet-text {
+    bottom: -10px;
+}
+
+/* Note symbol from the combined note sprite. */
 .staff-note-viewer-note-symbol {
     display: block;
     width: 25px;
     height: 60px;
 
     /* The note head is in the lower part of this SVG; lift it so the head center sits on the middle line. */
-    transform: translateY(-14.5px);
+    transform: translateY(-18px);
+}
+
+/* ---------------------------------------------------------------------------
+ * Staff note heads drawn with CSS (Square, Triangle, Cross, Diamond).
+ * Oval heads come from the SVG sprite.
+ * --------------------------------------------------------------------------- */
+
+.staff-note-head {
+    position: relative;
+    display: inline-block;
+    flex-shrink: 0;
+
+    /* Shared head shape via ::after.  Centre ~27 px above the bottom of the 60 px span. */
+    &::after {
+        content: "";
+        position: absolute;
+        left: 50%;
+        bottom: 20px;
+        color: var(--color-base-content);
+    }
+
+    /* ---- Square (filled, 14×14 px) ---- */
+    &.square::after {
+        width: 14px;
+        height: 14px;
+        background: currentColor;
+        transform: translate(-100%, -5%);
+    }
+
+    /* ---- Triangle (hollow, equilateral, point up) ---- */
+    &.triangle::after {
+        width: 0;
+        height: 0;
+        border-left: 7px solid transparent;
+        border-right: 7px solid transparent;
+        border-bottom: 14px solid currentColor;
+        background: transparent;
+        transform: translate(-50%, -5%);
+    }
+
+    /* ---- Cross (×, 45°-rotated, 14×14 px, rendered as cached SVG) ---- */
+
+    .staff-note-head-cross-svg {
+        position: absolute;
+        left: calc(50% - 14px);
+        bottom: 20px;
+        transform: translate(0, -5%);
+        pointer-events: none;
+    }
+
+    /* ---- Diamond (◆, filled, 11×11 px rotated) ---- */
+    &.diamond::after {
+        width: 11px;
+        height: 11px;
+        background: currentColor;
+        transform: translate(-50%, -5%) rotate(45deg);
+    }
+
+    /* ---- CSS stem for non-oval, non-beamed notes ---- */
+    &-stem {
+        position: absolute;
+        left: 50%;
+        width: 1.5px;
+        background: var(--color-base-content);
+        transform: translateX(-50%);
+        top: -14px;
+        pointer-events: none;
+        z-index: 1;
+    }
+
+    /* ---- Thumb: empty circle inside square ---- */
+    &-thumb-circle {
+        position: absolute;
+        left: calc(50% - 7px);
+        bottom: 20px;
+        width: 6px;
+        height: 6px;
+        border: 1px solid var(--color-base-100);
+        border-radius: 50%;
+        transform: translate(-50%, -30%);
+        pointer-events: none;
+    }
+
+    /* ---- Tap / TapWithPalm: triangle inside square (pointing up) ---- */
+    &-tap-triangle {
+        position: absolute;
+        left: calc(50% - 7px);
+        bottom: 20px;
+        width: 0;
+        height: 0;
+        border-left: 4px solid transparent;
+        border-right: 4px solid transparent;
+        border-bottom: 5px solid var(--color-base-100);
+        transform: translate(-50%, -30%);
+        pointer-events: none;
+    }
+
+    /* ---- Press roll: 3 diagonal slashes on the stem ---- */
+    &.press-roll::before {
+        content: "";
+        position: absolute;
+        left: calc(50% - 4px);
+        top: 5px;
+        width: 14px;
+        height: 35px;
+        pointer-events: none;
+    }
+
+    .staff-note-head-press-roll-svg {
+        position: absolute;
+        left: calc(50% - 7px);
+        top: -2px;
+        pointer-events: none;
+        overflow: visible;
+    }
+
+    /* ---- Blown: wavy line above the note head ---- */
+    &.blown::before {
+        content: "~";
+        position: absolute;
+        left: 50%;
+        bottom: 28px;
+        transform: translate(-50%, -5%);
+        font-size: 16px;
+        line-height: 1;
+        pointer-events: none;
+        color: var(--color-base-content);
+    }
+
+    /* ---- Slap: cross inside square (uses ::before so ::after keeps the filled square) ---- */
+    &.slap::before {
+        content: "";
+        position: absolute;
+        left: calc(50% - 7px);
+        bottom: 20px;
+        width: 10px;
+        height: 10px;
+        transform: translate(-50%, -30%);
+        pointer-events: none;
+        z-index: 1;
+        background-image:
+            linear-gradient(45deg,
+                transparent 42%, var(--color-base-100) 42%, var(--color-base-100) 58%, transparent 58%),
+            linear-gradient(-45deg,
+                transparent 42%, var(--color-base-100) 42%, var(--color-base-100) 58%, transparent 58%);
+    }
+
+    /* ---- Hand + Cross → hollow square around the cross (Kessel) ---- */
+    &.body-hand::before {
+        content: "";
+        position: absolute;
+        left: calc(50% - 7px);
+        bottom: 19px;
+        width: 18px;
+        height: 18px;
+        border: 1.5px solid var(--color-base-content);
+        background: transparent;
+        transform: translate(-50%, -5%);
+        pointer-events: none;
+    }
+
+    /* ---- Rim: horizontal line below the cross ---- */
+    &.rim::before {
+        content: "";
+        position: absolute;
+        left: calc(50% - 7px);
+        bottom: 15px;
+        width: 16px;
+        height: 1.5px;
+        background: var(--color-base-content);
+        transform: translateX(-50%);
+        pointer-events: none;
+    }
+
+    /* ---- RimShot: small cross on the right of the stem, oval on the left ---- */
+    .staff-note-head-rimshot-cross-svg {
+        position: absolute;
+        left: calc(50% + 2px);
+        bottom: 34px;
+        transform: translate(0, -5%);
+        pointer-events: none;
+    }
+
+    /* ---- Stick.Body: vertical line left of the cross ---- */
+    &.body-stick::before {
+        content: "";
+        position: absolute;
+        left: calc(50% - 17px);
+        bottom: 12px;
+        width: 1.5px;
+        height: 16px;
+        background: var(--color-base-content);
+        pointer-events: none;
+    }
+
+    /* ---- CrossClick: horizontal line above the cross ---- */
+    &.cross-click::before {
+        content: "";
+        position: absolute;
+        left: calc(50% - 7px);
+        bottom: 29px;
+        width: 16px;
+        height: 1.5px;
+        background: var(--color-base-content);
+        transform: translateX(-50%);
+        pointer-events: none;
+    }
+
+    /* ---- Scraped: zigzag on the stem ---- */
+    &.scraped::before {
+        content: "";
+        position: absolute;
+        left: calc(50% - 4px);
+        top: 8px;
+        width: 14px;
+        height: 22px;
+        pointer-events: none;
+        background:
+            linear-gradient(135deg, transparent 48%, var(--color-base-content) 48%, var(--color-base-content) 52%, transparent 52%) 0 2px / 6px 6px,
+            linear-gradient(45deg, transparent 48%, var(--color-base-content) 48%, var(--color-base-content) 52%, transparent 52%) 6px 2px / 6px 6px;
+        background-repeat: repeat-y;
+    }
+
+    /* ---- Damping: brackets around the note ---- */
+    &.damping-muted::before {
+        content: "[";
+        position: absolute;
+        left: -6px;
+        top: 50%;
+        transform: translateY(-50%);
+        font-size: 20px;
+        font-weight: bold;
+        line-height: 1;
+        pointer-events: none;
+        color: var(--color-base-content);
+    }
+
+    &.damping-muted::after {
+        content: "]" !important;
+        position: absolute;
+        right: -6px;
+        top: 50%;
+        transform: translateY(-50%);
+        font-size: 20px;
+        font-weight: bold;
+        line-height: 1;
+        pointer-events: none;
+        color: var(--color-base-content);
+        width: auto !important;
+        height: auto !important;
+        background: none !important;
+        border: none !important;
+    }
+
+    &.damping-start::before {
+        content: "[";
+        position: absolute;
+        left: -6px;
+        top: 50%;
+        transform: translateY(-50%);
+        font-size: 20px;
+        font-weight: bold;
+        line-height: 1;
+        pointer-events: none;
+        color: var(--color-base-content);
+    }
+
+    &.damping-end::after {
+        content: "]" !important;
+        position: absolute;
+        right: -6px;
+        top: 50%;
+        transform: translateY(-50%);
+        font-size: 20px;
+        font-weight: bold;
+        line-height: 1;
+        pointer-events: none;
+        color: var(--color-base-content);
+        width: auto !important;
+        height: auto !important;
+        background: none !important;
+        border: none !important;
+    }
 }
 
 /* Rest symbol: 16th-rest SVG icon */
@@ -709,34 +1084,6 @@ h6 {
     display: block;
     width: 22px;
     height: 40px;
-}
-
-/* Augmentation dots are absolutely positioned so they don't displace the centered note / rest
-   glyph in the flex slot. Without this, flex centering would shift the glyph left by half the
-   dot+gap width, opening a gap between the note stem and any beam (which anchors at slot center). */
-
-/* Augmentation dot drawn next to a grouped rest icon (no dotted-rest SVGs exist). */
-.staff-note-viewer-rest-dot {
-    position: absolute;
-    /* Rest icons have some transparent padding on the right; offset so the dot reads as adjacent. */
-    left: calc(50% + 8px);
-    top: calc(50% + 6px);
-    width: 4px;
-    height: 4px;
-    border-radius: 50%;
-    background: var(--color-base-content);
-}
-
-/* Augmentation dot drawn next to a dotted note glyph (no dotted-note SVGs exist). */
-.staff-note-viewer-note-dot {
-    position: absolute;
-    /* Just past the right edge of the 25px-wide notehead icon (centered in slot). */
-    left: calc(50% + 8px);
-    top: calc(50% + 4px);
-    width: 4px;
-    height: 4px;
-    border-radius: 50%;
-    background: var(--color-base-content);
 }
 
 /* Polyrhythm fragment: an absolutely-positioned slice of a polyrhythm within a bar */
@@ -752,47 +1099,13 @@ h6 {
     pointer-events: none;
 }
 
-/* "full" and "start" — draw left bracket end with the full inset glow */
-.polyrhythm-fragment.frag-full .polyrhythm-decoration,
-.polyrhythm-fragment.frag-start .polyrhythm-decoration {
-    box-shadow: inset 10pt 0 10pt -8pt var(--color-warning),
-        inset 0 4pt 6pt -4pt var(--color-warning),
-        inset 0 -4pt 6pt -4pt var(--color-warning);
-}
-
-/* "full" and "end" — draw right bracket end */
-.polyrhythm-fragment.frag-full .polyrhythm-decoration,
-.polyrhythm-fragment.frag-end .polyrhythm-decoration {
-    box-shadow: inset -10pt 0 10pt -8pt var(--color-warning),
-        inset 0 4pt 6pt -4pt var(--color-warning),
-        inset 0 -4pt 6pt -4pt var(--color-warning);
-}
-
-/* "full" gets both sides (override the individual rules above) */
 .polyrhythm-fragment.frag-full .polyrhythm-decoration {
     box-shadow: inset 0 0 10pt 1pt var(--color-warning);
-}
-
-/* "middle" — only top and bottom edges (continuation) */
-.polyrhythm-fragment.frag-middle .polyrhythm-decoration {
-    box-shadow: inset 0 4pt 6pt -4pt var(--color-warning),
-        inset 0 -4pt 6pt -4pt var(--color-warning);
 }
 
 .polyrhythm-fragment .polyrhythm-notes-wrapper {
     display: flex;
     width: 100%;
-}
-
-.polyrhythm-fragment .delete-polyrhythm-wrapper {
-    height: var(--note-height);
-    margin-top: calc(-1 * 1.5pt);
-    margin-bottom: calc(-1 * 1.5pt);
-    margin-left: calc(-1 * 1.5pt);
-    width: 100%;
-    text-align: center;
-    line-height: var(--note-height);
-    background-color: var(--lightest-green);
 }
 
 .polyrhythm-fragment .note-viewer {
@@ -849,7 +1162,7 @@ h6 {
 }
 
 .note-details-viewer .icon.note-style-symbol {
-    background-color: var(--color-base-content);
+    background-color: var(--color-neutral);
 }
 
 .note-details-viewer .small {
@@ -862,64 +1175,6 @@ h6 {
     margin-right: 5pt;
     margin-bottom: 5pt;
     vertical-align: middle;
-}
-
-@keyframes shinyLink {
-    0% {
-        background-color: hsl(268, 61%, 69%);
-    }
-
-    33% {
-        background-color: hsl(200, 97%, 51%);
-    }
-
-    67% {
-        background-color: hsl(174, 61%, 47%)
-    }
-
-    100% {
-        background-color: hsl(29, 88%, 69%)
-    }
-}
-
-.shiny-link {
-    animation: shinyLink 3s infinite alternate;
-}
-
-.dialog #aboutBox {
-    min-width: 800px;
-    min-height: 600px;
-    position: absolute;
-    z-index: 10;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-
-    background: var(--dialog-background);
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2), 0 6px 20px rgba(0, 0, 0, 0.19);
-    border-radius: 16px;
-
-    padding: 20pt;
-    transition: opacity 0.2s;
-}
-
-@media (max-width: 900px) {
-    .dialog #aboutBox {
-        min-width: 0;
-        min-height: 0;
-        width: 94vw;
-        max-height: 90vh;
-        overflow-y: auto;
-        padding: 16px;
-    }
-}
-
-@supports (max-height: 90dvh) {
-    @media (max-width: 900px) {
-        .dialog #aboutBox {
-            max-height: 90dvh;
-        }
-    }
 }
 
 /* Overlays */
@@ -954,25 +1209,6 @@ h6 {
     left: 0;
     background-color: white;
     overflow: scroll;
-}
-
-#aboutBox #headingLabel {
-    margin: 15px auto;
-    font-size: 25pt;
-    font-weight: 100;
-    overflow: hidden;
-}
-
-.dialog .logo {
-    height: 160pt;
-    display: block;
-    margin: 40px auto;
-}
-
-.githubLogo {
-    height: 24pt;
-    margin: 0 8pt;
-    vertical-align: middle;
 }
 
 #headerContent {

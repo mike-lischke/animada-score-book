@@ -6,7 +6,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import type { INoteStyle, ITimeParams, Mutable } from "../../src/core/types/general.js";
-import type { ICallbackEvent, IInterval, ILoopInterval, } from "../../src/player/types.js";
+import type { ICallbackEvent, IInterval } from "../../src/player/types.js";
 
 // Simple subscribable helper with publish capability for tests
 type Sub = (...args: unknown[]) => void;
@@ -86,27 +86,6 @@ vi.mock("../../src/player/TimeCoordinator.js", () => {
             return ((timing.bar - 1) * 1) + ((timing.step - 1) * 0.1);
         }
 
-        public convertToLoopIntervals({ start, end }: IInterval): ILoopInterval[] {
-            const length = this.realTimeLength;
-            const intervals: ILoopInterval[] = [];
-            const startLoop = Math.floor(start / length);
-            const endLoop = Math.floor(end / length);
-            const startAdj = start % length;
-            const endAdj = end % length;
-            if (startLoop === endLoop) {
-                intervals.push({ loopNumber: startLoop, start: startAdj, end: endAdj });
-            } else {
-                intervals.push({ loopNumber: startLoop, start: startAdj, end: length });
-                intervals.push({ loopNumber: endLoop, start: 0, end: endAdj });
-            }
-
-            return intervals;
-        }
-
-        public convertToAudioTime(realTime: RealTime, loopNumber: number): RealTime {
-            return realTime + (loopNumber * this.realTimeLength);
-        }
-
         public convertToLoopProgress(realTime: RealTime): number {
             return (realTime % this.realTimeLength) / this.realTimeLength;
         }
@@ -126,7 +105,7 @@ vi.mock("../../src/player/TrackPlayer.js", () => {
             const events = [] as Array<{ realTime: RealTime; } & (Record<string, unknown>)>;
             const t = interval.start;
             let firstEvent: ISbDmNoteEvent | undefined;
-            for (const event of this.track.getNoteIterator()) {
+            for (const event of this.track.notes) {
                 firstEvent = event;
                 break;
             }
@@ -244,10 +223,12 @@ const makeArrangement = (trackCount: number): ISbDmArrangement & { _publish: () 
             getNoteAt: () => {
                 return undefined;
             },
-            getNoteIterator: function* () {
-                for (const note of notes) {
-                    yield note;
-                }
+            get notes() {
+                return (function* () {
+                    for (const note of notes) {
+                        yield note;
+                    }
+                })();
             },
             clear: vi.fn(),
             ...trackSubs
@@ -264,6 +245,14 @@ const makeArrangement = (trackCount: number): ISbDmArrangement & { _publish: () 
             type: SbDmEntityType.TrackMeasure,
             id: getNewId(),
             number: 1,
+            meter: {
+                beats: 4,
+                beatUnits: 4,
+                stepResolution: 1,
+                beatGroups: [1],
+            },
+            steps: [{ index: 0, noteStyleId: sourceNote.noteStyle?.id }],
+            subdivisions: [],
             events: [{
                 type: SbDmEntityType.NoteEvent,
                 id: sourceNote.id,
@@ -295,7 +284,8 @@ const makeArrangement = (trackCount: number): ISbDmArrangement & { _publish: () 
         mainVolume: 1,
         loop: false,
         useMetronome: false,
-        countIn: false
+        countIn: false,
+        measureLabels: {},
     };
     tracks.forEach((t) => {
         t.arrangement = arrangement;
@@ -309,8 +299,8 @@ import {
     SbDmEntityType, ScoreBookDataModel, type ISbDmArrangement, type ISbDmInstrument, type ISbDmNoteEvent,
     type ISbDmTrack, type ITiming, type RealTime
 } from "../../src/core/ScoreBookDataModel.js";
-import { ArrangementPlayer } from "../../src/player/ArrangementPlayer.js";
 import { getNewId } from "../../src/core/utils.js";
+import { ArrangementPlayer } from "../../src/player/ArrangementPlayer.js";
 import type { TimeCoordinator } from "../../src/player/TimeCoordinator.js";
 import type { TrackPlayer } from "../../src/player/TrackPlayer.js";
 
@@ -342,8 +332,10 @@ describe("ArrangementPlayer", () => {
             getNoteAt: () => {
                 return undefined;
             },
-            getNoteIterator: function* () {
-                yield* [];
+            get notes() {
+                return (function* () {
+                    yield* [];
+                })();
             },
             clear: vi.fn(),
             ...makeSubscribable()
@@ -354,14 +346,14 @@ describe("ArrangementPlayer", () => {
         expect(player.trackPlayers.size).toBe(2);
     });
 
-    it("aggregates events across loops and includes timing callbacks", () => {
+    it("aggregates events within the requested interval and includes timing callbacks", () => {
         const arrangement = makeArrangement(1);
         const dm = new TestScoreBookDataModel(arrangement);
         const player = new ArrangementPlayer(dm);
 
-        // Interval crosses loop boundary (length=1): [0.9, 1.2].
+        // Query a small direct interval.
         // @ts-expect-error Accessing internal for test purposes
-        const events = player.getEvents({ start: 0.9, end: 1.2 });
+        const events = player.getEvents({ start: 0, end: 0.2 });
         expect(events.length).toBeGreaterThan(0);
         // Ensure sorted order
         for (let i = 1; i < events.length; i++) {

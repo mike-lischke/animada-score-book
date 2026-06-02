@@ -5,6 +5,8 @@
 
 import { expect, test } from "@playwright/test";
 
+import { tryParsePackedArrangement } from "../../src/core/serialisation/snapshot-packing.js";
+import type { IArrangementSnapshot } from "../../src/core/types/general.js";
 import {
     beijaFlorImportPath, beijaFlorTitle, beijaFlorDisplayedTitle, expectImportedPolyrhythmSong, expectPlaybackToMove,
     readStoredCurrentScore, routeApi,
@@ -20,14 +22,14 @@ test.describe("Snapshot compatibility polyrhythm flow", () => {
         await expectImportedPolyrhythmSong(page);
 
         const storedCurrentScore = await readStoredCurrentScore(page);
-        const storedSnapshot = JSON.parse(storedCurrentScore) as
-            { version: number; title?: string; tracks: unknown[]; };
+        const storedSnapshot = tryParsePackedArrangement(storedCurrentScore);
+        expect(storedSnapshot).toBeDefined();
 
-        expect(storedSnapshot.version).toBe(2);
-        expect(storedSnapshot.title).toBe(beijaFlorTitle);
-        expect(storedSnapshot.title).not.toBe(beijaFlorDisplayedTitle);
-        expect(Array.isArray(storedSnapshot.tracks)).toBeTruthy();
-        expect(storedSnapshot.tracks.length).toBeGreaterThan(0);
+        expect(storedSnapshot!.version).toBe(2);
+        expect(storedSnapshot!.title).toBe(beijaFlorTitle);
+        expect(storedSnapshot!.title).not.toBe(beijaFlorDisplayedTitle);
+        expect(Array.isArray(storedSnapshot!.tracks)).toBeTruthy();
+        expect(storedSnapshot!.tracks.length).toBeGreaterThan(0);
 
         await page.goto("/");
 

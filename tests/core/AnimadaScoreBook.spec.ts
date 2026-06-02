@@ -6,7 +6,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { Arrangement } from "../../src/core/Arrangement.js";
-import { ArrangementSnapshotMigrator } from "../../src/core/serialisation/migration/ArrangementSnapshotMigrator.js";
+import { ArrangementMigrator } from "../../src/core/serialisation/migration/ArrangementMigrator.js";
 import {
     ScoreBookDataModel, type ISbDmArrangement, type ISbDmInstrument, type ISbDmNoteEvent
 } from "../../src/core/ScoreBookDataModel.js";
@@ -62,7 +62,7 @@ vi.mock("../../src/core/UndoRedoStack.js", () => {
         public canRedo = false;
         public topics = { canUndo: new TestPublisher(), canRedo: new TestPublisher() };
         public currentState: IArrangementSnapshot = {
-            version: 1,
+            version: 2,
             title: "Snapshot",
             timeParams: {
                 timeSignature: "4/4",
@@ -115,7 +115,7 @@ const editModule = (
 
 describe("AnimadaScoreBook", () => {
     const snapshot: IArrangementSnapshot = {
-        version: 1,
+        version: 2,
         title: "Initial",
         timeParams: {
             timeSignature: "4/4",
@@ -127,7 +127,7 @@ describe("AnimadaScoreBook", () => {
         tracks: []
     };
 
-    const arrangement = Arrangement.fromSnapshot(ArrangementSnapshotMigrator.migrate(snapshot, []), []);
+    const arrangement = ArrangementMigrator.migrateToArrangement(snapshot, []).arrangement;
     arrangement.applyArrangementSnapshot = vi.fn();
     const dm = new TestScoreBookDataModel(arrangement);
 

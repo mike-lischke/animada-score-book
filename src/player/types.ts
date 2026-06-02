@@ -46,11 +46,6 @@ export interface IInterval {
     end: RealTime;
 }
 
-// Intervals may land beyond the end of a loop, but LoopIntervals must be within the loop
-export interface ILoopInterval extends IInterval {
-    loopNumber: number;
-}
-
 /** Stuff which is created once for the entire lifetime of the app. */
 export interface ScoreBookUiServices {
     selectionManager: SelectionManager;

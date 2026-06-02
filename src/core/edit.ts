@@ -72,7 +72,7 @@ const editArrangement = (command: EditCommand_Arrangement): boolean => {
     if (command.type === "EditCommand_ArrangementClear") {
         // Need to painstakingly check whether this changes anything
         for (const track of arrangement.tracks) {
-            for (const note of track.getNoteIterator()) {
+            for (const note of track.notes) {
                 if (note.noteStyle) {
                     // As soon as we find one note to clear, we're good
                     arrangement.tracks.forEach((track) => {
@@ -108,7 +108,7 @@ const editArrangement = (command: EditCommand_Arrangement): boolean => {
 const editTrack = (command: EditCommand_Track): boolean => {
     const track = command.track;
 
-    for (const note of track.getNoteIterator()) {
+    for (const note of track.notes) {
         if (note.noteStyle) {
             track.clear();
 

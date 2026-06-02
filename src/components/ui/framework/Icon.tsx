@@ -41,7 +41,7 @@ export class Icon extends UIComponent<IIconProperties> {
 
     public render(): ComponentChild {
         const {
-            id, src, overlays, disabled, style, height, width, color, alt, "data-tooltip": dataTooltip
+            id, src, overlays, disabled, style, height, width, color, alt
         } = this.props;
         let className = this.generateFinalClassName([
             "icon",
@@ -100,7 +100,7 @@ export class Icon extends UIComponent<IIconProperties> {
                     <div
                         className={className}
                         style={newStyle}
-                        data-tooltip={dataTooltip}
+                        {...this.dataAttributes()}
                     />
                     {olLayers}
                 </div>
@@ -112,7 +112,7 @@ export class Icon extends UIComponent<IIconProperties> {
                     className={className}
                     style={newStyle}
                     aria-label={alt}
-                    data-tooltip={dataTooltip}
+                    {...this.dataAttributes()}
                 />
             );
         }

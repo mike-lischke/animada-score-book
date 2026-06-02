@@ -39,6 +39,7 @@ const makeArrangement = (tracks: ISbDmTrack[]): ISbDmArrangement => {
         countIn: false,
         subscribe: vi.fn(),
         unsubscribe: vi.fn(),
+        measureLabels: {},
     };
 
     return arrangement;
@@ -82,10 +83,12 @@ const makeTrack = (notes: Array<Mutable<ISbDmNoteEvent>>, arrangement: ISbDmArra
         getNoteAt: () => {
             return undefined;
         },
-        getNoteIterator: function* () {
-            for (const n of notes) {
-                yield n;
-            }
+        get notes() {
+            return (function* () {
+                for (const n of notes) {
+                    yield n;
+                }
+            })();
         }
     };
 
