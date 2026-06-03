@@ -14,6 +14,7 @@
         "npx vitest": true,
         "npx playwright": true,
         "git checkout": true,
-        "npx tsx": true
+        "npx tsx": true,
+        "npx vite": true
     },
 }

@@ -106,13 +106,16 @@ const fixSvgFile = (filePath: string): void => {
     });
 
     if (fileName === "note.svg") {
-        // Restore manual stroke attributes on stems and fix attribute order.
-        // Drawing programs swap shape-rendering/vector-effect and move id earlier.
+        // Restore manual stroke attributes on stems and fix attribute order. Drawing
+        // programs may move `id` earlier or re-introduce `shape-rendering` /
+        // `vector-effect` that we deliberately removed: those make the printed stem
+        // dotted on hi-DPI printers (`crispEdges` aliasing + non-scaling 1.45px).
+        // Strip both and use a thicker scaling stroke instead.
         root.querySelectorAll('[id$="-stem"]').forEach((el) => {
-            el.setAttribute("stroke-width", "1.45");
+            el.removeAttribute("shape-rendering");
+            el.removeAttribute("vector-effect");
+            el.setAttribute("stroke-width", "3.5");
             reorderAttributes(el, [
-                { name: "shape-rendering", value: "crispEdges" },
-                { name: "vector-effect", value: "non-scaling-stroke" },
                 { name: "id" },
                 { name: "style" }, // placeholder position; overwritten by styleRules below
             ]);

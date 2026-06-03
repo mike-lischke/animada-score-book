@@ -5,6 +5,7 @@
 
 import "@vscode/codicons/dist/codicon.css";
 import "./App.scss";
+import "./print.scss";
 import "./tailwind.css";
 
 import timbauImage from "./assets/images/instrument-icons/timbau.svg";
@@ -36,6 +37,8 @@ import { DrawerSidebar } from "./components/ui/framework/DrawerSidebar.js";
 import { Icon } from "./components/ui/framework/Icon.js";
 import { TooltipProvider } from "./components/ui/framework/Tooltip.js";
 import { Overlay } from "./components/ui/Overlay.js";
+import { PrintDialog } from "./components/ui/Print/PrintDialog.js";
+import { PrintView, type IPrintOptions } from "./components/ui/Print/PrintView.js";
 import { AppStorage, type IUISettings } from "./core/AppStorage.js";
 import {
     SbDmEntityType, ScoreBookDataModel, type ISbDmScore, type ISbDmScoreFolder
@@ -75,13 +78,21 @@ interface IAppState {
     sidebarOpen: boolean;
 
     headerPinned: boolean;
+
+    /** When true, the print view is rendered into the DOM and `window.print()` will be triggered. */
+    printing: boolean;
+    printOptions?: IPrintOptions;
 }
 
 export class App extends UIComponent<{}, IAppState> {
     private scoreLibraryRef = createRef<DrawerSidebar>();
     private settingsDialogRef = createRef<SettingsDialog>();
+    private printDialogRef = createRef<PrintDialog>();
     private valueDialogRef = createRef<ValueDialog>();
     private confirmDialogRef = createRef<ConfirmDialog>();
+
+    /** Saved theme/title to restore after the print job finishes. */
+    private printRestoreState?: { theme: string; documentTitle: string; };
 
     private dataModel = new ScoreBookDataModel();
 
@@ -106,6 +117,7 @@ export class App extends UIComponent<{}, IAppState> {
             displayMode: DisplayMode.Standard,
             sidebarOpen: false,
             headerPinned: false,
+            printing: false,
         };
 
         const selectionManager = new SelectionManager();
@@ -121,6 +133,7 @@ export class App extends UIComponent<{}, IAppState> {
         this.selectedThemePreference = AppStorage.loadUISettings()?.theme ?? "Light+";
         this.applyThemePreference(this.selectedThemePreference);
         this.systemThemeQuery.addEventListener("change", this.handleSystemThemeChange);
+        window.addEventListener("afterprint", this.handleAfterPrint);
         escapeStack.attach();
 
         requisitions.register("settingsChanged", this.handleSettingsChanged);
@@ -135,16 +148,18 @@ export class App extends UIComponent<{}, IAppState> {
     }
 
     public override shouldComponentUpdate(nextProps: {}, nextState: IAppState): boolean {
-        const { displayMode, sidebarOpen, ready, headerPinned } = this.state;
+        const { displayMode, sidebarOpen, ready, headerPinned, printing } = this.state;
 
         return displayMode !== nextState.displayMode
             || sidebarOpen !== nextState.sidebarOpen || ready !== nextState.ready
-            || headerPinned !== nextState.headerPinned;
+            || headerPinned !== nextState.headerPinned
+            || printing !== nextState.printing;
     }
 
     public override componentWillUnmount() {
         super.componentWillUnmount();
         this.systemThemeQuery.removeEventListener("change", this.handleSystemThemeChange);
+        window.removeEventListener("afterprint", this.handleAfterPrint);
         escapeStack.detach();
         requisitions.unregister("settingsChanged", this.handleSettingsChanged);
         requisitions.unregister("playRangeChanged", this.handlePlayRangeChanged);
@@ -268,6 +283,15 @@ export class App extends UIComponent<{}, IAppState> {
                                             >
                                                 <Icon src={timbauImage} width={24} height={24} data-tooltip="inherit" />
                                             </Button>
+                                            <Button
+                                                id="printButton"
+                                                imageOnly
+                                                className="btn-ghost"
+                                                data-tooltip="Print / Export to PDF"
+                                                onClick={this.handlePrintClick}
+                                            >
+                                                <Icon src={Codicon.FilePdf} data-tooltip="inherit" />
+                                            </Button>
                                         </Container>
                                         <Container
                                             id="appTitleContainer"
@@ -339,6 +363,20 @@ export class App extends UIComponent<{}, IAppState> {
                 <ValueDialog ref={this.valueDialogRef} />
                 <ConfirmDialog ref={this.confirmDialogRef} />
                 <SettingsDialog ref={this.settingsDialogRef} />
+                <PrintDialog ref={this.printDialogRef} onAccept={this.handlePrintAccept} />
+                {
+                    this.state.printing && this.dataModel.arrangement && this.state.printOptions
+                    && this.arrangementPlayer && this.undoManager && (
+                        <PrintView
+                            arrangement={this.dataModel.arrangement as Arrangement}
+                            options={this.state.printOptions}
+                            dataModel={this.dataModel}
+                            arrangementPlayer={this.arrangementPlayer}
+                            services={this.services}
+                            undoManager={this.undoManager}
+                        />
+                    )
+                }
             </ErrorBoundary>
         );
     }
@@ -355,6 +393,105 @@ export class App extends UIComponent<{}, IAppState> {
 
     private handleInstrumentEditorClick = () => {
         alert("Instrument Editor is not yet implemented.");
+    };
+
+    private handlePrintClick = () => {
+        this.openPrintDialog();
+    };
+
+    private openPrintDialog(): void {
+        if (!this.dataModel.arrangement) {
+            return;
+        }
+
+        const settings = AppStorage.loadUISettings() ?? {};
+        const viewMode = settings.viewSettings?.arrangementViewSettings?.displayMode ?? "grid";
+
+        const availableTracks = this.dataModel.arrangement.tracks.map((track) => {
+            return { id: track.id, name: track.name || track.instrument.displayName };
+        });
+
+        this.printDialogRef.current?.open({ viewMode, }, availableTracks);
+    }
+
+    private handlePrintAccept = (options: IPrintOptions): void => {
+        this.startPrint(options);
+    };
+
+    private startPrint(options: IPrintOptions): void {
+        this.printRestoreState = {
+            theme: this.selectedThemePreference,
+            documentTitle: document.title,
+        };
+
+        // Always print with the Light+ theme for consistent, paper-friendly output.
+        document.documentElement.setAttribute("data-theme", "Light+");
+
+        // Inject a dynamic @page rule so the browser uses the chosen paper size and orientation,
+        // and place a running header on every printed page: arrangement title left, "Page N" right.
+        const arrangement = this.dataModel.arrangement;
+        const headerTitle = (arrangement?.title ?? "").replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+        const pageStyle = document.createElement("style");
+        pageStyle.id = "print-page-style";
+        pageStyle.textContent =
+            `@page { ` +
+            // Slightly bigger top margin so the header band fits without clipping the
+            // 14pt title glyphs.
+            `margin: 25mm 15mm 15mm 15mm; ` +
+            `@top-left { ` +
+            `content: "${headerTitle}"; ` +
+            `font-family: system-ui, sans-serif; ` +
+            `font-size: 14pt; ` +
+            `font-weight: 700; ` +
+            `color: #000; ` +
+            `vertical-align: middle; ` +
+            `} ` +
+            `@top-right { ` +
+            `content: "Page " counter(page); ` +
+            `font-family: system-ui, sans-serif; ` +
+            `font-size: 10pt; ` +
+            `color: #444; ` +
+            `vertical-align: middle; ` +
+            `} ` +
+            `}`;
+        document.head.appendChild(pageStyle);
+
+        // Use the arrangement title as default PDF filename.
+        if (arrangement) {
+            document.title = `${arrangement.title} \u2014 Animada Score Book`;
+        }
+
+        document.body.classList.add("printing");
+
+        this.setState({ printing: true, printOptions: options }, () => {
+            // Wait for layout, fonts, then trigger the browser print dialog.
+            const fontsReady = (document as { fonts?: { ready?: Promise<unknown>; }; }).fonts?.ready
+                ?? Promise.resolve();
+            void fontsReady.then(() => {
+                // One more rAF tick so the print DOM is laid out.
+                requestAnimationFrame(() => {
+                    window.print();
+                });
+            });
+        });
+    }
+
+    private handleAfterPrint = (): void => {
+        document.body.classList.remove("printing");
+
+        const pageStyle = document.getElementById("print-page-style");
+        if (pageStyle) {
+            pageStyle.remove();
+        }
+
+        if (this.printRestoreState) {
+            const { theme, documentTitle } = this.printRestoreState;
+            this.applyThemePreference(theme);
+            document.title = documentTitle;
+            this.printRestoreState = undefined;
+        }
+
+        this.setState({ printing: false, printOptions: undefined });
     };
 
     private handleDisplayOptionsClick = () => {
@@ -658,6 +795,14 @@ export class App extends UIComponent<{}, IAppState> {
     };
 
     private handleKeyDown(event: KeyboardEvent): void {
+        // Ctrl/Cmd+P opens the print preview dialog instead of the native print dialog.
+        if ((event.ctrlKey || event.metaKey) && !event.shiftKey && !event.altKey && event.key === "p") {
+            event.preventDefault();
+            this.openPrintDialog();
+
+            return;
+        }
+
         switch (event.key) {
             case "Escape": {
                 Overlay.closeAllOverlays();

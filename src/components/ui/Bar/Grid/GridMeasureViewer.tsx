@@ -5,7 +5,7 @@
 
 import type { ComponentChild } from "preact";
 
-import type { ScoreBookDataModel } from "../../../../core/ScoreBookDataModel.js";
+import type { ISbDmTrack, ScoreBookDataModel } from "../../../../core/ScoreBookDataModel.js";
 import type { IScoreMetrics } from "../../../../player/TimeCoordinator.js";
 import { Container } from "../../framework/Container.js";
 import { ChildAlignment, Orientation } from "../../framework/ui-types.js";
@@ -19,6 +19,12 @@ export interface IGridMeasureViewerProperties extends ICommonUIProperties {
 
     dataModel: ScoreBookDataModel;
     scoreMetrics: IScoreMetrics;
+
+    /**
+     * If given, render only these tracks (in this order) instead of all tracks of the arrangement.
+     * Used by the print feature to limit output to the user's selection.
+     */
+    tracks?: ISbDmTrack[];
 }
 
 interface IGridMeasureViewerState {
@@ -59,16 +65,18 @@ export class GridMeasureViewer extends UIComponent<IGridMeasureViewerProperties,
     }
 
     public override render(): ComponentChild {
-        const { measureNumber, dataModel, scoreMetrics } = this.props;
+        const { measureNumber, dataModel, scoreMetrics, tracks: tracksOverride } = this.props;
         const { beatPositions } = this.state;
 
         if (!dataModel.arrangement) {
             return null;
         }
 
+        const tracks = tracksOverride ?? dataModel.arrangement.tracks;
+
         const rows: ComponentChild[] = [];
         let baseSteps = 0;
-        for (const track of dataModel.arrangement.tracks) {
+        for (const track of tracks) {
             const measure = track.measures[measureNumber - 1];
             if (baseSteps === 0) {
                 baseSteps = measure.steps.length

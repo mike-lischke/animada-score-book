@@ -15,9 +15,11 @@ test.beforeEach(async ({ page }) => {
 /**
  * Builds a minimal 1-bar arrangement snapshot with a single track and one note.
  *
- * @param instrumentId
- * @param title
- * @param noteStyleId
+ * @param instrumentId The id of the instrument to bind to the single track.
+ * @param title The arrangement title.
+ * @param noteStyleId The id of the note style used for the single note.
+ *
+ * @returns A snapshot object suitable for `stringifyPackedArrangement`.
  */
 const buildSnapshot = (instrumentId: string, title: string, noteStyleId = "1") => {
     return {

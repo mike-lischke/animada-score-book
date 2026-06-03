@@ -18,8 +18,6 @@ import { UIComponent } from "../components/ui/framework/UIComponent.js";
 import { AppStorage, type IUISettings } from "../core/AppStorage.js";
 import { clampValue } from "../core/utils.js";
 import { requisitions } from "../supplement/Requisitions.js";
-import { Grid } from "../components/ui/framework/Grid.js";
-import { GridCell } from "../components/ui/framework/GridCell.js";
 import { Label } from "../components/ui/framework/Label.js";
 
 interface ISettingsDialogState {
@@ -118,69 +116,82 @@ export class SettingsDialog extends UIComponent<{}, ISettingsDialogState> {
                     <Icon src={Codicon.Gear} style={{ fontSize: "24px", marginRight: "8px" }} />
                     Settings
                 </Container>
-                <Grid columns={["auto", "1fr"]} id="settingsGrid" columnGap={16}>
-                    <GridCell className="settingName">
-                        <p className="py-4">Select Color Theme</p>
-                    </GridCell>
-                    <GridCell className="settingValue">
+
+                <Container className="settings-card" orientation={Orientation.TopDown}>
+                    <Container
+                        className="settings-row"
+                        orientation={Orientation.LeftToRight}
+                        mainAlignment={ChildAlignment.SpaceBetween}
+                        crossAlignment={ChildAlignment.Center}
+                    >
+                        <span className="settings-row-label">Color theme</span>
                         <Dropdown
                             caption={currentTheme}
                             items={themeItems}
                             selectedItem={currentTheme}
                             closeOnSelect
                         />
-                    </GridCell>
-                    <GridCell className="settingName">
-                        <p className="py-4">Track Viewer Zoom</p>
-                    </GridCell>
-                    <GridCell className="settingValue">
-                        <Label caption={`${currentViewerZoom}%`} style={{ marginRight: "8px" }} />
-                        <Button
-                            className="zoomButton"
-                            caption="-"
-                            onClick={() => {
-                                const newZoom = clampValue(currentViewerZoom - 10, 50, 150);
-                                if (newZoom !== currentViewerZoom) {
+                    </Container>
+
+                    <Container
+                        className="settings-row"
+                        orientation={Orientation.LeftToRight}
+                        mainAlignment={ChildAlignment.SpaceBetween}
+                        crossAlignment={ChildAlignment.Center}
+                    >
+                        <span className="settings-row-label">Track viewer zoom</span>
+                        <Container
+                            orientation={Orientation.LeftToRight}
+                            crossAlignment={ChildAlignment.Center}
+                        >
+                            <Label caption={`${currentViewerZoom}%`} style={{ marginRight: "8px" }} />
+                            <Button
+                                className="zoomButton"
+                                caption="-"
+                                onClick={() => {
+                                    const newZoom = clampValue(currentViewerZoom - 10, 50, 150);
+                                    if (newZoom !== currentViewerZoom) {
+                                        currentSettings.viewSettings ??= {};
+                                        currentSettings.viewSettings.arrangementViewSettings ??= {};
+                                        currentSettings.viewSettings.arrangementViewSettings.zoomLevel = newZoom;
+                                        this.setState({ currentSettings }, () => {
+                                            this.temporarySettingsChange();
+                                        });
+                                    }
+                                }}
+                            />
+
+                            <Button
+                                className="zoomButton"
+                                caption="+"
+                                onClick={() => {
+                                    const newZoom = clampValue(currentViewerZoom + 10, 50, 150);
+                                    if (newZoom !== currentViewerZoom) {
+                                        currentSettings.viewSettings ??= {};
+                                        currentSettings.viewSettings.arrangementViewSettings ??= {};
+                                        currentSettings.viewSettings.arrangementViewSettings.zoomLevel = newZoom;
+                                        this.setState({ currentSettings }, () => {
+                                            this.temporarySettingsChange();
+                                        });
+                                    }
+                                }}
+                            />
+
+                            <Button
+                                caption="Reset"
+                                className="resetButton"
+                                onClick={() => {
                                     currentSettings.viewSettings ??= {};
                                     currentSettings.viewSettings.arrangementViewSettings ??= {};
-                                    currentSettings.viewSettings.arrangementViewSettings.zoomLevel = newZoom;
+                                    currentSettings.viewSettings.arrangementViewSettings.zoomLevel = 100;
                                     this.setState({ currentSettings }, () => {
                                         this.temporarySettingsChange();
                                     });
-                                }
-                            }}
-                        />
-
-                        <Button
-                            className="zoomButton"
-                            caption="+"
-                            onClick={() => {
-                                const newZoom = clampValue(currentViewerZoom + 10, 50, 150);
-                                if (newZoom !== currentViewerZoom) {
-                                    currentSettings.viewSettings ??= {};
-                                    currentSettings.viewSettings.arrangementViewSettings ??= {};
-                                    currentSettings.viewSettings.arrangementViewSettings.zoomLevel = newZoom;
-                                    this.setState({ currentSettings }, () => {
-                                        this.temporarySettingsChange();
-                                    });
-                                }
-                            }}
-                        />
-
-                        <Button
-                            caption="Reset"
-                            className="resetButton"
-                            onClick={() => {
-                                currentSettings.viewSettings ??= {};
-                                currentSettings.viewSettings.arrangementViewSettings ??= {};
-                                currentSettings.viewSettings.arrangementViewSettings.zoomLevel = 100;
-                                this.setState({ currentSettings }, () => {
-                                    this.temporarySettingsChange();
-                                });
-                            }}
-                        />
-                    </GridCell>
-                </Grid>
+                                }}
+                            />
+                        </Container>
+                    </Container>
+                </Container>
 
             </Dialog >
         );

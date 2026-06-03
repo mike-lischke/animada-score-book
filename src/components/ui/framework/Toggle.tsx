@@ -17,6 +17,9 @@ export interface IToggleProperties extends ICommonUIProperties {
     checkState?: CheckState;
     disabled?: boolean;
 
+    /** When true, the toggle is rendered rotated 90° (handle moves vertically). */
+    vertical?: boolean;
+
     onChange?: (e: InputEvent, checkState: CheckState) => void;
 }
 
@@ -49,9 +52,10 @@ export class Toggle extends UIComponent<IToggleProperties> {
     }
 
     public render(): ComponentChild {
-        const { id, checkState } = this.props;
+        const { id, checkState, vertical } = this.props;
         const className = this.generateFinalClassName([
             "toggle",
+            ...(vertical ? ["toggle-vertical"] : []),
         ]);
 
         return (

@@ -166,7 +166,7 @@ describe.sequential("SettingsDialog (class)", () => {
         renderResult = render(<TestableSettingsDialog />);
 
         expect(renderResult.container.querySelector("#settingsDialog")).toBeTruthy();
-        expect(renderResult.container.querySelector("#settingsGrid")).toBeTruthy();
+        expect(renderResult.container.querySelector(".settings-card")).toBeTruthy();
         expect(renderResult.container.querySelector("#settings-button-cancel")).toBeTruthy();
         expect(renderResult.container.querySelector("#settings-button-save")).toBeTruthy();
     });

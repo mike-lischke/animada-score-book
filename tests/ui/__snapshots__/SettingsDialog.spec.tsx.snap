@@ -19,24 +19,18 @@ exports[`SettingsDialog (class) > matches snapshot for default rendering 1`] = `
       Settings
     </div>
     <div
-      class="grid"
-      id="settingsGrid"
-      style="grid-template-columns: auto 1fr; column-gap: 16px;"
+      class="container settings-card"
+      style="flex-direction: column;"
     >
       <div
-        class="container gridCell settingName"
-        style="flex-direction: row;"
+        class="container settings-row"
+        style="flex-direction: row; justify-content: space-between; align-items: center;"
       >
-        <p
-          class="py-4"
+        <span
+          class="settings-row-label"
         >
-          Select Color Theme
-        </p>
-      </div>
-      <div
-        class="container gridCell settingValue"
-        style="flex-direction: row;"
-      >
+          Color theme
+        </span>
         <div
           class="dropdownHost"
         >
@@ -169,40 +163,40 @@ exports[`SettingsDialog (class) > matches snapshot for default rendering 1`] = `
         </div>
       </div>
       <div
-        class="container gridCell settingName"
-        style="flex-direction: row;"
-      >
-        <p
-          class="py-4"
-        >
-          Track Viewer Zoom
-        </p>
-      </div>
-      <div
-        class="container gridCell settingValue"
-        style="flex-direction: row;"
+        class="container settings-row"
+        style="flex-direction: row; justify-content: space-between; align-items: center;"
       >
         <span
-          class="label"
-          style="margin-right: 8px;"
+          class="settings-row-label"
         >
-          100%
+          Track viewer zoom
         </span>
-        <button
-          class="btn zoomButton"
+        <div
+          class="container"
+          style="flex-direction: row; align-items: center;"
         >
-          -
-        </button>
-        <button
-          class="btn zoomButton"
-        >
-          +
-        </button>
-        <button
-          class="btn resetButton"
-        >
-          Reset
-        </button>
+          <span
+            class="label"
+            style="margin-right: 8px;"
+          >
+            100%
+          </span>
+          <button
+            class="btn zoomButton"
+          >
+            -
+          </button>
+          <button
+            class="btn zoomButton"
+          >
+            +
+          </button>
+          <button
+            class="btn resetButton"
+          >
+            Reset
+          </button>
+        </div>
       </div>
     </div>
     <div

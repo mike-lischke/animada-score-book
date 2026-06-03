@@ -12,6 +12,7 @@ import { CheckState, Toggle } from "../framework/Toggle.js";
 import { Codicon } from "../framework/Codicon.js";
 import { Container } from "../framework/Container.js";
 import { Icon } from "../framework/Icon.js";
+import { NoteImage, NoteLength } from "../framework/NoteImage.js";
 import { SplitSlider } from "../framework/SplitSlider.js";
 import { ChildAlignment, Orientation } from "../framework/ui-types.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
@@ -126,11 +127,33 @@ export class TrackControls extends UIComponent<ITrackControlsProperties, ITrackC
                     >
                         <Icon src={Codicon.Settings} width={16} height={16} alt="Collapse mixer" />
                     </Button>
-                    <Toggle
-                        className="trackViewModeToggle toggle-xs"
-                        checkState={trackViewMode === "staff" ? CheckState.Checked : CheckState.Unchecked}
-                        onChange={this.handleTrackViewModeToggle}
-                    />
+                    <Container
+                        className="trackViewModeToggleGroup"
+                        orientation={Orientation.LeftToRight}
+                        crossAlignment={ChildAlignment.Center}
+                    >
+                        <Toggle
+                            className="trackViewModeToggle toggle-xs"
+                            vertical
+                            checkState={trackViewMode === "staff" ? CheckState.Checked : CheckState.Unchecked}
+                            onChange={this.handleTrackViewModeToggle}
+                        />
+                        <Container
+                            className="trackViewModeIcons"
+                            orientation={Orientation.TopDown}
+                            crossAlignment={ChildAlignment.Center}
+                            mainAlignment={ChildAlignment.SpaceBetween}
+                        >
+                            <div className="trackViewModeGridIcon" aria-label="Show grid view" />
+                            <NoteImage
+                                className="trackViewModeStaffIcon"
+                                value={NoteLength.Quarter}
+                                width={12}
+                                height={18}
+                                alt="Show staff view"
+                            />
+                        </Container>
+                    </Container>
                 </Container>
                 <Container
                     className="trackControlsPanel"

@@ -1378,6 +1378,28 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                     break;
                 }
 
+                case HandTechnique.Slap: {
+                    NoteImage.registerSymbol("cross-head", "0 0 14 14",
+                        `<line x1="2" y1="2" x2="12" y2="12" />` +
+                        `<line x1="12" y1="2" x2="2" y2="12" />`,
+                    );
+
+                    nodes.push(
+                        <svg key="slap-cross" className="staff-note-head-slap-svg"
+                            width={10} height={10}
+                            viewBox="0 0 14 14"
+                            aria-hidden="true"
+                            style={{
+                                stroke: "var(--color-base-100)",
+                                strokeWidth: 3,
+                                strokeLinecap: "round",
+                            }}>
+                            <use href="#symbol-cross-head" />
+                        </svg>,
+                    );
+                    break;
+                }
+
                 default: {
                     break;
                 }

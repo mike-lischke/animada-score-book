@@ -44,14 +44,26 @@ export class Container extends UIComponent<IContainerProperties> {
             title, gap, onScroll,
         } = this.props;
 
-        const newStyle = {
-            flexDirection: orientation,
-            justifyContent: mainAlignment,
-            alignItems: crossAlignment,
-            flexWrap: wrap,
-            gap,
-            ...style,
-        };
+        const newStyle: Record<string, unknown> = { ...style };
+        if (orientation !== undefined) {
+            newStyle.flexDirection = orientation;
+        }
+
+        if (mainAlignment !== undefined) {
+            newStyle.justifyContent = mainAlignment;
+        }
+
+        if (crossAlignment !== undefined) {
+            newStyle.alignItems = crossAlignment;
+        }
+
+        if (wrap !== undefined) {
+            newStyle.flexWrap = wrap;
+        }
+
+        if (gap !== undefined) {
+            newStyle.gap = gap;
+        }
 
         const className = this.generateFinalClassName([
             "container",

@@ -3,6 +3,8 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
+@use "grid-shared" as score;
+
 @font-face {
     font-family: "Fairytale";
     src: url("/fonts/FairytaleSerif-MediumItalic.woff2") format("woff2");
@@ -240,78 +242,7 @@ h6 {
                 transition: left 0.050s linear;
             }
 
-            .grid-measure-viewer {
-                border-right: 2px solid var(--color-base-300);
-            }
-
-            .grid-measure-beam {
-                height: 20pt;
-                margin-bottom: 5px;
-                position: relative;
-                overflow: hidden;
-
-                // Horizontal beam; left/right endpoints are set via CSS vars from GridMeasureBeam.tsx
-                // so that edge measures start/end exactly at the measured beat positions.
-                &::before {
-                    content: '';
-                    position: absolute;
-                    top: 0;
-                    left: var(--beam-left, 0);
-                    right: var(--beam-right, 0);
-                    height: 5px;
-                    background-color: var(--color-base-content);
-                }
-            }
-
-            .grid-measure-number {
-                position: absolute;
-                top: 10px;
-                font-size: 11px;
-                color: var(--color-base-content);
-                pointer-events: none;
-            }
-
-            .grid-measure-beat {
-                position: absolute;
-                top: 0;
-                height: 100%;
-                border-left: 1px solid var(--color-base-content);
-
-                &.bar-start {
-                    border-left-width: 2px;
-                }
-            }
-
-            .grid-measure-row {
-                margin: 2px 8px 14px 8px;
-            }
-
-            .subdivision {
-                position: relative;
-                padding: 4px 0 4px 0;
-
-                // Bracket color: neutral gray, level 1 ≈ #ccc (83 % L) getting 15 % darker
-                // per nesting level. Fixed lightness guarantees light → dark on every theme.
-                --subdivision-color: oklch(calc(83% - (var(--current-level, 1) - 1) * 15%) 0 0);
-
-                &::before {
-                    content: '';
-                    position: absolute;
-                    top: 2px;
-                    left: 0;
-                    right: 0;
-                    bottom: 2px;
-                    border-top: 3px solid var(--subdivision-color);
-                    border-bottom: 3px solid var(--subdivision-color);
-                    border-radius: 6px;
-                    pointer-events: none;
-                    z-index: 1;
-                }
-
-                > .note-viewer {
-                    height: calc(var(--note-height) - var(--current-level) * 8px);
-                }
-            }
+            @include score.score-grid-rules($useThemeColors: true, $renderBeam: true, $beatNumberTop: 10px);
         }
     }
 
@@ -320,7 +251,7 @@ h6 {
         --track-controls-expanded-width: clamp(200px, 24vw, 300px);
 
         overflow: hidden;
-        gap: 12px;
+        gap: 8px;
 
         flex: 0 0 var(--track-controls-collapsed-width);
         width: var(--track-controls-expanded-width);
@@ -424,13 +355,37 @@ h6 {
         justify-content: flex-start;
     }
 
-    .trackViewModeToggle {
+    .trackViewModeToggleGroup {
         margin-left: 8px;
+    }
+
+    .trackViewModeIcons {
+        height: 32px;
+        margin-top: 3px;
+    }
+
+    .trackViewModeGridIcon {
+        width: 8px;
+        height: 8px;
+        flex: 0 0 auto;
+        border: 1px dashed currentColor;
+    }
+
+    .trackViewModeToggle {
+        margin: 0;
     }
 
     .trackViewModeToggle input[type="checkbox"] {
         width: 32px;
         height: 18px;
+    }
+
+    .trackViewModeToggle.toggle-vertical {
+        // daisyUI's toggle is horizontal. Rotate it 90° clockwise so the handle
+        // moves vertically. With this rotation, the unchecked handle sits at the
+        // top and the checked handle at the bottom.
+        transform: rotate(90deg);
+        margin-right: -2px;
     }
 }
 
@@ -923,9 +878,8 @@ h6 {
         color: var(--color-base-content);
     }
 
-    /* ---- Slap: cross inside square (uses ::before so ::after keeps the filled square) ---- */
-    &.slap::before {
-        content: "";
+    /* ---- Slap: white cross SVG drawn on top of the filled square head ---- */
+    .staff-note-head-slap-svg {
         position: absolute;
         left: calc(50% - 7px);
         bottom: 20px;
@@ -934,14 +888,10 @@ h6 {
         transform: translate(-50%, -30%);
         pointer-events: none;
         z-index: 1;
-        background-image:
-            linear-gradient(45deg,
-                transparent 42%, var(--color-base-100) 42%, var(--color-base-100) 58%, transparent 58%),
-            linear-gradient(-45deg,
-                transparent 42%, var(--color-base-100) 42%, var(--color-base-100) 58%, transparent 58%);
+        overflow: visible;
     }
 
-    /* ---- Hand + Cross → hollow square around the cross (Kessel) ---- */
+    /* ---- Hand + Cross → hollow square around the cross (body) ---- */
     &.body-hand::before {
         content: "";
         position: absolute;
@@ -1125,6 +1075,14 @@ h6 {
     border: 1px solid rgba(0, 0, 0, 0.08);
     border-radius: 8px;
 }
+
+/*
+ * In the grid view, the row is a CSS grid with `baseSteps` columns of `1fr`,
+ * and tuplet subdivisions span `subdivision.normal` columns while internally
+ * being grids of `subdivision.actual` columns. This makes a tuplet's outer
+ * width exactly equal to `normal` base cells regardless of margin, padding,
+ * border or grid `gap`, since `gap` is included in the spanned width.
+ */
 
 .note-viewer:active .hold-detector {
     opacity: 30%;
@@ -1535,31 +1493,68 @@ h6 {
     height: 100%;
 }
 
-#settingsDialog #settingsGrid {
+/*
+ * macOS-style settings card. A rounded container with horizontal hairline
+ * dividers between rows. Each row has its label on the left and its control
+ * on the right.
+ */
+.settings-card {
     margin: 16px 0;
+    background-color: color-mix(in srgb, var(--color-base-content) 4%, var(--color-base-100));
+    border: 1px solid var(--color-base-300);
+    border-radius: 10px;
+    overflow: hidden;
+}
 
-    .settingName {
-        justify-content: center;
-    }
+.settings-row {
+    padding: 10px 16px;
+    min-height: 36px;
+    border-bottom: 1px solid var(--color-base-300);
 
-    .settingValue {
-        align-items: center;
-        justify-content: flex-end;
+    &:last-child {
+        border-bottom: 0;
     }
+}
 
-    .zoomButton {
-        border: none;
-        width: 32px;
-        height: 32px;
-        margin: 0 2px;
-    }
+.settings-row-stacked {
+    gap: 6px;
+}
 
-    .resetButton {
-        border: none;
-        height: 32px;
-        margin-left: 8px;
-        padding: 0 12px;
-    }
+.settings-row-stacked > .settings-row-label {
+    margin-right: 0;
+}
+
+.settings-row-values {
+    margin-left: 4px;
+}
+
+.settings-row-label {
+    font-size: 13px;
+    color: var(--color-base-content);
+    margin-right: 16px;
+}
+
+.settings-section-title {
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: color-mix(in srgb, var(--color-base-content) 60%, transparent);
+    margin: 12px 4px 4px 4px;
+}
+
+#settingsDialog .zoomButton {
+    border: none;
+    width: 32px;
+    height: 32px;
+    margin: 0 2px;
+}
+
+#settingsDialog .resetButton {
+    border: none;
+    height: 32px;
+    margin-left: 8px;
+    padding: 0 12px;
 }
 
 .arrangementViewer .minimap {

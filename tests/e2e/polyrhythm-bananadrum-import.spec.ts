@@ -186,7 +186,8 @@ test.describe("BananaDrum polyrhythm import", () => {
         expect(bar6Grid).toHaveLength(16);
         expect(bar6Grid[9].type).toBe("subdivision");
         const bar6Sub = bar6Grid[9] as { type: "subdivision"; flex: string; childCount: number; };
-        expect(bar6Sub.flex).toBe("1 1 0%");
+        // Grid layout: subdivisions use gridColumn + nested grid, no flex.
+        expect(bar6Sub.flex).toBe("");
         expect(bar6Sub.childCount).toBe(2);
 
         // --- Bar 7: same structure ---
@@ -249,7 +250,7 @@ test.describe("BananaDrum polyrhythm import", () => {
         expect(bar8Grid).toHaveLength(15);
         expect(bar8Grid[14].type).toBe("subdivision");
         const bar8Sub = bar8Grid[14] as { type: "subdivision"; flex: string; childCount: number; };
-        expect(bar8Sub.flex).toBe("2 1 0%");
+        expect(bar8Sub.flex).toBe("");
         expect(bar8Sub.childCount).toBe(4);
 
         // ==================== STAFF MODE ====================

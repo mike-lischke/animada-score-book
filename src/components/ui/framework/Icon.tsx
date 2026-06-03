@@ -79,6 +79,10 @@ export class Icon extends UIComponent<IIconProperties> {
                 WebkitMaskImage: maskImage,
                 maskSize,
                 maskComposite,
+                // Expose the icon source as a CSS variable so the print stylesheet can
+                // reuse it as a background-image (Chromium's print engine ignores
+                // mask-image, so we fall back to drawing the SVG natively on paper).
+                "--icon-src": maskImage,
                 ...style,
                 width: convertPropValue(width),
                 height: convertPropValue(height),

@@ -5,11 +5,10 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { Arrangement } from "../../src/core/Arrangement.js";
-import { ArrangementMigrator } from "../../src/core/serialisation/migration/ArrangementMigrator.js";
 import {
     ScoreBookDataModel, type ISbDmArrangement, type ISbDmInstrument, type ISbDmNoteEvent
 } from "../../src/core/ScoreBookDataModel.js";
+import { ArrangementMigrator } from "../../src/core/serialisation/migration/ArrangementMigrator.js";
 import type { EditCommand } from "../../src/core/types/edit_commands.js";
 import type { IArrangementSnapshot } from "../../src/core/types/general.js";
 import { UndoManager } from "../../src/core/UndoManager.js";

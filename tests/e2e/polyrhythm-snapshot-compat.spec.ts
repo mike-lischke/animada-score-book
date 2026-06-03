@@ -6,7 +6,6 @@
 import { expect, test } from "@playwright/test";
 
 import { tryParsePackedArrangement } from "../../src/core/serialisation/snapshot-packing.js";
-import type { IArrangementSnapshot } from "../../src/core/types/general.js";
 import {
     beijaFlorImportPath, beijaFlorTitle, beijaFlorDisplayedTitle, expectImportedPolyrhythmSong, expectPlaybackToMove,
     readStoredCurrentScore, routeApi,

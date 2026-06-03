@@ -1,0 +1,287 @@
+/*
+ * Copyright (c) Mike Lischke. All rights reserved.
+ * Licensed under the MIT License. See License.txt in the project root for license information.
+ */
+
+@use "grid-shared" as score;
+
+/*
+ * Print stylesheet for the score / PDF export feature. Page size, orientation and
+ * running headers are injected at print time via a dynamic <style id="print-page-style">.
+ */
+
+/* Hidden in normal screen mode; shown only via `body.printing` under @media print. */
+.print-root {
+    display: none;
+}
+
+@media print {
+
+    html,
+    body {
+        width: auto !important;
+        height: auto !important;
+        overflow: visible !important;
+        background: white !important;
+        margin: 0;
+    }
+
+    body.printing #appRoot,
+    body.printing dialog.modal,
+    body.printing .tooltip {
+        display: none !important;
+    }
+
+    body.printing .print-root {
+        display: block !important;
+        color: black;
+        background: white;
+
+        /*
+         * Render the score exactly like the on-screen player and use one CSS `zoom` to
+         * fit the configured number of bars per line into the printable page width.
+         * `--print-bars-per-line` is set inline on .print-root by PrintView.
+         */
+        zoom: calc(1.32 / var(--print-bars-per-line, 2));
+    }
+
+    /* Preserve background colors / SVG fills. */
+    body.printing,
+    body.printing * {
+        print-color-adjust: exact;
+        -webkit-print-color-adjust: exact;
+    }
+}
+
+.print-root {
+    color: black;
+    background: white;
+    font-family: system-ui, "Open Sans", "Helvetica Neue", "Segoe UI", Roboto, sans-serif;
+
+    .print-header {
+        margin-bottom: 8mm;
+
+        /* The title is reproduced in the @page top-left margin box on every page. */
+        .print-title {
+            font-size: 18pt;
+            font-weight: 700;
+            margin: 0 0 3mm 0;
+            display: none;
+        }
+
+        .print-tempo {
+            font-size: 16.5pt;
+            margin: 0;
+        }
+    }
+
+    .print-bar-block {
+        break-inside: avoid;
+        page-break-inside: avoid;
+        margin-bottom: 12mm;
+    }
+
+    .print-bar-row {
+        display: flex;
+        flex-direction: row;
+        align-items: stretch;
+        gap: 0;
+    }
+
+    /* Shared score grid rules — no decorative beam strip, fixed black/gray colors. */
+    @include score.score-grid-rules($useThemeColors: false, $renderBeam: false, $beatNumberTop: 0);
+
+    /*
+     * Halve the bar's horizontal extent for print. On screen the bar's min-width has to
+     * match a full grid cell per step (for play-head positioning); on paper there is no
+     * play head, so the same content fits into half the horizontal space.
+     */
+    .bar-viewer {
+        --bar-step-width: calc((var(--note-height) + 5px) / 2);
+
+        min-width: calc(var(--steps-per-bar) * var(--note-height) / 2);
+    }
+
+    /* Pin the bar number inside the bar instead of right-anchored against the icon column. */
+    .grid-measure-beam .grid-measure-number {
+        right: auto !important;
+        left: 6px;
+        top: 0;
+    }
+
+    /* Compensate the 1px border-left of the first beat tick. */
+    .grid-measure-beam .grid-measure-beat.bar-start {
+        margin-left: -1px;
+    }
+
+    /* Drop the row min-width so the row stays inside the viewer when adding margins. */
+    .grid-measure-row {
+        min-width: 0 !important;
+        margin-left: 2px;
+        margin-right: 2px;
+    }
+
+    /* Keep bars at their natural size; don't stretch a partial trailing row. */
+    .grid-measure-viewer {
+        flex: 0 0 auto !important;
+    }
+
+    /* Suppress live-editor selection / focus highlight. */
+    .note-viewer {
+        outline: none !important;
+        border: 0.5px solid #d8d8d8 !important;
+        box-shadow: none !important;
+    }
+
+    /*
+     * Print fallback for the per-track instrument icons. Chromium/Safari silently
+     * drop mask-image on paper, so we keep the per-track background-color and
+     * overlay the SVG silhouette via `--icon-src` (set by Icon.tsx) as a
+     * background-image. Only used in staff view — in grid view the cells already
+     * carry the track color, so a plain silhouette without colored backdrop is
+     * enough.
+     */
+    &.view-staff .print-instrument-icon.icon,
+    .print-legend-icon.icon {
+        -webkit-mask-image: none !important;
+        mask-image: none !important;
+        background-image: var(--icon-src) !important;
+        background-size: 70% 70% !important;
+        background-repeat: no-repeat !important;
+        background-position: center !important;
+        border-radius: 6px;
+        filter: none !important;
+    }
+
+    /*
+     * Grid view: drop the inline track-color background and render the icon as a
+     * plain silhouette only.
+     */
+    &.view-grid .print-instrument-icon.icon {
+        -webkit-mask-image: none !important;
+        mask-image: none !important;
+        background-color: transparent !important;
+        background-image: var(--icon-src) !important;
+        background-size: contain !important;
+        background-repeat: no-repeat !important;
+        background-position: center !important;
+        filter: none !important;
+    }
+
+    /*
+     * Instrument icon column rendered before the first measure of each bar row. Each
+     * grid row contributes `--note-height + 21px` to the column height (row + note-viewer
+     * margins/border); each icon cell uses that stride so icons line up with their
+     * track row regardless of subdivisions.
+     */
+    .print-instrument-column {
+        flex: 0 0 auto;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        margin-right: 6px;
+        margin-top: calc(var(--note-height) * -0.35 + 5px);
+    }
+
+    /* Matches the beam strip + its margin above the first row. */
+    .print-instrument-beam-spacer {
+        flex: 0 0 auto;
+        height: 16px;
+    }
+
+    .print-instrument-cell {
+        flex: 0 0 auto;
+        height: calc(var(--note-height) + 20px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .print-instrument-icon {
+        width: calc(var(--note-height) * 0.7 + 1px);
+        height: calc(var(--note-height) * 0.7 + 1px);
+        object-fit: contain;
+    }
+
+    /* Staff rows have no beam strip and a different stride than grid rows. */
+    &.view-staff {
+        .print-instrument-column {
+            margin-top: 30px;
+        }
+
+        .print-instrument-beam-spacer {
+            display: none;
+        }
+
+        .print-instrument-cell {
+            height: calc(var(--note-height) + 20px);
+        }
+    }
+
+    /* Grid view: nudge the instrument column down a touch so it lines up with
+       the first track row in the printed output. */
+    &.view-grid .print-instrument-column {
+        margin-top: -4px;
+    }
+
+    .print-legend {
+        margin-top: 8mm;
+        page-break-inside: avoid;
+        break-inside: avoid;
+
+        .print-legend-title {
+            font-size: 12pt;
+            font-weight: 700;
+            margin: 0 0 3mm 0;
+        }
+
+        .print-legend-list {
+            list-style: none;
+            margin: 0;
+            padding: 0;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 2mm 6mm;
+        }
+
+        .print-legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .print-legend-icon {
+            width: 48px;
+            height: 48px;
+            object-fit: contain;
+        }
+
+        .print-legend-label {
+            font-size: 11pt;
+        }
+    }
+
+    /*
+     * Staff line fix: `.staff-note-viewer-line` uses z-index: -1, which would drop it
+     * behind the white .print-root background (zoom creates a stacking context). Give
+     * each row its own stacking context and force a print-friendly black line color.
+     */
+    .staff-note-viewer,
+    .staff-prefix-row {
+        isolation: isolate;
+    }
+
+    .staff-note-viewer-line {
+        border-top-color: #000 !important;
+    }
+
+    /*
+     * Bar-number badge: in print the digits sit slightly too high inside their
+     * bordered box (different font-metric handling than on screen). Nudge them
+     * down with a small padding tweak.
+     */
+    .staff-measure-number {
+        padding: 0 4px 0 4px;
+        line-height: 1;
+    }
+}

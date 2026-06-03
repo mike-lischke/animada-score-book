@@ -70,8 +70,14 @@ export class GridMeasureRow extends UIComponent<IGridMeasureRowProperties> {
             }
         });
 
+        const rowStyle: CSSProperties = {
+            minWidth: `calc(${baseSteps} * var(--note-height))`,
+            display: "grid",
+            gridTemplateColumns: `repeat(${baseSteps}, 1fr)`,
+        };
+
         return (
-            <Container className={className} style={{ minWidth: `calc(${baseSteps} * var(--note-height))` }}>
+            <Container className={className} style={rowStyle}>
                 {this.renderItems(group.items, 1, beatStartItemIndices)}
             </Container>
         );
@@ -137,17 +143,19 @@ export class GridMeasureRow extends UIComponent<IGridMeasureRowProperties> {
                 return (
                     <div key={index} className="note-viewer"
                         data-beat-start={isBeatStart ? "true" : undefined}
-                        style={{ flex: 1, minWidth: 0, backgroundColor }}>
+                        style={{ minWidth: 0, backgroundColor }}>
                         <div className="note-details-viewer">
                             <NoteStyleSymbolViewer noteStyle={noteStyle} />
                         </div>
                     </div>
                 );
             } else {
-                const { normal } = item.subdivision;
+                const { normal, actual } = item.subdivision;
                 const tupletStyle = {
-                    flex: normal,
                     minWidth: 0,
+                    gridColumn: `span ${normal}`,
+                    display: "grid",
+                    gridTemplateColumns: `repeat(${actual}, 1fr)`,
                     "--current-level": level,
                 } as CSSProperties;
 

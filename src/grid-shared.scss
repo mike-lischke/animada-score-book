@@ -1,0 +1,128 @@
+/*
+ * Copyright (c) Mike Lischke. All rights reserved.
+ * Licensed under the MIT License. See License.txt in the project root for license information.
+ */
+
+/*
+ * Shared rules for the grid-mode score viewer.
+ *
+ * These rules are used both by the live editor (under #trackViewerHost in App.scss)
+ * and by the print view (.print-root in print.scss). They are exposed as a mixin so
+ * each consumer can include them in its own scoping context.
+ *
+ * Inputs (CSS custom properties expected from the surrounding context):
+ *   --note-height        : note cell size, used to derive subdivision row heights.
+ *   --color-base-content : foreground color (only used when $useThemeColors is true).
+ *   --color-base-300     : measure separator color (only when $useThemeColors is true).
+ *
+ * Parameters:
+ *   $useThemeColors : when true, theme variables are used (live editor mode).
+ *                     When false, fixed black/gray are used (print mode).
+ *   $renderBeam     : when true, the .grid-measure-beam strip is shown
+ *                     (live editor only — irrelevant on paper).
+ *   $beatNumberTop  : vertical offset of the beat numbers above the first row.
+ */
+
+@mixin score-grid-rules($useThemeColors: true,
+    $renderBeam: true,
+    $beatNumberTop: 10px) {
+    $separatorColor: #d0d0d0;
+    $contentColor: black;
+
+    @if $useThemeColors {
+        $separatorColor: var(--color-base-300);
+        $contentColor: var(--color-base-content);
+    }
+
+    .grid-measure-viewer {
+        border-right: 2px solid #{$separatorColor};
+    }
+
+    @if $renderBeam {
+        .grid-measure-beam {
+            height: 20pt;
+            margin-bottom: 5px;
+            position: relative;
+            overflow: hidden;
+
+            // Horizontal beam; left/right endpoints are set via CSS vars from GridMeasureBeam.tsx
+            // so that edge measures start/end exactly at the measured beat positions.
+            &::before {
+                content: '';
+                position: absolute;
+                top: 0;
+                left: var(--beam-left, 0);
+                right: var(--beam-right, 0);
+                height: 5px;
+                background-color: #{$contentColor};
+            }
+        }
+    }
+
+    @else {
+
+        // Print mode: keep the beam strip as a thin band so the bar number above the
+        // first row has its own vertical space and is not painted on top of the first
+        // track row.
+        .grid-measure-beam {
+            height: 14px;
+            margin-bottom: 2px;
+            position: relative;
+            overflow: visible;
+
+            &::before {
+                display: none;
+            }
+        }
+    }
+
+    .grid-measure-number {
+        position: absolute;
+        top: #{$beatNumberTop};
+        font-size: 11px;
+        color: #{$contentColor};
+        pointer-events: none;
+    }
+
+    .grid-measure-beat {
+        position: absolute;
+        top: 0;
+        height: 100%;
+        border-left: 1px solid #{$contentColor};
+
+        &.bar-start {
+            border-left-width: 2px;
+        }
+    }
+
+    .grid-measure-row {
+        margin: 2px 8px 14px 8px;
+    }
+
+    .subdivision {
+        position: relative;
+        padding: 4px 0 4px 0;
+
+        // Bracket color: neutral gray, level 1 ≈ #ccc (83 % L) getting 15 % darker
+        // per nesting level. Fixed lightness guarantees light → dark on every theme.
+        --subdivision-color: oklch(calc(83% - (var(--current-level, 1) - 1) * 15%) 0 0);
+
+        &::before {
+            content: '';
+            position: absolute;
+            top: 2px;
+            left: 0;
+            right: 0;
+            bottom: 2px;
+            border-top: 3px solid var(--subdivision-color);
+            border-bottom: 3px solid var(--subdivision-color);
+            border-radius: 6px;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        > .note-viewer {
+            height: calc(var(--note-height) - var(--current-level) * 8px);
+        }
+    }
+}

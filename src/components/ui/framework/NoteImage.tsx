@@ -75,7 +75,7 @@ export class NoteImage extends UIComponent<INoteImageProperties, INoteImageState
     public static override defaultProps = {
         disabled: false,
         kind: NoteKind.Note,
-        headType: "oval",
+        headType: NoteImageHeadType.Oval,
     };
 
     public override state: INoteImageState = {

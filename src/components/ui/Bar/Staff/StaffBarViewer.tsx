@@ -27,6 +27,12 @@ export interface IBarViewerProps extends ICommonUIProperties {
 
     /** Most-recent label from an earlier measure; shown dimmed when no ownLabel is set. */
     inheritedLabel?: string;
+
+    /**
+     * If given, render only these tracks (in this order) instead of all tracks of the arrangement.
+     * Used by the print feature to limit output to the user's selection.
+     */
+    tracks?: ISbDmTrack[];
 }
 
 interface IBarViewerState {
@@ -38,9 +44,9 @@ export class StaffBarViewer extends UIComponent<IBarViewerProps, IBarViewerState
     public constructor(props: IBarViewerProps) {
         super(props);
 
-        const { arrangement } = props;
+        const { arrangement, tracks } = props;
         this.state = {
-            tracks: [...arrangement.tracks],
+            tracks: tracks ?? [...arrangement.tracks],
         };
     }
 
@@ -50,13 +56,17 @@ export class StaffBarViewer extends UIComponent<IBarViewerProps, IBarViewerState
     }
 
     public override componentDidUpdate(previousProps: Readonly<IBarViewerProps>): void {
-        const { arrangement } = this.props;
+        const { arrangement, tracks } = this.props;
         if (arrangement !== previousProps.arrangement) {
             this.removeSubscription(previousProps.arrangement, this.arrangementChanged);
             this.addSubscription(arrangement, this.arrangementChanged);
 
             this.setState({
-                tracks: [...arrangement.tracks],
+                tracks: tracks ?? [...arrangement.tracks],
+            });
+        } else if (tracks !== previousProps.tracks) {
+            this.setState({
+                tracks: tracks ?? [...arrangement.tracks],
             });
         }
     }
@@ -99,7 +109,7 @@ export class StaffBarViewer extends UIComponent<IBarViewerProps, IBarViewerState
     }
 
     private arrangementChanged = () => {
-        const { arrangement } = this.props;
-        this.setState({ tracks: [...arrangement.tracks] });
+        const { arrangement, tracks } = this.props;
+        this.setState({ tracks: tracks ?? [...arrangement.tracks] });
     };
 }
