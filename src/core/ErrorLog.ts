@@ -3,7 +3,7 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import { Publisher } from "./Publisher.js";
+import { requisitions } from "../supplement/Requisitions.js";
 
 const errorReportPreamble = "Sorry to hear you had problems running Animada Score Book! Please copy this error " +
     "report and open an issue on Github (https://github.com/mike-lischke/animada-score-book/issues).";
@@ -33,7 +33,7 @@ interface IUnhandledRejectionLogEntry extends ILogEntry {
  *
  * We catch two things: uncaught errors, and unhandled promise rejections.
  */
-export class ErrorLog extends Publisher {
+export class ErrorLog {
     private readonly logEntries: ILogEntry[] = [];
 
     public getEntryCount() {
@@ -63,7 +63,7 @@ export class ErrorLog extends Publisher {
 
     public addToLog = (logEntry: ILogEntry) => {
         this.logEntries.push(logEntry);
-        this.publish();
+        void requisitions.execute("errorLogChanged", undefined);
     };
 
     static {

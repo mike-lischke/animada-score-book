@@ -157,7 +157,7 @@ export class App extends UIComponent<{}, IAppState> {
     }
 
     public override componentWillUnmount() {
-        super.componentWillUnmount();
+        requisitions.unregister("timeParamsChanged", this.handleTimeParamsChange);
         this.systemThemeQuery.removeEventListener("change", this.handleSystemThemeChange);
         window.removeEventListener("afterprint", this.handleAfterPrint);
         escapeStack.detach();
@@ -758,8 +758,7 @@ export class App extends UIComponent<{}, IAppState> {
         let arrangement = this.dataModel.arrangement!;
         if (resolvedSource) {
             if (this.arrangementPlayer) {
-                const arrangementView = this.dataModel.arrangement!;
-                arrangementView.timeParams.unsubscribe(this.handleTimeParamsChanged);
+                requisitions.unregister("timeParamsChanged", this.handleTimeParamsChange);
 
                 this.arrangementPlayer.dispose();
             }
@@ -769,7 +768,7 @@ export class App extends UIComponent<{}, IAppState> {
 
         this.undoManager = new UndoManager(this.dataModel);
         this.arrangementPlayer = new ArrangementPlayer(this.dataModel);
-        this.dataModel.arrangement!.timeParams.subscribe(this.handleTimeParamsChanged);
+        requisitions.register("timeParamsChanged", this.handleTimeParamsChange);
 
         if (arrangement.title) {
             document.title = arrangement.title + " - Animada Score Book";
@@ -777,6 +776,8 @@ export class App extends UIComponent<{}, IAppState> {
 
         AppStorage.saveSetting("currentScore", stringifyPackedArrangement((arrangement as Arrangement).toSnapshot()),
         );
+
+        this.forceUpdate();
     }
 
     private initEventHandlers(): void {
@@ -893,8 +894,10 @@ export class App extends UIComponent<{}, IAppState> {
         }, 100);
     };
 
-    private handleTimeParamsChanged = () => {
+    private handleTimeParamsChange = (): Promise<boolean> => {
         this.forceUpdate();
+
+        return Promise.resolve(true);
     };
 
     private handlePlayRangeChanged = (range: { from: number; to: number; } | undefined): Promise<boolean> => {

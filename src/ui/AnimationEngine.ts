@@ -3,32 +3,31 @@
 * Licensed under the MIT License. See License.txt in the project root for license information.
 */
 
-import { Publisher } from "../core/Publisher.js";
+import { requisitions } from "../supplement/Requisitions.js";
 import type { RealTime } from "../core/ScoreBookDataModel.js";
-import type { ISubscribable } from "../core/types/general.js";
 import type { PlayerPlayState } from "../player/ArrangementPlayer.js";
 
-export interface IRealtimeProvider extends ISubscribable {
+export interface IRealtimeProvider {
     get state(): PlayerPlayState;
     get currentTime(): RealTime;
 }
 
-export class AnimationEngine extends Publisher {
+export class AnimationEngine {
     private readonly animations: Array<(realTime: RealTime) => void> = [];
     private nextAnimationId = 0;
 
     public constructor(private readonly realtimeProvider: IRealtimeProvider) {
-        super();
-
-        realtimeProvider.subscribe(() => {
+        requisitions.register("playerStateChanged", () => {
             if (realtimeProvider.state === "playing") {
                 if (this.nextAnimationId === 0) {
                     this.start();
                 }
 
-                return;
+                return Promise.resolve(true);
             }
             this.stop();
+
+            return Promise.resolve(true);
         });
     }
 
@@ -45,7 +44,7 @@ export class AnimationEngine extends Publisher {
 
     private start() {
         if (this.realtimeProvider.state === "playing") {
-            this.publish();
+            void requisitions.execute("animationStateChanged", "playing");
             this.runAnimations();
         }
     }
@@ -54,7 +53,7 @@ export class AnimationEngine extends Publisher {
         if (this.realtimeProvider.state === "stopped") {
             cancelAnimationFrame(this.nextAnimationId);
             this.nextAnimationId = 0;
-            this.publish();
+            void requisitions.execute("animationStateChanged", "stopped");
         }
     }
 

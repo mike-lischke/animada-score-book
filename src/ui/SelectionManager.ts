@@ -3,7 +3,7 @@
 * Licensed under the MIT License. See License.txt in the project root for license information.
 */
 
-import { Publisher } from "../core/Publisher.js";
+import { requisitions } from "../supplement/Requisitions.js";
 import type { ISbDmNoteEvent, ISbDmTrack } from "../core/ScoreBookDataModel.js";
 
 interface ITrackSelection {
@@ -12,7 +12,7 @@ interface ITrackSelection {
 }
 
 /** Manages note selections across tracks and publishes selection changes. */
-export class SelectionManager extends Publisher {
+export class SelectionManager {
     /** Current selections per track, including selected notes and range per track. */
     public readonly selections: Map<ISbDmTrack, ITrackSelection> = new Map<ISbDmTrack, ITrackSelection>();
 
@@ -128,7 +128,7 @@ export class SelectionManager extends Publisher {
             }
         }
 
-        this.publish();
+        void requisitions.execute("selectionChanged", undefined);
     }
 
     /**
@@ -161,7 +161,7 @@ export class SelectionManager extends Publisher {
             this.anchor = null;
             this.lastClickedNote = null;
             this.selections.clear();
-            this.publish();
+            void requisitions.execute("selectionChanged", undefined);
         }
     }
 
@@ -173,7 +173,7 @@ export class SelectionManager extends Publisher {
         }
 
         this.anchor = note;
-        this.publish();
+        void requisitions.execute("selectionChanged", undefined);
     }
 
     private recalcSelectedTracks(clickedNote: ISbDmNoteEvent): void {

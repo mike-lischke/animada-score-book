@@ -70,7 +70,6 @@ export class Dialog extends UIComponent<IDialogProperties> {
     }
 
     public override componentWillUnmount(): void {
-        super.componentWillUnmount();
 
         this.dialogRef.current?.removeEventListener("close", this.handleCloseEvent);
         this.dialogRef.current?.removeEventListener("cancel", this.handleCancelEvent);

@@ -9,6 +9,7 @@ import {
     SbDmEntityType, type ISbDmArrangement, type ISbDmNoteEvent, type ISbDmTrack
 } from "../../src/core/ScoreBookDataModel.js";
 import type { Mutable } from "../../src/core/types/general.js";
+import { requisitions } from "../../src/supplement/Requisitions.js";
 import { SelectionManager } from "../../src/ui/SelectionManager.js";
 
 const makeArrangement = (tracks: ISbDmTrack[]): ISbDmArrangement => {
@@ -27,8 +28,6 @@ const makeArrangement = (tracks: ISbDmTrack[]): ISbDmArrangement => {
             isValid: () => {
                 return true;
             },
-            subscribe: vi.fn(),
-            unsubscribe: vi.fn(),
         },
         addTrack: vi.fn(),
         removeTrack: vi.fn(),
@@ -37,8 +36,6 @@ const makeArrangement = (tracks: ISbDmTrack[]): ISbDmArrangement => {
         loop: false,
         useMetronome: false,
         countIn: false,
-        subscribe: vi.fn(),
-        unsubscribe: vi.fn(),
         measureLabels: {},
     };
 
@@ -72,13 +69,9 @@ const makeTrack = (notes: Array<Mutable<ISbDmNoteEvent>>, arrangement: ISbDmArra
                 expandedOnce: false,
             },
             noteStyles: {},
-            subscribe: vi.fn(),
-            unsubscribe: vi.fn(),
             range: [21, 108],
         },
         measures: [],
-        subscribe: vi.fn(),
-        unsubscribe: vi.fn(),
         clear: vi.fn(),
         getNoteAt: () => {
             return undefined;
@@ -133,11 +126,12 @@ describe("SelectionManager (class)", () => {
 
     it("selects a single note on click and publishes", () => {
         const publishSpy = vi.fn();
-        manager.subscribe(publishSpy);
+        requisitions.register("selectionChanged", publishSpy);
         manager.handleClick(noteA);
         expect(manager.isSelected(noteA)).toBe(true);
         expect(manager.selections.get(track)!.range).toEqual([noteA, noteA]);
         expect(publishSpy).toHaveBeenCalled();
+        requisitions.unregister("selectionChanged", publishSpy);
     });
 
     it.skip("clicking the same anchor again clears selection", () => {
@@ -158,11 +152,12 @@ describe("SelectionManager (class)", () => {
 
     it("deselectAll clears selection and publishes", () => {
         const publishSpy = vi.fn();
-        manager.subscribe(publishSpy);
+        requisitions.register("selectionChanged", publishSpy);
         manager.handleClick(noteA);
         manager.deselectAll();
         expect(manager.selections.size).toBe(0);
         expect(publishSpy).toHaveBeenCalled();
+        requisitions.unregister("selectionChanged", publishSpy);
     });
 
     it("can construct via new", () => {

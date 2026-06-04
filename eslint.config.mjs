@@ -20,6 +20,9 @@ export default tseslint.config(
         files: ["*.ts", "*.tsx", "*.mjs" ],
     },
     {
+        ignores: ["build/serve-dist.mjs"],
+    },
+    {
         plugins: {
             "@stylistic": stylistic,
             jsdoc,

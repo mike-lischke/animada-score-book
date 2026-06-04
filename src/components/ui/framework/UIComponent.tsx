@@ -11,8 +11,6 @@ import {
     type WheelEventHandler
 } from "preact";
 
-import type { ISubscribable, Subscription } from "../../../core/types/general.js";
-
 // Click events can also be triggered using the keyboard.
 export type ClickEventCallback = (e: MouseEvent | KeyboardEvent) => void;
 export type MouseEventCallback = (e: MouseEvent) => void;
@@ -107,57 +105,6 @@ export interface ICommonUIProperties {
 
 export abstract class UIComponent<P extends ICommonUIProperties = {}, S = {}>
     extends Component<P, S> {
-
-    private subscriptionHandlers: Array<[boolean, () => void]> = [];
-
-    public override componentWillUnmount(): void {
-        this.subscriptionHandlers.forEach(([, unsubscribe]) => {
-            unsubscribe();
-        });
-        this.subscriptionHandlers = [];
-    }
-
-    /**
-     * Adds a new subscription to a subscribable and automatically unsubscribes it when the component is unmounted.
-     *
-     * @param subscribable The subscribable to subscribe to.
-     * @param subscription  The subscription callback to subscribe.
-     * @param removeAtUpdate Whether to remove the subscription at next component update.
-     */
-    public addSubscription(subscribable: ISubscribable, subscription: Subscription, removeAtUpdate = false): void {
-        this.subscriptionHandlers.push([removeAtUpdate, subscribable.subscribe(subscription)]);
-    }
-
-    /**
-     * Removes a subscription that was added using addSubscription.
-     *
-     * @param subscribable The subscribable to unsubscribe from.
-     * @param subscription The subscription callback to unsubscribe.
-     */
-    public removeSubscription(subscribable: ISubscribable, subscription: Subscription): void {
-        this.subscriptionHandlers = this.subscriptionHandlers.filter(([, unsubscribe]) => {
-            if (unsubscribe === subscribable.subscribe(subscription)) {
-                unsubscribe();
-
-                return false;
-            }
-
-            return true;
-        });
-    }
-
-    public override componentDidUpdate(previousProps: Readonly<P>, previousState: Readonly<S>,
-        snapshot?: unknown): void {
-        this.subscriptionHandlers = this.subscriptionHandlers.filter(([removeAtUpdate, unsubscribe]) => {
-            if (removeAtUpdate) {
-                unsubscribe();
-
-                return false;
-            }
-
-            return true;
-        });
-    }
 
     /**
      * Takes the given base class names (CSS class names) and combines them with the class name of the component.

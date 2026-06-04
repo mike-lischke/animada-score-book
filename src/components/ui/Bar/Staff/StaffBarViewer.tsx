@@ -9,6 +9,7 @@ import type { ISbDmArrangement, ISbDmTrack, ScoreBookDataModel } from "../../../
 import type { UndoManager } from "../../../../core/UndoManager.js";
 import type { ArrangementPlayer } from "../../../../player/ArrangementPlayer.js";
 import type { ScoreBookUiServices } from "../../../../player/types.js";
+import { requisitions } from "../../../../supplement/Requisitions.js";
 import { UIComponent, type ICommonUIProperties } from "../../framework/UIComponent.js";
 import { StaffBarTrackRow } from "./StaffBarTrackRow.js";
 import { StaffMeasureBeam } from "./StaffMeasureBeam.js";
@@ -51,24 +52,20 @@ export class StaffBarViewer extends UIComponent<IBarViewerProps, IBarViewerState
     }
 
     public override componentDidMount(): void {
-        const { arrangement } = this.props;
-        this.addSubscription(arrangement, this.arrangementChanged);
+        requisitions.register("arrangementChanged", this.handleArrangementChanged);
     }
 
     public override componentDidUpdate(previousProps: Readonly<IBarViewerProps>): void {
         const { arrangement, tracks } = this.props;
-        if (arrangement !== previousProps.arrangement) {
-            this.removeSubscription(previousProps.arrangement, this.arrangementChanged);
-            this.addSubscription(arrangement, this.arrangementChanged);
-
-            this.setState({
-                tracks: tracks ?? [...arrangement.tracks],
-            });
-        } else if (tracks !== previousProps.tracks) {
+        if (arrangement !== previousProps.arrangement || tracks !== previousProps.tracks) {
             this.setState({
                 tracks: tracks ?? [...arrangement.tracks],
             });
         }
+    }
+
+    public override componentWillUnmount(): void {
+        requisitions.unregister("arrangementChanged", this.handleArrangementChanged);
     }
 
     public override render(): ComponentChild {
@@ -108,8 +105,15 @@ export class StaffBarViewer extends UIComponent<IBarViewerProps, IBarViewerState
         );
     }
 
-    private arrangementChanged = () => {
+    private handleArrangementChanged = (arrangementId: number): Promise<boolean> => {
         const { arrangement, tracks } = this.props;
+
+        if (arrangementId !== arrangement.id) {
+            return Promise.resolve(false);
+        }
+
         this.setState({ tracks: tracks ?? [...arrangement.tracks] });
+
+        return Promise.resolve(true);
     };
 }

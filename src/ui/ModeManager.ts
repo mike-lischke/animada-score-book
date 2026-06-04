@@ -3,7 +3,7 @@
 * Licensed under the MIT License. See License.txt in the project root for license information.
 */
 
-import { Publisher } from "../core/Publisher.js";
+import { requisitions } from "../supplement/Requisitions.js";
 import type { SelectionManager } from "./SelectionManager.js";
 
 // The really useful thing about a mode-manager would be the ability enforce mutual exclusivity of different modes
@@ -12,7 +12,7 @@ import type { SelectionManager } from "./SelectionManager.js";
 // There could be a select-mode cleanup function, so if we change mode, we deselect all
 // It introduces a single-source-of-truth problem, as modeManager.selectMode is equivalent
 // to `selectionManager.selections.size`.
-// For now, since there's only two modes, not a priority. We just have to be meticulous about avoioding bugs.
+// For now, since there's only two modes, not a priority. We just have to be meticulous about avoiding bugs.
 
 /**
  * Tracks UI modes and publishes changes so the UI can react.
@@ -25,7 +25,7 @@ import type { SelectionManager } from "./SelectionManager.js";
  * The manager subscribes to `SelectionManager` to enforce mutual exclusivity where needed: when a selection exists
  * it disables delete-polyrhythm mode; when the selection is cleared it disables mobile selection mode.
  */
-export class ModeManager extends Publisher {
+export class ModeManager {
     private _deletePolyrhythmMode = false;
     private _mobileSelectionMode = false;
     private _selectByMouseOverMode = false;
@@ -36,14 +36,14 @@ export class ModeManager extends Publisher {
      * @param selectionManager The selection manager to observe for state changes.
      */
     public constructor(selectionManager: SelectionManager) {
-        super();
-
-        selectionManager.subscribe(() => {
+        requisitions.register("selectionChanged", () => {
             if (selectionManager.selections.size) {
                 this.deletePolyrhythmMode = false;
             } else {
                 this.mobileSelectionMode = false;
             }
+
+            return Promise.resolve(true);
         });
     }
 
@@ -59,7 +59,7 @@ export class ModeManager extends Publisher {
     public set deletePolyrhythmMode(newValue: boolean) {
         if (newValue !== this._deletePolyrhythmMode) {
             this._deletePolyrhythmMode = newValue;
-            this.publish();
+            void requisitions.execute("modeChanged", undefined);
         }
     }
 
@@ -75,7 +75,7 @@ export class ModeManager extends Publisher {
     public set mobileSelectionMode(newValue: boolean) {
         if (newValue !== this._mobileSelectionMode) {
             this._mobileSelectionMode = newValue;
-            this.publish();
+            void requisitions.execute("modeChanged", undefined);
         }
     }
 
@@ -91,7 +91,7 @@ export class ModeManager extends Publisher {
     public set selectByMouseOverMode(newValue: boolean) {
         if (newValue !== this._selectByMouseOverMode) {
             this._selectByMouseOverMode = newValue;
-            this.publish();
+            void requisitions.execute("modeChanged", undefined);
         }
     }
 }

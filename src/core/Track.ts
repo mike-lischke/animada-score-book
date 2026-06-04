@@ -3,7 +3,7 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import { Publisher } from "./Publisher.js";
+import { requisitions } from "../supplement/Requisitions.js";
 import {
     SbDmEntityType, type ISbDmArrangement, type ISbDmInstrument, type ISbDmNoteEvent, type ISbDmTrack,
     type ISbDmTrackMeasure, type ITiming
@@ -21,7 +21,7 @@ import { getNewId } from "./utils.js";
  * {@link notes} (synthesised rest events for empty grid slots are inserted into
  * the measure on demand by the editing code).
  */
-export class Track extends Publisher implements ISbDmTrack {
+export class Track implements ISbDmTrack {
     public readonly type = SbDmEntityType.Track;
     public readonly measures: ISbDmTrackMeasure[] = [];
 
@@ -31,8 +31,6 @@ export class Track extends Publisher implements ISbDmTrack {
 
     public constructor(public readonly arrangement: ISbDmArrangement, public readonly instrument: ISbDmInstrument,
         public readonly id = getNewId()) {
-        super();
-
         // Initialise with empty measures matching the current arrangement length.
         for (let measureNumber = 1; measureNumber <= this.arrangement.timeParams.length; measureNumber++) {
             this.measures.push(this.createEmptyMeasure(measureNumber));
@@ -136,7 +134,7 @@ export class Track extends Publisher implements ISbDmTrack {
                 }
             }
         }
-        this.publish();
+        void requisitions.execute("trackChanged", this.id);
     }
 
     private createEmptyMeasure(measureNumber: number): ISbDmTrackMeasure {

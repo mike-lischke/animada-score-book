@@ -7,6 +7,7 @@ import { type ComponentChild } from "preact";
 
 import type { ISbDmArrangement } from "../../../core/ScoreBookDataModel.js";
 import type { ITimeParams } from "../../../core/types/general.js";
+import { requisitions } from "../../../supplement/Requisitions.js";
 import { Container } from "../framework/Container.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
 import { TimingViewer } from "./TimingViewer.js";
@@ -32,8 +33,11 @@ export class GuideRail extends UIComponent<IGuideRailProps, IGuideRailState> {
     }
 
     public override componentDidMount(): void {
-        const { arrangementView } = this.props;
-        this.addSubscription(arrangementView.timeParams, this.timeParamsSubscription);
+        requisitions.register("timeParamsChanged", this.handleTimeParamsChanged);
+    }
+
+    public override componentWillUnmount(): void {
+        requisitions.unregister("timeParamsChanged", this.handleTimeParamsChanged);
     }
 
     public override render(): ComponentChild {
@@ -69,11 +73,13 @@ export class GuideRail extends UIComponent<IGuideRailProps, IGuideRailState> {
         return 1;
     }
 
-    private timeParamsSubscription = () => {
+    private handleTimeParamsChanged = (): Promise<boolean> => {
         const { arrangementView } = this.props;
 
         this.setState({
             barDivisibility: this.getBarDivisibility(arrangementView.timeParams)
         });
+
+        return Promise.resolve(true);
     };
 }

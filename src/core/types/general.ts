@@ -18,18 +18,7 @@ export interface INoteStyleSymbol {
     string: string; // string to display for this note-style
 }
 
-export type Subscription = (...args: unknown[]) => void;
-
-export interface ISubscribable {
-    subscribe: (callback: Subscription) => () => void;
-    unsubscribe: (callback: Subscription) => void;
-}
-
-export interface IPublisher extends ISubscribable {
-    publish(): void;
-}
-
-export interface ITimeParams extends ISubscribable, ITimeParamsBase {
+export interface ITimeParams extends ITimeParamsBase {
     timings: ITiming[];
 
     isValid(timing: ITiming): boolean;

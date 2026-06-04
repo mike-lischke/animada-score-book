@@ -13,6 +13,7 @@ import type { ArrangementPlayer } from "../../../player/ArrangementPlayer.js";
 import { AudioBufferPlayer } from "../../../player/AudioBufferPlayer.js";
 import type { TrackPlayer } from "../../../player/TrackPlayer.js";
 import type { ScoreBookUiServices } from "../../../player/types.js";
+import { requisitions } from "../../../supplement/Requisitions.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
 import { TouchHoldDetector } from "../TouchHoldDetector.js";
 import { NoteStyleSymbolViewer } from "./NoteStyleSymbolViewer.js";
@@ -39,8 +40,6 @@ interface INoteViewerState {
 }
 
 export class NoteViewer extends UIComponent<INoteViewerProps, INoteViewerState> {
-    private selectionChangeUnsubscribe?: () => void;
-
     public constructor(props: INoteViewerProps) {
         super(props);
 
@@ -115,9 +114,7 @@ export class NoteViewer extends UIComponent<INoteViewerProps, INoteViewerState> 
     }
 
     public override componentWillUnmount(): void {
-        super.componentWillUnmount();
-
-        this.selectionChangeUnsubscribe?.();
+        requisitions.unregister("selectionChanged", this.handleSelectionChanged);
     }
 
     public override render(): ComponentChild {
@@ -158,17 +155,16 @@ export class NoteViewer extends UIComponent<INoteViewerProps, INoteViewerState> 
     }
 
     private addSubscriptions(): void {
-        const { services } = this.props;
-        const { selectionManager } = services;
-
-        this.selectionChangeUnsubscribe = selectionManager.subscribe(this.selectionChanged);
+        requisitions.register("selectionChanged", this.handleSelectionChanged);
     }
 
-    private selectionChanged = (): void => {
+    private handleSelectionChanged = (): Promise<boolean> => {
         const { note, services } = this.props;
         const { selectionManager } = services;
 
         this.setState({ selected: selectionManager.isSelected(note) });
+
+        return Promise.resolve(true);
     };
 
     private handleClick = (event: MouseEvent) => {

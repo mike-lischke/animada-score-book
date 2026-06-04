@@ -6,11 +6,11 @@
 import { createRef, type JSX } from "preact";
 
 import { AppStorage, type IUISettings } from "../../../core/AppStorage.js";
-import { Publisher } from "../../../core/Publisher.js";
 import type { RealTime, ScoreBookDataModel } from "../../../core/ScoreBookDataModel.js";
 import type { UndoManager } from "../../../core/UndoManager.js";
 import { clampValue } from "../../../core/utils.js";
 import type { ArrangementPlayer } from "../../../player/ArrangementPlayer.js";
+import type { PlayerPlayState } from "../../../player/ArrangementPlayer.js";
 import type { ScoreBookUiServices } from "../../../player/types.js";
 import { requisitions } from "../../../supplement/Requisitions.js";
 import { GridMeasureViewer } from "../Bar/Grid/GridMeasureViewer.js";
@@ -49,8 +49,6 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
     private trackControlsRef = createRef<HTMLDivElement>();
     private viewerContentHostRef = createRef<HTMLDivElement>();
     private minimapRef = createRef<Minimap>();
-
-    private contentWidthPublisher = new Publisher();
 
     //private animationEngine?: AnimationEngine;
     private resizeObserver: ResizeObserver;
@@ -96,21 +94,16 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
 
         requisitions.register("settingsChanged", this.handleSettingsChanged);
         requisitions.register("trackViewModeToggled", this.handleTrackViewModeToggled);
+        requisitions.register("timeParamsChanged", this.handleTimeParamsChange);
+        requisitions.register("animationStateChanged", this.handleAnimationStateChanged);
 
         setTimeout(this.handleResize, 0);
         this.resizeObserver.observe(this.viewerRef.current!);
-
-        const { dataModel } = this.props;
-        const arrangement = dataModel.arrangement!;
-        this.addSubscription(arrangement.timeParams, this.timeParamsSubscription, true);
 
         // If desired, turn on auto-follow like so.
         if (autoFollowIsOn) {
             arrangementPlayer.animationEngine.connect(this.autoFollow);
         }
-
-        // Otherwise, set up the subscription which will turn it on again.
-        this.addSubscription(arrangementPlayer.animationEngine, this.animationEngineSubscription, true);
 
         this.autoFollowTransitionDurationMs = 50;
         this.trackViewerContainerRef.current!.style.zoom = `${viewerZoom}%`;
@@ -118,21 +111,15 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
     }
 
     public override componentDidUpdate(prevProps: IArrangementViewerProps, prevState: IArrangementViewerState): void {
-        super.componentDidUpdate(prevProps, prevState);
-
-        const { arrangementPlayer, dataModel } = this.props;
+        const { arrangementPlayer } = this.props;
         const { autoFollowIsOn, viewerZoom } = this.state;
 
         if (prevProps.arrangementPlayer !== arrangementPlayer) {
             prevProps.arrangementPlayer.animationEngine.disconnect(this.autoFollow);
 
-            const arrangement = dataModel.arrangement!;
-            this.addSubscription(arrangement.timeParams, this.timeParamsSubscription);
-
             if (autoFollowIsOn) {
                 arrangementPlayer.animationEngine.connect(this.autoFollow);
             }
-            this.addSubscription(arrangementPlayer.animationEngine, this.animationEngineSubscription);
 
             this.autoFollow(0);
         }
@@ -142,8 +129,6 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
     }
 
     public override componentWillUnmount(): void {
-        super.componentWillUnmount();
-
         const { arrangementPlayer } = this.props;
 
         this.resizeObserver.disconnect();
@@ -156,6 +141,8 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
 
         requisitions.unregister("settingsChanged", this.handleSettingsChanged);
         requisitions.unregister("trackViewModeToggled", this.handleTrackViewModeToggled);
+        requisitions.unregister("timeParamsChanged", this.handleTimeParamsChange);
+        requisitions.unregister("animationStateChanged", this.handleAnimationStateChanged);
     }
 
     public override render(): JSX.Element {
@@ -281,10 +268,10 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         this.handleTrackViewerScroll();
     };
 
-    private timeParamsSubscription = () => {
-        return setTimeout(() => {
-            this.contentWidthPublisher.publish();
-        }, 0);
+    private handleTimeParamsChange = (): Promise<boolean> => {
+        // Time params changed — internal layout may need recalculation.
+
+        return Promise.resolve(true);
     };
 
     /**
@@ -392,13 +379,14 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         return prefix?.offsetWidth ?? 0;
     }
 
-    private animationEngineSubscription = () => {
-        const { arrangementPlayer } = this.props;
+    private handleAnimationStateChanged = (state: PlayerPlayState): Promise<boolean> => {
         const { autoFollowIsOn } = this.state;
 
-        if (arrangementPlayer.state === "playing" && !autoFollowIsOn) {
+        if (state === "playing" && !autoFollowIsOn) {
             this.setState({ autoFollowIsOn: true });
         }
+
+        return Promise.resolve(true);
     };
 
     private handleWheel = (event: WheelEvent) => {

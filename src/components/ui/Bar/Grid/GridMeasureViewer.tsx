@@ -54,12 +54,10 @@ export class GridMeasureViewer extends UIComponent<IGridMeasureViewerProperties,
         prevProps: Readonly<IGridMeasureViewerProperties>,
         prevState: Readonly<IGridMeasureViewerState>,
     ): void {
-        super.componentDidUpdate(prevProps, prevState);
         this.updateBeatPositions();
     }
 
     public override componentWillUnmount(): void {
-        super.componentWillUnmount();
         this.resizeObserver?.disconnect();
         this.resizeObserver = undefined;
     }

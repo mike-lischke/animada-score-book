@@ -6,6 +6,7 @@
 import type { ComponentChild } from "preact";
 
 import type { ITimeParamsView } from "../../../../core/ScoreBookDataModel.js";
+import { requisitions } from "../../../../supplement/Requisitions.js";
 import { Container } from "../../framework/Container.js";
 import { UIComponent, type ICommonUIProperties } from "../../framework/UIComponent.js";
 import { TimingViewer } from "../../GuideRail/TimingViewer.js";
@@ -20,8 +21,11 @@ export interface IBarGuideRailProps extends ICommonUIProperties {
 /** Renders the guide rail timings for a single bar. */
 export class BarGuideRail extends UIComponent<IBarGuideRailProps> {
     public override componentDidMount(): void {
-        const { timeParams } = this.props;
-        this.addSubscription(timeParams, this.timeParamsChanged);
+        requisitions.register("timeParamsChanged", this.handleTimeParamsChanged);
+    }
+
+    public override componentWillUnmount(): void {
+        requisitions.unregister("timeParamsChanged", this.handleTimeParamsChanged);
     }
 
     public override render(): ComponentChild {
@@ -47,7 +51,9 @@ export class BarGuideRail extends UIComponent<IBarGuideRailProps> {
         );
     }
 
-    private timeParamsChanged = () => {
+    private handleTimeParamsChanged = (): Promise<boolean> => {
         this.forceUpdate();
+
+        return Promise.resolve(true);
     };
 }

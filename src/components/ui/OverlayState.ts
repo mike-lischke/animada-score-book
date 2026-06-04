@@ -3,10 +3,13 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import { Publisher } from "../../core/Publisher.js";
+import { requisitions } from "../../supplement/Requisitions.js";
 
-export class OverlayState extends Publisher {
+export class OverlayState {
     private isVisible = false;
+
+    public constructor(public readonly name: string) {
+    }
 
     public get visible(): boolean {
         return this.isVisible;
@@ -15,7 +18,7 @@ export class OverlayState extends Publisher {
     public set visible(value: boolean) {
         if (this.isVisible !== value) {
             this.isVisible = value;
-            this.publish();
+            void requisitions.execute("overlayVisibilityChanged", { name: this.name, visible: value });
         }
     }
 }

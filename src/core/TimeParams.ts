@@ -3,7 +3,7 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import { Publisher } from "./Publisher.js";
+import { requisitions } from "../supplement/Requisitions.js";
 import type { ISbDmTimeParams, ITiming } from "./ScoreBookDataModel.js";
 
 /**
@@ -12,7 +12,7 @@ import type { ISbDmTimeParams, ITiming } from "./ScoreBookDataModel.js";
  * Maintains a derived list of `timings` covering every step of every bar,
  * updated whenever any parameter changes (time signature, tempo, length, pulse, resolution).
  */
-export class TimeParams extends Publisher implements ISbDmTimeParams {
+export class TimeParams implements ISbDmTimeParams {
     /** All valid timings for the current configuration (bar/step pairs). */
     public readonly timings: ITiming[] = [];
 
@@ -32,8 +32,6 @@ export class TimeParams extends Publisher implements ISbDmTimeParams {
      * @param stepResolution The granularity per whole note (power of two), e.g., 8 for sixteenths.
      */
     public constructor(timeSignature: string, tempo: number, length: number, pulse: string, stepResolution: number) {
-        super();
-
         if (!this.validateTimeSignature(timeSignature)) {
             throw new Error("Invalid time signature");
         }
@@ -91,7 +89,7 @@ export class TimeParams extends Publisher implements ISbDmTimeParams {
         if (newTimeSignature !== this.signature) {
             this.signature = newTimeSignature;
             this.regenerateTimings();
-            this.publish();
+            void requisitions.execute("timeParamsChanged", undefined);
         }
     }
 
@@ -117,7 +115,7 @@ export class TimeParams extends Publisher implements ISbDmTimeParams {
         if (newTempo !== this.usedTempo) {
             this.usedTempo = newTempo;
             this.regenerateTimings();
-            this.publish();
+            void requisitions.execute("timeParamsChanged", undefined);
         }
     }
 
@@ -143,7 +141,7 @@ export class TimeParams extends Publisher implements ISbDmTimeParams {
         if (newLength !== this.usedLength) {
             this.usedLength = newLength;
             this.regenerateTimings();
-            this.publish();
+            void requisitions.execute("timeParamsChanged", undefined);
         }
     }
 
@@ -168,7 +166,7 @@ export class TimeParams extends Publisher implements ISbDmTimeParams {
         if (newPulse !== this.usedPulse) {
             this.usedPulse = newPulse;
             this.regenerateTimings();
-            this.publish();
+            void requisitions.execute("timeParamsChanged", undefined);
         }
     }
 
@@ -198,7 +196,7 @@ export class TimeParams extends Publisher implements ISbDmTimeParams {
         if (newStepResolution !== this.resolution) {
             this.resolution = newStepResolution;
             this.regenerateTimings();
-            this.publish();
+            void requisitions.execute("timeParamsChanged", undefined);
         }
     }
 

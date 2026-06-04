@@ -5,11 +5,8 @@
 
 import { describe, expect, it, vi } from "vitest";
 
-import type { INoteStyle, ITimeParams, Mutable } from "../../src/core/types/general.js";
+import type { INoteStyle, Mutable } from "../../src/core/types/general.js";
 import type { ICallbackEvent, IInterval } from "../../src/player/types.js";
-
-// Simple subscribable helper with publish capability for tests
-type Sub = (...args: unknown[]) => void;
 
 type CallbackHelper = {
     kind: "callback";
@@ -31,55 +28,13 @@ class TestScoreBookDataModel extends ScoreBookDataModel {
     }
 }
 
-interface PublishableSubscribable {
-    subscribe: (cb: Sub) => () => void; unsubscribe: (cb: Sub) => void;
-    publish: () => void;
-}
-
-const makeSubscribable = (): PublishableSubscribable => {
-    const subs: Sub[] = [];
-
-    return {
-        subscribe: (cb: Sub) => {
-            subs.push(cb);
-
-            return () => {
-                const i = subs.indexOf(cb);
-                if (i !== -1) {
-                    subs.splice(i, 1);
-                }
-            };
-        },
-        unsubscribe: (cb: Sub) => {
-            const i = subs.indexOf(cb);
-            if (i !== -1) {
-                subs.splice(i, 1);
-            }
-        },
-        publish: () => {
-            subs.forEach((cb) => {
-                cb();
-            });
-        }
-    };
-};
-
 // Mock TimeCoordinator used by ArrangementPlayer
 vi.mock("../../src/player/TimeCoordinator.js", () => {
     class MockTimeCoordinator {
         public realTimeLength: RealTime;
-        private readonly subs = makeSubscribable();
 
-        public constructor(_timeParams: ITimeParams) {
+        public constructor() {
             this.realTimeLength = 1;
-        }
-
-        public subscribe(cb: Sub): void {
-            this.subs.subscribe(cb);
-        }
-
-        public unsubscribe(cb: Sub): void {
-            this.subs.unsubscribe(cb);
         }
 
         public convertToRealTime(timing: ITiming): RealTime {
@@ -88,6 +43,24 @@ vi.mock("../../src/player/TimeCoordinator.js", () => {
 
         public convertToLoopProgress(realTime: RealTime): number {
             return (realTime % this.realTimeLength) / this.realTimeLength;
+        }
+
+        public recomputeMetrics(): void {
+            // No-op for mock.
+        }
+
+        public get metrics() {
+            return {
+                realTimeLength: this.realTimeLength,
+                secondsPerBar: 1,
+                secondsPerStep: 0.1,
+                bars: 1,
+                beatsPerBar: 4,
+                beatUnit: 4,
+                pulsesPerBar: 4,
+                stepsPerBar: 16,
+                stepsPerPulse: 4,
+            };
         }
     }
 
@@ -98,7 +71,6 @@ vi.mock("../../src/player/TimeCoordinator.js", () => {
 vi.mock("../../src/player/TrackPlayer.js", () => {
     class MockTrackPlayer {
         public stopped = false;
-        private readonly subs = makeSubscribable();
         public constructor(public track: ISbDmTrack, _tc: TimeCoordinator) { }
 
         public getEvents(interval: IInterval) {
@@ -122,25 +94,12 @@ vi.mock("../../src/player/TrackPlayer.js", () => {
             return events;
         }
 
-        public subscribe(cb: Sub): void {
-            this.subs.subscribe(cb);
-        }
-
-        public unsubscribe(cb: Sub): void {
-            this.subs.unsubscribe(cb);
-        }
-
         public onStop(): void {
             this.stopped = true;
         }
 
         public dispose(): void {
             return;
-        }
-
-        // Helper to simulate internal publish on state change
-        public publish(): void {
-            this.subs.publish();
         }
     }
 
@@ -161,10 +120,8 @@ const makeNote = (track: ISbDmTrack, timing: ITiming, noteStyle?: INoteStyle): I
     };
 };
 
-const makeArrangement = (trackCount: number): ISbDmArrangement & { _publish: () => void; } => {
-    const arrangementSubs = makeSubscribable();
-    const timeParamsSubs = makeSubscribable();
-    const timeParams: ITimeParams & { _publish: () => void; } = {
+const makeArrangement = (trackCount: number): ISbDmArrangement => {
+    const timeParams: ISbDmTimeParams = {
         timeSignature: "4/4",
         tempo: 120,
         length: 1,
@@ -177,16 +134,10 @@ const makeArrangement = (trackCount: number): ISbDmArrangement & { _publish: () 
         isValid: () => {
             return true;
         },
-        subscribe: timeParamsSubs.subscribe,
-        unsubscribe: timeParamsSubs.unsubscribe,
-        _publish: () => {
-            timeParamsSubs.publish();
-        }
     };
 
     const tracks: Array<Mutable<ISbDmTrack>> = [];
     for (let i = 0; i < trackCount; i++) {
-        const trackSubs = makeSubscribable();
         const instrument: ISbDmInstrument = {
             type: SbDmEntityType.Instrument,
             id: i,
@@ -207,7 +158,6 @@ const makeArrangement = (trackCount: number): ISbDmArrangement & { _publish: () 
             },
             color: "blue",
             noteStyles: {},
-            ...makeSubscribable()
         };
 
         const notes: ISbDmNoteEvent[] = [];
@@ -231,7 +181,6 @@ const makeArrangement = (trackCount: number): ISbDmArrangement & { _publish: () 
                 })();
             },
             clear: vi.fn(),
-            ...trackSubs
         };
 
         const noteStyle: INoteStyle = {
@@ -267,7 +216,7 @@ const makeArrangement = (trackCount: number): ISbDmArrangement & { _publish: () 
         tracks.push(track);
     }
 
-    const arrangement: ISbDmArrangement & { _publish: () => void; } = {
+    const arrangement: ISbDmArrangement = {
         type: SbDmEntityType.Arrangement,
         id: 1,
         title: "Test",
@@ -276,11 +225,6 @@ const makeArrangement = (trackCount: number): ISbDmArrangement & { _publish: () 
         addTrack: vi.fn(),
         removeTrack: vi.fn(),
         applyArrangementSnapshot: vi.fn(),
-        subscribe: arrangementSubs.subscribe,
-        unsubscribe: arrangementSubs.unsubscribe,
-        _publish: () => {
-            arrangementSubs.publish();
-        },
         mainVolume: 1,
         loop: false,
         useMetronome: false,
@@ -297,12 +241,13 @@ const makeArrangement = (trackCount: number): ISbDmArrangement & { _publish: () 
 // Import after mocks
 import {
     SbDmEntityType, ScoreBookDataModel, type ISbDmArrangement, type ISbDmInstrument, type ISbDmNoteEvent,
-    type ISbDmTrack, type ITiming, type RealTime
+    type ISbDmTimeParams, type ISbDmTrack, type ITiming, type RealTime
 } from "../../src/core/ScoreBookDataModel.js";
 import { getNewId } from "../../src/core/utils.js";
 import { ArrangementPlayer } from "../../src/player/ArrangementPlayer.js";
 import type { TimeCoordinator } from "../../src/player/TimeCoordinator.js";
 import type { TrackPlayer } from "../../src/player/TrackPlayer.js";
+import { requisitions } from "../../src/supplement/Requisitions.js";
 
 describe("ArrangementPlayer", () => {
     it("creates track players", () => {
@@ -338,10 +283,9 @@ describe("ArrangementPlayer", () => {
                 })();
             },
             clear: vi.fn(),
-            ...makeSubscribable()
         };
         arrangement.tracks.push(newTrack);
-        arrangement._publish();
+        void requisitions.execute("arrangementChanged", arrangement.id);
 
         expect(player.trackPlayers.size).toBe(2);
     });
@@ -365,12 +309,16 @@ describe("ArrangementPlayer", () => {
             return ("callback" in e) && ("identifier" in e);
         });
         const currentTimingUpdates: number[] = [];
-        player.subscribe(() => {
+        const timingSpy = (): Promise<boolean> => {
             currentTimingUpdates.push(1);
-        });
+
+            return Promise.resolve(true);
+        };
+        requisitions.register("playerStateChanged", timingSpy);
         cb?.callback();
         expect(player.currentTiming).toBeTruthy();
         expect(currentTimingUpdates.length).toBe(1);
+        requisitions.unregister("playerStateChanged", timingSpy);
     });
 
     it("onStop resets currentTiming and forwards to track players", () => {

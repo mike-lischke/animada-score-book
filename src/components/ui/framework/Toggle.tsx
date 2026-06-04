@@ -42,7 +42,6 @@ export class Toggle extends UIComponent<IToggleProperties> {
     }
 
     public override componentDidUpdate(prevProps: IToggleProperties): void {
-        super.componentDidUpdate(prevProps, {});
 
         if (this.toggleRef.current) {
             const { checkState } = this.props;

@@ -7,6 +7,7 @@ import type { ISbDmArrangement, ISbDmTrack, ScoreBookDataModel } from "../../../
 import type { EditCommand_TimeParamsTimeSignature } from "../../../core/types/edit_commands.js";
 import type { UndoManager } from "../../../core/UndoManager.js";
 import type { ScoreBookUiServices } from "../../../player/types.js";
+import { requisitions } from "../../../supplement/Requisitions.js";
 import { ExpandingSpacer } from "../ExpandingSpacer.js";
 import { Button } from "../framework/Button.js";
 import { Container } from "../framework/Container.js";
@@ -43,12 +44,12 @@ export class ArrangementEditControls
         const { arePolyrhythms } = this.state;
 
         const arrangement = dataModel.arrangement!;
-        this.addSubscription(services.selectionManager, this.onSelectionChange);
-        this.addSubscription(arrangement, this.arrangementCallback);
-        this.addSubscription(arrangement, this.trackUpdate);
+        requisitions.register("selectionChanged", this.onSelectionChanged);
+        requisitions.register("arrangementChanged", this.onArrangementChanged);
+        requisitions.register("arrangementChanged", this.trackUpdate);
 
         arrangement.tracks.forEach((track) => {
-            track.subscribe(this.arrangementCallback);
+            requisitions.register("trackChanged", this.onTrackChanged);
             this.subscribedTracks.add(track);
         });
 
@@ -64,11 +65,10 @@ export class ArrangementEditControls
     }
 
     public override componentWillUnmount(): void {
-        super.componentWillUnmount();
-
-        this.subscribedTracks.forEach((track) => {
-            track.unsubscribe(this.arrangementCallback);
-        });
+        requisitions.unregister("selectionChanged", this.onSelectionChanged);
+        requisitions.unregister("arrangementChanged", this.onArrangementChanged);
+        requisitions.unregister("arrangementChanged", this.trackUpdate);
+        requisitions.unregister("trackChanged", this.onTrackChanged);
 
         this.subscribedTracks.clear();
     }
@@ -202,10 +202,13 @@ export class ArrangementEditControls
         });
     }
 
-    private arrangementCallback = () => {
+    private onArrangementChanged = (arrangementId: number): Promise<boolean> => {
         const { dataModel, services } = this.props;
-
         const arrangement = dataModel.arrangement!;
+
+        if (arrangementId !== arrangement.id) {
+            return Promise.resolve(false);
+        }
 
         const arePolyrhythms = this.hasPolyrhythms(arrangement);
         if (!arePolyrhythms) {
@@ -214,26 +217,52 @@ export class ArrangementEditControls
             services.modeManager.deletePolyrhythmMode = false;
         }
         this.setState({ arePolyrhythms });
+
+        return Promise.resolve(true);
     };
 
-    private trackUpdate = (): void => {
+    private trackUpdate = (arrangementId: number): Promise<boolean> => {
         const { dataModel } = this.props;
-
         const arrangement = dataModel.arrangement!;
+
+        if (arrangementId !== arrangement.id) {
+            return Promise.resolve(false);
+        }
 
         this.subscribedTracks.forEach((track) => {
             if (!arrangement.tracks.includes(track)) {
-                track.unsubscribe(this.arrangementCallback);
                 this.subscribedTracks.delete(track);
             }
         });
 
         arrangement.tracks.forEach((track) => {
             if (!this.subscribedTracks.has(track)) {
-                track.subscribe(this.arrangementCallback);
                 this.subscribedTracks.add(track);
             }
         });
+
+        return Promise.resolve(true);
+    };
+
+    private onTrackChanged = (trackId: number): Promise<boolean> => {
+        const { dataModel, services } = this.props;
+        const arrangement = dataModel.arrangement!;
+
+        // Only react if the changed track is one we care about.
+        if (!this.subscribedTracks.has(arrangement.tracks.find((t) => {
+            return t.id === trackId;
+        })!)) {
+            return Promise.resolve(false);
+        }
+
+        const arePolyrhythms = this.hasPolyrhythms(arrangement);
+        if (!arePolyrhythms) {
+            Overlay.toggleOverlay("delete_polyrhythms", "hide");
+            services.modeManager.deletePolyrhythmMode = false;
+        }
+        this.setState({ arePolyrhythms });
+
+        return Promise.resolve(true);
     };
 
     private changeTimeSignature = (event: InputEvent) => {
@@ -284,11 +313,13 @@ export class ArrangementEditControls
         }
     };
 
-    private onSelectionChange = () => {
+    private onSelectionChanged = (): Promise<boolean> => {
         const { services } = this.props;
 
         const selectionManager = services.selectionManager;
         Overlay.toggleOverlay("selection_controls", selectionManager.selections.size ? "show" : "hide");
+
+        return Promise.resolve(true);
     };
 
 };

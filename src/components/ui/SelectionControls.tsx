@@ -13,6 +13,7 @@ import { ExpandingSpacer } from "./ExpandingSpacer.js";
 import { Button } from "./framework/Button.js";
 import { UIComponent, type ICommonUIProperties } from "./framework/UIComponent.js";
 import { OverlayStateContext } from "./Overlay.js";
+import { requisitions } from "../../supplement/Requisitions.js";
 import { Separator } from "./Separator.js";
 
 const digitMatcher = /^\d$/;
@@ -43,16 +44,11 @@ export class SelectionControls extends UIComponent<ISelectionControlsProperties,
 
     public override componentDidMount(): void {
         window.addEventListener("keypress", this.onWindowKeyPress);
-
-        const context = this.context;
-        if (context) {
-            this.addSubscription(context, this.overlayStateChanged);
-        }
+        requisitions.register("overlayVisibilityChanged", this.handleOverlayVisibilityChanged);
     }
 
     public override componentWillUnmount(): void {
-        super.componentWillUnmount();
-
+        requisitions.unregister("overlayVisibilityChanged", this.handleOverlayVisibilityChanged);
         window.removeEventListener("keypress", this.onWindowKeyPress);
     }
 
@@ -210,12 +206,16 @@ export class SelectionControls extends UIComponent<ISelectionControlsProperties,
         }
     };
 
-    private overlayStateChanged = () => {
-        const context = this.context;
+    private handleOverlayVisibilityChanged = (data: { name: string; visible: boolean; }): Promise<boolean> => {
+        if (data.name !== "selection_controls") {
+            return Promise.resolve(false);
+        }
 
-        if (!context?.visible) {
+        if (!data.visible) {
             this.setState({ addingPolyrhythm: false });
             this.polyrhythmInputRef.current!.value = "";
         }
+
+        return Promise.resolve(true);
     };
 }

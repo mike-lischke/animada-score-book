@@ -6,6 +6,7 @@
 import type { ComponentChild } from "preact";
 
 import type { UndoManager } from "../../../core/UndoManager.js";
+import { requisitions } from "../../../supplement/Requisitions.js";
 import { Button } from "../framework/Button.js";
 import { Codicon } from "../framework/Codicon.js";
 import { Container } from "../framework/Container.js";
@@ -36,8 +37,6 @@ export class UndoRedoControls extends UIComponent<IUndoRedoProps, IUndoRedoState
     }
 
     public override componentDidUpdate(prevProps: IUndoRedoProps, prevState: IUndoRedoState): void {
-        super.componentDidUpdate(prevProps, prevState);
-
         const { undoManager } = this.props;
 
         if (prevProps.undoManager !== undoManager) {
@@ -47,6 +46,11 @@ export class UndoRedoControls extends UIComponent<IUndoRedoProps, IUndoRedoState
             });
         }
         this.prepareSubscriptions();
+    }
+
+    public override componentWillUnmount(): void {
+        requisitions.unregister("canUndoChanged", this.handleCanUndoChanged);
+        requisitions.unregister("canRedoChanged", this.handleCanRedoChanged);
     }
 
     public render(): ComponentChild {
@@ -79,14 +83,21 @@ export class UndoRedoControls extends UIComponent<IUndoRedoProps, IUndoRedoState
     }
 
     private prepareSubscriptions(): void {
-        const { undoManager } = this.props;
-
-        this.addSubscription(undoManager.topics.canUndo, () => {
-            this.setState({ canUndo: undoManager.canUndo });
-        }, true);
-        this.addSubscription(undoManager.topics.canRedo, () => {
-            this.setState({ canRedo: undoManager.canRedo });
-        }, true);
-
+        requisitions.register("canUndoChanged", this.handleCanUndoChanged);
+        requisitions.register("canRedoChanged", this.handleCanRedoChanged);
     }
+
+    private handleCanUndoChanged = (): Promise<boolean> => {
+        const { undoManager } = this.props;
+        this.setState({ canUndo: undoManager.canUndo });
+
+        return Promise.resolve(true);
+    };
+
+    private handleCanRedoChanged = (): Promise<boolean> => {
+        const { undoManager } = this.props;
+        this.setState({ canRedo: undoManager.canRedo });
+
+        return Promise.resolve(true);
+    };
 }

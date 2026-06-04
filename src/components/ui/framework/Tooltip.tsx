@@ -58,7 +58,6 @@ export class TooltipProvider extends UIComponent<ITooltipProviderProperties, ITo
     }
 
     public override componentWillUnmount(): void {
-        super.componentWillUnmount();
 
         if (this.tooltipTimer) {
             clearTimeout(this.tooltipTimer);
@@ -70,7 +69,6 @@ export class TooltipProvider extends UIComponent<ITooltipProviderProperties, ITo
     }
 
     public override componentDidUpdate(prevProps: ITooltipProviderProperties, prevState: ITooltipProviderState): void {
-        super.componentDidUpdate(prevProps, prevState);
 
         const { cursorWidth = 16, cursorHeight = 16 } = this.props;
         const { tooltip, target, expand, mouse } = this.state;

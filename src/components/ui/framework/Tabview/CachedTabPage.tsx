@@ -38,7 +38,6 @@ export class CachedTabPage extends UIComponent<ICachedTabPageProps, ICachedTabPa
     }
 
     public override componentDidUpdate(prevProps: ICachedTabPageProps, prevState: ICachedTabPageState) {
-        super.componentDidUpdate(prevProps, prevState);
 
         const { active } = this.props;
         const { hasMountedOnce } = this.state;

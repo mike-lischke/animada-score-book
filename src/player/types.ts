@@ -4,7 +4,6 @@
  */
 
 import type { ISbDmNoteEvent, RealTime } from "../core/ScoreBookDataModel.js";
-import type { ISubscribable } from "../core/types/general.js";
 import type { ModeManager } from "../ui/ModeManager.js";
 import type { SelectionManager } from "../ui/SelectionManager.js";
 
@@ -36,7 +35,7 @@ export interface IMetronomeEvent extends IEventDetails {
 
 export type Event = ICallbackEvent | IAudioEvent | IMetronomeEvent;
 
-export interface IEventSource extends ISubscribable {
+export interface IEventSource {
     getEvents(interval: IInterval): Event[];
     onStop(): void;
 }

@@ -7,6 +7,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 import { SbDmEntityType, type ISbDmArrangement, type ISbDmTimeParams } from "../../src/core/ScoreBookDataModel.js";
 import { UndoRedoStack } from "../../src/core/UndoRedoStack.js";
+import { requisitions } from "../../src/supplement/Requisitions.js";
 import type { IArrangementSnapshot } from "../../src/core/types/general.js";
 import type { EditCommand, EditCommand_ArrangementTitle } from "../../src/core/types/edit_commands.js";
 
@@ -88,7 +89,7 @@ describe("UndoRedoStack (class)", () => {
         const arrangement = makeArrangement("A");
         const stack = new UndoRedoStack(arrangement);
         const onCanUndo = vi.fn();
-        stack.topics.canUndo.subscribe(onCanUndo);
+        requisitions.register("canUndoChanged", onCanUndo);
 
         const cmd: EditCommand = { type: "EditCommand_TimeParamsTempo", timeParams: stubTimeParams, tempo: 130 };
         stack.handleEdit(cmd);
@@ -96,13 +97,14 @@ describe("UndoRedoStack (class)", () => {
         expect(stack.canUndo).toBe(true);
         expect(stack.canRedo).toBe(false);
         expect(onCanUndo).toHaveBeenCalled();
+        requisitions.unregister("canUndoChanged", onCanUndo);
     });
 
     it("title change is ignored in history", () => {
         const arrangement = makeArrangement("A");
         const stack = new UndoRedoStack(arrangement);
         const onCanUndo = vi.fn();
-        stack.topics.canUndo.subscribe(onCanUndo);
+        requisitions.register("canUndoChanged", onCanUndo);
 
         const titleCmd: EditCommand_ArrangementTitle = {
             type: "EditCommand_ArrangementTitle",
@@ -113,6 +115,7 @@ describe("UndoRedoStack (class)", () => {
 
         expect(stack.canUndo).toBe(false);
         expect(onCanUndo).not.toHaveBeenCalled();
+        requisitions.unregister("canUndoChanged", onCanUndo);
     });
 
     it("goBack moves current to future and publishes canRedo/canUndo", () => {
@@ -120,8 +123,8 @@ describe("UndoRedoStack (class)", () => {
         const stack = new UndoRedoStack(arrangement);
         const onCanUndo = vi.fn();
         const onCanRedo = vi.fn();
-        stack.topics.canUndo.subscribe(onCanUndo);
-        stack.topics.canRedo.subscribe(onCanRedo);
+        requisitions.register("canUndoChanged", onCanUndo);
+        requisitions.register("canRedoChanged", onCanRedo);
 
         stack.handleEdit({ type: "EditCommand_TimeParamsTempo", timeParams: stubTimeParams, tempo: 130 });
         expect(stack.canUndo).toBe(true);
@@ -131,6 +134,8 @@ describe("UndoRedoStack (class)", () => {
         expect(onCanRedo).toHaveBeenCalled();
         expect(stack.canUndo).toBe(false);
         expect(stack.canRedo).toBe(true);
+        requisitions.unregister("canUndoChanged", onCanUndo);
+        requisitions.unregister("canRedoChanged", onCanRedo);
     });
 
     it("goForward returns to present and publishes canUndo/canRedo", () => {
@@ -138,8 +143,8 @@ describe("UndoRedoStack (class)", () => {
         const stack = new UndoRedoStack(arrangement);
         const onCanUndo = vi.fn();
         const onCanRedo = vi.fn();
-        stack.topics.canUndo.subscribe(onCanUndo);
-        stack.topics.canRedo.subscribe(onCanRedo);
+        requisitions.register("canUndoChanged", onCanUndo);
+        requisitions.register("canRedoChanged", onCanRedo);
 
         stack.handleEdit({ type: "EditCommand_TimeParamsTempo", timeParams: stubTimeParams, tempo: 130 });
         stack.goBack();
@@ -150,13 +155,15 @@ describe("UndoRedoStack (class)", () => {
         expect(onCanRedo).toHaveBeenCalled();
         expect(stack.canUndo).toBe(true);
         expect(stack.canRedo).toBe(false);
+        requisitions.unregister("canUndoChanged", onCanUndo);
+        requisitions.unregister("canRedoChanged", onCanRedo);
     });
 
     it("handleEdit after undo clears future and publishes canRedo", () => {
         const arrangement = makeArrangement("A");
         const stack = new UndoRedoStack(arrangement);
         const onCanRedo = vi.fn();
-        stack.topics.canRedo.subscribe(onCanRedo);
+        requisitions.register("canRedoChanged", onCanRedo);
 
         stack.handleEdit({ type: "EditCommand_TimeParamsTempo", timeParams: stubTimeParams, tempo: 125 });
         stack.goBack();
@@ -165,6 +172,7 @@ describe("UndoRedoStack (class)", () => {
         stack.handleEdit({ type: "EditCommand_TimeParamsTempo", timeParams: stubTimeParams, tempo: 140 });
         expect(stack.canRedo).toBe(false);
         expect(onCanRedo).toHaveBeenCalled();
+        requisitions.unregister("canRedoChanged", onCanRedo);
     });
 
     it("currentState title reflects arrangement.title", () => {

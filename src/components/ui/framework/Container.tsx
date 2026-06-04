@@ -6,7 +6,7 @@
 import { ChildAlignment, ChildWrap, Orientation } from "./ui-types.js";
 import { UIComponent, type ICommonUIProperties } from "./UIComponent.js";
 
-import { type ComponentChild } from "preact";
+import { type ComponentChild, type CSSProperties } from "preact";
 
 export interface IContainerProperties extends ICommonUIProperties {
     orientation?: Orientation;
@@ -27,7 +27,6 @@ export class Container extends UIComponent<IContainerProperties> {
     };
 
     public override componentDidUpdate(prevProps: IContainerProperties): void {
-        super.componentDidUpdate(prevProps, {});
 
         const { innerRef, scrollPosition } = this.props;
 
@@ -44,7 +43,7 @@ export class Container extends UIComponent<IContainerProperties> {
             title, gap, onScroll,
         } = this.props;
 
-        const newStyle: Record<string, unknown> = { ...style };
+        const newStyle: CSSProperties = { ...style };
         if (orientation !== undefined) {
             newStyle.flexDirection = orientation;
         }
@@ -89,7 +88,7 @@ export class Container extends UIComponent<IContainerProperties> {
                 {...this.dataAttributes()}
             >
                 {children}
-            </ div>
+            </div>
         );
     }
 

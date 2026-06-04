@@ -109,10 +109,6 @@ export class ArrangementMigrator {
             get currentTime() {
                 return 0;
             },
-            subscribe: () => {
-                return () => { /* no-op */ };
-            },
-            unsubscribe: () => { /* no-op */ },
         };
 
         const timeCoordinator = new TimeCoordinator(

@@ -3,7 +3,6 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import { Publisher } from "../core/Publisher.js";
 import type { ISbDmNoteEvent, ITiming, RealTime } from "../core/ScoreBookDataModel.js";
 import type { ITimeParamsBase } from "../core/types/general.js";
 import type { IRealtimeProvider } from "../ui/AnimationEngine.js";
@@ -59,7 +58,7 @@ export interface IScoreMetrics {
  * - Step: The base unit of time in the music. Steps are numbered from 1, and there are `stepResolution` steps
  *         in a beat.
  */
-export class TimeCoordinator extends Publisher {
+export class TimeCoordinator {
 
     /**
      * Time offset used temporarily when there are changes to the time params that would cause the music to jump
@@ -69,21 +68,11 @@ export class TimeCoordinator extends Publisher {
      */
     private internalOffset: RealTime = 0;
 
-    // Tempo and length changes incur offset changes.
-    private cachedTempo: number;
-
     #metrics: IScoreMetrics;
 
     public constructor(private timeParams: Readonly<ITimeParamsBase>,
         private readonly realtimeProvider: IRealtimeProvider) {
-        super();
-
         this.#metrics = this.computeMetrics();
-
-        this.cachedTempo = timeParams.tempo;
-
-        // XXX: convert to requisition.
-        // timeParams.subscribe(this.handleTimeParamsChange);
     }
 
     public get metrics(): IScoreMetrics {
@@ -122,7 +111,14 @@ export class TimeCoordinator extends Publisher {
      */
     public reset(): void {
         this.internalOffset = 0;
-        this.cachedTempo = this.timeParams.tempo;
+        this.#metrics = this.computeMetrics();
+    }
+
+    /**
+     * Recomputes cached metrics when time parameters (e.g. tempo) change during playback.
+     * Publishes so that subscribers (e.g. TrackPlayer) can rebuild their event caches.
+     */
+    public recomputeMetrics(): void {
         this.#metrics = this.computeMetrics();
     }
 

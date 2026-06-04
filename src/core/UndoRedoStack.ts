@@ -3,10 +3,10 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import { Publisher } from "./Publisher.js";
+import { requisitions } from "../supplement/Requisitions.js";
 import { getArrangementSnapshot } from "./serialisation/snapshots.js";
 import type { EditCommand, EditCommand_ArrangementTitle, EditCommand_Note } from "./types/edit_commands.js";
-import type { IArrangementSnapshot, INoteStyle, ISubscribable } from "./types/general.js";
+import type { IArrangementSnapshot, INoteStyle } from "./types/general.js";
 import type { ISbDmArrangement } from "./ScoreBookDataModel.js";
 import { exists } from "./utils.js";
 
@@ -26,9 +26,6 @@ export interface IHistoryState {
  * - Squashes rapid note-style cycling via a deferred timeout to keep history clean.
  */
 export class UndoRedoStack {
-    private readonly canUndoPublisher = new Publisher();
-    private readonly canRedoPublisher = new Publisher();
-
     private past: IHistoryState[];
     private future: IHistoryState[] = [];
     private queuedSquashTimeout?: ReturnType<typeof setTimeout>;
@@ -96,12 +93,12 @@ export class UndoRedoStack {
 
         if (this.future.length) {
             this.future.splice(0);
-            this.canRedoPublisher.publish(); // No longer anything to redo, the future has been deleted
+            void requisitions.execute("canRedoChanged", undefined);
         }
 
         if (this.past.length === 2) {
-            this.canUndoPublisher.publish();
-        } // Used to be 1, so now we have a past to return to
+            void requisitions.execute("canUndoChanged", undefined);
+        }
 
         this.queueStackSquash();
     }
@@ -118,11 +115,11 @@ export class UndoRedoStack {
         this.future.push(this.past.pop()!);
 
         if (this.past.length === 1) {
-            this.canUndoPublisher.publish();
-        } // Reached the beginning of history, so can't go back any more
+            void requisitions.execute("canUndoChanged", undefined);
+        }
         if (this.future.length === 1) {
-            this.canRedoPublisher.publish();
-        } // Didn't used to have a future, now we do
+            void requisitions.execute("canRedoChanged", undefined);
+        }
 
         // We don't want to simplify history in the middle of undoing some stuff
         // So if a squash is queued, we push it back. But if not, we wouldn't want to queue it for no reason
@@ -142,26 +139,14 @@ export class UndoRedoStack {
         this.past.push(this.future.pop()!);
 
         if (this.past.length === 2) {
-            this.canUndoPublisher.publish();
-        } // Used to be 1, so now we have a past to return to
+            void requisitions.execute("canUndoChanged", undefined);
+        }
         if (this.future.length === 0) {
-            this.canRedoPublisher.publish();
-        } // We've reached the end of the future
+            void requisitions.execute("canRedoChanged", undefined);
+        }
 
         // We may have hit undo a bunch before squashing
         this.queueStackSquash();
-    }
-
-    /**
-     * Exposes publishers to subscribe to changes in undo/redo availability.
-     *
-     * @returns An object with `canUndo` and `canRedo` publishers.
-     */
-    public get topics(): { canUndo: ISubscribable; canRedo: ISubscribable; } {
-        return {
-            canUndo: this.canUndoPublisher,
-            canRedo: this.canRedoPublisher,
-        };
     }
 
     /**

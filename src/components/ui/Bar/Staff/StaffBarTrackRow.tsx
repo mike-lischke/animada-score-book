@@ -13,6 +13,7 @@ import type { UndoManager } from "../../../../core/UndoManager.js";
 import type { ArrangementPlayer } from "../../../../player/ArrangementPlayer.js";
 import type { TrackPlayer } from "../../../../player/TrackPlayer.js";
 import type { ScoreBookUiServices } from "../../../../player/types.js";
+import { requisitions } from "../../../../supplement/Requisitions.js";
 import { UIComponent, type ICommonUIProperties } from "../../framework/UIComponent.js";
 import { StaffNoteViewer } from "../../Note/StaffNoteViewer.js";
 
@@ -44,8 +45,11 @@ export class StaffBarTrackRow extends UIComponent<IStaffBarTrackRowProps, IStaff
     }
 
     public override componentDidMount(): void {
-        const { track } = this.props;
-        this.addSubscription(track, this.trackChanged);
+        requisitions.register("trackChanged", this.handleTrackChanged);
+    }
+
+    public override componentWillUnmount(): void {
+        requisitions.unregister("trackChanged", this.handleTrackChanged);
     }
 
     public override render(): ComponentChild {
@@ -79,9 +83,17 @@ export class StaffBarTrackRow extends UIComponent<IStaffBarTrackRowProps, IStaff
         );
     }
 
-    private trackChanged = () => {
+    private handleTrackChanged = (trackId: number): Promise<boolean> => {
+        const { track } = this.props;
+
+        if (trackId !== track.id) {
+            return Promise.resolve(false);
+        }
+
         const { changeCount } = this.state;
         this.setState({ changeCount: changeCount + 1 });
+
+        return Promise.resolve(true);
     };
 
 }

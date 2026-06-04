@@ -5,8 +5,8 @@
 
 import { edit } from "./edit.js";
 import { FaviconDirtyService } from "./FavIconDirtyService.js";
-import { Publisher } from "./Publisher.js";
 import type { ScoreBookDataModel } from "./ScoreBookDataModel.js";
+import { requisitions } from "../supplement/Requisitions.js";
 import type { EditCommand } from "./types/edit_commands.js";
 import type { INoteStyle } from "./types/general.js";
 import { UndoRedoStack } from "./UndoRedoStack.js";
@@ -14,7 +14,6 @@ import { UndoRedoStack } from "./UndoRedoStack.js";
 /** Encapsulates the application-level undo/redo management. */
 export class UndoManager {
     private readonly undoRedoStack;
-    private readonly currentStatePublisher = new Publisher();
 
     /**
      * Creates a new score book from an arrangement snapshot.
@@ -64,7 +63,7 @@ export class UndoManager {
         const anythingHasChanged = edit(command);
         if (anythingHasChanged) {
             this.undoRedoStack.handleEdit(command, oldValue);
-            this.currentStatePublisher.publish();
+            void requisitions.execute("undoStateChanged", undefined);
             this.updateDirtyState();
         }
     }
@@ -80,7 +79,7 @@ export class UndoManager {
         this.undoRedoStack.goBack();
         this.dataModel.arrangement!.applyArrangementSnapshot(this.undoRedoStack.currentState,
             this.dataModel.instruments);
-        this.currentStatePublisher.publish();
+        void requisitions.execute("undoStateChanged", undefined);
         this.updateDirtyState();
     };
 
@@ -95,22 +94,9 @@ export class UndoManager {
         this.undoRedoStack.goForward();
         this.dataModel.arrangement!.applyArrangementSnapshot(this.undoRedoStack.currentState,
             this.dataModel.instruments);
-        this.currentStatePublisher.publish();
+        void requisitions.execute("undoStateChanged", undefined);
         this.updateDirtyState();
     };
-
-    /**
-     * Publishers for UI subscriptions to state changes.
-     *
-     * @returns An object with publishers for `canUndo`, `canRedo`, and `currentState`.
-     */
-    public get topics() {
-        return {
-            canUndo: this.undoRedoStack.topics.canUndo,
-            canRedo: this.undoRedoStack.topics.canRedo,
-            currentState: this.currentStatePublisher,
-        };
-    }
 
     private extractOldValue(command: EditCommand): INoteStyle | undefined {
         const targetNote = command.type === "EditCommand_Note" ? command.note : undefined;

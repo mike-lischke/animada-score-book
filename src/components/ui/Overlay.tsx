@@ -7,6 +7,7 @@ import { createContext, type ComponentChild } from "preact";
 
 import { UIComponent, type ICommonUIProperties } from "./framework/UIComponent.js";
 import { OverlayState } from "./OverlayState.js";
+import { requisitions } from "../../supplement/Requisitions.js";
 
 export const OverlayStateContext = createContext<OverlayState | null>(null);
 
@@ -22,10 +23,12 @@ interface IOverlayState {
 export class Overlay extends UIComponent<IOverlayProps, IOverlayState> {
     private static overlayStates: Record<string, OverlayState> = {};
 
-    private overlayState = new OverlayState();
+    private overlayState: OverlayState;
 
     public constructor(props: IOverlayProps) {
         super(props);
+
+        this.overlayState = new OverlayState(props.name);
 
         this.state = {
             visible: false,
@@ -58,15 +61,14 @@ export class Overlay extends UIComponent<IOverlayProps, IOverlayState> {
     public override componentDidMount(): void {
         const { name } = this.props;
 
-        this.addSubscription(this.overlayState, this.overlayStateChanged);
+        requisitions.register("overlayVisibilityChanged", this.handleOverlayVisibilityChanged);
         Overlay.overlayStates[name] = this.overlayState;
     }
 
     public override componentWillUnmount(): void {
-        super.componentWillUnmount();
-
         const { name } = this.props;
 
+        requisitions.unregister("overlayVisibilityChanged", this.handleOverlayVisibilityChanged);
         delete Overlay.overlayStates[name];
     }
 
@@ -106,8 +108,12 @@ export class Overlay extends UIComponent<IOverlayProps, IOverlayState> {
         event.stopPropagation();
     };
 
-    private overlayStateChanged = () => {
-        if (this.overlayState.visible) {
+    private handleOverlayVisibilityChanged = (data: { name: string; visible: boolean; }): Promise<boolean> => {
+        if (data.name !== this.props.name) {
+            return Promise.resolve(false);
+        }
+
+        if (data.visible) {
             // First remove hidden class, so we remove display:none.
             this.setState({ visibilityClass: "invisible" });
             setTimeout(() => {
@@ -116,5 +122,7 @@ export class Overlay extends UIComponent<IOverlayProps, IOverlayState> {
         } else {
             this.setState({ visibilityClass: "invisible" }); // hidden class will be set after animation ends
         }
+
+        return Promise.resolve(true);
     };
 }

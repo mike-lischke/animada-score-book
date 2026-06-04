@@ -3,7 +3,7 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import { Publisher } from "../core/Publisher.js";
+import { requisitions } from "../supplement/Requisitions.js";
 import type { ISbDmNoteEvent, ISbDmTrack, ITiming, RealTime, ScoreBookDataModel } from "../core/ScoreBookDataModel.js";
 import { getSharedAudioContext } from "../core/audio-context.js";
 import { sleep, waitFor } from "../core/utils.js";
@@ -27,7 +27,7 @@ export type PlayerPlayState = "counting" | "playing" | "stopped";
  * - Connect to an `EventEngine` as an event source.
  * - Call `dispose()` when replacing the arrangement to clean up subscriptions.
  */
-export class ArrangementPlayer extends Publisher {
+export class ArrangementPlayer {
     public readonly trackPlayers = new Map<ISbDmTrack, TrackPlayer>();
 
     public readonly animationEngine: AnimationEngine;
@@ -76,15 +76,13 @@ export class ArrangementPlayer extends Publisher {
      * @param dataModel The data model containing the arrangement to play.
      */
     public constructor(private dataModel: ScoreBookDataModel) {
-        super();
-
         this.timeCoordinator = new TimeCoordinator(this.dataModel.arrangement!.timeParams, this);
 
         this.updateTrackPlayers();
-        this.dataModel.arrangement!.subscribe(this.updateTrackPlayers);
+        requisitions.register("arrangementChanged", this.handleArrangementChanged);
 
         this.updateCallbackEvents();
-        this.dataModel.arrangement!.timeParams.subscribe(this.updateCallbackEvents);
+        requisitions.register("timeParamsChanged", this.handleTimeParamsChanged);
 
         this.animationEngine = new AnimationEngine(this);
         this.metronome = new Metronome(this.timeCoordinator);
@@ -131,7 +129,7 @@ export class ArrangementPlayer extends Publisher {
      */
     public onStop = (): void => {
         this.timing = undefined;
-        this.publish();
+        void requisitions.execute("playerStateChanged", undefined);
         for (const player of this.trackPlayers.values()) {
             player.onStop();
         }
@@ -152,8 +150,8 @@ export class ArrangementPlayer extends Publisher {
         this.onStop();
 
         // Unsubscribe from arrangement changes and the event engine.
-        this.dataModel.arrangement!.unsubscribe(this.updateTrackPlayers);
-        this.dataModel.arrangement!.timeParams.unsubscribe(this.updateCallbackEvents);
+        requisitions.unregister("arrangementChanged", this.handleArrangementChanged);
+        requisitions.unregister("timeParamsChanged", this.handleTimeParamsChanged);
 
         this.metronome.dispose();
         this.trackPlayers.clear();
@@ -198,7 +196,7 @@ export class ArrangementPlayer extends Publisher {
 
         this.#state = "counting";
         if (this.dataModel.arrangement!.countIn) {
-            this.publish();
+            void requisitions.execute("playerStateChanged", undefined);
             this.offset = this.audioContext.currentTime;
             await this.countIn();
         }
@@ -218,7 +216,7 @@ export class ArrangementPlayer extends Publisher {
         // Pretend we have covered all events before the interval start.
         this.timeCovered = interval?.start ?? 0;
 
-        this.publish();
+        void requisitions.execute("playerStateChanged", undefined);
         void this.iteration();
     }
 
@@ -380,6 +378,22 @@ export class ArrangementPlayer extends Publisher {
     };
 
     /**
+     * Handles arrangement structure changes (tracks added/removed).
+     *
+     * @param arrangementId The id of the arrangement that changed.
+     * @returns True if this player handles the given arrangement.
+     */
+    private handleArrangementChanged = (arrangementId: number): Promise<boolean> => {
+        if (arrangementId !== this.dataModel.arrangement!.id) {
+            return Promise.resolve(false);
+        }
+
+        this.updateTrackPlayers();
+
+        return Promise.resolve(true);
+    };
+
+    /**
      * Synchronizes `trackPlayers` with the arrangement's tracks (add/remove),
      * maintains subscription to audible updates, and publishes structural changes.
      */
@@ -403,8 +417,19 @@ export class ArrangementPlayer extends Publisher {
         }
 
         if (somethingChanged) {
-            this.publish();
+            void requisitions.execute("playerStateChanged", undefined);
         }
+    };
+
+    /**
+     * Handles time parameter changes by recomputing callback events.
+     *
+     * @returns Always true (the change is always handled).
+     */
+    private handleTimeParamsChanged = (): Promise<boolean> => {
+        this.updateCallbackEvents();
+
+        return Promise.resolve(true);
     };
 
     /**
@@ -412,13 +437,21 @@ export class ArrangementPlayer extends Publisher {
      * Publishing `currentTiming` occurs when those callbacks fire during playback.
      */
     private updateCallbackEvents = (): void => {
+        // Recompute cached metrics when time parameters change (e.g. tempo) during playback.
+        this.timeCoordinator.recomputeMetrics();
+
+        // If playing the full score (no interval restriction), update endOffset to match the new tempo.
+        if (this.#state === "playing" && !this.currentInterval) {
+            this.endOffset = this.timeCoordinator.metrics.realTimeLength;
+        }
+
         this.callbackEvents = this.dataModel.arrangement!.timeParams.timings.map((timing) => {
             return {
                 kind: "callback",
                 realTime: this.timeCoordinator.convertToRealTime(timing),
                 callback: () => {
                     this.timing = timing;
-                    this.publish();
+                    void requisitions.execute("playerStateChanged", undefined);
                 },
                 identifier: timing
             };

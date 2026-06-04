@@ -3,16 +3,14 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import { Publisher } from "../core/Publisher.js";
 import type { RealTime } from "../core/ScoreBookDataModel.js";
 import type { TimeCoordinator } from "./TimeCoordinator.js";
 import type { Event, IEventSource, IInterval, IMetronomeEvent } from "./types.js";
 
-export class Metronome extends Publisher implements IEventSource {
+export class Metronome implements IEventSource {
     private disposed = false;
 
     public constructor(private readonly timeCoordinator: TimeCoordinator) {
-        super();
     }
 
     public onStop = (): void => { /**/ };

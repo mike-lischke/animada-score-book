@@ -12,6 +12,7 @@ import { ArrangementMigrator } from "../../src/core/serialisation/migration/Arra
 import type { EditCommand } from "../../src/core/types/edit_commands.js";
 import type { IArrangementSnapshot } from "../../src/core/types/general.js";
 import { UndoManager } from "../../src/core/UndoManager.js";
+import { requisitions } from "../../src/supplement/Requisitions.js";
 
 class TestScoreBookDataModel extends ScoreBookDataModel {
     private readonly _arrangement: ISbDmArrangement;
@@ -153,7 +154,7 @@ describe("AnimadaScoreBook", () => {
 
     it("records edits that cause changes and publishes current state", () => {
         const publishSpy = vi.fn();
-        manager.topics.currentState.subscribe(publishSpy);
+        requisitions.register("undoStateChanged", publishSpy);
         // Use a note edit to exercise oldValue extraction.
         const cmd: EditCommand = {
             type: "EditCommand_Note",
@@ -165,12 +166,13 @@ describe("AnimadaScoreBook", () => {
         expect(stack1).toBeDefined();
         expect(stack1!.handleEdit).toHaveBeenCalledOnce();
         expect(publishSpy).toHaveBeenCalledOnce();
+        requisitions.unregister("undoStateChanged", publishSpy);
     });
 
     it("does not record when no changes happen", () => {
         editModule.edit.mockReturnValueOnce(false);
         const publishSpy = vi.fn();
-        manager.topics.currentState.subscribe(publishSpy);
+        requisitions.register("undoStateChanged", publishSpy);
         const cmd: EditCommand = {
             type: "EditCommand_ArrangementTitle",
             arrangement: dm.arrangement,
@@ -178,6 +180,7 @@ describe("AnimadaScoreBook", () => {
         };
         manager.edit(cmd);
         expect(publishSpy).not.toHaveBeenCalled();
+        requisitions.unregister("undoStateChanged", publishSpy);
     });
 
     it("undo applies snapshot when available", () => {

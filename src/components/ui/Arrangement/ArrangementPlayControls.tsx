@@ -10,6 +10,7 @@ import type { ScoreBookDataModel } from "../../../core/ScoreBookDataModel.js";
 import type { UndoManager } from "../../../core/UndoManager.js";
 import type { ArrangementPlayer } from "../../../player/ArrangementPlayer.js";
 import type { ScoreBookUiServices } from "../../../player/types.js";
+import { requisitions } from "../../../supplement/Requisitions.js";
 import { isMobile } from "../../../ui/index.js";
 import { Button } from "../framework/Button.js";
 import { Checkbox } from "../framework/Checkbox.js";
@@ -62,10 +63,11 @@ export class ArrangementPlayControls
     }
 
     public override componentDidMount(): void {
-        const { dataModel } = this.props;
+        requisitions.register("arrangementChanged", this.handleArrangementTitleChanged);
+    }
 
-        const arrangement = dataModel.arrangement!;
-        this.addSubscription(arrangement, this.titleChangeSubscription);
+    public override componentWillUnmount(): void {
+        requisitions.unregister("arrangementChanged", this.handleArrangementTitleChanged);
     }
 
     public override componentDidUpdate(previousProps: Readonly<IArrangementPlayControlsProperties>,
@@ -271,11 +273,17 @@ export class ArrangementPlayControls
         );
     }
 
-    private titleChangeSubscription = () => {
+    private handleArrangementTitleChanged = (arrangementId: number): Promise<boolean> => {
         const { dataModel } = this.props;
-
         const arrangement = dataModel.arrangement!;
+
+        if (arrangementId !== arrangement.id) {
+            return Promise.resolve(false);
+        }
+
         this.setState({ title: arrangement.title });
+
+        return Promise.resolve(true);
     };
 
     private startRecording = async () => {

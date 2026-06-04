@@ -11,6 +11,7 @@ import {
 } from "../core/serialisation/numeric-functions.js";
 import type { IFraction, ISubdivision } from "../core/types/general.js";
 import { getNewId } from "../core/utils.js";
+import { requisitions } from "../supplement/Requisitions.js";
 import type { TimeCoordinator } from "./TimeCoordinator.js";
 import { Event, IInterval } from "./types.js";
 
@@ -35,8 +36,6 @@ export class TrackPlayer {
 
     private disposed = false;
 
-    private setupNotes: (() => void) | null = null;
-
     /**
      * Creates a player for the given track and sets up note timing caches and subscriptions.
      *
@@ -52,18 +51,13 @@ export class TrackPlayer {
 
         // Rebuild once instrument assets become ready.
         if (!this.track.instrument.state.initialized) {
-            this.setupNotes = () => {
-                this.rebuildEventCache();
-                this.track.instrument.unsubscribe(this.setupNotes!);
-                this.setupNotes = null;
-            };
-            this.track.instrument.subscribe(this.setupNotes);
+            requisitions.register("instrumentLoaded", this.handleInstrumentLoaded);
         }
 
         // Subscriptions to keep internal caches in sync.
-        this.track.subscribe(this.handleTrackChange);
-        this.timeCoordinator.subscribe(this.handleTimeChange);
-        this.track.arrangement.subscribe(this.destroySelfIfNeeded);
+        requisitions.register("trackChanged", this.handleTrackChanged);
+        requisitions.register("timeParamsChanged", this.handleTimeParamsChanged);
+        requisitions.register("arrangementChanged", this.handleArrangementDestroy);
     }
 
     /**
@@ -109,13 +103,10 @@ export class TrackPlayer {
         this.disposed = true;
 
         // Unsubscribe from all sources and clear any pending instrument setup subscription.
-        this.timeCoordinator.unsubscribe(this.handleTimeChange);
-        this.track.unsubscribe(this.handleTrackChange);
-        this.track.arrangement.unsubscribe(this.destroySelfIfNeeded);
-        if (this.setupNotes) {
-            this.track.instrument.unsubscribe(this.setupNotes);
-            this.setupNotes = null;
-        }
+        requisitions.unregister("instrumentLoaded", this.handleInstrumentLoaded);
+        requisitions.unregister("trackChanged", this.handleTrackChanged);
+        requisitions.unregister("timeParamsChanged", this.handleTimeParamsChanged);
+        requisitions.unregister("arrangementChanged", this.handleArrangementDestroy);
     }
 
     /** Rebuilds runtime note events from steps/subdivisions and stores them in measure.events. */
@@ -350,22 +341,66 @@ export class TrackPlayer {
         return { bar: measureNumber, step };
     }
 
-    /** Responds to structural changes in the track by rebuilding the event cache. */
-    private handleTrackChange = (): void => {
-        this.rebuildEventCache();
-    };
-
-    /** Reacts to arrangement timing changes by rebuilding the event cache. */
-    private handleTimeChange = (): void => {
-        this.rebuildEventCache();
-    };
-
-    /** Stops reacting if the track is removed from its arrangement (unsubscribes). */
-    private destroySelfIfNeeded = (): void => {
-        if (!this.track.arrangement.tracks.includes(this.track)) {
-            this.timeCoordinator.unsubscribe(this.handleTimeChange);
-            this.track.arrangement.unsubscribe(this.destroySelfIfNeeded);
+    /**
+     * Rebuilds event cache once the instrument's audio buffers are loaded, then unregisters.
+     *
+     * @param instrumentId The id of the instrument that finished loading.
+     * @returns True if this player handles the given instrument.
+     */
+    private handleInstrumentLoaded = (instrumentId: number): Promise<boolean> => {
+        if (instrumentId !== this.track.instrument.id) {
+            return Promise.resolve(false);
         }
+
+        this.rebuildEventCache();
+        requisitions.unregister("instrumentLoaded", this.handleInstrumentLoaded);
+
+        return Promise.resolve(true);
+    };
+
+    /**
+     * Responds to structural changes in a track by rebuilding the event cache.
+     *
+     * @param trackId The id of the track that changed.
+     * @returns True if this player handles the given track.
+     */
+    private handleTrackChanged = (trackId: number): Promise<boolean> => {
+        if (trackId !== this.track.id) {
+            return Promise.resolve(false);
+        }
+
+        this.rebuildEventCache();
+
+        return Promise.resolve(true);
+    };
+
+    /**
+     * Reacts to arrangement timing changes by rebuilding the event cache.
+     *
+     * @returns Always true.
+     */
+    private handleTimeParamsChanged = (): Promise<boolean> => {
+        this.rebuildEventCache();
+
+        return Promise.resolve(true);
+    };
+
+    /**
+     * Disposes this player if its track was removed from the arrangement.
+     *
+     * @param arrangementId The id of the arrangement that changed.
+     * @returns True if this player handles the given arrangement.
+     */
+    private handleArrangementDestroy = (arrangementId: number): Promise<boolean> => {
+        if (arrangementId !== this.track.arrangement.id) {
+            return Promise.resolve(false);
+        }
+
+        if (!this.track.arrangement.tracks.includes(this.track)) {
+            this.dispose();
+        }
+
+        return Promise.resolve(true);
     };
 
     /**

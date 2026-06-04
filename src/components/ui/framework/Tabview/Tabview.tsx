@@ -145,7 +145,6 @@ export class Tabview extends UIComponent<ITabviewProperties, ITabviewState> {
     }
 
     public override componentDidUpdate(prevProps: ITabviewProperties, prevState: ITabviewState): void {
-        super.componentDidUpdate(prevProps, prevState);
 
         this.scrollActiveItemIntoView();
         this.handleResize();

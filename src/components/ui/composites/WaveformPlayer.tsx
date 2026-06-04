@@ -40,7 +40,6 @@ export class WaveformPlayer extends UIComponent<IWaveformPlayerProps, IWaveformP
     }
 
     public override componentDidUpdate(prevProps: IWaveformPlayerProps, prevState: IWaveformPlayerState): void {
-        super.componentDidUpdate(prevProps, prevState);
 
         const { url, media } = this.props;
         if (prevProps.url !== url || prevProps.media !== media) {
@@ -49,7 +48,6 @@ export class WaveformPlayer extends UIComponent<IWaveformPlayerProps, IWaveformP
     }
 
     public override componentWillUnmount() {
-        super.componentWillUnmount();
 
         if (this.wavesurfer) {
             this.wavesurfer.destroy();

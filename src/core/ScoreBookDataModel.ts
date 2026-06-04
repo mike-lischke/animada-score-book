@@ -10,10 +10,10 @@ import { stringifyPackedArrangement } from "./serialisation/snapshot-packing.js"
 
 import type { IScoreDBEntry, ISoundLibFsNode } from "./DatabaseTypes.js";
 import { Instrument } from "./Instrument.js";
-import { Publisher } from "./Publisher.js";
+import { requisitions } from "../supplement/Requisitions.js";
 import type {
     IArrangementSnapshot, IFraction, IMeasureStep, IMeterSnapshot, INoteStyle, INoteStyleSymbol,
-    ISubdivision, ISubscribable, Mutable
+    ISubdivision, Mutable
 } from "./types/general.js";
 import { getNewId } from "./utils.js";
 
@@ -225,7 +225,7 @@ export interface IInstrumentMeta {
     readonly color: string;
 }
 
-export interface ITimeParamsView extends ISubscribable {
+export interface ITimeParamsView {
     readonly timeSignature: string;
     readonly tempo: number;
     readonly length: number;
@@ -332,7 +332,7 @@ export interface ISbDmScore extends ISbDmVisual {
     readonly description?: string;
 }
 
-export interface ISbDmTrack extends ISbDmCommon, ISubscribable {
+export interface ISbDmTrack extends ISbDmCommon {
     readonly type: SbDmEntityType.Track;
     readonly name: string;
 
@@ -397,7 +397,7 @@ export interface ISbDmInstrumentImage {
     readonly filePath: string;
 }
 
-export interface ISbDmInstrument extends ISbDmVisual, ISubscribable {
+export interface ISbDmInstrument extends ISbDmVisual {
     readonly type: SbDmEntityType.Instrument;
 
     /** The type identifier of this instrument. It corresponds to a specific instrument class (Agogô, Repinique etc). */
@@ -430,7 +430,7 @@ export interface ISbDmTimeParams extends ITimeParamsView {
     stepResolution: number;
 }
 
-export interface ISbDmArrangement extends ISbDmCommon, ISubscribable {
+export interface ISbDmArrangement extends ISbDmCommon {
     readonly type: SbDmEntityType.Arrangement;
 
     title: string;
@@ -484,7 +484,7 @@ export type ScoreBookDataModelEntry =
 /**
  * A data model to share score book data between components.
  */
-export class ScoreBookDataModel extends Publisher {
+export class ScoreBookDataModel {
     /**
      * Indicates whether the current session is allowed to mutate scores on the backend.
      * Until proper user management exists this defaults to `true`. Read-only viewers will
@@ -564,7 +564,7 @@ export class ScoreBookDataModel extends Publisher {
 
         this.data.arrangement = arrangement;
         this.applyArrangementPlaybackSettings(arrangement);
-        this.publish();
+        void requisitions.execute("scoreBookLoaded", undefined);
 
         return arrangement;
     }
@@ -620,7 +620,7 @@ export class ScoreBookDataModel extends Publisher {
 
             parent.children.push(newFolder);
 
-            this.publish();
+            void requisitions.execute("scoreBookLoaded", undefined);
         }
     }
 
@@ -657,7 +657,7 @@ export class ScoreBookDataModel extends Publisher {
                 parent.children.push(newScore);
             }
 
-            this.publish();
+            void requisitions.execute("scoreBookLoaded", undefined);
         }
     }
 
@@ -699,7 +699,7 @@ export class ScoreBookDataModel extends Publisher {
         }
 
         entry.name = newName;
-        this.publish();
+        void requisitions.execute("scoreBookLoaded", undefined);
     }
 
     public async deleteEntry(entry: ISbDmScoreFolder | ISbDmScore): Promise<void> {
@@ -728,7 +728,7 @@ export class ScoreBookDataModel extends Publisher {
 
         if (index >= 0) {
             parentChildren.splice(index, 1);
-            this.publish();
+            void requisitions.execute("scoreBookLoaded", undefined);
         }
     }
 

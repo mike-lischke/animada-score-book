@@ -106,7 +106,6 @@ export class Minimap extends UIComponent<IMinimapProps> {
             || previousProps.arrangement.tracks.length !== arrangement.tracks.length
             || previousBarCount !== barCount;
 
-        super.componentDidUpdate(previousProps, this.state);
         this.refreshViewportDomRefs();
 
         if (arrangementStructureChanged && this.selectionState.selectorIsActive) {
@@ -126,7 +125,6 @@ export class Minimap extends UIComponent<IMinimapProps> {
 
     /** Removes global pointer listeners and any pending animation frame. */
     public override componentWillUnmount(): void {
-        super.componentWillUnmount();
 
         document.removeEventListener("pointermove", this.handleDocumentPointerMove);
         document.removeEventListener("pointerup", this.handleDocumentPointerUp);

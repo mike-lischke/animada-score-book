@@ -44,7 +44,6 @@ export class ArrangementTitle extends UIComponent<IArrangementTitleProps, IArran
     }
 
     public override componentDidUpdate(prevProps: IArrangementTitleProps, prevState: IArrangementTitleState): void {
-        super.componentDidUpdate(prevProps, prevState);
 
         const { arrangement } = this.props;
         const { title } = this.state;

@@ -4,8 +4,8 @@
  */
 
 import { LoadAudioError, type LoadAudioStage } from "./LoadAudioError.js";
-import { Publisher } from "./Publisher.js";
 import type { IInstrumentMeta } from "./ScoreBookDataModel.js";
+import { requisitions } from "../supplement/Requisitions.js";
 import { getSharedAudioContext } from "./audio-context.js";
 import { SbDmEntityType, type ISbDmInstrument, type ISbDmInstrumentImage } from "./ScoreBookDataModel.js";
 import type { INoteStyle } from "./types/general.js";
@@ -15,7 +15,7 @@ import { getNewId } from "./utils.js";
  * All details about a specific instrument, including its note styles and associated audio buffers.
  * This is the main class representing an instrument in the data model.
  */
-export class Instrument extends Publisher implements ISbDmInstrument {
+export class Instrument implements ISbDmInstrument {
     public readonly type = SbDmEntityType.Instrument;
     public readonly id: number;
     public readonly typeId: string;
@@ -41,8 +41,6 @@ export class Instrument extends Publisher implements ISbDmInstrument {
     private static readonly audioCtx = getSharedAudioContext();
 
     public constructor(instrumentMeta: IInstrumentMeta) {
-        super();
-
         const { id, variants, displayOrder, displayName, color, typeId } = instrumentMeta;
         this.id = id;
         this.typeId = typeId;
@@ -65,7 +63,7 @@ export class Instrument extends Publisher implements ISbDmInstrument {
 
         void Promise.all(loadPromises).then(() => {
             this.state.initialized = true;
-            this.publish();
+            void requisitions.execute("instrumentLoaded", this.id);
         });
     }
 

@@ -3,7 +3,7 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import { Publisher } from "./Publisher.js";
+import { requisitions } from "../supplement/Requisitions.js";
 import {
     SbDmEntityType, type ISbDmArrangement, type ISbDmInstrument, type ISbDmTrack,
     type ISbDmTrackMeasure
@@ -13,7 +13,7 @@ import { Track } from "./Track.js";
 import type { IArrangementSnapshot, ITimeParams, ITrackSnapshot } from "./types/general.js";
 import { getNewId } from "./utils.js";
 
-export class Arrangement extends Publisher implements ISbDmArrangement {
+export class Arrangement implements ISbDmArrangement {
     public readonly type = SbDmEntityType.Arrangement;
     public id = getNewId();
 
@@ -119,7 +119,7 @@ export class Arrangement extends Publisher implements ISbDmArrangement {
             this.tracks.splice(index, 0, track);
         }
 
-        this.publish();
+        void requisitions.execute("arrangementChanged", this.id);
 
         return track;
     };
@@ -134,7 +134,7 @@ export class Arrangement extends Publisher implements ISbDmArrangement {
         const index = this.tracks.indexOf(trackToRemove);
         if (index !== -1) {
             this.tracks.splice(index, 1);
-            this.publish();
+            void requisitions.execute("arrangementChanged", this.id);
 
             return true;
         } else {
@@ -159,7 +159,7 @@ export class Arrangement extends Publisher implements ISbDmArrangement {
      */
     public set title(newTitle: string) {
         this.titleString = newTitle;
-        this.publish();
+        void requisitions.execute("arrangementChanged", this.id);
     }
 
     public applyArrangementSnapshot(arrangementSnapshot: IArrangementSnapshot, instruments: ISbDmInstrument[]): void {
@@ -235,7 +235,7 @@ export class Arrangement extends Publisher implements ISbDmArrangement {
         });
 
         track.measures.splice(0, track.measures.length, ...newMeasures);
-        track.publish();
+        void requisitions.execute("trackChanged", track.id);
     }
 
     private getTrackMeasureId(track: Track, measureNumber: number): number {

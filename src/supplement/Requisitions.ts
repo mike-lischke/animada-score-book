@@ -4,17 +4,41 @@
  */
 
 import type { IUISettings } from "../core/AppStorage.js";
+import type { PlayerPlayState } from "../player/ArrangementPlayer.js";
 
-export type SimpleCallback = (_: unknown) => Promise<boolean>;
+export type SimpleCallback = () => Promise<boolean>;
 
 /** A generic type to extract the (single) callback parameter type from the callback map. */
 export type IRequisitionCallbackValues<K extends keyof IRequestTypeMap> = Parameters<IRequestTypeMap[K]>[0];
 
 /** A map of request types to their corresponding callback signatures. A callback must only have a single parameter. */
 export interface IRequestTypeMap {
+    // --- UI / settings topics ---
     "settingsChanged": (settings: IUISettings) => Promise<boolean>;
-    "playRangeChanged": (range?: { from: number; to: number; }) => Promise<boolean>;
     "trackViewModeToggled": (mode: "grid" | "staff") => Promise<boolean>;
+
+    // --- Playback topics ---
+    "playRangeChanged": (range?: { from: number; to: number; }) => Promise<boolean>;
+    "animationStateChanged": (state: PlayerPlayState) => Promise<boolean>;
+    "playerStateChanged": SimpleCallback;
+
+    // --- Core model topics ---
+    "instrumentLoaded": (instrumentId: number) => Promise<boolean>;
+    "trackChanged": (trackId: number) => Promise<boolean>;
+    "arrangementChanged": (arrangementId: number) => Promise<boolean>;
+    "timeParamsChanged": SimpleCallback;
+    "scoreBookLoaded": SimpleCallback;
+
+    // --- Undo/redo topics ---
+    "undoStateChanged": SimpleCallback;
+    "canUndoChanged": SimpleCallback;
+    "canRedoChanged": SimpleCallback;
+
+    // --- UI state topics ---
+    "modeChanged": SimpleCallback;
+    "selectionChanged": SimpleCallback;
+    "errorLogChanged": SimpleCallback;
+    "overlayVisibilityChanged": (data: { name: string; visible: boolean; }) => Promise<boolean>;
 }
 
 type CallbackType = IRequestTypeMap[keyof IRequestTypeMap];
