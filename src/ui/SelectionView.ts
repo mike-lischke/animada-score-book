@@ -93,7 +93,11 @@ export class SelectionView {
         if (!this.isDragging && this.dragPending) {
             // The user pressed and released without significant movement — treat as a click.
             // The selection mode is already live on the manager via handleKeyDown/handleKeyUp.
-            const clickRect = new DOMRect(this.startX, this.startY, 1, 1);
+            // Use a small rect (5×5) instead of a single point so the hit-test is as forgiving
+            // as a minimal drag (which requires width > 2 || height > 2 before firing).
+            const half = 2;
+            const clickRect = new DOMRect(this.startX - half, this.startY - half,
+                (half * 2) + 1, (half * 2) + 1);
             this.manager.endSelection(clickRect);
         }
 
@@ -322,6 +326,16 @@ export class SelectionView {
             // Staff-mode note groups: query the row directly and create one
             // merged overlay per group from all run elements in the step range,
             // shifted up so the overlay sits near the tuplet bracket, not at note level.
+            //
+            // Runs have flex:1-1-0 so they stretch — we use the runs for gap-free
+            // coverage between adjacent steps but narrow the left/right edges to the
+            // inner note-content elements so the overlay hugs the actual note symbols.
+            const contentSelector = [
+                ".staff-note-viewer-note-symbol",
+                ".staff-note-head",
+                ".staff-note-viewer-rest-symbol",
+            ].join(", ");
+
             for (const entry of noteGroups) {
                 const row = contentHost.querySelector<HTMLElement>(
                     `[data-bar="${entry.bar}"][data-track="${entry.trackId}"]`,
@@ -332,24 +346,75 @@ export class SelectionView {
 
                 const startStep = entry.startStep ?? 0;
                 const endStep = entry.endStep ?? startStep;
-                const elements: HTMLElement[] = [];
+                const runs: HTMLElement[] = [];
 
                 for (let step = startStep; step <= endStep; step++) {
                     const el = row.querySelector<HTMLElement>(`[data-step-index="${step}"]`);
                     if (el) {
-                        elements.push(el);
+                        runs.push(el);
                     }
                 }
 
-                if (elements.length > 0) {
-                    // Beam groups stay at note level; tuplet groups shift up.
-                    const hasBeams = elements.some((el) => {
-                        return el.querySelector(".staff-note-viewer-beam") !== null;
-                    });
-                    const offsetY = hasBeams ? -12 : -30;
-                    const heightOffset = hasBeams ? 0 : 10;
-                    this.createMergedOverlay(overlayContainer, containerRect, elements, offsetY, heightOffset);
+                if (runs.length === 0) {
+                    continue;
                 }
+
+                const hasBeams = runs.some((el) => {
+                    return el.querySelector(".staff-note-viewer-beam") !== null;
+                });
+                const offsetY = hasBeams ? -12 : -30;
+                const heightOffset = hasBeams ? 0 : 10;
+
+                // Compute the union rect of all runs (gap-free horizontal coverage).
+                let minTop = Infinity;
+                let maxBottom = -Infinity;
+                let minLeft = Infinity;
+                let maxRight = -Infinity;
+
+                for (const run of runs) {
+                    const r = this.computeElementRect(run, containerRect);
+                    const absTop = r.y + containerRect.top;
+                    const absBottom = absTop + r.height;
+
+                    if (absTop < minTop) {
+                        minTop = absTop;
+                    }
+
+                    if (absBottom > maxBottom) {
+                        maxBottom = absBottom;
+                    }
+
+                    const rawRect = run.getBoundingClientRect();
+                    if (rawRect.left < minLeft) {
+                        minLeft = rawRect.left;
+                    }
+
+                    if (rawRect.right > maxRight) {
+                        maxRight = rawRect.right;
+                    }
+                }
+
+                // Narrow left edge to the first run's inner content, with 10 px padding
+                // but never beyond the run's own bounding box.
+                const firstContent = runs[0].querySelector<HTMLElement>(contentSelector);
+                if (firstContent) {
+                    const firstRect = firstContent.getBoundingClientRect();
+                    minLeft = Math.max(minLeft, firstRect.left - 10);
+                }
+
+                // Narrow right edge to the last run's inner content.
+                const lastContent = runs[runs.length - 1].querySelector<HTMLElement>(contentSelector);
+                if (lastContent) {
+                    const lastRect = lastContent.getBoundingClientRect();
+                    maxRight = lastRect.right + 2;
+                }
+
+                this.createOverlay(overlayContainer, {
+                    x: minLeft - containerRect.left,
+                    y: minTop - containerRect.top + offsetY,
+                    width: maxRight - minLeft,
+                    height: maxBottom - minTop + heightOffset,
+                });
             }
 
             return;
@@ -688,34 +753,37 @@ export class SelectionView {
         let maxRight = -Infinity;
         let maxBottom = -Infinity;
 
+        // Horizontal bounds use raw element rects to avoid margin-induced over-extension.
+        // Vertical bounds use margin-expanded rects so adjacent track rows touch without gaps.
         for (const el of elements) {
             const r = this.computeElementRect(el, containerRect);
-            const absLeft = r.x + containerRect.left;
             const absTop = r.y + containerRect.top;
-            const absRight = absLeft + r.width;
             const absBottom = absTop + r.height;
-
-            if (absLeft < minLeft) {
-                minLeft = absLeft;
-            }
 
             if (absTop < minTop) {
                 minTop = absTop;
             }
 
-            if (absRight > maxRight) {
-                maxRight = absRight;
-            }
-
             if (absBottom > maxBottom) {
                 maxBottom = absBottom;
             }
+
+            const rawRect = el.getBoundingClientRect();
+            if (rawRect.left < minLeft) {
+                minLeft = rawRect.left;
+            }
+
+            if (rawRect.right > maxRight) {
+                maxRight = rawRect.right;
+            }
         }
 
+        const padding = 2; // small visual breathing room on each side
+
         this.createOverlay(overlayContainer, {
-            x: minLeft - containerRect.left,
+            x: minLeft - containerRect.left - padding,
             y: minTop - containerRect.top + offsetY,
-            width: maxRight - minLeft,
+            width: (maxRight - minLeft) + (2 * padding),
             height: maxBottom - minTop + heightOffset,
         });
     }
@@ -749,6 +817,9 @@ export class SelectionView {
      * Computes a bounding rectangle that covers all elements matching the selector,
      * relative to the overlay container.
      *
+     * Horizontal bounds use raw element rects to avoid margin-induced over-extension;
+     * vertical bounds use margin-expanded rects so adjacent track rows touch without gaps.
+     *
      * @param scope The element to query within.
      * @param selector The CSS selector for target elements.
      * @param containerRect The overlay container's bounding rect in viewport coordinates.
@@ -772,32 +843,33 @@ export class SelectionView {
             }
 
             const r = this.computeElementRect(el, containerRect);
-            const absLeft = r.x + containerRect.left;
             const absTop = r.y + containerRect.top;
-            const absRight = absLeft + r.width;
             const absBottom = absTop + r.height;
-
-            if (absLeft < minLeft) {
-                minLeft = absLeft;
-            }
 
             if (absTop < minTop) {
                 minTop = absTop;
             }
 
-            if (absRight > maxRight) {
-                maxRight = absRight;
-            }
-
             if (absBottom > maxBottom) {
                 maxBottom = absBottom;
             }
+
+            const rawRect = el.getBoundingClientRect();
+            if (rawRect.left < minLeft) {
+                minLeft = rawRect.left;
+            }
+
+            if (rawRect.right > maxRight) {
+                maxRight = rawRect.right;
+            }
         }
 
+        const padding = 2;
+
         return {
-            x: minLeft - containerRect.left,
+            x: minLeft - containerRect.left - padding,
             y: minTop - containerRect.top,
-            width: maxRight - minLeft,
+            width: (maxRight - minLeft) + (2 * padding),
             height: maxBottom - minTop,
         };
     }

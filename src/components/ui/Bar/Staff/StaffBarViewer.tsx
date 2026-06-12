@@ -256,144 +256,267 @@ export class StaffBarViewer extends UIComponent<IBarViewerProps, IBarViewerState
                 }
             }
 
-            // If no individual notes/rests were hit, try beams → NoteGroup entries.
-            if (noteEntries.filter((e) => {
-                return e.trackId === trackId;
-            }).length === 0) {
-                const beamElements = row.querySelectorAll<HTMLElement>(".staff-note-viewer-beam");
-                const hitBeamSteps = new Set<number>();
+            // Beam detection runs regardless of note hits — when a beam is hit,
+            // it takes priority over individual note entries because clicking on
+            // a beam should select the entire beam group.
+            const beamElements = row.querySelectorAll<HTMLElement>(".staff-note-viewer-beam");
+            const hitBeamSteps = new Set<number>();
 
-                for (const beam of beamElements) {
-                    const beamRect = beam.getBoundingClientRect();
-                    if (rectsIntersect(rect, beamRect.left, beamRect.top, beamRect.right, beamRect.bottom, 0)) {
-                        const runParent = beam.closest<HTMLElement>(
-                            ".staff-note-viewer-run[data-step-index]",
-                        );
-
-                        if (runParent) {
-                            const step = parseInt(runParent.getAttribute("data-step-index") ?? "", 10);
-                            if (!isNaN(step)) {
-                                hitBeamSteps.add(step);
-                            }
-                        }
-                    }
-                }
-
-                if (hitBeamSteps.size > 0) {
-                    const allRuns = row.querySelectorAll<HTMLElement>(
+            for (const beam of beamElements) {
+                const beamRect = beam.getBoundingClientRect();
+                if (rectsIntersect(rect, beamRect.left, beamRect.top, beamRect.right, beamRect.bottom, TOLERANCE)) {
+                    let runParent = beam.closest<HTMLElement>(
                         ".staff-note-viewer-run[data-step-index]",
                     );
 
-                    // Build connections from shared-right beams: step → step + extent.
-                    // The beam width is `${extent * 100}%`, so parsing the percentage
-                    // gives us the extent in step units.
-                    const beamConnections = new Map<number, number>();
+                    // Subdivision container beams are rendered inside the subdivision
+                    // container div, not inside a run. Fall back to the nearest run
+                    // sibling (the last note inside the subdivision).
+                    if (!runParent) {
+                        let sibling: Element | null = beam.previousElementSibling;
+                        while (sibling) {
+                            if (sibling.matches(".staff-note-viewer-run[data-step-index]")) {
+                                runParent = sibling as HTMLElement;
 
-                    for (const run of allRuns) {
-                        const step = parseInt(run.getAttribute("data-step-index") ?? "", 10);
-                        if (isNaN(step)) {
-                            continue;
+                                break;
+                            }
+
+                            // The sibling may be a nested subdivision container;
+                            // look inside it for the last run.
+                            const innerRun = sibling.querySelector<HTMLElement>(
+                                ".staff-note-viewer-run[data-step-index]:last-of-type",
+                            );
+                            if (innerRun) {
+                                runParent = innerRun;
+
+                                break;
+                            }
+
+                            sibling = sibling.previousElementSibling;
                         }
+                    }
 
-                        const beam = run.querySelector<HTMLElement>(".staff-note-viewer-beam");
-                        if (!beam) {
-                            continue;
+                    if (runParent) {
+                        const step = parseInt(runParent.getAttribute("data-step-index") ?? "", 10);
+                        if (!isNaN(step)) {
+                            hitBeamSteps.add(step);
                         }
+                    }
+                }
+            }
 
+            if (hitBeamSteps.size > 0) {
+                const allRuns = row.querySelectorAll<HTMLElement>(
+                    ".staff-note-viewer-run[data-step-index]",
+                );
+
+                // Build connections from shared-right beams: step → step + extent.
+                // The beam width is `${extent * 100}%`, so parsing the percentage
+                // gives us the extent in step units.
+                // A run may contain multiple beam segments (one per beam level).
+                // Partial stubs (12px) are skipped; only percentage-width shared
+                // beams indicate a connection to the next note.
+                const beamConnections = new Map<number, number>();
+
+                for (const run of allRuns) {
+                    const step = parseInt(run.getAttribute("data-step-index") ?? "", 10);
+                    if (isNaN(step)) {
+                        continue;
+                    }
+
+                    const beams = run.querySelectorAll<HTMLElement>(".staff-note-viewer-beam");
+                    for (const beam of beams) {
                         const widthStyle = beam.style.width;
                         const percentMatch = /^(\d+)%$/.exec(widthStyle);
                         if (percentMatch) {
                             const extent = parseInt(percentMatch[1], 10) / 100;
                             beamConnections.set(step, step + extent);
+
+                            break;
                         }
-                    }
-
-                    // Build reverse map for walking left.
-                    const reverseConnections = new Map<number, number>();
-                    for (const [from, to] of beamConnections) {
-                        reverseConnections.set(to, from);
-                    }
-
-                    // Collect distinct beam groups from all hit steps.
-                    const beamGroups = new Set<string>();
-
-                    for (const hitStep of hitBeamSteps) {
-                        let groupStart = hitStep;
-                        while (reverseConnections.has(groupStart)) {
-                            groupStart = reverseConnections.get(groupStart)!;
-                        }
-
-                        let groupEnd = hitStep;
-                        while (beamConnections.has(groupEnd)) {
-                            groupEnd = beamConnections.get(groupEnd)!;
-                        }
-
-                        beamGroups.add(`${groupStart}-${groupEnd}`);
-                    }
-
-                    for (const groupKey of beamGroups) {
-                        const [startStr, endStr] = groupKey.split("-");
-                        const groupStart = parseInt(startStr, 10);
-                        const groupEnd = parseInt(endStr, 10);
-
-                        noteEntries.push({
-                            granularity: SelectionGranularity.NoteGroup,
-                            bar: barNumber,
-                            trackId: trackId,
-                            startStep: groupStart,
-                            endStep: groupEnd,
-                        });
-                        rowHasSoundingNotes = true;
                     }
                 }
-            }
 
-            // If still no entries for this track, try tuplet bracket/number → NoteGroup.
-            if (noteEntries.filter((e) => {
-                return e.trackId === trackId;
-            }).length === 0) {
-                const tupletElements = row.querySelectorAll<HTMLElement>(
-                    ".staff-note-viewer-tuplet-number, .staff-note-viewer-tuplet-bracket",
-                );
+                // Subdivision container beams: rendered inside the subdivision div,
+                // not inside a run. The beam's CSS width is in container units
+                // (not steps), so we find the connection target by locating the
+                // first run after the subdivision container.
+                for (const beam of beamElements) {
+                    if (beam.closest(".staff-note-viewer-run[data-step-index]")) {
+                        continue; // already handled above
+                    }
 
-                for (const tupletEl of tupletElements) {
-                    const tRect = tupletEl.getBoundingClientRect();
-                    if (rectsIntersect(rect, tRect.left, tRect.top, tRect.right, tRect.bottom, TOLERANCE)) {
-                        // Find all run elements whose horizontal range overlaps the tuplet.
-                        const runs = row.querySelectorAll<HTMLElement>(
-                            ".staff-note-viewer-run[data-step-index]",
+                    const widthStyle = beam.style.width;
+                    if (!/^(\d+)%$/.exec(widthStyle)) {
+                        continue;
+                    }
+
+                    // Find the last descendant step (previous sibling run, or
+                    // last run inside a nested container sibling).
+                    let sibling: Element | null = beam.previousElementSibling;
+                    let fromStep: number | undefined;
+                    while (sibling) {
+                        if (sibling.matches(".staff-note-viewer-run[data-step-index]")) {
+                            fromStep = parseInt(
+                                (sibling as HTMLElement).getAttribute("data-step-index") ?? "", 10,
+                            );
+
+                            break;
+                        }
+
+                        const innerRun = sibling.querySelector<HTMLElement>(
+                            ".staff-note-viewer-run[data-step-index]:last-of-type",
                         );
-                        let minStep = Infinity;
-                        let maxStep = -Infinity;
+                        if (innerRun) {
+                            fromStep = parseInt(innerRun.getAttribute("data-step-index") ?? "", 10);
 
-                        for (const run of runs) {
-                            const rRect = run.getBoundingClientRect();
-                            if (rRect.right > tRect.left && rRect.left < tRect.right) {
-                                const step = parseInt(run.getAttribute("data-step-index") ?? "", 10);
-                                if (!isNaN(step)) {
-                                    if (step < minStep) {
-                                        minStep = step;
-                                    }
+                            break;
+                        }
 
-                                    if (step > maxStep) {
-                                        maxStep = step;
+                        sibling = sibling.previousElementSibling;
+                    }
+
+                    if (fromStep === undefined || isNaN(fromStep)) {
+                        continue;
+                    }
+
+                    // Find the first run after the subdivision container.
+                    const container = beam.parentElement;
+                    let nextSibling: Element | null = container?.nextElementSibling ?? null;
+                    let toStep: number | undefined;
+                    while (nextSibling) {
+                        const nextRun = nextSibling.matches(".staff-note-viewer-run[data-step-index]")
+                            ? nextSibling as HTMLElement
+                            : nextSibling.querySelector<HTMLElement>(".staff-note-viewer-run[data-step-index]");
+                        if (nextRun) {
+                            toStep = parseInt(nextRun.getAttribute("data-step-index") ?? "", 10);
+
+                            break;
+                        }
+
+                        nextSibling = nextSibling.nextElementSibling;
+                    }
+
+                    if (toStep !== undefined && !isNaN(toStep)) {
+                        beamConnections.set(fromStep, toStep);
+                    }
+                }
+
+                // Build reverse map for walking left.
+                const reverseConnections = new Map<number, number>();
+                for (const [from, to] of beamConnections) {
+                    reverseConnections.set(to, from);
+                }
+
+                // Collect distinct beam groups from all hit steps.
+                const beamGroups = new Set<string>();
+
+                for (const hitStep of hitBeamSteps) {
+                    let groupStart = hitStep;
+                    while (reverseConnections.has(groupStart)) {
+                        groupStart = reverseConnections.get(groupStart)!;
+                    }
+
+                    let groupEnd = hitStep;
+                    while (beamConnections.has(groupEnd)) {
+                        groupEnd = beamConnections.get(groupEnd)!;
+                    }
+
+                    beamGroups.add(`${groupStart}-${groupEnd}`);
+                }
+
+                // Merge overlapping groups: when a container beam and an inner
+                // run beam are both hit, they may produce groups like "0-2" and
+                // "0-4" that share a start. Keep only the widest range.
+                const mergedGroups: Array<{ start: number; end: number; }> = [];
+                for (const groupKey of beamGroups) {
+                    const [s, e] = groupKey.split("-");
+                    mergedGroups.push({ start: parseInt(s, 10), end: parseInt(e, 10) });
+                }
+
+                const deduplicated: Array<{ start: number; end: number; }> = [];
+                for (const group of mergedGroups) {
+                    const existing = deduplicated.findIndex((g) => {
+                        return g.start === group.start || g.end === group.end
+                            || (group.start <= g.end && group.end >= g.start);
+                    });
+
+                    if (existing >= 0) {
+                        deduplicated[existing] = {
+                            start: Math.min(deduplicated[existing].start, group.start),
+                            end: Math.max(deduplicated[existing].end, group.end),
+                        };
+                    } else {
+                        deduplicated.push(group);
+                    }
+                }
+
+                // Beam hits take priority: remove any individual note entries
+                // for this track and replace with beam group entries.
+                for (let i = noteEntries.length - 1; i >= 0; i--) {
+                    if (noteEntries[i].trackId === trackId) {
+                        noteEntries.splice(i, 1);
+                    }
+                }
+
+                for (const { start, end } of deduplicated) {
+                    noteEntries.push({
+                        granularity: SelectionGranularity.NoteGroup,
+                        bar: barNumber,
+                        trackId: trackId,
+                        startStep: start,
+                        endStep: end,
+                    });
+                    rowHasSoundingNotes = true;
+                }
+            } else {
+                // No beams were hit — try tuplet bracket/number → NoteGroup.
+                if (noteEntries.filter((e) => {
+                    return e.trackId === trackId;
+                }).length === 0) {
+                    const tupletElements = row.querySelectorAll<HTMLElement>(
+                        ".staff-note-viewer-tuplet-number, .staff-note-viewer-tuplet-bracket",
+                    );
+
+                    for (const tupletEl of tupletElements) {
+                        const tRect = tupletEl.getBoundingClientRect();
+                        if (rectsIntersect(rect, tRect.left, tRect.top, tRect.right, tRect.bottom, TOLERANCE)) {
+                            // Find all run elements whose horizontal range overlaps the tuplet.
+                            const runs = row.querySelectorAll<HTMLElement>(
+                                ".staff-note-viewer-run[data-step-index]",
+                            );
+                            let minStep = Infinity;
+                            let maxStep = -Infinity;
+
+                            for (const run of runs) {
+                                const rRect = run.getBoundingClientRect();
+                                if (rRect.right > tRect.left && rRect.left < tRect.right) {
+                                    const step = parseInt(run.getAttribute("data-step-index") ?? "", 10);
+                                    if (!isNaN(step)) {
+                                        if (step < minStep) {
+                                            minStep = step;
+                                        }
+
+                                        if (step > maxStep) {
+                                            maxStep = step;
+                                        }
                                     }
                                 }
                             }
-                        }
 
-                        if (minStep !== Infinity) {
-                            noteEntries.push({
-                                granularity: SelectionGranularity.NoteGroup,
-                                bar: barNumber,
-                                trackId: trackId,
-                                startStep: minStep,
-                                endStep: maxStep,
-                            });
-                            rowHasSoundingNotes = true;
-                        }
+                            if (minStep !== Infinity) {
+                                noteEntries.push({
+                                    granularity: SelectionGranularity.NoteGroup,
+                                    bar: barNumber,
+                                    trackId: trackId,
+                                    startStep: minStep,
+                                    endStep: maxStep,
+                                });
+                                rowHasSoundingNotes = true;
+                            }
 
-                        break;
+                            break;
+                        }
                     }
                 }
             }

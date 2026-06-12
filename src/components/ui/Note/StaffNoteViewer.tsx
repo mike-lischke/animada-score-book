@@ -1011,7 +1011,7 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
      */
     private renderBeamSegments(stepIndex: number, info: IBeamInfo): VNode[] {
         const beamGap = 6;
-        const primaryTopOffset = 41;
+        const primaryTopOffset = 38;
         const stemAnchorOffset = 0;
         const partialPixels = 12;
 
@@ -1073,19 +1073,18 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
      * @returns A VNode representing the custom stem.
      */
     private renderCustomStem(lineOffset: number): VNode {
-        // The stem top sits just above the primary beam (50% − 41 px), fixed for all lines.
+        // The stem top sits just above the primary beam (50% − 38 px), fixed for all lines.
         // The height adjusts with lineOffset so the stem bottom tracks the note head.
         return (
             <span
                 className="staff-note-viewer-custom-stem"
                 style={{
                     position: "absolute",
-                    left: "50%",
-                    width: "1.5px",
+                    left: "calc(50% - 1px)",
+                    width: "2px",
                     background: "var(--color-base-content)",
-                    transform: "translateX(-50%)",
-                    top: "calc(50% - 41px)",
-                    height: `calc(38.5px + ${lineOffset}px)`,
+                    top: "calc(50% - 38px)",
+                    height: `calc(35.5px + ${lineOffset}px)`,
                 }}
             />
         );
