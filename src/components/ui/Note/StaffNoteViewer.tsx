@@ -262,11 +262,11 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
             });
 
             if (subdivision) {
-                // Create a tuplet-style container for ALL subdivisions so that the beam
-                // computation correctly advances basePos by the subdivision's normal
-                // (not by each individual visible step). Non-tuplet subdivisions skip
-                // bracket/number labels and keep the same tuplet depth.
-                const nextTupletDepth = subdivision.isTuplet ? tupletDepth + 1 : tupletDepth;
+                // Track subdivision nesting depth for beam count — each level
+                // of subdivision (tuplet or not) halves the effective note duration,
+                // adding one beam level. The isTuplet flag controls tuplet bracket
+                // display only, not beam depth.
+                const nextTupletDepth = tupletDepth + 1;
                 const { nodes: children, length } = this.buildTree(eventsByStep, subdivision.id,
                     nextTupletDepth, subdivision.startStep,
                     subdivision.startStep + subdivision.actual);
@@ -295,10 +295,10 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                         ?? { icon: NoteLength.Sixteenth, dotted: false };
 
                     beamCount = this.glyphBeamCount(glyph.icon);
-                    if (tupletDepth > 0) {
-                        const tupletBeamFloor = 1 + tupletDepth;
-                        beamCount = Math.max(beamCount, tupletBeamFloor);
-                    }
+                    // Each level of subdivision nesting halves the effective note
+                    // duration, adding one beam level: root=eighths(1), depth=1→
+                    // sixteenths(2), depth=2→thirty-seconds(3), etc.
+                    beamCount = Math.max(beamCount, 1 + tupletDepth);
 
                     if (event.noteStyle) {
                         noteStyle = event.noteStyle;
