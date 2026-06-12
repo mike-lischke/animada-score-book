@@ -5,6 +5,7 @@
 
 import type { IUISettings } from "../core/AppStorage.js";
 import type { PlayerPlayState } from "../player/ArrangementPlayer.js";
+import type { ISelectionDelta, ISelectionRectChange } from "../ui/selection-types.js";
 
 export type SimpleCallback = () => Promise<boolean>;
 
@@ -36,7 +37,8 @@ export interface IRequestTypeMap {
 
     // --- UI state topics ---
     "modeChanged": SimpleCallback;
-    "selectionChanged": SimpleCallback;
+    "selectionChanged": (delta: ISelectionDelta) => Promise<boolean>;
+    "selectionRectChanged": (data: ISelectionRectChange) => Promise<boolean>;
     "errorLogChanged": SimpleCallback;
     "overlayVisibilityChanged": (data: { name: string; visible: boolean; }) => Promise<boolean>;
 }

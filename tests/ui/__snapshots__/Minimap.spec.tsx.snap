@@ -36,20 +36,6 @@ exports[`Minimap (component) > edge cases > matches snapshot for empty arrangeme
       1
     </span>
   </div>
-  <div
-    id="minimapBarSelector"
-  />
-  <div
-    id="minimapBarSelectorLabel"
-  />
-  <div
-    class="minimap-bar-selector-handle"
-    id="minimapBarSelectorStartHandle"
-  />
-  <div
-    class="minimap-bar-selector-handle"
-    id="minimapBarSelectorEndHandle"
-  />
 </div>
 `;
 
@@ -79,6 +65,8 @@ exports[`Minimap (component) > initialization > matches snapshot for default ren
         >
           <div
             class="bar-track-row mini-bar-track-row"
+            data-bar="1"
+            data-track="1"
           >
             <div
               class="mini-note-viewer"
@@ -115,6 +103,8 @@ exports[`Minimap (component) > initialization > matches snapshot for default ren
           </div>
           <div
             class="bar-track-row mini-bar-track-row"
+            data-bar="1"
+            data-track="2"
           >
             <div
               class="mini-note-viewer"
@@ -156,6 +146,8 @@ exports[`Minimap (component) > initialization > matches snapshot for default ren
         >
           <div
             class="bar-track-row mini-bar-track-row"
+            data-bar="2"
+            data-track="1"
           >
             <div
               class="mini-note-viewer"
@@ -192,6 +184,8 @@ exports[`Minimap (component) > initialization > matches snapshot for default ren
           </div>
           <div
             class="bar-track-row mini-bar-track-row"
+            data-bar="2"
+            data-track="2"
           >
             <div
               class="mini-note-viewer"
@@ -233,6 +227,8 @@ exports[`Minimap (component) > initialization > matches snapshot for default ren
         >
           <div
             class="bar-track-row mini-bar-track-row"
+            data-bar="3"
+            data-track="1"
           >
             <div
               class="mini-note-viewer"
@@ -269,6 +265,8 @@ exports[`Minimap (component) > initialization > matches snapshot for default ren
           </div>
           <div
             class="bar-track-row mini-bar-track-row"
+            data-bar="3"
+            data-track="2"
           >
             <div
               class="mini-note-viewer"
@@ -310,6 +308,8 @@ exports[`Minimap (component) > initialization > matches snapshot for default ren
         >
           <div
             class="bar-track-row mini-bar-track-row"
+            data-bar="4"
+            data-track="1"
           >
             <div
               class="mini-note-viewer"
@@ -346,6 +346,8 @@ exports[`Minimap (component) > initialization > matches snapshot for default ren
           </div>
           <div
             class="bar-track-row mini-bar-track-row"
+            data-bar="4"
+            data-track="2"
           >
             <div
               class="mini-note-viewer"
@@ -387,6 +389,8 @@ exports[`Minimap (component) > initialization > matches snapshot for default ren
         >
           <div
             class="bar-track-row mini-bar-track-row"
+            data-bar="5"
+            data-track="1"
           >
             <div
               class="mini-note-viewer"
@@ -423,6 +427,8 @@ exports[`Minimap (component) > initialization > matches snapshot for default ren
           </div>
           <div
             class="bar-track-row mini-bar-track-row"
+            data-bar="5"
+            data-track="2"
           >
             <div
               class="mini-note-viewer"
@@ -464,6 +470,8 @@ exports[`Minimap (component) > initialization > matches snapshot for default ren
         >
           <div
             class="bar-track-row mini-bar-track-row"
+            data-bar="6"
+            data-track="1"
           >
             <div
               class="mini-note-viewer"
@@ -500,6 +508,8 @@ exports[`Minimap (component) > initialization > matches snapshot for default ren
           </div>
           <div
             class="bar-track-row mini-bar-track-row"
+            data-bar="6"
+            data-track="2"
           >
             <div
               class="mini-note-viewer"
@@ -541,6 +551,8 @@ exports[`Minimap (component) > initialization > matches snapshot for default ren
         >
           <div
             class="bar-track-row mini-bar-track-row"
+            data-bar="7"
+            data-track="1"
           >
             <div
               class="mini-note-viewer"
@@ -577,6 +589,8 @@ exports[`Minimap (component) > initialization > matches snapshot for default ren
           </div>
           <div
             class="bar-track-row mini-bar-track-row"
+            data-bar="7"
+            data-track="2"
           >
             <div
               class="mini-note-viewer"
@@ -618,6 +632,8 @@ exports[`Minimap (component) > initialization > matches snapshot for default ren
         >
           <div
             class="bar-track-row mini-bar-track-row"
+            data-bar="8"
+            data-track="1"
           >
             <div
               class="mini-note-viewer"
@@ -654,6 +670,8 @@ exports[`Minimap (component) > initialization > matches snapshot for default ren
           </div>
           <div
             class="bar-track-row mini-bar-track-row"
+            data-bar="8"
+            data-track="2"
           >
             <div
               class="mini-note-viewer"
@@ -706,19 +724,5 @@ exports[`Minimap (component) > initialization > matches snapshot for default ren
       1
     </span>
   </div>
-  <div
-    id="minimapBarSelector"
-  />
-  <div
-    id="minimapBarSelectorLabel"
-  />
-  <div
-    class="minimap-bar-selector-handle"
-    id="minimapBarSelectorStartHandle"
-  />
-  <div
-    class="minimap-bar-selector-handle"
-    id="minimapBarSelectorEndHandle"
-  />
 </div>
 `;

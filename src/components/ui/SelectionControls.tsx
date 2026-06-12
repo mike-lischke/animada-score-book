@@ -95,7 +95,7 @@ export class SelectionControls extends UIComponent<ISelectionControlsProperties,
 
                                 <Button
                                     onClick={() => {
-                                        selectionManager.deselectAll();
+                                        selectionManager.clearSelection();
                                     }}
                                 >Cancel</Button>
                             </div>
@@ -156,10 +156,10 @@ export class SelectionControls extends UIComponent<ISelectionControlsProperties,
         undoManager.edit({
             type: "EditCommand_ArrangementAddPolyrhythms",
             arrangement,
-            addPolyrhythms: { length, selection: selectionManager.selections }
+            addPolyrhythms: { length, selection: selectionManager.currentTrackSelections }
         });
 
-        selectionManager.deselectAll();
+        selectionManager.clearSelection();
     }
 
     private handleClearSounds = () => {
@@ -171,9 +171,9 @@ export class SelectionControls extends UIComponent<ISelectionControlsProperties,
         undoManager.edit({
             type: "EditCommand_ArrangementClearSelection",
             arrangement,
-            clearSelection: selectionManager.selections
+            clearSelection: selectionManager.currentTrackSelections
         });
-        selectionManager.deselectAll();
+        selectionManager.clearSelection();
     };
 
     private handleNoteCountInputKeyPress = (event: KeyboardEvent) => {
@@ -194,7 +194,7 @@ export class SelectionControls extends UIComponent<ISelectionControlsProperties,
         const { services } = this.props;
 
         const selectionManager = services.selectionManager;
-        if (!(event.target instanceof HTMLInputElement) && selectionManager.selections.size
+        if (!(event.target instanceof HTMLInputElement) && selectionManager.currentTrackSelections.size
             && this.polyrhythmInputRef.current && digitMatcher.test(event.key)) {
             this.polyrhythmInputRef.current.value = event.key;
 

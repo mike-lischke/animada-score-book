@@ -4,6 +4,7 @@
 */
 
 import type { ISbDmArrangement, ISbDmTrack, ScoreBookDataModel } from "../../../core/ScoreBookDataModel.js";
+import type { ISelectionDelta } from "../../../ui/selection-types.js";
 import type { EditCommand_TimeParamsTimeSignature } from "../../../core/types/edit_commands.js";
 import type { UndoManager } from "../../../core/UndoManager.js";
 import type { ScoreBookUiServices } from "../../../player/types.js";
@@ -313,11 +314,11 @@ export class ArrangementEditControls
         }
     };
 
-    private onSelectionChanged = (): Promise<boolean> => {
+    private onSelectionChanged = (_delta: ISelectionDelta): Promise<boolean> => {
         const { services } = this.props;
 
         const selectionManager = services.selectionManager;
-        Overlay.toggleOverlay("selection_controls", selectionManager.selections.size ? "show" : "hide");
+        Overlay.toggleOverlay("selection_controls", selectionManager.currentTrackSelections.size ? "show" : "hide");
 
         return Promise.resolve(true);
     };

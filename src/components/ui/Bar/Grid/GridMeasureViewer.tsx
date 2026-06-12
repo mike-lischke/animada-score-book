@@ -7,6 +7,10 @@ import type { ComponentChild } from "preact";
 
 import type { ISbDmTrack, ScoreBookDataModel } from "../../../../core/ScoreBookDataModel.js";
 import type { IScoreMetrics } from "../../../../player/TimeCoordinator.js";
+import type { ScoreBookUiServices } from "../../../../player/types.js";
+import {
+    SelectionGranularity, type ISelectionEntry, type ISelectionHitTester,
+} from "../../../../ui/selection-types.js";
 import { Container } from "../../framework/Container.js";
 import { ChildAlignment, Orientation } from "../../framework/ui-types.js";
 import { UIComponent, type ICommonUIProperties } from "../../framework/UIComponent.js";
@@ -19,6 +23,7 @@ export interface IGridMeasureViewerProperties extends ICommonUIProperties {
 
     dataModel: ScoreBookDataModel;
     scoreMetrics: IScoreMetrics;
+    services: ScoreBookUiServices;
 
     /**
      * If given, render only these tracks (in this order) instead of all tracks of the arrangement.
@@ -32,12 +37,16 @@ interface IGridMeasureViewerState {
     beatPositions: number[];
 }
 
-export class GridMeasureViewer extends UIComponent<IGridMeasureViewerProperties, IGridMeasureViewerState> {
+export class GridMeasureViewer extends UIComponent<IGridMeasureViewerProperties, IGridMeasureViewerState>
+    implements ISelectionHitTester {
     public override state: IGridMeasureViewerState = { beatPositions: [] };
 
     private resizeObserver?: ResizeObserver;
 
     public override componentDidMount(): void {
+        const { services } = this.props;
+        services.selectionManager.registerHitTester(this);
+
         const viewer = this.base as HTMLElement | null;
         if (!viewer) {
             return;
@@ -58,8 +67,98 @@ export class GridMeasureViewer extends UIComponent<IGridMeasureViewerProperties,
     }
 
     public override componentWillUnmount(): void {
+        const { services } = this.props;
+        services.selectionManager.unregisterHitTester(this);
+
         this.resizeObserver?.disconnect();
         this.resizeObserver = undefined;
+    }
+
+    /**
+     * Checks whether this measure's DOM element intersects the given rectangle.
+     *
+     * @param rect The selection rectangle in viewport coordinates.
+     *
+     * @returns A single-element array with this measure's entry if intersected, or an empty array.
+     */
+    public hitTest(rect: DOMRect): ISelectionEntry[] {
+        const { measureNumber, dataModel, tracks: tracksOverride } = this.props;
+        const element = this.base as HTMLElement | null;
+        if (!element) {
+            return [];
+        }
+
+        const elRect = element.getBoundingClientRect();
+        if (rect.right < elRect.left || rect.left > elRect.right
+            || rect.bottom < elRect.top || rect.top > elRect.bottom) {
+            return [];
+        }
+
+        const rows = element.querySelectorAll<HTMLElement>(".grid-measure-row");
+        const tracks = tracksOverride ?? dataModel.arrangement!.tracks;
+        const noteEntries: ISelectionEntry[] = [];
+        const trackPieceEntries: ISelectionEntry[] = [];
+
+        for (let i = 0; i < rows.length; i++) {
+            const rowRect = rows[i].getBoundingClientRect();
+            if (rect.right < rowRect.left || rect.left > rowRect.right
+                || rect.bottom < rowRect.top || rect.top > rowRect.bottom) {
+                continue;
+            }
+
+            const track = tracks[i];
+
+            // Check individual note/rest elements.
+            const noteElements = rows[i].querySelectorAll<HTMLElement>(
+                ".note-viewer[data-step-index]",
+            );
+
+            let rowHasNotes = false;
+            for (const noteElement of noteElements) {
+                const noteRect = noteElement.getBoundingClientRect();
+                if (rect.right >= noteRect.left && rect.left <= noteRect.right
+                    && rect.bottom >= noteRect.top && rect.top <= noteRect.bottom) {
+                    const stepIndex = parseInt(
+                        noteElement.getAttribute("data-step-index") ?? "", 10,
+                    );
+                    const noteIdAttr = noteElement.getAttribute("data-note-id");
+                    const noteId = noteIdAttr ? parseInt(noteIdAttr, 10) : undefined;
+
+                    noteEntries.push({
+                        granularity: SelectionGranularity.Note,
+                        bar: measureNumber,
+                        trackId: track.id,
+                        startStep: stepIndex,
+                        endStep: stepIndex,
+                        noteId,
+                    });
+                    rowHasNotes = true;
+                }
+            }
+
+            if (!rowHasNotes) {
+                trackPieceEntries.push({
+                    granularity: SelectionGranularity.TrackPiece,
+                    bar: measureNumber,
+                    trackId: track.id,
+                });
+            }
+        }
+
+        // Notes dominate: when any note is hit, only return notes (no mixed granularities).
+        if (noteEntries.length > 0) {
+            return noteEntries;
+        }
+
+        if (trackPieceEntries.length > 0) {
+            return trackPieceEntries;
+        }
+
+        return [{
+            granularity: SelectionGranularity.Measure,
+            bar: measureNumber,
+            trackId: 0,
+        }];
     }
 
     public override render(): ComponentChild {
@@ -88,6 +187,7 @@ export class GridMeasureViewer extends UIComponent<IGridMeasureViewerProperties,
                 track={track}
                 dataModel={dataModel}
                 pulsesPerBar={scoreMetrics.pulsesPerBar}
+                data-bar={measureNumber}
             />);
         }
 

@@ -46,7 +46,7 @@ export class SplitSlider extends UIComponent<ISplitSliderProperties> {
                 id={id}
                 className={className}
                 style={style}
-                {...this.dataAttributes()}
+                {...this.dataAttributes}
                 role="slider"
                 aria-valuemin={min}
                 aria-valuemax={max}
@@ -109,6 +109,8 @@ export class SplitSlider extends UIComponent<ISplitSliderProperties> {
 
         track.addEventListener("pointermove", onMove);
         track.addEventListener("pointerup", onUp);
+
+        e.stopPropagation();
     };
 
     private updateValueFromPointer(e: PointerEvent): void {

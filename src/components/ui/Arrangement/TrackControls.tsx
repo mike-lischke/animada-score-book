@@ -3,32 +3,41 @@
 * Licensed under the MIT License. See License.txt in the project root for license information.
 */
 
+import { AppStorage } from "../../../core/AppStorage.js";
 import type { ISbDmTrack } from "../../../core/ScoreBookDataModel.js";
 import type { Mutable } from "../../../core/types/general.js";
-import { AppStorage } from "../../../core/AppStorage.js";
+import type { ScoreBookUiServices } from "../../../player/types.js";
 import { requisitions } from "../../../supplement/Requisitions.js";
+import {
+    SelectionGranularity, type ISelectionDelta, type ISelectionEntry, type ISelectionHitTester,
+} from "../../../ui/selection-types.js";
 import { Button } from "../framework/Button.js";
-import { CheckState, Toggle } from "../framework/Toggle.js";
 import { Codicon } from "../framework/Codicon.js";
 import { Container } from "../framework/Container.js";
 import { Icon } from "../framework/Icon.js";
 import { NoteImage, NoteLength } from "../framework/NoteImage.js";
 import { SplitSlider } from "../framework/SplitSlider.js";
+import { CheckState, Toggle } from "../framework/Toggle.js";
 import { ChildAlignment, Orientation } from "../framework/ui-types.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
 
 export interface ITrackControlsProperties extends ICommonUIProperties {
     tracks: ISbDmTrack[];
+    services: ScoreBookUiServices;
     innerRef?: preact.RefObject<HTMLDivElement>;
 }
 
 interface ITrackControlsState {
     mixerExpanded: boolean;
     trackViewMode: "grid" | "staff";
+
+    /** Track IDs that are currently selected via Track granularity. */
+    selectedTrackIds: ReadonlySet<number>;
 }
 
 /** Icon and track-specific controls. */
-export class TrackControls extends UIComponent<ITrackControlsProperties, ITrackControlsState> {
+export class TrackControls extends UIComponent<ITrackControlsProperties, ITrackControlsState>
+    implements ISelectionHitTester {
     public constructor(props: ITrackControlsProperties) {
         super(props);
 
@@ -38,11 +47,21 @@ export class TrackControls extends UIComponent<ITrackControlsProperties, ITrackC
         this.state = {
             mixerExpanded: false,
             trackViewMode,
+            selectedTrackIds: new Set(),
         };
     }
 
     public override componentDidMount(): void {
+        const { services } = this.props;
+        services.selectionManager.registerHitTester(this);
+        requisitions.register("selectionChanged", this.handleSelectionChanged);
         this.recomputeEffectiveVolumes();
+    }
+
+    public override componentWillUnmount(): void {
+        const { services } = this.props;
+        services.selectionManager.unregisterHitTester(this);
+        requisitions.unregister("selectionChanged", this.handleSelectionChanged);
     }
 
     public override componentDidUpdate(prevProps: ITrackControlsProperties, prevState: ITrackControlsState): void {
@@ -53,9 +72,35 @@ export class TrackControls extends UIComponent<ITrackControlsProperties, ITrackC
         }
     }
 
+    public hitTest(rect: DOMRect): ISelectionEntry[] {
+        const { tracks } = this.props;
+        const element = this.base as HTMLElement | null;
+        if (!element) {
+            return [];
+        }
+
+        const rows = element.querySelectorAll<HTMLElement>(".trackControls");
+        const entries: ISelectionEntry[] = [];
+
+        for (let i = 0; i < rows.length; i++) {
+            const rowRect = rows[i].getBoundingClientRect();
+            if (rect.right >= rowRect.left && rect.left <= rowRect.right
+                && rect.bottom >= rowRect.top && rect.top <= rowRect.bottom) {
+                const track = tracks[i];
+                entries.push({
+                    granularity: SelectionGranularity.Track,
+                    bar: 0,
+                    trackId: track.id,
+                });
+            }
+        }
+
+        return entries;
+    }
+
     public render() {
         const { tracks, innerRef } = this.props;
-        const { mixerExpanded, trackViewMode } = this.state;
+        const { mixerExpanded, trackViewMode, selectedTrackIds } = this.state;
 
         const listClassName = this.generateFinalClassName([
             "trackControlsList",
@@ -66,11 +111,13 @@ export class TrackControls extends UIComponent<ITrackControlsProperties, ITrackC
         const controls = tracks.map((track) => {
             const instrumentName = track.instrument.displayName;
             const iconPath = track.instrument.image.filePath;
+            const isSelected = selectedTrackIds.has(track.id);
 
             return (
                 <Container
                     key={track.id}
                     className="trackControls"
+                    data-track={track.id}
                     orientation={Orientation.LeftToRight}
                     crossAlignment={ChildAlignment.Center}
                 >
@@ -103,6 +150,7 @@ export class TrackControls extends UIComponent<ITrackControlsProperties, ITrackC
                         mainAlignment={ChildAlignment.Center}
                         crossAlignment={ChildAlignment.Center}
                     >
+                        {isSelected && <div className="track-controls-selection-overlay" />}
                         <Icon
                             className="trackInstrumentIcon"
                             src={iconPath}
@@ -165,10 +213,11 @@ export class TrackControls extends UIComponent<ITrackControlsProperties, ITrackC
         );
     }
 
-    private toggleMixer = () => {
+    private toggleMixer = (e: MouseEvent | KeyboardEvent) => {
         this.setState((previousState) => {
             return { mixerExpanded: !previousState.mixerExpanded };
         });
+        e.stopPropagation();
     };
 
     private handleTrackViewModeToggle = (_e: InputEvent, checkState: CheckState) => {
@@ -217,4 +266,20 @@ export class TrackControls extends UIComponent<ITrackControlsProperties, ITrackC
             mutableTrack.effectiveVolume = normalVolume * nonFocusAttenuation;
         });
     };
+
+    private handleSelectionChanged = (_delta: ISelectionDelta): Promise<boolean> => {
+        const { services } = this.props;
+        const selectedTrackIds = new Set<number>();
+
+        for (const entry of services.selectionManager.currentSelection.values()) {
+            if (entry.granularity === SelectionGranularity.Track && entry.trackId > 0) {
+                selectedTrackIds.add(entry.trackId);
+            }
+        }
+
+        this.setState({ selectedTrackIds });
+
+        return Promise.resolve(true);
+    };
+
 }

@@ -3,7 +3,7 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { Arrangement } from "../../../src/core/Arrangement.js";
 import { SbDmEntityType, type ISbDmInstrument } from "../../../src/core/ScoreBookDataModel.js";
@@ -31,33 +31,15 @@ const createInstrument = (typeId: string, id: number, displayOrder: number): ISb
             expandedOnce: false,
         },
         noteStyles: {},
-        subscribe: vi.fn(() => {
-            return () => {
-                return undefined;
-            };
-        }),
-        unsubscribe: vi.fn(() => {
-            return undefined;
-        }),
     };
 };
 
 const hydrateMeasureEvents = (arrangement: Arrangement): void => {
-    const noop = () => {
-        return;
-    };
-
     const timeCoordinator = new TimeCoordinator(arrangement.timeParams, {
         state: "stopped",
         get currentTime() {
             return -1;
         },
-        subscribe: () => {
-            return () => {
-                return undefined;
-            };
-        },
-        unsubscribe: noop,
     });
 
     const players = arrangement.tracks.map((track) => {

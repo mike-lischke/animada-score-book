@@ -24,6 +24,7 @@
         "lib": [
             "es2022",
             "dom",
+            "dom.iterable",
             "WebWorker"
         ],
         "skipLibCheck": true,

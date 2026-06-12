@@ -36,8 +36,8 @@ export class ModeManager {
      * @param selectionManager The selection manager to observe for state changes.
      */
     public constructor(selectionManager: SelectionManager) {
-        requisitions.register("selectionChanged", () => {
-            if (selectionManager.selections.size) {
+        requisitions.register("selectionChanged", (_delta) => {
+            if (selectionManager.currentTrackSelections.size) {
                 this.deletePolyrhythmMode = false;
             } else {
                 this.mobileSelectionMode = false;

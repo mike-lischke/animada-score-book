@@ -55,32 +55,15 @@ const createInstrument = (typeId: string, id: number, displayOrder: number): ISb
             expandedOnce: false,
         },
         noteStyles: {},
-        subscribe: () => {
-            return () => {
-                return undefined;
-            };
-        },
-        unsubscribe: () => {
-            return undefined;
-        },
     };
 };
 
 const hydrateMeasureEvents = (arrangement: Arrangement): void => {
-    const noop = () => {
-        return;
-    };
     const timeCoordinator = new TimeCoordinator(arrangement.timeParams, {
         state: "stopped",
         get currentTime() {
             return -1;
         },
-        subscribe: () => {
-            return () => {
-                return undefined;
-            };
-        },
-        unsubscribe: noop,
     });
     const players = arrangement.tracks.map((track) => {
         return new TrackPlayer(track, timeCoordinator);

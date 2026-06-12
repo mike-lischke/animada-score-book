@@ -77,13 +77,24 @@ export class Button extends UIComponent<IButtonProperties> {
             role={role}
             name={name}
             value={value}
-            {...this.dataAttributes()}
+            {...this.dataAttributes}
             popoverTarget={popoverTarget}
             onClick={onClick}
+            onMouseDown={this.handleMouseDown}
+            onPointerDown={this.handleMouseDown}
         >
             {content}
         </button>;
 
         return button;
     }
+
+    private handleMouseDown = (e: MouseEvent | PointerEvent): void => {
+        const { focusOnClick } = this.props;
+        if (focusOnClick) {
+            this.buttonRef.current?.focus();
+        }
+
+        e.stopPropagation();
+    };
 }

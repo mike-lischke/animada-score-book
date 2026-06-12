@@ -23,6 +23,7 @@
         "lib": [
             "es2022",
             "dom",
+            "dom.iterable",
         ],
         "skipLibCheck": true,
         "strictPropertyInitialization": true,

@@ -185,7 +185,7 @@ export class PrintView extends UIComponent<IPrintViewProps> {
     }
 
     private renderGridBar(barNumber: number, tracks: ISbDmTrack[]): ComponentChild {
-        const { dataModel, arrangementPlayer } = this.props;
+        const { dataModel, arrangementPlayer, services } = this.props;
 
         return (
             <GridMeasureViewer
@@ -193,6 +193,7 @@ export class PrintView extends UIComponent<IPrintViewProps> {
                 measureNumber={barNumber}
                 dataModel={dataModel}
                 scoreMetrics={arrangementPlayer.scoreMetrics}
+                services={services}
                 tracks={tracks}
             />
         );

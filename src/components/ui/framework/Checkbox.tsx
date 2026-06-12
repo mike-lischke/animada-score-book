@@ -31,7 +31,7 @@ export class Checkbox extends UIComponent<ICheckboxProperties> {
                 id={id}
                 type="checkbox"
                 className={className}
-                {...this.dataAttributes()}
+                {...this.dataAttributes}
                 checked={checked}
                 disabled={disabled}
                 style={style}

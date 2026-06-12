@@ -4,7 +4,7 @@
  */
 
 import { cleanup, render } from "@testing-library/preact";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 
 import { GridMeasureRow } from "../../src/components/ui/Bar/Grid/GridMeasureRow.js";
 import { Overlay } from "../../src/components/ui/Overlay.js";
@@ -57,14 +57,6 @@ const createInstrument = (typeId: string, id: number, displayOrder: number): ISb
             expandedOnce: false,
         },
         noteStyles,
-        subscribe: vi.fn(() => {
-            return () => {
-                return undefined;
-            };
-        }),
-        unsubscribe: vi.fn(() => {
-            return undefined;
-        }),
     };
 };
 
@@ -84,14 +76,6 @@ const createRealtimeProvider = (): IRealtimeProvider => {
     return {
         state: "stopped",
         currentTime: -1,
-        subscribe: vi.fn(() => {
-            return () => {
-                return undefined;
-            };
-        }),
-        unsubscribe: vi.fn(() => {
-            return undefined;
-        }),
     };
 };
 

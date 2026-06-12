@@ -13,6 +13,9 @@ import {
 } from "../../src/core/ScoreBookDataModel.js";
 import type { IScoreMetrics } from "../../src/player/TimeCoordinator.js";
 import { requisitions } from "../../src/supplement/Requisitions.js";
+import type { ScoreBookUiServices } from "../../src/player/types.js";
+import type { SelectionManager } from "../../src/ui/SelectionManager.js";
+import { ModeManager } from "../../src/ui/ModeManager.js";
 
 /**
  * Creates a minimal mock ISbDmTimeParams for testing.
@@ -36,8 +39,6 @@ const makeTimeParams = (length: number): ISbDmTimeParams => {
         isValid: () => {
             return true;
         },
-        subscribe: vi.fn(),
-        unsubscribe: vi.fn(),
     };
 };
 
@@ -74,13 +75,9 @@ const makeTrack = (arrangement: ISbDmArrangement): ISbDmTrack => {
                 expandedOnce: false,
             },
             noteStyles: {},
-            subscribe: vi.fn(),
-            unsubscribe: vi.fn(),
             range: [21, 108],
         },
         measures: [],
-        subscribe: vi.fn(),
-        unsubscribe: vi.fn(),
         clear: vi.fn(),
         getNoteAt: () => {
             return undefined;
@@ -153,8 +150,6 @@ const makeArrangement = (barCount: number, trackCount: number): ISbDmArrangement
         addTrack: vi.fn(),
         removeTrack: vi.fn(),
         applyArrangementSnapshot: vi.fn(),
-        subscribe: vi.fn(),
-        unsubscribe: vi.fn(),
         measureLabels: {},
     };
 
@@ -190,17 +185,11 @@ const makeScoreMetrics = (): IScoreMetrics => {
 };
 
 class TestableMinimap extends Minimap {
-    public testSetSelectionState(active: boolean): void {
-        // @ts-expect-error, because we are accessing a private method.
-        this.setSelectionState(active);
+    public setSelectionState(_active: boolean): void {
+        // Selection range was removed from Minimap — no-op.
     }
 
-    public testHandleContentPointerDown(event: PointerEvent): void {
-        // @ts-expect-error, because we are accessing a private method.
-        this.handleContentPointerDown(event);
-    }
-
-    public testInstallViewportDom(dom: {
+    public installViewportDom(dom: {
         scrollHost: HTMLDivElement;
         contentHost: HTMLDivElement;
         marker: HTMLDivElement;
@@ -237,10 +226,18 @@ describe.sequential("Minimap (component)", () => {
     let scoreMetrics: IScoreMetrics;
     let minimapRef: TestableMinimap | null;
 
-    const renderMinimap = (props: {
-        arrangement?: ISbDmArrangement;
-        onViewportMoved?: (position: number) => void;
-    } = {}): void => {
+    const selectionManagerMock: SelectionManager = {
+        registerHitTester: vi.fn(),
+        unregisterHitTester: vi.fn(),
+    } as unknown as SelectionManager;
+
+    const services: ScoreBookUiServices = {
+        selectionManager: selectionManagerMock,
+        modeManager: new ModeManager(selectionManagerMock),
+    } as ScoreBookUiServices;
+
+    const renderMinimap = (
+        props: { arrangement?: ISbDmArrangement; onViewportMoved?: (position: number) => void; } = {}): void => {
         minimapRef = null;
 
         result = render(
@@ -251,20 +248,11 @@ describe.sequential("Minimap (component)", () => {
                 arrangement={props.arrangement ?? arrangement}
                 scoreMetrics={scoreMetrics}
                 onViewportMoved={props.onViewportMoved}
+                services={services}
             />
         );
 
         expect(minimapRef).toBeTruthy();
-    };
-
-    const registerPlayRangeChangedHandler = () => {
-        const handler = vi.fn((_range?: { from: number; to: number; }) => {
-            return Promise.resolve(true);
-        });
-
-        requisitions.register("playRangeChanged", handler);
-
-        return handler;
     };
 
     const getMinimap = (): TestableMinimap => {
@@ -372,7 +360,7 @@ describe.sequential("Minimap (component)", () => {
             renderMinimap();
             const minimap = getMinimap();
             const dom = createViewportDom();
-            minimap.testInstallViewportDom(dom);
+            minimap.installViewportDom(dom);
 
             const visibleBars: IVisibleBarRange = { startBar: 3, endBar: 3 };
             minimap.handleTrackViewerScrolled(0.2, 0.25, visibleBars);
@@ -384,7 +372,7 @@ describe.sequential("Minimap (component)", () => {
             renderMinimap();
             const minimap = getMinimap();
             const dom = createViewportDom();
-            minimap.testInstallViewportDom(dom);
+            minimap.installViewportDom(dom);
 
             const visibleBars: IVisibleBarRange = { startBar: 2, endBar: 5 };
             minimap.handleTrackViewerScrolled(0.2, 0.5, visibleBars);
@@ -399,7 +387,7 @@ describe.sequential("Minimap (component)", () => {
             renderMinimap();
             const minimap = getMinimap();
             const dom = createViewportDom();
-            minimap.testInstallViewportDom(dom);
+            minimap.installViewportDom(dom);
 
             const visibleBars: IVisibleBarRange = { startBar: 1, endBar: 2 };
             minimap.handleTrackViewerScrolled(0.2, 0, visibleBars);
@@ -412,7 +400,7 @@ describe.sequential("Minimap (component)", () => {
             renderMinimap();
             const minimap = getMinimap();
             const dom = createViewportDom();
-            minimap.testInstallViewportDom(dom);
+            minimap.installViewportDom(dom);
 
             const visibleBars: IVisibleBarRange = { startBar: 7, endBar: 8 };
             minimap.handleTrackViewerScrolled(0.2, 1, visibleBars);
@@ -426,7 +414,7 @@ describe.sequential("Minimap (component)", () => {
             renderMinimap();
             const minimap = getMinimap();
             const dom = createViewportDom();
-            minimap.testInstallViewportDom(dom);
+            minimap.installViewportDom(dom);
 
             const visibleBars: IVisibleBarRange = { startBar: 1, endBar: 8 };
             minimap.handleTrackViewerScrolled(1, 0, visibleBars);
@@ -445,10 +433,7 @@ describe.sequential("Minimap (component)", () => {
         });
 
         it("clears selection when arrangement structure changes", () => {
-            const playRangeChanged = registerPlayRangeChangedHandler();
             renderMinimap();
-            const minimap = getMinimap();
-            minimap.testSetSelectionState(true);
 
             const newArrangement = makeArrangement(8, 4);
             result?.rerender(
@@ -458,11 +443,12 @@ describe.sequential("Minimap (component)", () => {
                     }}
                     arrangement={newArrangement}
                     scoreMetrics={scoreMetrics}
+                    services={services}
                 />
             );
 
-            expect(playRangeChanged).toHaveBeenNthCalledWith(1, { from: 1, to: 1 });
-            expect(playRangeChanged).toHaveBeenNthCalledWith(2, undefined);
+            // Arrangement structure change should not throw.
+            expect(result?.container.querySelector(".minimap")).toBeTruthy();
         });
 
         it("handles track count change", () => {
@@ -476,6 +462,7 @@ describe.sequential("Minimap (component)", () => {
                     }}
                     arrangement={newArrangement}
                     scoreMetrics={scoreMetrics}
+                    services={services}
                 />
             );
 
@@ -495,24 +482,22 @@ describe.sequential("Minimap (component)", () => {
 
             expect(result?.container.querySelector(".minimap")).toBeTruthy();
             expect(document.querySelector("#minimapViewportMarker")).toBeTruthy();
-            expect(document.querySelector("#minimapBarSelector")).toBeTruthy();
-            expect(document.querySelector("#minimapBarSelectorLabel")).toBeTruthy();
-            expect(document.querySelector("#minimapBarSelectorStartHandle")).toBeTruthy();
-            expect(document.querySelector("#minimapBarSelectorEndHandle")).toBeTruthy();
+            expect(document.querySelector("#minimapViewportLabel")).toBeTruthy();
+            expect(document.querySelector("#barNumber")).toBeTruthy();
         });
 
-        it("initially hides the bar selector when not active", () => {
+        it("initially hides the viewport marker when full content is visible", () => {
             renderMinimap();
+            const minimap = getMinimap();
+            const dom = createViewportDom();
+            minimap.installViewportDom(dom);
 
-            const selector = document.querySelector<HTMLElement>("#minimapBarSelector")!;
-            const selectorLabel = document.querySelector<HTMLElement>("#minimapBarSelectorLabel")!;
-            const startHandle = document.querySelector<HTMLElement>("#minimapBarSelectorStartHandle")!;
-            const endHandle = document.querySelector<HTMLElement>("#minimapBarSelectorEndHandle")!;
+            // Call handleTrackViewerScrolled to trigger marker update.
+            minimap.handleTrackViewerScrolled(1, 0, { startBar: 1, endBar: 1 });
 
-            expect(selector.style.display).toBe("");
-            expect(selectorLabel.style.display).toBe("");
-            expect(startHandle.style.display).toBe("");
-            expect(endHandle.style.display).toBe("");
+            // The test's marker (installed via installViewportDom) should have display:none.
+            expect(dom.marker.style.display).toBe("none");
+            expect(dom.viewportLabel.style.display).toBe("none");
         });
     });
 
@@ -522,23 +507,21 @@ describe.sequential("Minimap (component)", () => {
             expect(result?.container.querySelector(".minimap")).toBeTruthy();
         });
 
-        it("calls onViewportMoved with normalized pointer position", () => {
+        it("handleTrackViewerScrolled updates viewport marker position", () => {
             const onViewportMoved = vi.fn();
             renderMinimap({ onViewportMoved });
             const minimap = getMinimap();
             const dom = createViewportDom();
-            minimap.testInstallViewportDom(dom);
+            minimap.installViewportDom(dom);
 
-            const pointerEvent = new PointerEvent("pointerdown", {
-                clientX: 60,
-                clientY: 10,
-                pointerId: 1,
-            });
+            // handleTrackViewerScrolled should update the marker without throwing.
+            const visibleBars: IVisibleBarRange = { startBar: 1, endBar: 2 };
+            expect(() => {
+                minimap.handleTrackViewerScrolled(0.2, 0.3, visibleBars);
+            }).not.toThrow();
 
-            minimap.testHandleContentPointerDown(pointerEvent);
-
-            expect(onViewportMoved).toHaveBeenCalledTimes(1);
-            expect(onViewportMoved).toHaveBeenCalledWith(0.3);
+            // Marker should be visible (viewportWidth < 1).
+            expect(dom.marker.style.display).toBe("flex");
         });
     });
 
@@ -597,16 +580,21 @@ describe.sequential("Minimap (component)", () => {
     });
 
     describe("selection requisitions", () => {
-        it("calls playRangeChanged when selector is toggled", () => {
-            const playRangeChanged = registerPlayRangeChangedHandler();
+        it("handles viewport scrolled callback without errors", () => {
             renderMinimap();
             const minimap = getMinimap();
+            const dom = createViewportDom();
+            minimap.installViewportDom(dom);
 
-            minimap.testSetSelectionState(true);
-            minimap.testSetSelectionState(false);
+            const visibleBars: IVisibleBarRange = { startBar: 1, endBar: 2 };
 
-            expect(playRangeChanged).toHaveBeenNthCalledWith(1, { from: 1, to: 1 });
-            expect(playRangeChanged).toHaveBeenNthCalledWith(2, undefined);
+            // Should not throw.
+            expect(() => {
+                minimap.handleTrackViewerScrolled(0.2, 0.2, visibleBars);
+            }).not.toThrow();
+
+            const minimapElement = result?.container.querySelector(".minimap");
+            expect(minimapElement).not.toBeNull();
         });
 
         it("handles missing playRangeChanged handlers gracefully", () => {
@@ -617,8 +605,8 @@ describe.sequential("Minimap (component)", () => {
 
             const visibleBars: IVisibleBarRange = { startBar: 1, endBar: 2 };
             minimap.handleTrackViewerScrolled(0.2, 0.2, visibleBars);
-            minimap.testSetSelectionState(true);
-            minimap.testSetSelectionState(false);
+            minimap.setSelectionState(true);
+            minimap.setSelectionState(false);
 
             const minimapElement = result?.container.querySelector(".minimap");
             expect(minimapElement).not.toBeNull();

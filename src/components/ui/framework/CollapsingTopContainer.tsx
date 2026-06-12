@@ -86,6 +86,7 @@ export class CollapsingTopContainer extends UIComponent<CollapsingTopContainerPr
             >
                 <div
                     id="bottom"
+                    style={{ flex: "1 1 auto" }}
                     ref={this.bottomRef}
                     onScroll={this.handleBottomScroll}
                 >

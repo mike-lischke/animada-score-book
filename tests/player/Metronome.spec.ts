@@ -5,32 +5,9 @@
 
 import { describe, expect, it } from "vitest";
 
-import type { ITimeParams, Subscription } from "../../src/core/types/general.js";
+import type { ITimeParams } from "../../src/core/types/general.js";
 import { Metronome } from "../../src/player/Metronome.js";
 import { TimeCoordinator } from "../../src/player/TimeCoordinator.js";
-
-const makeSubscribable = () => {
-    const subs: Subscription[] = [];
-
-    return {
-        subscribe: (cb: Subscription) => {
-            subs.push(cb);
-
-            return () => {
-                const i = subs.indexOf(cb);
-                if (i !== -1) {
-                    subs.splice(i, 1);
-                }
-            };
-        },
-        unsubscribe: (cb: Subscription) => {
-            const i = subs.indexOf(cb);
-            if (i !== -1) {
-                subs.splice(i, 1);
-            }
-        }
-    };
-};
 
 const makeTimeCoordinator = (): TimeCoordinator => {
     const timeParams: ITimeParams = {
@@ -43,13 +20,11 @@ const makeTimeCoordinator = (): TimeCoordinator => {
         isValid: () => {
             return true;
         },
-        ...makeSubscribable(),
     };
 
     const realtimeProvider = {
         state: "stopped" as const,
         currentTime: -1,
-        ...makeSubscribable(),
     };
 
     return new TimeCoordinator(timeParams, realtimeProvider);

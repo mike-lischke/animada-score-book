@@ -104,7 +104,7 @@ export class Icon extends UIComponent<IIconProperties> {
                     <div
                         className={className}
                         style={newStyle}
-                        {...this.dataAttributes()}
+                        {...this.dataAttributes}
                     />
                     {olLayers}
                 </div>
@@ -116,7 +116,7 @@ export class Icon extends UIComponent<IIconProperties> {
                     className={className}
                     style={newStyle}
                     aria-label={alt}
-                    {...this.dataAttributes()}
+                    {...this.dataAttributes}
                 />
             );
         }

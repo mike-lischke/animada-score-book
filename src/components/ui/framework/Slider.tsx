@@ -40,7 +40,7 @@ export class Slider extends UIComponent<ISliderProperties> {
                 id={id}
                 ref={this.sliderRef}
                 className={className}
-                {...this.dataAttributes()}
+                {...this.dataAttributes}
                 type="range"
                 min={min}
                 max={max}

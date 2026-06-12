@@ -172,7 +172,7 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
 
         const runs =
             hasAnyNote
-                ? this.renderItems(nodes, allOccupied, restGroups, beamSpans, "", false,
+                ? this.renderItems(nodes, allOccupied, restGroups, beamSpans, eventsByStep, "", false,
                     undefined, centerLine, restLineOffset)
                 : [this.renderWholeBarRestSlot(restLineOffset)];
 
@@ -191,7 +191,7 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
         }
 
         return (
-            <div className={className} aria-hidden>
+            <div className={className} aria-hidden {...this.dataAttributes}>
                 {staffLines}
                 <div className="staff-note-viewer-runs">
                     {runs}
@@ -829,6 +829,8 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
      * @param restGroups Map of step indices to rest group info, keyed by the first step index of each rest group
      *                   (these render as rest symbols).
      * @param beamSpans Map of step indices to beam info (these render with attached beam segments).
+     * @param eventsByStep Array indexed by step position, containing the sounding note event for that step
+     *                     (or undefined if there is none).
      * @param keyPrefix A prefix for React keys to ensure uniqueness across recursive calls.
      * @param inTuplet Whether the current level is inside a tuplet, which affects rest rendering.
      * @param tupletActual The actual count of the current tuplet, if inside a tuplet (used to determine rest icons);
@@ -839,8 +841,8 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
      * @returns List of VNodes representing the rendered items at this level.
      */
     private renderItems(nodes: IStaffTreeNode[], allOccupied: Set<number>, restGroups: Map<number, IRestGroup>,
-        beamSpans: Map<number, IBeamInfo>, keyPrefix: string, inTuplet: boolean,
-        tupletActual: number | undefined, centerLine: number,
+        beamSpans: Map<number, IBeamInfo>, eventsByStep: Array<ISbDmNoteEvent | undefined>,
+        keyPrefix: string, inTuplet: boolean, tupletActual: number | undefined, centerLine: number,
         restLineOffset: number): ComponentChild[] {
         const { scoreMetrics } = this.props;
 
@@ -863,7 +865,7 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                         }}
                     >
                         {this.renderItems(
-                            node.children, allOccupied, restGroups, beamSpans,
+                            node.children, allOccupied, restGroups, beamSpans, eventsByStep,
                             `${keyPrefix}${index}-`, true, node.subdivision.actual, centerLine,
                             restLineOffset,
                         )}
@@ -901,8 +903,21 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                 // Non-oval heads without beam need a CSS stem (the SVG stem is hidden).
                 const needsCssStem = isNonOval && !hasBeam;
 
+                const event = eventsByStep[stepIndex];
+
+                const runDivProps: Record<string, unknown> = {
+                    key: `${keyPrefix}note-${stepIndex}`,
+                    className: "staff-note-viewer-run",
+                    style: slotStyle,
+                    "data-step-index": stepIndex,
+                };
+
+                if (event?.id !== undefined) {
+                    runDivProps["data-note-id"] = event.id;
+                }
+
                 return (
-                    <div key={`${keyPrefix}note-${stepIndex}`} className="staff-note-viewer-run" style={slotStyle}>
+                    <div {...runDivProps}>
                         <span className={headWrapperClasses.join(" ")}>
                             <NoteImage
                                 className="staff-note-viewer-note-symbol"
@@ -936,7 +951,8 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
 
             if (allOccupied.has(stepIndex)) {
                 return (
-                    <div key={`${keyPrefix}empty-${stepIndex}`} className="staff-note-viewer-run" style={slotStyle} />
+                    <div key={`${keyPrefix}empty-${stepIndex}`} className="staff-note-viewer-run" style={slotStyle}
+                        data-step-index={stepIndex} />
                 );
             }
 
@@ -945,7 +961,8 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                 const isWholeOrHalf = restGroup.icon === NoteLength.Whole || restGroup.icon === NoteLength.Half;
 
                 return (
-                    <div key={`${keyPrefix}rest-${stepIndex}`} className="staff-note-viewer-run" style={slotStyle}>
+                    <div key={`${keyPrefix}rest-${stepIndex}`} className="staff-note-viewer-run" style={slotStyle}
+                        data-step-index={stepIndex}>
                         <NoteImage
                             className="staff-note-viewer-rest-symbol"
                             kind={NoteKind.Rest}
@@ -969,7 +986,8 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                     { numerator: 1, denominator: scoreMetrics.stepsPerBar })?.icon ?? NoteLength.Sixteenth);
 
             return (
-                <div key={`${keyPrefix}rest-${stepIndex}`} className="staff-note-viewer-run" style={slotStyle}>
+                <div key={`${keyPrefix}rest-${stepIndex}`} className="staff-note-viewer-run" style={slotStyle}
+                    data-step-index={stepIndex}>
                     <NoteImage
                         className="staff-note-viewer-rest-symbol"
                         kind={NoteKind.Rest}
@@ -1306,7 +1324,7 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                     }
                 }
 
-                // Hand + Cross display → hollow square around cross (Kessel).
+                // Hand + Cross display → hollow square around cross (body).
                 if (c.displayType === NoteDisplayType.Cross) {
                     classes.push("body-hand");
                 }

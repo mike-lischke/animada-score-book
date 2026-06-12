@@ -807,7 +807,7 @@ export class App extends UIComponent<{}, IAppState> {
         switch (event.key) {
             case "Escape": {
                 Overlay.closeAllOverlays();
-                this.services.selectionManager.deselectAll();
+                this.services.selectionManager.clearSelection();
                 this.services.modeManager.deletePolyrhythmMode = false;
 
                 break;
@@ -844,9 +844,9 @@ export class App extends UIComponent<{}, IAppState> {
                     this.undoManager?.edit({
                         type: "EditCommand_ArrangementClearSelection",
                         arrangement: this.dataModel.arrangement!,
-                        clearSelection: this.services.selectionManager.selections
+                        clearSelection: this.services.selectionManager.currentTrackSelections
                     });
-                    this.services.selectionManager.deselectAll();
+                    this.services.selectionManager.clearSelection();
                 }
 
                 break;

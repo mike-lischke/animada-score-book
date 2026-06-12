@@ -43,8 +43,6 @@ const stubTimeParams: ISbDmTimeParams = {
         return true;
     },
     timings: [{ bar: 1, step: 1 }],
-    subscribe: vi.fn(),
-    unsubscribe: vi.fn(),
 };
 
 const makeArrangement = (title: string): ISbDmArrangement => {
@@ -61,8 +59,6 @@ const makeArrangement = (title: string): ISbDmArrangement => {
         addTrack: vi.fn(),
         removeTrack: vi.fn(),
         applyArrangementSnapshot: vi.fn(),
-        subscribe: vi.fn(),
-        unsubscribe: vi.fn(),
         measureLabels: {},
     };
 };

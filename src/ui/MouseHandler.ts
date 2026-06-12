@@ -31,13 +31,13 @@ export class MouseHandler {
         // We want clicking anywhere to clear the selection, with some extra criteria...
         this.onClick = (event: MouseEvent) => {
             if (
-                this.selectionManager.selections.size
+                this.selectionManager.currentTrackSelections.size
                 // mouseup might be the end of selecting notes, but will fire a click event
                 && !this.modeManager.selectByMouseOverMode
                 && !this.onSelectionButtonsOrPolyrhythmControls(event)
                 && !event.shiftKey
             ) {
-                this.selectionManager.deselectAll();
+                this.selectionManager.clearSelection();
             }
         };
 
@@ -104,7 +104,7 @@ export class MouseHandler {
             }
         };
 
-        // When the mousebutton goes back up, we leave select-by-mouseover mode
+        // When the mouse button goes back up, we leave select-by-mouseover mode
         this.onMouseUp = () => {
             // We need to handle click events first, so we setTimeout to delay this reaction
             setTimeout(() => {

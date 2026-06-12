@@ -11,7 +11,7 @@ import { Input } from "../framework/Input.js";
 import { Label } from "../framework/Label.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
 
-export interface IArrangementTitleProps extends ICommonUIProperties {
+export interface IArrangementTitleProperties extends ICommonUIProperties {
     arrangement: Readonly<ISbDmArrangement>;
     undoManager: UndoManager;
     editMode: boolean;
@@ -23,10 +23,10 @@ interface IArrangementTitleState {
     inputValue?: string;
 }
 
-export class ArrangementTitle extends UIComponent<IArrangementTitleProps, IArrangementTitleState> {
+export class ArrangementTitle extends UIComponent<IArrangementTitleProperties, IArrangementTitleState> {
     private inputRef = createRef<HTMLInputElement>();
 
-    public constructor(props: IArrangementTitleProps) {
+    public constructor(props: IArrangementTitleProperties) {
         super(props);
 
         this.state = {
@@ -43,8 +43,7 @@ export class ArrangementTitle extends UIComponent<IArrangementTitleProps, IArran
         this.setState({ title: arrangement.title, inputValue: arrangement.title });
     }
 
-    public override componentDidUpdate(prevProps: IArrangementTitleProps, prevState: IArrangementTitleState): void {
-
+    public override componentDidUpdate(): void {
         const { arrangement } = this.props;
         const { title } = this.state;
 
@@ -84,7 +83,12 @@ export class ArrangementTitle extends UIComponent<IArrangementTitleProps, IArran
         }
 
         return (
-            <Label id={id}>{title}</Label>
+            <Label
+                id={id}
+                {...this.dataAttributes}
+            >
+                {title}
+            </Label>
         );
     }
 

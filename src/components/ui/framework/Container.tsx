@@ -85,7 +85,7 @@ export class Container extends UIComponent<IContainerProperties> {
                 onDragStart={onDragStart}
                 onDragEnd={onDragEnd}
                 title={title}
-                {...this.dataAttributes()}
+                {...this.dataAttributes}
             >
                 {children}
             </div>

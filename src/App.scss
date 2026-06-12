@@ -82,13 +82,6 @@ h6 {
     height: 100%;
 }
 
-.arrangementViewer {
-    padding: 15px;
-    overflow-x: hidden;
-    overflow-y: auto;
-}
-
-
 #mainArrangementTitle {
     display: block;
     font-size: clamp(12pt, 20pt, 20pt);
@@ -218,10 +211,10 @@ h6 {
             }
 
             #playBeam {
-                width: calc(var(--note-height) / 6);
+                width: 4px;
                 border: none;
                 background-color: var(--color-primary);
-                border-radius: 16px;
+                border-radius: 4px;
                 position: absolute;
                 top: 0;
                 bottom: 0;
@@ -251,7 +244,7 @@ h6 {
         --track-controls-expanded-width: clamp(200px, 24vw, 300px);
 
         overflow: hidden;
-        gap: 8px;
+        gap: 16px;
 
         flex: 0 0 var(--track-controls-collapsed-width);
         width: var(--track-controls-expanded-width);
@@ -291,7 +284,18 @@ h6 {
             }
         }
 
+        .track-controls-selection-overlay {
+            position: absolute;
+            inset: 0;
+            background-color: color-mix(in srgb, var(--color-primary) 25%, transparent);
+            border: 1px solid color-mix(in srgb, var(--color-primary) 60%, transparent);
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 2;
+        }
+
         .trackControls .trackInstrumentShell {
+            position: relative;
             width: 70px;
             height: 70px;
             border-radius: 50%;
@@ -969,26 +973,22 @@ h6 {
 
     /* ---- Damping: brackets around the note ---- */
     &.damping-muted::before {
-        content: "[";
+        content: "(";
         position: absolute;
-        left: -6px;
-        top: 50%;
-        transform: translateY(-50%);
-        font-size: 20px;
-        font-weight: bold;
+        left: -8px;
+        top: 20px;
+        font-size: 16px;
         line-height: 1;
         pointer-events: none;
         color: var(--color-base-content);
     }
 
     &.damping-muted::after {
-        content: "]" !important;
+        content: ")" !important;
         position: absolute;
-        right: -6px;
-        top: 50%;
-        transform: translateY(-50%);
-        font-size: 20px;
-        font-weight: bold;
+        top: 20px;
+        left: 16px;
+        font-size: 16px;
         line-height: 1;
         pointer-events: none;
         color: var(--color-base-content);
@@ -1074,6 +1074,80 @@ h6 {
     margin: 2px;
     border: 1px solid rgba(0, 0, 0, 0.08);
     border-radius: 8px;
+}
+
+.selected {
+    outline: 2px solid var(--color-primary);
+    outline-offset: -1px;
+    background-color: color-mix(in srgb, var(--color-primary) 20%, transparent) !important;
+}
+
+.note-selected {
+
+    .staff-note-viewer-note-symbol,
+    .staff-note-viewer-rest-symbol {
+        color: var(--color-primary) !important;
+    }
+
+    .staff-note-head {
+
+        &,
+        &::after,
+        &::before {
+            color: var(--color-primary) !important;
+        }
+
+        &-cross-svg,
+        &-press-roll-svg,
+        &-slap-svg,
+        &-rimshot-cross-svg {
+            stroke: var(--color-primary) !important;
+        }
+
+        &-stem {
+            background: var(--color-primary) !important;
+        }
+
+        &-thumb-circle {
+            border-color: var(--color-primary) !important;
+        }
+
+        &-tap-triangle {
+            border-bottom-color: var(--color-primary) !important;
+        }
+
+        &.body-hand::before {
+            border-color: var(--color-primary) !important;
+        }
+
+        &.rim::before {
+            background: var(--color-primary) !important;
+        }
+
+        &.blown::before {
+            color: var(--color-primary) !important;
+        }
+    }
+
+    .staff-note-viewer-custom-stem {
+        background: var(--color-primary) !important;
+    }
+}
+
+.selection-rect {
+    position: fixed;
+    border: 1px dashed var(--color-primary);
+    background: color-mix(in srgb, var(--color-primary) 15%, transparent);
+    pointer-events: none;
+    z-index: 1000;
+}
+
+.selection-overlay {
+    position: absolute;
+    background-color: color-mix(in srgb, var(--color-primary) 25%, transparent);
+    border: 1px solid color-mix(in srgb, var(--color-primary) 60%, transparent);
+    border-radius: 6px;
+    pointer-events: none;
 }
 
 /*
@@ -1174,6 +1248,7 @@ h6 {
     width: 100%;
     overflow: hidden;
     background: var(--color-base-100);
+    user-select: none;
 }
 
 .appTitle {
@@ -1557,146 +1632,165 @@ h6 {
     padding: 0 12px;
 }
 
-.arrangementViewer .minimap {
-    --minimap-marker-top: -4px;
-    --minimap-marker-height: 68px;
+.arrangementViewer {
+    padding: 15px;
+    overflow-x: hidden;
+    overflow-y: auto;
+    user-select: none;
+    height: 100%;
 
-    height: 80px;
-    margin: 0 20px 0 0;
-    touch-action: none;
+    .minimap {
+        --minimap-marker-top: -4px;
+        --minimap-marker-height: 68px;
 
-    background-color: var(--color-base-100);
-
-    #minimapScrollHost {
-        height: 60px;
-        overflow: hidden;
-        flex: 1 1 auto;
-        min-width: 0;
-
+        height: 80px;
+        margin: 0 20px 0 0;
         touch-action: none;
-        scrollbar-width: none;
 
-        &::-webkit-scrollbar {
-            display: none;
+        background-color: var(--color-base-100);
+
+        #minimapScrollHost {
+            height: 60px;
+            overflow: hidden;
+            flex: 1 1 auto;
+            min-width: 0;
+
+            touch-action: none;
+            scrollbar-width: none;
+
+            &::-webkit-scrollbar {
+                display: none;
+            }
         }
-    }
 
-    .mini-bar-track-row {
-        pointer-events: none;
-    }
-
-    .mini-bar-viewer {
-        padding-right: 8px;
-        margin-right: 8px;
-        border-right: 1px solid var(--color-neutral);
-        pointer-events: none;
-    }
-
-    .mini-note-viewer {
-        width: var(--note-height);
-        height: var(--note-height);
-        margin: 4px;
-        border-radius: 8px;
-        pointer-events: none;
-    }
-
-    #minimapViewportMarker {
-        position: absolute;
-        display: none;
-        pointer-events: auto;
-        touch-action: none;
-        user-select: none;
-
-        height: var(--minimap-marker-height);
-        top: var(--minimap-marker-top);
-
-        border: 1px solid color-mix(in srgb, var(--color-base-300) 10%, var(--color-neutral-content));
-        border-radius: 6px;
-        background-color: color-mix(in srgb, var(--color-base-300) 50%, transparent);
-        z-index: 4;
-
-        cursor: grab;
-    }
-
-    #minimapViewportLabel {
-        position: absolute;
-        display: none;
-        top: calc(var(--minimap-marker-top) + (var(--minimap-marker-height) / 2));
-        transform: translate(-50%, -50%);
-        pointer-events: none;
-        user-select: none;
-        z-index: 6;
-
-        #barNumber {
-            display: inline-block;
-            font-size: 24px;
-            font-weight: bold;
-            line-height: 1;
-            color: var(--color-neutral-content);
-            text-shadow: 0 1px 2px color-mix(in srgb, var(--color-base-100) 50%, black);
-            white-space: nowrap;
-            user-select: none;
+        .mini-bar-viewer {
+            position: relative;
+            padding-right: 8px;
+            margin-right: 8px;
+            border-right: 1px solid var(--color-neutral);
             pointer-events: none;
         }
-    }
 
-    #minimapBarSelector {
-        position: absolute;
-        display: none;
-        pointer-events: auto;
-        touch-action: none;
-        user-select: none;
+        .mini-bar-track-row {
+            position: relative;
+            pointer-events: none;
+        }
 
-        height: var(--minimap-marker-height);
-        top: var(--minimap-marker-top);
+        .mini-bar-selection-overlay {
+            position: absolute;
+            inset: 0;
+            background-color: color-mix(in srgb, var(--color-primary) 15%, transparent);
+            pointer-events: none;
+            z-index: 2;
+            border-radius: 4px;
+        }
 
-        border: 2px solid color-mix(in srgb, var(--color-info) 25%, white);
-        border-radius: 4px;
-        background-color: color-mix(in srgb, var(--color-neutral) 20%, transparent);
-        z-index: 3;
-        cursor: grab;
-    }
+        .mini-note-viewer {
+            width: var(--note-height);
+            height: var(--note-height);
+            margin: 4px;
+            border-radius: 8px;
+            pointer-events: none;
+        }
 
-    #minimapBarSelectorLabel {
-        position: absolute;
-        display: none;
-        top: calc(var(--minimap-marker-top) - 14px);
-        transform: translate(-50%, -100%);
-        pointer-events: none;
-        user-select: none;
-        z-index: 6;
+        #minimapViewportMarker {
+            position: absolute;
+            display: none;
+            pointer-events: auto;
+            touch-action: none;
+            user-select: none;
 
-        font-size: 12px;
-        font-weight: 700;
-        line-height: 1;
-        color: var(--color-info-content);
-        background-color: color-mix(in srgb, var(--color-info) 75%, black 10%);
-        border: 1px solid color-mix(in srgb, var(--color-info-content) 25%, transparent);
-        border-radius: 999px;
-        padding: 4px 8px;
-        white-space: nowrap;
-    }
+            height: var(--minimap-marker-height);
+            top: var(--minimap-marker-top);
 
-    .minimap-bar-selector-handle {
-        position: absolute;
-        display: none;
-        top: -6px;
-        width: 12px;
-        height: 72px;
-        margin-left: -6px;
+            border: 1px solid color-mix(in srgb, var(--color-base-300) 10%, var(--color-neutral-content));
+            border-radius: 6px;
+            background-color: color-mix(in srgb, var(--color-base-300) 50%, transparent);
+            z-index: 4;
 
-        pointer-events: auto;
-        touch-action: none;
-        user-select: none;
-        cursor: ew-resize;
+            cursor: grab;
+        }
 
-        border-radius: 999px;
-        background-color: color-mix(in srgb, var(--color-neutral) 50%, white);
-        box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-base-100) 65%, transparent);
-        z-index: 5;
-    }
+        #minimapViewportLabel {
+            position: absolute;
+            display: none;
+            top: calc(var(--minimap-marker-top) + (var(--minimap-marker-height) / 2));
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            user-select: none;
+            z-index: 6;
 
-    .minimap-viewport-marker:active {
-        cursor: grabbing;
+            #barNumber {
+                display: inline-block;
+                font-size: 24px;
+                font-weight: bold;
+                line-height: 1;
+                color: var(--color-neutral-content);
+                text-shadow: 0 1px 2px color-mix(in srgb, var(--color-base-100) 50%, black);
+                white-space: nowrap;
+                user-select: none;
+                pointer-events: none;
+            }
+        }
+
+        #minimapBarSelector {
+            position: absolute;
+            display: none;
+            pointer-events: auto;
+            touch-action: none;
+            user-select: none;
+
+            height: var(--minimap-marker-height);
+            top: var(--minimap-marker-top);
+
+            border: 2px solid color-mix(in srgb, var(--color-info) 25%, white);
+            border-radius: 4px;
+            background-color: color-mix(in srgb, var(--color-neutral) 20%, transparent);
+            z-index: 3;
+            cursor: grab;
+        }
+
+        #minimapBarSelectorLabel {
+            position: absolute;
+            display: none;
+            top: calc(var(--minimap-marker-top) - 14px);
+            transform: translate(-50%, -100%);
+            pointer-events: none;
+            user-select: none;
+            z-index: 6;
+
+            font-size: 12px;
+            font-weight: 700;
+            line-height: 1;
+            color: var(--color-info-content);
+            background-color: color-mix(in srgb, var(--color-info) 75%, black 10%);
+            border: 1px solid color-mix(in srgb, var(--color-info-content) 25%, transparent);
+            border-radius: 999px;
+            padding: 4px 8px;
+            white-space: nowrap;
+        }
+
+        .minimap-bar-selector-handle {
+            position: absolute;
+            display: none;
+            top: -6px;
+            width: 12px;
+            height: 72px;
+            margin-left: -6px;
+
+            pointer-events: auto;
+            touch-action: none;
+            user-select: none;
+            cursor: ew-resize;
+
+            border-radius: 999px;
+            background-color: color-mix(in srgb, var(--color-neutral) 50%, white);
+            box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-base-100) 65%, transparent);
+            z-index: 5;
+        }
+
+        .minimap-viewport-marker:active {
+            cursor: grabbing;
+        }
     }
 }

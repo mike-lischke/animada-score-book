@@ -120,7 +120,7 @@ describe("SelectionManager (class)", () => {
     });
 
     it("starts with nothing selected", () => {
-        expect(manager.selections.size).toBe(0);
+        expect(manager.currentTrackSelections.size).toBe(0);
         expect(manager.isSelected(noteA)).toBe(false);
     });
 
@@ -129,7 +129,7 @@ describe("SelectionManager (class)", () => {
         requisitions.register("selectionChanged", publishSpy);
         manager.handleClick(noteA);
         expect(manager.isSelected(noteA)).toBe(true);
-        expect(manager.selections.get(track)!.range).toEqual([noteA, noteA]);
+        expect(manager.currentTrackSelections.get(track)!.range).toEqual([noteA, noteA]);
         expect(publishSpy).toHaveBeenCalled();
         requisitions.unregister("selectionChanged", publishSpy);
     });
@@ -144,7 +144,7 @@ describe("SelectionManager (class)", () => {
         manager.handleClick(noteA);
         manager.handleMouseDown(noteA);
         manager.handleDragSelect(noteB);
-        const selection = manager.selections.get(track)!;
+        const selection = manager.currentTrackSelections.get(track)!;
         expect(selection.selectedNotes.has(noteA)).toBe(true);
         expect(selection.selectedNotes.has(noteB)).toBe(true);
         expect(selection.range).toEqual([noteA, noteB]);
@@ -154,8 +154,8 @@ describe("SelectionManager (class)", () => {
         const publishSpy = vi.fn();
         requisitions.register("selectionChanged", publishSpy);
         manager.handleClick(noteA);
-        manager.deselectAll();
-        expect(manager.selections.size).toBe(0);
+        manager.clearSelection();
+        expect(manager.currentTrackSelections.size).toBe(0);
         expect(publishSpy).toHaveBeenCalled();
         requisitions.unregister("selectionChanged", publishSpy);
     });

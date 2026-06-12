@@ -40,7 +40,7 @@ interface IRenderGroup {
 
 export class GridMeasureRow extends UIComponent<IGridMeasureRowProperties> {
     public override render(): ComponentChild {
-        const { measure, dataModel, pulsesPerBar } = this.props;
+        const { measure, dataModel, pulsesPerBar, track } = this.props;
 
         if (!dataModel.arrangement) {
             return null;
@@ -77,7 +77,8 @@ export class GridMeasureRow extends UIComponent<IGridMeasureRowProperties> {
         };
 
         return (
-            <Container className={className} style={rowStyle}>
+            <Container className={className} style={rowStyle}
+                data-track={track.id} {...this.dataAttributes}>
                 {this.renderItems(group.items, 1, beatStartItemIndices)}
             </Container>
         );
@@ -122,7 +123,17 @@ export class GridMeasureRow extends UIComponent<IGridMeasureRowProperties> {
 
     private renderItems(items: IRenderItem[], level = 1, beatStartItemIndices?: Set<number>,
         markFirst = false): ComponentChild[] {
-        const { track } = this.props;
+        const { track, measure } = this.props;
+
+        // Build step-index → event-id mapping for note identification.
+        const stepToEventId = new Map<number, number>();
+        let eventIndex = 0;
+        for (const step of measure.steps) {
+            if (step.noteStyleId !== undefined && eventIndex < measure.events.length) {
+                stepToEventId.set(step.index, measure.events[eventIndex].id);
+                eventIndex++;
+            }
+        }
 
         return items.map((item, index) => {
             // A step or tuplet is a beat start if it is explicitly in beatStartItemIndices (top level)
@@ -140,10 +151,22 @@ export class GridMeasureRow extends UIComponent<IGridMeasureRowProperties> {
                     ? `color-mix(in srgb, ${color} 80%, var(--color-base-100))`
                     : "transparent";
 
+                const noteId = stepToEventId.get(item.step.index);
+
+                const noteDivProps: Record<string, unknown> = {
+                    key: index,
+                    className: "note-viewer",
+                    "data-step-index": item.step.index,
+                    "data-beat-start": isBeatStart ? "true" : undefined,
+                    style: { minWidth: 0, backgroundColor },
+                };
+
+                if (noteId !== undefined) {
+                    noteDivProps["data-note-id"] = noteId;
+                }
+
                 return (
-                    <div key={index} className="note-viewer"
-                        data-beat-start={isBeatStart ? "true" : undefined}
-                        style={{ minWidth: 0, backgroundColor }}>
+                    <div {...noteDivProps}>
                         <div className="note-details-viewer">
                             <NoteStyleSymbolViewer noteStyle={noteStyle} />
                         </div>

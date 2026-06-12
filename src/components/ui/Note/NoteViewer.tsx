@@ -14,6 +14,7 @@ import { AudioBufferPlayer } from "../../../player/AudioBufferPlayer.js";
 import type { TrackPlayer } from "../../../player/TrackPlayer.js";
 import type { ScoreBookUiServices } from "../../../player/types.js";
 import { requisitions } from "../../../supplement/Requisitions.js";
+import type { ISelectionDelta } from "../../../ui/selection-types.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
 import { TouchHoldDetector } from "../TouchHoldDetector.js";
 import { NoteStyleSymbolViewer } from "./NoteStyleSymbolViewer.js";
@@ -136,7 +137,6 @@ export class NoteViewer extends UIComponent<INoteViewerProps, INoteViewerState> 
                 id={`note-${note.id}`}
                 className={classString}
                 onClick={this.handleClick}
-                onMouseDown={this.handleMouseDown}
                 onMouseMove={this.handleMouseMove}
                 style={{ backgroundColor: backgroundColor }}
             >
@@ -158,7 +158,7 @@ export class NoteViewer extends UIComponent<INoteViewerProps, INoteViewerState> 
         requisitions.register("selectionChanged", this.handleSelectionChanged);
     }
 
-    private handleSelectionChanged = (): Promise<boolean> => {
+    private handleSelectionChanged = (_delta: ISelectionDelta): Promise<boolean> => {
         const { note, services } = this.props;
         const { selectionManager } = services;
 
@@ -175,8 +175,8 @@ export class NoteViewer extends UIComponent<INoteViewerProps, INoteViewerState> 
             selectionManager.handleClick(note);
         } else if (!modeManager.selectByMouseOverMode) {
             // We ignore the click event at the end of a select-by-mouseover action
-            if (selectionManager.selections.size) {
-                selectionManager.deselectAll();
+            if (selectionManager.currentTrackSelections.size) {
+                selectionManager.clearSelection();
             } else {
                 this.cycleNoteStyle();
             }
@@ -193,12 +193,6 @@ export class NoteViewer extends UIComponent<INoteViewerProps, INoteViewerState> 
         if (modeManager.selectByMouseOverMode && event.buttons === 1) {
             selectionManager.handleDragSelect(note);
         }
-    };
-
-    private handleMouseDown = () => {
-        const { note, services } = this.props;
-        const { selectionManager } = services;
-        selectionManager.handleMouseDown(note);
     };
 
     private handleTouchHold = () => {

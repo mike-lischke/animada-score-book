@@ -43,7 +43,10 @@ export interface EditCommand_ArrangementAddPolyrhythms {
     arrangement: Readonly<ISbDmArrangement>;
     addPolyrhythms: {
         length: number;
-        selection: Map<ISbDmTrack, { range: [ISbDmNoteEvent | null, ISbDmNoteEvent | null]; }>;
+        selection: Map<ISbDmTrack, {
+            selectedNotes: Set<ISbDmNoteEvent>;
+            range: [ISbDmNoteEvent | undefined, ISbDmNoteEvent | undefined];
+        }>;
     };
 }
 

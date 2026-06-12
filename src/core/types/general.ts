@@ -5,6 +5,13 @@
 
 import type { INoteStyleMeta, ISbDmInstrument, ITiming } from "../ScoreBookDataModel.js";
 
+export interface IRect {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+}
+
 export interface INoteStyle extends Omit<INoteStyleMeta, "file"> {
     /** The audio buffer associated with this note style. Null while the instrument is loading. */
     audioBuffer: AudioBuffer | null;

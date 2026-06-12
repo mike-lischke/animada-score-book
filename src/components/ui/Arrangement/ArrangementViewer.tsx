@@ -43,6 +43,7 @@ interface IArrangementViewerState {
 }
 
 export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArrangementViewerState> {
+    private arrangementViewerRef = createRef<HTMLDivElement>();
     private viewerRef = createRef<HTMLDivElement>();
     private playBeamRef = createRef<HTMLDivElement>();
     private trackViewerContainerRef = createRef<HTMLDivElement>();
@@ -89,8 +90,10 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
     }
 
     public override componentDidMount(): void {
-        const { arrangementPlayer } = this.props;
+        const { arrangementPlayer, services } = this.props;
         const { autoFollowIsOn, viewerZoom } = this.state;
+
+        services.selectionManager.setEventContainer(this.arrangementViewerRef.current!);
 
         requisitions.register("settingsChanged", this.handleSettingsChanged);
         requisitions.register("trackViewModeToggled", this.handleTrackViewModeToggled);
@@ -111,8 +114,8 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
     }
 
     public override componentDidUpdate(prevProps: IArrangementViewerProps, prevState: IArrangementViewerState): void {
-        const { arrangementPlayer } = this.props;
-        const { autoFollowIsOn, viewerZoom } = this.state;
+        const { arrangementPlayer, services } = this.props;
+        const { autoFollowIsOn, viewerZoom, trackViewMode } = this.state;
 
         if (prevProps.arrangementPlayer !== arrangementPlayer) {
             prevProps.arrangementPlayer.animationEngine.disconnect(this.autoFollow);
@@ -122,6 +125,11 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
             }
 
             this.autoFollow(0);
+        }
+
+        if (prevState.trackViewMode !== trackViewMode) {
+            // View mode switched — newly mounted components need the current selection state.
+            services.selectionManager.republishSelection();
         }
 
         this.trackViewerContainerRef.current!.style.zoom = `${viewerZoom}%`;
@@ -225,6 +233,7 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         return (
             <Container
                 className="arrangementViewer"
+                innerRef={this.arrangementViewerRef}
                 orientation={Orientation.TopDown}
                 crossAlignment={ChildAlignment.Stretch}
             >
@@ -235,7 +244,8 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
                     crossAlignment={ChildAlignment.Stretch}
                     style={{ zoom: `${viewerZoom}%` }}
                 >
-                    <TrackControls innerRef={this.trackControlsRef} tracks={arrangement.tracks} />
+                    <TrackControls innerRef={this.trackControlsRef} tracks={arrangement.tracks}
+                        services={services} />
                     <Container
                         id="trackViewerHost"
                         innerRef={this.viewerRef}
@@ -258,6 +268,7 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
                     ref={this.minimapRef}
                     arrangement={arrangement}
                     scoreMetrics={arrangementPlayer.scoreMetrics}
+                    services={services}
                     onViewportMoved={this.handleViewportMoved}
                 />
             </Container >

@@ -46,12 +46,6 @@ describe("TrackClipboard", () => {
                     expandedOnce: false,
                 },
                 range: [21, 108],
-                subscribe: () => {
-                    return () => {
-                        return undefined;
-                    };
-                },
-                unsubscribe: () => { /* no-op */ },
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
