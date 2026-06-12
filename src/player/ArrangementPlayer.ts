@@ -129,7 +129,7 @@ export class ArrangementPlayer {
      */
     public onStop = (): void => {
         this.timing = undefined;
-        void requisitions.execute("playerStateChanged", undefined);
+        void requisitions.execute("playerStateChanged", this.#state);
         for (const player of this.trackPlayers.values()) {
             player.onStop();
         }
@@ -196,7 +196,7 @@ export class ArrangementPlayer {
 
         this.#state = "counting";
         if (this.dataModel.arrangement!.countIn) {
-            void requisitions.execute("playerStateChanged", undefined);
+            void requisitions.execute("playerStateChanged", this.#state);
             this.offset = this.audioContext.currentTime;
             await this.countIn();
         }
@@ -216,7 +216,7 @@ export class ArrangementPlayer {
         // Pretend we have covered all events before the interval start.
         this.timeCovered = interval?.start ?? 0;
 
-        void requisitions.execute("playerStateChanged", undefined);
+        void requisitions.execute("playerStateChanged", this.#state);
         void this.iteration();
     }
 
@@ -417,7 +417,7 @@ export class ArrangementPlayer {
         }
 
         if (somethingChanged) {
-            void requisitions.execute("playerStateChanged", undefined);
+            void requisitions.execute("playerStateChanged", this.#state);
         }
     };
 
@@ -451,7 +451,6 @@ export class ArrangementPlayer {
                 realTime: this.timeCoordinator.convertToRealTime(timing),
                 callback: () => {
                     this.timing = timing;
-                    void requisitions.execute("playerStateChanged", undefined);
                 },
                 identifier: timing
             };

@@ -29,6 +29,12 @@ export interface IArrangementViewSettings {
 export interface IViewSettings {
     /** Settings related to the arrangement viewer. */
     arrangementViewSettings?: IArrangementViewSettings;
+
+    /**
+     * Serialised selection state for the current arrangement, stored as a JSON string.
+     * Maintained by the SelectionManager so the selection survives page reloads.
+     */
+    selectionState?: string;
 }
 
 export interface IUISettings {

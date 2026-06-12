@@ -308,17 +308,10 @@ describe("ArrangementPlayer", () => {
         const cb = events.find((e): e is CallbackHelper => {
             return ("callback" in e) && ("identifier" in e);
         });
-        const currentTimingUpdates: number[] = [];
-        const timingSpy = (): Promise<boolean> => {
-            currentTimingUpdates.push(1);
-
-            return Promise.resolve(true);
-        };
-        requisitions.register("playerStateChanged", timingSpy);
-        cb?.callback();
+        expect(cb).toBeDefined();
+        expect(player.currentTiming).toBeUndefined();
+        cb!.callback();
         expect(player.currentTiming).toBeTruthy();
-        expect(currentTimingUpdates.length).toBe(1);
-        requisitions.unregister("playerStateChanged", timingSpy);
     });
 
     it("onStop resets currentTiming and forwards to track players", () => {

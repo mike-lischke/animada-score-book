@@ -256,26 +256,30 @@ export class StaffBarViewer extends UIComponent<IBarViewerProps, IBarViewerState
                 }
             }
 
-            // If no individual notes/rests were hit, try beam → NoteGroup.
+            // If no individual notes/rests were hit, try beams → NoteGroup entries.
             if (noteEntries.filter((e) => {
                 return e.trackId === trackId;
             }).length === 0) {
                 const beamElements = row.querySelectorAll<HTMLElement>(".staff-note-viewer-beam");
-                let hitBeamStep: number | undefined;
+                const hitBeamSteps = new Set<number>();
 
                 for (const beam of beamElements) {
                     const beamRect = beam.getBoundingClientRect();
                     if (rectsIntersect(rect, beamRect.left, beamRect.top, beamRect.right, beamRect.bottom, 0)) {
-                        const runParent = beam.closest<HTMLElement>(".staff-note-viewer-run[data-step-index]");
-                        if (runParent) {
-                            hitBeamStep = parseInt(runParent.getAttribute("data-step-index") ?? "", 10);
-                        }
+                        const runParent = beam.closest<HTMLElement>(
+                            ".staff-note-viewer-run[data-step-index]",
+                        );
 
-                        break;
+                        if (runParent) {
+                            const step = parseInt(runParent.getAttribute("data-step-index") ?? "", 10);
+                            if (!isNaN(step)) {
+                                hitBeamSteps.add(step);
+                            }
+                        }
                     }
                 }
 
-                if (hitBeamStep !== undefined && !isNaN(hitBeamStep)) {
+                if (hitBeamSteps.size > 0) {
                     const allRuns = row.querySelectorAll<HTMLElement>(
                         ".staff-note-viewer-run[data-step-index]",
                     );
@@ -310,24 +314,37 @@ export class StaffBarViewer extends UIComponent<IBarViewerProps, IBarViewerState
                         reverseConnections.set(to, from);
                     }
 
-                    let groupStart = hitBeamStep;
-                    while (reverseConnections.has(groupStart)) {
-                        groupStart = reverseConnections.get(groupStart)!;
+                    // Collect distinct beam groups from all hit steps.
+                    const beamGroups = new Set<string>();
+
+                    for (const hitStep of hitBeamSteps) {
+                        let groupStart = hitStep;
+                        while (reverseConnections.has(groupStart)) {
+                            groupStart = reverseConnections.get(groupStart)!;
+                        }
+
+                        let groupEnd = hitStep;
+                        while (beamConnections.has(groupEnd)) {
+                            groupEnd = beamConnections.get(groupEnd)!;
+                        }
+
+                        beamGroups.add(`${groupStart}-${groupEnd}`);
                     }
 
-                    let groupEnd = hitBeamStep;
-                    while (beamConnections.has(groupEnd)) {
-                        groupEnd = beamConnections.get(groupEnd)!;
-                    }
+                    for (const groupKey of beamGroups) {
+                        const [startStr, endStr] = groupKey.split("-");
+                        const groupStart = parseInt(startStr, 10);
+                        const groupEnd = parseInt(endStr, 10);
 
-                    noteEntries.push({
-                        granularity: SelectionGranularity.NoteGroup,
-                        bar: barNumber,
-                        trackId: trackId,
-                        startStep: groupStart,
-                        endStep: groupEnd,
-                    });
-                    rowHasSoundingNotes = true;
+                        noteEntries.push({
+                            granularity: SelectionGranularity.NoteGroup,
+                            bar: barNumber,
+                            trackId: trackId,
+                            startStep: groupStart,
+                            endStep: groupEnd,
+                        });
+                        rowHasSoundingNotes = true;
+                    }
                 }
             }
 

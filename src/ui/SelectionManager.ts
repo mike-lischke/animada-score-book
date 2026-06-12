@@ -3,7 +3,9 @@
 * Licensed under the MIT License. See License.txt in the project root for license information.
 */
 
+import type { PlayerPlayState } from "../player/ArrangementPlayer.js";
 import { requisitions } from "../supplement/Requisitions.js";
+import { AppStorage } from "../core/AppStorage.js";
 import type { ISbDmNoteEvent, ISbDmTrack } from "../core/ScoreBookDataModel.js";
 import {
     SelectionGranularity, SelectionMode, type ISelectionEntry, type ISelectionHitTester, type ISelectionPoint,
@@ -57,6 +59,12 @@ export class SelectionManager {
     /** Hit-test result from the previous rect change, used for differential updates. */
     private previousEntries: ISelectionEntry[] = [];
 
+    /** Saved selection before playback started, for restoration on stop. */
+    private originalSelection?: Map<string, ISelectionEntry>;
+
+    /** Debounce timer id for persisting the selection to localStorage. */
+    private saveDebounceId?: ReturnType<typeof setTimeout>;
+
     /** Owned view — handles pointer events, rect drawing, and DOM updates. Created lazily when the container is set. */
     private view?: SelectionView;
 
@@ -66,6 +74,8 @@ export class SelectionManager {
 
     public constructor() {
         requisitions.register("selectionRectChanged", this.handleSelectionRectChanged);
+        requisitions.register("playerStateChanged", this.handlePlayerStateChanged);
+        requisitions.register("scoreBookLoaded", this.handleScoreBookLoaded);
     }
 
     public get selectionMode(): SelectionMode {
@@ -348,6 +358,7 @@ export class SelectionManager {
         }
 
         this.applySelection(entries);
+        this.publishPlayRange();
     }
 
     /**
@@ -478,6 +489,8 @@ export class SelectionManager {
         if (added.length > 0 || removed.length > 0) {
             void requisitions.execute("selectionChanged", { added, removed });
         }
+
+        this.schedulePersist();
     }
 
     /**
@@ -495,6 +508,8 @@ export class SelectionManager {
             this.previousEntries = [];
             void requisitions.execute("selectionChanged", { added: [], removed });
             void requisitions.execute("playRangeChanged", undefined);
+
+            this.schedulePersist();
 
             return true;
         }
@@ -821,24 +836,189 @@ export class SelectionManager {
     };
 
     private publishPlayRange(): void {
-        const measureBars: number[] = [];
+        const bars = new Set<number>();
         for (const entry of this.currentSelection.values()) {
-            if (entry.granularity === SelectionGranularity.Measure && entry.bar > 0) {
-                measureBars.push(entry.bar);
+            if (entry.bar > 0) {
+                bars.add(entry.bar);
             }
         }
 
-        if (measureBars.length > 0) {
-            measureBars.sort((a, b) => {
+        if (bars.size > 0) {
+            const sorted = [...bars].sort((a, b) => {
                 return a - b;
             });
 
             void requisitions.execute("playRangeChanged", {
-                from: measureBars[0],
-                to: measureBars[measureBars.length - 1],
+                from: sorted[0],
+                to: sorted[sorted.length - 1],
             });
         } else {
             void requisitions.execute("playRangeChanged", undefined);
         }
     }
+
+    /**
+     * Reacts to playback state changes. When playback starts and the current selection is not at measure
+     * granularity, the selection is temporarily replaced with the containing measures so the play range
+     * is valid. When playback stops, the original fine-grained selection is restored.
+     */
+    private handlePlayerStateChanged = (state: PlayerPlayState): Promise<boolean> => {
+        if (state === "playing" || state === "counting") {
+            this.switchToMeasureSelection();
+        } else if (state === "stopped") {
+            this.restoreOriginalSelection();
+        }
+
+        return Promise.resolve(true);
+    };
+
+    /**
+     * If the current selection contains entries that are not at measure granularity,
+     * saves the original selection and replaces it with measure-level entries for the containing bars.
+     * Does nothing if all entries are already at measure granularity.
+     */
+    private switchToMeasureSelection(): void {
+        if (this.currentSelection.size === 0 || this.originalSelection) {
+            return;
+        }
+
+        const hasNonMeasure = [...this.currentSelection.values()].some((entry) => {
+            return entry.granularity !== SelectionGranularity.Measure;
+        });
+        if (!hasNonMeasure) {
+            return;
+        }
+
+        // Save the original selection for later restoration.
+        this.originalSelection = new Map(this.currentSelection);
+
+        // Collect all distinct bar numbers from the current selection.
+        const barSet = new Set<number>();
+        for (const entry of this.currentSelection.values()) {
+            if (entry.bar > 0) {
+                barSet.add(entry.bar);
+            }
+        }
+
+        const measureEntries: ISelectionEntry[] = [...barSet].map((bar) => {
+            return {
+                granularity: SelectionGranularity.Measure,
+                bar,
+                trackId: 0,
+            };
+        });
+
+        // Replace the selection with measure-level entries.
+        const removed = [...this.currentSelection.values()];
+        this.currentSelection.clear();
+        for (const entry of measureEntries) {
+            this.currentSelection.set(this.entryKey(entry), entry);
+        }
+
+        void requisitions.execute("selectionChanged", { added: measureEntries, removed });
+        this.publishPlayRange();
+    }
+
+    /**
+     * Restores the original selection that was saved before playback started, then clears the saved state.
+     * Does nothing if no original selection was saved.
+     */
+    private restoreOriginalSelection(): void {
+        if (!this.originalSelection) {
+            return;
+        }
+
+        const saved = this.originalSelection;
+        this.originalSelection = undefined;
+
+        const removed = [...this.currentSelection.values()];
+        this.currentSelection.clear();
+        for (const [key, entry] of saved) {
+            this.currentSelection.set(key, entry);
+        }
+
+        const added = [...saved.values()];
+        void requisitions.execute("selectionChanged", { added, removed });
+        this.publishPlayRange();
+    }
+
+    /**
+     * Schedules a debounced write of the current selection to localStorage.
+     * Clears any pending save and sets a new 300 ms timer to avoid excessive writes during rapid
+     * selection changes (e.g. drag operations).
+     */
+    private schedulePersist(): void {
+        if (this.saveDebounceId) {
+            clearTimeout(this.saveDebounceId);
+        }
+
+        this.saveDebounceId = setTimeout(() => {
+            this.saveDebounceId = undefined;
+            this.persistSelection();
+        }, 300);
+    }
+
+    /**
+     * Serialises the current selection and writes it to localStorage via AppStorage.
+     * An empty or cleared selection removes the stored state.
+     */
+    private persistSelection(): void {
+        const entries = [...this.currentSelection.values()];
+
+        const settings = AppStorage.loadUISettings() ?? {};
+        const viewSettings = settings.viewSettings ?? {};
+
+        if (entries.length > 0) {
+            viewSettings.selectionState = JSON.stringify(entries);
+        } else {
+            delete viewSettings.selectionState;
+        }
+
+        settings.viewSettings = viewSettings;
+        AppStorage.saveUISettings(settings);
+    }
+
+    /**
+     * Restores a previously persisted selection from localStorage, if one exists.
+     * Called when the scorebook finishes loading so the arrangement and DOM are ready.
+     */
+    private restorePersistedSelection(): void {
+        const state = AppStorage.loadUISettings()?.viewSettings?.selectionState;
+        if (!state) {
+            return;
+        }
+
+        let entries: ISelectionEntry[];
+        try {
+            entries = JSON.parse(state) as ISelectionEntry[];
+        } catch {
+            return;
+        }
+
+        if (!Array.isArray(entries) || entries.length === 0) {
+            return;
+        }
+
+        const removed = [...this.currentSelection.values()];
+        this.currentSelection.clear();
+        for (const entry of entries) {
+            this.currentSelection.set(this.entryKey(entry), entry);
+        }
+
+        void requisitions.execute("selectionChanged", { added: entries, removed });
+        this.publishPlayRange();
+    }
+
+    /**
+     * Handles the scoreBookLoaded requisition by attempting to restore a previously persisted selection.
+     */
+    private handleScoreBookLoaded = (): Promise<boolean> => {
+        // Delay slightly so the arrangement viewer has time to render its DOM before selection overlays
+        // are applied.
+        setTimeout(() => {
+            this.restorePersistedSelection();
+        }, 100);
+
+        return Promise.resolve(true);
+    };
 }

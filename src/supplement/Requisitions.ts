@@ -21,7 +21,7 @@ export interface IRequestTypeMap {
     // --- Playback topics ---
     "playRangeChanged": (range?: { from: number; to: number; }) => Promise<boolean>;
     "animationStateChanged": (state: PlayerPlayState) => Promise<boolean>;
-    "playerStateChanged": SimpleCallback;
+    "playerStateChanged": (state: PlayerPlayState) => Promise<boolean>;
 
     // --- Core model topics ---
     "instrumentLoaded": (instrumentId: number) => Promise<boolean>;
