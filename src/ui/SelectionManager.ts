@@ -3,10 +3,10 @@
 * Licensed under the MIT License. See License.txt in the project root for license information.
 */
 
-import type { PlayerPlayState } from "../player/ArrangementPlayer.js";
-import { requisitions } from "../supplement/Requisitions.js";
 import { AppStorage } from "../core/AppStorage.js";
 import type { ISbDmNoteEvent, ISbDmTrack } from "../core/ScoreBookDataModel.js";
+import type { PlayerPlayState } from "../player/ArrangementPlayer.js";
+import { requisitions } from "../supplement/Requisitions.js";
 import {
     SelectionGranularity, SelectionMode, type ISelectionEntry, type ISelectionHitTester, type ISelectionPoint,
     type ISelectionRectChange,
@@ -64,6 +64,13 @@ export class SelectionManager {
 
     /** Debounce timer id for persisting the selection to localStorage. */
     private saveDebounceId?: ReturnType<typeof setTimeout>;
+
+    /**
+     * Tracks whether the first scoreBookLoaded event (app startup) has already been processed.
+     * On the first load the persisted selection is restored; on subsequent loads (user opens a
+     * different song) the selection is cleared.
+     */
+    private firstLoadDone = false;
 
     /** Owned view — handles pointer events, rect drawing, and DOM updates. Created lazily when the container is set. */
     private view?: SelectionView;
@@ -861,11 +868,15 @@ export class SelectionManager {
      * Reacts to playback state changes. When playback starts and the current selection is not at measure
      * granularity, the selection is temporarily replaced with the containing measures so the play range
      * is valid. When playback stops, the original fine-grained selection is restored.
+     *
+     * @param state The new playback state.
+     *
+     * @returns A resolved promise to satisfy the requisition handler signature.
      */
     private handlePlayerStateChanged = (state: PlayerPlayState): Promise<boolean> => {
         if (state === "playing" || state === "counting") {
             this.switchToMeasureSelection();
-        } else if (state === "stopped") {
+        } else {
             this.restoreOriginalSelection();
         }
 
@@ -1010,13 +1021,22 @@ export class SelectionManager {
     }
 
     /**
-     * Handles the scoreBookLoaded requisition by attempting to restore a previously persisted selection.
+     * Handles the scoreBookLoaded requisition.
+     * On the first call (app startup) the persisted selection is restored from localStorage.
+     * On subsequent calls (user loads a different song) the selection is cleared.
+     *
+     * @returns A resolved promise to satisfy the requisition handler signature.
      */
     private handleScoreBookLoaded = (): Promise<boolean> => {
         // Delay slightly so the arrangement viewer has time to render its DOM before selection overlays
         // are applied.
         setTimeout(() => {
-            this.restorePersistedSelection();
+            if (this.firstLoadDone) {
+                this.clearSelection();
+            } else {
+                this.firstLoadDone = true;
+                this.restorePersistedSelection();
+            }
         }, 100);
 
         return Promise.resolve(true);
