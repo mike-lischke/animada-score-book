@@ -190,18 +190,11 @@ export const maxValue = <T extends number | bigint>(a: T, b: T): T => {
 };
 
 /**
- * @returns the path to use for the REST API script as string. It differs between local
- *          development and production.
+ * @returns The base path for backend API and sound library requests.
+ *          In dev mode Vite proxies these; in production the backend
+ *          is on the same origin.
  */
 export const getApiBase = (): string => {
-    const origin = window.location.origin;
-
-    // For local development use the test server.
-    if (origin.includes("localhost") || origin.includes("127.0.0.1")) {
-        return import.meta.env.VITE_BASE_URL;
-    }
-
-    // In production: use the same server as the app is served from.
     return "";
 };
 

@@ -12,6 +12,7 @@
     "scripts": {
         "dev": "vite --host",
         "build": "npm run fix-svgs && npm run generate-themes && vite build",
+        "check": "tsc --noEmit && tsc -p tests/tsconfig.json --noEmit",
         "watch": "npm run watch:src & npm run watch:tests & wait",
         "watch:src": "tsc --noEmit --watch",
         "watch:tests": "tsc -p tests/tsconfig.json --noEmit --watch",
@@ -23,7 +24,8 @@
         "serve:e2e": "tsx build/serve-dist.ts",
         "playwright:install": "playwright install chromium",
         "generate-themes": "tsx build/generate-daisyui-themes.ts",
-        "fix-svgs": "tsx build/fix-svg-attributes.ts"
+        "fix-svgs": "tsx build/fix-svg-attributes.ts",
+        "start": "tsx src/server/backend.ts"
     },
     "dependencies": {
         "@mediabunny/mp3-encoder": "1.39.1",
@@ -31,6 +33,9 @@
         "classnames": "2.5.1",
         "daisyui": "5.5.19",
         "mediabunny": "1.39.1",
+        "mime-types": "^3.0.2",
+        "mysql2": "^3.16.0",
+        "pg": "^8.16.3",
         "preact": "10.29.0",
         "tabulator-tables": "6.4.0",
         "tailwindcss": "4.2.1",
@@ -44,7 +49,9 @@
         "@stylistic/eslint-plugin-ts": "4.4.1",
         "@tailwindcss/vite": "4.2.1",
         "@testing-library/preact": "3.2.4",
+        "@types/mime-types": "3.0.1",
         "@types/node": "25.5.0",
+        "@types/pg": "8.16.0",
         "@types/tabulator-tables": "6.3.1",
         "@typescript-eslint/eslint-plugin": "8.57.0",
         "@typescript-eslint/parser": "8.57.0",

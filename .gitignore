@@ -2,9 +2,11 @@ node_modules
 .vscode/numbered-bookmarks.json
 dist
 .vscode/chrome
+.env
 .env.local
 .htaccess
 src/generated
 playwright-report
 test-results
 .playwright
+backend-config.json

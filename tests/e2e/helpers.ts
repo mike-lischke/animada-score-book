@@ -25,9 +25,19 @@ export const beijaFlorQuery = "t=Beija%20Flor%202004%20%20-%20%20Bossa%201%20(H-
 export const beijaFlorImportPath = `/?${beijaFlorQuery}`;
 
 export const routeApi = async (page: Page): Promise<void> => {
-    await page.route("**/api.php**", async (route) => {
+    await page.route("**/api**", async (route) => {
         const url = new URL(route.request().url());
         const action = url.searchParams.get("action");
+
+        if (action === "health") {
+            await route.fulfill({
+                status: 200,
+                contentType: "application/json",
+                body: JSON.stringify({ status: "ok", initialized: true, engine: "mysql", hasData: true }),
+            });
+
+            return;
+        }
 
         if (action === "listSoundLib") {
             await route.fulfill({

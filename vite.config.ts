@@ -8,7 +8,7 @@ import { join } from "node:path";
 
 import preact from "@preact/preset-vite";
 import tailwindcss from "@tailwindcss/vite";
-import { defineConfig, loadEnv, Plugin } from "vite";
+import { defineConfig, Plugin } from "vite";
 
 /**
  * Helper plugin to serve index.html for non-asset requests, enabling SPA-like routing in development mode.
@@ -36,6 +36,7 @@ const spaDocumentFallback = (): Plugin => {
                     accept.includes("text/html") || accept.includes("*/*");
 
                 const isAssetLike =
+                    pathname.startsWith("/api") ||
                     pathname.startsWith("/sounds") ||
                     pathname.startsWith("/assets") ||
                     pathname.startsWith("/src") ||
@@ -57,13 +58,9 @@ const spaDocumentFallback = (): Plugin => {
 };
 
 // https://vitejs.dev/config/
-export default defineConfig(({ command, mode }) => {
-    // eslint-disable-next-line no-restricted-syntax
-    const env = loadEnv(mode, process.cwd(), "");
-
+export default defineConfig(({ command }) => {
     // eslint-disable-next-line no-restricted-syntax
     const home = process.env.HOME ?? process.env.USERPROFILE ?? "";
-    const apiTarget = env.VITE_BASE_URL;
 
     return {
         server: command === "serve" ? {
@@ -75,7 +72,11 @@ export default defineConfig(({ command, mode }) => {
             port: 5173,
             proxy: {
                 "/api": {
-                    target: apiTarget,
+                    target: "http://127.0.0.1:3100",
+                    changeOrigin: true,
+                },
+                "/soundLib": {
+                    target: "http://127.0.0.1:3100",
                     changeOrigin: true,
                 },
             },

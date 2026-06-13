@@ -586,7 +586,7 @@ export class ScoreBookDataModel {
             throw new Error(`A folder named '${name}' already exists in the target location.`);
         }
 
-        const res = await fetch(`/api.php?action=addScoreFolder`, {
+        const res = await fetch(`/api?action=addScoreFolder`, {
             method: "POST",
             headers: { Accept: "application/json" },
             body: JSON.stringify({ name, parentid: parent?.id }),
@@ -625,7 +625,7 @@ export class ScoreBookDataModel {
     }
 
     public async addScore(name: string, content: string, parent?: ISbDmScoreFolder): Promise<void> {
-        const res = await fetch(`/api.php?action=addScore`, {
+        const res = await fetch(`/api?action=addScore`, {
             method: "POST",
             headers: { Accept: "application/json" },
             body: JSON.stringify({ name, content, folderId: parent?.id }),
@@ -670,7 +670,7 @@ export class ScoreBookDataModel {
      * @param content The new content string to persist.
      */
     public async updateScoreContent(score: ISbDmScore, content: string): Promise<void> {
-        const res = await fetch(`/api.php?action=updateScore`, {
+        const res = await fetch(`/api?action=updateScore`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ id: score.id, content }),
@@ -684,7 +684,7 @@ export class ScoreBookDataModel {
     }
 
     public async renameEntry(entry: ISbDmScoreFolder | ISbDmScore, newName: string): Promise<void> {
-        const res = await fetch(`/api.php?action=renameEntry`, {
+        const res = await fetch(`/api?action=renameEntry`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -708,7 +708,7 @@ export class ScoreBookDataModel {
             throw new Error("Cannot delete a folder that still has children.");
         }
 
-        const res = await fetch(`/api.php?action=delete`, {
+        const res = await fetch(`/api?action=delete`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -785,7 +785,7 @@ export class ScoreBookDataModel {
             return Promise.resolve();
         }
 
-        const res = await fetch(`/api.php?action=listSoundLib`, {
+        const res = await fetch(`/api?action=listSoundLib`, {
             headers: { Accept: "application/json" },
         });
 
@@ -856,7 +856,7 @@ export class ScoreBookDataModel {
 
     private async updateScoreLibFolder(list: Array<ISbDmScoreFolder | ISbDmScore>,
         parent?: ISbDmScoreFolder): Promise<void> {
-        const res = await fetch(`/api.php?action=listScoreFolderContent`, {
+        const res = await fetch(`/api?action=listScoreFolderContent`, {
             method: "POST",
             headers: { Accept: "application/json" },
             body: JSON.stringify({ parentid: parent?.id ?? -1 }),

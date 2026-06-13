@@ -107,6 +107,11 @@
         font-size: 150%;
     }
 
+    &.wrap {
+        white-space: normal;
+        word-break: break-word;
+    }
+
     &[disabled] {
         color: var(--color-disabled);
     }

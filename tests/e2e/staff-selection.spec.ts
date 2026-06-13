@@ -103,6 +103,8 @@ test.describe("Staff view selection", () => {
 
         if (!containerBeamBox) {
             test.skip(true, "No subdivision container beam found in this arrangement");
+
+            return;
         }
 
         // Click at the center of the subdivision container beam.

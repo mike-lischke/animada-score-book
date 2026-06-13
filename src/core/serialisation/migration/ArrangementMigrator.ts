@@ -52,7 +52,13 @@ export class ArrangementMigrator {
                 return { arrangement: this.migrate(compact, instruments), migrated: false };
             }
 
-            const params = new URLSearchParams(source);
+            // If the source is a full URL, extract just the query string.
+            // new URLSearchParams(fullUrl) behaviour varies across runtimes.
+            const query = source.startsWith("http")
+                ? new URL(source).search
+                : source;
+
+            const params = new URLSearchParams(query);
             const legacyArrangement = BananaDrumUrlImporter.getArrangementFromParams(params, instruments);
             if (!legacyArrangement) {
                 throw new Error("Score content could not be decoded");

@@ -59,6 +59,7 @@ import { ModeManager } from "./ui/ModeManager.js";
 import { MouseHandler } from "./ui/MouseHandler.js";
 import { SelectionManager } from "./ui/SelectionManager.js";
 import { SettingsDialog } from "./ui/SettingsDialog.js";
+import { BackendSetupDialog } from "./ui/BackendSetupDialog.js";
 
 const ScoreLibrary = lazy(() => {
     return import("./ui/ScoreLibrary.js").then((m) => {
@@ -87,6 +88,7 @@ interface IAppState {
 export class App extends UIComponent<{}, IAppState> {
     private scoreLibraryRef = createRef<DrawerSidebar>();
     private settingsDialogRef = createRef<SettingsDialog>();
+    private backendSetupDialogRef = createRef<BackendSetupDialog>();
     private printDialogRef = createRef<PrintDialog>();
     private valueDialogRef = createRef<ValueDialog>();
     private confirmDialogRef = createRef<ConfirmDialog>();
@@ -139,12 +141,7 @@ export class App extends UIComponent<{}, IAppState> {
         requisitions.register("settingsChanged", this.handleSettingsChanged);
         requisitions.register("playRangeChanged", this.handlePlayRangeChanged);
 
-        void this.dataModel.initialize().then(() => {
-            const params = new URL(window.location.href).searchParams;
-            const hasBananaDrum = params.has("a") || params.has("a2");
-            this.loadScorebook(hasBananaDrum ? params : undefined);
-            this.setState({ ready: true });
-        });
+        void this.checkBackendThenInitialize();
     }
 
     public override shouldComponentUpdate(nextProps: {}, nextState: IAppState): boolean {
@@ -169,7 +166,17 @@ export class App extends UIComponent<{}, IAppState> {
         const { ready, displayMode, sidebarOpen, headerPinned } = this.state;
 
         if (!ready) {
-            return <ProgressIndicator />;
+            return (
+                <>
+                    <ProgressIndicator />
+                    <BackendSetupDialog
+                        ref={this.backendSetupDialogRef}
+                        onSetupComplete={() => {
+                            void this.handleBackendSetupComplete();
+                        }}
+                    />
+                </>
+            );
         }
 
         const arrangementView = this.dataModel.arrangement!;
@@ -363,6 +370,12 @@ export class App extends UIComponent<{}, IAppState> {
                 <ValueDialog ref={this.valueDialogRef} />
                 <ConfirmDialog ref={this.confirmDialogRef} />
                 <SettingsDialog ref={this.settingsDialogRef} />
+                <BackendSetupDialog
+                    ref={this.backendSetupDialogRef}
+                    onSetupComplete={() => {
+                        void this.handleBackendSetupComplete();
+                    }}
+                />
                 <PrintDialog ref={this.printDialogRef} onAccept={this.handlePrintAccept} />
                 {
                     this.state.printing && this.dataModel.arrangement && this.state.printOptions
@@ -379,6 +392,56 @@ export class App extends UIComponent<{}, IAppState> {
                 }
             </ErrorBoundary>
         );
+    }
+
+    /**
+     * Checks if the backend is reachable and initialised. If not, opens the setup dialog.
+     * Once the backend is ready, proceeds with data model initialisation.
+     */
+    private async checkBackendThenInitialize(): Promise<void> {
+        try {
+            const res = await fetch("/api?action=health");
+            const data = await res.json() as { status: string; initialized: boolean; };
+
+            if (data.initialized) {
+                await this.initializeApp();
+
+                return;
+            }
+        } catch {
+            // Backend not reachable — show setup dialog.
+        }
+
+        this.backendSetupDialogRef.current?.open();
+    }
+
+    /**
+     * Called when the backend setup dialog is closed.
+     * If setup completed successfully, proceed with app initialisation.
+     */
+    private handleBackendSetupComplete = async (): Promise<void> => {
+        try {
+            const res = await fetch("/api?action=health");
+            const data = await res.json() as { status: string; initialized: boolean; };
+
+            if (data.initialized) {
+                await this.initializeApp();
+
+                return;
+            }
+        } catch {
+            // Still not ready.
+        }
+    };
+
+    private async initializeApp(): Promise<void> {
+        await this.dataModel.initialize();
+
+        const params = new URL(window.location.href).searchParams;
+        const hasBananaDrum = params.has("a") || params.has("a2");
+
+        this.loadScorebook(hasBananaDrum ? params : undefined);
+        this.setState({ ready: true });
     }
 
     private handleGithubClick = () => {
