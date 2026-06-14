@@ -151,7 +151,7 @@ export class TrackPlayer {
                 duration,
                 track: this.track,
                 timing: this.timingForEventStart(event.start, measure.number, stepsPerBar),
-                noteStyle: event.noteStyleId === "0"
+                audioData: event.noteStyleId === "0"
                     ? undefined
                     : this.track.instrument.noteStyles[event.noteStyleId],
             };

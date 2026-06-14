@@ -23,7 +23,7 @@ test.beforeEach(async ({ page }) => {
  */
 const buildSnapshot = (instrumentId: string, title: string, noteStyleId = "1") => {
     return {
-        version: 2,
+        version: 3,
         title,
         timeParams: {
             timeSignature: "4/4",

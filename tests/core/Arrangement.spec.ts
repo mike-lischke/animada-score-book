@@ -9,7 +9,7 @@ import { Arrangement } from "../../src/core/Arrangement.js";
 import { SbDmEntityType, type ISbDmInstrument } from "../../src/core/ScoreBookDataModel.js";
 import { TimeParams } from "../../src/core/TimeParams.js";
 import { Track } from "../../src/core/Track.js";
-import type { IArrangementSnapshot, INoteStyle, ITrackSnapshot, Mutable } from "../../src/core/types/general.js";
+import type { IArrangementSnapshot, IAudioData, ITrackSnapshot, Mutable } from "../../src/core/types/general.js";
 import { TimeCoordinator } from "../../src/player/TimeCoordinator.js";
 import { TrackPlayer } from "../../src/player/TrackPlayer.js";
 
@@ -72,9 +72,11 @@ const hydrateMeasureEvents = (arrangement: Arrangement): void => {
             return -1;
         },
     });
+
     const players = arrangement.tracks.map((track) => {
         return new TrackPlayer(track, timeCoordinator);
     });
+
     players.forEach((player) => {
         player.dispose();
     });
@@ -125,7 +127,9 @@ describe("Arrangement", () => {
             id: "1",
             audioBuffer: null,
             instrument,
-        } as INoteStyle;
+            sampleProfile: { builtInDamping: 0, builtInAccent: false, ghost: false }
+        } as IAudioData;
+
         (instrument as Mutable<ISbDmInstrument>).noteStyles = { "1": hitStyle };
 
         const snapshot: IArrangementSnapshot = {
@@ -194,8 +198,8 @@ describe("Arrangement", () => {
         hydrateMeasureEvents(arrangement);
         const track = arrangement.tracks[0] as Track;
 
-        expect(track.getNoteAt({ bar: 1, step: 1 })?.noteStyle?.id).toBe("1");
-        expect(track.getNoteAt({ bar: 2, step: 5 })?.noteStyle?.id).toBe("1");
+        expect(track.getNoteAt({ bar: 1, step: 1 })?.audioData?.id).toBe("1");
+        expect(track.getNoteAt({ bar: 2, step: 5 })?.audioData?.id).toBe("1");
 
         // No non-grid (polyrhythm-shaped) events expected in this snapshot. Sounding grid notes
         // may carry an extended duration (a multiple of the grid step) when they absorb the

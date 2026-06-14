@@ -10,7 +10,7 @@ import { SbDmEntityType, type ISbDmInstrument } from "../../../src/core/ScoreBoo
 import { ArrangementMigrator } from "../../../src/core/serialisation/migration/ArrangementMigrator.js";
 import { getArrangementSnapshot } from "../../../src/core/serialisation/snapshots.js";
 import type { ILegacyArrangementSnapshot } from "../../../src/core/serialisation/migration/legacy-snapshot-types.js";
-import type { INoteStyle, Mutable } from "../../../src/core/types/general.js";
+import type { IAudioData, Mutable } from "../../../src/core/types/general.js";
 import { TimeCoordinator } from "../../../src/player/TimeCoordinator.js";
 import { TrackPlayer } from "../../../src/player/TrackPlayer.js";
 
@@ -58,7 +58,9 @@ describe("snapshots", () => {
             id: "1",
             audioBuffer: null,
             instrument,
-        } as INoteStyle;
+            sampleProfile: { builtInDamping: 0, builtInAccent: false, ghost: false }
+        } as IAudioData;
+
         (instrument as Mutable<ISbDmInstrument>).noteStyles = { "1": noteStyle };
 
         const sourceSnapshot: ILegacyArrangementSnapshot = {
@@ -104,12 +106,12 @@ describe("snapshots", () => {
         const secondPolyrhythmEventIndex = polyrhythmEventIndex + 1;
         firstTrack.measures[0].events[secondPolyrhythmEventIndex] = {
             ...firstTrack.measures[0].events[secondPolyrhythmEventIndex],
-            noteStyle,
+            audioData: noteStyle,
         };
 
         const snapshot = getArrangementSnapshot(arrangement);
 
-        expect(snapshot.version).toBe(2);
+        expect(snapshot.version).toBe(3);
         const track = snapshot.tracks[0];
         expect("measures" in track).toBe(true);
         if ("measures" in track) {
@@ -120,6 +122,7 @@ describe("snapshots", () => {
                 normal: 2,
                 isTuplet: true,
             }));
+
             expect(track.measures[0]?.steps.slice(0, 3)).toEqual([
                 { index: 0, noteStyleId: undefined },
                 { index: 1, noteStyleId: "1" },

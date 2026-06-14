@@ -158,7 +158,7 @@ describe("AnimadaScoreBook", () => {
         // Use a note edit to exercise oldValue extraction.
         const cmd: EditCommand = {
             type: "EditCommand_Note",
-            note: { noteStyle: { id: "ns", audioBuffer: null, instrument: {} as ISbDmInstrument } } as ISbDmNoteEvent,
+            note: { audioData: { id: "ns", audioBuffer: null, instrument: {} as ISbDmInstrument } } as ISbDmNoteEvent,
         };
         manager.edit(cmd);
         expect(editModule.edit).toHaveBeenCalledOnce();

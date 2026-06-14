@@ -96,12 +96,36 @@ export enum Damping {
 
     /** The hit is muted, dampening the sound. */
     Muted,
+}
 
-    /** If the damping is applied over more than one note, it starts here. */
-    Start,
+/**
+ * Per-note performance instructions stored on each measure step.
+ * These describe *how* the player should execute the note, independently
+ * of which instrument sound variant is selected.
+ */
+export interface INoteArticulation {
+    /** How the note is dampened. */
+    damping: Damping;
 
-    /** If the damping is applied over more than one note, it ends here. */
-    End,
+    /** Whether the note is accented. */
+    accent: boolean;
+}
+
+/**
+ * Describes the articulation that is baked into a specific audio sample.
+ * This is purely descriptive — it tells the player which articulation
+ * values the sample was recorded with, so the right sample can be
+ * selected for a given {@link INoteArticulation}.
+ */
+export interface ISampleProfile {
+    /** Which damping is inherent in this sample. */
+    builtInDamping: Damping;
+
+    /** Whether this sample is an accented variant. */
+    builtInAccent: boolean;
+
+    /** Whether this sample represents a ghost note (intentionally quiet, unaccented). */
+    ghost: boolean;
 }
 
 export enum HandType {
@@ -141,38 +165,35 @@ export enum NoteDisplayType {
 /** Information about the struck play style. */
 export type StruckCharacteristics = {
     excitationMode: ExcitationMode.Struck;
-    damping: Damping;
-    displayType: NoteDisplayType;
+
+    /** The main note head display type for this instrument. */
+    mainDisplayType: NoteDisplayType;
 } & TechniqueType;
 
 export interface IShakenCharacteristics {
     excitationMode: ExcitationMode.Shaken;
-    damping?: Damping;
-    displayType: NoteDisplayType;
+    mainDisplayType: NoteDisplayType;
     handTechnique?: never;
     stickTechnique?: never;
 }
 
 export interface IScrapedCharacteristics {
     excitationMode: ExcitationMode.Scraped;
-    damping?: never;
-    displayType: NoteDisplayType;
+    mainDisplayType: NoteDisplayType;
     handTechnique?: never;
     stickTechnique?: never;
 }
 
 export interface IFrictionCharacteristics {
     excitationMode: ExcitationMode.Friction;
-    damping: Damping;
-    displayType: NoteDisplayType;
+    mainDisplayType: NoteDisplayType;
     handTechnique: HandTechnique.Friction;
     stickTechnique?: never;
 }
 
 export interface IBlownCharacteristics {
     excitationMode: ExcitationMode.Blown;
-    damping?: never;
-    displayType: NoteDisplayType;
+    mainDisplayType: NoteDisplayType;
     handTechnique?: never;
     stickTechnique?: never;
 }
@@ -183,8 +204,7 @@ export interface IBlownCharacteristics {
  */
 export interface IVocalCharacteristics {
     excitationMode: ExcitationMode.Vocal;
-    damping?: never;
-    displayType?: never;
+    mainDisplayType?: never;
     handTechnique?: never;
     stickTechnique?: never;
 }
@@ -208,10 +228,10 @@ export interface ISoundStyleMeta {
     readonly noteLine?: number;
 
     /**
-     * Indicates whether the note is accented. Accents are a play style and are part of the score, but we also need
-     * to mark sound files which represent accented variants of a note style.
+     * Describes the articulation (damping, accent) that is baked into this sample.
+     * Used by the player to match a sample to a given {@link INoteArticulation}.
      */
-    readonly accented: boolean;
+    readonly sampleProfile: ISampleProfile;
 }
 
 /** Defines the structure of the instrument metadata. */

@@ -9,34 +9,9 @@ import {
     SbDmEntityType, type ISbDmArrangement, type ISbDmNoteEvent, type ISbDmTrack,
     type ISbDmTrackMeasure, type ITiming, type RealTime
 } from "../../src/core/ScoreBookDataModel.js";
-import type { INoteStyle, ITimeParams, Mutable } from "../../src/core/types/general.js";
+import type { IAudioData, ITimeParams, Mutable } from "../../src/core/types/general.js";
 import type { TimeCoordinator } from "../../src/player/TimeCoordinator.js";
 import { TrackPlayer } from "../../src/player/TrackPlayer.js";
-
-type Sub = (...args: unknown[]) => void;
-
-const makeSubscribable = () => {
-    const subs: Sub[] = [];
-
-    return {
-        subscribe: (cb: Sub) => {
-            subs.push(cb);
-
-            return () => {
-                const i = subs.indexOf(cb);
-                if (i !== -1) {
-                    subs.splice(i, 1);
-                }
-            };
-        },
-        unsubscribe: (cb: Sub) => {
-            const i = subs.indexOf(cb);
-            if (i !== -1) {
-                subs.splice(i, 1);
-            }
-        }
-    };
-};
 
 /**
  * Minimal stub for the ITimeCoordinator used by TrackPlayer.
@@ -46,7 +21,6 @@ const makeSubscribable = () => {
  */
 const makeTimeCoordinator = (realTimeLength: RealTime = 4): TimeCoordinator => {
     return {
-        ...makeSubscribable(),
         metrics: {
             realTimeLength,
             secondsPerBar: 1,
@@ -55,6 +29,8 @@ const makeTimeCoordinator = (realTimeLength: RealTime = 4): TimeCoordinator => {
             beatsPerBar: 4,
             stepsPerBar: 16,
             stepsPerPulse: 2,
+            beatUnit: 4,
+            pulsesPerBar: 8,
         },
         convertToRealTime: (timing: ITiming) => {
             return ((timing.bar - 1) * 1) + ((timing.step - 1) * 0.1);
@@ -62,21 +38,17 @@ const makeTimeCoordinator = (realTimeLength: RealTime = 4): TimeCoordinator => {
         convertEventToRealTime: (event: ISbDmNoteEvent) => {
             return event.start.numerator / event.start.denominator;
         },
-        convertToAudioTime: (realTime: RealTime) => {
-            return realTime;
-        },
         convertToLoopProgress: () => {
             return 0;
         },
         reset: vi.fn(),
-        publish: vi.fn(),
     } as unknown as TimeCoordinator;
 };
 
 const makeNote = (
     track: ISbDmTrack,
     timing: ITiming,
-    noteStyle?: INoteStyle,
+    noteStyle?: IAudioData,
 ): ISbDmNoteEvent => {
     return {
         type: SbDmEntityType.NoteEvent,
@@ -86,13 +58,14 @@ const makeNote = (
         duration: { numerator: 1, denominator: 16 },
         track,
         timing,
-        noteStyle,
+        audioData: noteStyle,
     };
 };
 
-const makeTrack = (
-    opts?: { instrumentLoaded?: boolean; withPolyrhythmNote?: boolean; }
-): ISbDmTrack & { _notes: ISbDmNoteEvent[]; } => {
+const makeTrack = (opts?: {
+    instrumentLoaded?: boolean;
+    withPolyrhythmNote?: boolean;
+}): ISbDmTrack & { _notes: ISbDmNoteEvent[]; } => {
     const instrumentLoaded = opts?.instrumentLoaded ?? true;
     const timeParams: ITimeParams = {
         timeSignature: "4/4",
@@ -104,8 +77,8 @@ const makeTrack = (
         isValid: (_timing: ITiming) => {
             return true;
         },
-        ...makeSubscribable(),
     };
+
     const arrangement: ISbDmArrangement = {
         id: 1,
         type: SbDmEntityType.Arrangement,
@@ -116,7 +89,6 @@ const makeTrack = (
         loop: false,
         useMetronome: false,
         countIn: false,
-        ...makeSubscribable(),
         addTrack: vi.fn(() => {
             return track;
         }),
@@ -152,7 +124,6 @@ const makeTrack = (
             },
             color: "blue",
             noteStyles: {},
-            ...makeSubscribable()
         },
         measures: [],
         getNoteAt: () => {
@@ -165,7 +136,6 @@ const makeTrack = (
                 yield* ns;
             })();
         },
-        ...makeSubscribable(),
         _notes: [],
         clear: vi.fn(),
     };
@@ -173,11 +143,15 @@ const makeTrack = (
     arrangement.tracks.push(track);
 
     // One simple audible note at bar 1, step 1
-    const noteStyle: INoteStyle = {
+    const noteStyle: IAudioData = {
         id: "x",
         audioBuffer: {} as AudioBuffer,
-        instrument: track.instrument
-    } as INoteStyle;
+        instrument: track.instrument,
+
+        sampleProfile: { builtInDamping: 0, builtInAccent: false, ghost: false }
+
+    } as IAudioData;
+
     const note = makeNote(track, { bar: 1, step: 1 }, noteStyle);
     track._notes.push(note);
 
@@ -201,9 +175,10 @@ const makeTrack = (
             },
             track,
             timing: currentNote.timing,
-            noteStyle: currentNote.noteStyle,
+            audioData: currentNote.audioData,
         };
     });
+
     const measure: ISbDmTrackMeasure = {
         type: SbDmEntityType.TrackMeasure,
         id: 1,
@@ -215,7 +190,7 @@ const makeTrack = (
             beatGroups: [track._notes.length],
         },
         steps: track._notes.map((currentNote, index) => {
-            return { index, noteStyleId: currentNote.noteStyle?.id };
+            return { index, noteStyleId: currentNote.audioData?.id };
         }),
         subdivisions: [],
         events: measureEvents,

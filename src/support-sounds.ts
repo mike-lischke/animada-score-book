@@ -3,7 +3,9 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import { ExcitationMode, type IInstrumentMeta, type IVocalCharacteristics } from "./core/ScoreBookDataModel.js";
+import {
+    Damping, ExcitationMode, type IInstrumentMeta, type IVocalCharacteristics,
+} from "./core/ScoreBookDataModel.js";
 
 const vocalCharacteristics: IVocalCharacteristics = { excitationMode: ExcitationMode.Vocal };
 
@@ -20,61 +22,61 @@ const numberSoundsPT: IInstrumentMeta = {
             id: "1",
             file: "Numbers/Um.mp3",
             characteristics: vocalCharacteristics,
-            accented: false,
+            sampleProfile: { builtInDamping: Damping.Open, builtInAccent: false, ghost: false },
         },
         {
             id: "2",
             file: "Numbers/Dois.mp3",
             characteristics: vocalCharacteristics,
-            accented: false,
+            sampleProfile: { builtInDamping: Damping.Open, builtInAccent: false, ghost: false },
         },
         {
             id: "3",
             file: "Numbers/Tres.mp3",
             characteristics: vocalCharacteristics,
-            accented: true,
+            sampleProfile: { builtInDamping: Damping.Open, builtInAccent: true, ghost: false },
         },
         {
             id: "4",
             file: "Numbers/Quatro.mp3",
             characteristics: vocalCharacteristics,
-            accented: false,
+            sampleProfile: { builtInDamping: Damping.Open, builtInAccent: false, ghost: false },
         },
         {
             id: "5",
             file: "Numbers/Cinco.mp3",
             characteristics: vocalCharacteristics,
-            accented: false,
+            sampleProfile: { builtInDamping: Damping.Open, builtInAccent: false, ghost: false },
         },
         {
             id: "6",
             file: "Numbers/Seis.mp3",
             characteristics: vocalCharacteristics,
-            accented: false,
+            sampleProfile: { builtInDamping: Damping.Open, builtInAccent: false, ghost: false },
         },
         {
             id: "7",
             file: "Numbers/Sete.mp3",
             characteristics: vocalCharacteristics,
-            accented: false,
+            sampleProfile: { builtInDamping: Damping.Open, builtInAccent: false, ghost: false },
         },
         {
             id: "8",
             file: "Numbers/Oito.mp3",
             characteristics: vocalCharacteristics,
-            accented: false,
+            sampleProfile: { builtInDamping: Damping.Open, builtInAccent: false, ghost: false },
         },
         {
             id: "9",
             file: "Numbers/Nove.mp3",
             characteristics: vocalCharacteristics,
-            accented: false,
+            sampleProfile: { builtInDamping: Damping.Open, builtInAccent: false, ghost: false },
         },
         {
             id: "10",
             file: "Numbers/Dez.mp3",
             characteristics: vocalCharacteristics,
-            accented: false,
+            sampleProfile: { builtInDamping: Damping.Open, builtInAccent: false, ghost: false },
         }
     ],
 };

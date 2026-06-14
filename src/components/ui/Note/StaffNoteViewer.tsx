@@ -1178,8 +1178,8 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
     }
 
     private resolveDisplayType(noteStyle: IAudioData): NoteDisplayType {
-        if ("displayType" in noteStyle.characteristics) {
-            return noteStyle.characteristics.displayType!;
+        if ("mainDisplayType" in noteStyle.characteristics) {
+            return noteStyle.characteristics.mainDisplayType!;
         }
 
         return NoteDisplayType.Oval;
@@ -1211,15 +1211,11 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
 
     private resolveDiamondOpen(noteStyle: IAudioData): boolean | undefined {
         const characteristics = noteStyle.characteristics;
-        if (!("displayType" in characteristics) || characteristics.displayType !== NoteDisplayType.Diamond) {
+        if (!("mainDisplayType" in characteristics) || characteristics.mainDisplayType !== NoteDisplayType.Diamond) {
             return undefined;
         }
 
-        if (!("damping" in characteristics) || characteristics.damping === undefined) {
-            return undefined;
-        }
-
-        return characteristics.damping === Damping.Open;
+        return noteStyle.sampleProfile.builtInDamping === Damping.Open;
     }
 
     /**
@@ -1324,7 +1320,7 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                 }
 
                 // Hand + Cross display → hollow square around cross (body).
-                if (c.displayType === NoteDisplayType.Cross) {
+                if (c.mainDisplayType === NoteDisplayType.Cross) {
                     classes.push("body-hand");
                 }
             }
@@ -1334,28 +1330,9 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
             classes.push("blown");
         }
 
-        // Damping class for non-open damping.
-        if ("damping" in c && c.damping !== undefined) {
-            switch (c.damping) {
-                case Damping.Muted: {
-                    classes.push("damping-muted");
-                    break;
-                }
-
-                case Damping.Start: {
-                    classes.push("damping-start");
-                    break;
-                }
-
-                case Damping.End: {
-                    classes.push("damping-end");
-                    break;
-                }
-
-                default: {
-                    break;
-                }
-            }
+        // Ghost notes: rendered with parentheses.
+        if (noteStyle.sampleProfile.ghost) {
+            classes.push("ghost-note");
         }
 
         return classes;
@@ -1455,6 +1432,20 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                     style={{ stroke: "var(--color-base-content)", strokeWidth: 2.5, strokeLinecap: "round" }}>
                     <use href="#symbol-cross-head" />
                 </svg>,
+            );
+        }
+
+        // Damped (muted) note: plus sign above the note head.
+        if (noteStyle.sampleProfile.builtInDamping === Damping.Muted) {
+            nodes.push(
+                <span key="damped-plus" className="staff-note-head-damped-plus">+</span>,
+            );
+        }
+
+        // Ghost note: closing parenthesis (opening is via CSS ::before on .ghost-note).
+        if (noteStyle.sampleProfile.ghost) {
+            nodes.push(
+                <span key="ghost-paren" className="staff-note-head-ghost-paren">)</span>,
             );
         }
 

@@ -10,7 +10,7 @@ import { Track } from "../../src/core/Track.js";
 import { SbDmEntityType, type ISbDmInstrument } from "../../src/core/ScoreBookDataModel.js";
 import { ArrangementMigrator } from "../../src/core/serialisation/migration/ArrangementMigrator.js";
 import type { ILegacyArrangementSnapshot } from "../../src/core/serialisation/migration/legacy-snapshot-types.js";
-import type { INoteStyle } from "../../src/core/types/general.js";
+import type { IAudioData } from "../../src/core/types/general.js";
 import { TimeCoordinator } from "../../src/player/TimeCoordinator.js";
 import { TrackPlayer } from "../../src/player/TrackPlayer.js";
 
@@ -41,9 +41,11 @@ const hydrateMeasureEvents = (arrangement: Arrangement): void => {
             return -1;
         },
     });
+
     const players = arrangement.tracks.map((track) => {
         return new TrackPlayer(track, timeCoordinator);
     });
+
     players.forEach((player) => {
         player.dispose();
     });
@@ -56,7 +58,9 @@ describe("Track", () => {
             id: "accent",
             instrument,
             audioBuffer: null,
-        } as INoteStyle;
+            sampleProfile: { builtInDamping: 0, builtInAccent: false, ghost: false }
+        } as IAudioData;
+
         instrument.noteStyles[noteStyle.id] = noteStyle;
 
         const snapshot: ILegacyArrangementSnapshot = {
@@ -120,12 +124,12 @@ describe("Track", () => {
             measureNumber: 1,
             start: { numerator: 1, denominator: 16 },
             duration: { numerator: 1, denominator: 16 },
-            noteStyle: undefined,
+            audioData: undefined,
         });
 
         // getNoteAt finds stored sounding events.
-        expect(track.getNoteAt({ bar: 1, step: 1 })?.noteStyle?.id).toBe(noteStyle.id);
-        expect(track.getNoteAt({ bar: 2, step: 5 })?.noteStyle?.id).toBe(noteStyle.id);
+        expect(track.getNoteAt({ bar: 1, step: 1 })?.audioData?.id).toBe(noteStyle.id);
+        expect(track.getNoteAt({ bar: 2, step: 5 })?.audioData?.id).toBe(noteStyle.id);
     });
 
     it("includes sounding polyrhythm notes in derived measures", () => {
@@ -134,7 +138,10 @@ describe("Track", () => {
             id: "accent",
             instrument,
             audioBuffer: null,
-        } as INoteStyle;
+
+            sampleProfile: { builtInDamping: 0, builtInAccent: false, ghost: false }
+
+        } as IAudioData;
         instrument.noteStyles[noteStyle.id] = noteStyle;
 
         // Build the polyrhythm via the V1 legacy snapshot path so the migration produces the
@@ -182,18 +189,20 @@ describe("Track", () => {
             .map(({ index }) => {
                 return index;
             });
+
         expect(polyrhythmEventIndices).toHaveLength(3);
         for (const index of polyrhythmEventIndices) {
             track.measures[0].events[index] = {
                 ...track.measures[0].events[index],
-                noteStyle,
+                audioData: noteStyle,
             };
         }
 
         expect(track.measures).toHaveLength(1);
         const soundingEvents = track.measures[0].events.filter((event) => {
-            return event.noteStyle?.id === noteStyle.id;
+            return event.audioData?.id === noteStyle.id;
         });
+
         expect(soundingEvents).toHaveLength(3);
         expect(soundingEvents.map((event) => {
             return event.start;

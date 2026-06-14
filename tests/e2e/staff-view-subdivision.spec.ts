@@ -65,7 +65,7 @@ test.describe("Staff view subdivision rendering", () => {
 
     test("expands staff slots for clean power-of-two subdivisions", async ({ page }) => {
         const subdivisionSnapshot = {
-            version: 2,
+            version: 3,
             title: "E2E Staff Subdivision",
             timeParams: {
                 timeSignature: "4/4",
@@ -141,7 +141,7 @@ test.describe("Staff view subdivision rendering", () => {
 
     test("renders mixed full-bar note lengths down to 32nd correctly", async ({ page }) => {
         const mixedLengthsSnapshot = {
-            version: 2,
+            version: 3,
             title: "E2E Staff Mixed Lengths",
             timeParams: {
                 timeSignature: "4/4",

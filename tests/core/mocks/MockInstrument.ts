@@ -7,7 +7,7 @@ import type { IInstrumentMeta } from "../../../src/core/ScoreBookDataModel.js";
 import {
     SbDmEntityType, type ISbDmInstrument, type ISbDmInstrumentImage,
 } from "../../../src/core/ScoreBookDataModel.js";
-import type { INoteStyle } from "../../../src/core/types/general.js";
+import type { IAudioData } from "../../../src/core/types/general.js";
 import { getNewId } from "../../../src/core/utils.js";
 
 /**
@@ -30,7 +30,7 @@ export class MockInstrument implements ISbDmInstrument {
         expandedOnce: false,
     };
 
-    public readonly noteStyles: Record<string, INoteStyle> = {};
+    public readonly noteStyles: Record<string, IAudioData> = {};
 
     public constructor(instrumentMeta: IInstrumentMeta) {
         const { id, variants, displayOrder, displayName, color, typeId } = instrumentMeta;
@@ -43,7 +43,8 @@ export class MockInstrument implements ISbDmInstrument {
 
         variants.forEach(({ id, symbol, characteristics }) => {
             this.noteStyles[id] = {
-                id, symbol, audioBuffer: null, instrument: this, characteristics
+                id, symbol, audioBuffer: null, instrument: this, characteristics,
+                sampleProfile: { builtInDamping: 0, builtInAccent: false, ghost: false },
             };
         });
 

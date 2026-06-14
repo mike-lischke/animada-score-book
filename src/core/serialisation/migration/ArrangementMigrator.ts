@@ -83,7 +83,7 @@ export class ArrangementMigrator {
 
     private static migrate(snapshot: IArrangementSnapshot | ILegacyArrangementSnapshot,
         instruments: ISbDmInstrument[]): Arrangement {
-        if (snapshot.version < arrangementSnapshotVersion) {
+        if (snapshot.version < 2) {
             const legacyArrangement = new LegacyArrangement(snapshot as ILegacyArrangementSnapshot);
 
             return this.migrateLegacyArrangement(legacyArrangement, instruments);
@@ -93,7 +93,55 @@ export class ArrangementMigrator {
             throw new Error(`Unsupported snapshot schema version: ${snapshot.version}`);
         }
 
-        return this.createArrangementFromSnapshot(snapshot as IArrangementSnapshot, instruments);
+        let current = snapshot as IArrangementSnapshot;
+        if (current.version < arrangementSnapshotVersion) {
+            current = this.migrateV2ToV3(current, instruments);
+        }
+
+        return this.createArrangementFromSnapshot(current, instruments);
+    }
+
+    /**
+     * Migrates a v2 snapshot to v3 by adding {@link INoteArticulation} to each
+     * measure step that has a noteStyleId. The articulation is derived from the
+     * instrument variant's {@link ISampleProfile}.
+     *
+     * @param snapshot    The v2 arrangement snapshot.
+     * @param instruments The available instruments.
+     *
+     * @returns A v3 arrangement snapshot with articulation on every note step.
+     */
+    private static migrateV2ToV3(snapshot: IArrangementSnapshot,
+        instruments: ISbDmInstrument[]): IArrangementSnapshot {
+        const instrumentMap = new Map(instruments.map((inst) => {
+            return [inst.typeId, inst] as const;
+        }));
+
+        const migratedTracks = snapshot.tracks.map((track) => {
+            const instrument = instrumentMap.get(track.instrumentId);
+
+            const migratedMeasures = track.measures.map((measure) => {
+                const migratedSteps = measure.steps.map((step) => {
+                    if (!step.noteStyleId || !instrument) {
+                        return step;
+                    }
+
+                    const variant = instrument.noteStyles[step.noteStyleId];
+                    const { builtInDamping, builtInAccent } = variant.sampleProfile;
+
+                    return {
+                        ...step,
+                        articulation: { damping: builtInDamping, accent: builtInAccent },
+                    };
+                });
+
+                return { ...measure, steps: migratedSteps };
+            });
+
+            return { ...track, measures: migratedMeasures };
+        });
+
+        return { ...snapshot, version: arrangementSnapshotVersion, tracks: migratedTracks };
     }
 
     /**
@@ -150,7 +198,9 @@ export class ArrangementMigrator {
             }),
         };
 
-        return this.createArrangementFromSnapshot(snapshot, instruments);
+        const migrated = this.migrateV2ToV3(snapshot, instruments);
+
+        return this.createArrangementFromSnapshot(migrated, instruments);
     }
 
     private static createArrangementFromSnapshot(snapshot: IArrangementSnapshot,

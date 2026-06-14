@@ -12,7 +12,7 @@ import {
 import type { IArrangementSnapshot } from "../../../src/core/types/general.js";
 
 const sampleSnapshot: IArrangementSnapshot = {
-    version: 2,
+    version: 3,
     title: "Sample",
     timeParams: {
         timeSignature: "4/4",

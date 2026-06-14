@@ -24,7 +24,7 @@ test.describe("Snapshot compatibility polyrhythm flow", () => {
         const storedSnapshot = tryParsePackedArrangement(storedCurrentScore);
         expect(storedSnapshot).toBeDefined();
 
-        expect(storedSnapshot!.version).toBe(2);
+        expect(storedSnapshot!.version).toBe(3);
         expect(storedSnapshot!.title).toBe(beijaFlorTitle);
         expect(storedSnapshot!.title).not.toBe(beijaFlorDisplayedTitle);
         expect(Array.isArray(storedSnapshot!.tracks)).toBeTruthy();

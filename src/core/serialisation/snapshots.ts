@@ -10,7 +10,7 @@ import type {
 
 /** Current internal arrangement snapshot schema version. */
 
-export const arrangementSnapshotVersion = 2;
+export const arrangementSnapshotVersion = 3;
 
 export const isNaturalNumber = (value: unknown): value is number => {
     return typeof value === "number" && Number.isInteger(value) && value >= 1;

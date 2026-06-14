@@ -76,11 +76,10 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
                 stickTechnique: StickTechnique.Normal,
-                damping: Damping.Open,
-                displayType: NoteDisplayType.Oval
+                mainDisplayType: NoteDisplayType.Oval
             },
             noteLine: 2,
-            accented: false,
+            sampleProfile: { builtInDamping: Damping.Open, builtInAccent: false, ghost: false },
         },
         {
             id: "2",
@@ -92,11 +91,10 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
                 stickTechnique: StickTechnique.Normal,
-                damping: Damping.Open,
-                displayType: NoteDisplayType.Oval
+                mainDisplayType: NoteDisplayType.Oval
             },
             noteLine: 1,
-            accented: false,
+            sampleProfile: { builtInDamping: Damping.Open, builtInAccent: false, ghost: false },
         }
     ],
     color: pastelColors[(colorOffset + 0) % pastelColors.length],
@@ -117,11 +115,10 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
                 stickTechnique: StickTechnique.Normal,
-                damping: Damping.Open,
-                displayType: NoteDisplayType.Oval
+                mainDisplayType: NoteDisplayType.Oval
             },
             noteLine: 4,
-            accented: false,
+            sampleProfile: { builtInDamping: Damping.Open, builtInAccent: false, ghost: false },
         },
         {
             id: "2",
@@ -133,11 +130,10 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
                 stickTechnique: StickTechnique.Normal,
-                damping: Damping.Open,
-                displayType: NoteDisplayType.Oval
+                mainDisplayType: NoteDisplayType.Oval
             },
             noteLine: 3,
-            accented: false,
+            sampleProfile: { builtInDamping: Damping.Open, builtInAccent: false, ghost: false },
         },
         {
             id: "3",
@@ -149,11 +145,10 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
                 stickTechnique: StickTechnique.Normal,
-                damping: Damping.Open,
-                displayType: NoteDisplayType.Oval
+                mainDisplayType: NoteDisplayType.Oval
             },
             noteLine: 2,
-            accented: false,
+            sampleProfile: { builtInDamping: Damping.Open, builtInAccent: false, ghost: false },
         },
         {
             id: "4",
@@ -165,11 +160,10 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
                 stickTechnique: StickTechnique.Normal,
-                damping: Damping.Open,
-                displayType: NoteDisplayType.Oval
+                mainDisplayType: NoteDisplayType.Oval
             },
             noteLine: 1,
-            accented: false,
+            sampleProfile: { builtInDamping: Damping.Open, builtInAccent: false, ghost: false },
         }
     ],
     color: pastelColors[(colorOffset + 1) % pastelColors.length],
@@ -189,10 +183,9 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             },
             characteristics: {
                 excitationMode: ExcitationMode.Shaken,
-                damping: Damping.Open,
-                displayType: NoteDisplayType.Triangle,
+                mainDisplayType: NoteDisplayType.Triangle,
             },
-            accented: false
+            sampleProfile: { builtInDamping: Damping.Open, builtInAccent: false, ghost: false },
         },
         {
             id: "2",
@@ -203,10 +196,9 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             },
             characteristics: {
                 excitationMode: ExcitationMode.Shaken,
-                damping: Damping.Open,
-                displayType: NoteDisplayType.Triangle,
+                mainDisplayType: NoteDisplayType.Triangle,
             },
-            accented: false
+            sampleProfile: { builtInDamping: Damping.Open, builtInAccent: false, ghost: true },
         }
     ],
     color: pastelColors[(colorOffset + 2) % pastelColors.length]
@@ -227,10 +219,9 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
                 stickTechnique: StickTechnique.Normal,
-                damping: Damping.Open,
-                displayType: NoteDisplayType.Cross
+                mainDisplayType: NoteDisplayType.Cross
             },
-            accented: true
+            sampleProfile: { builtInDamping: Damping.Open, builtInAccent: true, ghost: false },
         },
         {
             id: "2",
@@ -242,10 +233,9 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
                 stickTechnique: StickTechnique.Normal,
-                damping: Damping.Open,
-                displayType: NoteDisplayType.Cross
+                mainDisplayType: NoteDisplayType.Cross
             },
-            accented: false
+            sampleProfile: { builtInDamping: Damping.Open, builtInAccent: false, ghost: true },
         }
     ],
     color: pastelColors[(colorOffset + 3) % pastelColors.length]
@@ -266,10 +256,9 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
                 stickTechnique: StickTechnique.Normal,
-                damping: Damping.Open,
-                displayType: NoteDisplayType.Oval
+                mainDisplayType: NoteDisplayType.Oval
             },
-            accented: true
+            sampleProfile: { builtInDamping: Damping.Open, builtInAccent: true, ghost: false },
         },
         {
             id: "2",
@@ -281,10 +270,9 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
                 stickTechnique: StickTechnique.Normal,
-                damping: Damping.Open,
-                displayType: NoteDisplayType.Oval
+                mainDisplayType: NoteDisplayType.Oval
             },
-            accented: false
+            sampleProfile: { builtInDamping: Damping.Open, builtInAccent: false, ghost: false },
         },
         {
             id: "3",
@@ -296,10 +284,9 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
                 stickTechnique: StickTechnique.RimShot,
-                damping: Damping.Open,
-                displayType: NoteDisplayType.Oval
+                mainDisplayType: NoteDisplayType.Oval
             },
-            accented: false
+            sampleProfile: { builtInDamping: Damping.Open, builtInAccent: false, ghost: false },
         },
         {
             id: "4",
@@ -311,10 +298,9 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
                 stickTechnique: StickTechnique.Rim,
-                damping: Damping.Open,
-                displayType: NoteDisplayType.Cross
+                mainDisplayType: NoteDisplayType.Cross
             },
-            accented: false
+            sampleProfile: { builtInDamping: Damping.Open, builtInAccent: false, ghost: false },
         },
         {
             id: "5",
@@ -326,10 +312,9 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
                 stickTechnique: StickTechnique.PressRoll,
-                damping: Damping.Open,
-                displayType: NoteDisplayType.Oval
+                mainDisplayType: NoteDisplayType.Oval
             },
-            accented: false
+            sampleProfile: { builtInDamping: Damping.Open, builtInAccent: false, ghost: false },
         },
         {
             id: "6",
@@ -341,10 +326,9 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
                 handTechnique: HandTechnique.Open,
-                damping: Damping.Open,
-                displayType: NoteDisplayType.Oval
+                mainDisplayType: NoteDisplayType.Oval
             },
-            accented: false
+            sampleProfile: { builtInDamping: Damping.Open, builtInAccent: false, ghost: false },
         },
         {
             id: "7",
@@ -356,10 +340,9 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
                 handTechnique: HandTechnique.Slap,
-                damping: Damping.Open,
-                displayType: NoteDisplayType.Square
+                mainDisplayType: NoteDisplayType.Square
             },
-            accented: true
+            sampleProfile: { builtInDamping: Damping.Open, builtInAccent: true, ghost: false },
         }
     ],
     color: pastelColors[(colorOffset + 4) % pastelColors.length]
@@ -380,10 +363,9 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
                 stickTechnique: StickTechnique.Normal,
-                damping: Damping.Open,
-                displayType: NoteDisplayType.Oval
+                mainDisplayType: NoteDisplayType.Oval
             },
-            accented: true
+            sampleProfile: { builtInDamping: Damping.Open, builtInAccent: true, ghost: false },
         },
         {
             id: "2",
@@ -395,10 +377,9 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
                 stickTechnique: StickTechnique.Normal,
-                damping: Damping.Open,
-                displayType: NoteDisplayType.Oval
+                mainDisplayType: NoteDisplayType.Oval
             },
-            accented: false
+            sampleProfile: { builtInDamping: Damping.Open, builtInAccent: false, ghost: true },
         }
     ],
     color: pastelColors[(colorOffset + 5) % pastelColors.length]
@@ -419,10 +400,9 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
                 stickTechnique: StickTechnique.Normal,
-                damping: Damping.Open,
-                displayType: NoteDisplayType.Oval
+                mainDisplayType: NoteDisplayType.Oval
             },
-            accented: true
+            sampleProfile: { builtInDamping: Damping.Open, builtInAccent: true, ghost: false },
         },
         {
             id: "2",
@@ -434,10 +414,9 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
                 stickTechnique: StickTechnique.Normal,
-                damping: Damping.Open,
-                displayType: NoteDisplayType.Oval
+                mainDisplayType: NoteDisplayType.Oval
             },
-            accented: false
+            sampleProfile: { builtInDamping: Damping.Open, builtInAccent: false, ghost: true },
         },
         {
             id: "3",
@@ -449,10 +428,9 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
                 stickTechnique: StickTechnique.PressRoll,
-                damping: Damping.Open,
-                displayType: NoteDisplayType.Oval
+                mainDisplayType: NoteDisplayType.Oval
             },
-            accented: false
+            sampleProfile: { builtInDamping: Damping.Open, builtInAccent: false, ghost: false },
         },
         {
             id: "4",
@@ -464,10 +442,9 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
                 stickTechnique: StickTechnique.RimShot,
-                damping: Damping.Open,
-                displayType: NoteDisplayType.Cross
+                mainDisplayType: NoteDisplayType.Oval
             },
-            accented: false
+            sampleProfile: { builtInDamping: Damping.Open, builtInAccent: false, ghost: false },
         },
     ],
     color: pastelColors[(colorOffset + 6) % pastelColors.length]
@@ -488,10 +465,9 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
                 handTechnique: HandTechnique.Open,
-                damping: Damping.Open,
-                displayType: NoteDisplayType.Square
+                mainDisplayType: NoteDisplayType.Square
             },
-            accented: false
+            sampleProfile: { builtInDamping: Damping.Open, builtInAccent: false, ghost: false },
         },
         {
             id: "2",
@@ -503,10 +479,9 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
                 handTechnique: HandTechnique.Slap,
-                damping: Damping.Open,
-                displayType: NoteDisplayType.Square
+                mainDisplayType: NoteDisplayType.Square
             },
-            accented: true
+            sampleProfile: { builtInDamping: Damping.Open, builtInAccent: true, ghost: false },
         },
         {
             id: "3",
@@ -518,10 +493,9 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
                 handTechnique: HandTechnique.Heel,
-                damping: Damping.Open,
-                displayType: NoteDisplayType.Square
+                mainDisplayType: NoteDisplayType.Square
             },
-            accented: false
+            sampleProfile: { builtInDamping: Damping.Open, builtInAccent: false, ghost: false },
         }
     ],
     color: pastelColors[(colorOffset + 7) % pastelColors.length]
@@ -542,10 +516,9 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
                 stickTechnique: StickTechnique.Normal,
-                damping: Damping.Open,
-                displayType: NoteDisplayType.Oval
+                mainDisplayType: NoteDisplayType.Oval
             },
-            accented: true
+            sampleProfile: { builtInDamping: Damping.Open, builtInAccent: true, ghost: false },
         },
         {
             id: "2",
@@ -557,10 +530,9 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
                 stickTechnique: StickTechnique.Normal,
-                damping: Damping.Muted,
-                displayType: NoteDisplayType.Oval
+                mainDisplayType: NoteDisplayType.Oval
             },
-            accented: false
+            sampleProfile: { builtInDamping: Damping.Muted, builtInAccent: false, ghost: false },
         }
     ],
     color: pastelColors[(colorOffset + 8) % pastelColors.length]
@@ -581,10 +553,9 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
                 stickTechnique: StickTechnique.Normal,
-                damping: Damping.Open,
-                displayType: NoteDisplayType.Oval
+                mainDisplayType: NoteDisplayType.Oval
             },
-            accented: true
+            sampleProfile: { builtInDamping: Damping.Open, builtInAccent: true, ghost: false },
         },
         {
             id: "2",
@@ -596,10 +567,9 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
                 stickTechnique: StickTechnique.Normal,
-                damping: Damping.Muted,
-                displayType: NoteDisplayType.Oval
+                mainDisplayType: NoteDisplayType.Oval
             },
-            accented: false
+            sampleProfile: { builtInDamping: Damping.Muted, builtInAccent: false, ghost: false },
         }
     ],
     color: pastelColors[(colorOffset + 9) % pastelColors.length]
@@ -620,10 +590,9 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
                 stickTechnique: StickTechnique.Normal,
-                damping: Damping.Open,
-                displayType: NoteDisplayType.Oval
+                mainDisplayType: NoteDisplayType.Oval
             },
-            accented: true
+            sampleProfile: { builtInDamping: Damping.Open, builtInAccent: true, ghost: false },
         },
         {
             id: "2",
@@ -635,10 +604,9 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
                 stickTechnique: StickTechnique.Normal,
-                damping: Damping.Muted,
-                displayType: NoteDisplayType.Oval
+                mainDisplayType: NoteDisplayType.Oval
             },
-            accented: false
+            sampleProfile: { builtInDamping: Damping.Muted, builtInAccent: false, ghost: false },
         }
     ],
     color: pastelColors[(colorOffset + 10) % pastelColors.length]

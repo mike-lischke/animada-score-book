@@ -5,7 +5,7 @@
 
 import { describe, expect, it, vi } from "vitest";
 
-import type { INoteStyle, Mutable } from "../../src/core/types/general.js";
+import type { IAudioData, Mutable } from "../../src/core/types/general.js";
 import type { ICallbackEvent, IInterval } from "../../src/player/types.js";
 
 type CallbackHelper = {
@@ -107,7 +107,7 @@ vi.mock("../../src/player/TrackPlayer.js", () => {
 });
 
 // Build simple track/arrangement factories
-const makeNote = (track: ISbDmTrack, timing: ITiming, noteStyle?: INoteStyle): ISbDmNoteEvent => {
+const makeNote = (track: ISbDmTrack, timing: ITiming, noteStyle?: IAudioData): ISbDmNoteEvent => {
     return {
         type: SbDmEntityType.NoteEvent,
         id: getNewId(),
@@ -116,7 +116,7 @@ const makeNote = (track: ISbDmTrack, timing: ITiming, noteStyle?: INoteStyle): I
         duration: { numerator: 1, denominator: 16 },
         track,
         timing,
-        noteStyle,
+        audioData: noteStyle,
     };
 };
 
@@ -183,11 +183,13 @@ const makeArrangement = (trackCount: number): ISbDmArrangement => {
             clear: vi.fn(),
         };
 
-        const noteStyle: INoteStyle = {
+        const noteStyle: IAudioData = {
             id: "x",
-            instrument: instrument as unknown as INoteStyle["instrument"],
-            audioBuffer: {} as AudioBuffer
-        } as INoteStyle;
+            instrument: instrument as unknown as IAudioData["instrument"],
+            audioBuffer: {} as AudioBuffer,
+            sampleProfile: { builtInDamping: 0, builtInAccent: false, ghost: false }
+        } as IAudioData;
+
         const sourceNote = makeNote(track, { bar: 1, step: 1 }, noteStyle);
         notes.push(sourceNote);
         track.measures.push({
@@ -200,7 +202,7 @@ const makeArrangement = (trackCount: number): ISbDmArrangement => {
                 stepResolution: 1,
                 beatGroups: [1],
             },
-            steps: [{ index: 0, noteStyleId: sourceNote.noteStyle?.id }],
+            steps: [{ index: 0, noteStyleId: sourceNote.audioData?.id }],
             subdivisions: [],
             events: [{
                 type: SbDmEntityType.NoteEvent,
@@ -210,7 +212,7 @@ const makeArrangement = (trackCount: number): ISbDmArrangement => {
                 duration: { numerator: 1, denominator: 1 },
                 track: track as unknown as ISbDmTrack,
                 timing: { bar: 1, step: 1 },
-                noteStyle: sourceNote.noteStyle,
+                audioData: sourceNote.audioData,
             }],
         });
         tracks.push(track);
@@ -231,6 +233,7 @@ const makeArrangement = (trackCount: number): ISbDmArrangement => {
         countIn: false,
         measureLabels: {},
     };
+
     tracks.forEach((t) => {
         t.arrangement = arrangement;
     });

@@ -14,7 +14,7 @@ import {
 import { ArrangementMigrator } from "../../src/core/serialisation/migration/ArrangementMigrator.js";
 import type { ILegacyArrangementSnapshot } from "../../src/core/serialisation/migration/legacy-snapshot-types.js";
 import { Track } from "../../src/core/Track.js";
-import type { INoteStyle } from "../../src/core/types/general.js";
+import type { IAudioData } from "../../src/core/types/general.js";
 import { TimeCoordinator } from "../../src/player/TimeCoordinator.js";
 import { TrackPlayer } from "../../src/player/TrackPlayer.js";
 import type { IRealtimeProvider } from "../../src/ui/AnimationEngine.js";
@@ -39,7 +39,7 @@ class TestScoreBookDataModel extends ScoreBookDataModel {
 }
 
 const createInstrument = (typeId: string, id: number, displayOrder: number): ISbDmInstrument => {
-    const noteStyles = {} as Record<string, INoteStyle>;
+    const noteStyles = {} as Record<string, IAudioData>;
 
     return {
         type: SbDmEntityType.Instrument,
@@ -67,7 +67,8 @@ const createInstrumentWithNoteStyle = (typeId: string, id: number, displayOrder:
         id: "1",
         audioBuffer: null,
         instrument,
-    } as INoteStyle;
+        sampleProfile: { builtInDamping: 0, builtInAccent: false, ghost: false }
+    } as IAudioData;
 
     return instrument;
 };
@@ -175,7 +176,7 @@ describe.sequential("Polyrhythm UI Integration", () => {
                 return;
             }
 
-            track.measures[0].events[index] = { ...event, noteStyle: instrument.noteStyles["1"] };
+            track.measures[0].events[index] = { ...event, audioData: instrument.noteStyles["1"] };
         });
 
         const events = trackPlayer.getEvents({ start: 0, end: timeCoordinator.metrics.realTimeLength });

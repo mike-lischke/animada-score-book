@@ -399,20 +399,23 @@ export class App extends UIComponent<{}, IAppState> {
      * Once the backend is ready, proceeds with data model initialisation.
      */
     private async checkBackendThenInitialize(): Promise<void> {
+        let initialized = false;
+
         try {
             const res = await fetch("/api?action=health");
             const data = await res.json() as { status: string; initialized: boolean; };
-
-            if (data.initialized) {
-                await this.initializeApp();
-
-                return;
-            }
+            initialized = data.initialized;
         } catch {
             // Backend not reachable — show setup dialog.
         }
 
-        this.backendSetupDialogRef.current?.open();
+        if (!initialized) {
+            this.backendSetupDialogRef.current?.open();
+
+            return;
+        }
+
+        await this.initializeApp();
     }
 
     /**

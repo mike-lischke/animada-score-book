@@ -12,6 +12,7 @@ import { TimeParams } from "./TimeParams.js";
 import { Track } from "./Track.js";
 import type { IArrangementSnapshot, ITimeParams, ITrackSnapshot } from "./types/general.js";
 import { getNewId } from "./utils.js";
+import { arrangementSnapshotVersion } from "./serialisation/snapshots.js";
 
 export class Arrangement implements ISbDmArrangement {
     public readonly type = SbDmEntityType.Arrangement;
@@ -67,7 +68,7 @@ export class Arrangement implements ISbDmArrangement {
      */
     public toSnapshot(): IArrangementSnapshot {
         return {
-            version: 2,
+            version: arrangementSnapshotVersion,
             title: this.titleString,
             timeParams: {
                 timeSignature: this.timeParams.timeSignature,

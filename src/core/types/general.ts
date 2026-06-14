@@ -3,7 +3,7 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import type { ISoundStyleMeta, ISbDmInstrument, ITiming } from "../ScoreBookDataModel.js";
+import type { ISoundStyleMeta, ISbDmInstrument, ITiming, INoteArticulation } from "../ScoreBookDataModel.js";
 
 export interface IRect {
     x: number;
@@ -81,7 +81,12 @@ export interface IMeterSnapshot {
 
 export interface IMeasureStep {
     index: number;
+
+    /** Which sound variant (center, rim, high bell…). References a key in the instrument's noteStyles map. */
     noteStyleId?: string;
+
+    /** How the note is played. Defaults to Open / unaccented when absent. */
+    articulation?: INoteArticulation;
 }
 
 /**

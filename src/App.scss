@@ -971,61 +971,54 @@ h6 {
         background-repeat: repeat-y;
     }
 
-    /* ---- Damping: brackets around the note ---- */
-    &.damping-muted::before {
+    /* ---- Ghost notes: parentheses around the note ---- */
+    &.ghost-note::before {
         content: "(";
         position: absolute;
         left: -8px;
-        top: 20px;
+        bottom: 24px;
         font-size: 16px;
         line-height: 1;
         pointer-events: none;
         color: var(--color-base-content);
     }
 
-    &.damping-muted::after {
-        content: ")" !important;
+    .staff-note-head-ghost-paren {
         position: absolute;
-        top: 20px;
-        left: 16px;
+        bottom: 24px;
+        left: 18px;
         font-size: 16px;
         line-height: 1;
         pointer-events: none;
         color: var(--color-base-content);
-        width: auto !important;
-        height: auto !important;
-        background: none !important;
-        border: none !important;
     }
 
-    &.damping-start::before {
-        content: "[";
+    /* Non-oval heads sit higher; pull parentheses down to match. */
+    &.ghost-note.triangle::before,
+    &.ghost-note.square::before,
+    &.ghost-note.diamond::before,
+    &.ghost-note.cross::before {
+        left: -2px;
+        bottom: 18px;
+    }
+
+    &.ghost-note.triangle .staff-note-head-ghost-paren,
+    &.ghost-note.square .staff-note-head-ghost-paren,
+    &.ghost-note.diamond .staff-note-head-ghost-paren,
+    &.ghost-note.cross .staff-note-head-ghost-paren {
+        left: 20px;
+        bottom: 18px;
+    }
+
+    /* ---- Damped (muted) notes: plus sign above the note head ---- */
+    .staff-note-head-damped-plus {
         position: absolute;
-        left: -6px;
-        top: 50%;
-        transform: translateY(-50%);
-        font-size: 20px;
-        font-weight: bold;
+        left: calc(50% - 10px);
+        bottom: 35px;
+        font-size: 14px;
         line-height: 1;
         pointer-events: none;
         color: var(--color-base-content);
-    }
-
-    &.damping-end::after {
-        content: "]" !important;
-        position: absolute;
-        right: -6px;
-        top: 50%;
-        transform: translateY(-50%);
-        font-size: 20px;
-        font-weight: bold;
-        line-height: 1;
-        pointer-events: none;
-        color: var(--color-base-content);
-        width: auto !important;
-        height: auto !important;
-        background: none !important;
-        border: none !important;
     }
 }
 

@@ -101,7 +101,7 @@ const makePolyrhythmFixture = (
         duration: { numerator: 1, denominator: 8 },
         track,
         timing: { bar: 1, step: 1 },
-        noteStyle: {
+        audioData: {
             id: "1",
             audioBuffer: null,
             instrument: track.instrument,

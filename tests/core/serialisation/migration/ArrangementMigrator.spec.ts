@@ -11,7 +11,7 @@ import { SbDmEntityType, type ISbDmInstrument } from "../../../../src/core/Score
 import { ArrangementMigrator } from "../../../../src/core/serialisation/migration/ArrangementMigrator.js";
 import type { ILegacyArrangementSnapshot } from "../../../../src/core/serialisation/migration/legacy-snapshot-types.js";
 import { getArrangementSnapshot } from "../../../../src/core/serialisation/snapshots.js";
-import type { IArrangementSnapshot, INoteStyle, Mutable } from "../../../../src/core/types/general.js";
+import type { IArrangementSnapshot, IAudioData, Mutable } from "../../../../src/core/types/general.js";
 import { TimeCoordinator } from "../../../../src/player/TimeCoordinator.js";
 import { TrackPlayer } from "../../../../src/player/TrackPlayer.js";
 
@@ -174,7 +174,10 @@ describe("ArrangementMigrator", () => {
             id: "1",
             audioBuffer: null,
             instrument,
-        } as INoteStyle;
+
+            sampleProfile: { builtInDamping: 0, builtInAccent: false, ghost: false }
+
+        } as IAudioData;
         (instrument as Mutable<ISbDmInstrument>).noteStyles = { "1": hitStyle };
 
         const legacySnapshot: ILegacyArrangementSnapshot = {
@@ -218,7 +221,7 @@ describe("ArrangementMigrator", () => {
         const targetEventIndex = sourceTrack.measures[0].events.indexOf(sourcePolyrhythmEvents[1]);
         sourceTrack.measures[0].events[targetEventIndex] = {
             ...sourcePolyrhythmEvents[1],
-            noteStyle: hitStyle,
+            audioData: hitStyle,
         };
         const snapshot = getArrangementSnapshot(sourceArrangement);
 
@@ -231,7 +234,7 @@ describe("ArrangementMigrator", () => {
         });
 
         expect(polyrhythmEvents).toHaveLength(3);
-        expect(polyrhythmEvents[1].noteStyle?.id).toBe("1");
+        expect(polyrhythmEvents[1].audioData?.id).toBe("1");
     });
 
     it("treats undefined parentSubdivisionId as top-level when rebuilding runtime events", () => {
@@ -240,7 +243,10 @@ describe("ArrangementMigrator", () => {
             id: "1",
             audioBuffer: null,
             instrument,
-        } as INoteStyle;
+
+            sampleProfile: { builtInDamping: 0, builtInAccent: false, ghost: false }
+
+        } as IAudioData;
         (instrument as Mutable<ISbDmInstrument>).noteStyles = { "1": hitStyle };
 
         const snapshot: IArrangementSnapshot = {
@@ -293,6 +299,12 @@ describe("ArrangementMigrator", () => {
 
     it("links nested legacy tuplets to their parent when migrating v1 snapshots", () => {
         const instrument = createInstrument("3", 3, 3);
+        (instrument as Mutable<ISbDmInstrument>).noteStyles = {
+            "1": {
+                id: "1", audioBuffer: null, instrument,
+                sampleProfile: { builtInDamping: 0, builtInAccent: false, ghost: false }
+            } as IAudioData,
+        };
 
         const snapshot: ILegacyArrangementSnapshot = {
             version: 1,
@@ -342,7 +354,12 @@ describe("ArrangementMigrator", () => {
         //   Base step 5: 1 regular note
         // Without the totalVisibleSteps fix, absIdx advanced by T1.actual(=3) and missed T3 at absIdx=8.
         const instrument = createInstrument("x", 99, 1);
-        const hitStyle = { id: "h", audioBuffer: null, instrument } as INoteStyle;
+        const hitStyle = {
+            id: "h", audioBuffer: null, instrument,
+
+            sampleProfile: { builtInDamping: 0, builtInAccent: false, ghost: false }
+
+        } as IAudioData;
         (instrument as Mutable<ISbDmInstrument>).noteStyles = { h: hitStyle };
 
         const snapshot: IArrangementSnapshot = {
@@ -397,6 +414,74 @@ describe("ArrangementMigrator", () => {
 
         // T1 produces 2 non-grid (slots 0–1), T2 produces 3 non-grid, T3 produces 4 non-grid → 9 total.
         expect(nonGridEvents).toHaveLength(9);
+    });
+
+    it("migrates v2 snapshots to v3 by adding articulation to steps", () => {
+        const instrument = createInstrument("ag", 1, 0);
+        const accentedStyle = {
+            id: "accent", audioBuffer: null, instrument,
+            sampleProfile: { builtInDamping: 0, builtInAccent: true, ghost: false },
+        } as IAudioData;
+        const mutedStyle = {
+            id: "muted", audioBuffer: null, instrument,
+            sampleProfile: { builtInDamping: 1, builtInAccent: false, ghost: false },
+        } as IAudioData;
+        (instrument as Mutable<ISbDmInstrument>).noteStyles = { accent: accentedStyle, muted: mutedStyle };
+
+        const v2Snapshot: IArrangementSnapshot = {
+            version: 2,
+            title: "V2→V3 Test",
+            timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4", stepResolution: 8 },
+            tracks: [{
+                id: 1,
+                instrumentId: "ag",
+                measures: [{
+                    number: 1,
+                    meter: { beats: 4, beatUnits: 4, stepResolution: 8, beatGroups: [4, 4] },
+                    steps: [
+                        { index: 0, noteStyleId: "accent" },
+                        { index: 1 },
+                        { index: 2, noteStyleId: "muted" },
+                        { index: 3 },
+                        { index: 4, noteStyleId: "accent" },
+                        { index: 5 },
+                        { index: 6 },
+                        { index: 7 },
+                    ],
+                    subdivisions: [],
+                }],
+            }],
+        };
+
+        const arrangement = createArrangement(v2Snapshot, [instrument]);
+        const track = arrangement.tracks[0];
+        const steps = track.measures[0].steps;
+
+        // Steps without noteStyleId should not have articulation.
+        expect(steps[1]).toEqual({ index: 1 });
+        expect(steps[3]).toEqual({ index: 3 });
+        expect(steps[5]).toEqual({ index: 5 });
+        expect(steps[6]).toEqual({ index: 6 });
+        expect(steps[7]).toEqual({ index: 7 });
+
+        // Accented step: damping=Open (0), accent=true.
+        expect(steps[0]).toEqual({
+            index: 0, noteStyleId: "accent",
+            articulation: { damping: 0, accent: true }
+        });
+        expect(steps[4]).toEqual({
+            index: 4, noteStyleId: "accent",
+            articulation: { damping: 0, accent: true }
+        });
+
+        // Muted step: damping=Muted (1), accent=false.
+        expect(steps[2]).toEqual({
+            index: 2, noteStyleId: "muted",
+            articulation: { damping: 1, accent: false }
+        });
+
+        // Verify snapshot version is bumped.
+        expect(arrangement.toSnapshot().version).toBe(3);
     });
 });
 
@@ -498,19 +583,19 @@ describe("ArrangementMigrator - BananaDrum URL migration", () => {
         expect(measure.meter.beatGroups).toEqual([3, 3]);
 
         expect(measure.steps).toEqual([
-            { index: 0, noteStyleId: "1" },
-            { index: 1, noteStyleId: "1" }, // Subdivision 1 (3:1) starts here.
-            { index: 2, noteStyleId: "1" },
-            { index: 3, noteStyleId: "2" }, // Subdivision 2 (3:1) starts here, nested in subdivision 1's slot 2.
-            { index: 4, noteStyleId: "2" },
-            { index: 5, noteStyleId: "2" },
-            { index: 6, noteStyleId: "1" },
-            { index: 7, noteStyleId: "1" },
-            { index: 8, noteStyleId: "3" }, // Subdivision 3 (4:1) starts here.
-            { index: 9, noteStyleId: "3" },
-            { index: 10, noteStyleId: "3" },
-            { index: 11, noteStyleId: "3" },
-            { index: 12, noteStyleId: "1" },
+            { index: 0, noteStyleId: "1", articulation: { accent: false, damping: 0 } },
+            { index: 1, noteStyleId: "1", articulation: { accent: false, damping: 0 } },
+            { index: 2, noteStyleId: "1", articulation: { accent: false, damping: 0 } },
+            { index: 3, noteStyleId: "2", articulation: { accent: false, damping: 0 } },
+            { index: 4, noteStyleId: "2", articulation: { accent: false, damping: 0 } },
+            { index: 5, noteStyleId: "2", articulation: { accent: false, damping: 0 } },
+            { index: 6, noteStyleId: "1", articulation: { accent: false, damping: 0 } },
+            { index: 7, noteStyleId: "1", articulation: { accent: false, damping: 0 } },
+            { index: 8, noteStyleId: "3", articulation: { accent: false, damping: 0 } },
+            { index: 9, noteStyleId: "3", articulation: { accent: false, damping: 0 } },
+            { index: 10, noteStyleId: "3", articulation: { accent: false, damping: 0 } },
+            { index: 11, noteStyleId: "3", articulation: { accent: false, damping: 0 } },
+            { index: 12, noteStyleId: "1", articulation: { accent: false, damping: 0 } },
         ]);
 
         expect(measure.subdivisions.length).toBe(3);
