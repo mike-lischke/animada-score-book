@@ -82,7 +82,7 @@ export class TrackPlayer {
                 break;
             }
 
-            if (realTime >= interval.start && event.noteStyle) {
+            if (realTime >= interval.start && event.audioData) {
                 events.push(this.getAudioEvent(event, realTime));
             }
         }
@@ -416,7 +416,7 @@ export class TrackPlayer {
             kind: "audio",
             event,
             realTime,
-            audioBuffer: event.noteStyle!.audioBuffer!
+            audioBuffer: event.audioData!.audioBuffer!
         };
     };
 }

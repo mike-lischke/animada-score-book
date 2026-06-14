@@ -12,7 +12,7 @@ import type { IScoreDBEntry, ISoundLibFsNode } from "./DatabaseTypes.js";
 import { Instrument } from "./Instrument.js";
 import { requisitions } from "../supplement/Requisitions.js";
 import type {
-    IArrangementSnapshot, IFraction, IMeasureStep, IMeterSnapshot, INoteStyle, INoteStyleSymbol,
+    IArrangementSnapshot, IFraction, IMeasureStep, IMeterSnapshot, IAudioData, INoteStyleSymbol,
     ISubdivision, Mutable
 } from "./types/general.js";
 import { getNewId } from "./utils.js";
@@ -198,7 +198,7 @@ export type NoteCharacteristics =
     | IVocalCharacteristics;
 
 /** Describes details about a specific play variant of an instrument. */
-export interface INoteStyleMeta {
+export interface ISoundStyleMeta {
     readonly id: string;
     readonly file: string;
     readonly symbol?: INoteStyleSymbol;
@@ -206,6 +206,12 @@ export interface INoteStyleMeta {
 
     /** The line on which the note is displayed (1-based), if the note represents a different sound/pitch. */
     readonly noteLine?: number;
+
+    /**
+     * Indicates whether the note is accented. Accents are a play style and are part of the score, but we also need
+     * to mark sound files which represent accented variants of a note style.
+     */
+    readonly accented: boolean;
 }
 
 /** Defines the structure of the instrument metadata. */
@@ -217,7 +223,7 @@ export interface IInstrumentMeta {
     readonly typeId: string;
 
     /** The different variants of the instrument (if any). */
-    readonly variants: INoteStyleMeta[];
+    readonly variants: ISoundStyleMeta[];
 
     readonly displayOrder: number;
     readonly displayName: string;
@@ -387,7 +393,7 @@ export interface ISbDmNoteEvent extends ISbDmCommon {
     readonly timing: ITiming;
 
     /** Reference to audio data and instrument. If unassigned this event represents a rest. */
-    noteStyle?: INoteStyle;
+    audioData?: IAudioData;
 }
 
 export interface ISbDmInstrumentImage {
@@ -419,7 +425,7 @@ export interface ISbDmInstrument extends ISbDmVisual {
     readonly range: [number, number];
 
     /** Note (play) styles available for this instrument (high bell, center, rimshot, press roll etc.). */
-    readonly noteStyles: Record<string, INoteStyle>;
+    readonly noteStyles: Record<string, IAudioData>;
 }
 
 export interface ISbDmTimeParams extends ITimeParamsView {

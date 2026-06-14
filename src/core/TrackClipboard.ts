@@ -4,7 +4,7 @@
  */
 
 import type { ISbDmNoteEvent, ITiming } from "./ScoreBookDataModel.js";
-import type { INoteStyle } from "./types/general.js";
+import type { IAudioData } from "./types/general.js";
 import { isSameTiming } from "./utils.js";
 
 interface ITrackWithNotes {
@@ -22,7 +22,7 @@ interface IPasteRequest {
 }
 
 export class TrackClipboard {
-    private buffer: Array<INoteStyle | undefined> = [];
+    private buffer: Array<IAudioData | undefined> = [];
 
     public constructor(private track: ITrackWithNotes) {
     }
@@ -48,7 +48,7 @@ export class TrackClipboard {
 
         const lastIndex = endIndex >= 0 ? endIndex : notes.length - 1;
         for (let i = startIndex; i <= lastIndex && i < notes.length; i++) {
-            this.buffer.push(notes[i].noteStyle);
+            this.buffer.push(notes[i].audioData);
         }
     }
 
@@ -68,7 +68,7 @@ export class TrackClipboard {
                 break;
             }
             const note = notes[trackPos];
-            note.noteStyle = this.buffer[i];
+            note.audioData = this.buffer[i];
             if (end && isSameTiming(note.timing, end)) {
                 break;
             }

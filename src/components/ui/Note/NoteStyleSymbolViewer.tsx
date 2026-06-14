@@ -5,12 +5,12 @@
 
 import type { ComponentChild } from "preact";
 
-import type { INoteStyle } from "../../../core/types/general.js";
+import type { IAudioData } from "../../../core/types/general.js";
 import { Icon } from "../framework/Icon.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
 
 export interface INoteStyleSymbolViewerProps extends ICommonUIProperties {
-    noteStyle?: INoteStyle;
+    noteStyle?: IAudioData;
 }
 
 export class NoteStyleSymbolViewer extends UIComponent<INoteStyleSymbolViewerProps> {

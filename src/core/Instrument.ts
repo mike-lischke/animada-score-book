@@ -8,7 +8,7 @@ import type { IInstrumentMeta } from "./ScoreBookDataModel.js";
 import { requisitions } from "../supplement/Requisitions.js";
 import { getSharedAudioContext } from "./audio-context.js";
 import { SbDmEntityType, type ISbDmInstrument, type ISbDmInstrumentImage } from "./ScoreBookDataModel.js";
-import type { INoteStyle } from "./types/general.js";
+import type { IAudioData } from "./types/general.js";
 import { getNewId } from "./utils.js";
 
 /**
@@ -32,7 +32,7 @@ export class Instrument implements ISbDmInstrument {
         expandedOnce: false,
     };
 
-    public readonly noteStyles: Record<string, INoteStyle> = {};
+    public readonly noteStyles: Record<string, IAudioData> = {};
 
     /** Base folder for audio files under the public assets. */
     private static readonly soundBasePath = "sounds";
@@ -50,9 +50,9 @@ export class Instrument implements ISbDmInstrument {
         this.color = color;
 
         const loadPromises: Array<Promise<AudioBuffer>> = [];
-        variants.forEach(({ id, file, symbol, characteristics, noteLine }) => {
+        variants.forEach(({ id, file, symbol, characteristics, noteLine, accented }) => {
             this.noteStyles[id] = {
-                id, symbol, audioBuffer: null, instrument: this, characteristics, noteLine,
+                id, symbol, audioBuffer: null, instrument: this, characteristics, noteLine, accented,
             };
             loadPromises.push(
                 Instrument.loadAudio(file).then((audioBuffer) => {

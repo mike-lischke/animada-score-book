@@ -85,7 +85,7 @@ export class MiniBarViewer extends UIComponent<IMiniBarViewerProps, IMiniBarView
 
                     const activeSteps = new Set<number>();
                     for (const event of events) {
-                        if (!event.noteStyle) {
+                        if (!event.audioData) {
                             continue;
                         }
 

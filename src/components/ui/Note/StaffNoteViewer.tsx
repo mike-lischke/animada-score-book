@@ -9,7 +9,7 @@ import type { ISbDmNoteEvent, ISbDmTrackMeasure } from "../../../core/ScoreBookD
 import {
     Damping, ExcitationMode, HandTechnique, NoteDisplayType, StickTechnique,
 } from "../../../core/ScoreBookDataModel.js";
-import type { IFraction, INoteStyle, ISubdivision } from "../../../core/types/general.js";
+import type { IFraction, IAudioData, ISubdivision } from "../../../core/types/general.js";
 import type { IScoreMetrics } from "../../../player/TimeCoordinator.js";
 import { NoteImage, NoteImageHeadType, NoteKind, NoteLength } from "../framework/NoteImage.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
@@ -49,7 +49,7 @@ interface IStaffStepNode {
     noteLine?: number;
 
     /** The note style for this step, if it has a sounding note. Carries characteristics for decoration. */
-    noteStyle?: INoteStyle;
+    noteStyle?: IAudioData;
 }
 
 interface IStaffSubdivisionNode {
@@ -121,7 +121,7 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
         let ei = 0;
         for (let si = 0; si < measure.steps.length && ei < measure.events.length; si++) {
             if (measure.steps[si].noteStyleId !== undefined) {
-                while (ei < measure.events.length && measure.events[ei].noteStyle === undefined) {
+                while (ei < measure.events.length && measure.events[ei].audioData === undefined) {
                     ei++;
                 }
 
@@ -283,7 +283,7 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                 let diamondOpen: boolean | undefined;
                 let lengthSteps = 1;
                 let noteLine: number | undefined;
-                let noteStyle: INoteStyle | undefined;
+                let noteStyle: IAudioData | undefined;
 
                 if (hasNote && event) {
                     lengthSteps = Math.max(1, Math.round(
@@ -300,11 +300,11 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                     // sixteenths(2), depth=2→thirty-seconds(3), etc.
                     beamCount = Math.max(beamCount, 1 + tupletDepth);
 
-                    if (event.noteStyle) {
-                        noteStyle = event.noteStyle;
-                        displayType = this.resolveDisplayType(event.noteStyle);
-                        diamondOpen = this.resolveDiamondOpen(event.noteStyle);
-                        noteLine = event.noteStyle.noteLine;
+                    if (event.audioData) {
+                        noteStyle = event.audioData;
+                        displayType = this.resolveDisplayType(event.audioData);
+                        diamondOpen = this.resolveDiamondOpen(event.audioData);
+                        noteLine = event.audioData.noteLine;
                     }
                 }
 
@@ -1177,7 +1177,7 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
         return NoteLength.ThirtySecond;
     }
 
-    private resolveDisplayType(noteStyle: INoteStyle): NoteDisplayType {
+    private resolveDisplayType(noteStyle: IAudioData): NoteDisplayType {
         if ("displayType" in noteStyle.characteristics) {
             return noteStyle.characteristics.displayType!;
         }
@@ -1209,7 +1209,7 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
         }
     }
 
-    private resolveDiamondOpen(noteStyle: INoteStyle): boolean | undefined {
+    private resolveDiamondOpen(noteStyle: IAudioData): boolean | undefined {
         const characteristics = noteStyle.characteristics;
         if (!("displayType" in characteristics) || characteristics.displayType !== NoteDisplayType.Diamond) {
             return undefined;
@@ -1260,7 +1260,7 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
      *
      * @returns An array of CSS class name suffixes (without the `staff-note-head--` prefix).
      */
-    private resolveDecorationClasses(noteStyle: INoteStyle): string[] {
+    private resolveDecorationClasses(noteStyle: IAudioData): string[] {
         const { characteristics: c } = noteStyle;
         const classes: string[] = [];
 
@@ -1369,7 +1369,7 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
      *
      * @returns An array of VNodes or null if no decorations are needed.
      */
-    private renderNoteDecorations(noteStyle: INoteStyle | undefined): VNode[] | null {
+    private renderNoteDecorations(noteStyle: IAudioData | undefined): VNode[] | null {
         if (!noteStyle) {
             return null;
         }

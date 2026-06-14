@@ -84,7 +84,7 @@ const getVisibleSteps = (track: ISbDmTrack, measureNumber: number, stepsPerBar: 
         const subdivision = topLevelByStart.get(visibleIndex);
         if (!subdivision) {
             const note = track.getNoteAt({ bar: measureNumber, step: baseStep });
-            steps.push({ index: visibleIndex, noteStyleId: note?.noteStyle?.id });
+            steps.push({ index: visibleIndex, noteStyleId: note?.audioData?.id });
             visibleIndex += 1;
             baseStep += 1;
 
@@ -105,7 +105,7 @@ const getVisibleSteps = (track: ISbDmTrack, measureNumber: number, stepsPerBar: 
         }) ?? [];
 
         for (const event of subEvents) {
-            steps.push({ index: visibleIndex, noteStyleId: event.noteStyle?.id });
+            steps.push({ index: visibleIndex, noteStyleId: event.audioData?.id });
             visibleIndex += 1;
         }
         baseStep += subdivision.normal;

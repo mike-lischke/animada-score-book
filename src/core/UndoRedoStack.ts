@@ -6,14 +6,14 @@
 import { requisitions } from "../supplement/Requisitions.js";
 import { getArrangementSnapshot } from "./serialisation/snapshots.js";
 import type { EditCommand, EditCommand_ArrangementTitle, EditCommand_Note } from "./types/edit_commands.js";
-import type { IArrangementSnapshot, INoteStyle } from "./types/general.js";
+import type { IArrangementSnapshot, IAudioData } from "./types/general.js";
 import type { ISbDmArrangement } from "./ScoreBookDataModel.js";
 import { exists } from "./utils.js";
 
 export interface IHistoryState {
     arrangementSnapshot: IArrangementSnapshot;
     lastCommand?: EditCommand;
-    oldValue?: INoteStyle;
+    oldValue?: IAudioData;
     timestamp: number;
 }
 
@@ -84,7 +84,7 @@ export class UndoRedoStack {
      * @param command The edit that was applied.
      * @param oldValue Optional note-style being replaced, used by squash heuristics.
      */
-    public handleEdit(command: EditCommand, oldValue?: INoteStyle): void {
+    public handleEdit(command: EditCommand, oldValue?: IAudioData): void {
         if (exists((command as EditCommand_ArrangementTitle).newTitle)) {
             return; // Title is ignored in undo/redo, so we don't react to it changing at all
         }
@@ -167,7 +167,7 @@ export class UndoRedoStack {
     }
 
     private getNewHistoryState(arrangementView: Readonly<ISbDmArrangement>, lastCommand?: EditCommand,
-        oldValue?: INoteStyle): IHistoryState {
+        oldValue?: IAudioData): IHistoryState {
         return {
             arrangementSnapshot: getArrangementSnapshot(arrangementView),
             lastCommand,

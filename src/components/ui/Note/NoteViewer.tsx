@@ -7,7 +7,7 @@ import type { ComponentChild } from "preact";
 
 import { getSharedAudioContext } from "../../../core/audio-context.js";
 import type { ISbDmNoteEvent, ScoreBookDataModel } from "../../../core/ScoreBookDataModel.js";
-import type { INoteStyle } from "../../../core/types/general.js";
+import type { IAudioData } from "../../../core/types/general.js";
 import type { UndoManager } from "../../../core/UndoManager.js";
 import type { ArrangementPlayer } from "../../../player/ArrangementPlayer.js";
 import { AudioBufferPlayer } from "../../../player/AudioBufferPlayer.js";
@@ -37,7 +37,7 @@ export interface INoteViewerProps extends ICommonUIProperties {
 interface INoteViewerState {
     isCurrent: boolean;
     selected: boolean;
-    noteStyle?: INoteStyle;
+    noteStyle?: IAudioData;
 }
 
 export class NoteViewer extends UIComponent<INoteViewerProps, INoteViewerState> {
@@ -47,7 +47,7 @@ export class NoteViewer extends UIComponent<INoteViewerProps, INoteViewerState> 
         this.state = {
             isCurrent: false,
             selected: false,
-            noteStyle: props.note.noteStyle,
+            noteStyle: props.note.audioData,
         };
     }
 
@@ -109,8 +109,8 @@ export class NoteViewer extends UIComponent<INoteViewerProps, INoteViewerState> 
 
     public override componentDidUpdate(prevProps: INoteViewerProps): void {
         const { note } = this.props;
-        if (prevProps.note !== note || prevProps.note.noteStyle !== note.noteStyle) {
-            this.setState({ noteStyle: note.noteStyle });
+        if (prevProps.note !== note || prevProps.note.audioData !== note.audioData) {
+            this.setState({ noteStyle: note.audioData });
         }
     }
 
@@ -230,7 +230,7 @@ export class NoteViewer extends UIComponent<INoteViewerProps, INoteViewerState> 
             return note.track.instrument.color;
         }
 
-        if (note.noteStyle?.symbol) {
+        if (note.audioData?.symbol) {
             return `color-mix(in srgb, ${note.track.instrument.color} 50%, white)`;
         }
 
@@ -249,15 +249,15 @@ export class NoteViewer extends UIComponent<INoteViewerProps, INoteViewerState> 
         }
     }
 
-    private getNextNoteStyle(note: ISbDmNoteEvent): INoteStyle | undefined {
+    private getNextNoteStyle(note: ISbDmNoteEvent): IAudioData | undefined {
         const noteStyles = note.track.instrument.noteStyles;
         const noteStyleIds = Object.keys(noteStyles);
-        if (!note.noteStyle) {
+        if (!note.audioData) {
             // This happens when the note-style is null, meaning a rest
             return noteStyles[noteStyleIds[0]];
         }
 
-        const currentNoteStyleId = note.noteStyle.id;
+        const currentNoteStyleId = note.audioData.id;
         const index = noteStyleIds.indexOf(currentNoteStyleId);
         const nextNoteStyleId = noteStyleIds[index + 1];
         if (nextNoteStyleId) {

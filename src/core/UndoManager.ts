@@ -8,7 +8,7 @@ import { FaviconDirtyService } from "./FavIconDirtyService.js";
 import type { ScoreBookDataModel } from "./ScoreBookDataModel.js";
 import { requisitions } from "../supplement/Requisitions.js";
 import type { EditCommand } from "./types/edit_commands.js";
-import type { INoteStyle } from "./types/general.js";
+import type { IAudioData } from "./types/general.js";
 import { UndoRedoStack } from "./UndoRedoStack.js";
 
 /** Encapsulates the application-level undo/redo management. */
@@ -98,10 +98,10 @@ export class UndoManager {
         this.updateDirtyState();
     };
 
-    private extractOldValue(command: EditCommand): INoteStyle | undefined {
+    private extractOldValue(command: EditCommand): IAudioData | undefined {
         const targetNote = command.type === "EditCommand_Note" ? command.note : undefined;
 
-        return targetNote ? targetNote.noteStyle : undefined;
+        return targetNote ? targetNote.audioData : undefined;
     }
 
     private updateDirtyState() {

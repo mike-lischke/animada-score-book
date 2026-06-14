@@ -4,7 +4,7 @@
 */
 
 import type { ISbDmArrangement, ISbDmInstrument, ISbDmNoteEvent, ISbDmTrack } from "../ScoreBookDataModel.js";
-import type { INoteStyle, ITimeParams } from "./general.js";
+import type { IAudioData, ITimeParams } from "./general.js";
 
 /* eslint-disable @typescript-eslint/naming-convention */
 
@@ -59,7 +59,7 @@ export interface EditCommand_TrackClear {
 export interface EditCommand_Note {
     type: "EditCommand_Note";
     note: ISbDmNoteEvent;
-    noteStyle?: INoteStyle;
+    noteStyle?: IAudioData;
 }
 
 export interface EditCommand_TimeParamsTimeSignature {

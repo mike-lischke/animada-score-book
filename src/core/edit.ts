@@ -73,7 +73,7 @@ const editArrangement = (command: EditCommand_Arrangement): boolean => {
         // Need to painstakingly check whether this changes anything
         for (const track of arrangement.tracks) {
             for (const note of track.notes) {
-                if (note.noteStyle) {
+                if (note.audioData) {
                     // As soon as we find one note to clear, we're good
                     arrangement.tracks.forEach((track) => {
                         track.clear();
@@ -92,8 +92,8 @@ const editArrangement = (command: EditCommand_Arrangement): boolean => {
 
         command.clearSelection.forEach((trackSelection) => {
             trackSelection.selectedNotes.forEach((note) => {
-                if (note.noteStyle) {
-                    note.noteStyle = undefined;
+                if (note.audioData) {
+                    note.audioData = undefined;
                     changedAnyNotes = true;
                 }
             });
@@ -109,7 +109,7 @@ const editTrack = (command: EditCommand_Track): boolean => {
     const track = command.track;
 
     for (const note of track.notes) {
-        if (note.noteStyle) {
+        if (note.audioData) {
             track.clear();
 
             return true;

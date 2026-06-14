@@ -129,8 +129,8 @@ export class Track implements ISbDmTrack {
     public clear(): void {
         for (const measure of this.measures) {
             for (const event of measure.events) {
-                if (event.noteStyle !== undefined) {
-                    event.noteStyle = undefined;
+                if (event.audioData !== undefined) {
+                    event.audioData = undefined;
                 }
             }
         }
@@ -171,7 +171,7 @@ export class Track implements ISbDmTrack {
             duration: reduceFraction(1, stepsPerBar),
             track: this,
             timing,
-            noteStyle: undefined,
+            audioData: undefined,
         };
     }
 

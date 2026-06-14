@@ -3,7 +3,7 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import type { INoteStyleMeta, ISbDmInstrument, ITiming } from "../ScoreBookDataModel.js";
+import type { ISoundStyleMeta, ISbDmInstrument, ITiming } from "../ScoreBookDataModel.js";
 
 export interface IRect {
     x: number;
@@ -12,7 +12,7 @@ export interface IRect {
     height: number;
 }
 
-export interface INoteStyle extends Omit<INoteStyleMeta, "file"> {
+export interface IAudioData extends Omit<ISoundStyleMeta, "file"> {
     /** The audio buffer associated with this note style. Null while the instrument is loading. */
     audioBuffer: AudioBuffer | null;
 

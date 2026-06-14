@@ -6,7 +6,7 @@
 import type { ComponentChild, CSSProperties } from "preact";
 
 import type { ISbDmTrack, ISbDmTrackMeasure, ScoreBookDataModel } from "../../../../core/ScoreBookDataModel.js";
-import type { IMeasureStep, ISubdivision, INoteStyle } from "../../../../core/types/general.js";
+import type { IMeasureStep, ISubdivision, IAudioData } from "../../../../core/types/general.js";
 import { NoteStyleSymbolViewer } from "../../Note/NoteStyleSymbolViewer.js";
 import { Container } from "../../framework/Container.js";
 import { UIComponent, type ICommonUIProperties } from "../../framework/UIComponent.js";
@@ -142,7 +142,7 @@ export class GridMeasureRow extends UIComponent<IGridMeasureRowProperties> {
                 || (level > 1 && markFirst && index === 0);
 
             if (item.type === "step") {
-                const noteStyle: INoteStyle | undefined = item.step.noteStyleId !== undefined
+                const noteStyle: IAudioData | undefined = item.step.noteStyleId !== undefined
                     ? track.instrument.noteStyles[item.step.noteStyleId]
                     : undefined;
 
