@@ -464,20 +464,20 @@ describe("ArrangementMigrator", () => {
         expect(steps[6]).toEqual({ index: 6 });
         expect(steps[7]).toEqual({ index: 7 });
 
-        // Accented step: damping=Open (0), accent=true.
+        // Accented step: damping=Open (0), accent=true, ghost=false.
         expect(steps[0]).toEqual({
             index: 0, noteStyleId: "accent",
-            articulation: { damping: 0, accent: true }
+            articulation: { damping: 0, accent: true, ghost: false },
         });
         expect(steps[4]).toEqual({
             index: 4, noteStyleId: "accent",
-            articulation: { damping: 0, accent: true }
+            articulation: { damping: 0, accent: true, ghost: false },
         });
 
-        // Muted step: damping=Muted (1), accent=false.
+        // Muted step: damping=Muted (1), accent=false, ghost=false.
         expect(steps[2]).toEqual({
             index: 2, noteStyleId: "muted",
-            articulation: { damping: 1, accent: false }
+            articulation: { damping: 1, accent: false, ghost: false },
         });
 
         // Verify snapshot version is bumped.
@@ -583,19 +583,19 @@ describe("ArrangementMigrator - BananaDrum URL migration", () => {
         expect(measure.meter.beatGroups).toEqual([3, 3]);
 
         expect(measure.steps).toEqual([
-            { index: 0, noteStyleId: "1", articulation: { accent: false, damping: 0 } },
-            { index: 1, noteStyleId: "1", articulation: { accent: false, damping: 0 } },
-            { index: 2, noteStyleId: "1", articulation: { accent: false, damping: 0 } },
-            { index: 3, noteStyleId: "2", articulation: { accent: false, damping: 0 } },
-            { index: 4, noteStyleId: "2", articulation: { accent: false, damping: 0 } },
-            { index: 5, noteStyleId: "2", articulation: { accent: false, damping: 0 } },
-            { index: 6, noteStyleId: "1", articulation: { accent: false, damping: 0 } },
-            { index: 7, noteStyleId: "1", articulation: { accent: false, damping: 0 } },
-            { index: 8, noteStyleId: "3", articulation: { accent: false, damping: 0 } },
-            { index: 9, noteStyleId: "3", articulation: { accent: false, damping: 0 } },
-            { index: 10, noteStyleId: "3", articulation: { accent: false, damping: 0 } },
-            { index: 11, noteStyleId: "3", articulation: { accent: false, damping: 0 } },
-            { index: 12, noteStyleId: "1", articulation: { accent: false, damping: 0 } },
+            { index: 0, noteStyleId: "1", articulation: { accent: false, damping: 0, ghost: false } },
+            { index: 1, noteStyleId: "1", articulation: { accent: false, damping: 0, ghost: false } },
+            { index: 2, noteStyleId: "1", articulation: { accent: false, damping: 0, ghost: false } },
+            { index: 3, noteStyleId: "2", articulation: { accent: false, damping: 0, ghost: false } },
+            { index: 4, noteStyleId: "2", articulation: { accent: false, damping: 0, ghost: false } },
+            { index: 5, noteStyleId: "2", articulation: { accent: false, damping: 0, ghost: false } },
+            { index: 6, noteStyleId: "1", articulation: { accent: false, damping: 0, ghost: false } },
+            { index: 7, noteStyleId: "1", articulation: { accent: false, damping: 0, ghost: false } },
+            { index: 8, noteStyleId: "3", articulation: { accent: false, damping: 0, ghost: false } },
+            { index: 9, noteStyleId: "3", articulation: { accent: false, damping: 0, ghost: false } },
+            { index: 10, noteStyleId: "3", articulation: { accent: false, damping: 0, ghost: false } },
+            { index: 11, noteStyleId: "3", articulation: { accent: false, damping: 0, ghost: false } },
+            { index: 12, noteStyleId: "1", articulation: { accent: false, damping: 0, ghost: false } },
         ]);
 
         expect(measure.subdivisions.length).toBe(3);

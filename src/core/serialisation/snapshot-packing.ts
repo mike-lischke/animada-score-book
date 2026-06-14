@@ -61,7 +61,12 @@ export type PackedSubdivision = [
     isTuplet?: boolean,
 ];
 
-export type PackedMeasure = [number: number, meter: PackedMeter, steps: string[], subdivisions: PackedSubdivision[]];
+export type PackedMeasure = [
+    number: number,
+    meter: PackedMeter,
+    steps: Array<string | [string, number, boolean, boolean]>,
+    subdivisions: PackedSubdivision[],
+];
 
 export type PackedTrack = [id: number, instrumentId: string, measures: PackedMeasure[]];
 
@@ -218,7 +223,16 @@ const packMeasure = (measure: ITrackMeasureSnapshot): PackedMeasure => {
         measure.number,
         packMeter(measure.meter),
         measure.steps.map((step) => {
-            return step.noteStyleId ?? "";
+            if (!step.noteStyleId) {
+                return "";
+            }
+
+            const a = step.articulation;
+            if (!a) {
+                return step.noteStyleId;
+            }
+
+            return [step.noteStyleId, a.damping, a.accent, a.ghost];
         }),
         measure.subdivisions.map(packSubdivision),
     ];
@@ -230,8 +244,14 @@ const unpackMeasure = (packed: PackedMeasure): ITrackMeasureSnapshot => {
     return {
         number,
         meter: unpackMeter(meter),
-        steps: steps.map((noteStyleId, index) => {
-            return { index, noteStyleId: noteStyleId || undefined };
+        steps: steps.map((entry, index) => {
+            if (typeof entry === "string") {
+                return { index, noteStyleId: entry || undefined };
+            }
+
+            const [noteStyleId, damping, accent, ghost] = entry;
+
+            return { index, noteStyleId, articulation: { damping, accent, ghost } };
         }),
         subdivisions: subdivisions.map(unpackSubdivision),
     };

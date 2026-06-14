@@ -22,7 +22,7 @@ test.beforeEach(async ({ page }) => {
  */
 const buildPackedArrangement = (tracks: Array<{
     instrumentId: string;
-    steps: Array<{ noteStyleId?: string; articulation?: { damping: number; accent: boolean; }; }>;
+    steps: Array<{ noteStyleId?: string; articulation?: { damping: number; accent: boolean; ghost: boolean; }; }>;
 }>): string => {
     const snapshot: IArrangementSnapshot = {
         version: 3,
@@ -194,7 +194,7 @@ test.describe("Note decorations", () => {
         const packed = buildPackedArrangement([{
             instrumentId: "5", // Caixa
             steps: [
-                { noteStyleId: "2" }, // Ghost – parentheses
+                { noteStyleId: "2", articulation: { damping: 0, accent: false, ghost: true } }, // Ghost
             ],
         }]);
 
@@ -228,7 +228,7 @@ test.describe("Note decorations", () => {
         const packed = buildPackedArrangement([{
             instrumentId: "7", // High Surdo
             steps: [
-                { noteStyleId: "2" }, // Muted – plus sign
+                { noteStyleId: "2", articulation: { damping: 1, accent: false, ghost: false } }, // Muted
             ],
         }]);
 
@@ -254,6 +254,38 @@ test.describe("Note decorations", () => {
         const dampedPlus = page.locator(".staff-note-head-damped-plus").first();
         await expect(dampedPlus).toBeVisible();
         await expect(dampedPlus).toHaveText("+");
+    });
+
+    test("renders accent mark for High Surdo accent", async ({ page }) => {
+        const packed = buildPackedArrangement([{
+            instrumentId: "7", // High Surdo
+            steps: [
+                { noteStyleId: "1", articulation: { damping: 0, accent: true, ghost: false } }, // Accent – >
+            ],
+        }]);
+
+        await page.addInitScript((snapshotPacked: string) => {
+            const sessionId = "e2e-deco-accent";
+            window.history.replaceState({ ...(window.history.state ?? {}), sessionId }, "");
+            window.sessionStorage.setItem("asb-session-id", sessionId);
+            window.localStorage.setItem(`asb-ui-settings-session-${sessionId}`, JSON.stringify({
+                currentScore: snapshotPacked,
+            }));
+        }, packed);
+
+        await page.goto("/");
+
+        const trackViewToggle = page.locator("input.trackViewModeToggle").first();
+        await expect(trackViewToggle).toBeVisible();
+        if (!await trackViewToggle.isChecked()) {
+            await trackViewToggle.check({ force: true });
+        }
+
+        await expect(page.locator(".bar-track-row.staff-mode").first()).toBeVisible();
+
+        const accentMark = page.locator(".staff-note-viewer-accent").first();
+        await expect(accentMark).toBeVisible();
+        await expect(accentMark).toHaveText(">");
     });
 
     test("renders rimshot decoration for Repinique rimshot", async ({ page }) => {

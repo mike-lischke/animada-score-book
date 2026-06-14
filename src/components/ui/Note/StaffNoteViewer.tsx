@@ -8,6 +8,7 @@ import { type ComponentChild, type VNode } from "preact";
 import type { ISbDmNoteEvent, ISbDmTrackMeasure } from "../../../core/ScoreBookDataModel.js";
 import {
     Damping, ExcitationMode, HandTechnique, NoteDisplayType, StickTechnique,
+    type INoteArticulation,
 } from "../../../core/ScoreBookDataModel.js";
 import type { IFraction, IAudioData, ISubdivision } from "../../../core/types/general.js";
 import type { IScoreMetrics } from "../../../player/TimeCoordinator.js";
@@ -50,6 +51,9 @@ interface IStaffStepNode {
 
     /** The note style for this step, if it has a sounding note. Carries characteristics for decoration. */
     noteStyle?: IAudioData;
+
+    /** The per-note articulation (damping, accent, ghost) for this step. */
+    articulation?: INoteArticulation;
 }
 
 interface IStaffSubdivisionNode {
@@ -318,6 +322,7 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                     lengthSteps,
                     noteLine,
                     noteStyle,
+                    articulation: hasNote ? step.articulation : undefined,
                 });
 
                 // If lengthSteps > 1, the next lengthSteps - 1 steps are occupied by this note's duration tail and
@@ -876,7 +881,7 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                 );
             }
 
-            const { stepIndex, glyph, displayType, diamondOpen, noteLine, noteStyle } = node;
+            const { stepIndex, glyph, displayType, diamondOpen, noteLine, noteStyle, articulation } = node;
             const slotStyle = { flex: "1 1 0", minWidth: 0 };
 
             if (glyph) {
@@ -897,7 +902,7 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                     headWrapperClasses.push(this.headTypeClassName(headType));
                 }
 
-                const decoClasses = noteStyle ? this.resolveDecorationClasses(noteStyle) : [];
+                const decoClasses = noteStyle ? this.resolveDecorationClasses(noteStyle, articulation) : [];
                 headWrapperClasses.push(...decoClasses);
 
                 // Non-oval heads without beam need a CSS stem (the SVG stem is hidden).
@@ -940,11 +945,14 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                                     style={{ height: `calc(38.5px + ${lineOffset}px)` }}
                                 />
                             ) : null}
-                            {this.renderNoteDecorations(noteStyle)}
+                            {this.renderNoteDecorations(noteStyle, articulation)}
                             {headType === NoteImageHeadType.Cross ? this.renderCrossHead() : null}
                         </span>
+                        {articulation?.accent ? (
+                            <span className="staff-note-viewer-accent">&gt;</span>
+                        ) : null}
                         {hasBeam ? this.renderBeamSegments(stepIndex, beamInfo) : null}
-                        {hasBeam ? this.renderCustomStem(lineOffset) : null}
+                        {hasBeam ? this.renderCustomStem(lineOffset, headType) : null}
                     </div>
                 );
             }
@@ -1069,15 +1077,18 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
      * Spans from the note-head connection point to just above the primary beam.
      *
      * @param lineOffset Vertical offset in px for this note's staff line relative to the centre line.
+     * @param headType   The note head type, used for per-head-type stem positioning.
      *
      * @returns A VNode representing the custom stem.
      */
-    private renderCustomStem(lineOffset: number): VNode {
-        // The stem top sits just above the primary beam (50% − 38 px), fixed for all lines.
-        // The height adjusts with lineOffset so the stem bottom tracks the note head.
+    private renderCustomStem(lineOffset: number, headType: NoteImageHeadType): VNode {
+        const headClass = headType !== NoteImageHeadType.Oval
+            ? `staff-note-viewer-custom-stem--${this.headTypeClassName(headType)}`
+            : "";
+
         return (
             <span
-                className="staff-note-viewer-custom-stem"
+                className={`staff-note-viewer-custom-stem ${headClass}`}
                 style={{
                     position: "absolute",
                     left: "calc(50% - 1px)",
@@ -1253,10 +1264,11 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
      * Resolves CSS class names for note decorations based on the play characteristics.
      *
      * @param noteStyle The note style whose characteristics determine the decorations.
+     * @param articulation The per-note articulation (damping, accent, ghost).
      *
      * @returns An array of CSS class name suffixes (without the `staff-note-head--` prefix).
      */
-    private resolveDecorationClasses(noteStyle: IAudioData): string[] {
+    private resolveDecorationClasses(noteStyle: IAudioData, articulation?: INoteArticulation): string[] {
         const { characteristics: c } = noteStyle;
         const classes: string[] = [];
 
@@ -1330,8 +1342,8 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
             classes.push("blown");
         }
 
-        // Ghost notes: rendered with parentheses.
-        if (noteStyle.sampleProfile.ghost) {
+        // Ghost notes: rendered with parentheses, derived from the note's articulation.
+        if (articulation?.ghost) {
             classes.push("ghost-note");
         }
 
@@ -1343,10 +1355,12 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
      * These are absolutely-positioned spans layered over the note head.
      *
      * @param noteStyle The note style whose characteristics determine the decorations.
+     * @param articulation The per-note articulation (damping, accent, ghost).
      *
      * @returns An array of VNodes or null if no decorations are needed.
      */
-    private renderNoteDecorations(noteStyle: IAudioData | undefined): VNode[] | null {
+    private renderNoteDecorations(noteStyle: IAudioData | undefined,
+        articulation?: INoteArticulation): VNode[] | null {
         if (!noteStyle) {
             return null;
         }
@@ -1435,15 +1449,15 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
             );
         }
 
-        // Damped (muted) note: plus sign above the note head.
-        if (noteStyle.sampleProfile.builtInDamping === Damping.Muted) {
+        // Damped (muted) note: plus sign above the note head, derived from the note's articulation.
+        if (articulation?.damping === Damping.Muted) {
             nodes.push(
                 <span key="damped-plus" className="staff-note-head-damped-plus">+</span>,
             );
         }
 
         // Ghost note: closing parenthesis (opening is via CSS ::before on .ghost-note).
-        if (noteStyle.sampleProfile.ghost) {
+        if (articulation?.ghost) {
             nodes.push(
                 <span key="ghost-paren" className="staff-note-head-ghost-paren">)</span>,
             );

@@ -109,6 +109,9 @@ export interface INoteArticulation {
 
     /** Whether the note is accented. */
     accent: boolean;
+
+    /** Whether the note is a ghost note (intentionally quiet). */
+    ghost: boolean;
 }
 
 /**

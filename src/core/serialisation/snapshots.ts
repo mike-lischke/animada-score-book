@@ -76,6 +76,10 @@ const getVisibleSteps = (track: ISbDmTrack, measureNumber: number, stepsPerBar: 
         return [s.startStep, s] as const;
     }));
 
+    const measure = track.measures.find((candidate) => {
+        return candidate.number === measureNumber;
+    });
+
     const steps: IMeasureStep[] = [];
     let visibleIndex = 0;
     let baseStep = 1;
@@ -84,7 +88,12 @@ const getVisibleSteps = (track: ISbDmTrack, measureNumber: number, stepsPerBar: 
         const subdivision = topLevelByStart.get(visibleIndex);
         if (!subdivision) {
             const note = track.getNoteAt({ bar: measureNumber, step: baseStep });
-            steps.push({ index: visibleIndex, noteStyleId: note?.audioData?.id });
+            const sourceStep = measure?.steps[visibleIndex];
+            steps.push({
+                index: visibleIndex,
+                noteStyleId: note?.audioData?.id,
+                articulation: sourceStep?.articulation,
+            });
             visibleIndex += 1;
             baseStep += 1;
 
@@ -94,9 +103,6 @@ const getVisibleSteps = (track: ISbDmTrack, measureNumber: number, stepsPerBar: 
         // Collect events within the subdivision range from the track.
         const start = (baseStep - 1) / stepsPerBar;
         const end = (baseStep - 1 + subdivision.normal) / stepsPerBar;
-        const measure = track.measures.find((candidate) => {
-            return candidate.number === measureNumber;
-        });
         const subEvents = measure?.events.filter((event) => {
             const eventStart = event.start.numerator / event.start.denominator;
 
@@ -105,7 +111,12 @@ const getVisibleSteps = (track: ISbDmTrack, measureNumber: number, stepsPerBar: 
         }) ?? [];
 
         for (const event of subEvents) {
-            steps.push({ index: visibleIndex, noteStyleId: event.audioData?.id });
+            const sourceStep = measure?.steps[visibleIndex];
+            steps.push({
+                index: visibleIndex,
+                noteStyleId: event.audioData?.id,
+                articulation: sourceStep?.articulation,
+            });
             visibleIndex += 1;
         }
         baseStep += subdivision.normal;

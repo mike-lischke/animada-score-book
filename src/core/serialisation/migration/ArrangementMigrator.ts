@@ -127,11 +127,11 @@ export class ArrangementMigrator {
                     }
 
                     const variant = instrument.noteStyles[step.noteStyleId];
-                    const { builtInDamping, builtInAccent } = variant.sampleProfile;
+                    const { builtInDamping, builtInAccent, ghost } = variant.sampleProfile;
 
                     return {
                         ...step,
-                        articulation: { damping: builtInDamping, accent: builtInAccent },
+                        articulation: { damping: builtInDamping, accent: builtInAccent, ghost },
                     };
                 });
 
