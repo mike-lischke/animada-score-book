@@ -112,9 +112,10 @@ test.describe("Staff view multi-line rendering", () => {
         });
 
         expect(lineCount).toBe(2);
-        // Two lines centred vertically: calc(50% - 5px) and calc(50% + 5px)
-        expect(positions[0]).toBe("calc(50% - 5px)");
-        expect(positions[1]).toBe("calc(50% + 5px)");
+        // Two lines centred: offset = (line - centerLine) * 10 + 31.5
+        // centerLine = 1.5: line 1 → -5+31.5=26.5, line 2 → +5+31.5=36.5
+        expect(positions[0]).toBe("calc(50% + 26.5px)");
+        expect(positions[1]).toBe("calc(50% + 36.5px)");
     });
 
     test("renders four staff lines for a 4-line instrument (4-Bell Agogo)", async ({ page }) => {
@@ -147,11 +148,12 @@ test.describe("Staff view multi-line rendering", () => {
         });
 
         expect(lineCount).toBe(4);
-        // Four lines centred: offsets -15, -5, +5, +15 from 50%
-        expect(positions[0]).toBe("calc(50% - 15px)");
-        expect(positions[1]).toBe("calc(50% - 5px)");
-        expect(positions[2]).toBe("calc(50% + 5px)");
-        expect(positions[3]).toBe("calc(50% + 15px)");
+        // Four lines centred: offset = (line - centerLine) * 10 + 31.5
+        // centerLine = 2.5: lines → 16.5, 26.5, 36.5, 46.5
+        expect(positions[0]).toBe("calc(50% + 16.5px)");
+        expect(positions[1]).toBe("calc(50% + 26.5px)");
+        expect(positions[2]).toBe("calc(50% + 36.5px)");
+        expect(positions[3]).toBe("calc(50% + 46.5px)");
     });
 
     test("staff prefix viewer renders matching lines for multi-line instruments", async ({ page }) => {
