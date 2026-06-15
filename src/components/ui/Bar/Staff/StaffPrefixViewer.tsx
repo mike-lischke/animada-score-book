@@ -44,7 +44,7 @@ export class StaffPrefixViewer extends UIComponent<IStaffPrefixViewerProps> {
                     // Render staff lines matching those in StaffNoteViewer.
                     const staffLines: ComponentChild[] = [];
                     for (let i = 1; i <= maxNoteLine; i++) {
-                        const offset = (i - centerLine) * 10;
+                        const offset = ((i - centerLine) * 10) + 12; // 10px = line spacing, +12px = prefix-row shift
                         staffLines.push(
                             <div
                                 key={`prefix-line-${i}`}

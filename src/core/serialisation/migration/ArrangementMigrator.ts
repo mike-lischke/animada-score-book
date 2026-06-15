@@ -12,6 +12,7 @@ import { TimeParams } from "../../TimeParams.js";
 import type {
     IArrangementSnapshot, IMeasureStep, ISubdivision, ITrackMeasureSnapshot, ITrackSnapshot
 } from "../../types/general.js";
+import { greatestCommonDivisor } from "../numeric-functions.js";
 import { primeFactors } from "../../utils.js";
 import { tryParsePackedArrangement } from "../snapshot-packing.js";
 import { arrangementSnapshotVersion } from "../snapshots.js";
@@ -332,27 +333,44 @@ export class ArrangementMigrator {
                 continue;
             }
 
-            const prStartStep = (pr.start.timing.bar * stepsPerBar) + pr.start.timing.step - stepsPerBar;
-            const prEndStep = (pr.end.timing.bar * stepsPerBar) + pr.end.timing.step - stepsPerBar;
+            // Nested polyrhythms (start note is itself inside another PR) always
+            // belong to the current measure and occupy one slot in their parent.
+            const isNested = pr.start.polyrhythm !== undefined;
 
-            const overlapStart = Math.max(prStartStep, measureBaseStart);
-            const overlapEnd = Math.min(prEndStep, measureBaseEnd);
+            let normal: number;
+            let notesInMeasure: number;
+            let hasMore: boolean;
 
-            if (overlapStart > overlapEnd) {
-                // No overlap with this measure.
-                if (prStartStep >= measureBaseStart + stepsPerBar) {
-                    break;
+            if (isNested) {
+                normal = 1;
+                notesInMeasure = pr.length;
+                hasMore = false;
+            } else {
+                const prStartStep = (pr.start.timing.bar * stepsPerBar) + pr.start.timing.step - stepsPerBar;
+                const prEndStep = (pr.end.timing.bar * stepsPerBar) + pr.end.timing.step - stepsPerBar;
+
+                const overlapStart = Math.max(prStartStep, measureBaseStart);
+                const overlapEnd = Math.min(prEndStep, measureBaseEnd);
+
+                if (overlapStart > overlapEnd) {
+                    // No overlap with this measure.
+                    if (prStartStep >= measureBaseStart + stepsPerBar) {
+                        break;
+                    }
+                    i++;
+                    continue;
                 }
-                i++;
-                continue;
+
+                normal = overlapEnd - overlapStart + 1;
+
+                const split = ArrangementMigrator.splitPolyrhythmNotes(
+                    prStartStep, prEndStep, pr.length, measureBaseStart, measureBaseEnd,
+                );
+                notesInMeasure = split.notesInMeasure;
+                hasMore = split.hasMore;
             }
 
             seenPolyrhythmIds.add(pr.id);
-            const normal = overlapEnd - overlapStart + 1;
-
-            const { notesInMeasure, hasMore } = ArrangementMigrator.splitPolyrhythmNotes(
-                prStartStep, prEndStep, pr.length, measureBaseStart, measureBaseEnd,
-            );
 
             subdivisions.push({
                 id: pr.id,
@@ -433,6 +451,14 @@ export class ArrangementMigrator {
                 // Determine this individual PR note's position in the base grid
                 // so cross-bar polyrhythms are split correctly across measures.
                 const pr = note.polyrhythm;
+
+                // Nested polyrhythms (whose start note is itself inside another
+                // PR) are always within the current measure — no cross-bar check.
+                if (pr.start.polyrhythm) {
+                    count++;
+                    continue;
+                }
+
                 const prStartStep = (pr.start.timing.bar * stepsPerBar) + pr.start.timing.step - stepsPerBar;
                 const prEndStep = (pr.end.timing.bar * stepsPerBar) + pr.end.timing.step - stepsPerBar;
                 const totalNormal = prEndStep - prStartStep + 1;
@@ -478,10 +504,13 @@ export class ArrangementMigrator {
         }
 
         for (const sub of sorted) {
-            const actualFactors = primeFactors(sub.actual);
-            const baseFactors = sub.normal === 1 ? meterBase : primeFactors(sub.normal);
-            const selfIsTuplet = [...actualFactors].some((f) => {
-                return !baseFactors.has(f);
+            // Reduce the ratio to simplest terms.  A subdivision is a tuplet iff
+            // the reduced numerator has at least one prime factor not in the
+            // meter's natural basis S.  E.g. 9:12 → gcd=3 → 3, 3∉{2} → tuplet.
+            const divisor = greatestCommonDivisor(sub.actual, sub.normal);
+            const reducedActual = divisor > 0 ? sub.actual / divisor : sub.actual;
+            const selfIsTuplet = [...primeFactors(reducedActual)].some((f) => {
+                return !meterBase.has(f);
             });
 
             const children = childrenByParent.get(sub.id) ?? [];

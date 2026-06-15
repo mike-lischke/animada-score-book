@@ -362,8 +362,11 @@ export class SelectionView {
                 const hasBeams = runs.some((el) => {
                     return el.querySelector(".staff-note-viewer-beam") !== null;
                 });
-                const offsetY = hasBeams ? -12 : -30;
-                const heightOffset = hasBeams ? 0 : 10;
+                // Runs sit at margin-top:64px inside the 80px viewer. Extend the
+                // overlay upward to the viewer top edge (0px) and downward
+                // through the 20px margin-bottom (+2px).
+                const offsetY = -64;
+                const heightOffset = 84;
 
                 // Compute the union rect of all runs (gap-free horizontal coverage).
                 let minTop = Infinity;
@@ -617,7 +620,7 @@ export class SelectionView {
 
         // 4. Create overlays.
         for (const group of merged) {
-            this.createMergedOverlay(overlayContainer, containerRect, group.elements, -10);
+            this.createMergedOverlay(overlayContainer, containerRect, group.elements, 0, 0);
         }
     }
 

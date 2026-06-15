@@ -170,7 +170,7 @@ export class NoteImage extends UIComponent<INoteImageProperties, INoteImageState
         const isOval = headType === NoteImageHeadType.Oval;
 
         style["--note-show-oval-body"] = isOval && value !== NoteLength.Whole ? "inline" : "none";
-        style["--note-show-oval-stem"] = isOval && hasStem ? "inline" : "none";
+        style["--note-show-oval-stem"] = "none";
         style["--note-show-oval-half"] = isOval && value === NoteLength.Half ? "inline" : "none";
         style["--note-show-oval-quarter"] = isOval && value !== NoteLength.Whole && value !== NoteLength.Half
             ? "inline"
@@ -181,6 +181,8 @@ export class NoteImage extends UIComponent<INoteImageProperties, INoteImageState
         style["--note-show-flag-16th"] = flags >= 2 ? "inline" : "none";
         style["--note-show-flag-32nd"] = flags >= 3 ? "inline" : "none";
         style["--note-show-dot"] = dotted ? "inline" : "none";
+        // Shift flags down to align with custom CSS stems (SVG stem is hidden).
+        style["--note-flag-offset"] = flags >= 1 ? "10px" : "0px";
 
         return style;
     }

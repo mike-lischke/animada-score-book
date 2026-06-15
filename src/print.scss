@@ -41,8 +41,11 @@
          * Render the score exactly like the on-screen player and use one CSS `zoom` to
          * fit the configured number of bars per line into the printable page width.
          * `--print-bars-per-line` is set inline on .print-root by PrintView.
+         * `--print-zoom` is exposed so stem widths and pixel offsets can compensate
+         * for the scaling and stay pixel-perfect (integer px after zoom).
          */
-        zoom: calc(1.32 / var(--print-bars-per-line, 2));
+        --print-zoom: calc(1.32 / var(--print-bars-per-line, 2));
+        zoom: var(--print-zoom);
     }
 
     /* Preserve background colors / SVG fills. */
@@ -273,6 +276,34 @@
 
     .staff-note-viewer-line {
         border-top-color: #000 !important;
+    }
+
+    /* Note decorations: force black for print. */
+    .staff-note-head.ghost-note::before,
+    .staff-note-head-ghost-paren,
+    .staff-note-head-damped-plus,
+    .staff-note-viewer-accent {
+        color: #000 !important;
+    }
+
+    /*
+     * Stem overrides for print: compensate CSS zoom so stems always render at
+     * exactly 1 px width.  Without compensation, zoom values like 0.66 shrink a
+     * 1-px stem to 0.66 px, causing visibly uneven stem thickness.
+     *
+     * Position offsets (top / left) are intentionally left untouched — they are
+     * CSS-pixel values that must scale with zoom just like every other layout
+     * measurement.
+     */
+    .staff-note-head-stem,
+    .staff-note-viewer-custom-stem {
+        background: #000 !important;
+        width: calc(1px / var(--print-zoom, 1)) !important;
+    }
+
+    .staff-note-viewer-beam {
+        background: #000 !important;
+        height: calc(3px / var(--print-zoom, 1)) !important;
     }
 
     /*

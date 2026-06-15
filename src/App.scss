@@ -460,12 +460,12 @@ h6 {
     flex-shrink: 0;
     width: 48px;
     margin: 0 -8px 0 8px;
-    padding-top: calc(20pt + 5px);
+    padding-top: 32px;
 }
 
 .staff-measure-beam {
     height: 20pt;
-    margin-bottom: 5px;
+    margin-bottom: -14px;
     display: flex;
     align-items: center;
     gap: 6px;
@@ -495,9 +495,10 @@ h6 {
 }
 
 .staff-prefix-row {
-    position: relative;
     min-height: var(--note-height);
-    margin: 10px 0;
+    margin: 0;
+    padding-top: 24px;
+    margin-bottom: 20px;
 }
 
 .staff-prefix-middle-line {
@@ -513,7 +514,7 @@ h6 {
 .staff-prefix-clef {
     margin: 0 8px;
     width: 8px;
-    height: calc(var(--note-height) * 0.2);
+    height: calc(var(--note-height) * 0.25);
     border-left: 3px solid var(--color-base-content);
     border-right: 3px solid var(--color-base-content);
     flex-shrink: 0;
@@ -552,11 +553,7 @@ h6 {
     display: flex;
     flex-direction: row;
     width: 100%;
-    margin: 8px 0;
-}
-
-.bar-track-row.staff-mode {
-    margin: 10px 0;
+    margin: 0;
 }
 
 .staff-note-viewer {
@@ -566,6 +563,7 @@ h6 {
     position: relative;
     width: 100%;
     min-height: var(--note-height);
+    margin-bottom: 20px;
 }
 
 .staff-note-viewer-line {
@@ -577,19 +575,25 @@ h6 {
 }
 
 .staff-note-viewer-custom-stem {
+    position: absolute;
     pointer-events: none;
     z-index: 1;
+    left: calc(50% - 1px);
+    top: calc(50% - 38px);
+    width: 2px;
+    background: var(--color-base-content);
 }
 
 /* Per-head-type adjustments for beamed custom stems. */
 .staff-note-viewer-custom-stem--square {
-    /* Square heads (Timbau, Repinique slap) sit lower; pull stem down. */
-    top: calc(50% - 34px) !important;
+    /* Square heads (Timbau, Repinique slap) sit lower; pull stem down and left. */
+    top: calc(50% - 38px) !important;
+    left: calc(50% - 2px) !important;
 }
 
 .staff-note-viewer-custom-stem--cross {
     /* Cross heads (Tamborim) are small; pull stem down slightly. */
-    top: calc(50% - 36px) !important;
+    top: calc(50% - 38px) !important;
 }
 
 .staff-note-viewer-prefix {
@@ -646,7 +650,7 @@ h6 {
 
 .staff-note-viewer-final-barline::before {
     right: 4px;
-    width: 1.5px;
+    width: 2px;
 }
 
 .staff-note-viewer-final-barline::after {
@@ -659,7 +663,7 @@ h6 {
     position: absolute;
     inset: 0;
     display: flex;
-    align-items: center;
+    margin-top: 64px;
 }
 
 .staff-note-viewer-run {
@@ -683,8 +687,8 @@ h6 {
 
 .staff-note-viewer-accent {
     position: absolute;
-    left: 50%;
-    top: calc(50% - 60px);
+    left: calc(50% - 5px);
+    top: calc(50% + 9px);
     transform: translateX(-50%);
     font-size: 18px;
     line-height: 1;
@@ -738,7 +742,7 @@ h6 {
 }
 
 .staff-note-viewer-tuplet-bracket.staff-note-viewer-tuplet-above {
-    top: calc(50% - 55px);
+    top: calc(50% - 24px);
     border-top: 1.5px solid var(--color-base-content);
     border-bottom: 0;
 }
@@ -775,7 +779,7 @@ h6 {
     height: 60px;
 
     /* The note head is in the lower part of this SVG; lift it so the head center sits on the middle line. */
-    transform: translateY(-18px);
+    transform: translateY(-16px);
 }
 
 /* ---------------------------------------------------------------------------
@@ -802,6 +806,7 @@ h6 {
         width: 14px;
         height: 14px;
         background: currentColor;
+        bottom: 22px;
         transform: translate(-100%, -5%);
     }
 
@@ -820,7 +825,7 @@ h6 {
 
     .staff-note-head-cross-svg {
         position: absolute;
-        left: calc(50% - 12px);
+        left: calc(50% - 12.5px);
         bottom: 22px;
         pointer-events: none;
     }
@@ -834,28 +839,29 @@ h6 {
     }
 
     /* ---- CSS stem for non-oval, non-beamed notes ---- */
-    &-stem {
+    .staff-note-head-stem {
         position: absolute;
         left: 50%;
         width: 2px;
         background: var(--color-base-content);
         transform: translateX(-50%);
-        top: -8px;
+        top: -6px;
         pointer-events: none;
         z-index: 1;
     }
 
     /* Per-head-type stem adjustments (non-beamed CSS stem). */
-    &.square &-stem {
+    &.square .staff-note-head-stem {
+        top: -6px;
+        left: calc(50% - 1px);
+    }
+
+    &.cross .staff-note-head-stem {
         top: -8px;
     }
 
-    &.cross &-stem {
-        top: -12px;
-    }
-
     /* ---- Thumb: empty circle inside square ---- */
-    &-thumb-circle {
+    .staff-note-head-thumb-circle {
         position: absolute;
         left: calc(50% - 7px);
         bottom: 20px;
@@ -868,7 +874,7 @@ h6 {
     }
 
     /* ---- Tap / TapWithPalm: triangle inside square (pointing up) ---- */
-    &-tap-triangle {
+    .staff-note-head-tap-triangle {
         position: absolute;
         left: calc(50% - 7px);
         bottom: 20px;
@@ -917,7 +923,7 @@ h6 {
     .staff-note-head-slap-svg {
         position: absolute;
         left: calc(50% - 7px);
-        bottom: 20px;
+        bottom: 22px;
         width: 10px;
         height: 10px;
         transform: translate(-50%, -30%);
@@ -944,12 +950,11 @@ h6 {
     &.rim::before {
         content: "";
         position: absolute;
-        left: calc(50% - 7px);
-        bottom: 15px;
-        width: 16px;
+        left: calc(50% - 12px);
+        bottom: 17px;
+        width: 13px;
         height: 1.5px;
         background: var(--color-base-content);
-        transform: translateX(-50%);
         pointer-events: none;
     }
 
@@ -968,7 +973,7 @@ h6 {
         position: absolute;
         left: calc(50% - 17px);
         bottom: 12px;
-        width: 1.5px;
+        width: 2px;
         height: 16px;
         background: var(--color-base-content);
         pointer-events: none;
@@ -1130,22 +1135,22 @@ h6 {
             color: var(--color-primary) !important;
         }
 
-        &-cross-svg,
-        &-press-roll-svg,
-        &-slap-svg,
-        &-rimshot-cross-svg {
+        .staff-note-head-cross-svg,
+        .staff-note-head-press-roll-svg,
+        .staff-note-head-slap-svg,
+        .staff-note-head-rimshot-cross-svg {
             stroke: var(--color-primary) !important;
         }
 
-        &-stem {
+        .staff-note-head-stem {
             background: var(--color-primary) !important;
         }
 
-        &-thumb-circle {
+        .staff-note-head-thumb-circle {
             border-color: var(--color-primary) !important;
         }
 
-        &-tap-triangle {
+        .staff-note-head-tap-triangle {
             border-bottom-color: var(--color-primary) !important;
         }
 
@@ -1164,6 +1169,10 @@ h6 {
 
     .staff-note-viewer-custom-stem {
         background: var(--color-primary) !important;
+    }
+
+    .staff-note-viewer-accent {
+        color: var(--color-primary) !important;
     }
 }
 

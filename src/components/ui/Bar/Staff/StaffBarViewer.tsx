@@ -127,10 +127,11 @@ export class StaffBarViewer extends UIComponent<IBarViewerProps, IBarViewerState
         for (const row of rows) {
             const rowRect = row.getBoundingClientRect();
 
-            // Tuplet brackets and numbers extend above / below the row, so
-            // expand the hit-test rect vertically to catch clicks on them.
-            const expandedTop = rowRect.top - 30;
-            const expandedBottom = rowRect.bottom + 20;
+            // Tuplet brackets/numbers extend above the row via absolute
+            // positioning.  With overflow:visible (the default) the row's
+            // bounding rect already includes them, so no expansion is needed.
+            const expandedTop = rowRect.top;
+            const expandedBottom = rowRect.bottom;
 
             if (!rectsIntersect(rect, rowRect.left, expandedTop, rowRect.right, expandedBottom, 0)) {
                 continue;
@@ -259,6 +260,12 @@ export class StaffBarViewer extends UIComponent<IBarViewerProps, IBarViewerState
             // Beam detection runs regardless of note hits — when a beam is hit,
             // it takes priority over individual note entries because clicking on
             // a beam should select the entire beam group.
+            // However, individual note hits have the highest priority: if a note
+            // was already hit in this row, skip beam/tuplet detection.
+            const rowHadNoteHits = noteEntries.some((e) => {
+                return e.trackId === trackId && e.bar === barNumber;
+            });
+
             const beamElements = row.querySelectorAll<HTMLElement>(".staff-note-viewer-beam");
             const hitBeamSteps = new Set<number>();
 
@@ -451,23 +458,26 @@ export class StaffBarViewer extends UIComponent<IBarViewerProps, IBarViewerState
                     }
                 }
 
-                // Beam hits take priority: remove any individual note entries
-                // for this track and replace with beam group entries.
-                for (let i = noteEntries.length - 1; i >= 0; i--) {
-                    if (noteEntries[i].trackId === trackId) {
-                        noteEntries.splice(i, 1);
+                // Beam hits take priority over track-piece entries, but
+                // individual note hits (already detected above) take priority
+                // over beam hits.
+                if (!rowHadNoteHits) {
+                    for (let i = noteEntries.length - 1; i >= 0; i--) {
+                        if (noteEntries[i].trackId === trackId) {
+                            noteEntries.splice(i, 1);
+                        }
                     }
-                }
 
-                for (const { start, end } of deduplicated) {
-                    noteEntries.push({
-                        granularity: SelectionGranularity.NoteGroup,
-                        bar: barNumber,
-                        trackId: trackId,
-                        startStep: start,
-                        endStep: end,
-                    });
-                    rowHasSoundingNotes = true;
+                    for (const { start, end } of deduplicated) {
+                        noteEntries.push({
+                            granularity: SelectionGranularity.NoteGroup,
+                            bar: barNumber,
+                            trackId: trackId,
+                            startStep: start,
+                            endStep: end,
+                        });
+                        rowHasSoundingNotes = true;
+                    }
                 }
             } else {
                 // No beams were hit — try tuplet bracket/number → NoteGroup.

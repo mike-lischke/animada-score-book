@@ -184,7 +184,7 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
         // For multiple lines, render N lines symmetrically around the vertical centre.
         const staffLines: ComponentChild[] = [];
         for (let i = 1; i <= maxNoteLine; i++) {
-            const offset = (i - centerLine) * 10; // 10px = --staff-line-spacing
+            const offset = ((i - centerLine) * 10) + 31.5; // 10px = line spacing, +16px = prefix-row shift
             staffLines.push(
                 <div
                     key={`staff-line-${i}`}
@@ -905,8 +905,8 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                 const decoClasses = noteStyle ? this.resolveDecorationClasses(noteStyle, articulation) : [];
                 headWrapperClasses.push(...decoClasses);
 
-                // Non-oval heads without beam need a CSS stem (the SVG stem is hidden).
-                const needsCssStem = isNonOval && !hasBeam;
+                // All non-beamed notes get a CSS stem (the SVG stem is always hidden).
+                const needsCssStem = !hasBeam;
 
                 const event = eventsByStep[stepIndex];
 
@@ -936,13 +936,13 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                                 dotted={glyph.dotted}
                                 diamondOpen={diamondOpen}
                                 flagCount={hasBeam ? 0 : undefined}
-                                hideStem={hasBeam || isNonOval}
+                                hideStem={true}
                                 alt=""
                             />
                             {needsCssStem ? (
                                 <span
                                     className="staff-note-head-stem"
-                                    style={{ height: `calc(38.5px + ${lineOffset}px)` }}
+                                    style={{ height: `calc(33px + ${lineOffset}px)` }}
                                 />
                             ) : null}
                             {this.renderNoteDecorations(noteStyle, articulation)}
@@ -1090,12 +1090,7 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
             <span
                 className={`staff-note-viewer-custom-stem ${headClass}`}
                 style={{
-                    position: "absolute",
-                    left: "calc(50% - 1px)",
-                    width: "2px",
-                    background: "var(--color-base-content)",
-                    top: "calc(50% - 38px)",
-                    height: `calc(35.5px + ${lineOffset}px)`,
+                    height: `calc(35px + ${lineOffset}px)`,
                 }}
             />
         );
