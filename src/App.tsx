@@ -14,6 +14,8 @@ import { createRef } from "preact";
 import { lazy, Suspense } from "preact/compat";
 
 import { ErrorBoundary } from "./components/ui/ErrorBoundary.js";
+import { renderStatusBar, Statusbar } from "./components/ui/Statusbar/Statusbar.js";
+import { StatusBarAlignment, type IStatusBarItem } from "./components/ui/Statusbar/StatusBarItem.js";
 import { Button } from "./components/ui/framework/Button.js";
 import { Container } from "./components/ui/framework/Container.js";
 import { Label } from "./components/ui/framework/Label.js";
@@ -109,6 +111,7 @@ export class App extends UIComponent<{}, IAppState> {
     private currentPlayRange?: { startBar: number; endBar: number; };
     private selectedThemePreference = "Light+";
     private systemThemeQuery = window.matchMedia("(prefers-color-scheme: dark)");
+    private statsItem?: IStatusBarItem;
 
     public constructor(props: {}) {
         super(props);
@@ -153,6 +156,12 @@ export class App extends UIComponent<{}, IAppState> {
             || printing !== nextState.printing;
     }
 
+    public override componentDidUpdate(_prevProps: {}, prevState: IAppState): void {
+        if (!prevState.ready && this.state.ready) {
+            this.updateStatsItem();
+        }
+    }
+
     public override componentWillUnmount() {
         requisitions.unregister("timeParamsChanged", this.handleTimeParamsChange);
         this.systemThemeQuery.removeEventListener("change", this.handleSystemThemeChange);
@@ -180,7 +189,6 @@ export class App extends UIComponent<{}, IAppState> {
         }
 
         const arrangementView = this.dataModel.arrangement!;
-        const scoreMetrics = this.arrangementPlayer!.scoreMetrics;
 
         let titleBlock;
         if (this.arrangementPlayer) {
@@ -215,10 +223,6 @@ export class App extends UIComponent<{}, IAppState> {
 
             </Container>;
         }
-
-        const bars = scoreMetrics.bars === 1 ? "1 bar" : `${scoreMetrics.bars} bars`;
-        const scoreStats = `${scoreMetrics.beatsPerBar}/${scoreMetrics.beatUnit} • ${bars} • ` +
-            `${Math.round(100 * scoreMetrics.realTimeLength) / 100} s`;
 
         return (
             <ErrorBoundary>
@@ -313,9 +317,6 @@ export class App extends UIComponent<{}, IAppState> {
                                                 <Label className="appTitle bottom faded">Score</Label>
                                                 <Label className="appTitle bottom accent">Book</Label>
                                             </Container>
-                                            <Container crossAlignment={ChildAlignment.Center} id="arrangementStats">
-                                                {scoreStats}
-                                            </Container>
 
                                         </Container>
                                         <ArrangementPlayControls
@@ -365,6 +366,7 @@ export class App extends UIComponent<{}, IAppState> {
                             forceExpanded={headerPinned}
                         />
                     </DrawerSidebar>
+                    {renderStatusBar()}
                 </Container>
                 <TooltipProvider />
                 <ValueDialog ref={this.valueDialogRef} />
@@ -962,6 +964,7 @@ export class App extends UIComponent<{}, IAppState> {
 
     private handleTimeParamsChange = (): Promise<boolean> => {
         this.forceUpdate();
+        this.updateStatsItem();
 
         return Promise.resolve(true);
     };
@@ -972,4 +975,30 @@ export class App extends UIComponent<{}, IAppState> {
 
         return Promise.resolve(true);
     };
+
+    /**
+     * Creates or updates the status bar item that shows the current score metrics
+     * (time signature, bar count, duration) on the right side of the status bar.
+     */
+    private updateStatsItem(): void {
+        if (!this.arrangementPlayer) {
+            return;
+        }
+
+        const metrics = this.arrangementPlayer.scoreMetrics;
+        const bars = metrics.bars === 1 ? "1 bar" : `${metrics.bars} bars`;
+        const text = `${metrics.beatsPerBar}/${metrics.beatUnit} • ${bars} • ` +
+            `${Math.round(100 * metrics.realTimeLength) / 100} s`;
+
+        if (!this.statsItem) {
+            this.statsItem = Statusbar.createStatusBarItem({
+                id: "scoreStats",
+                text,
+                alignment: StatusBarAlignment.Right,
+                priority: 10,
+            });
+        } else {
+            this.statsItem.text = text;
+        }
+    }
 }

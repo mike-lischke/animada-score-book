@@ -41,6 +41,9 @@ export interface IRequestTypeMap {
     "selectionRectChanged": (data: ISelectionRectChange) => Promise<boolean>;
     "errorLogChanged": SimpleCallback;
     "overlayVisibilityChanged": (data: { name: string; visible: boolean; }) => Promise<boolean>;
+
+    // --- Status bar topics ---
+    "statusBarItemClicked": (data: { command: string; event: MouseEvent | KeyboardEvent; }) => Promise<boolean>;
 }
 
 type CallbackType = IRequestTypeMap[keyof IRequestTypeMap];
