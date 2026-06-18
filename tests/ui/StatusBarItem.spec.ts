@@ -5,7 +5,9 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { StatusBarAlignment, StatusBarItem, type UpdateFunction } from "../../src/components/ui/Statusbar/StatusBarItem.js";
+import {
+    StatusBarAlignment, StatusBarItem, type UpdateFunction
+} from "../../src/components/ui/Statusbar/StatusBarItem.js";
 
 describe.sequential("StatusBarItem", () => {
     let update: ReturnType<typeof vi.fn<UpdateFunction>>;

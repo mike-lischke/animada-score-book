@@ -36,6 +36,7 @@ body {
     font-family: system-ui, 'Open Sans', 'Helvetica Neue', 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
     line-height: 1.5;
     font-weight: 400;
+    font-size: 14px;
 
     overflow: hidden;
 }
@@ -1600,11 +1601,11 @@ h6 {
     max-height: 150px;
 }
 
-.drawer .drawer-content #expanded-top {
+.drawer .du-drawer-content #expanded-top {
     z-index: 3;
 }
 
-.drawer .drawer-sidebar-content {
+.drawer .du-drawer-sidebar-content {
     background-color: var(--color-base-100);
     padding: 20px;
     height: 100%;

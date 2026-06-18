@@ -78,17 +78,17 @@ export class Dialog extends UIComponent<IDialogProperties> {
     public render(): ComponentChild {
         const { id, children, caption, actions } = this.props;
 
-        const className = this.generateFinalClassName(["dialog", "modal"]);
+        const className = this.generateFinalClassName(["dialog", "du-modal"]);
 
         return (
             <dialog
                 id={id}
                 className={className}
                 ref={this.dialogRef}>
-                <div className="modal-box">
+                <div className="du-modal-box">
                     {caption && <h3 id="dialog-caption">{caption}</h3>}
                     {children}
-                    <div className="modal-action">
+                    <div className="du-modal-action">
                         <form method="dialog">
                             {actions}
                         </form>

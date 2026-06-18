@@ -49,23 +49,23 @@ export class DrawerSidebar extends UIComponent<IDrawerSidebarProps, IDrawerSideb
         const { everOpened } = this.state;
 
         return (
-            <div id={id} className={`drawer ${alwaysOpen ? "drawer-open" : ""}`}>
+            <div id={id} className={`drawer du-drawer ${alwaysOpen ? "du-drawer-open" : ""}`}>
                 <input
                     id={`${id}-toggle`}
                     type="checkbox"
-                    className="drawer-toggle"
+                    className="du-drawer-toggle"
                     checked={open}
                     onChange={this.handleOnChange}
                 />
                 <Container
-                    className="drawer-content"
+                    className="du-drawer-content"
                     orientation={Orientation.TopDown}
                 >
                     {children}
                 </Container>
-                <div className="drawer-side">
-                    <label htmlFor={`${id}-toggle`} aria-label="close sidebar" className="drawer-overlay" />
-                    <Container className="drawer-sidebar-content">
+                <div className="du-drawer-side">
+                    <label htmlFor={`${id}-toggle`} aria-label="close sidebar" className="du-drawer-overlay" />
+                    <Container className="du-drawer-sidebar-content">
                         {(open || alwaysOpen === true || everOpened) ? sidebarContent : null}
                     </Container>
                 </div>

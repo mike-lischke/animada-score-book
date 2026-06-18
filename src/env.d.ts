@@ -16,3 +16,11 @@ interface ImportMeta {
 interface CSSStyleDeclaration {
     zoom: string;
 }
+
+interface Window {
+    __e2e?: {
+        requisitions: {
+            execute: (topic: string, parameter: unknown) => Promise<boolean>;
+        };
+    };
+}

@@ -170,7 +170,7 @@ export class NoteImage extends UIComponent<INoteImageProperties, INoteImageState
         const isOval = headType === NoteImageHeadType.Oval;
 
         style["--note-show-oval-body"] = isOval && value !== NoteLength.Whole ? "inline" : "none";
-        style["--note-show-oval-stem"] = "none";
+        style["--note-show-oval-stem"] = hasStem ? "inline" : "none";
         style["--note-show-oval-half"] = isOval && value === NoteLength.Half ? "inline" : "none";
         style["--note-show-oval-quarter"] = isOval && value !== NoteLength.Whole && value !== NoteLength.Half
             ? "inline"

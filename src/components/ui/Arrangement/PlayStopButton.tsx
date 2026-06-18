@@ -35,7 +35,7 @@ export class PlayStopButton extends UIComponent<IPlayStopButtonProperties> {
 
         const className = this.generateFinalClassName([
             "playStopButton",
-            this.classFromProperty(isPlaying, ["", "swap-active"])
+            this.classFromProperty(isPlaying, ["", "du-swap-active"])
         ]);
 
         const playButton = (

@@ -171,7 +171,7 @@ export class ArrangementPlayControls
                             max={200}
                             step={5}
                             data-tooltip="inherit"
-                            className="range-xs"
+                            className="du-range-xs"
                             onChange={(value) => {
                                 this.setState({ currentTempo: value });
                                 undoManager.edit({
@@ -182,7 +182,10 @@ export class ArrangementPlayControls
 
                             }}
                         />
-                        <Label caption={`${currentTempo} bpm`} style={{ fontSize: "80%", marginTop: "4px" }} />
+                        <Label
+                            caption={`${currentTempo} bpm`}
+                            style={{ fontSize: "80%", marginTop: "4px", whiteSpace: "nowrap" }}
+                        />
                     </Container>
                     <Container
                         mainAlignment={ChildAlignment.Start}
@@ -196,7 +199,7 @@ export class ArrangementPlayControls
                             min={0}
                             max={100}
                             data-tooltip="inherit"
-                            className="range-xs"
+                            className="du-range-xs"
                             onChange={(value) => {
                                 arrangementView.mainVolume = value;
                                 this.setState({ currentVolume: arrangementView.mainVolume }, () => {
@@ -206,7 +209,7 @@ export class ArrangementPlayControls
                         />
                         <Label
                             caption={`${Math.round(currentVolume)}%`}
-                            style={{ fontSize: "80%", marginTop: "4px" }}
+                            style={{ fontSize: "80%", marginTop: "4px", whiteSpace: "nowrap" }}
                         />
                     </Container>
                 </Container>

@@ -62,7 +62,7 @@ export class UpDown extends UIComponent<IUpDownProperties> {
         const content = (
             <Input
                 id={id ?? "upDownInput"}
-                className="input-sm"
+                className="du-input-sm"
                 value={value.toString()}
                 onChange={this.handleInputChange}
                 onConfirm={this.handleInputConfirm}

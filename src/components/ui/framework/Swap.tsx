@@ -26,9 +26,10 @@ export class Swap extends UIComponent<ISwapProperties> {
 
         const className = this.generateFinalClassName([
             "btn",
-            "btn-circle",
-            "swap",
-            "swap-rotate"
+            "du-btn",
+            "du-btn-circle",
+            "du-swap",
+            "du-swap-rotate"
         ]);
 
         return (
@@ -41,8 +42,8 @@ export class Swap extends UIComponent<ISwapProperties> {
                         onChange?.(event.currentTarget.checked);
                     }}
                 />
-                <span className="swap-off fill-current">{offContent}</span>
-                <span className="swap-on fill-current">{onContent}</span>
+                <span className="du-swap-off fill-current">{offContent}</span>
+                <span className="du-swap-on fill-current">{onContent}</span>
             </label>
         );
     }

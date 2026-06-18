@@ -2,11 +2,11 @@
 
 exports[`SettingsDialog (class) > matches snapshot for default rendering 1`] = `
 <dialog
-  class="dialog modal"
+  class="dialog du-modal"
   id="settingsDialog"
 >
   <div
-    class="modal-box"
+    class="du-modal-box"
   >
     <div
       class="container font-bold text-lg"
@@ -35,7 +35,7 @@ exports[`SettingsDialog (class) > matches snapshot for default rendering 1`] = `
           class="dropdownHost"
         >
           <button
-            class="btn"
+            class="btn du-btn"
             popovertarget="popover-2"
             style="anchor-name: --anchor-1;"
           >
@@ -182,17 +182,17 @@ exports[`SettingsDialog (class) > matches snapshot for default rendering 1`] = `
             100%
           </span>
           <button
-            class="btn zoomButton"
+            class="btn du-btn zoomButton"
           >
             -
           </button>
           <button
-            class="btn zoomButton"
+            class="btn du-btn zoomButton"
           >
             +
           </button>
           <button
-            class="btn resetButton"
+            class="btn du-btn resetButton"
           >
             Reset
           </button>
@@ -200,20 +200,20 @@ exports[`SettingsDialog (class) > matches snapshot for default rendering 1`] = `
       </div>
     </div>
     <div
-      class="modal-action"
+      class="du-modal-action"
     >
       <form
         method="dialog"
       >
         <button
-          class="btn"
+          class="btn du-btn"
           id="settings-button-cancel"
           value="cancel"
         >
           Cancel
         </button>
         <button
-          class="btn"
+          class="btn du-btn"
           id="settings-button-save"
           value="save"
         >

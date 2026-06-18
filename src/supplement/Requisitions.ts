@@ -44,6 +44,14 @@ export interface IRequestTypeMap {
 
     // --- Status bar topics ---
     "statusBarItemClicked": (data: { command: string; event: MouseEvent | KeyboardEvent; }) => Promise<boolean>;
+
+    // --- Notification center topics ---
+    "showInfo": (text: string) => Promise<boolean>;
+    "showWarning": (text: string) => Promise<boolean>;
+    "showError": (text: string) => Promise<boolean>;
+    "notificationStateChanged": (state: {
+        newCount: number; totalCount: number; silent: boolean; showHistory: boolean;
+    }) => Promise<boolean>;
 }
 
 type CallbackType = IRequestTypeMap[keyof IRequestTypeMap];

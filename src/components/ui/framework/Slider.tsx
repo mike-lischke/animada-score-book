@@ -32,6 +32,7 @@ export class Slider extends UIComponent<ISliderProperties> {
 
         const className = this.generateFinalClassName([
             "range",
+            "du-range",
             this.classFromProperty(vertical, "vertical"),
         ]);
 

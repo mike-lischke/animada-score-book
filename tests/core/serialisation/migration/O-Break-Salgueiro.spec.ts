@@ -18,12 +18,12 @@ const bdInstruments = bateriaInstruments.map((meta) => {
 const oBreakSalgueiroUrl =
     "t=O-Break%20Salgueiro%202007%20Handzeichen%3A%20Dreieck" +
     "&a2=4-4.100.19.1-4.16.03hgQUbXnuDd~YM_U6bb3ThnSA9rOtLondqgc4LE7NuEF4tl_mhI_Dw7np6T2Amph1yZXv2cfltPZ-wwK9" +
-    ".a3n8Ia4lYaYNXlmOvI90Au91df6F4olcl6y0tvHLKKLBB5OgdyIqvfElxMrqdYI5chb0KpHQ3OSWckHVBl0kVJm7sSOnDUxhFTUwEqCzrXfFqCD6-wwK9" +
-    ".11EHv6HNf_tFFT3LSzzEF7M4Q0d7PLDx9mWFm7o~8sdG~DTYXLA_GSXC2WEHbUjFE7VNCQjZpmZG1-3rYmq6Ku" +
+    ".a3n8Ia4lYaYNXlmOvI90Au91df6F4olcl6y0tvHLKKLBB5OgdyIqvfElxMrqdYI5chb0KpHQ3OSWckHVBl0kVJm7sSOnDUxhFTUwEqCzr" +
+    "XfFqCD6-wwK9.11EHv6HNf_tFFT3LSzzEF7M4Q0d7PLDx9mWFm7o~8sdG~DTYXLA_GSXC2WEHbUjFE7VNCQjZpmZG1-3rYmq6Ku" +
     ".23U8gRNeQE72d70zowkIwNyiXaUuQnFtjv52xj8f1Oi78AXuL_PUWj6GWN42wLUFtbEbfJOYW9JE-8N0T9cf461BHDV8fB" +
     ".399888000808080009998eo0avauavauavauavauavauavauavauavau800080808o0o8r56o088d6o099809980" +
-    "avauavauavauavauavauavauavauavauavauavauavauavauavamavau-3_u2VDQWnwUf" +
-    ".5ROdT2lgcB1h2bwlk2xOPmxWHzAYTKYx7bIDRi0NV4HAJ_BXI4tAM~HCuA49tGxObqQ7_PCfnUoKfWsj5BGNZAcfMUfWHZQIxRz7jmOeputpL9G-3rYmq6Ku" +
+    "avauavauavauavauavauavauavauavauavauavauavauavauavamavau-3_u2VDQWnwUf.5ROdT2lgcB1h2bwlk2xOPmxWHzAYTKYx7bI" +
+    "DRi0NV4HAJ_BXI4tAM~HCuA49tGxObqQ7_PCfnUoKfWsj5BGNZAcfMUfWHZQIxRz7jmOeputpL9G-3rYmq6Ku" +
     ".769lbD8wA0LyGxPIOcGB8pdu30HCImk1NELdrJrKOm_P0iar_UWMbOMlryOFMQJOh_FhPA_ZBVd-3rYmq6Ku" +
     ".8160V40rCvwJbxBXTSb07tbaPSOnwYhpw1MFJSwwQTKoZVK4nQIj_oSAA7Vq~xeGT0zjoHxdknHd8-3rYmq6Ku" +
     ".969lbD8wA0LyE_znt3RgMbIfjXLhIk8hIRG4CUVQ2AitAPfM00UhSuV0AQUSyhjtUeD_0NuBezD-3rYmq6Ku";
@@ -31,11 +31,14 @@ const oBreakSalgueiroUrl =
 
 /**
  * Pretty-prints a subdivision for readable assertion messages.
+ *
+ * @param sub The subdivision to format.
+ *
+ * @returns A string representation of the subdivision.
  */
 const formatSub = (sub: ISubdivision): string => {
-    return "Sub(id=" + sub.id + ", start=" + sub.startStep + ", actual=" + sub.actual + ", " +
-        "normal=" + sub.normal + ", isTuplet=" + sub.isTuplet + ", parentId=" +
-        (sub.parentSubdivisionId ?? "none") + ")";
+    return `Sub(id=${sub.id}, start=${sub.startStep}, actual=${sub.actual}, normal=${sub.normal}, ` +
+        `isTuplet=${sub.isTuplet}, parentId=${sub.parentSubdivisionId ?? "none"})`;
 };
 
 describe("O-Break Salgueiro 2007 - Migration", () => {
@@ -95,7 +98,7 @@ describe("O-Break Salgueiro 2007 - Migration", () => {
         it("all top-level subdivisions are tuplets (nested 2:1 is correctly not a tuplet)", () => {
             for (const info of bar4Subdivisions) {
                 const topLevelSubs = info.subdivisions.filter((s) => {
-                    return s.parentSubdivisionId === undefined || s.parentSubdivisionId === null;
+                    return s.parentSubdivisionId == null;
                 });
 
                 for (const sub of topLevelSubs) {

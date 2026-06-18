@@ -30,6 +30,7 @@ export class Divider extends UIComponent<IDividerProperties> {
 
         const className = this.generateFinalClassName([
             "divider",
+            "du-divider",
             this.classFromProperty(vertical, ["horizontal", "vertical"]),
         ]);
 

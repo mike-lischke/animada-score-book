@@ -13,6 +13,7 @@
 
 @plugin "daisyui" {
     themes: false;
+    prefix: "du-";
 }
 
 
@@ -24,6 +25,6 @@
 }
 
 /* Allow mouse events reaching disabled buttons (for tooltips). */
-.btn:disabled {
+.du-btn:disabled {
     pointer-events: all;
 }

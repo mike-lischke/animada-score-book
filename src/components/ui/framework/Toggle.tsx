@@ -54,6 +54,7 @@ export class Toggle extends UIComponent<IToggleProperties> {
         const { id, checkState, vertical } = this.props;
         const className = this.generateFinalClassName([
             "toggle",
+            "du-toggle",
             ...(vertical ? ["toggle-vertical"] : []),
         ]);
 

@@ -55,9 +55,10 @@ export class Button extends UIComponent<IButtonProperties> {
         } = this.props;
         const className = this.generateFinalClassName([
             "btn",
-            this.classFromProperty(round, "btn-circle"),
+            "du-btn",
+            this.classFromProperty(round, "du-btn-circle"),
             this.classFromProperty(imageOnly, "imageOnly"),
-            this.classFromProperty(disabled, "btn-disabled"),
+            this.classFromProperty(disabled, "du-btn-disabled"),
             this.classFromProperty(isDefault, "default"),
         ]);
 

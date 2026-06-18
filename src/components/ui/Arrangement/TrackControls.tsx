@@ -180,7 +180,7 @@ export class TrackControls extends UIComponent<ITrackControlsProperties, ITrackC
                         crossAlignment={ChildAlignment.Center}
                     >
                         <Toggle
-                            className="trackViewModeToggle toggle-xs"
+                            className="trackViewModeToggle du-toggle-xs"
                             vertical
                             checkState={trackViewMode === "staff" ? CheckState.Checked : CheckState.Unchecked}
                             onChange={this.handleTrackViewModeToggle}

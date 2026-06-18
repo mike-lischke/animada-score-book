@@ -52,6 +52,7 @@
         "repiniques",
         "Rimshot",
         "rimshots",
+        "Salgueiro",
         "Scorebook",
         "Seis",
         "serialisation",
@@ -75,6 +76,8 @@
         "Whippies"
     ],
     "ignoreWords": [
+        "Dreieck",
+        "Handzeichen",
         "Lischke",
         "Millis",
         "alttext",

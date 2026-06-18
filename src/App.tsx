@@ -14,6 +14,7 @@ import { createRef } from "preact";
 import { lazy, Suspense } from "preact/compat";
 
 import { ErrorBoundary } from "./components/ui/ErrorBoundary.js";
+import { renderNotificationCenter } from "./components/ui/NotificationCenter/NotificationCenter.js";
 import { renderStatusBar, Statusbar } from "./components/ui/Statusbar/Statusbar.js";
 import { StatusBarAlignment, type IStatusBarItem } from "./components/ui/Statusbar/StatusBarItem.js";
 import { Button } from "./components/ui/framework/Button.js";
@@ -112,6 +113,7 @@ export class App extends UIComponent<{}, IAppState> {
     private selectedThemePreference = "Light+";
     private systemThemeQuery = window.matchMedia("(prefers-color-scheme: dark)");
     private statsItem?: IStatusBarItem;
+    private notificationItem?: IStatusBarItem;
 
     public constructor(props: {}) {
         super(props);
@@ -143,6 +145,7 @@ export class App extends UIComponent<{}, IAppState> {
 
         requisitions.register("settingsChanged", this.handleSettingsChanged);
         requisitions.register("playRangeChanged", this.handlePlayRangeChanged);
+        requisitions.register("notificationStateChanged", this.handleNotificationStateChanged);
 
         void this.checkBackendThenInitialize();
     }
@@ -169,6 +172,7 @@ export class App extends UIComponent<{}, IAppState> {
         escapeStack.detach();
         requisitions.unregister("settingsChanged", this.handleSettingsChanged);
         requisitions.unregister("playRangeChanged", this.handlePlayRangeChanged);
+        requisitions.unregister("notificationStateChanged", this.handleNotificationStateChanged);
     }
 
     public render() {
@@ -269,7 +273,7 @@ export class App extends UIComponent<{}, IAppState> {
                                         >
                                             <Button
                                                 imageOnly
-                                                className="btn-ghost"
+                                                className="du-btn-ghost"
                                                 data-tooltip="Display Options"
                                                 onClick={this.handleDisplayOptionsClick}
                                             >
@@ -278,7 +282,7 @@ export class App extends UIComponent<{}, IAppState> {
                                             <Button
                                                 id="scoreLibraryButton"
                                                 imageOnly
-                                                className="btn-ghost"
+                                                className="du-btn-ghost"
                                                 data-tooltip="Score Library"
                                                 onClick={this.handleScoreLibraryClick}
                                             >
@@ -287,7 +291,7 @@ export class App extends UIComponent<{}, IAppState> {
                                             <Button
                                                 id="instrumentEditor"
                                                 imageOnly
-                                                className="btn-ghost"
+                                                className="du-btn-ghost"
                                                 data-tooltip="Instrument Editor"
                                                 disabled
                                                 onClick={this.handleInstrumentEditorClick}
@@ -297,7 +301,7 @@ export class App extends UIComponent<{}, IAppState> {
                                             <Button
                                                 id="printButton"
                                                 imageOnly
-                                                className="btn-ghost"
+                                                className="du-btn-ghost"
                                                 data-tooltip="Print / Export to PDF"
                                                 onClick={this.handlePrintClick}
                                             >
@@ -367,6 +371,7 @@ export class App extends UIComponent<{}, IAppState> {
                         />
                     </DrawerSidebar>
                     {renderStatusBar()}
+                    {renderNotificationCenter()}
                 </Container>
                 <TooltipProvider />
                 <ValueDialog ref={this.valueDialogRef} />
@@ -446,7 +451,9 @@ export class App extends UIComponent<{}, IAppState> {
         const hasBananaDrum = params.has("a") || params.has("a2");
 
         this.loadScorebook(hasBananaDrum ? params : undefined);
-        this.setState({ ready: true });
+        this.setState({ ready: true }, () => {
+            Statusbar.setStatusBarMessage("App loaded", 5000);
+        });
     }
 
     private handleGithubClick = () => {
@@ -831,7 +838,15 @@ export class App extends UIComponent<{}, IAppState> {
                 this.arrangementPlayer.dispose();
             }
 
-            arrangement = this.dataModel.loadArrangement(resolvedSource);
+            try {
+                arrangement = this.dataModel.loadArrangement(resolvedSource);
+            } catch (error) {
+                const message = convertErrorToString(error);
+                console.error(message);
+                void requisitions.execute("showError", message);
+
+                return;
+            }
         }
 
         this.undoManager = new UndoManager(this.dataModel);
@@ -1001,4 +1016,52 @@ export class App extends UIComponent<{}, IAppState> {
             this.statsItem.text = text;
         }
     }
+
+    private handleNotificationStateChanged = (state: {
+        newCount: number; totalCount: number; silent: boolean; showHistory: boolean;
+    }): Promise<boolean> => {
+        const { newCount, totalCount, silent, showHistory } = state;
+
+        let text: string;
+        let tooltip: string;
+
+        if (showHistory) {
+            tooltip = "Hide Notifications";
+            text = silent ? "$(bell-slash)" : "$(bell)";
+        } else {
+            if (silent) {
+                text = newCount === 0 ? "$(bell-slash)" : "$(bell-slash-dot)";
+            } else {
+                text = newCount === 0 ? "$(bell)" : "$(bell-dot)";
+            }
+
+            tooltip = newCount === 0 ? "No" : newCount.toString();
+            if (newCount === 0) {
+                if (totalCount > 0) {
+                    tooltip += " New Notifications";
+                } else {
+                    tooltip += " Notifications";
+                }
+            } else {
+                tooltip += " New Notification" + (newCount > 1 ? "s" : "");
+            }
+        }
+
+        if (!this.notificationItem) {
+            this.notificationItem = Statusbar.createStatusBarItem({
+                id: "showNotificationHistory",
+                text,
+                tooltip,
+                command: "notifications:toggleHistory",
+                alignment: StatusBarAlignment.Right,
+                priority: 0,
+            });
+        } else {
+            this.notificationItem.text = text;
+            this.notificationItem.tooltip = tooltip;
+        }
+
+        return Promise.resolve(true);
+    };
+
 }

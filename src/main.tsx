@@ -13,6 +13,7 @@ import { Icon } from "./components/ui/framework/Icon.js";
 import { Message } from "./components/ui/framework/Message.js";
 import { ChildAlignment, MessageType, Orientation } from "./components/ui/framework/ui-types.js";
 import { LoadAudioError } from "./core/LoadAudioError.js";
+import { requisitions } from "./supplement/Requisitions.js";
 
 const root = document.getElementById("app")!;
 interface ISerializedError {
@@ -93,6 +94,12 @@ window.onunhandledrejection = (event) => {
 
 try {
     render(<App />, root);
+
+    if (navigator.webdriver) {
+        window.__e2e = {
+            requisitions: requisitions as unknown as Window["__e2e"] extends { requisitions: infer R; } ? R : never,
+        };
+    }
 } catch (error) {
     console.error("Fatal error during initial render:", error);
 

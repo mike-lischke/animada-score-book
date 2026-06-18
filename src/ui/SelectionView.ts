@@ -359,9 +359,6 @@ export class SelectionView {
                     continue;
                 }
 
-                const hasBeams = runs.some((el) => {
-                    return el.querySelector(".staff-note-viewer-beam") !== null;
-                });
                 // Runs sit at margin-top:64px inside the 80px viewer. Extend the
                 // overlay upward to the viewer top edge (0px) and downward
                 // through the 20px margin-bottom (+2px).

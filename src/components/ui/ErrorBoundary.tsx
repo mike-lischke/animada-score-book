@@ -5,19 +5,16 @@
 
 import { Component, type ComponentChild } from "preact";
 
-import { Label } from "./framework/Label.js";
-import { Message } from "./framework/Message.js";
-
-import { Container } from "./framework/Container.js";
-import { MessageType, Orientation } from "./framework/ui-types.js";
+import { requisitions } from "../../supplement/Requisitions.js";
 
 interface IErrorBoundaryState {
     error: string;
-    stack: string;
 }
 
 /**
  * A component to handle unhandled exceptions in any of the components.
+ * Instead of replacing the UI with an error page, it shows an error notification
+ * via the NotificationCenter and continues rendering the children.
  */
 export class ErrorBoundary extends Component<{}, IErrorBoundaryState> {
 
@@ -26,46 +23,30 @@ export class ErrorBoundary extends Component<{}, IErrorBoundaryState> {
 
         this.state = {
             error: "",
-            stack: "",
         };
     }
 
     /* istanbul ignore next */
     public static override getDerivedStateFromError(error: Error): object {
-        // Update state so the next render will show the fallback UI.
-        return {
-            error: error.message,
-            stack: error.stack,
-        };
+        return { error: error.message };
     }
 
     /* istanbul ignore next */
-    public override componentDidCatch(_error: Error, _errorInfo: unknown): void {
-        // log the error errorInfo.componentStack;
-        console.log("ErrorBoundary caught an error:", _error, _errorInfo);
+    public override componentDidCatch(error: Error, _errorInfo: unknown): void {
+        console.log("ErrorBoundary caught an error:", error, _errorInfo);
+    }
+
+    public override componentDidUpdate(): void {
+        const { error } = this.state;
+
+        if (error.length > 0) {
+            void requisitions.execute("showError", error);
+            this.setState({ error: "" });
+        }
     }
 
     public render(): ComponentChild {
         const { children } = this.props;
-        const { error, stack } = this.state;
-
-        /* istanbul ignore next */
-        if (error.length > 0) {
-            return (
-                <Container className="errorBoundary" style={{ padding: "30px" }} orientation={Orientation.TopDown}>
-                    <Label className="heading">Sorry to hear you had problems running the Animada Score Book!
-                        An unexpected error occurred:</Label><br />
-                    <Message messageType={MessageType.Error}>{error}</Message><br />
-                    <Message className="stack" messageType={MessageType.Info}>{stack}</Message><br />
-                    <span>
-                        If you think this is a bug in the application then please file a bug report at
-                        &nbsp;the <a href="https://github.com/mike-lischke/animada-score-book/issues">
-                            Animada Score Book GitHub issue tracker
-                        </a>.
-                    </span>
-                </Container>
-            );
-        }
 
         return children;
     }
