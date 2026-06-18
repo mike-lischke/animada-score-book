@@ -327,7 +327,10 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
 
                 // If lengthSteps > 1, the next lengthSteps - 1 steps are occupied by this note's duration tail and
                 // cannot have their own note events. Add empty slots for them.
-                for (let j = 1; j < lengthSteps; j++) {
+                // Cap to the current recursion level boundary so a long note inside a subdivision does not
+                // consume the next array slot that belongs to the parent level.
+                const consumed = Math.min(lengthSteps, endIdx - i);
+                for (let j = 1; j < consumed; j++) {
                     nodes.push({
                         type: "step",
                         stepIndex: i + j,
@@ -339,7 +342,7 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                     });
                 }
 
-                i += lengthSteps;
+                i += consumed;
             }
         }
 
@@ -400,6 +403,7 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
         let run: IStaffStepNode[] = [];
         let basePos = 0;
         const descendantIndices = new Set<number>();
+        const descendantNormals = new Map<number, number>();
 
         // Track subdivisions whose container beam (negative key) needs to be
         // validated after run processing: only keep the beam when the last
@@ -408,7 +412,7 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
 
         const flush = (): void => {
             if (run.length >= 2) {
-                this.assignBeamSegments(run, target, descendantIndices, scopeBeamLevel);
+                this.assignBeamSegments(run, target, descendantIndices, descendantNormals, scopeBeamLevel);
             }
 
             // After flushing, validate pending subdivision container beams.
@@ -455,6 +459,7 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                 const descendantSteps = this.collectDescendantSteps(node.children);
                 for (const step of descendantSteps) {
                     descendantIndices.add(step.stepIndex);
+                    descendantNormals.set(step.stepIndex, node.subdivision.normal);
                     pushStep(step, step.beamCount);
                 }
 
@@ -514,6 +519,7 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
         run: IStaffStepNode[],
         target: Map<number, IBeamInfo>,
         descendantIndices?: Set<number>,
+        descendantNormals?: Map<number, number>,
         scopeBeamLevel = 1,
     ): void {
         const counts = run.map((n) => {
@@ -532,12 +538,57 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                 }
 
                 // Level 1 must remain continuous across tuplets and non-tuplets in the same run.
-                const leftHasShared = i > 0 && counts[i - 1] >= level;
-                const rightHasShared = i + 1 < run.length && counts[i + 1] >= level;
+                let leftHasShared = i > 0 && counts[i - 1] >= level;
+                if (leftHasShared) {
+                    const leftIsDesc = descendantIndices?.has(run[i - 1].stepIndex);
+                    if (leftIsDesc && level > scopeBeamLevel) {
+                        leftHasShared = false;
+                    }
+                }
+
+                let rightHasShared = i + 1 < run.length && counts[i + 1] >= level;
+                if (rightHasShared) {
+                    const rightIsDesc = descendantIndices?.has(run[i + 1].stepIndex);
+                    if (rightIsDesc && level > scopeBeamLevel) {
+                        rightHasShared = false;
+                    }
+                }
 
                 if (rightHasShared) {
-                    // Beam extends from this notehead to the next; distance = this note's lengthSteps.
-                    segments.push({ level, kind: "shared-right", extentSteps: run[i].lengthSteps });
+                    if (isDescendant) {
+                        const nextOutside = i + 1 < run.length
+                            && !descendantIndices!.has(run[i + 1].stepIndex);
+
+                        if (nextOutside) {
+                            // The run div covers the full subdivision width (flex:1 in flex:N),
+                            // so scale the extent so width% × N = actual distance in flex units.
+                            const normal = descendantNormals?.get(run[i].stepIndex) ?? 1;
+                            const extent = 0.5 + (0.5 / normal);
+                            segments.push(
+                                { level, kind: "shared-right", extentSteps: extent },
+                            );
+                        } else {
+                            segments.push(
+                                { level, kind: "shared-right", extentSteps: run[i].lengthSteps },
+                            );
+                        }
+                    } else {
+                        // Non-descendant connecting to a descendant. If the descendant is the last in
+                        // its subdivision, extend the beam to the subdivision centre (not the descendant
+                        // centre), because the single child is centred in the flex:N container.
+                        const nextIsDesc = descendantIndices?.has(run[i + 1].stepIndex);
+                        const nextIsLast = nextIsDesc
+                            && (i + 2 >= run.length
+                                || !descendantIndices!.has(run[i + 2].stepIndex));
+                        const normal = nextIsLast
+                            ? (descendantNormals?.get(run[i + 1].stepIndex) ?? 1)
+                            : 1;
+                        const extent = nextIsLast ? 0.5 + (normal / 2) : run[i].lengthSteps;
+
+                        segments.push(
+                            { level, kind: "shared-right", extentSteps: extent },
+                        );
+                    }
                 } else if (!leftHasShared) {
                     const partialKind = i === 0 ? "partial-right" : "partial-left";
                     segments.push({ level, kind: partialKind });

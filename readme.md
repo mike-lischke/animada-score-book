@@ -1,5 +1,5 @@
 [![GitHub Workflow Status (with event)](https://img.shields.io/github/actions/workflow/status/mike-lischke/animada-score-book/nodejs.yml?branch=main&style=for-the-badge&color=green&logo=github)](https://github.com/mike-lischke/animada-score-book/actions/workflows/nodejs.yml)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg?style=for-the-badge&color=green)](./LICENSE)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg?style=for-the-badge&color=green)](./License.txt)
 
 <p align="center">
 <img src="public/logo.svg" title="Animada Score Book" alt="Animada Score Book" style="height: 200px" /><br/>
