@@ -17,7 +17,7 @@ export default defineConfig({
         video: "retain-on-failure",
     },
     webServer: {
-        command: "npm run build && npm run serve:e2e",
+        command: process.env.CI ? "npm run serve:e2e" : "npm run build && npm run serve:e2e",
         url: "http://127.0.0.1:4173",
         reuseExistingServer: true,
         timeout: 120_000,
