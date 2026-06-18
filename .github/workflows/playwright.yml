@@ -31,13 +31,15 @@ jobs:
           path: ~/.cache/ms-playwright
           key: playwright-chromium-${{ hashFiles('package-lock.json') }}
 
-      - name: Install Playwright browser
-        run: npx playwright install --with-deps chromium
-        if: steps.playwright-cache.outputs.cache-hit != 'true'
-
-      - name: Install Playwright system deps only
+      - name: Install Playwright system dependencies
         run: npx playwright install-deps chromium
-        if: steps.playwright-cache.outputs.cache-hit == 'true'
+
+      - name: Install Playwright browser
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: npx playwright install chromium
+        timeout-minutes: 5
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_GC: "1"
 
       - name: Build app
         run: npm run build
