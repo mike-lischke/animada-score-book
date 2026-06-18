@@ -90,8 +90,8 @@ describe.sequential("NotificationCenter", () => {
             fireEvent.click(closeButton);
         });
 
-        // closeToast sets state="removing" and waits for transitionend.
-        toasts[0].dispatchEvent(new Event("transitionend"));
+        // closeToast sets state="removing" and waits for animationend.
+        toasts[0].dispatchEvent(new Event("animationend"));
 
         await act(() => {
             // Force re-render after transitionend handler runs.
@@ -148,8 +148,8 @@ describe.sequential("NotificationCenter", () => {
             vi.advanceTimersByTime(6000);
         });
 
-        // Trigger the transitionend to complete removal.
-        toast.dispatchEvent(new Event("transitionend"));
+        // Trigger the animationend to complete removal.
+        toast.dispatchEvent(new Event("animationend"));
 
         await act(() => {
             // Force a re-render after the event.
