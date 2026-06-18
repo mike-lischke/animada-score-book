@@ -489,7 +489,7 @@ export class NotificationCenter extends UIComponent<ICommonUIProperties, INotifi
         toast.timer = undefined;
 
         toast.state = "removing";
-        toast.ref.current?.addEventListener("transitionend", () => {
+        toast.ref.current?.addEventListener("animationend", () => {
             const { mainList } = this.state;
 
             const index = mainList.indexOf(toast);
@@ -498,7 +498,7 @@ export class NotificationCenter extends UIComponent<ICommonUIProperties, INotifi
             toast.state = "normal";
 
             this.setState({ mainList });
-        });
+        }, { once: true });
 
         this.forceUpdate();
     }
@@ -547,9 +547,9 @@ export class NotificationCenter extends UIComponent<ICommonUIProperties, INotifi
         if (showHistory) {
             remove();
         } else {
-            toast.ref.current?.addEventListener("transitionend", () => {
+            toast.ref.current?.addEventListener("animationend", () => {
                 remove();
-            });
+            }, { once: true });
             this.setState({ mainList });
         }
     }
