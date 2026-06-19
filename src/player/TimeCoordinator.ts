@@ -6,6 +6,7 @@
 import type { ISbDmNoteEvent, ITiming, RealTime } from "../core/ScoreBookDataModel.js";
 import type { ITimeParamsBase } from "../core/types/general.js";
 import type { IRealtimeProvider } from "../ui/AnimationEngine.js";
+import { createBeatGroups } from "../core/utils.js";
 
 /**
  * Timing details about the score, such as how long a bar is, or how many pulses there are in a bar.
@@ -32,13 +33,24 @@ export interface IScoreMetrics {
     /** What note value represents one beat? (e.g. 4 for 4/4, 8 for 6/8 etc.) */
     beatUnit: number,
 
-    /** How many pulses are in a bar? */
+    /** How many pulses are in a bar? (= beatGroups.length) */
     pulsesPerBar: number,
 
     /** How many steps are in a bar? */
     stepsPerBar: number,
 
-    /** How many steps are in a pulse? */
+    /**
+     * Beat group sizes in steps, summing to {@link stepsPerBar}.
+     * E.g. `[4, 4, 4, 4]` for 4/4 or `[3, 2, 2]` for 7/8.  Irregular meters have
+     * varying group sizes; this array captures the exact pulse boundaries.
+     */
+    beatGroups: number[],
+
+    /**
+     * How many steps are in a pulse, when beat groups are uniform.
+     * For irregular meters this is the average (may be fractional);
+     * prefer {@link beatGroups} for precise pulse-boundary work.
+     */
     stepsPerPulse: number,
 }
 
@@ -143,16 +155,18 @@ export class TimeCoordinator {
         // And produce our actually useful values.
         const secondsPerStep = secondsPerPulse / stepsPerPulse;
         const secondsPerBar = secondsPerStep * stepsPerBar;
+        const beatGroups = createBeatGroups(beatsPerBar, beatUnit, stepsPerBar);
 
         return {
             realTimeLength: secondsPerBar * this.timeParams.length,
             secondsPerBar,
             secondsPerStep,
             bars: this.timeParams.length,
-            pulsesPerBar: stepsPerBar / stepsPerPulse,
+            pulsesPerBar: beatGroups.length,
             beatsPerBar,
             beatUnit,
             stepsPerBar,
+            beatGroups,
             stepsPerPulse,
         };
     }

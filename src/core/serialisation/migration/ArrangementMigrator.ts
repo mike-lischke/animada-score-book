@@ -13,7 +13,7 @@ import type {
     IArrangementSnapshot, IMeasureStep, ISubdivision, ITrackMeasureSnapshot, ITrackSnapshot
 } from "../../types/general.js";
 import { greatestCommonDivisor } from "../numeric-functions.js";
-import { createBeatGroups, primeFactors } from "../../utils.js";
+import { primeFactors } from "../../utils.js";
 import { tryParsePackedArrangement } from "../snapshot-packing.js";
 import { arrangementSnapshotVersion } from "../snapshots.js";
 import { BananaDrumUrlImporter, LegacyArrangement, LegacyNote, LegacyTrack } from "./BananaDrumUrlImporter.js";
@@ -253,9 +253,7 @@ export class ArrangementMigrator {
                     beats: metrics.beatsPerBar,
                     beatUnits: metrics.beatUnit,
                     stepResolution: stepsPerBar,
-                    beatGroups: createBeatGroups(
-                        metrics.beatsPerBar, metrics.beatUnit, stepsPerBar,
-                    ),
+                    beatGroups: metrics.beatGroups,
                 },
                 steps,
                 subdivisions,

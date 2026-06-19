@@ -180,6 +180,7 @@ const makeScoreMetrics = (): IScoreMetrics => {
         beatUnit: 4,
         pulsesPerBar: 4,
         stepsPerBar: 8,
+        beatGroups: [2, 2, 2, 2],
         stepsPerPulse: 2,
     };
 };

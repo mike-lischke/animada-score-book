@@ -59,6 +59,7 @@ vi.mock("../../src/player/TimeCoordinator.js", () => {
                 beatUnit: 4,
                 pulsesPerBar: 4,
                 stepsPerBar: 16,
+                beatGroups: [4, 4, 4, 4],
                 stepsPerPulse: 4,
             };
         }

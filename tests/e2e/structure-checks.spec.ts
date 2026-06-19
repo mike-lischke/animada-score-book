@@ -40,7 +40,9 @@ test.describe("Beija Flor I-Break: Agogô DOM structure", () => {
                 return null;
             }
 
-            return Array.from(row.children).map((child) => {
+            return Array.from(row.children)
+                .filter((c) => { return !c.classList.contains("grid-beat-overlay"); })
+                .map((child) => {
                 if (child.classList.contains("subdivision")) {
                     return {
                         type: "subdivision",

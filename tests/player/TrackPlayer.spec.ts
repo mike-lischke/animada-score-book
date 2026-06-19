@@ -28,6 +28,7 @@ const makeTimeCoordinator = (realTimeLength: RealTime = 4): TimeCoordinator => {
             bars: 1,
             beatsPerBar: 4,
             stepsPerBar: 16,
+            beatGroups: [2, 2, 2, 2, 2, 2, 2, 2],
             stepsPerPulse: 2,
             beatUnit: 4,
             pulsesPerBar: 8,

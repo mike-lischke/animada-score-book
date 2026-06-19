@@ -62,7 +62,8 @@ test.describe("BananaDrum polyrhythm import", () => {
                 return null;
             }
 
-            const directChildren = Array.from(row.children);
+            const directChildren = Array.from(row.children)
+                .filter((c) => { return !c.classList.contains("grid-beat-overlay"); });
 
             return directChildren.map((child) => {
                 const isSubdivision = child.classList.contains("subdivision");
@@ -166,7 +167,9 @@ test.describe("BananaDrum polyrhythm import", () => {
                 return null;
             }
 
-            return Array.from(row.children).map((child) => {
+            return Array.from(row.children)
+                .filter((c) => { return !c.classList.contains("grid-beat-overlay"); })
+                .map((child) => {
                 if (child.classList.contains("subdivision")) {
                     return {
                         type: "subdivision",
@@ -199,7 +202,9 @@ test.describe("BananaDrum polyrhythm import", () => {
                 return null;
             }
 
-            return Array.from(row.children).map((child) => {
+            return Array.from(row.children)
+                .filter((c) => { return !c.classList.contains("grid-beat-overlay"); })
+                .map((child) => {
                 if (child.classList.contains("subdivision")) {
                     return {
                         type: "subdivision",
@@ -230,7 +235,9 @@ test.describe("BananaDrum polyrhythm import", () => {
                 return null;
             }
 
-            return Array.from(row.children).map((child) => {
+            return Array.from(row.children)
+                .filter((c) => { return !c.classList.contains("grid-beat-overlay"); })
+                .map((child) => {
                 if (child.classList.contains("subdivision")) {
                     return {
                         type: "subdivision",
