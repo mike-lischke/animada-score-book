@@ -63,7 +63,9 @@ test.describe("BananaDrum polyrhythm import", () => {
             }
 
             const directChildren = Array.from(row.children)
-                .filter((c) => { return !c.classList.contains("grid-beat-overlay"); });
+                .filter((c) => {
+                    return !c.classList.contains("grid-beat-overlay"); 
+                });
 
             return directChildren.map((child) => {
                 const isSubdivision = child.classList.contains("subdivision");
@@ -168,18 +170,20 @@ test.describe("BananaDrum polyrhythm import", () => {
             }
 
             return Array.from(row.children)
-                .filter((c) => { return !c.classList.contains("grid-beat-overlay"); })
+                .filter((c) => {
+                    return !c.classList.contains("grid-beat-overlay"); 
+                })
                 .map((child) => {
-                if (child.classList.contains("subdivision")) {
-                    return {
-                        type: "subdivision",
-                        flex: (child as HTMLElement).style.flex,
-                        childCount: child.children.length,
-                    };
-                }
+                    if (child.classList.contains("subdivision")) {
+                        return {
+                            type: "subdivision",
+                            flex: (child as HTMLElement).style.flex,
+                            childCount: child.children.length,
+                        };
+                    }
 
-                return { type: "step" };
-            });
+                    return { type: "step" };
+                });
         });
 
         expect(bar6Grid).not.toBeNull();
@@ -203,18 +207,20 @@ test.describe("BananaDrum polyrhythm import", () => {
             }
 
             return Array.from(row.children)
-                .filter((c) => { return !c.classList.contains("grid-beat-overlay"); })
+                .filter((c) => {
+                    return !c.classList.contains("grid-beat-overlay"); 
+                })
                 .map((child) => {
-                if (child.classList.contains("subdivision")) {
-                    return {
-                        type: "subdivision",
-                        flex: (child as HTMLElement).style.flex,
-                        childCount: child.children.length,
-                    };
-                }
+                    if (child.classList.contains("subdivision")) {
+                        return {
+                            type: "subdivision",
+                            flex: (child as HTMLElement).style.flex,
+                            childCount: child.children.length,
+                        };
+                    }
 
-                return { type: "step" };
-            });
+                    return { type: "step" };
+                });
         });
 
         expect(bar7Grid).not.toBeNull();
@@ -236,18 +242,20 @@ test.describe("BananaDrum polyrhythm import", () => {
             }
 
             return Array.from(row.children)
-                .filter((c) => { return !c.classList.contains("grid-beat-overlay"); })
+                .filter((c) => {
+                    return !c.classList.contains("grid-beat-overlay"); 
+                })
                 .map((child) => {
-                if (child.classList.contains("subdivision")) {
-                    return {
-                        type: "subdivision",
-                        flex: (child as HTMLElement).style.flex,
-                        childCount: child.children.length,
-                    };
-                }
+                    if (child.classList.contains("subdivision")) {
+                        return {
+                            type: "subdivision",
+                            flex: (child as HTMLElement).style.flex,
+                            childCount: child.children.length,
+                        };
+                    }
 
-                return { type: "step" };
-            });
+                    return { type: "step" };
+                });
         });
 
         expect(bar8Grid).not.toBeNull();

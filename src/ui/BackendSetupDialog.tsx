@@ -250,8 +250,16 @@ export class BackendSetupDialog extends UIComponent<IBackendSetupDialogPropertie
             ];
         } else if (phase === BackendSetupState.Unreachable) {
             actions = [
-                <Button id="backend-setup-retry" value="retry" caption="Retry" />,
-                <Button id="backend-setup-close" value="close" caption="Close" />,
+                <Button
+                    id="backend-setup-retry"
+                    caption="Retry"
+                    onClick={(e) => {
+                        e.preventDefault();
+                        this.setState({ phase: BackendSetupState.Checking, errorMessage: "" }, () => {
+                            void this.checkBackendStatus();
+                        });
+                    }}
+                />,
             ];
         } else if (phase === BackendSetupState.ConfirmOverwrite) {
             actions = [
@@ -519,7 +527,12 @@ export class BackendSetupDialog extends UIComponent<IBackendSetupDialogPropertie
         this.removeGlobalListeners();
 
         if (returnValue === "retry") {
+            // Re-open the dialog for the re-check; the normal retry button prevents form submission,
+            // but this guards against any other path that might close the dialog with "retry".
             this.setState({ phase: BackendSetupState.Checking, errorMessage: "" }, () => {
+                document.addEventListener("keydown", this.handleGlobalKeyDown);
+                document.addEventListener("keyup", this.handleGlobalKeyUp);
+                this.dialogRef.current?.open();
                 void this.checkBackendStatus();
             });
 

@@ -295,8 +295,16 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
         }, 500);
         void entry.refresh?.().then(() => {
             clearTimeout(timer);
-            entry.state.expandedOnce = true;
             entry.state.loading = false;
+
+            if (!entry.state.expanded) {
+                // refresh() reset the expanded flag on failure — collapse the row visually.
+                row.treeCollapse();
+
+                return;
+            }
+
+            entry.state.expandedOnce = true;
 
             // Force the table row to refresh.
             void row.update(entry);

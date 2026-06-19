@@ -533,7 +533,9 @@ export class ScoreBookDataModel {
             this.loadSoundLib(),
             this.loadInstruments(),
             this.loadNumberSounds(),
-            this.updateScoreLibFolder(this.data.scoreLib),
+            (async () => {
+                await this.updateScoreLibFolder(this.data.scoreLib);
+            })(),
         ];
 
         await Promise.all(promises);
@@ -615,14 +617,14 @@ export class ScoreBookDataModel {
             throw new Error(`A folder named '${name}' already exists in the target location.`);
         }
 
-        const res = await fetch(`/api?action=addScoreFolder`, {
+        const res = await this.fetchApi(`/api?action=addScoreFolder`, {
             method: "POST",
             headers: { Accept: "application/json" },
             body: JSON.stringify({ name, parentid: parent?.id }),
         });
 
-        if (!res.ok) {
-            throw new Error(`HTTP ${res.status}`);
+        if (!res) {
+            return;
         }
 
         const { success, id } = await res.json() as { success: boolean; id: number; };
@@ -654,14 +656,14 @@ export class ScoreBookDataModel {
     }
 
     public async addScore(name: string, content: string, parent?: ISbDmScoreFolder): Promise<void> {
-        const res = await fetch(`/api?action=addScore`, {
+        const res = await this.fetchApi(`/api?action=addScore`, {
             method: "POST",
             headers: { Accept: "application/json" },
             body: JSON.stringify({ name, content, folderId: parent?.id }),
         });
 
-        if (!res.ok) {
-            throw new Error(`HTTP ${res.statusText} (${res.status})`);
+        if (!res) {
+            return;
         }
 
         const { success, id } = await res.json() as { success: boolean; id: number; };
@@ -699,21 +701,21 @@ export class ScoreBookDataModel {
      * @param content The new content string to persist.
      */
     public async updateScoreContent(score: ISbDmScore, content: string): Promise<void> {
-        const res = await fetch(`/api?action=updateScore`, {
+        const res = await this.fetchApi(`/api?action=updateScore`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ id: score.id, content }),
         });
 
-        if (!res.ok) {
-            throw new Error(`HTTP ${res.statusText} (${res.status})`);
+        if (!res) {
+            return;
         }
 
         score.content = content;
     }
 
     public async renameEntry(entry: ISbDmScoreFolder | ISbDmScore, newName: string): Promise<void> {
-        const res = await fetch(`/api?action=renameEntry`, {
+        const res = await this.fetchApi(`/api?action=renameEntry`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -723,8 +725,8 @@ export class ScoreBookDataModel {
             }),
         });
 
-        if (!res.ok) {
-            throw new Error(`HTTP ${res.status}`);
+        if (!res) {
+            return;
         }
 
         entry.name = newName;
@@ -737,7 +739,7 @@ export class ScoreBookDataModel {
             throw new Error("Cannot delete a folder that still has children.");
         }
 
-        const res = await fetch(`/api?action=delete`, {
+        const res = await this.fetchApi(`/api?action=delete`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -746,8 +748,8 @@ export class ScoreBookDataModel {
             }),
         });
 
-        if (!res.ok) {
-            throw new Error(`HTTP ${res.status}`);
+        if (!res) {
+            return;
         }
 
         const parentChildren = entry.parent ? entry.parent.children : this.data.scoreLib;
@@ -814,12 +816,12 @@ export class ScoreBookDataModel {
             return Promise.resolve();
         }
 
-        const res = await fetch(`/api?action=listSoundLib`, {
+        const res = await this.fetchApi(`/api?action=listSoundLib`, {
             headers: { Accept: "application/json" },
         });
 
-        if (!res.ok) {
-            throw new Error(`HTTP ${res.status}`);
+        if (!res) {
+            return;
         }
 
         const data = (await res.json()) as ISoundLibFsNode[];
@@ -884,15 +886,15 @@ export class ScoreBookDataModel {
     }
 
     private async updateScoreLibFolder(list: Array<ISbDmScoreFolder | ISbDmScore>,
-        parent?: ISbDmScoreFolder): Promise<void> {
-        const res = await fetch(`/api?action=listScoreFolderContent`, {
+        parent?: ISbDmScoreFolder): Promise<boolean> {
+        const res = await this.fetchApi(`/api?action=listScoreFolderContent`, {
             method: "POST",
             headers: { Accept: "application/json" },
             body: JSON.stringify({ parentid: parent?.id ?? -1 }),
         });
 
-        if (!res.ok) {
-            throw new Error(`HTTP ${res.status}`);
+        if (!res) {
+            return false;
         }
 
         list.length = 0;
@@ -910,10 +912,16 @@ export class ScoreBookDataModel {
                     isLeaf: !folder.hasChildren,
                 },
                 children: [],
-                refresh: (cb?: ProgressCallback) => {
+                refresh: async (cb?: ProgressCallback) => {
                     (entry.state as Mutable<ISbDmEntityState>).initialized = true;
 
-                    return this.updateScoreLibFolder(entry.children, entry);
+                    const success = await this.updateScoreLibFolder(entry.children, entry);
+                    if (!success) {
+                        const state = entry.state as Mutable<ISbDmEntityState>;
+                        state.initialized = false;
+                        state.expandedOnce = false;
+                        state.expanded = false;
+                    }
                 },
             };
             list.push(entry);
@@ -935,7 +943,7 @@ export class ScoreBookDataModel {
             });
         });
 
-        return Promise.resolve();
+        return true;
     }
 
     private applyArrangementPlaybackSettings(arrangement: ISbDmArrangement): void {
@@ -950,4 +958,34 @@ export class ScoreBookDataModel {
         arrangement.countIn = settings.countIn ?? false;
     };
 
+    /**
+     * Wraps a fetch call with backend-disconnect detection. On any network or HTTP error the
+     * `backendDisconnected` requisition is dispatched and `undefined` is returned so the caller
+     * can bail out gracefully instead of throwing an unhandled rejection.
+     *
+     * @param url The URL to fetch.
+     * @param options Optional fetch options.
+     * @returns The response on success, or `undefined` when the backend is unreachable.
+     */
+    private async fetchApi(url: string, options?: RequestInit): Promise<Response | undefined> {
+        let res: Response;
+
+        try {
+            res = await fetch(url, options);
+        } catch {
+            void requisitions.execute("backendDisconnected", undefined);
+            void requisitions.execute("showError", "Backend connection lost — network request failed.");
+
+            return undefined;
+        }
+
+        if (!res.ok) {
+            void requisitions.execute("backendDisconnected", undefined);
+            void requisitions.execute("showError", `Backend request failed: HTTP ${res.status} ${res.statusText}`);
+
+            return undefined;
+        }
+
+        return res;
+    }
 }

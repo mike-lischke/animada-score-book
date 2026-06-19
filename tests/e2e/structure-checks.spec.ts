@@ -41,17 +41,19 @@ test.describe("Beija Flor I-Break: Agogô DOM structure", () => {
             }
 
             return Array.from(row.children)
-                .filter((c) => { return !c.classList.contains("grid-beat-overlay"); })
+                .filter((c) => {
+                    return !c.classList.contains("grid-beat-overlay"); 
+                })
                 .map((child) => {
-                if (child.classList.contains("subdivision")) {
-                    return {
-                        type: "subdivision",
-                        childCount: child.children.length,
-                    };
-                }
+                    if (child.classList.contains("subdivision")) {
+                        return {
+                            type: "subdivision",
+                            childCount: child.children.length,
+                        };
+                    }
 
-                return { type: "step" };
-            });
+                    return { type: "step" };
+                });
         });
 
         expect(bar4Dom).not.toBeNull();

@@ -52,6 +52,9 @@ export interface IRequestTypeMap {
     "notificationStateChanged": (state: {
         newCount: number; totalCount: number; silent: boolean; showHistory: boolean;
     }) => Promise<boolean>;
+
+    // --- Backend connectivity ---
+    "backendDisconnected": SimpleCallback;
 }
 
 type CallbackType = IRequestTypeMap[keyof IRequestTypeMap];

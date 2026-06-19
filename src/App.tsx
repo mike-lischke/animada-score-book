@@ -63,6 +63,7 @@ import { MouseHandler } from "./ui/MouseHandler.js";
 import { SelectionManager } from "./ui/SelectionManager.js";
 import { SettingsDialog } from "./ui/SettingsDialog.js";
 import { BackendSetupDialog } from "./ui/BackendSetupDialog.js";
+import { BackendDisconnectedDialog } from "./ui/BackendDisconnectedDialog.js";
 
 const ScoreLibrary = lazy(() => {
     return import("./ui/ScoreLibrary.js").then((m) => {
@@ -92,6 +93,7 @@ export class App extends UIComponent<{}, IAppState> {
     private scoreLibraryRef = createRef<DrawerSidebar>();
     private settingsDialogRef = createRef<SettingsDialog>();
     private backendSetupDialogRef = createRef<BackendSetupDialog>();
+    private backendDisconnectedDialogRef = createRef<BackendDisconnectedDialog>();
     private printDialogRef = createRef<PrintDialog>();
     private valueDialogRef = createRef<ValueDialog>();
     private confirmDialogRef = createRef<ConfirmDialog>();
@@ -146,6 +148,7 @@ export class App extends UIComponent<{}, IAppState> {
         requisitions.register("settingsChanged", this.handleSettingsChanged);
         requisitions.register("playRangeChanged", this.handlePlayRangeChanged);
         requisitions.register("notificationStateChanged", this.handleNotificationStateChanged);
+        requisitions.register("backendDisconnected", this.handleBackendDisconnected);
 
         void this.checkBackendThenInitialize();
     }
@@ -173,6 +176,7 @@ export class App extends UIComponent<{}, IAppState> {
         requisitions.unregister("settingsChanged", this.handleSettingsChanged);
         requisitions.unregister("playRangeChanged", this.handlePlayRangeChanged);
         requisitions.unregister("notificationStateChanged", this.handleNotificationStateChanged);
+        requisitions.unregister("backendDisconnected", this.handleBackendDisconnected);
     }
 
     public render() {
@@ -383,6 +387,12 @@ export class App extends UIComponent<{}, IAppState> {
                         void this.handleBackendSetupComplete();
                     }}
                 />
+                <BackendDisconnectedDialog
+                    ref={this.backendDisconnectedDialogRef}
+                    onReconnected={() => {
+                        // The app continues normally — nothing special needed.
+                    }}
+                />
                 <PrintDialog ref={this.printDialogRef} onAccept={this.handlePrintAccept} />
                 {
                     this.state.printing && this.dataModel.arrangement && this.state.printOptions
@@ -424,6 +434,17 @@ export class App extends UIComponent<{}, IAppState> {
 
         await this.initializeApp();
     }
+
+    /**
+     * Opens the backend-disconnected dialog when the backend connection is lost.
+     *
+     * @returns Always true to signal the event was handled.
+     */
+    private handleBackendDisconnected = (): Promise<boolean> => {
+        this.backendDisconnectedDialogRef.current?.open();
+
+        return Promise.resolve(true);
+    };
 
     /**
      * Called when the backend setup dialog is closed.
