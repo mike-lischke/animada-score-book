@@ -13,7 +13,7 @@ import type {
     IArrangementSnapshot, IMeasureStep, ISubdivision, ITrackMeasureSnapshot, ITrackSnapshot
 } from "../../types/general.js";
 import { greatestCommonDivisor } from "../numeric-functions.js";
-import { primeFactors } from "../../utils.js";
+import { createBeatGroups, primeFactors } from "../../utils.js";
 import { tryParsePackedArrangement } from "../snapshot-packing.js";
 import { arrangementSnapshotVersion } from "../snapshots.js";
 import { BananaDrumUrlImporter, LegacyArrangement, LegacyNote, LegacyTrack } from "./BananaDrumUrlImporter.js";
@@ -253,7 +253,7 @@ export class ArrangementMigrator {
                     beats: metrics.beatsPerBar,
                     beatUnits: metrics.beatUnit,
                     stepResolution: stepsPerBar,
-                    beatGroups: ArrangementMigrator.createBeatGroups(
+                    beatGroups: createBeatGroups(
                         metrics.beatsPerBar, metrics.beatUnit, stepsPerBar,
                     ),
                 },
@@ -519,69 +519,6 @@ export class ArrangementMigrator {
             });
 
             sub.isTuplet = selfIsTuplet || childIsTuplet;
-        }
-    }
-
-    private static createBeatGroups(numerator: number, denominator: number, stepResolution: number): number[] {
-        if (numerator <= 0 || denominator <= 0 || stepResolution <= 0 || denominator % 2 !== 0) {
-            return [stepResolution];
-        }
-
-        switch (denominator) {
-            case 4: {
-                switch (numerator) {
-                    case 2: case 4: case 8:
-                        return Array.from({ length: numerator }, () => {
-                            return stepResolution / 4;
-                        });
-
-                    case 3: case 6:
-                        return Array.from({ length: numerator }, () => {
-                            return stepResolution / 3;
-                        });
-
-                    case 5: case 7: {
-                        const spb = stepResolution / numerator;
-
-                        return Array.from({ length: numerator }, (_, beat) => {
-                            return beat % 2 === 0 ? Math.ceil(spb) : Math.floor(spb);
-                        });
-                    }
-
-                    default:
-                        return [stepResolution];
-                }
-            }
-
-            case 8: {
-                switch (numerator) {
-                    case 6: return Array.from({ length: 2 }, () => {
-                        return stepResolution / 2;
-                    });
-
-                    case 7: {
-                        const spb = stepResolution / numerator;
-
-                        return Array.from({ length: numerator }, (_, beat) => {
-                            return beat % 2 === 0 ? Math.ceil(spb) : Math.floor(spb);
-                        });
-                    }
-
-                    case 9: return Array.from({ length: 3 }, () => {
-                        return stepResolution / 3;
-                    });
-
-                    case 12: return Array.from({ length: 4 }, () => {
-                        return stepResolution / 4;
-                    });
-
-                    default:
-                        return [stepResolution];
-                }
-            }
-
-            default:
-                return [stepResolution];
         }
     }
 }

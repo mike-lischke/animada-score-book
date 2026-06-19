@@ -125,7 +125,6 @@ describe.sequential("Polyrhythm UI Integration", () => {
                 measure={track.measures[0]}
                 track={track}
                 dataModel={dataModel}
-                pulsesPerBar={4}
             />
         );
 

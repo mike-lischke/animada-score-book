@@ -12,7 +12,6 @@ export interface IGridMeasureBeamProps extends ICommonUIProperties {
 
     /** Center-X of the first note of each beat, in px relative to the viewer's left edge. */
     beatPositions: number[];
-    isFirstMeasure: boolean;
     isLastMeasure: boolean;
 }
 
@@ -23,14 +22,19 @@ export interface IGridMeasureBeamProps extends ICommonUIProperties {
  */
 export class GridMeasureBeam extends UIComponent<IGridMeasureBeamProps> {
     public override render(): ComponentChild {
-        const { measureNumber, beatPositions, isFirstMeasure, isLastMeasure } = this.props;
+        const { measureNumber, beatPositions, isLastMeasure } = this.props;
 
         const className = this.generateFinalClassName(["grid-measure-beam"]);
 
-        // Beam line boundaries: span full width by default; trim at the first/last beat on edge measures.
-        const beamLeft = (isFirstMeasure && beatPositions.length > 0)
+        // Left edge always trimmed to the first tick so the beam does not
+        // overhang into viewer padding.
+        const beamLeft = beatPositions.length > 0
             ? `${beatPositions[0]}px`
             : "0";
+
+        // Right edge extends to the full measure width, except on the
+        // last measure where it stops at the last tick to visually mark
+        // the end of the piece.
         const beamRight = (isLastMeasure && beatPositions.length > 0)
             ? `calc(100% - ${beatPositions[beatPositions.length - 1]}px)`
             : "0";

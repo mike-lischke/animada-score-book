@@ -36,6 +36,7 @@
 
     .grid-measure-viewer {
         border-right: 2px solid #{$separatorColor};
+        padding-left: 8px;
     }
 
     @if $renderBeam {
@@ -97,6 +98,23 @@
 
     .grid-measure-row {
         margin: 8px 8px 8px 8px;
+    }
+
+    .grid-beat-overlay {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        z-index: 2;
+    }
+
+    .grid-beat-marker {
+        position: absolute;
+        top: 0;
+        height: 100%;
+        width: 1px;
+
+        /* The left position is set inline as a percentage of the row width. */
+        /* No visible styling — these serve only as measurement anchors for GridMeasureViewer. */
     }
 
     .subdivision {

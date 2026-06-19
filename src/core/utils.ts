@@ -198,6 +198,86 @@ export const getApiBase = (): string => {
     return "";
 };
 
+/**
+ * Builds beat group sizes for a measure from time-signature components and step resolution.
+ *
+ * Each entry in the returned array is the number of steps belonging to one beat group (pulse).
+ * The array sums to {@link stepResolution}.  For example, 4/4 with stepResolution=16 produces
+ * `[4, 4, 4, 4]`; 7/8 with stepResolution=14 produces `[4, 4, 3, 3]`; 6/8 with stepResolution=12
+ * produces `[6, 6]`.
+ *
+ * Complex and irregular numerators (5, 7) alternate ceil/floor to distribute steps as evenly as
+ * possible while respecting the natural accent pattern (strong-weak).
+ *
+ * @param numerator      Beats per bar (e.g. 4 from "4/4").
+ * @param denominator    Beat unit (e.g. 4 from "4/4").
+ * @param stepResolution Total grid steps in the bar (= beats × stepsPerBeat).
+ *
+ * @returns Beat group sizes summing to stepResolution.
+ */
+export const createBeatGroups = (numerator: number, denominator: number, stepResolution: number): number[] => {
+    if (numerator <= 0 || denominator <= 0 || stepResolution <= 0 || denominator % 2 !== 0) {
+        return [stepResolution];
+    }
+
+    switch (denominator) {
+        case 4: {
+            switch (numerator) {
+                case 2: case 4: case 8:
+                    return Array.from({ length: numerator }, () => {
+                        return stepResolution / 4;
+                    });
+
+                case 3: case 6:
+                    return Array.from({ length: numerator }, () => {
+                        return stepResolution / 3;
+                    });
+
+                case 5: case 7: {
+                    const spb = stepResolution / numerator;
+
+                    return Array.from({ length: numerator }, (_, beat) => {
+                        return beat % 2 === 0 ? Math.ceil(spb) : Math.floor(spb);
+                    });
+                }
+
+                default:
+                    return [stepResolution];
+            }
+        }
+
+        case 8: {
+            switch (numerator) {
+                case 6: return Array.from({ length: 2 }, () => {
+                    return stepResolution / 2;
+                });
+
+                case 7: {
+                    const spb = stepResolution / numerator;
+
+                    return Array.from({ length: numerator }, (_, beat) => {
+                        return beat % 2 === 0 ? Math.ceil(spb) : Math.floor(spb);
+                    });
+                }
+
+                case 9: return Array.from({ length: 3 }, () => {
+                    return stepResolution / 3;
+                });
+
+                case 12: return Array.from({ length: 4 }, () => {
+                    return stepResolution / 4;
+                });
+
+                default:
+                    return [stepResolution];
+            }
+        }
+
+        default:
+            return [stepResolution];
+    }
+};
+
 /** Key names to key strings. */
 export const KeyboardKeys = {
     // Modifier keys

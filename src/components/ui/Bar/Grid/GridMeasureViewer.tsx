@@ -186,7 +186,6 @@ export class GridMeasureViewer extends UIComponent<IGridMeasureViewerProperties,
                 measure={measure}
                 track={track}
                 dataModel={dataModel}
-                pulsesPerBar={scoreMetrics.pulsesPerBar}
                 data-bar={measureNumber}
             />);
         }
@@ -209,7 +208,6 @@ export class GridMeasureViewer extends UIComponent<IGridMeasureViewerProperties,
                 <GridMeasureBeam
                     measureNumber={measureNumber}
                     beatPositions={beatPositions}
-                    isFirstMeasure={measureNumber === 1}
                     isLastMeasure={measureNumber === scoreMetrics.bars}
                 />
                 {rows}
@@ -233,11 +231,21 @@ export class GridMeasureViewer extends UIComponent<IGridMeasureViewerProperties,
             return;
         }
 
+        // The viewer sits inside #trackViewerContainer which has CSS zoom applied.
+        // getBoundingClientRect() returns viewport coordinates (already zoomed), but
+        // GridMeasureBeam sets left: Xpx in CSS pixels which will be zoomed again.
+        // Divide by the zoom factor to compensate.
+        const zoomContainer = viewer.closest<HTMLElement>("#trackViewerContainer");
+        const zoom = parseFloat(zoomContainer?.style.zoom ?? "100%") || 100;
+        const zoomFactor = zoom / 100;
+
         const viewerRect = viewer.getBoundingClientRect();
         const positions = beatStartElements.map((el) => {
             const rect = el.getBoundingClientRect();
 
-            return (rect.left - viewerRect.left) + (rect.width / 2);
+            // Beat markers are 1px-wide absolutely positioned elements whose left edge
+            // is the beat boundary; no need to add half width.
+            return (rect.left - viewerRect.left) / zoomFactor;
         });
 
         const { beatPositions } = this.state;

@@ -15,7 +15,6 @@ export interface IGridMeasureRowProperties extends ICommonUIProperties {
     measure: ISbDmTrackMeasure;
     track: ISbDmTrack;
     dataModel: ScoreBookDataModel;
-    pulsesPerBar: number;
 }
 
 interface IRenderStep {
@@ -40,7 +39,7 @@ interface IRenderGroup {
 
 export class GridMeasureRow extends UIComponent<IGridMeasureRowProperties> {
     public override render(): ComponentChild {
-        const { measure, dataModel, pulsesPerBar, track } = this.props;
+        const { measure, dataModel, track } = this.props;
 
         if (!dataModel.arrangement) {
             return null;
@@ -54,21 +53,25 @@ export class GridMeasureRow extends UIComponent<IGridMeasureRowProperties> {
                 return sum + s.actual - s.normal;
             }, 0);
 
-        // Compute which top-level items start a new pulse so they can be marked in the DOM
-        // for use by GridMeasureViewer's position-measurement logic.
-        const stepsPerBeat = baseSteps / pulsesPerBar;
-        const beatStartItemIndices = new Set<number>();
-        let currentBaseStep = 0;
-        group.items.forEach((item, i) => {
-            if (currentBaseStep % stepsPerBeat === 0) {
-                beatStartItemIndices.add(i);
+        // Beat tick markers: absolutely positioned at fractional positions derived
+        // from the meter's beatGroups, which sum to stepResolution (= baseSteps).
+        // These are independent of grid items and subdivisions — they always align
+        // to the outer grid's 1..baseSteps column boundaries.
+        const beatMarkers: ComponentChild[] = [];
+        let cumulative = 0;
+        for (const groupSize of measure.meter.beatGroups) {
+            if (cumulative < baseSteps) {
+                beatMarkers.push(
+                    <div
+                        key={cumulative}
+                        className="grid-beat-marker"
+                        data-beat-start="true"
+                        style={{ left: `${(cumulative / baseSteps) * 100}%` }}
+                    />,
+                );
             }
-            if (item.type === "step") {
-                currentBaseStep++;
-            } else {
-                currentBaseStep += item.subdivision.normal;
-            }
-        });
+            cumulative += groupSize;
+        }
 
         const rowStyle: CSSProperties = {
             minWidth: `calc(${baseSteps} * var(--note-height))`,
@@ -79,7 +82,10 @@ export class GridMeasureRow extends UIComponent<IGridMeasureRowProperties> {
         return (
             <Container className={className} style={rowStyle}
                 data-track={track.id} {...this.dataAttributes}>
-                {this.renderItems(group.items, 1, beatStartItemIndices)}
+                <div className="grid-beat-overlay" aria-hidden="true">
+                    {beatMarkers}
+                </div>
+                {this.renderItems(group.items)}
             </Container>
         );
     }
@@ -121,8 +127,7 @@ export class GridMeasureRow extends UIComponent<IGridMeasureRowProperties> {
         return { items, length: i - startIdx };
     }
 
-    private renderItems(items: IRenderItem[], level = 1, beatStartItemIndices?: Set<number>,
-        markFirst = false): ComponentChild[] {
+    private renderItems(items: IRenderItem[], level = 1): ComponentChild[] {
         const { track, measure } = this.props;
 
         // Build step-index → event-id mapping for note identification.
@@ -136,11 +141,6 @@ export class GridMeasureRow extends UIComponent<IGridMeasureRowProperties> {
         }
 
         return items.map((item, index) => {
-            // A step or tuplet is a beat start if it is explicitly in beatStartItemIndices (top level)
-            // or if it is the first child of a beat-start ancestor (deeper levels).
-            const isBeatStart = (level === 1 && (beatStartItemIndices?.has(index) ?? false))
-                || (level > 1 && markFirst && index === 0);
-
             if (item.type === "step") {
                 const noteStyle: IAudioData | undefined = item.step.noteStyleId !== undefined
                     ? track.instrument.noteStyles[item.step.noteStyleId]
@@ -157,7 +157,6 @@ export class GridMeasureRow extends UIComponent<IGridMeasureRowProperties> {
                     key: index,
                     className: "note-viewer",
                     "data-step-index": item.step.index,
-                    "data-beat-start": isBeatStart ? "true" : undefined,
                     style: { minWidth: 0, backgroundColor },
                 };
 
@@ -172,22 +171,22 @@ export class GridMeasureRow extends UIComponent<IGridMeasureRowProperties> {
                         </div>
                     </div>
                 );
-            } else {
-                const { normal, actual } = item.subdivision;
-                const tupletStyle = {
-                    minWidth: 0,
-                    gridColumn: `span ${normal}`,
-                    display: "grid",
-                    gridTemplateColumns: `repeat(${actual}, 1fr)`,
-                    "--current-level": level,
-                } as CSSProperties;
-
-                return (
-                    <Container key={index} className="subdivision" style={tupletStyle}>
-                        {this.renderItems(item.children, level + 1, undefined, isBeatStart)}
-                    </Container>
-                );
             }
+
+            const { normal, actual } = item.subdivision;
+            const tupletStyle = {
+                minWidth: 0,
+                gridColumn: `span ${normal}`,
+                display: "grid",
+                gridTemplateColumns: `repeat(${actual}, 1fr)`,
+                "--current-level": level,
+            } as CSSProperties;
+
+            return (
+                <Container key={index} className="subdivision" style={tupletStyle}>
+                    {this.renderItems(item.children, level + 1)}
+                </Container>
+            );
         });
     }
 }

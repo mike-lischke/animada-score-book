@@ -9,7 +9,7 @@ import {
     type ISbDmTrackMeasure, type ITiming
 } from "./ScoreBookDataModel.js";
 import { reduceFraction } from "./serialisation/numeric-functions.js";
-import { getNewId } from "./utils.js";
+import { createBeatGroups, getNewId } from "./utils.js";
 
 /**
  * A track holds its content as a list of {@link ISbDmTrackMeasure} entries (one per bar).
@@ -150,7 +150,7 @@ export class Track implements ISbDmTrack {
                 beats,
                 beatUnits,
                 stepResolution: stepsPerBar,
-                beatGroups: [stepsPerBar],
+                beatGroups: createBeatGroups(beats, beatUnits, stepsPerBar),
             },
             steps: Array.from({ length: stepsPerBar }, (_, index) => {
                 return { index };
