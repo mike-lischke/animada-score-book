@@ -55,6 +55,9 @@ export interface IRequestTypeMap {
 
     // --- Backend connectivity ---
     "backendDisconnected": SimpleCallback;
+
+    // --- Authentication ---
+    "authChanged": SimpleCallback;
 }
 
 type CallbackType = IRequestTypeMap[keyof IRequestTypeMap];

@@ -40,6 +40,39 @@ const createTablesSQL = [
         height       INT,
         filesize     INT
     )`,
+
+    `CREATE TABLE IF NOT EXISTS users (
+        id            SERIAL PRIMARY KEY,
+        username      VARCHAR(255) NOT NULL UNIQUE,
+        password_hash VARCHAR(512) NOT NULL,
+        display_name  VARCHAR(255) NOT NULL,
+        is_admin      BOOLEAN      NOT NULL DEFAULT FALSE,
+        created_at    TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at    TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )`,
+
+    `CREATE TABLE IF NOT EXISTS groups (
+        id          SERIAL PRIMARY KEY,
+        name        VARCHAR(255) NOT NULL UNIQUE,
+        description TEXT,
+        created_at  TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )`,
+
+    `CREATE TABLE IF NOT EXISTS user_groups (
+        user_id  INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        group_id INT NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+        PRIMARY KEY (user_id, group_id)
+    )`,
+
+    `CREATE TABLE IF NOT EXISTS permissions (
+        id          SERIAL PRIMARY KEY,
+        entity_type VARCHAR(32)  NOT NULL,
+        entity_id   INT NULL,
+        owner_id    INT NULL REFERENCES users(id) ON DELETE SET NULL,
+        group_id    INT NULL REFERENCES groups(id) ON DELETE SET NULL,
+        perm_bits   INT NOT NULL DEFAULT 0,
+        UNIQUE (entity_type, entity_id)
+    )`,
 ];
 
 /**
@@ -187,10 +220,10 @@ export class PostgresAdapter implements IDatabaseAdapter {
             const statements = sql
                 .split(";")
                 .map((s) => {
-                    return s.trim(); 
+                    return s.trim();
                 })
                 .filter((s) => {
-                    return s.length > 0; 
+                    return s.length > 0;
                 });
 
             for (const stmt of statements) {

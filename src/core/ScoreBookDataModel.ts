@@ -8,12 +8,11 @@ import { Arrangement } from "./Arrangement.js";
 import { ArrangementMigrator } from "./serialisation/migration/ArrangementMigrator.js";
 import { stringifyPackedArrangement } from "./serialisation/snapshot-packing.js";
 
+import { requisitions } from "../supplement/Requisitions.js";
 import type { IScoreDBEntry, ISoundLibFsNode } from "./DatabaseTypes.js";
 import { Instrument } from "./Instrument.js";
-import { requisitions } from "../supplement/Requisitions.js";
 import type {
-    IArrangementSnapshot, IFraction, IMeasureStep, IMeterSnapshot, IAudioData, INoteStyleSymbol,
-    ISubdivision, Mutable
+    IArrangementSnapshot, IAudioData, IFraction, IMeasureStep, IMeterSnapshot, INoteStyleSymbol, ISubdivision, Mutable
 } from "./types/general.js";
 import { getNewId } from "./utils.js";
 
@@ -513,14 +512,65 @@ export type ScoreBookDataModelEntry =
 /**
  * A data model to share score book data between components.
  */
+
+/** Mirrors IWhoamiResponse / ICapabilities from the backend. */
+export interface IUserInfo {
+    id: number;
+    username: string;
+    displayName: string;
+    isAdmin: boolean;
+}
+
+export interface ICapabilities {
+    canEditScores: boolean;
+    canManageUsers: boolean;
+    canManageInstruments: boolean;
+    canExportMP3: boolean;
+}
+
+interface ILoginResponse {
+    token: string;
+    user: IUserInfo;
+    capabilities: ICapabilities;
+}
+
+interface IWhoamiResponse {
+    authenticated: boolean;
+    user?: IUserInfo;
+    capabilities: ICapabilities;
+}
+
 export class ScoreBookDataModel {
     /**
      * Indicates whether the current session is allowed to mutate scores on the backend.
-     * Until proper user management exists this defaults to `true`. Read-only viewers will
-     * later set this to `false` so opportunistic rewrites (e.g. legacy → compact migration)
-     * are skipped.
+     * Derived from the capabilities returned by the backend after authentication.
+     *
+     * @returns True if the current user can edit scores.
      */
-    public canWriteScores = false;
+    public get canWriteScores(): boolean {
+        return this.capabilities.canEditScores;
+    }
+
+    public get authenticated(): boolean {
+        return this.accessToken !== undefined;
+    }
+
+    public get user(): IUserInfo | undefined {
+        return this.currentUser;
+    }
+
+    public get capabilities(): ICapabilities {
+        return this.currentCapabilities;
+    }
+
+    private accessToken: string | undefined;
+    private currentUser: IUserInfo | undefined;
+    private currentCapabilities: ICapabilities = {
+        canEditScores: false,
+        canManageUsers: false,
+        canManageInstruments: false,
+        canExportMP3: false,
+    };
 
     private data: IScoreBookDataModelData = {
         soundLib: [],
@@ -776,6 +826,87 @@ export class ScoreBookDataModel {
     }
 
     /**
+     * Authenticates the user with the backend.
+     *
+     * On success the access token, user info and capabilities are stored in memory.
+     * The refresh token is stored by the backend in an httpOnly cookie.
+     *
+     * @param username The username.
+     * @param password The password.
+     * @returns True if login was successful.
+     */
+    public async login(username: string, password: string): Promise<boolean> {
+        const res = await this.fetchApi("/api?action=login", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ username, password }),
+        }, false); // Don't attach auth header for login request.
+
+        if (!res) {
+            return false;
+        }
+
+        const data = await res.json() as ILoginResponse;
+
+        this.accessToken = data.token;
+        this.currentUser = data.user;
+        this.currentCapabilities = data.capabilities;
+
+        void requisitions.execute("authChanged", undefined);
+
+        return true;
+    }
+
+    /**
+     * Logs out the current user and clears all auth state.
+     */
+    public async logout(): Promise<void> {
+        // Notify the backend to clear the refresh token cookie.
+        await this.fetchApi("/api?action=logout", { method: "POST" });
+
+        this.accessToken = undefined;
+        this.currentUser = undefined;
+        this.currentCapabilities = {
+            canEditScores: false,
+            canManageUsers: false,
+            canManageInstruments: false,
+            canExportMP3: false,
+        };
+
+        void requisitions.execute("authChanged", undefined);
+    }
+
+    /**
+     * Fetches the current auth state from the backend.
+     * Use this on app startup to restore a session from the refresh token cookie.
+     *
+     * @returns True if the session was restored.
+     */
+    public async restoreSession(): Promise<boolean> {
+        // refreshAccessToken uses the httpOnly refresh cookie to get a new access token,
+        // then calls whoami with it to populate user + capabilities.
+        const restored = await this.refreshAccessToken();
+
+        if (!restored) {
+            // No valid session — fetch anonymous capabilities.
+            const res = await this.fetchApi("/api?action=whoami", {
+                headers: { Accept: "application/json" },
+                credentials: "include",
+            }, false);
+
+            if (res) {
+                const data = await res.json() as IWhoamiResponse;
+
+                this.currentCapabilities = data.capabilities;
+            }
+        }
+
+        void requisitions.execute("authChanged", undefined);
+
+        return restored;
+    }
+
+    /**
      * Rewrites a score whose content was just migrated from a legacy format
      * to the current compact representation. Failures are silently ignored —
      * the legacy content remains intact and will be retried on the next load.
@@ -959,19 +1090,76 @@ export class ScoreBookDataModel {
     };
 
     /**
-     * Wraps a fetch call with backend-disconnect detection. On any network or HTTP error the
-     * `backendDisconnected` requisition is dispatched and `undefined` is returned so the caller
-     * can bail out gracefully instead of throwing an unhandled rejection.
+     * Refreshes the access token using the refresh token cookie.
+     * Called automatically when a 401 response is received.
      *
-     * @param url The URL to fetch.
-     * @param options Optional fetch options.
+     * @returns True if the refresh was successful.
+     */
+    private async refreshAccessToken(): Promise<boolean> {
+        const res = await this.fetchApi("/api?action=refresh", {
+            method: "POST",
+            credentials: "include",
+        }, false);
+
+        if (!res) {
+            return false;
+        }
+
+        const data = await res.json() as { token: string; };
+
+        this.accessToken = data.token;
+
+        // Also refresh user info and capabilities.
+        const whoamiRes = await this.fetchApi("/api?action=whoami", {
+            headers: { Accept: "application/json" },
+        }, true);
+
+        if (whoamiRes) {
+            const whoami = await whoamiRes.json() as IWhoamiResponse;
+
+            if (whoami.authenticated && whoami.user) {
+                this.currentUser = whoami.user;
+                this.currentCapabilities = whoami.capabilities;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Wraps a fetch call with backend-disconnect detection and automatic token refresh.
+     * On any network or HTTP error the `backendDisconnected` requisition is dispatched
+     * and `undefined` is returned so the caller can bail out gracefully.
+     *
+     * On a 401 response the access token is automatically refreshed once and the
+     * request is retried. If the refresh also fails the user is effectively logged out.
+     *
+     * @param url          The URL to fetch.
+     * @param options      Optional fetch options.
+     * @param attachAuth   Whether to attach the Authorization header. Defaults to true.
+     *                     Set to false for login, refresh, and whoami requests.
      * @returns The response on success, or `undefined` when the backend is unreachable.
      */
-    private async fetchApi(url: string, options?: RequestInit): Promise<Response | undefined> {
+    private async fetchApi(
+        url: string, options?: RequestInit, attachAuth = true,
+    ): Promise<Response | undefined> {
+        const mergedOptions: RequestInit = {
+            ...options,
+            headers: {
+                ...(options?.headers as Record<string, string> | undefined),
+            },
+            credentials: options?.credentials ?? "include",
+        };
+
+        if (attachAuth && this.accessToken) {
+            (mergedOptions.headers as Record<string, string>).Authorization =
+                `Bearer ${this.accessToken}`;
+        }
+
         let res: Response;
 
         try {
-            res = await fetch(url, options);
+            res = await fetch(url, mergedOptions);
         } catch {
             void requisitions.execute("backendDisconnected", undefined);
             void requisitions.execute("showError", "Backend connection lost — network request failed.");
@@ -979,7 +1167,38 @@ export class ScoreBookDataModel {
             return undefined;
         }
 
+        // Auto-refresh on 401 and retry once.
+        if (res.status === 401 && attachAuth && this.accessToken) {
+            const refreshed = await this.refreshAccessToken();
+
+            if (refreshed) {
+                (mergedOptions.headers as Record<string, string>).Authorization =
+                    `Bearer ${this.accessToken}`;
+
+                try {
+                    res = await fetch(url, mergedOptions);
+                } catch {
+                    void requisitions.execute("backendDisconnected", undefined);
+                    void requisitions.execute("showError", "Backend connection lost — retry failed.");
+
+                    return undefined;
+                }
+            }
+        }
+
         if (!res.ok) {
+            // 401 is an expected auth response — not a backend disconnect.
+            if (res.status === 401) {
+                return undefined;
+            }
+
+            // 403 means the user lacks permission — not a disconnect.
+            if (res.status === 403) {
+                void requisitions.execute("showError", "You do not have permission for this action.");
+
+                return undefined;
+            }
+
             void requisitions.execute("backendDisconnected", undefined);
             void requisitions.execute("showError", `Backend request failed: HTTP ${res.status} ${res.statusText}`);
 

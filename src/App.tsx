@@ -14,15 +14,15 @@ import { createRef } from "preact";
 import { lazy, Suspense } from "preact/compat";
 
 import { ErrorBoundary } from "./components/ui/ErrorBoundary.js";
-import { renderNotificationCenter } from "./components/ui/NotificationCenter/NotificationCenter.js";
-import { renderStatusBar, Statusbar } from "./components/ui/Statusbar/Statusbar.js";
-import { StatusBarAlignment, type IStatusBarItem } from "./components/ui/Statusbar/StatusBarItem.js";
 import { Button } from "./components/ui/framework/Button.js";
 import { Container } from "./components/ui/framework/Container.js";
 import { Label } from "./components/ui/framework/Label.js";
 import { ProgressIndicator } from "./components/ui/framework/ProgressIndicator.js";
 import { ChildAlignment, Orientation } from "./components/ui/framework/ui-types.js";
 import { UIComponent } from "./components/ui/framework/UIComponent.js";
+import { renderNotificationCenter } from "./components/ui/NotificationCenter/NotificationCenter.js";
+import { renderStatusBar, Statusbar } from "./components/ui/Statusbar/Statusbar.js";
+import { StatusBarAlignment, type IStatusBarItem } from "./components/ui/Statusbar/StatusBarItem.js";
 
 import { ArrangementEditControls } from "./components/ui/Arrangement/ArrangementEditControls.js";
 import { ArrangementPlayControls } from "./components/ui/Arrangement/ArrangementPlayControls.js";
@@ -43,6 +43,7 @@ import { Overlay } from "./components/ui/Overlay.js";
 import { PrintDialog } from "./components/ui/Print/PrintDialog.js";
 import { PrintView, type IPrintOptions } from "./components/ui/Print/PrintView.js";
 import { AppStorage, type IUISettings } from "./core/AppStorage.js";
+import { Arrangement } from "./core/Arrangement.js";
 import {
     SbDmEntityType, ScoreBookDataModel, type ISbDmScore, type ISbDmScoreFolder
 } from "./core/ScoreBookDataModel.js";
@@ -52,18 +53,18 @@ import {
 } from "./core/serialisation/snapshot-packing.js";
 import type { IArrangementSnapshot } from "./core/types/general.js";
 import { UndoManager } from "./core/UndoManager.js";
-import { Arrangement } from "./core/Arrangement.js";
 import { convertErrorToString } from "./core/utils.js";
 import { ArrangementPlayer } from "./player/ArrangementPlayer.js";
 import type { ScoreBookUiServices } from "./player/types.js";
 import { escapeStack } from "./supplement/EscapeStack.js";
 import { requisitions } from "./supplement/Requisitions.js";
+import { BackendDisconnectedDialog } from "./ui/BackendDisconnectedDialog.js";
+import { BackendSetupDialog } from "./ui/BackendSetupDialog.js";
+import { LoginDialog } from "./ui/LoginDialog.js";
 import { ModeManager } from "./ui/ModeManager.js";
 import { MouseHandler } from "./ui/MouseHandler.js";
 import { SelectionManager } from "./ui/SelectionManager.js";
 import { SettingsDialog } from "./ui/SettingsDialog.js";
-import { BackendSetupDialog } from "./ui/BackendSetupDialog.js";
-import { BackendDisconnectedDialog } from "./ui/BackendDisconnectedDialog.js";
 
 const ScoreLibrary = lazy(() => {
     return import("./ui/ScoreLibrary.js").then((m) => {
@@ -81,6 +82,7 @@ interface IAppState {
     editingTitle: boolean;
     displayMode: DisplayMode;
     sidebarOpen: boolean;
+    loginDialogVisible: boolean;
 
     headerPinned: boolean;
 
@@ -94,6 +96,7 @@ export class App extends UIComponent<{}, IAppState> {
     private settingsDialogRef = createRef<SettingsDialog>();
     private backendSetupDialogRef = createRef<BackendSetupDialog>();
     private backendDisconnectedDialogRef = createRef<BackendDisconnectedDialog>();
+    private loginDialogRef = createRef<LoginDialog>();
     private printDialogRef = createRef<PrintDialog>();
     private valueDialogRef = createRef<ValueDialog>();
     private confirmDialogRef = createRef<ConfirmDialog>();
@@ -125,6 +128,7 @@ export class App extends UIComponent<{}, IAppState> {
             editingTitle: false,
             displayMode: DisplayMode.Standard,
             sidebarOpen: false,
+            loginDialogVisible: false,
             headerPinned: false,
             printing: false,
         };
@@ -154,10 +158,11 @@ export class App extends UIComponent<{}, IAppState> {
     }
 
     public override shouldComponentUpdate(nextProps: {}, nextState: IAppState): boolean {
-        const { displayMode, sidebarOpen, ready, headerPinned, printing } = this.state;
+        const { displayMode, sidebarOpen, ready, loginDialogVisible, headerPinned, printing } = this.state;
 
         return displayMode !== nextState.displayMode
             || sidebarOpen !== nextState.sidebarOpen || ready !== nextState.ready
+            || loginDialogVisible !== nextState.loginDialogVisible
             || headerPinned !== nextState.headerPinned
             || printing !== nextState.printing;
     }
@@ -393,6 +398,12 @@ export class App extends UIComponent<{}, IAppState> {
                         // The app continues normally — nothing special needed.
                     }}
                 />
+                <LoginDialog
+                    ref={this.loginDialogRef}
+                    dataModel={this.dataModel}
+                    onLoginSuccess={this.handleLoginSuccess}
+                    onContinueAnonymous={this.handleContinueAnonymous}
+                />
                 <PrintDialog ref={this.printDialogRef} onAccept={this.handlePrintAccept} />
                 {
                     this.state.printing && this.dataModel.arrangement && this.state.printOptions
@@ -447,6 +458,26 @@ export class App extends UIComponent<{}, IAppState> {
     };
 
     /**
+     * Called when the user logs in successfully.
+     * Hides the login dialog. The UI updates automatically because capabilities have changed.
+     */
+    private handleLoginSuccess = (): void => {
+        this.setState({ loginDialogVisible: false });
+        Statusbar.setStatusBarMessage(
+            `Signed in as ${this.dataModel.user?.displayName ?? this.dataModel.user?.username}`,
+            3000,
+        );
+    };
+
+    /**
+     * Called when the user chooses to continue without logging in.
+     * Hides the login dialog. The app continues with anonymous capabilities.
+     */
+    private handleContinueAnonymous = (): void => {
+        this.setState({ loginDialogVisible: false });
+    };
+
+    /**
      * Called when the backend setup dialog is closed.
      * If setup completed successfully, proceed with app initialisation.
      */
@@ -472,9 +503,20 @@ export class App extends UIComponent<{}, IAppState> {
         const hasBananaDrum = params.has("a") || params.has("a2");
 
         this.loadScorebook(hasBananaDrum ? params : undefined);
+
+        // Attempt to restore a previous session via the refresh token cookie.
+        const sessionRestored = await this.dataModel.restoreSession();
+
         this.setState({ ready: true }, () => {
             Statusbar.setStatusBarMessage("App loaded", 5000);
         });
+
+        // If no session could be restored, show the login dialog.
+        if (!sessionRestored) {
+            this.setState({ loginDialogVisible: true }, () => {
+                this.loginDialogRef.current?.open();
+            });
+        }
     }
 
     private handleGithubClick = () => {

@@ -57,6 +57,56 @@ const createTablesSQL = [
             FOREIGN KEY (instrumentid) REFERENCES instruments(id)
             ON DELETE CASCADE
     ) ENGINE=InnoDB, AUTO_INCREMENT = 30000`,
+
+    `CREATE TABLE IF NOT EXISTS users (
+        id            INT UNSIGNED NOT NULL AUTO_INCREMENT,
+        username      VARCHAR(255) NOT NULL,
+        password_hash VARCHAR(512) NOT NULL,
+        display_name  VARCHAR(255) NOT NULL,
+        is_admin      TINYINT(1)   NOT NULL DEFAULT 0,
+        created_at    TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at    TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        UNIQUE KEY uk_users_username (username)
+    ) ENGINE=InnoDB`,
+
+    `CREATE TABLE IF NOT EXISTS \`groups\` (
+        id          INT UNSIGNED NOT NULL AUTO_INCREMENT,
+        name        VARCHAR(255) NOT NULL,
+        description TEXT NULL,
+        created_at  TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        UNIQUE KEY uk_groups_name (name)
+    ) ENGINE=InnoDB`,
+
+    `CREATE TABLE IF NOT EXISTS user_groups (
+        user_id  INT UNSIGNED NOT NULL,
+        group_id INT UNSIGNED NOT NULL,
+        PRIMARY KEY (user_id, group_id),
+        CONSTRAINT fk_user_groups_user
+            FOREIGN KEY (user_id) REFERENCES users(id)
+            ON DELETE CASCADE,
+        CONSTRAINT fk_user_groups_group
+            FOREIGN KEY (group_id) REFERENCES \`groups\`(id)
+            ON DELETE CASCADE
+    ) ENGINE=InnoDB`,
+
+    `CREATE TABLE IF NOT EXISTS permissions (
+        id          INT UNSIGNED NOT NULL AUTO_INCREMENT,
+        entity_type VARCHAR(32)  NOT NULL,
+        entity_id   INT UNSIGNED NULL,
+        owner_id    INT UNSIGNED NULL,
+        group_id    INT UNSIGNED NULL,
+        perm_bits   INT UNSIGNED NOT NULL DEFAULT 0,
+        PRIMARY KEY (id),
+        UNIQUE KEY uk_permissions_entity (entity_type, entity_id),
+        CONSTRAINT fk_permissions_owner
+            FOREIGN KEY (owner_id) REFERENCES users(id)
+            ON DELETE SET NULL,
+        CONSTRAINT fk_permissions_group
+            FOREIGN KEY (group_id) REFERENCES \`groups\`(id)
+            ON DELETE SET NULL
+    ) ENGINE=InnoDB`,
 ];
 
 export class MySqlAdapter implements IDatabaseAdapter {

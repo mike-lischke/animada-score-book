@@ -15,6 +15,13 @@ import {
 } from "./database.js";
 import { MySqlAdapter } from "./mysql-adapter.js";
 import { PostgresAdapter } from "./postgres-adapter.js";
+import {
+    hashPassword, verifyPassword, createAccessToken, createRefreshToken,
+    verifyToken, verifyRefreshToken, checkPermission, setPermissions,
+    makePermBits, buildCapabilities, hasUsers,
+    Perm,
+    type ITokenPayload,
+} from "./auth.js";
 
 const configPath = resolve(process.cwd(), "backend-config.json");
 const uploadsPath = resolve(process.cwd(), "public", "uploads", "instruments");
@@ -152,13 +159,120 @@ const getRequestUrl = (req: IncomingMessage): URL => {
 const setCorsHeaders = (res: ServerResponse): void => {
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+};
+
+// ---------- Auth Helpers ----------
+
+/**
+ * Extracts the Bearer token from the Authorization header.
+ *
+ * @param req The incoming HTTP request.
+ * @returns The token string or undefined.
+ */
+const extractToken = (req: IncomingMessage): string | undefined => {
+    const header = getHeader(req, "authorization");
+
+    if (!header?.startsWith("Bearer ")) {
+        return undefined;
+    }
+
+    return header.slice(7);
+};
+
+/**
+ * Extracts a cookie value by name from the Cookie header.
+ *
+ * @param req  The incoming HTTP request.
+ * @param name The cookie name.
+ * @returns The cookie value or undefined.
+ */
+const getCookie = (req: IncomingMessage, name: string): string | undefined => {
+    const cookieHeader = getHeader(req, "cookie");
+
+    if (!cookieHeader) {
+        return undefined;
+    }
+
+    for (const part of cookieHeader.split(";")) {
+        const [key, ...rest] = part.trim().split("=");
+        if (key === name) {
+            return rest.join("=");
+        }
+    }
+
+    return undefined;
+};
+
+/**
+ * Extracts the authenticated user from the request, or returns undefined for anonymous.
+ *
+ * @param req The incoming HTTP request.
+ * @returns The token payload or undefined.
+ */
+const getAuthUser = (req: IncomingMessage): ITokenPayload | undefined => {
+    const token = extractToken(req);
+
+    if (!token) {
+        return undefined;
+    }
+
+    return verifyToken(token);
+};
+
+/**
+ * Sets the refresh token as an httpOnly cookie on the response.
+ *
+ * @param res     The HTTP response.
+ * @param token   The refresh token value.
+ * @param maxAge  The cookie max age in seconds.
+ */
+const setRefreshTokenCookie = (res: ServerResponse, token: string, maxAge: number): void => {
+    const cookie = `refreshToken=${token}; HttpOnly; Path=/; Max-Age=${maxAge}; SameSite=Lax`;
+
+    res.setHeader("Set-Cookie", cookie);
+};
+
+/**
+ * Clears the refresh token cookie.
+ *
+ * @param res The HTTP response.
+ */
+const clearRefreshTokenCookie = (res: ServerResponse): void => {
+    res.setHeader("Set-Cookie", "refreshToken=; HttpOnly; Path=/; Max-Age=0; SameSite=Lax");
+};
+
+// ---------- Admin Seeding ----------
+
+/**
+ * Seeds a default admin user (admin / admin) if no users exist yet.
+ * This is for development bootstrapping. In production the admin setup dialog will be used.
+ *
+ * @param targetAdapter The database adapter.
+ */
+const seedAdminUser = async (targetAdapter: IDatabaseAdapter): Promise<void> => {
+    const usersExist = await hasUsers(targetAdapter);
+
+    if (usersExist) {
+        return;
+    }
+
+    const passwordHash = await hashPassword("admin");
+
+    const result = await targetAdapter.insertReturningId(
+        `INSERT INTO users (username, password_hash, display_name, is_admin)
+         VALUES (?, ?, ?, ?)`,
+        ["admin", passwordHash, "Administrator", 1],
+    );
+
+    console.log(`Seeded admin user (id=${result.insertId}, username=admin, password=admin)`);
 };
 
 // ---------- API Handlers ----------
 
 const handleHealth = async (_req: IncomingMessage, res: ServerResponse): Promise<void> => {
     let hasData = false;
+    let anyUsers = false;
 
     if (adapter.isInitialized()) {
         try {
@@ -167,6 +281,7 @@ const handleHealth = async (_req: IncomingMessage, res: ServerResponse): Promise
             );
 
             hasData = (rows[0]?.cnt ?? 0) > 0;
+            anyUsers = await hasUsers(adapter);
         } catch {
             // Tables might not exist yet.
         }
@@ -177,6 +292,7 @@ const handleHealth = async (_req: IncomingMessage, res: ServerResponse): Promise
         initialized: adapter.isInitialized(),
         engine: config.database.engine,
         hasData,
+        hasUsers: anyUsers,
     });
 };
 
@@ -209,6 +325,10 @@ const handleSetup = async (req: IncomingMessage, res: ServerResponse): Promise<v
         if (body.overwrite) {
             try {
                 await newAdapter.initialize(config.database);
+                await newAdapter.execute("DROP TABLE IF EXISTS permissions");
+                await newAdapter.execute("DROP TABLE IF EXISTS user_groups");
+                await newAdapter.execute("DROP TABLE IF EXISTS `groups`");
+                await newAdapter.execute("DROP TABLE IF EXISTS users");
                 await newAdapter.execute("DROP TABLE IF EXISTS instrument_images");
                 await newAdapter.execute("DROP TABLE IF EXISTS instruments");
                 await newAdapter.execute("DROP TABLE IF EXISTS scores");
@@ -218,6 +338,7 @@ const handleSetup = async (req: IncomingMessage, res: ServerResponse): Promise<v
 
                 await freshAdapter.initialize(config.database);
                 await seedIfExists(freshAdapter);
+                await seedAdminUser(freshAdapter);
                 await adapter.shutdown();
                 adapter = freshAdapter;
                 saveConfig();
@@ -241,6 +362,8 @@ const handleSetup = async (req: IncomingMessage, res: ServerResponse): Promise<v
         if ((existing[0]?.cnt ?? 0) === 0) {
             await seedIfExists(newAdapter);
         }
+
+        await seedAdminUser(newAdapter);
     } catch (e) {
         sendError(res, `Initialisation failed: ${String(e)}`, 500);
 
@@ -372,8 +495,10 @@ const handleListScoreFolderContent = async (req: IncomingMessage, res: ServerRes
 };
 
 const handleAddScoreFolder = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
+    const user = getAuthUser(req);
     const body = await readJsonBody(req);
     const name = String(body.name ?? "").trim();
+    const parentId = body.parentid !== undefined ? Number(body.parentid) : null;
 
     if (!name) {
         sendError(res, "Name required");
@@ -381,17 +506,34 @@ const handleAddScoreFolder = async (req: IncomingMessage, res: ServerResponse): 
         return;
     }
 
-    const parentId = body.parentid !== undefined ? Number(body.parentid) : null;
+    // Check write permission on parent folder (or root).
+    if (parentId !== null && parentId !== -1) {
+        const allowed = await checkPermission(adapter, user, "folder", parentId, Perm.W);
+
+        if (!allowed) {
+            sendError(res, "Forbidden", 403);
+
+            return;
+        }
+    }
 
     const result = await adapter.insertReturningId(
         "INSERT INTO folders (parentid, name) VALUES (?, ?)",
-        [parentId, name],
+        [parentId === -1 ? null : parentId, name],
     );
+
+    // Assign default permissions: owner = current user, group = null, world = read-only.
+    if (user) {
+        const permBits = makePermBits(Perm.RWX, Perm.RX, Perm.R);
+
+        await setPermissions(adapter, "folder", result.insertId, user.userId, null, permBits);
+    }
 
     sendJson(res, { success: true, id: result.insertId });
 };
 
 const handleAddScore = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
+    const user = getAuthUser(req);
     const body = await readJsonBody(req);
     const folderId = body.folderId !== undefined ? Number(body.folderId) : null;
     const name = String(body.name ?? "").trim();
@@ -403,15 +545,34 @@ const handleAddScore = async (req: IncomingMessage, res: ServerResponse): Promis
         return;
     }
 
+    // Check write permission on parent folder (or root).
+    if (folderId !== null && folderId !== -1) {
+        const allowed = await checkPermission(adapter, user, "folder", folderId, Perm.W);
+
+        if (!allowed) {
+            sendError(res, "Forbidden", 403);
+
+            return;
+        }
+    }
+
     const result = await adapter.insertReturningId(
         "INSERT INTO scores (folderid, name, content) VALUES (?, ?, ?)",
-        [folderId, name, content],
+        [folderId === -1 ? null : folderId, name, content],
     );
+
+    // Assign default permissions: owner = current user, group = null, world = read-only.
+    if (user) {
+        const permBits = makePermBits(Perm.RWX, Perm.RX, Perm.R);
+
+        await setPermissions(adapter, "score", result.insertId, user.userId, null, permBits);
+    }
 
     sendJson(res, { success: true, id: result.insertId });
 };
 
 const handleRenameEntry = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
+    const user = getAuthUser(req);
     const body = await readJsonBody(req);
     const type = body.type as string | undefined;
     const id = body.id !== undefined ? Number(body.id) : undefined;
@@ -429,6 +590,14 @@ const handleRenameEntry = async (req: IncomingMessage, res: ServerResponse): Pro
         return;
     }
 
+    const allowed = await checkPermission(adapter, user, type, id, Perm.W);
+
+    if (!allowed) {
+        sendError(res, "Forbidden", 403);
+
+        return;
+    }
+
     const table = type === "folder" ? "folders" : "scores";
 
     await adapter.execute(`UPDATE ${table} SET name = ? WHERE id = ?`, [name, id]);
@@ -437,6 +606,7 @@ const handleRenameEntry = async (req: IncomingMessage, res: ServerResponse): Pro
 };
 
 const handleUpdateScore = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
+    const user = getAuthUser(req);
     const body = await readJsonBody(req);
     const id = body.id !== undefined ? Number(body.id) : undefined;
     const content = body.content as string | undefined;
@@ -447,12 +617,21 @@ const handleUpdateScore = async (req: IncomingMessage, res: ServerResponse): Pro
         return;
     }
 
+    const allowed = await checkPermission(adapter, user, "score", id, Perm.W);
+
+    if (!allowed) {
+        sendError(res, "Forbidden", 403);
+
+        return;
+    }
+
     await adapter.execute("UPDATE scores SET content = ? WHERE id = ?", [content, id]);
 
     sendJson(res, { success: true });
 };
 
 const handleDelete = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
+    const user = getAuthUser(req);
     const body = await readJsonBody(req);
     const type = body.type as string | undefined;
     const id = body.id !== undefined ? Number(body.id) : undefined;
@@ -463,8 +642,20 @@ const handleDelete = async (req: IncomingMessage, res: ServerResponse): Promise<
         return;
     }
 
+    const allowed = await checkPermission(adapter, user, type, id, Perm.W);
+
+    if (!allowed) {
+        sendError(res, "Forbidden", 403);
+
+        return;
+    }
+
     if (type === "score") {
         await adapter.execute("DELETE FROM scores WHERE id = ?", [id]);
+        // Also delete the permission entry.
+        await adapter.execute(
+            "DELETE FROM permissions WHERE entity_type = 'score' AND entity_id = ?", [id],
+        );
         sendJson(res, { success: true });
 
         return;
@@ -495,6 +686,10 @@ const handleDelete = async (req: IncomingMessage, res: ServerResponse): Promise<
 
         // Remove the folder itself.
         await adapter.execute("DELETE FROM folders WHERE id = ?", [id]);
+        // Also delete the permission entry.
+        await adapter.execute(
+            "DELETE FROM permissions WHERE entity_type = 'folder' AND entity_id = ?", [id],
+        );
 
         sendJson(res, { success: true });
 
@@ -505,6 +700,7 @@ const handleDelete = async (req: IncomingMessage, res: ServerResponse): Promise<
 };
 
 const handleMove = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
+    const user = getAuthUser(req);
     const body = await readJsonBody(req);
     const type = body.type as string | undefined;
     const id = body.id !== undefined ? Number(body.id) : undefined;
@@ -518,7 +714,28 @@ const handleMove = async (req: IncomingMessage, res: ServerResponse): Promise<vo
             return;
         }
 
-        await adapter.execute("UPDATE folders SET parentid = ? WHERE id = ?", [newParentId, id]);
+        // Need write permission on both the folder being moved and the target parent.
+        const allowed = await checkPermission(adapter, user, "folder", id, Perm.W);
+
+        if (!allowed) {
+            sendError(res, "Forbidden", 403);
+
+            return;
+        }
+
+        if (newParentId !== -1) {
+            const targetAllowed = await checkPermission(adapter, user, "folder", newParentId, Perm.W);
+
+            if (!targetAllowed) {
+                sendError(res, "Forbidden", 403);
+
+                return;
+            }
+        }
+
+        await adapter.execute("UPDATE folders SET parentid = ? WHERE id = ?", [
+            newParentId === -1 ? null : newParentId, id,
+        ]);
         sendJson(res, { success: true });
 
         return;
@@ -533,7 +750,28 @@ const handleMove = async (req: IncomingMessage, res: ServerResponse): Promise<vo
             return;
         }
 
-        await adapter.execute("UPDATE scores SET folderid = ? WHERE id = ?", [newFolderId, id]);
+        // Need write permission on the score being moved.
+        const allowed = await checkPermission(adapter, user, "score", id, Perm.W);
+
+        if (!allowed) {
+            sendError(res, "Forbidden", 403);
+
+            return;
+        }
+
+        if (newFolderId !== -1) {
+            const targetAllowed = await checkPermission(adapter, user, "folder", newFolderId, Perm.W);
+
+            if (!targetAllowed) {
+                sendError(res, "Forbidden", 403);
+
+                return;
+            }
+        }
+
+        await adapter.execute("UPDATE scores SET folderid = ? WHERE id = ?", [
+            newFolderId === -1 ? null : newFolderId, id,
+        ]);
         sendJson(res, { success: true });
 
         return;
@@ -551,6 +789,651 @@ const handleClearAll = async (_req: IncomingMessage, res: ServerResponse): Promi
 
     await adapter.execute("DELETE FROM scores");
     await adapter.execute("DELETE FROM folders");
+
+    sendJson(res, { success: true });
+};
+
+// ---------- Auth Handlers ----------
+
+const handleLogin = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
+    const body = await readJsonBody(req);
+    const username = String(body.username ?? "").trim();
+    const password = String(body.password ?? "");
+
+    if (!username || !password) {
+        sendError(res, "Username and password required");
+
+        return;
+    }
+
+    const rows = await adapter.query<{
+        id: number; username: string; password_hash: string;
+        display_name: string; is_admin: number | boolean;
+    }>(
+        "SELECT * FROM users WHERE username = ?",
+        [username],
+    );
+
+    if (rows.length === 0) {
+        sendError(res, "Invalid username or password", 401);
+
+        return;
+    }
+
+    const user = rows[0];
+    const valid = await verifyPassword(password, user.password_hash);
+
+    if (!valid) {
+        sendError(res, "Invalid username or password", 401);
+
+        return;
+    }
+
+    const payload: ITokenPayload = {
+        userId: user.id,
+        username: user.username,
+        isAdmin: Boolean(user.is_admin),
+    };
+
+    const accessToken = createAccessToken(payload);
+    const refreshToken = createRefreshToken(payload);
+
+    setRefreshTokenCookie(res, refreshToken.token, refreshToken.maxAge);
+
+    const capabilities = await buildCapabilities(adapter, payload);
+
+    sendJson(res, {
+        token: accessToken,
+        user: {
+            id: user.id,
+            username: user.username,
+            displayName: user.display_name,
+            isAdmin: payload.isAdmin,
+        },
+        capabilities,
+    });
+};
+
+const handleRefresh = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
+    const refreshToken = getCookie(req, "refreshToken");
+
+    if (!refreshToken) {
+        sendError(res, "No refresh token", 401);
+
+        return;
+    }
+
+    const payload = verifyRefreshToken(refreshToken);
+
+    if (!payload) {
+        clearRefreshTokenCookie(res);
+        sendError(res, "Invalid or expired refresh token", 401);
+
+        return;
+    }
+
+    // Verify the user still exists and is active.
+    const rows = await adapter.query<{ id: number; username: string; is_admin: number | boolean; }>(
+        "SELECT id, username, is_admin FROM users WHERE id = ?",
+        [payload.userId],
+    );
+
+    if (rows.length === 0) {
+        clearRefreshTokenCookie(res);
+        sendError(res, "User no longer exists", 401);
+
+        return;
+    }
+
+    const user = rows[0];
+    const freshPayload: ITokenPayload = {
+        userId: user.id,
+        username: user.username,
+        isAdmin: Boolean(user.is_admin),
+    };
+
+    const accessToken = createAccessToken(freshPayload);
+
+    sendJson(res, { token: accessToken });
+};
+
+const handleLogout = (req: IncomingMessage, res: ServerResponse): void => {
+    clearRefreshTokenCookie(res);
+    sendJson(res, { success: true });
+};
+
+const handleWhoAmI = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
+    const user = getAuthUser(req);
+
+    if (!user) {
+        const capabilities = await buildCapabilities(adapter, undefined);
+
+        sendJson(res, { authenticated: false, capabilities });
+
+        return;
+    }
+
+    // Verify the user still exists.
+    const rows = await adapter.query<{
+        id: number; username: string; display_name: string;
+        is_admin: number | boolean;
+    }>(
+        "SELECT * FROM users WHERE id = ?",
+        [user.userId],
+    );
+
+    if (rows.length === 0) {
+        const capabilities = await buildCapabilities(adapter, undefined);
+
+        sendJson(res, { authenticated: false, capabilities });
+
+        return;
+    }
+
+    const dbUser = rows[0];
+    const capabilities = await buildCapabilities(adapter, user);
+
+    sendJson(res, {
+        authenticated: true,
+        user: {
+            id: dbUser.id,
+            username: dbUser.username,
+            displayName: dbUser.display_name,
+            isAdmin: Boolean(dbUser.is_admin),
+        },
+        capabilities,
+    });
+};
+
+// ---------- User CRUD Handlers ----------
+
+const handleListUsers = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
+    const user = getAuthUser(req);
+
+    if (!user?.isAdmin) {
+        sendError(res, "Forbidden", 403);
+
+        return;
+    }
+
+    const rows = await adapter.query(
+        "SELECT id, username, display_name, is_admin, created_at, updated_at FROM users ORDER BY username",
+    );
+
+    sendJson(res, {
+        users: rows.map((u) => {
+            return {
+                id: u.id,
+                username: u.username,
+                displayName: u.display_name,
+                isAdmin: Boolean(u.is_admin),
+                createdAt: u.created_at,
+                updatedAt: u.updated_at,
+            };
+        }),
+    });
+};
+
+const handleCreateUser = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
+    const authUser = getAuthUser(req);
+
+    if (!authUser?.isAdmin) {
+        sendError(res, "Forbidden", 403);
+
+        return;
+    }
+
+    const body = await readJsonBody(req);
+    const username = String(body.username ?? "").trim();
+    const password = String(body.password ?? "");
+    const displayName = String(body.displayName ?? username).trim();
+    const isAdmin = Boolean(body.isAdmin ?? false);
+
+    if (!username || !password) {
+        sendError(res, "Username and password required");
+
+        return;
+    }
+
+    if (username.length < 3) {
+        sendError(res, "Username must be at least 3 characters");
+
+        return;
+    }
+
+    if (password.length < 6) {
+        sendError(res, "Password must be at least 6 characters");
+
+        return;
+    }
+
+    const existing = await adapter.query<{ cnt: number; }>(
+        "SELECT COUNT(*) AS cnt FROM users WHERE username = ?",
+        [username],
+    );
+
+    if ((existing[0]?.cnt ?? 0) > 0) {
+        sendError(res, "Username already exists");
+
+        return;
+    }
+
+    const passwordHash = await hashPassword(password);
+    const result = await adapter.insertReturningId(
+        `INSERT INTO users (username, password_hash, display_name, is_admin)
+         VALUES (?, ?, ?, ?)`,
+        [username, passwordHash, displayName, isAdmin ? 1 : 0],
+    );
+
+    sendJson(res, { success: true, id: result.insertId });
+};
+
+const handleUpdateUser = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
+    const authUser = getAuthUser(req);
+
+    if (!authUser?.isAdmin) {
+        sendError(res, "Forbidden", 403);
+
+        return;
+    }
+
+    const body = await readJsonBody(req);
+    const id = body.id !== undefined ? Number(body.id) : undefined;
+
+    if (id === undefined) {
+        sendError(res, "id required");
+
+        return;
+    }
+
+    const updates: string[] = [];
+    const params: unknown[] = [];
+
+    if (body.displayName !== undefined) {
+        updates.push("display_name = ?");
+        params.push(String(body.displayName).trim());
+    }
+
+    if (body.isAdmin !== undefined) {
+        updates.push("is_admin = ?");
+        params.push(body.isAdmin ? 1 : 0);
+    }
+
+    if (body.password) {
+        const passwordHash = await hashPassword(String(body.password));
+
+        updates.push("password_hash = ?");
+        params.push(passwordHash);
+    }
+
+    if (updates.length === 0) {
+        sendError(res, "No fields to update");
+
+        return;
+    }
+
+    params.push(id);
+
+    await adapter.execute(
+        `UPDATE users SET ${updates.join(", ")} WHERE id = ?`,
+        params,
+    );
+
+    sendJson(res, { success: true });
+};
+
+const handleDeleteUser = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
+    const authUser = getAuthUser(req);
+
+    if (!authUser?.isAdmin) {
+        sendError(res, "Forbidden", 403);
+
+        return;
+    }
+
+    const body = await readJsonBody(req);
+    const id = body.id !== undefined ? Number(body.id) : undefined;
+
+    if (id === undefined) {
+        sendError(res, "id required");
+
+        return;
+    }
+
+    // Prevent deleting the last admin.
+    if (id === authUser.userId) {
+        const adminCount = await adapter.query<{ cnt: number; }>(
+            "SELECT COUNT(*) AS cnt FROM users WHERE is_admin = 1",
+        );
+
+        if ((adminCount[0]?.cnt ?? 0) <= 1) {
+            sendError(res, "Cannot delete the last admin user");
+
+            return;
+        }
+    }
+
+    await adapter.execute("DELETE FROM users WHERE id = ?", [id]);
+
+    sendJson(res, { success: true });
+};
+
+// ---------- Group CRUD Handlers ----------
+
+const handleListGroups = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
+    const user = getAuthUser(req);
+
+    if (!user?.isAdmin) {
+        sendError(res, "Forbidden", 403);
+
+        return;
+    }
+
+    const rows = await adapter.query(
+        "SELECT * FROM `groups` ORDER BY name",
+    );
+
+    sendJson(res, {
+        groups: rows.map((g) => {
+            return {
+                id: g.id,
+                name: g.name,
+                description: g.description,
+                createdAt: g.created_at,
+            };
+        }),
+    });
+};
+
+const handleCreateGroup = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
+    const user = getAuthUser(req);
+
+    if (!user?.isAdmin) {
+        sendError(res, "Forbidden", 403);
+
+        return;
+    }
+
+    const body = await readJsonBody(req);
+    const name = String(body.name ?? "").trim();
+    const description = body.description !== undefined ? String(body.description).trim() : "";
+
+    if (!name) {
+        sendError(res, "Group name required");
+
+        return;
+    }
+
+    const existing = await adapter.query<{ cnt: number; }>(
+        "SELECT COUNT(*) AS cnt FROM `groups` WHERE name = ?",
+        [name],
+    );
+
+    if ((existing[0]?.cnt ?? 0) > 0) {
+        sendError(res, "Group name already exists");
+
+        return;
+    }
+
+    const result = await adapter.insertReturningId(
+        "INSERT INTO `groups` (name, description) VALUES (?, ?)",
+        [name, description],
+    );
+
+    sendJson(res, { success: true, id: result.insertId });
+};
+
+const handleUpdateGroup = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
+    const user = getAuthUser(req);
+
+    if (!user?.isAdmin) {
+        sendError(res, "Forbidden", 403);
+
+        return;
+    }
+
+    const body = await readJsonBody(req);
+    const id = body.id !== undefined ? Number(body.id) : undefined;
+
+    if (id === undefined) {
+        sendError(res, "id required");
+
+        return;
+    }
+
+    const name = body.name !== undefined ? String(body.name).trim() : undefined;
+    const description = body.description !== undefined ? String(body.description).trim() : undefined;
+
+    if (!name && description === undefined) {
+        sendError(res, "No fields to update");
+
+        return;
+    }
+
+    const updates: string[] = [];
+    const params: unknown[] = [];
+
+    if (name) {
+        updates.push("name = ?");
+        params.push(name);
+    }
+
+    if (description !== undefined) {
+        updates.push("description = ?");
+        params.push(description);
+    }
+
+    params.push(id);
+
+    await adapter.execute(
+        `UPDATE \`groups\` SET ${updates.join(", ")} WHERE id = ?`,
+        params,
+    );
+
+    sendJson(res, { success: true });
+};
+
+const handleDeleteGroup = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
+    const user = getAuthUser(req);
+
+    if (!user?.isAdmin) {
+        sendError(res, "Forbidden", 403);
+
+        return;
+    }
+
+    const body = await readJsonBody(req);
+    const id = body.id !== undefined ? Number(body.id) : undefined;
+
+    if (id === undefined) {
+        sendError(res, "id required");
+
+        return;
+    }
+
+    await adapter.execute("DELETE FROM `groups` WHERE id = ?", [id]);
+
+    sendJson(res, { success: true });
+};
+
+// ---------- User-Group Membership Handlers ----------
+
+const handleAddUserToGroup = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
+    const user = getAuthUser(req);
+
+    if (!user?.isAdmin) {
+        sendError(res, "Forbidden", 403);
+
+        return;
+    }
+
+    const body = await readJsonBody(req);
+    const userId = body.userId !== undefined ? Number(body.userId) : undefined;
+    const groupId = body.groupId !== undefined ? Number(body.groupId) : undefined;
+
+    if (userId === undefined || groupId === undefined) {
+        sendError(res, "userId and groupId required");
+
+        return;
+    }
+
+    await adapter.execute(
+        "INSERT IGNORE INTO user_groups (user_id, group_id) VALUES (?, ?)",
+        [userId, groupId],
+    );
+
+    sendJson(res, { success: true });
+};
+
+const handleRemoveUserFromGroup = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
+    const user = getAuthUser(req);
+
+    if (!user?.isAdmin) {
+        sendError(res, "Forbidden", 403);
+
+        return;
+    }
+
+    const body = await readJsonBody(req);
+    const userId = body.userId !== undefined ? Number(body.userId) : undefined;
+    const groupId = body.groupId !== undefined ? Number(body.groupId) : undefined;
+
+    if (userId === undefined || groupId === undefined) {
+        sendError(res, "userId and groupId required");
+
+        return;
+    }
+
+    await adapter.execute(
+        "DELETE FROM user_groups WHERE user_id = ? AND group_id = ?",
+        [userId, groupId],
+    );
+
+    sendJson(res, { success: true });
+};
+
+const handleListGroupMembers = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
+    const authUser = getAuthUser(req);
+
+    if (!authUser?.isAdmin) {
+        sendError(res, "Forbidden", 403);
+
+        return;
+    }
+
+    const url = getRequestUrl(req);
+    const groupId = Number(url.searchParams.get("groupId"));
+
+    if (!groupId) {
+        sendError(res, "groupId required");
+
+        return;
+    }
+
+    const rows = await adapter.query(
+        `SELECT u.id, u.username, u.display_name
+         FROM users u
+         JOIN user_groups ug ON u.id = ug.user_id
+         WHERE ug.group_id = ?
+         ORDER BY u.username`,
+        [groupId],
+    );
+
+    sendJson(res, {
+        members: rows.map((u) => {
+            return {
+                id: u.id,
+                username: u.username,
+                displayName: u.display_name,
+            };
+        }),
+    });
+};
+
+// ---------- Permission Handlers ----------
+
+const handleGetPermissions = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
+    const user = getAuthUser(req);
+    const url = getRequestUrl(req);
+    const entityType = url.searchParams.get("entityType") ?? "";
+    const entityIdStr = url.searchParams.get("entityId");
+    const entityId = entityIdStr !== null ? Number(entityIdStr) : null;
+
+    if (!entityType) {
+        sendError(res, "entityType required");
+
+        return;
+    }
+
+    // Non-admins can only read permissions for entities they own.
+    const rows = await adapter.query<{
+        id: number; entity_type: string; entity_id: number | null;
+        owner_id: number | null; group_id: number | null; perm_bits: number;
+    }>(
+        "SELECT * FROM permissions WHERE entity_type = ? AND entity_id <=> ?",
+        [entityType, entityId],
+    );
+
+    if (rows.length === 0) {
+        sendJson(res, { permission: null });
+
+        return;
+    }
+
+    const perm = rows[0];
+
+    // Restrict access: non-admins can only see permissions for entities they own.
+    if (!user?.isAdmin && perm.owner_id !== user?.userId) {
+        sendError(res, "Forbidden", 403);
+
+        return;
+    }
+
+    const ownerBits = (perm.perm_bits >> 6) & 0x7;
+    const groupBits = (perm.perm_bits >> 3) & 0x7;
+    const worldBits = perm.perm_bits & 0x7;
+
+    sendJson(res, {
+        permission: {
+            id: perm.id,
+            entityType: perm.entity_type,
+            entityId: perm.entity_id,
+            ownerId: perm.owner_id,
+            groupId: perm.group_id,
+            ownerPerm: ownerBits,
+            groupPerm: groupBits,
+            worldPerm: worldBits,
+        },
+    });
+};
+
+const handleSetPermissions = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
+    const user = getAuthUser(req);
+
+    if (!user?.isAdmin) {
+        sendError(res, "Forbidden", 403);
+
+        return;
+    }
+
+    const body = await readJsonBody(req);
+    const entityType = String(body.entityType ?? "");
+    const entityId = body.entityId !== undefined ? Number(body.entityId) : null;
+    const ownerId = body.ownerId !== undefined ? Number(body.ownerId) : null;
+    const groupId = body.groupId !== undefined ? Number(body.groupId) : null;
+    const ownerPerm = body.ownerPerm !== undefined ? Number(body.ownerPerm) : Perm.RWX;
+    const groupPerm = body.groupPerm !== undefined ? Number(body.groupPerm) : Perm.RX;
+    const worldPerm = body.worldPerm !== undefined ? Number(body.worldPerm) : Perm.None;
+
+    if (!entityType) {
+        sendError(res, "entityType required");
+
+        return;
+    }
+
+    const permBits = makePermBits(ownerPerm, groupPerm, worldPerm);
+
+    await setPermissions(adapter, entityType, entityId, ownerId, groupId, permBits);
 
     sendJson(res, { success: true });
 };
@@ -985,6 +1868,91 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse): Promise
 
                     break;
 
+                case "login":
+                    await handleLogin(req, res);
+
+                    break;
+
+                case "refresh":
+                    await handleRefresh(req, res);
+
+                    break;
+
+                case "logout":
+                    handleLogout(req, res);
+
+                    break;
+
+                case "whoami":
+                    await handleWhoAmI(req, res);
+
+                    break;
+
+                case "listUsers":
+                    await handleListUsers(req, res);
+
+                    break;
+
+                case "createUser":
+                    await handleCreateUser(req, res);
+
+                    break;
+
+                case "updateUser":
+                    await handleUpdateUser(req, res);
+
+                    break;
+
+                case "deleteUser":
+                    await handleDeleteUser(req, res);
+
+                    break;
+
+                case "listGroups":
+                    await handleListGroups(req, res);
+
+                    break;
+
+                case "createGroup":
+                    await handleCreateGroup(req, res);
+
+                    break;
+
+                case "updateGroup":
+                    await handleUpdateGroup(req, res);
+
+                    break;
+
+                case "deleteGroup":
+                    await handleDeleteGroup(req, res);
+
+                    break;
+
+                case "addUserToGroup":
+                    await handleAddUserToGroup(req, res);
+
+                    break;
+
+                case "removeUserFromGroup":
+                    await handleRemoveUserFromGroup(req, res);
+
+                    break;
+
+                case "listGroupMembers":
+                    await handleListGroupMembers(req, res);
+
+                    break;
+
+                case "getPermissions":
+                    await handleGetPermissions(req, res);
+
+                    break;
+
+                case "setPermissions":
+                    await handleSetPermissions(req, res);
+
+                    break;
+
                 default:
                     sendError(res, "Unknown action");
             }
@@ -1092,6 +2060,9 @@ const main = (): void => {
                     }
 
                     return undefined;
+                }).then(() => {
+                    // Seed a default admin user if no users exist yet.
+                    return seedAdminUser(adapter);
                 });
             });
         }

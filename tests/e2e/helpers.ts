@@ -24,7 +24,72 @@ export const beijaFlorQuery = "t=Beija%20Flor%202004%20%20-%20%20Bossa%201%20(H-
 
 export const beijaFlorImportPath = `/?${beijaFlorQuery}`;
 
+/**
+ * Sets up API mocks so that the session appears already authenticated
+ * (whoami returns an admin user, refresh returns a token).
+ * The login dialog will not appear.
+ *
+ * @param page The Playwright page.
+ */
+export const setupAuthenticatedSession = async (page: Page): Promise<void> => {
+    await page.route("**/api?action=whoami", async (route) => {
+        await route.fulfill({
+            status: 200,
+            contentType: "application/json",
+            body: JSON.stringify({
+                authenticated: true,
+                user: { id: 1, username: "test", displayName: "Test", isAdmin: true },
+                capabilities: {
+                    canEditScores: true, canManageUsers: true,
+                    canManageInstruments: true, canExportMP3: true
+                },
+            }),
+        });
+    });
+
+    await page.route("**/api?action=refresh", async (route) => {
+        await route.fulfill({
+            status: 200,
+            contentType: "application/json",
+            body: JSON.stringify({ token: "test-token" }),
+        });
+    });
+};
+
+/**
+ * Sets up API mocks so that the session appears anonymous (whoami returns
+ * `authenticated: false`). The login dialog will appear on page load.
+ *
+ * @param page The Playwright page.
+ */
+export const setupAnonymousSession = async (page: Page): Promise<void> => {
+    await page.route("**/api?action=whoami", async (route) => {
+        await route.fulfill({
+            status: 200,
+            contentType: "application/json",
+            body: JSON.stringify({
+                authenticated: false,
+                capabilities: {
+                    canEditScores: false, canManageUsers: false,
+                    canManageInstruments: false, canExportMP3: false,
+                },
+            }),
+        });
+    });
+
+    await page.route("**/api?action=refresh", async (route) => {
+        await route.fulfill({
+            status: 401,
+            contentType: "application/json",
+            body: JSON.stringify({ error: "No refresh token" }),
+        });
+    });
+};
+
 export const routeApi = async (page: Page): Promise<void> => {
+    // Default: authenticated session so existing tests work without login dialog.
+    await setupAuthenticatedSession(page);
+
     await page.route("**/api**", async (route) => {
         const url = new URL(route.request().url());
         const action = url.searchParams.get("action");
@@ -33,7 +98,10 @@ export const routeApi = async (page: Page): Promise<void> => {
             await route.fulfill({
                 status: 200,
                 contentType: "application/json",
-                body: JSON.stringify({ status: "ok", initialized: true, engine: "mysql", hasData: true }),
+                body: JSON.stringify({
+                    status: "ok", initialized: true, engine: "mysql", hasData: true,
+                    hasUsers: true
+                }),
             });
 
             return;
