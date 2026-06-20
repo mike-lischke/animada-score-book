@@ -3,8 +3,6 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-/* eslint-disable no-restricted-syntax */
-
 /**
  * Authentication and authorisation helpers for the Animada Score Book backend.
  *
@@ -124,8 +122,17 @@ export const Feature = {
 const scryptKeyLen = 64;
 const scryptOptions = { N: 16384, r: 8, p: 1 };
 
-// Hard-coded JWT secret for development. In production this should come from an environment variable.
-const jwtSecret = process.env.jwtSecret ?? "animada-score-book-dev-secret-change-in-production";
+// The JWT secret must be set via the JWT_SECRET environment variable.
+const jwtSecret = (() => {
+    // eslint-disable-next-line no-restricted-syntax
+    const secret = process.env.JWT_SECRET;
+
+    if (!secret) {
+        throw new Error("JWT_SECRET environment variable is required. Set it before starting the server.");
+    }
+
+    return secret;
+})();
 const accessTokenExpiry = "15m";
 const refreshTokenExpirySeconds = 7 * 24 * 60 * 60; // 7 days
 
@@ -175,13 +182,12 @@ export const verifyPassword = async (password: string, hash: string): Promise<bo
         return false;
     }
 
-    const options = JSON.parse(Buffer.from(parts[2], "hex").toString("utf-8")) as {
-        N: number; r: number; p: number;
-    };
-    const salt = Buffer.from(parts[3], "hex");
-    const expectedKey = Buffer.from(parts[4], "hex");
-
     try {
+        const options = JSON.parse(Buffer.from(parts[2], "hex").toString("utf-8")) as {
+            N: number; r: number; p: number;
+        };
+        const salt = Buffer.from(parts[3], "hex");
+        const expectedKey = Buffer.from(parts[4], "hex");
         const derivedKey = await new Promise<Buffer>((resolve, reject) => {
             crypto.scrypt(password, salt, scryptKeyLen, options, (err, key) => {
                 if (err) {
@@ -463,28 +469,27 @@ export const makePermBits = (ownerPerm: number, groupPerm: number, worldPerm: nu
 
 /**
  * Builds the capabilities object for a user.
+ * Currently a simple admin check. When per-feature permissions are seeded,
+ * this will check individual feature permissions.
  *
- * @param adapter The database adapter.
- * @param user    The authenticated user, or undefined for anonymous.
+ * @param user The authenticated user, or undefined for anonymous.
  * @returns The capabilities object.
  */
-export const buildCapabilities = async (
-    adapter: IDatabaseAdapter,
-    user: ITokenPayload | undefined,
-): Promise<ICapabilities> => {
-    const canEditScores = await checkPermission(adapter, user, "feature", null, Perm.W);
-    // Feature-based capabilities — currently always fall through to admin-only.
-    // Once per-feature permissions are seeded, these checks will take effect.
-    const canManageInstruments = await checkPermission(
-        adapter, user, "feature", null, Perm.W,
-    );
-    const canExportMP3 = await checkPermission(adapter, user, "feature", null, Perm.X);
+export const buildCapabilities = (user: ITokenPayload | undefined): ICapabilities => {
+    if (user?.isAdmin) {
+        return {
+            canEditScores: true,
+            canManageUsers: true,
+            canManageInstruments: true,
+            canExportMP3: true,
+        };
+    }
 
     return {
-        canEditScores: user?.isAdmin ?? canEditScores,
-        canManageUsers: user?.isAdmin ?? false,
-        canManageInstruments: user?.isAdmin ?? canManageInstruments,
-        canExportMP3: user?.isAdmin ?? canExportMP3,
+        canEditScores: false,
+        canManageUsers: false,
+        canManageInstruments: false,
+        canExportMP3: false,
     };
 };
 

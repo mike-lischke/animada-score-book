@@ -228,7 +228,7 @@ const getAuthUser = (req: IncomingMessage): ITokenPayload | undefined => {
  * @param maxAge  The cookie max age in seconds.
  */
 const setRefreshTokenCookie = (res: ServerResponse, token: string, maxAge: number): void => {
-    const cookie = `refreshToken=${token}; HttpOnly; Path=/; Max-Age=${maxAge}; SameSite=Lax`;
+    const cookie = `refreshToken=${token}; HttpOnly; Secure; Path=/; Max-Age=${maxAge}; SameSite=Lax`;
 
     res.setHeader("Set-Cookie", cookie);
 };
@@ -239,7 +239,7 @@ const setRefreshTokenCookie = (res: ServerResponse, token: string, maxAge: numbe
  * @param res The HTTP response.
  */
 const clearRefreshTokenCookie = (res: ServerResponse): void => {
-    res.setHeader("Set-Cookie", "refreshToken=; HttpOnly; Path=/; Max-Age=0; SameSite=Lax");
+    res.setHeader("Set-Cookie", "refreshToken=; HttpOnly; Secure; Path=/; Max-Age=0; SameSite=Lax");
 };
 
 // ---------- Admin Seeding ----------
@@ -265,7 +265,7 @@ const seedAdminUser = async (targetAdapter: IDatabaseAdapter): Promise<void> => 
         ["admin", passwordHash, "Administrator", 1],
     );
 
-    console.log(`Seeded admin user (id=${result.insertId}, username=admin, password=admin)`);
+    console.log(`Seeded admin user (id=${result.insertId}, username=admin).`);
 };
 
 // ---------- API Handlers ----------
@@ -298,6 +298,21 @@ const handleHealth = async (_req: IncomingMessage, res: ServerResponse): Promise
 
 const handleSetup = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
     const body = await readJsonBody(req);
+
+    // If the backend is already set up, only admins may reconfigure.
+    if (adapter.isInitialized()) {
+        const usersExist = await hasUsers(adapter);
+
+        if (usersExist) {
+            const user = getAuthUser(req);
+
+            if (!user?.isAdmin) {
+                sendError(res, "Forbidden", 403);
+
+                return;
+            }
+        }
+    }
 
     // Merge incoming config with defaults.
     config.database = {
@@ -506,7 +521,7 @@ const handleAddScoreFolder = async (req: IncomingMessage, res: ServerResponse): 
         return;
     }
 
-    // Check write permission on parent folder (or root).
+    // Check write permission on parent folder (or require auth for root).
     if (parentId !== null && parentId !== -1) {
         const allowed = await checkPermission(adapter, user, "folder", parentId, Perm.W);
 
@@ -515,6 +530,10 @@ const handleAddScoreFolder = async (req: IncomingMessage, res: ServerResponse): 
 
             return;
         }
+    } else if (!user) {
+        sendError(res, "Forbidden", 403);
+
+        return;
     }
 
     const result = await adapter.insertReturningId(
@@ -545,7 +564,7 @@ const handleAddScore = async (req: IncomingMessage, res: ServerResponse): Promis
         return;
     }
 
-    // Check write permission on parent folder (or root).
+    // Check write permission on parent folder (or require auth for root).
     if (folderId !== null && folderId !== -1) {
         const allowed = await checkPermission(adapter, user, "folder", folderId, Perm.W);
 
@@ -554,6 +573,10 @@ const handleAddScore = async (req: IncomingMessage, res: ServerResponse): Promis
 
             return;
         }
+    } else if (!user) {
+        sendError(res, "Forbidden", 403);
+
+        return;
     }
 
     const result = await adapter.insertReturningId(
@@ -780,7 +803,15 @@ const handleMove = async (req: IncomingMessage, res: ServerResponse): Promise<vo
     sendError(res, "Invalid type (folder|score)");
 };
 
-const handleClearAll = async (_req: IncomingMessage, res: ServerResponse): Promise<void> => {
+const handleClearAll = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
+    const user = getAuthUser(req);
+
+    if (!user?.isAdmin) {
+        sendError(res, "Forbidden", 403);
+
+        return;
+    }
+
     if (!adapter.isInitialized()) {
         sendError(res, "Database not initialised.", 500);
 
@@ -840,7 +871,7 @@ const handleLogin = async (req: IncomingMessage, res: ServerResponse): Promise<v
 
     setRefreshTokenCookie(res, refreshToken.token, refreshToken.maxAge);
 
-    const capabilities = await buildCapabilities(adapter, payload);
+    const capabilities = buildCapabilities(payload);
 
     sendJson(res, {
         token: accessToken,
@@ -906,7 +937,7 @@ const handleWhoAmI = async (req: IncomingMessage, res: ServerResponse): Promise<
     const user = getAuthUser(req);
 
     if (!user) {
-        const capabilities = await buildCapabilities(adapter, undefined);
+        const capabilities = buildCapabilities(undefined);
 
         sendJson(res, { authenticated: false, capabilities });
 
@@ -923,7 +954,7 @@ const handleWhoAmI = async (req: IncomingMessage, res: ServerResponse): Promise<
     );
 
     if (rows.length === 0) {
-        const capabilities = await buildCapabilities(adapter, undefined);
+        const capabilities = buildCapabilities(undefined);
 
         sendJson(res, { authenticated: false, capabilities });
 
@@ -931,7 +962,7 @@ const handleWhoAmI = async (req: IncomingMessage, res: ServerResponse): Promise<
     }
 
     const dbUser = rows[0];
-    const capabilities = await buildCapabilities(adapter, user);
+    const capabilities = buildCapabilities(user);
 
     sendJson(res, {
         authenticated: true,
@@ -1532,6 +1563,14 @@ const serveSoundLibFile = (req: IncomingMessage, res: ServerResponse): void => {
 // ---------- Instrument Image Upload ----------
 
 const handleUploadInstrumentImage = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
+    const user = getAuthUser(req);
+
+    if (!user?.isAdmin) {
+        sendError(res, "Forbidden", 403);
+
+        return;
+    }
+
     const url = getRequestUrl(req);
     const instrumentId = Number(url.searchParams.get("instrumentId"));
 

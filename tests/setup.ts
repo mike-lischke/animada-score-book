@@ -5,6 +5,10 @@
 
 import { beforeEach, vi } from "vitest";
 
+// Required by auth.ts — the JWT secret is mandatory.
+// eslint-disable-next-line no-restricted-syntax
+process.env.JWT_SECRET = "test-secret";
+
 class StorageMock implements Storage {
     private data = new Map<string, string>();
 
