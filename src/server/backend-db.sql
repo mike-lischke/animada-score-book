@@ -54,8 +54,9 @@ CREATE TABLE instrument_images (
 CREATE TABLE users (
   id            INT UNSIGNED NOT NULL AUTO_INCREMENT,
   username      VARCHAR(255) NOT NULL,
-  password_hash VARCHAR(512) NOT NULL,
-  display_name  VARCHAR(255) NOT NULL,
+  password_hash     VARCHAR(512) NOT NULL,
+  refresh_token_hash VARCHAR(256) NULL,
+  display_name      VARCHAR(255) NOT NULL,
   is_admin      TINYINT(1)   NOT NULL DEFAULT 0,
   created_at    TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at    TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,

@@ -36,29 +36,13 @@ import jwt from "jsonwebtoken";
 
 import type { IDatabaseAdapter } from "./database.js";
 
-// ---------- Types ----------
-
-export interface IUserRow {
-    id: number;
-    username: string;
-    password_hash: string;
-    display_name: string;
-    is_admin: boolean;
-}
-
-export interface IGroupRow {
-    id: number;
-    name: string;
-    description: string;
-}
-
 export interface IPermissionRow {
     id: number;
-    entity_type: string;
-    entity_id: number | null;
-    owner_id: number | null;
-    group_id: number | null;
-    perm_bits: number;
+    entityType: string;
+    entityId: number | null;
+    ownerId: number | null;
+    groupId: number | null;
+    permBits: number;
 }
 
 export interface ITokenPayload {
@@ -86,7 +70,7 @@ export interface ICapabilities {
 }
 
 /** Permission bit constants (r=4, w=2, x=1). */
-export const enum Perm {
+export const enum Permission {
     None = 0,
     X = 1,
     W = 2,
@@ -133,10 +117,9 @@ const jwtSecret = (() => {
 
     return secret;
 })();
-const accessTokenExpiry = "15m";
-const refreshTokenExpirySeconds = 7 * 24 * 60 * 60; // 7 days
 
-// ---------- Password Hashing ----------
+const accessTokenExpiry = "15m";
+export const refreshTokenExpirySeconds = 7 * 24 * 60 * 60; // 7 days
 
 /**
  * Hashes a password using scrypt.
@@ -186,6 +169,7 @@ export const verifyPassword = async (password: string, hash: string): Promise<bo
         const options = JSON.parse(Buffer.from(parts[2], "hex").toString("utf-8")) as {
             N: number; r: number; p: number;
         };
+
         const salt = Buffer.from(parts[3], "hex");
         const expectedKey = Buffer.from(parts[4], "hex");
         const derivedKey = await new Promise<Buffer>((resolve, reject) => {
@@ -206,8 +190,6 @@ export const verifyPassword = async (password: string, hash: string): Promise<bo
     }
 };
 
-// ---------- JWT ----------
-
 /**
  * Creates an access token for the given user.
  *
@@ -220,23 +202,53 @@ export const createAccessToken = (payload: ITokenPayload): string => {
 
 /**
  * Creates a refresh token for the given user.
- * Refresh tokens have a longer lifetime and are stored in an httpOnly cookie.
+ * Generates a random token, returns both the raw token (for the cookie)
+ * and its SHA-256 hash (to store in the database for rotation).
  *
- * @param payload The token payload.
- * @returns The signed JWT string and its expiry time in seconds.
+ * @returns The raw token, its hash, and its max age in seconds.
  */
-export const createRefreshToken = (payload: ITokenPayload): { token: string; maxAge: number; } => {
-    const token = jwt.sign(
-        { ...payload, type: "refresh" },
-        jwtSecret,
-        { expiresIn: refreshTokenExpirySeconds },
-    );
+export const createRefreshToken = (): { raw: string; hash: string; maxAge: number; } => {
+    const raw = crypto.randomBytes(32).toString("hex");
+    const hash = crypto.createHash("sha256").update(raw).digest("hex");
 
-    return { token, maxAge: refreshTokenExpirySeconds };
+    return { raw, hash, maxAge: refreshTokenExpirySeconds };
 };
 
 /**
- * Verifies a JWT token and returns its payload.
+ * Verifies a refresh token against the stored hash and rotates it.
+ * On success, stores a new hash and returns the userId and a new raw token
+ * (to be sent back as a cookie). On failure, clears the stored hash.
+ *
+ * @param adapter  The database adapter.
+ * @param rawToken The raw refresh token from the cookie.
+ * @returns The userId and new raw token if valid, or undefined.
+ */
+export const verifyAndRotateRefreshToken = async (adapter: IDatabaseAdapter,
+    rawToken: string,): Promise<{ userId: number; newRawToken: string; } | undefined> => {
+    const hash = crypto.createHash("sha256").update(rawToken).digest("hex");
+
+    const rows = await adapter.query<{ id: number; }>(
+        "SELECT id FROM users WHERE refresh_token_hash = ?",
+        [hash],
+    );
+
+    if (rows.length === 0) {
+        await adapter.execute("UPDATE users SET refresh_token_hash = NULL WHERE refresh_token_hash IS NOT NULL");
+
+        return undefined;
+    }
+
+    const userId = rows[0].id;
+    const newRaw = crypto.randomBytes(32).toString("hex");
+    const newHash = crypto.createHash("sha256").update(newRaw).digest("hex");
+
+    await adapter.execute("UPDATE users SET refresh_token_hash = ? WHERE id = ?", [newHash, userId]);
+
+    return { userId, newRawToken: newRaw };
+};
+
+/**
+ * Verifies a JWT access token and returns its payload.
  *
  * @param token The JWT string.
  * @returns The decoded payload, or undefined if invalid/expired.
@@ -255,28 +267,6 @@ export const verifyToken = (token: string): ITokenPayload | undefined => {
         return undefined;
     }
 };
-
-/**
- * Verifies a refresh token.
- *
- * @param token The refresh token string.
- * @returns The decoded payload, or undefined if invalid/expired.
- */
-export const verifyRefreshToken = (token: string): ITokenPayload | undefined => {
-    try {
-        const decoded = jwt.verify(token, jwtSecret) as ITokenPayload & { type?: string; };
-
-        if (decoded.type !== "refresh") {
-            return undefined;
-        }
-
-        return { userId: decoded.userId, username: decoded.username, isAdmin: decoded.isAdmin };
-    } catch {
-        return undefined;
-    }
-};
-
-// ---------- Permission Checking ----------
 
 /**
  * Extracts the permission bits for a specific role from a 9-bit permission mask.
@@ -308,13 +298,8 @@ const getRolePerm = (permBits: number, shift: number): number => {
  * @param requiredPerm The required permission bit(s) (e.g. Perm.R | Perm.W).
  * @returns True if the user has the required permission.
  */
-export const checkPermission = async (
-    adapter: IDatabaseAdapter,
-    user: ITokenPayload | undefined,
-    entityType: string,
-    entityId: number | null,
-    requiredPerm: number,
-): Promise<boolean> => {
+export const checkPermission = async (adapter: IDatabaseAdapter, user: ITokenPayload | undefined, entityType: string,
+    entityId: number | null, requiredPerm: number,): Promise<boolean> => {
     // Admin users always have full access.
     if (user?.isAdmin) {
         return true;
@@ -328,24 +313,24 @@ export const checkPermission = async (
     }
 
     // Check owner bits.
-    if (permRow.owner_id === user?.userId) {
-        return (getRolePerm(permRow.perm_bits, ownerShift) & requiredPerm) === requiredPerm;
+    if (permRow.ownerId === user?.userId) {
+        return (getRolePerm(permRow.permBits, ownerShift) & requiredPerm) === requiredPerm;
     }
 
     // Check group bits if the user belongs to the entity's group.
-    if (user && permRow.group_id !== null) {
-        const memberRows = await adapter.query<{ user_id: number; }>(
-            "SELECT user_id FROM user_groups WHERE group_id = ? AND user_id = ?",
-            [permRow.group_id, user.userId],
+    if (user && permRow.groupId !== null) {
+        const memberRows = await adapter.query<{ userId: number; }>(
+            "SELECT user_id AS userId FROM user_groups WHERE group_id = ? AND user_id = ?",
+            [permRow.groupId, user.userId],
         );
 
         if (memberRows.length > 0) {
-            return (getRolePerm(permRow.perm_bits, groupShift) & requiredPerm) === requiredPerm;
+            return (getRolePerm(permRow.permBits, groupShift) & requiredPerm) === requiredPerm;
         }
     }
 
     // Fall back to world bits (also used for anonymous users).
-    return (getRolePerm(permRow.perm_bits, worldShift) & requiredPerm) === requiredPerm;
+    return (getRolePerm(permRow.permBits, worldShift) & requiredPerm) === requiredPerm;
 };
 
 /**
@@ -360,11 +345,8 @@ export const checkPermission = async (
  * @param entityId   The entity id, or null for features.
  * @returns The resolved permission row, or undefined if no permission could be resolved.
  */
-const resolvePermission = async (
-    adapter: IDatabaseAdapter,
-    entityType: string,
-    entityId: number | null,
-): Promise<IPermissionRow | undefined> => {
+const resolvePermission = async (adapter: IDatabaseAdapter, entityType: string,
+    entityId: number | null): Promise<IPermissionRow | undefined> => {
     // Look for an explicit permission entry.
     const rows = await adapter.query(
         "SELECT * FROM permissions WHERE entity_type = ? AND entity_id <=> ?",
@@ -376,11 +358,11 @@ const resolvePermission = async (
 
         return {
             id: Number(r.id),
-            entity_type: String(r.entity_type),
-            entity_id: r.entity_id !== null ? Number(r.entity_id) : null,
-            owner_id: r.owner_id !== null ? Number(r.owner_id) : null,
-            group_id: r.group_id !== null ? Number(r.group_id) : null,
-            perm_bits: Number(r.perm_bits),
+            entityType: String(r.entity_type),
+            entityId: r.entity_id !== null ? Number(r.entity_id) : null,
+            ownerId: r.owner_id !== null ? Number(r.owner_id) : null,
+            groupId: r.group_id !== null ? Number(r.group_id) : null,
+            permBits: Number(r.perm_bits),
         };
     }
 
@@ -433,14 +415,8 @@ const resolvePermission = async (
  * @param groupId    The owning group id, or null.
  * @param permBits   The 9-bit permission mask.
  */
-export const setPermissions = async (
-    adapter: IDatabaseAdapter,
-    entityType: string,
-    entityId: number | null,
-    ownerId: number | null,
-    groupId: number | null,
-    permBits: number,
-): Promise<void> => {
+export const setPermissions = async (adapter: IDatabaseAdapter, entityType: string, entityId: number | null,
+    ownerId: number | null, groupId: number | null, permBits: number): Promise<void> => {
     // Delete any existing row for this entity first.
     await adapter.execute(
         "DELETE FROM permissions WHERE entity_type = ? AND entity_id <=> ?",

@@ -17,11 +17,13 @@ import { MySqlAdapter } from "./mysql-adapter.js";
 import { PostgresAdapter } from "./postgres-adapter.js";
 import {
     hashPassword, verifyPassword, createAccessToken, createRefreshToken,
-    verifyToken, verifyRefreshToken, checkPermission, setPermissions,
+    verifyToken, verifyAndRotateRefreshToken, checkPermission, setPermissions,
     makePermBits, buildCapabilities, hasUsers,
-    Perm,
+    refreshTokenExpirySeconds,
+    Permission,
     type ITokenPayload,
 } from "./auth.js";
+import { convertErrorToString } from "../core/utils.js";
 
 const configPath = resolve(process.cwd(), "backend-config.json");
 const uploadsPath = resolve(process.cwd(), "public", "uploads", "instruments");
@@ -361,7 +363,8 @@ const handleSetup = async (req: IncomingMessage, res: ServerResponse): Promise<v
 
                 return;
             } catch (e) {
-                sendError(res, `Overwrite failed: ${String(e)}`, 500);
+                console.error("Overwrite failed:", convertErrorToString(e));
+                sendError(res, "Database overwrite failed. Check server logs for details.", 500);
 
                 return;
             }
@@ -380,7 +383,8 @@ const handleSetup = async (req: IncomingMessage, res: ServerResponse): Promise<v
 
         await seedAdminUser(newAdapter);
     } catch (e) {
-        sendError(res, `Initialisation failed: ${String(e)}`, 500);
+        console.error("Database initialisation failed:", convertErrorToString(e));
+        sendError(res, "Database initialisation failed. Check server logs for details.", 500);
 
         return;
     }
@@ -440,7 +444,7 @@ const handleTestConnection = async (req: IncomingMessage, res: ServerResponse): 
             sendJson(res, { success: false, error: result.error ?? "Connection failed." });
         }
     } catch (e: unknown) {
-        console.error("testConnection error:", String(e));
+        console.error("testConnection error:", convertErrorToString(e));
         sendJson(res, { success: false, error: String(e) });
     }
 };
@@ -458,6 +462,7 @@ const createAdapterFor = (dbConfig: IDatabaseConfig): IDatabaseAdapter => {
 };
 
 const handleListScoreFolderContent = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
+    const user = getAuthUser(req);
     const body = await readJsonBody(req);
     const parentId = body.parentid !== undefined ? Number(body.parentid) : null;
 
@@ -506,7 +511,22 @@ const handleListScoreFolderContent = async (req: IncomingMessage, res: ServerRes
         scoreParams,
     );
 
-    sendJson(res, { folders, scores });
+    // Filter out entries the user cannot read.
+    const readableFolders = [];
+    for (const f of folders) {
+        if (await checkPermission(adapter, user, "folder", f.id as number, Permission.R)) {
+            readableFolders.push(f);
+        }
+    }
+
+    const readableScores = [];
+    for (const s of scores) {
+        if (await checkPermission(adapter, user, "score", s.id as number, Permission.R)) {
+            readableScores.push(s);
+        }
+    }
+
+    sendJson(res, { folders: readableFolders, scores: readableScores });
 };
 
 const handleAddScoreFolder = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
@@ -523,7 +543,7 @@ const handleAddScoreFolder = async (req: IncomingMessage, res: ServerResponse): 
 
     // Check write permission on parent folder (or require auth for root).
     if (parentId !== null && parentId !== -1) {
-        const allowed = await checkPermission(adapter, user, "folder", parentId, Perm.W);
+        const allowed = await checkPermission(adapter, user, "folder", parentId, Permission.W);
 
         if (!allowed) {
             sendError(res, "Forbidden", 403);
@@ -543,7 +563,7 @@ const handleAddScoreFolder = async (req: IncomingMessage, res: ServerResponse): 
 
     // Assign default permissions: owner = current user, group = null, world = read-only.
     if (user) {
-        const permBits = makePermBits(Perm.RWX, Perm.RX, Perm.R);
+        const permBits = makePermBits(Permission.RWX, Permission.RX, Permission.R);
 
         await setPermissions(adapter, "folder", result.insertId, user.userId, null, permBits);
     }
@@ -566,7 +586,7 @@ const handleAddScore = async (req: IncomingMessage, res: ServerResponse): Promis
 
     // Check write permission on parent folder (or require auth for root).
     if (folderId !== null && folderId !== -1) {
-        const allowed = await checkPermission(adapter, user, "folder", folderId, Perm.W);
+        const allowed = await checkPermission(adapter, user, "folder", folderId, Permission.W);
 
         if (!allowed) {
             sendError(res, "Forbidden", 403);
@@ -586,7 +606,7 @@ const handleAddScore = async (req: IncomingMessage, res: ServerResponse): Promis
 
     // Assign default permissions: owner = current user, group = null, world = read-only.
     if (user) {
-        const permBits = makePermBits(Perm.RWX, Perm.RX, Perm.R);
+        const permBits = makePermBits(Permission.RWX, Permission.RX, Permission.R);
 
         await setPermissions(adapter, "score", result.insertId, user.userId, null, permBits);
     }
@@ -613,7 +633,7 @@ const handleRenameEntry = async (req: IncomingMessage, res: ServerResponse): Pro
         return;
     }
 
-    const allowed = await checkPermission(adapter, user, type, id, Perm.W);
+    const allowed = await checkPermission(adapter, user, type, id, Permission.W);
 
     if (!allowed) {
         sendError(res, "Forbidden", 403);
@@ -640,7 +660,7 @@ const handleUpdateScore = async (req: IncomingMessage, res: ServerResponse): Pro
         return;
     }
 
-    const allowed = await checkPermission(adapter, user, "score", id, Perm.W);
+    const allowed = await checkPermission(adapter, user, "score", id, Permission.W);
 
     if (!allowed) {
         sendError(res, "Forbidden", 403);
@@ -665,7 +685,7 @@ const handleDelete = async (req: IncomingMessage, res: ServerResponse): Promise<
         return;
     }
 
-    const allowed = await checkPermission(adapter, user, type, id, Perm.W);
+    const allowed = await checkPermission(adapter, user, type, id, Permission.W);
 
     if (!allowed) {
         sendError(res, "Forbidden", 403);
@@ -738,7 +758,7 @@ const handleMove = async (req: IncomingMessage, res: ServerResponse): Promise<vo
         }
 
         // Need write permission on both the folder being moved and the target parent.
-        const allowed = await checkPermission(adapter, user, "folder", id, Perm.W);
+        const allowed = await checkPermission(adapter, user, "folder", id, Permission.W);
 
         if (!allowed) {
             sendError(res, "Forbidden", 403);
@@ -747,7 +767,7 @@ const handleMove = async (req: IncomingMessage, res: ServerResponse): Promise<vo
         }
 
         if (newParentId !== -1) {
-            const targetAllowed = await checkPermission(adapter, user, "folder", newParentId, Perm.W);
+            const targetAllowed = await checkPermission(adapter, user, "folder", newParentId, Permission.W);
 
             if (!targetAllowed) {
                 sendError(res, "Forbidden", 403);
@@ -774,7 +794,7 @@ const handleMove = async (req: IncomingMessage, res: ServerResponse): Promise<vo
         }
 
         // Need write permission on the score being moved.
-        const allowed = await checkPermission(adapter, user, "score", id, Perm.W);
+        const allowed = await checkPermission(adapter, user, "score", id, Permission.W);
 
         if (!allowed) {
             sendError(res, "Forbidden", 403);
@@ -783,7 +803,7 @@ const handleMove = async (req: IncomingMessage, res: ServerResponse): Promise<vo
         }
 
         if (newFolderId !== -1) {
-            const targetAllowed = await checkPermission(adapter, user, "folder", newFolderId, Perm.W);
+            const targetAllowed = await checkPermission(adapter, user, "folder", newFolderId, Permission.W);
 
             if (!targetAllowed) {
                 sendError(res, "Forbidden", 403);
@@ -838,10 +858,11 @@ const handleLogin = async (req: IncomingMessage, res: ServerResponse): Promise<v
     }
 
     const rows = await adapter.query<{
-        id: number; username: string; password_hash: string;
-        display_name: string; is_admin: number | boolean;
+        id: number; username: string; passwordHash: string;
+        displayName: string; isAdmin: number | boolean;
     }>(
-        "SELECT * FROM users WHERE username = ?",
+        "SELECT id, username, password_hash AS passwordHash, display_name AS displayName, is_admin AS isAdmin" +
+        " FROM users WHERE username = ?",
         [username],
     );
 
@@ -852,7 +873,7 @@ const handleLogin = async (req: IncomingMessage, res: ServerResponse): Promise<v
     }
 
     const user = rows[0];
-    const valid = await verifyPassword(password, user.password_hash);
+    const valid = await verifyPassword(password, user.passwordHash);
 
     if (!valid) {
         sendError(res, "Invalid username or password", 401);
@@ -863,13 +884,19 @@ const handleLogin = async (req: IncomingMessage, res: ServerResponse): Promise<v
     const payload: ITokenPayload = {
         userId: user.id,
         username: user.username,
-        isAdmin: Boolean(user.is_admin),
+        isAdmin: Boolean(user.isAdmin),
     };
 
     const accessToken = createAccessToken(payload);
-    const refreshToken = createRefreshToken(payload);
+    const refreshToken = createRefreshToken();
 
-    setRefreshTokenCookie(res, refreshToken.token, refreshToken.maxAge);
+    // Store the hash in the database for rotation.
+    await adapter.execute(
+        "UPDATE users SET refresh_token_hash = ? WHERE id = ?",
+        [refreshToken.hash, user.id],
+    );
+
+    setRefreshTokenCookie(res, refreshToken.raw, refreshToken.maxAge);
 
     const capabilities = buildCapabilities(payload);
 
@@ -878,7 +905,7 @@ const handleLogin = async (req: IncomingMessage, res: ServerResponse): Promise<v
         user: {
             id: user.id,
             username: user.username,
-            displayName: user.display_name,
+            displayName: user.displayName,
             isAdmin: payload.isAdmin,
         },
         capabilities,
@@ -886,27 +913,27 @@ const handleLogin = async (req: IncomingMessage, res: ServerResponse): Promise<v
 };
 
 const handleRefresh = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
-    const refreshToken = getCookie(req, "refreshToken");
+    const rawToken = getCookie(req, "refreshToken");
 
-    if (!refreshToken) {
+    if (!rawToken) {
         sendError(res, "No refresh token", 401);
 
         return;
     }
 
-    const payload = verifyRefreshToken(refreshToken);
+    const result = await verifyAndRotateRefreshToken(adapter, rawToken);
 
-    if (!payload) {
+    if (!result) {
         clearRefreshTokenCookie(res);
         sendError(res, "Invalid or expired refresh token", 401);
 
         return;
     }
 
-    // Verify the user still exists and is active.
-    const rows = await adapter.query<{ id: number; username: string; is_admin: number | boolean; }>(
-        "SELECT id, username, is_admin FROM users WHERE id = ?",
-        [payload.userId],
+    // Verify the user still exists.
+    const rows = await adapter.query<{ id: number; username: string; isAdmin: number | boolean; }>(
+        "SELECT id, username, is_admin AS isAdmin FROM users WHERE id = ?",
+        [result.userId],
     );
 
     if (rows.length === 0) {
@@ -917,13 +944,13 @@ const handleRefresh = async (req: IncomingMessage, res: ServerResponse): Promise
     }
 
     const user = rows[0];
-    const freshPayload: ITokenPayload = {
+    const accessToken = createAccessToken({
         userId: user.id,
         username: user.username,
-        isAdmin: Boolean(user.is_admin),
-    };
+        isAdmin: Boolean(user.isAdmin),
+    });
 
-    const accessToken = createAccessToken(freshPayload);
+    setRefreshTokenCookie(res, result.newRawToken, refreshTokenExpirySeconds);
 
     sendJson(res, { token: accessToken });
 };
@@ -946,10 +973,10 @@ const handleWhoAmI = async (req: IncomingMessage, res: ServerResponse): Promise<
 
     // Verify the user still exists.
     const rows = await adapter.query<{
-        id: number; username: string; display_name: string;
-        is_admin: number | boolean;
+        id: number; username: string; displayName: string;
+        isAdmin: number | boolean;
     }>(
-        "SELECT * FROM users WHERE id = ?",
+        "SELECT id, username, display_name AS displayName, is_admin AS isAdmin FROM users WHERE id = ?",
         [user.userId],
     );
 
@@ -969,8 +996,8 @@ const handleWhoAmI = async (req: IncomingMessage, res: ServerResponse): Promise<
         user: {
             id: dbUser.id,
             username: dbUser.username,
-            displayName: dbUser.display_name,
-            isAdmin: Boolean(dbUser.is_admin),
+            displayName: dbUser.displayName,
+            isAdmin: Boolean(dbUser.isAdmin),
         },
         capabilities,
     });
@@ -1398,10 +1425,12 @@ const handleGetPermissions = async (req: IncomingMessage, res: ServerResponse): 
 
     // Non-admins can only read permissions for entities they own.
     const rows = await adapter.query<{
-        id: number; entity_type: string; entity_id: number | null;
-        owner_id: number | null; group_id: number | null; perm_bits: number;
+        id: number; entityType: string; entityId: number | null;
+        ownerId: number | null; groupId: number | null; permBits: number;
     }>(
-        "SELECT * FROM permissions WHERE entity_type = ? AND entity_id <=> ?",
+        "SELECT id, entity_type AS entityType, entity_id AS entityId," +
+        " owner_id AS ownerId, group_id AS groupId, perm_bits AS permBits" +
+        " FROM permissions WHERE entity_type = ? AND entity_id <=> ?",
         [entityType, entityId],
     );
 
@@ -1414,23 +1443,23 @@ const handleGetPermissions = async (req: IncomingMessage, res: ServerResponse): 
     const perm = rows[0];
 
     // Restrict access: non-admins can only see permissions for entities they own.
-    if (!user?.isAdmin && perm.owner_id !== user?.userId) {
+    if (!user?.isAdmin && perm.ownerId !== user?.userId) {
         sendError(res, "Forbidden", 403);
 
         return;
     }
 
-    const ownerBits = (perm.perm_bits >> 6) & 0x7;
-    const groupBits = (perm.perm_bits >> 3) & 0x7;
-    const worldBits = perm.perm_bits & 0x7;
+    const ownerBits = (perm.permBits >> 6) & 0x7;
+    const groupBits = (perm.permBits >> 3) & 0x7;
+    const worldBits = perm.permBits & 0x7;
 
     sendJson(res, {
         permission: {
             id: perm.id,
-            entityType: perm.entity_type,
-            entityId: perm.entity_id,
-            ownerId: perm.owner_id,
-            groupId: perm.group_id,
+            entityType: perm.entityType,
+            entityId: perm.entityId,
+            ownerId: perm.ownerId,
+            groupId: perm.groupId,
             ownerPerm: ownerBits,
             groupPerm: groupBits,
             worldPerm: worldBits,
@@ -1452,9 +1481,9 @@ const handleSetPermissions = async (req: IncomingMessage, res: ServerResponse): 
     const entityId = body.entityId !== undefined ? Number(body.entityId) : null;
     const ownerId = body.ownerId !== undefined ? Number(body.ownerId) : null;
     const groupId = body.groupId !== undefined ? Number(body.groupId) : null;
-    const ownerPerm = body.ownerPerm !== undefined ? Number(body.ownerPerm) : Perm.RWX;
-    const groupPerm = body.groupPerm !== undefined ? Number(body.groupPerm) : Perm.RX;
-    const worldPerm = body.worldPerm !== undefined ? Number(body.worldPerm) : Perm.None;
+    const ownerPerm = body.ownerPerm !== undefined ? Number(body.ownerPerm) : Permission.RWX;
+    const groupPerm = body.groupPerm !== undefined ? Number(body.groupPerm) : Permission.RX;
+    const worldPerm = body.worldPerm !== undefined ? Number(body.worldPerm) : Permission.None;
 
     if (!entityType) {
         sendError(res, "entityType required");
@@ -1674,12 +1703,12 @@ const handleUploadInstrumentImage = async (req: IncomingMessage, res: ServerResp
 
     sendJson(res, {
         id: result.insertId,
-        instrument_id: instrumentId,
-        file_path: publicPath,
-        mime_type: mimeType,
+        instrumentId: instrumentId,
+        filePath: publicPath,
+        mimeType: mimeType,
         width: width ?? null,
         height: height ?? null,
-        file_size: filePart.data.length,
+        fileSize: filePart.data.length,
     });
 };
 
@@ -1996,8 +2025,8 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse): Promise
                     sendError(res, "Unknown action");
             }
         } catch (e) {
-            console.error("API error:", e);
-            sendError(res, `Internal server error: ${String(e)}`, 500);
+            console.error("API error:", convertErrorToString(e));
+            sendError(res, "Internal server error.", 500);
         }
 
         return;
@@ -2111,7 +2140,7 @@ const main = (): void => {
 
         return undefined;
     }).catch((e: unknown) => {
-        console.warn("Database init failed:", String(e));
+        console.warn("Database init failed:", convertErrorToString(e));
         console.log("Waiting for setup from frontend…");
     });
 

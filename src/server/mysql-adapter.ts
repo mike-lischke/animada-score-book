@@ -59,10 +59,11 @@ const createTablesSQL = [
     ) ENGINE=InnoDB, AUTO_INCREMENT = 30000`,
 
     `CREATE TABLE IF NOT EXISTS users (
-        id            INT UNSIGNED NOT NULL AUTO_INCREMENT,
-        username      VARCHAR(255) NOT NULL,
-        password_hash VARCHAR(512) NOT NULL,
-        display_name  VARCHAR(255) NOT NULL,
+        id                 INT UNSIGNED NOT NULL AUTO_INCREMENT,
+        username           VARCHAR(255) NOT NULL,
+        password_hash      VARCHAR(512) NOT NULL,
+        refresh_token_hash VARCHAR(256) NULL,
+        display_name       VARCHAR(255) NOT NULL,
         is_admin      TINYINT(1)   NOT NULL DEFAULT 0,
         created_at    TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
         updated_at    TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -181,6 +182,15 @@ export class MySqlAdapter implements IDatabaseAdapter {
             await connection.execute(
                 "ALTER TABLE scores MODIFY folderid INT UNSIGNED NULL",
             );
+
+            // Migration: add refresh_token_hash column for token rotation.
+            try {
+                await connection.execute(
+                    "ALTER TABLE users ADD COLUMN refresh_token_hash VARCHAR(256) NULL",
+                );
+            } catch {
+                // Column may already exist — safe to ignore.
+            }
         } finally {
             connection.release();
         }

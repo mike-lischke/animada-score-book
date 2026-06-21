@@ -42,10 +42,11 @@ const createTablesSQL = [
     )`,
 
     `CREATE TABLE IF NOT EXISTS users (
-        id            SERIAL PRIMARY KEY,
-        username      VARCHAR(255) NOT NULL UNIQUE,
-        password_hash VARCHAR(512) NOT NULL,
-        display_name  VARCHAR(255) NOT NULL,
+        id                 SERIAL PRIMARY KEY,
+        username           VARCHAR(255) NOT NULL UNIQUE,
+        password_hash      VARCHAR(512) NOT NULL,
+        refresh_token_hash VARCHAR(256),
+        display_name       VARCHAR(255) NOT NULL,
         is_admin      BOOLEAN      NOT NULL DEFAULT FALSE,
         created_at    TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
         updated_at    TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -165,6 +166,15 @@ export class PostgresAdapter implements IDatabaseAdapter {
         try {
             for (const stmt of createTablesSQL) {
                 await client.query(stmt);
+            }
+
+            // Migration: add refresh_token_hash column for token rotation.
+            try {
+                await client.query(
+                    "ALTER TABLE users ADD COLUMN IF NOT EXISTS refresh_token_hash VARCHAR(256)",
+                );
+            } catch {
+                // Safe to ignore.
             }
         } finally {
             client.release();
