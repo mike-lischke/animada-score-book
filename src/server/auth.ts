@@ -31,8 +31,8 @@
  * - Refresh token: httpOnly cookie set by the server.
  */
 
-import crypto from "node:crypto";
 import jwt from "jsonwebtoken";
+import crypto from "node:crypto";
 
 import type { IDatabaseAdapter } from "./database.js";
 
@@ -470,13 +470,15 @@ export const buildCapabilities = (user: ITokenPayload | undefined): ICapabilitie
 };
 
 /**
- * Checks whether any users exist in the database.
+ * Checks whether any real (non-anonymous) users exist in the database.
  *
  * @param adapter The database adapter.
- * @returns True if at least one user exists.
+ * @returns True if at least one non-anonymous user exists.
  */
 export const hasUsers = async (adapter: IDatabaseAdapter): Promise<boolean> => {
-    const rows = await adapter.query<{ cnt: number; }>("SELECT COUNT(*) AS cnt FROM users");
+    const rows = await adapter.query<{ cnt: number; }>(
+        "SELECT COUNT(*) AS cnt FROM users WHERE username != 'anonymous'",
+    );
 
     return (rows[0]?.cnt ?? 0) > 0;
 };

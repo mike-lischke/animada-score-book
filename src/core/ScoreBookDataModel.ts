@@ -584,7 +584,9 @@ export class ScoreBookDataModel {
             this.loadInstruments(),
             this.loadNumberSounds(),
             (async () => {
-                await this.updateScoreLibFolder(this.data.scoreLib);
+                const freshList: Array<ISbDmScoreFolder | ISbDmScore> = [];
+                await this.updateScoreLibFolder(freshList);
+                this.data.scoreLib = freshList;
             })(),
         ];
 
@@ -814,6 +816,22 @@ export class ScoreBookDataModel {
     }
 
     /**
+     * Directly sets the session from a token and user info returned by
+     * createInitialAdmin, without going through the normal login flow.
+     *
+     * @param token        The access token.
+     * @param user         The user info.
+     * @param capabilities The capabilities.
+     */
+    public setSession(token: string, user: IUserInfo, capabilities: ICapabilities): void {
+        this.accessToken = token;
+        this.currentUser = user;
+        this.currentCapabilities = capabilities;
+
+        void requisitions.execute("authChanged", undefined);
+    }
+
+    /**
      * Retrieves an instrument by its ID.
      *
      * @param id The ID of the instrument.
@@ -863,6 +881,30 @@ export class ScoreBookDataModel {
     public async logout(): Promise<void> {
         // Notify the backend to clear the refresh token cookie.
         await this.fetchApi("/api?action=logout", { method: "POST" });
+
+        this.accessToken = undefined;
+        this.currentUser = undefined;
+        this.currentCapabilities = {
+            canEditScores: false,
+            canManageUsers: false,
+            canManageInstruments: false,
+            canExportMP3: false,
+        };
+
+        void requisitions.execute("authChanged", undefined);
+    }
+
+    /**
+     * Resets the entire data model to its initial, unloaded state.
+     * Clears all loaded data (scores, instruments, sound library, arrangement,
+     * undo manager state) so a fresh login can reload everything.
+     */
+    public reset(): void {
+        this.data = {
+            soundLib: [],
+            scoreLib: [],
+            instruments: [],
+        };
 
         this.accessToken = undefined;
         this.currentUser = undefined;

@@ -315,7 +315,7 @@ export class ValueDialog extends UIComponent<{}, IValueDialogState> {
             data[key] = valueEntry;
         });
 
-        const closure = returnValue === "cancelled"
+        const closure = returnValue === "cancel"
             ? DialogResponseClosure.Cancel
             : DialogResponseClosure.Accept;
 

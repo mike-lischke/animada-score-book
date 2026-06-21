@@ -5,25 +5,21 @@
 
 /* eslint-disable no-restricted-syntax */
 
-import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
-import { readFileSync, existsSync, writeFileSync, readdirSync, statSync, mkdirSync } from "node:fs";
-import { join, resolve, extname } from "node:path";
 import { lookup as lookupMimeType } from "mime-types";
+import { randomBytes } from "node:crypto";
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import { extname, join, resolve } from "node:path";
 
+import { convertErrorToString } from "../core/utils.js";
 import {
-    DatabaseEngine, type IDatabaseAdapter, type IDatabaseConfig
-} from "./database.js";
-import { MySqlAdapter } from "./mysql-adapter.js";
-import { PostgresAdapter } from "./postgres-adapter.js";
-import {
-    hashPassword, verifyPassword, createAccessToken, createRefreshToken,
-    verifyToken, verifyAndRotateRefreshToken, checkPermission, setPermissions,
-    makePermBits, buildCapabilities, hasUsers,
-    refreshTokenExpirySeconds,
-    Permission,
+    buildCapabilities, checkPermission, createAccessToken, createRefreshToken, hashPassword, hasUsers, makePermBits,
+    Permission, refreshTokenExpirySeconds, setPermissions, verifyAndRotateRefreshToken, verifyPassword, verifyToken,
     type ITokenPayload,
 } from "./auth.js";
-import { convertErrorToString } from "../core/utils.js";
+import { DatabaseEngine, type IDatabaseAdapter, type IDatabaseConfig } from "./database.js";
+import { MySqlAdapter } from "./mysql-adapter.js";
+import { PostgresAdapter } from "./postgres-adapter.js";
 
 const configPath = resolve(process.cwd(), "backend-config.json");
 const uploadsPath = resolve(process.cwd(), "public", "uploads", "instruments");
@@ -244,30 +240,34 @@ const clearRefreshTokenCookie = (res: ServerResponse): void => {
     res.setHeader("Set-Cookie", "refreshToken=; HttpOnly; Secure; Path=/; Max-Age=0; SameSite=Lax");
 };
 
-// ---------- Admin Seeding ----------
+// ---------- Anonymous User Seed ----------
 
 /**
- * Seeds a default admin user (admin / admin) if no users exist yet.
- * This is for development bootstrapping. In production the admin setup dialog will be used.
+ * Seeds a system anonymous user. This user cannot log in — it exists only
+ * as a permission reference for world-accessible entities.
  *
  * @param targetAdapter The database adapter.
  */
-const seedAdminUser = async (targetAdapter: IDatabaseAdapter): Promise<void> => {
-    const usersExist = await hasUsers(targetAdapter);
+const seedAnonymousUser = async (targetAdapter: IDatabaseAdapter): Promise<void> => {
+    const rows = await targetAdapter.query<{ cnt: number; }>(
+        "SELECT COUNT(*) AS cnt FROM users WHERE username = 'anonymous'",
+    );
 
-    if (usersExist) {
+    if ((rows[0]?.cnt ?? 0) > 0) {
         return;
     }
 
-    const passwordHash = await hashPassword("admin");
+    // Use a random 64-byte password that no one can ever log in with.
+    const randomPassword = randomBytes(64).toString("hex");
+    const passwordHash = await hashPassword(randomPassword);
 
-    const result = await targetAdapter.insertReturningId(
+    await targetAdapter.insertReturningId(
         `INSERT INTO users (username, password_hash, display_name, is_admin)
          VALUES (?, ?, ?, ?)`,
-        ["admin", passwordHash, "Administrator", 1],
+        ["anonymous", passwordHash, "Anonymous", 0],
     );
 
-    console.log(`Seeded admin user (id=${result.insertId}, username=admin).`);
+    console.log("Seeded anonymous system user.");
 };
 
 // ---------- API Handlers ----------
@@ -355,7 +355,7 @@ const handleSetup = async (req: IncomingMessage, res: ServerResponse): Promise<v
 
                 await freshAdapter.initialize(config.database);
                 await seedIfExists(freshAdapter);
-                await seedAdminUser(freshAdapter);
+                await seedAnonymousUser(freshAdapter);
                 await adapter.shutdown();
                 adapter = freshAdapter;
                 saveConfig();
@@ -381,7 +381,7 @@ const handleSetup = async (req: IncomingMessage, res: ServerResponse): Promise<v
             await seedIfExists(newAdapter);
         }
 
-        await seedAdminUser(newAdapter);
+        await seedAnonymousUser(newAdapter);
     } catch (e) {
         console.error("Database initialisation failed:", convertErrorToString(e));
         sendError(res, "Database initialisation failed. Check server logs for details.", 500);
@@ -1004,6 +1004,89 @@ const handleWhoAmI = async (req: IncomingMessage, res: ServerResponse): Promise<
 };
 
 // ---------- User CRUD Handlers ----------
+
+/**
+ * Creates the first admin user. Only allowed when no users exist yet.
+ *
+ * @param req The incoming HTTP request.
+ * @param res The HTTP response.
+ */
+const handleCreateInitialAdmin = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
+    const usersExist = await hasUsers(adapter);
+
+    if (usersExist) {
+        sendError(res, "Admin user already exists.", 403);
+
+        return;
+    }
+
+    const body = await readJsonBody(req);
+    const username = String(body.username ?? "").trim();
+    const password = String(body.password ?? "");
+    const displayName = String(body.displayName ?? username).trim();
+
+    if (!username || !password) {
+        sendError(res, "Username and password required");
+
+        return;
+    }
+
+    if (username.length < 3) {
+        sendError(res, "Username must be at least 3 characters");
+
+        return;
+    }
+
+    if (password.length < 6) {
+        sendError(res, "Password must be at least 6 characters");
+
+        return;
+    }
+
+    const passwordHash = await hashPassword(password);
+    const result = await adapter.insertReturningId(
+        `INSERT INTO users (username, password_hash, display_name, is_admin)
+         VALUES (?, ?, ?, ?)`,
+        [username, passwordHash, displayName, 1],
+    );
+
+    // Create an "Admins" group and add the user to it.
+    const groupResult = await adapter.insertReturningId(
+        "INSERT INTO `groups` (name, description) VALUES (?, ?)",
+        ["Admins", "System administrators with full access"],
+    );
+
+    await adapter.execute(
+        "INSERT INTO user_groups (user_id, group_id) VALUES (?, ?)",
+        [result.insertId, groupResult.insertId],
+    );
+
+    const payload: ITokenPayload = {
+        userId: result.insertId,
+        username,
+        isAdmin: true,
+    };
+
+    const accessToken = createAccessToken(payload);
+    const refreshToken = createRefreshToken();
+
+    await adapter.execute(
+        "UPDATE users SET refresh_token_hash = ? WHERE id = ?",
+        [refreshToken.hash, result.insertId],
+    );
+
+    setRefreshTokenCookie(res, refreshToken.raw, refreshToken.maxAge);
+
+    const capabilities = buildCapabilities(payload);
+
+    console.log(`Initial admin user created: id=${result.insertId}, username=${username}.`);
+
+    sendJson(res, {
+        token: accessToken,
+        user: { id: result.insertId, username, displayName, isAdmin: true },
+        capabilities,
+    });
+};
 
 const handleListUsers = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
     const user = getAuthUser(req);
@@ -1867,7 +1950,7 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse): Promise
     }
 
     // API routes.
-    if (pathname === "/api" || pathname === "/api.php") {
+    if (pathname === "/api") {
         if (!action) {
             sendError(res, "Missing action");
 
@@ -1953,6 +2036,11 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse): Promise
 
                 case "whoami":
                     await handleWhoAmI(req, res);
+
+                    break;
+
+                case "createInitialAdmin":
+                    await handleCreateInitialAdmin(req, res);
 
                     break;
 
@@ -2129,8 +2217,7 @@ const main = (): void => {
 
                     return undefined;
                 }).then(() => {
-                    // Seed a default admin user if no users exist yet.
-                    return seedAdminUser(adapter);
+                    return seedAnonymousUser(adapter);
                 });
             });
         }

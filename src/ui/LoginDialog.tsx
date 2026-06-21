@@ -78,7 +78,8 @@ export class LoginDialog extends UIComponent<ILoginDialogProperties> {
                 placeholder: "Enter your password",
                 password: true,
                 displayWidth: 6,
-                onConfirm: () => {
+                onConfirm: (e: KeyboardEvent) => {
+                    e.preventDefault();
                     this.valueDialogRef.current?.triggerAccept();
                 },
             },

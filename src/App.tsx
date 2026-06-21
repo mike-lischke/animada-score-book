@@ -16,6 +16,7 @@ import { lazy, Suspense } from "preact/compat";
 import { ErrorBoundary } from "./components/ui/ErrorBoundary.js";
 import { Button } from "./components/ui/framework/Button.js";
 import { Container } from "./components/ui/framework/Container.js";
+import { Dropdown, type IDropdownItem } from "./components/ui/framework/Dropdown.js";
 import { Label } from "./components/ui/framework/Label.js";
 import { ProgressIndicator } from "./components/ui/framework/ProgressIndicator.js";
 import { ChildAlignment, Orientation } from "./components/ui/framework/ui-types.js";
@@ -61,6 +62,7 @@ import { requisitions } from "./supplement/Requisitions.js";
 import { BackendDisconnectedDialog } from "./ui/BackendDisconnectedDialog.js";
 import { BackendSetupDialog } from "./ui/BackendSetupDialog.js";
 import { LoginDialog } from "./ui/LoginDialog.js";
+import { AdminSetupDialog } from "./ui/AdminSetupDialog.js";
 import { ModeManager } from "./ui/ModeManager.js";
 import { MouseHandler } from "./ui/MouseHandler.js";
 import { SelectionManager } from "./ui/SelectionManager.js";
@@ -77,12 +79,28 @@ enum DisplayMode {
     Editing
 }
 
+enum AppPhase {
+    /** Checking backend health. */
+    Checking,
+
+    /** Backend not initialised — show setup form. */
+    Setup,
+
+    /** First-time installation — no admin user exists yet. */
+    AdminSetup,
+
+    /** Backend ready, no session — show login dialog. */
+    Login,
+
+    /** App fully loaded and running. */
+    Running,
+}
+
 interface IAppState {
-    ready: boolean;
+    phase: AppPhase;
     editingTitle: boolean;
     displayMode: DisplayMode;
     sidebarOpen: boolean;
-    loginDialogVisible: boolean;
 
     headerPinned: boolean;
 
@@ -97,6 +115,7 @@ export class App extends UIComponent<{}, IAppState> {
     private backendSetupDialogRef = createRef<BackendSetupDialog>();
     private backendDisconnectedDialogRef = createRef<BackendDisconnectedDialog>();
     private loginDialogRef = createRef<LoginDialog>();
+    private adminSetupDialogRef = createRef<AdminSetupDialog>();
     private printDialogRef = createRef<PrintDialog>();
     private valueDialogRef = createRef<ValueDialog>();
     private confirmDialogRef = createRef<ConfirmDialog>();
@@ -124,11 +143,10 @@ export class App extends UIComponent<{}, IAppState> {
         super(props);
 
         this.state = {
-            ready: false,
+            phase: AppPhase.Checking,
             editingTitle: false,
             displayMode: DisplayMode.Standard,
             sidebarOpen: false,
-            loginDialogVisible: false,
             headerPinned: false,
             printing: false,
         };
@@ -153,22 +171,22 @@ export class App extends UIComponent<{}, IAppState> {
         requisitions.register("playRangeChanged", this.handlePlayRangeChanged);
         requisitions.register("notificationStateChanged", this.handleNotificationStateChanged);
         requisitions.register("backendDisconnected", this.handleBackendDisconnected);
+        requisitions.register("authChanged", this.handleAuthChanged);
 
         void this.checkBackendThenInitialize();
     }
 
     public override shouldComponentUpdate(nextProps: {}, nextState: IAppState): boolean {
-        const { displayMode, sidebarOpen, ready, loginDialogVisible, headerPinned, printing } = this.state;
+        const { displayMode, sidebarOpen, phase, headerPinned, printing } = this.state;
 
         return displayMode !== nextState.displayMode
-            || sidebarOpen !== nextState.sidebarOpen || ready !== nextState.ready
-            || loginDialogVisible !== nextState.loginDialogVisible
+            || sidebarOpen !== nextState.sidebarOpen || phase !== nextState.phase
             || headerPinned !== nextState.headerPinned
             || printing !== nextState.printing;
     }
 
     public override componentDidUpdate(_prevProps: {}, prevState: IAppState): void {
-        if (!prevState.ready && this.state.ready) {
+        if (prevState.phase !== AppPhase.Running && this.state.phase === AppPhase.Running) {
             this.updateStatsItem();
         }
     }
@@ -178,27 +196,52 @@ export class App extends UIComponent<{}, IAppState> {
         this.systemThemeQuery.removeEventListener("change", this.handleSystemThemeChange);
         window.removeEventListener("afterprint", this.handleAfterPrint);
         escapeStack.detach();
+
         requisitions.unregister("settingsChanged", this.handleSettingsChanged);
         requisitions.unregister("playRangeChanged", this.handlePlayRangeChanged);
         requisitions.unregister("notificationStateChanged", this.handleNotificationStateChanged);
         requisitions.unregister("backendDisconnected", this.handleBackendDisconnected);
+        requisitions.unregister("authChanged", this.handleAuthChanged);
     }
 
     public render() {
-        const { ready, displayMode, sidebarOpen, headerPinned } = this.state;
+        const { phase, displayMode, sidebarOpen, headerPinned } = this.state;
 
-        if (!ready) {
-            return (
-                <>
-                    <ProgressIndicator />
+        switch (phase) {
+            case AppPhase.Checking:
+                return <ProgressIndicator />;
+
+            case AppPhase.Setup:
+                return (
                     <BackendSetupDialog
                         ref={this.backendSetupDialogRef}
                         onSetupComplete={() => {
                             void this.handleBackendSetupComplete();
                         }}
                     />
-                </>
-            );
+                );
+
+            case AppPhase.AdminSetup:
+                return (
+                    <AdminSetupDialog
+                        ref={this.adminSetupDialogRef}
+                        dataModel={this.dataModel}
+                        onSetupComplete={this.handleAdminSetupComplete}
+                    />
+                );
+
+            case AppPhase.Login:
+                return (
+                    <LoginDialog
+                        ref={this.loginDialogRef}
+                        dataModel={this.dataModel}
+                        onLoginSuccess={this.handleLoginSuccess}
+                        onContinueAnonymous={this.handleContinueAnonymous}
+                    />
+                );
+
+            case AppPhase.Running:
+                break;
         }
 
         const arrangementView = this.dataModel.arrangement!;
@@ -316,6 +359,24 @@ export class App extends UIComponent<{}, IAppState> {
                                             >
                                                 <Icon src={Codicon.FilePdf} data-tooltip="inherit" />
                                             </Button>
+                                            {this.dataModel.authenticated ? (
+                                                <Dropdown
+                                                    id="userMenu"
+                                                    icon={<Icon src={Codicon.Account} />}
+                                                    items={this.buildUserMenuItems()}
+                                                    closeOnSelect
+                                                />
+                                            ) : (
+                                                <Button
+                                                    id="signInButton"
+                                                    imageOnly
+                                                    className="du-btn-ghost"
+                                                    data-tooltip="Sign In"
+                                                    onClick={this.handleSignInClick}
+                                                >
+                                                    <Icon src={Codicon.SignIn} data-tooltip="inherit" />
+                                                </Button>
+                                            )}
                                         </Container>
                                         <Container
                                             id="appTitleContainer"
@@ -428,22 +489,45 @@ export class App extends UIComponent<{}, IAppState> {
      */
     private async checkBackendThenInitialize(): Promise<void> {
         let initialized = false;
+        let anyUsers = false;
 
         try {
             const res = await fetch("/api?action=health");
-            const data = await res.json() as { status: string; initialized: boolean; };
+            const data = await res.json() as { status: string; initialized: boolean; hasUsers: boolean; };
             initialized = data.initialized;
+            anyUsers = data.hasUsers;
         } catch {
-            // Backend not reachable — show setup dialog.
+            // Backend not reachable.
         }
 
         if (!initialized) {
-            this.backendSetupDialogRef.current?.open();
+            this.setState({ phase: AppPhase.Setup }, () => {
+                this.backendSetupDialogRef.current?.open();
+            });
 
             return;
         }
 
-        await this.initializeApp();
+        if (!anyUsers) {
+            this.setState({ phase: AppPhase.AdminSetup }, () => {
+                this.adminSetupDialogRef.current?.open();
+            });
+
+            return;
+        }
+
+        const sessionRestored = await this.dataModel.restoreSession();
+        // ...rest same
+
+        if (sessionRestored) {
+            await this.initializeApp();
+
+            return;
+        }
+
+        this.setState({ phase: AppPhase.Login }, () => {
+            this.loginDialogRef.current?.open();
+        });
     }
 
     /**
@@ -457,16 +541,17 @@ export class App extends UIComponent<{}, IAppState> {
         return Promise.resolve(true);
     };
 
-    /**
-     * Called when the user logs in successfully.
-     * Hides the login dialog. The UI updates automatically because capabilities have changed.
-     */
+    private handleAuthChanged = (): Promise<boolean> => {
+        this.forceUpdate();
+
+        return Promise.resolve(true);
+    };
+
     private handleLoginSuccess = (): void => {
-        this.setState({ loginDialogVisible: false });
-        Statusbar.setStatusBarMessage(
-            `Signed in as ${this.dataModel.user?.displayName ?? this.dataModel.user?.username}`,
-            3000,
-        );
+        void this.initializeApp().then(() => {
+            void requisitions.execute("showInfo",
+                `Signed in as ${this.dataModel.user?.displayName ?? this.dataModel.user?.username}`);
+        });
     };
 
     /**
@@ -474,20 +559,42 @@ export class App extends UIComponent<{}, IAppState> {
      * Hides the login dialog. The app continues with anonymous capabilities.
      */
     private handleContinueAnonymous = (): void => {
-        this.setState({ loginDialogVisible: false });
+        void this.initializeApp();
     };
 
     /**
      * Called when the backend setup dialog is closed.
      * If setup completed successfully, proceed with app initialisation.
      */
+    private handleAdminSetupComplete = (): void => {
+        void this.initializeApp();
+    };
+
     private handleBackendSetupComplete = async (): Promise<void> => {
         try {
             const res = await fetch("/api?action=health");
-            const data = await res.json() as { status: string; initialized: boolean; };
+            const data = await res.json() as { status: string; initialized: boolean; hasUsers: boolean; };
 
             if (data.initialized) {
-                await this.initializeApp();
+                if (!data.hasUsers) {
+                    this.setState({ phase: AppPhase.AdminSetup }, () => {
+                        this.adminSetupDialogRef.current?.open();
+                    });
+
+                    return;
+                }
+
+                const sessionRestored = await this.dataModel.restoreSession();
+
+                if (sessionRestored) {
+                    await this.initializeApp();
+
+                    return;
+                }
+
+                this.setState({ phase: AppPhase.Login }, () => {
+                    this.loginDialogRef.current?.open();
+                });
 
                 return;
             }
@@ -504,19 +611,9 @@ export class App extends UIComponent<{}, IAppState> {
 
         this.loadScorebook(hasBananaDrum ? params : undefined);
 
-        // Attempt to restore a previous session via the refresh token cookie.
-        const sessionRestored = await this.dataModel.restoreSession();
-
-        this.setState({ ready: true }, () => {
-            Statusbar.setStatusBarMessage("App loaded", 5000);
+        this.setState({ phase: AppPhase.Running }, () => {
+            Statusbar.setStatusBarMessage("App loaded", 3000);
         });
-
-        // If no session could be restored, show the login dialog.
-        if (!sessionRestored) {
-            this.setState({ loginDialogVisible: true }, () => {
-                this.loginDialogRef.current?.open();
-            });
-        }
     }
 
     private handleGithubClick = () => {
@@ -536,6 +633,50 @@ export class App extends UIComponent<{}, IAppState> {
     private handlePrintClick = () => {
         this.openPrintDialog();
     };
+
+    private handleSignInClick = () => {
+        this.loginDialogRef.current?.open();
+    };
+
+    private handleLogoutClick = async () => {
+        await this.dataModel.logout();
+        this.dataModel.reset();
+
+        // Dispose player and undo manager so they don't hold stale references.
+        if (this.arrangementPlayer) {
+            requisitions.unregister("timeParamsChanged", this.handleTimeParamsChange);
+            this.arrangementPlayer.dispose();
+            this.arrangementPlayer = undefined;
+        }
+
+        this.undoManager = undefined;
+
+        // Clear status bar item references — they belong to the old (now-unmounted) Statusbar.
+        this.statsItem = undefined;
+        this.notificationItem = undefined;
+
+        this.setState({ phase: AppPhase.Login }, () => {
+            this.loginDialogRef.current?.open();
+        });
+    };
+
+    private buildUserMenuItems(): IDropdownItem[] {
+        const { user } = this.dataModel;
+
+        return [
+            {
+                label: user?.displayName ?? user?.username ?? "",
+                icon: <Icon src={Codicon.Account} />,
+            },
+            {
+                label: "Sign Out",
+                icon: <Icon src={Codicon.SignOut} />,
+                onClick: () => {
+                    void this.handleLogoutClick();
+                },
+            },
+        ];
+    }
 
     private openPrintDialog(): void {
         if (!this.dataModel.arrangement) {

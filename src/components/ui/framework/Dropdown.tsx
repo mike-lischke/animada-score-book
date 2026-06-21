@@ -70,7 +70,7 @@ export class Dropdown extends UIComponent<IDropdownProperties> {
                     {caption ?? defaultCaption}
                 </Button>
 
-                <ul className="dropdown menu w-52 rounded-box bg-base-100 shadow-sm"
+                <ul className="du-dropdown du-menu w-52 rounded-box bg-base-100 shadow-sm"
                     popover="auto"
                     id={this.popoverId}
                     style={{ positionAnchor: this.anchorName }}
