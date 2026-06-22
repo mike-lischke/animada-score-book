@@ -1,0 +1,49 @@
+/*
+ * Copyright (c) Mike Lischke. All rights reserved.
+ * Licensed under the MIT License. See License.txt in the project root for license information.
+ */
+
+.menuItem {
+    display: flex;
+    align-items: center;
+
+    padding: 6px 12px;
+    gap: 8px;
+
+    cursor: default;
+    user-select: none;
+
+    border: 1px solid transparent;
+    border-radius: 4px;
+
+    white-space: nowrap;
+}
+
+.menuItem .icon {
+    width: 16px;
+    height: 16px;
+}
+
+.menuItem:not(.disabled):hover {
+    background-color: var(--color-base-200);
+}
+
+.menuItem.disabled {
+    opacity: 0.4;
+    cursor: default;
+}
+
+.menuItem.separator {
+    height: 1px;
+    margin: 4px 0;
+    padding: 0;
+
+    background-color: var(--color-base-300);
+    border: none;
+}
+
+.menuBar {
+    display: flex;
+    align-items: center;
+    gap: 0;
+}

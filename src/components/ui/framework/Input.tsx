@@ -72,6 +72,7 @@ export class Input extends UIComponent<IInputProperties> {
         const className = this.generateFinalClassName(["input"]);
 
         const newStyle = {
+            padding: "3px",
             ...style,
             textAlign: textAlignment,
         };

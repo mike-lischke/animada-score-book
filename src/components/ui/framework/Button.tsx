@@ -53,6 +53,7 @@ export class Button extends UIComponent<IButtonProperties> {
             id, children, caption, style, orientation, round, imageOnly, disabled, isDefault, title, role,
             name, value, popoverTarget, onClick
         } = this.props;
+
         const className = this.generateFinalClassName([
             "btn",
             "du-btn",

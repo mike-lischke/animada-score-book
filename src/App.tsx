@@ -633,9 +633,10 @@ export class App extends UIComponent<{}, IAppState> {
                         {
                             type: ValueEditorEntryType.Value,
                             id: "folderName",
-                            content: "Name of the new folder",
+                            content: "",
+                            placeholder: "Name of the new folder",
                             displayWidth: 6,
-                        }],
+                        } as IValueEditorValueEntry],
                     );
 
                     if (result?.closure !== DialogResponseClosure.Accept) {
