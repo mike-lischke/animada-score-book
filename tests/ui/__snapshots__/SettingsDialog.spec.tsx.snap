@@ -35,14 +35,14 @@ exports[`SettingsDialog (class) > matches snapshot for default rendering 1`] = `
           class="dropdownHost"
         >
           <button
-            class="btn du-btn"
+            class="btn du-btn du-btn-ghost"
             popovertarget="popover-2"
             style="anchor-name: --anchor-1;"
           >
             Light+
           </button>
           <ul
-            class="dropdown menu w-52 rounded-box bg-base-100 shadow-sm"
+            class="du-dropdown du-menu w-52 rounded-box bg-base-100 shadow-sm"
             id="popover-2"
             popover="auto"
             style="position-anchor: --anchor-1;"
@@ -182,17 +182,17 @@ exports[`SettingsDialog (class) > matches snapshot for default rendering 1`] = `
             100%
           </span>
           <button
-            class="btn du-btn zoomButton"
+            class="btn du-btn zoomButton du-btn-ghost"
           >
             -
           </button>
           <button
-            class="btn du-btn zoomButton"
+            class="btn du-btn zoomButton du-btn-ghost"
           >
             +
           </button>
           <button
-            class="btn du-btn resetButton"
+            class="btn du-btn resetButton du-btn-ghost"
           >
             Reset
           </button>

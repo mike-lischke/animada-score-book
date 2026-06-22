@@ -3,13 +3,16 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import { createRef } from "preact";
+import { createRef, type ComponentChild } from "preact";
 
-import {
-    ValueDialog, ValueEditorEntryType, type IValueEditorEntry, type IValueEditorValueEntry,
-} from "../components/ui/composites/ValueDialog.js";
+import { Button } from "../components/ui/framework/Button.js";
 import { Codicon } from "../components/ui/framework/Codicon.js";
-import { DialogResponseClosure } from "../components/ui/framework/Dialog.js";
+import { Container } from "../components/ui/framework/Container.js";
+import { Dialog } from "../components/ui/framework/Dialog.js";
+import { Icon } from "../components/ui/framework/Icon.js";
+import { Input } from "../components/ui/framework/Input.js";
+import { Label } from "../components/ui/framework/Label.js";
+import { ChildAlignment, Orientation } from "../components/ui/framework/ui-types.js";
 import { UIComponent, type ICommonUIProperties } from "../components/ui/framework/UIComponent.js";
 import { type ScoreBookDataModel } from "../core/ScoreBookDataModel.js";
 
@@ -23,103 +26,155 @@ interface ILoginDialogProperties extends ICommonUIProperties {
     onContinueAnonymous?: () => void;
 }
 
+interface ILoginDialogState {
+    username: string;
+    password: string;
+    errorMessage: string;
+}
+
 /**
- * A modal dialog for user authentication, built on {@link ValueDialog}.
+ * A modal dialog for user authentication, styled like {@link SettingsDialog}.
  */
-export class LoginDialog extends UIComponent<ILoginDialogProperties> {
-    private valueDialogRef = createRef<ValueDialog>();
+export class LoginDialog extends UIComponent<ILoginDialogProperties, ILoginDialogState> {
+    private dialogRef = createRef<Dialog>();
+    private passwordRef = createRef<HTMLElement>();
+    private loginSucceeded = false;
 
     public constructor(props: ILoginDialogProperties) {
         super(props);
-        this.state = {};
+
+        this.state = {
+            username: "",
+            password: "",
+            errorMessage: "",
+        };
     }
 
     /**
-     * Opens the dialog and starts the login flow.
+     * Opens the dialog and resets all fields.
      */
     public open(): void {
-        void this.showLoginForm("");
+        this.loginSucceeded = false;
+        this.setState({ username: "", password: "", errorMessage: "" }, () => {
+            this.dialogRef.current?.open();
+        });
     }
 
-    public render() {
+    public render(): ComponentChild {
+        const { username, password, errorMessage } = this.state;
+
         return (
-            <ValueDialog ref={this.valueDialogRef} />
+            <Dialog
+                ref={this.dialogRef}
+                id="loginDialog"
+                onClose={this.handleClose}
+                actions={[
+                    <Button id="login-button-anonymous" value="anonymous" caption="Continue Anonymously" />,
+                    <Button id="login-button-login" type="button" caption="Log In" onClick={this.handleLoginClick} />,
+                ]}
+            >
+                <Container
+                    className="font-bold text-lg"
+                    orientation={Orientation.LeftToRight}
+                    crossAlignment={ChildAlignment.Center}
+                >
+                    <Icon src={Codicon.Account} style={{ fontSize: "24px", marginRight: "8px" }} />
+                    Sign In
+                </Container>
+
+                <Container className="settings-card" orientation={Orientation.TopDown}>
+                    <Container
+                        className="settings-row"
+                        orientation={Orientation.LeftToRight}
+                        mainAlignment={ChildAlignment.SpaceBetween}
+                        crossAlignment={ChildAlignment.Center}
+                    >
+                        <Label className="settings-row-label" caption="Username" style={{ minWidth: "80px" }} />
+                        <Input
+                            id="login-username"
+                            value={username}
+                            placeholder="Enter your username"
+                            autoFocus
+                            autoComplete
+                            style={{ padding: "3px" }}
+                            onChange={this.handleUsernameChange}
+                            onConfirm={this.handleUsernameConfirm}
+                        />
+                    </Container>
+
+                    <Container
+                        className="settings-row"
+                        orientation={Orientation.LeftToRight}
+                        mainAlignment={ChildAlignment.SpaceBetween}
+                        crossAlignment={ChildAlignment.Center}
+                    >
+                        <Label className="settings-row-label" caption="Password" style={{ minWidth: "80px" }} />
+                        <Input
+                            id="login-password"
+                            innerRef={this.passwordRef}
+                            value={password}
+                            placeholder="Enter your password"
+                            password
+                            autoComplete
+                            style={{ padding: "3px" }}
+                            onChange={this.handlePasswordChange}
+                            onConfirm={this.handlePasswordConfirm}
+                        />
+                    </Container>
+
+                    {errorMessage && (
+                        <Container
+                            className="settings-row"
+                            orientation={Orientation.LeftToRight}
+                            crossAlignment={ChildAlignment.Center}
+                        >
+                            <Label
+                                caption={errorMessage}
+                                style={{ color: "var(--color-error)", fontSize: "13px" }}
+                            />
+                        </Container>
+                    )}
+                </Container>
+            </Dialog>
         );
     }
 
-    private buildEntries(username: string, password: string): IValueEditorEntry[] {
-        return [
-            {
-                type: ValueEditorEntryType.Title,
-                id: "usernameTitle",
-                content: "Username",
-                displayWidth: 2,
-            },
-            {
-                type: ValueEditorEntryType.Value,
-                id: "username",
-                content: username,
-                placeholder: "Enter your username",
-                displayWidth: 6,
-                onConfirm: () => {
-                    document.getElementById("password")?.focus();
-                },
-            } as IValueEditorValueEntry,
-            {
-                type: ValueEditorEntryType.Title,
-                id: "passwordTitle",
-                content: "Password",
-                displayWidth: 2,
-            },
-            {
-                type: ValueEditorEntryType.Value,
-                id: "password",
-                content: password,
-                placeholder: "Enter your password",
-                password: true,
-                displayWidth: 6,
-                onConfirm: (e: KeyboardEvent) => {
-                    e.preventDefault();
-                    this.valueDialogRef.current?.triggerAccept();
-                },
-            },
-        ];
-    }
+    private handleUsernameChange = (_e: Event, props: { value?: string; }): void => {
+        this.setState({ username: props.value ?? "", errorMessage: "" });
+    };
 
-    private async showLoginForm(previousError: string): Promise<void> {
-        const { dataModel, onLoginSuccess, onContinueAnonymous } = this.props;
+    private handleUsernameConfirm = (_e: KeyboardEvent, _props: { value?: string; }): void => {
+        this.passwordRef.current?.focus();
+    };
 
-        const result = await this.valueDialogRef.current?.show(
-            "loginDialog",
-            "Sign In",
-            Codicon.Account,
-            this.buildEntries("", ""),
-            {
-                acceptLabel: "Log In",
-                declineLabel: "Continue Anonymously",
-                errorMessage: previousError,
-                isDefault: true,
-            },
-        );
+    private handlePasswordChange = (_e: Event, props: { value?: string; }): void => {
+        this.setState({ password: props.value ?? "", errorMessage: "" });
+    };
 
-        if (!result || result.closure === DialogResponseClosure.Cancel) {
-            onContinueAnonymous?.();
+    private handlePasswordConfirm = (_e: KeyboardEvent, _props: { value?: string; }): void => {
+        void this.attemptLogin();
+    };
 
+    private handleClose = (_returnValue: string): void => {
+        if (this.loginSucceeded) {
             return;
         }
 
-        if (result.closure === DialogResponseClosure.Decline) {
-            onContinueAnonymous?.();
+        // "anonymous", "" (Escape key), or "cancel" — continue anonymously.
+        const { onContinueAnonymous } = this.props;
+        onContinueAnonymous?.();
+    };
 
-            return;
-        }
+    private handleLoginClick = (): void => {
+        void this.attemptLogin();
+    };
 
-        // Accept — extract values and attempt login.
-        const username = (result.data.username as IValueEditorValueEntry).content as string;
-        const password = (result.data.password as IValueEditorValueEntry).content as string;
+    private async attemptLogin(): Promise<void> {
+        const { dataModel, onLoginSuccess } = this.props;
+        const { username, password } = this.state;
 
         if (!username.trim() || !password) {
-            void this.showLoginForm("Username and password are required.");
+            this.setState({ errorMessage: "Username and password are required." });
 
             return;
         }
@@ -127,12 +182,13 @@ export class LoginDialog extends UIComponent<ILoginDialogProperties> {
         const success = await dataModel.login(username.trim(), password);
 
         if (success) {
+            this.loginSucceeded = true;
+            this.dialogRef.current?.close(false);
             onLoginSuccess?.();
 
             return;
         }
 
-        // Login failed — re-show with error.
-        void this.showLoginForm("Invalid username or password.");
+        this.setState({ errorMessage: "Invalid username or password." });
     }
 }

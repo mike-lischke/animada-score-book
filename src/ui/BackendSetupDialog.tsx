@@ -110,14 +110,9 @@ export class BackendSetupDialog extends UIComponent<IBackendSetupDialogPropertie
         };
     }
 
-    /**
-     * Opens the dialog and starts the health check.
-     */
+    /** Opens the dialog and starts the health check. */
     public open(): void {
-        this.setState({
-            phase: BackendSetupState.Checking,
-            errorMessage: "",
-        }, () => {
+        this.setState({ phase: BackendSetupState.Checking, errorMessage: "", }, () => {
             this.dialogRef.current?.open();
             void this.checkBackendStatus();
         });
@@ -140,106 +135,120 @@ export class BackendSetupDialog extends UIComponent<IBackendSetupDialogPropertie
         let content: ComponentChild;
 
         switch (phase) {
-            case BackendSetupState.Checking:
+            case BackendSetupState.Checking: {
                 content = (
-                    <Container orientation={Orientation.TopDown} crossAlignment={ChildAlignment.Center}>
-                        <ProgressIndicator />
-                        <Label caption="Checking backend connection…" style={{ marginTop: "12px" }} />
-                    </Container>
+                    <>
+                        <Label caption="Checking backend connection …" />
+                        <ProgressIndicator linear />
+                    </>
                 );
 
                 break;
+            }
 
-            case BackendSetupState.Ready:
+            case BackendSetupState.Ready: {
                 content = (
-                    <Container orientation={Orientation.TopDown} crossAlignment={ChildAlignment.Center}>
-                        <Icon src={Codicon.Check} style={{ fontSize: "48px", color: "var(--color-success)" }} />
-                        <Label caption="Backend is already configured and running." style={{ marginTop: "12px" }} />
-                    </Container>
+                    <>
+                        <Label caption="Backend is already configured and running." />
+                        <Icon
+                            src={Codicon.Check}
+                            style={{ fontSize: "24px", fontWeight: 800, color: "var(--color-success)" }}
+                        />
+                    </>
                 );
 
                 break;
+            }
 
-            case BackendSetupState.Unreachable:
+            case BackendSetupState.Unreachable: {
                 content = (
-                    <Container orientation={Orientation.TopDown}>
-                        <Container orientation={Orientation.LeftToRight} crossAlignment={ChildAlignment.Center}
-                            style={{ marginBottom: "12px" }}>
-                            <Icon src={Codicon.Warning}
-                                style={{ fontSize: "24px", color: "var(--color-warning)", marginRight: "8px" }} />
-                            <Label caption="Backend is not reachable. Start the backend server first:" />
-                        </Container>
-                        <Label caption="npm run backend"
+                    <Container orientation={Orientation.LeftToRight} crossAlignment={ChildAlignment.Center}>
+                        <Icon
+                            src={Codicon.Warning}
                             style={{
-                                fontFamily: "monospace", background: "var(--color-base-200)",
-                                padding: "4px 8px", borderRadius: "4px",
-                            }} />
-                        <Label caption="Then retry the connection check."
-                            style={{ marginTop: "8px" }} />
+                                fontSize: "24px",
+                                fontWeight: 800,
+                                color: "var(--color-warning)",
+                                marginRight: "8px",
+                            }}
+                        />
+                        <Label caption="Backend is not reachable. Is it running?" />
                     </Container>
                 );
 
                 break;
+            }
 
             case BackendSetupState.NeedsSetup:
-            case BackendSetupState.Error:
+            case BackendSetupState.Error: {
                 content = this.renderSetupForm(engine, host, port, database, user, password, canEdit, errorMessage);
 
                 break;
+            }
 
-            case BackendSetupState.Testing:
+            case BackendSetupState.Testing: {
                 content = (
-                    <Container orientation={Orientation.TopDown} crossAlignment={ChildAlignment.Center}>
-                        <ProgressIndicator />
-                        <Label caption="Testing database connection…" style={{ marginTop: "12px" }} />
-                    </Container>
+                    <>
+                        <Label caption="Testing database connection…" />
+                        <ProgressIndicator linear />
+                    </>
                 );
 
                 break;
+            }
 
             case BackendSetupState.Initialising:
                 content = (
-                    <Container orientation={Orientation.TopDown} crossAlignment={ChildAlignment.Center}>
-                        <ProgressIndicator />
-                        <Label caption="Creating database tables…" style={{ marginTop: "12px" }} />
-                    </Container>
+                    <>
+                        <Label caption="Creating database tables…" />
+                        <ProgressIndicator linear />
+                    </>
                 );
 
                 break;
 
-            case BackendSetupState.Done:
+            case BackendSetupState.Done: {
                 content = (
-                    <Container orientation={Orientation.TopDown} crossAlignment={ChildAlignment.Center}>
-                        <Icon src={Codicon.Check} style={{ fontSize: "48px", color: "var(--color-success)" }} />
-                        <Label caption="Database setup complete! You can now use the app."
-                            style={{ marginTop: "12px" }} />
-                    </Container>
+                    <>
+                        <Label caption="Database setup complete! You can now use the app." />
+                        <Icon
+                            src={Codicon.Check}
+                            style={{ fontSize: "24px", fontWeight: 800, color: "var(--color-success)" }}
+                        />
+                    </>
                 );
 
                 break;
+            }
 
-            case BackendSetupState.ConfirmOverwrite:
+            case BackendSetupState.ConfirmOverwrite: {
                 content = (
-                    <Container orientation={Orientation.TopDown} crossAlignment={ChildAlignment.Center}
-                        style={{ maxWidth: "360px", textAlign: "center" }}>
-                        <Icon src={Codicon.Warning}
-                            style={{ fontSize: "48px", color: "var(--color-warning)", marginBottom: "12px" }} />
-                        <Label caption="Database already contains data."
-                            heading wrap />
-                        <Label caption="Initializing will delete all existing scores and folders."
-                            style={{ marginTop: "4px" }} wrap />
-                        <Label caption="Do you want to continue?"
-                            style={{ marginTop: "8px" }} wrap />
+                    <Container
+                        orientation={Orientation.TopDown}
+                        crossAlignment={ChildAlignment.Center}
+                        style={{ flex: "1 1 auto" }}
+                    >
+                        <Icon
+                            src={Codicon.Warning}
+                            style={{ fontSize: "48px", color: "var(--color-warning)", marginBottom: "12px" }}
+                        />
+                        <Label caption="Database already contains data." heading wrap />
+                        <Label
+                            caption="Initializing will delete all existing scores and folders."
+                            style={{ marginTop: "4px" }} wrap
+                        />
+                        <Label
+                            caption="Do you want to continue?"
+                            style={{ marginTop: "16px" }}
+                            wrap
+                        />
                     </Container>
                 );
 
                 break;
+            }
 
-                break;
-
-                break;
-
-                break;
+            default:
         }
 
         let actions: ComponentChild[];
@@ -307,6 +316,7 @@ export class BackendSetupDialog extends UIComponent<IBackendSetupDialogPropertie
                 actions={actions}
             >
                 <Container
+                    id="backend-setup-header"
                     className="font-bold text-lg"
                     orientation={Orientation.LeftToRight}
                     crossAlignment={ChildAlignment.Center}
@@ -315,7 +325,14 @@ export class BackendSetupDialog extends UIComponent<IBackendSetupDialogPropertie
                     Database Setup
                 </Container>
 
-                {content}
+                <Container
+                    mainAlignment={ChildAlignment.Stretch}
+                    crossAlignment={ChildAlignment.Center}
+                    style={{ gap: "12px" }}
+                >
+                    {content}
+                </Container>
+
             </Dialog>
         );
     }
@@ -337,10 +354,8 @@ export class BackendSetupDialog extends UIComponent<IBackendSetupDialogPropertie
         }
     };
 
-    private renderSetupForm(
-        engine: DatabaseEngine, host: string, port: number, database: string, user: string, password: string,
-        canEdit: boolean, errorMessage: string,
-    ): ComponentChild {
+    private renderSetupForm(engine: DatabaseEngine, host: string, port: number, database: string, user: string,
+        password: string, canEdit: boolean, errorMessage: string): ComponentChild {
         const { lastTestSucceeded } = this.state;
 
         return (

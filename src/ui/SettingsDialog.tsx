@@ -146,7 +146,7 @@ export class SettingsDialog extends UIComponent<{}, ISettingsDialogState> {
                         >
                             <Label caption={`${currentViewerZoom}%`} style={{ marginRight: "8px" }} />
                             <Button
-                                className="zoomButton"
+                                className="zoomButton du-btn-ghost"
                                 caption="-"
                                 onClick={() => {
                                     const newZoom = clampValue(currentViewerZoom - 10, 50, 150);
@@ -162,7 +162,7 @@ export class SettingsDialog extends UIComponent<{}, ISettingsDialogState> {
                             />
 
                             <Button
-                                className="zoomButton"
+                                className="zoomButton du-btn-ghost"
                                 caption="+"
                                 onClick={() => {
                                     const newZoom = clampValue(currentViewerZoom + 10, 50, 150);
@@ -179,7 +179,7 @@ export class SettingsDialog extends UIComponent<{}, ISettingsDialogState> {
 
                             <Button
                                 caption="Reset"
-                                className="resetButton"
+                                className="resetButton du-btn-ghost"
                                 onClick={() => {
                                     currentSettings.viewSettings ??= {};
                                     currentSettings.viewSettings.arrangementViewSettings ??= {};

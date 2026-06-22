@@ -10,7 +10,7 @@ import "./tailwind.css";
 
 import timbauImage from "./assets/images/instrument-icons/timbau.svg";
 
-import { createRef } from "preact";
+import { createRef, type ComponentChild } from "preact";
 import { lazy, Suspense } from "preact/compat";
 
 import { ErrorBoundary } from "./components/ui/ErrorBoundary.js";
@@ -136,6 +136,7 @@ export class App extends UIComponent<{}, IAppState> {
     private currentPlayRange?: { startBar: number; endBar: number; };
     private selectedThemePreference = "Light+";
     private systemThemeQuery = window.matchMedia("(prefers-color-scheme: dark)");
+    private signInFromRunning = false;
     private statsItem?: IStatusBarItem;
     private notificationItem?: IStatusBarItem;
 
@@ -206,13 +207,15 @@ export class App extends UIComponent<{}, IAppState> {
 
     public render() {
         const { phase, displayMode, sidebarOpen, headerPinned } = this.state;
+        const isRunning = phase === AppPhase.Running;
 
+        let splashContent: ComponentChild;
         switch (phase) {
             case AppPhase.Checking:
-                return <ProgressIndicator />;
+                break;
 
             case AppPhase.Setup:
-                return (
+                splashContent = (
                     <BackendSetupDialog
                         ref={this.backendSetupDialogRef}
                         onSetupComplete={() => {
@@ -221,8 +224,10 @@ export class App extends UIComponent<{}, IAppState> {
                     />
                 );
 
+                break;
+
             case AppPhase.AdminSetup:
-                return (
+                splashContent = (
                     <AdminSetupDialog
                         ref={this.adminSetupDialogRef}
                         dataModel={this.dataModel}
@@ -230,8 +235,10 @@ export class App extends UIComponent<{}, IAppState> {
                     />
                 );
 
+                break;
+
             case AppPhase.Login:
-                return (
+                splashContent = (
                     <LoginDialog
                         ref={this.loginDialogRef}
                         dataModel={this.dataModel}
@@ -240,246 +247,294 @@ export class App extends UIComponent<{}, IAppState> {
                     />
                 );
 
+                break;
+
             case AppPhase.Running:
                 break;
         }
 
-        const arrangementView = this.dataModel.arrangement!;
-
         let titleBlock;
-        if (this.arrangementPlayer) {
-            titleBlock = <Container
-                orientation={Orientation.LeftToRight}
-                mainAlignment={ChildAlignment.End}
-                crossAlignment={ChildAlignment.Center}
-                style={{ width: "100%" }}
-            >
-                <ArrangementTitle
-                    id="mainArrangementTitle"
-                    arrangement={arrangementView}
-                    data-tooltip="expand"
-                    undoManager={this.undoManager!}
-                    editMode={displayMode === DisplayMode.Editing}
-                    onEditEnd={this.onEditEnd}
-                />
-                <Button
-                    imageOnly
-                    data-role="restore-top"
-                    style={{ margin: "2px 16px 0 0", width: "24px", height: "24px" }}
-                    className="normal-case btn-ghost"
-                    onClick={() => {
-                        this.setState({ headerPinned: !headerPinned });
-                    }}
-                >
-                    <Icon
-                        src={headerPinned ? Codicon.Pinned : Codicon.Pin}
-                        data-tooltip={headerPinned ? "Pinned Header" : "Automatic Header"}
-                    />
-                </Button>
+        let isAdmin = false;
+        if (isRunning) {
+            const arrangementView = this.dataModel.arrangement!;
+            isAdmin = this.dataModel.user?.isAdmin ?? false;
 
-            </Container>;
+            if (this.arrangementPlayer) {
+                titleBlock = <Container
+                    orientation={Orientation.LeftToRight}
+                    mainAlignment={ChildAlignment.End}
+                    crossAlignment={ChildAlignment.Center}
+                    style={{ width: "100%" }}
+                >
+                    <ArrangementTitle
+                        id="mainArrangementTitle"
+                        arrangement={arrangementView}
+                        data-tooltip="expand"
+                        undoManager={this.undoManager!}
+                        editMode={displayMode === DisplayMode.Editing}
+                        onEditEnd={this.onEditEnd}
+                    />
+                    <Button
+                        imageOnly
+                        data-role="restore-top"
+                        style={{ margin: "2px 16px 0 0", width: "24px", height: "24px" }}
+                        className="normal-case btn-ghost"
+                        onClick={() => {
+                            this.setState({ headerPinned: !headerPinned });
+                        }}
+                    >
+                        <Icon
+                            src={headerPinned ? Codicon.Pinned : Codicon.Pin}
+                            data-tooltip={headerPinned ? "Pinned Header" : "Automatic Header"}
+                        />
+                    </Button>
+
+                </Container>;
+            }
         }
 
         return (
-            <ErrorBoundary>
-                <Container
-                    id="appRoot"
-                    orientation={Orientation.TopDown}
-                    crossAlignment={ChildAlignment.Stretch}
-                >
-                    <DrawerSidebar
-                        id="mainDrawer"
-                        ref={this.scoreLibraryRef}
-                        open={sidebarOpen}
-                        sidebarContent={
-                            <Suspense fallback={<ProgressIndicator />}>
-                                <ScoreLibrary
-                                    onAction={this.handleScoreLibraryAction}
-                                    dataModel={this.dataModel}
-                                />
-                            </Suspense>
-                        }
-                        onOpenChange={(open) => {
-                            this.setState({ sidebarOpen: open }, () => {
-                                if (!open) {
-                                    escapeStack.remove(this.onSidebarEscape);
+            <>
+                {isRunning && (
+                    <ErrorBoundary>
+                        <Container
+                            id="appRoot"
+                            orientation={Orientation.TopDown}
+                            crossAlignment={ChildAlignment.Stretch}
+                        >
+                            <DrawerSidebar
+                                id="mainDrawer"
+                                ref={this.scoreLibraryRef}
+                                open={sidebarOpen}
+                                sidebarContent={
+                                    <Suspense fallback={<ProgressIndicator />}>
+                                        <ScoreLibrary
+                                            onAction={this.handleScoreLibraryAction}
+                                            dataModel={this.dataModel}
+                                        />
+                                    </Suspense>
                                 }
-                            });
-                        }}
-                    >
-                        <CollapsingTopContainer
-                            top={
-                                <Container
-                                    orientation={Orientation.LeftToRight}
-                                    crossAlignment={ChildAlignment.Center}
-                                >
-                                    <Container
-                                        id="headerContent"
-                                        className="rounded-3xl shadow-md border border-base-200/70 gap-4"
-                                    >
+                                onOpenChange={(open) => {
+                                    this.setState({ sidebarOpen: open }, () => {
+                                        if (!open) {
+                                            escapeStack.remove(this.onSidebarEscape);
+                                        }
+                                    });
+                                }}
+                            >
+                                <CollapsingTopContainer
+                                    top={
                                         <Container
-                                            id="toolbarButtons"
-                                            orientation={Orientation.TopDown}
-                                            mainAlignment={ChildAlignment.Center}
-                                            className="bg-base-100/80 p-2"
+                                            orientation={Orientation.LeftToRight}
+                                            crossAlignment={ChildAlignment.Center}
                                         >
-                                            <Button
-                                                imageOnly
-                                                className="du-btn-ghost"
-                                                data-tooltip="Display Options"
-                                                onClick={this.handleDisplayOptionsClick}
+                                            <Container
+                                                id="headerContent"
+                                                className="rounded-3xl shadow-md border border-base-200/70 gap-4"
                                             >
-                                                <Icon src={Codicon.Gear} data-tooltip="inherit" />
-                                            </Button>
-                                            <Button
-                                                id="scoreLibraryButton"
-                                                imageOnly
-                                                className="du-btn-ghost"
-                                                data-tooltip="Score Library"
-                                                onClick={this.handleScoreLibraryClick}
-                                            >
-                                                <Icon src={Codicon.Library} data-tooltip="inherit" />
-                                            </Button>
-                                            <Button
-                                                id="instrumentEditor"
-                                                imageOnly
-                                                className="du-btn-ghost"
-                                                data-tooltip="Instrument Editor"
-                                                disabled
-                                                onClick={this.handleInstrumentEditorClick}
-                                            >
-                                                <Icon src={timbauImage} width={24} height={24} data-tooltip="inherit" />
-                                            </Button>
-                                            <Button
-                                                id="printButton"
-                                                imageOnly
-                                                className="du-btn-ghost"
-                                                data-tooltip="Print / Export to PDF"
-                                                onClick={this.handlePrintClick}
-                                            >
-                                                <Icon src={Codicon.FilePdf} data-tooltip="inherit" />
-                                            </Button>
-                                            {this.dataModel.authenticated ? (
-                                                <Dropdown
-                                                    id="userMenu"
-                                                    icon={<Icon src={Codicon.Account} />}
-                                                    items={this.buildUserMenuItems()}
-                                                    closeOnSelect
-                                                />
-                                            ) : (
-                                                <Button
-                                                    id="signInButton"
-                                                    imageOnly
-                                                    className="du-btn-ghost"
-                                                    data-tooltip="Sign In"
-                                                    onClick={this.handleSignInClick}
+                                                <Container
+                                                    id="toolbarButtons"
+                                                    orientation={Orientation.TopDown}
+                                                    mainAlignment={ChildAlignment.Center}
+                                                    className="bg-base-100/80 p-2"
                                                 >
-                                                    <Icon src={Codicon.SignIn} data-tooltip="inherit" />
-                                                </Button>
-                                            )}
-                                        </Container>
-                                        <Container
-                                            id="appTitleContainer"
-                                            orientation={Orientation.TopDown}
-                                            crossAlignment={ChildAlignment.Stretch}
-                                        >
-                                            <Container>
-                                                <img id="titleLogo" src="/logo.svg" />
-                                                <Label className="appTitle top faded">ANIMADA</Label>
-                                            </Container>
-                                            <Container>
-                                                <Label className="appTitle bottom faded">Score</Label>
-                                                <Label className="appTitle bottom accent">Book</Label>
-                                            </Container>
+                                                    <Button
+                                                        imageOnly
+                                                        className="du-btn-ghost"
+                                                        data-tooltip="Display Options"
+                                                        onClick={this.handleDisplayOptionsClick}
+                                                    >
+                                                        <Icon
+                                                            src={Codicon.Gear}
+                                                            data-tooltip="inherit"
+                                                        />
+                                                    </Button>
+                                                    <Button
+                                                        id="scoreLibraryButton"
+                                                        imageOnly
+                                                        className="du-btn-ghost"
+                                                        data-tooltip="Score Library"
+                                                        onClick={this.handleScoreLibraryClick}
+                                                    >
+                                                        <Icon
+                                                            src={Codicon.Library}
+                                                            data-tooltip="inherit"
+                                                        />
+                                                    </Button>
+                                                    <Button
+                                                        id="instrumentEditor"
+                                                        imageOnly
+                                                        className="du-btn-ghost"
+                                                        data-tooltip="Instrument Editor"
+                                                        disabled
+                                                        onClick={this.handleInstrumentEditorClick}
+                                                    >
+                                                        <Icon
+                                                            src={timbauImage}
+                                                            width={24}
+                                                            height={24}
+                                                            data-tooltip="inherit"
+                                                        />
+                                                    </Button>
+                                                    <Button
+                                                        id="printButton"
+                                                        imageOnly
+                                                        className="du-btn-ghost"
+                                                        data-tooltip="Print / Export to PDF"
+                                                        onClick={this.handlePrintClick}
+                                                    >
+                                                        <Icon
+                                                            src={Codicon.FilePdf}
+                                                            data-tooltip="inherit"
+                                                        />
+                                                    </Button>
+                                                    {this.dataModel.authenticated ? (
+                                                        <Dropdown
+                                                            id="userMenu"
+                                                            icon={<Icon src={Codicon.Account} />}
+                                                            items={this.buildUserMenuItems()}
+                                                            closeOnSelect
+                                                            style={{ backgroundColor: isAdmin ? "tomato" : undefined }}
+                                                        />
+                                                    ) : (
+                                                        <Button
+                                                            id="signInButton"
+                                                            imageOnly
+                                                            className="du-btn-ghost"
+                                                            data-tooltip="Sign In"
+                                                            onClick={this.handleSignInClick}
+                                                        >
+                                                            <Icon
+                                                                src={Codicon.SignIn}
+                                                                data-tooltip="inherit"
+                                                            />
+                                                        </Button>
+                                                    )}
+                                                </Container>
+                                                <Container
+                                                    id="appTitleContainer"
+                                                    orientation={Orientation.TopDown}
+                                                    crossAlignment={ChildAlignment.Stretch}
+                                                >
+                                                    <Container>
+                                                        <img id="titleLogo" src="/logo.svg" />
+                                                        <Label className="appTitle top faded">ANIMADA</Label>
+                                                    </Container>
+                                                    <Container>
+                                                        <Label className="appTitle bottom faded">Score</Label>
+                                                        <Label className="appTitle bottom accent">Book</Label>
+                                                    </Container>
 
+                                                </Container>
+                                                <ArrangementPlayControls
+                                                    arrangementPlayer={this.arrangementPlayer!}
+                                                    dataModel={this.dataModel}
+                                                    services={this.services}
+                                                    undoManager={this.undoManager!}
+                                                />
+                                                <Container
+                                                    id="arrangementPalette"
+                                                    orientation={Orientation.TopDown}
+                                                    mainAlignment={ChildAlignment.Start}
+                                                    crossAlignment={ChildAlignment.Stretch}
+                                                >
+                                                    {titleBlock}
+                                                    {displayMode === DisplayMode.Editing && <ArrangementEditControls
+                                                        dataModel={this.dataModel}
+                                                        services={this.services}
+                                                        undoManager={this.undoManager!}
+                                                    />}
+                                                </Container>
+                                            </Container>
                                         </Container>
-                                        <ArrangementPlayControls
-                                            arrangementPlayer={this.arrangementPlayer!}
+                                    }
+                                    collapsedTop={
+                                        <Container
+                                            className="collapsed-header"
+                                            orientation={Orientation.LeftToRight}
+                                            crossAlignment={ChildAlignment.Center}
+                                        >
+                                            <PlayStopButton
+                                                id="standalonePlayButton"
+                                                arrangementPlayer={this.arrangementPlayer!}
+                                            />
+                                            {titleBlock}
+                                        </Container>
+                                    }
+                                    bottom={
+                                        this.arrangementPlayer && <ArrangementViewer
+                                            arrangementPlayer={this.arrangementPlayer}
                                             dataModel={this.dataModel}
                                             services={this.services}
                                             undoManager={this.undoManager!}
+                                            touchEditingEnabled={displayMode === DisplayMode.Editing}
                                         />
-                                        <Container
-                                            id="arrangementPalette"
-                                            orientation={Orientation.TopDown}
-                                            mainAlignment={ChildAlignment.Start}
-                                            crossAlignment={ChildAlignment.Stretch}
-                                        >
-                                            {titleBlock}
-                                            {displayMode === DisplayMode.Editing && <ArrangementEditControls
-                                                dataModel={this.dataModel}
-                                                services={this.services}
-                                                undoManager={this.undoManager!}
-                                            />}
-                                        </Container>
-                                    </Container>
-                                </Container>
-                            }
-                            collapsedTop={
-                                <Container
-                                    className="collapsed-header"
-                                    orientation={Orientation.LeftToRight}
-                                    crossAlignment={ChildAlignment.Center}
-                                >
-                                    <PlayStopButton
-                                        id="standalonePlayButton"
-                                        arrangementPlayer={this.arrangementPlayer!}
-                                    />
-                                    {titleBlock}
-                                </Container>
-                            }
-                            bottom={
-                                this.arrangementPlayer && <ArrangementViewer
-                                    arrangementPlayer={this.arrangementPlayer}
-                                    dataModel={this.dataModel}
-                                    services={this.services}
-                                    undoManager={this.undoManager!}
-                                    touchEditingEnabled={displayMode === DisplayMode.Editing}
+                                    }
+                                    forceExpanded={headerPinned}
                                 />
-                            }
-                            forceExpanded={headerPinned}
+                            </DrawerSidebar>
+                            {renderStatusBar()}
+                            {renderNotificationCenter()}
+                        </Container>
+                        <TooltipProvider />
+                        <ValueDialog ref={this.valueDialogRef} />
+                        <ConfirmDialog ref={this.confirmDialogRef} />
+                        <SettingsDialog ref={this.settingsDialogRef} />
+                        <BackendDisconnectedDialog
+                            ref={this.backendDisconnectedDialogRef}
+                            onReconnected={() => {
+                                // The app continues normally — nothing special needed.
+                            }}
                         />
-                    </DrawerSidebar>
-                    {renderStatusBar()}
-                    {renderNotificationCenter()}
-                </Container>
-                <TooltipProvider />
-                <ValueDialog ref={this.valueDialogRef} />
-                <ConfirmDialog ref={this.confirmDialogRef} />
-                <SettingsDialog ref={this.settingsDialogRef} />
-                <BackendSetupDialog
-                    ref={this.backendSetupDialogRef}
-                    onSetupComplete={() => {
-                        void this.handleBackendSetupComplete();
-                    }}
-                />
-                <BackendDisconnectedDialog
-                    ref={this.backendDisconnectedDialogRef}
-                    onReconnected={() => {
-                        // The app continues normally — nothing special needed.
-                    }}
-                />
-                <LoginDialog
-                    ref={this.loginDialogRef}
-                    dataModel={this.dataModel}
-                    onLoginSuccess={this.handleLoginSuccess}
-                    onContinueAnonymous={this.handleContinueAnonymous}
-                />
-                <PrintDialog ref={this.printDialogRef} onAccept={this.handlePrintAccept} />
-                {
-                    this.state.printing && this.dataModel.arrangement && this.state.printOptions
-                    && this.arrangementPlayer && this.undoManager && (
-                        <PrintView
-                            arrangement={this.dataModel.arrangement as Arrangement}
-                            options={this.state.printOptions}
+                        <LoginDialog
+                            ref={this.loginDialogRef}
                             dataModel={this.dataModel}
-                            arrangementPlayer={this.arrangementPlayer}
-                            services={this.services}
-                            undoManager={this.undoManager}
+                            onLoginSuccess={this.handleLoginSuccess}
+                            onContinueAnonymous={this.handleContinueAnonymous}
                         />
-                    )
-                }
-            </ErrorBoundary>
+                        <BackendSetupDialog
+                            ref={this.backendSetupDialogRef}
+                            onSetupComplete={() => {
+                                void this.handleBackendSetupComplete();
+                            }}
+                        />
+                        <PrintDialog ref={this.printDialogRef} onAccept={this.handlePrintAccept} />
+                        {
+                            this.state.printing && this.dataModel.arrangement && this.state.printOptions
+                            && this.arrangementPlayer && this.undoManager && (
+                                <PrintView
+                                    arrangement={this.dataModel.arrangement as Arrangement}
+                                    options={this.state.printOptions}
+                                    dataModel={this.dataModel}
+                                    arrangementPlayer={this.arrangementPlayer}
+                                    services={this.services}
+                                    undoManager={this.undoManager}
+                                />
+                            )
+                        }
+                    </ErrorBoundary>
+                )}
+
+                {phase === AppPhase.Checking && (
+                    <div className="progressIndicatorCard" style={{
+                        position: "fixed", inset: 0, display: "flex",
+                        justifyContent: "center", alignItems: "center",
+                    }}>
+                        <ProgressIndicator />
+                    </div>
+                )}
+
+                <Container
+                    id="splashScreen"
+                    className={phase === AppPhase.Setup || phase === AppPhase.AdminSetup
+                        || phase === AppPhase.Login ? "splash-visible" : ""}
+                    orientation={Orientation.TopDown}
+                    mainAlignment={ChildAlignment.Center}
+                    crossAlignment={ChildAlignment.Center}
+                >
+                    {!isRunning && splashContent}
+                </Container>
+            </>
         );
     }
 
@@ -548,6 +603,7 @@ export class App extends UIComponent<{}, IAppState> {
     };
 
     private handleLoginSuccess = (): void => {
+        this.signInFromRunning = false;
         void this.initializeApp().then(() => {
             void requisitions.execute("showInfo",
                 `Signed in as ${this.dataModel.user?.displayName ?? this.dataModel.user?.username}`);
@@ -559,6 +615,13 @@ export class App extends UIComponent<{}, IAppState> {
      * Hides the login dialog. The app continues with anonymous capabilities.
      */
     private handleContinueAnonymous = (): void => {
+        if (this.signInFromRunning) {
+            this.signInFromRunning = false;
+            this.setState({ phase: AppPhase.Running });
+
+            return;
+        }
+
         void this.initializeApp();
     };
 
@@ -635,7 +698,10 @@ export class App extends UIComponent<{}, IAppState> {
     };
 
     private handleSignInClick = () => {
-        this.loginDialogRef.current?.open();
+        this.signInFromRunning = true;
+        this.setState({ phase: AppPhase.Login }, () => {
+            this.loginDialogRef.current?.open();
+        });
     };
 
     private handleLogoutClick = async () => {

@@ -51,7 +51,7 @@ export class Button extends UIComponent<IButtonProperties> {
     public render(): ComponentChild {
         const {
             id, children, caption, style, orientation, round, imageOnly, disabled, isDefault, title, role,
-            name, value, popoverTarget, onClick
+            name, type, value, popoverTarget, onClick
         } = this.props;
 
         const className = this.generateFinalClassName([
@@ -72,6 +72,7 @@ export class Button extends UIComponent<IButtonProperties> {
         const button = <button
             id={id}
             ref={this.buttonRef}
+            type={type as HTMLButtonElement["type"]}
             style={newStyle}
             className={className}
             title={title}

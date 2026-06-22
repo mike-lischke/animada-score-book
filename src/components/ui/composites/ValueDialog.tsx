@@ -265,7 +265,7 @@ export class ValueDialog extends UIComponent<{}, IValueDialogState> {
                     <Label caption={errorMessage} wrap />
                 </Container>
             )}
-            <Grid columns={8} columnGap={8}>
+            <Grid columns={8} columnGap={8} rowGap={12}>
                 {cells}
             </Grid>
         </Dialog>;

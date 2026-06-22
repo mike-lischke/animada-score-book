@@ -30,7 +30,7 @@ export class Dropdown extends UIComponent<IDropdownProperties> {
     private popoverId = `popover-${getNewId()}`;
 
     public render(): ComponentChild {
-        const { caption, closeOnSelect, icon, items, selectedItem } = this.props;
+        const { caption, closeOnSelect, icon, items, selectedItem, style } = this.props;
 
         const children = items.map((item, index) => {
             return (
@@ -59,8 +59,9 @@ export class Dropdown extends UIComponent<IDropdownProperties> {
         return (
             <div className={className}>
                 <Button
+                    className="du-btn-ghost"
                     popoverTarget={this.popoverId}
-                    style={{ anchorName: this.anchorName }}
+                    style={{ ...style, anchorName: this.anchorName }}
                     imageOnly={!caption && icon !== undefined}
                     onClick={(e) => {
                         e.stopPropagation();
@@ -70,7 +71,8 @@ export class Dropdown extends UIComponent<IDropdownProperties> {
                     {caption ?? defaultCaption}
                 </Button>
 
-                <ul className="du-dropdown du-menu w-52 rounded-box bg-base-100 shadow-sm"
+                <ul
+                    className="du-dropdown du-menu w-52 rounded-box bg-base-100 shadow-sm"
                     popover="auto"
                     id={this.popoverId}
                     style={{ positionAnchor: this.anchorName }}

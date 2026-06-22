@@ -67,6 +67,79 @@ h6 {
     }
 }
 
+#splashScreen {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease-out;
+
+    &::before {
+        content: "";
+        position: absolute;
+        inset: 24px;
+        background-color: var(--color-base-content);
+        mask: url("/percussion-background.svg") center / contain no-repeat;
+    }
+
+    &::after {
+        content: "";
+        position: absolute;
+        top: 24px;
+        right: 24px;
+        width: 120px;
+        height: 144px;
+        background: url("/logo.svg") center / contain no-repeat;
+        filter: saturate(0);
+        opacity: 0.5;
+        animation: logoWobble 5s ease-in-out infinite;
+    }
+
+    &.splash-visible {
+        opacity: 1;
+        pointer-events: auto;
+    }
+}
+
+@keyframes logoWobble {
+
+    0%,
+    10%,
+    100% {
+        transform: rotate(0deg);
+    }
+
+    1%,
+    3%,
+    7%,
+    9% {
+        transform: rotate(1.5deg);
+    }
+
+    2%,
+    8% {
+        transform: rotate(-1.5deg);
+    }
+
+    5% {
+        transform: rotate(0deg) scale(1.1);
+    }
+}
+
+.progressIndicatorCard {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 180px;
+    height: 180px;
+    background: var(--color-base-100);
+    border-radius: 12px;
+}
+
 .separator {
     width: 8px;
     height: 100%;
@@ -146,6 +219,10 @@ h6 {
 #arrangementPlayControls {
     margin: 8px 0;
     height: 90%;
+
+    #recordButton {
+        margin-left: 20px;
+    }
 }
 
 #arrangementEditControls {
@@ -1662,14 +1739,12 @@ h6 {
 }
 
 #settingsDialog .zoomButton {
-    border: none;
     width: 32px;
     height: 32px;
     margin: 0 2px;
 }
 
 #settingsDialog .resetButton {
-    border: none;
     height: 32px;
     margin-left: 8px;
     padding: 0 12px;
@@ -1836,4 +1911,8 @@ h6 {
             cursor: grabbing;
         }
     }
+}
+
+#backendSetupDialog #backend-setup-header {
+    margin-bottom: 12px;
 }

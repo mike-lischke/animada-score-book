@@ -142,7 +142,8 @@ test.describe("Setup: no database", () => {
         await page.click("#backend-setup-close");
         await page.waitForTimeout(2000);
 
-        await expect(page.locator("#appRoot")).toBeVisible({ timeout: 10000 });
+        // After setup with no users, the AdminSetup dialog appears on the splash screen.
+        await expect(page.locator("#adminSetupDialog")).toBeVisible({ timeout: 10000 });
     });
 });
 
@@ -162,7 +163,10 @@ test.describe("Setup: fresh start, database exists but empty", () => {
 
                 await route.fulfill({
                     status: 200, contentType: "application/json",
-                    body: JSON.stringify({ status: "ok", initialized, engine: "mysql", hasData: false }),
+                    body: JSON.stringify({
+                        status: "ok", initialized, engine: "mysql",
+                        hasData: false, hasUsers: false
+                    }),
                 });
 
                 return;
@@ -203,7 +207,7 @@ test.describe("Setup: fresh start, database exists but empty", () => {
 
         await page.click("#backend-setup-close");
         await page.waitForTimeout(2000);
-        await expect(page.locator("#appRoot")).toBeVisible({ timeout: 10000 });
+        await expect(page.locator("#adminSetupDialog")).toBeVisible({ timeout: 10000 });
     });
 });
 
@@ -223,7 +227,10 @@ test.describe("Setup: fresh start, database has data", () => {
 
                 await route.fulfill({
                     status: 200, contentType: "application/json",
-                    body: JSON.stringify({ status: "ok", initialized, engine: "mysql", hasData: initialized }),
+                    body: JSON.stringify({
+                        status: "ok", initialized, engine: "mysql",
+                        hasData: initialized, hasUsers: initialized
+                    }),
                 });
 
                 return;
@@ -242,6 +249,31 @@ test.describe("Setup: fresh start, database has data", () => {
                 await route.fulfill({
                     status: 200, contentType: "application/json",
                     body: JSON.stringify([])
+                });
+
+                return;
+            }
+
+            // No session cookie — refresh returns 401, whoami returns anonymous.
+            if (action === "refresh") {
+                await route.fulfill({
+                    status: 401, contentType: "application/json",
+                    body: JSON.stringify({ error: "No refresh token" })
+                });
+
+                return;
+            }
+
+            if (action === "whoami") {
+                await route.fulfill({
+                    status: 200, contentType: "application/json",
+                    body: JSON.stringify({
+                        authenticated: false,
+                        capabilities: {
+                            canEditScores: false, canManageUsers: false,
+                            canManageInstruments: false, canExportMP3: false
+                        }
+                    })
                 });
 
                 return;
@@ -269,7 +301,9 @@ test.describe("Setup: fresh start, database has data", () => {
 
         await page.click("#backend-setup-close");
         await page.waitForTimeout(2000);
-        await expect(page.locator("#appRoot")).toBeVisible({ timeout: 10000 });
+
+        // After setup with existing users but no session, the login dialog appears.
+        await expect(page.locator("#loginDialog")).toBeVisible({ timeout: 10000 });
     });
 });
 
