@@ -98,6 +98,8 @@
         "rgba",
         "svgs",
         "tableholder",
+        "TINYINT",
+        "VARCHAR",
         "wavesurfer",
         "xlink"
     ],

@@ -67,6 +67,7 @@ import { ModeManager } from "./ui/ModeManager.js";
 import { MouseHandler } from "./ui/MouseHandler.js";
 import { SelectionManager } from "./ui/SelectionManager.js";
 import { SettingsDialog } from "./ui/SettingsDialog.js";
+import { UserGroupEditor } from "./ui/UserGroupEditor.js";
 
 const ScoreLibrary = lazy(() => {
     return import("./ui/ScoreLibrary.js").then((m) => {
@@ -116,6 +117,7 @@ export class App extends UIComponent<{}, IAppState> {
     private backendDisconnectedDialogRef = createRef<BackendDisconnectedDialog>();
     private loginDialogRef = createRef<LoginDialog>();
     private adminSetupDialogRef = createRef<AdminSetupDialog>();
+    private userGroupEditorRef = createRef<UserGroupEditor>();
     private printDialogRef = createRef<PrintDialog>();
     private valueDialogRef = createRef<ValueDialog>();
     private confirmDialogRef = createRef<ConfirmDialog>();
@@ -499,6 +501,7 @@ export class App extends UIComponent<{}, IAppState> {
                             }}
                         />
                         <PrintDialog ref={this.printDialogRef} onAccept={this.handlePrintAccept} />
+                        <UserGroupEditor ref={this.userGroupEditorRef} dataModel={this.dataModel} />
                         {
                             this.state.printing && this.dataModel.arrangement && this.state.printOptions
                             && this.arrangementPlayer && this.undoManager && (
@@ -728,20 +731,32 @@ export class App extends UIComponent<{}, IAppState> {
 
     private buildUserMenuItems(): IDropdownItem[] {
         const { user } = this.dataModel;
-
-        return [
+        const items: IDropdownItem[] = [
             {
                 label: user?.displayName ?? user?.username ?? "",
                 icon: <Icon src={Codicon.Account} />,
             },
-            {
-                label: "Sign Out",
-                icon: <Icon src={Codicon.SignOut} />,
-                onClick: () => {
-                    void this.handleLogoutClick();
-                },
-            },
         ];
+
+        if (user?.isAdmin) {
+            items.push({
+                label: "Users & Groups",
+                icon: <Icon src={Codicon.Organization} />,
+                onClick: () => {
+                    this.userGroupEditorRef.current?.open();
+                },
+            });
+        }
+
+        items.push({
+            label: "Sign Out",
+            icon: <Icon src={Codicon.SignOut} />,
+            onClick: () => {
+                void this.handleLogoutClick();
+            },
+        });
+
+        return items;
     }
 
     private openPrintDialog(): void {
@@ -1163,24 +1178,6 @@ export class App extends UIComponent<{}, IAppState> {
                 Overlay.closeAllOverlays();
                 this.services.selectionManager.clearSelection();
                 this.services.modeManager.deletePolyrhythmMode = false;
-
-                break;
-            }
-
-            case " ": {
-                if (this.arrangementPlayer) {
-                    if (this.arrangementPlayer.state === "stopped") {
-                        if (this.currentPlayRange) {
-                            void this.arrangementPlayer.playBars(this.currentPlayRange.startBar,
-                                this.currentPlayRange.endBar - this.currentPlayRange.startBar + 1);
-                        } else {
-                            void this.arrangementPlayer.play();
-                        }
-                    } else {
-                        this.arrangementPlayer.stop();
-                    }
-                }
-                event.preventDefault(); // This is to prevent spaces getting written in number inputs
 
                 break;
             }

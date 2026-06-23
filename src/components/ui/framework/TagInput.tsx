@@ -9,10 +9,15 @@ import { Button } from "./Button.js";
 import { Icon } from "./Icon.js";
 import { UIComponent, type ICommonUIProperties } from "./UIComponent.js";
 import { Codicon } from "./Codicon.js";
+import { Container } from "./Container.js";
+import { ChildAlignment, ChildWrap } from "./ui-types.js";
 
 export interface ITag {
     id: number;
     caption: string;
+
+    /** Optional hex color for the badge background (e.g. "#a1b2c3"). */
+    color?: string;
 }
 
 interface ITagInputProperties extends ICommonUIProperties {
@@ -30,6 +35,9 @@ interface ITagInputProperties extends ICommonUIProperties {
 
     /** Called when a tag is removed. */
     onRemove?: (id: number) => void;
+
+    /** Called when a tag's color is changed via the inline color picker. */
+    onBadgeColorChange?: (id: number, color: string) => void;
 }
 
 interface ITagInputState {
@@ -54,7 +62,7 @@ export class TagInput extends UIComponent<ITagInputProperties, ITagInputState> {
     }
 
     public render(): ComponentChild {
-        const { tags, removable, completions, id, style } = this.props;
+        const { tags, removable, completions, id, style, onBadgeColorChange } = this.props;
         const { inputValue, activeCompletionIndex } = this.state;
         const className = this.generateFinalClassName(["tagInput"]);
 
@@ -70,28 +78,63 @@ export class TagInput extends UIComponent<ITagInputProperties, ITagInputState> {
             : [];
 
         return (
-            <div
+            <Container
                 id={id}
                 className={className}
-                style={{
-                    ...style,
-                    display: "flex", flexWrap: "wrap", alignItems: "flex-start",
-                    gap: "4px", position: "relative",
-                }}
+                mainAlignment={ChildAlignment.Start}
+                wrap={ChildWrap.Wrap}
+                gap="4px"
+                style={style}
             >
                 {tags.map((tag) => {
+                    const badgeStyle: Record<string, string> = {};
+                    if (tag.color) {
+                        badgeStyle.backgroundColor = tag.color;
+                        badgeStyle.color = isLightColor(tag.color) ? "#1a1a2e" : "#ffffff";
+                        badgeStyle.borderColor = tag.color;
+                    }
+
+                    const textColor = tag.color
+                        ? (isLightColor(tag.color) ? "#1a1a2e" : "#ffffff")
+                        : undefined;
+
                     return (
-                        <span key={tag.id} className="badge badge-lg gap-1">
+                        <span
+                            key={tag.id}
+                            className="du-badge gap-1"
+                            style={{
+                                ...badgeStyle,
+                                position: "relative",
+                            }}
+                        >
+                            {onBadgeColorChange && (
+                                <input
+                                    type="color"
+                                    value={tag.color ?? "#808080"}
+                                    style={{
+                                        position: "absolute",
+                                        inset: 0,
+                                        width: "100%",
+                                        height: "100%",
+                                        opacity: 0,
+                                        cursor: "pointer",
+                                    }}
+                                    onChange={(e) => {
+                                        onBadgeColorChange(tag.id, (e.target as HTMLInputElement).value);
+                                    }}
+                                />
+                            )}
                             {tag.caption}
                             {removable && (
                                 <Button
                                     imageOnly
-                                    className="du-btn-ghost du-btn-xs"
-                                    onClick={() => {
+                                    className="du-btn-ghost du-btn-xs tag-input-close-button"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
                                         this.props.onRemove?.(tag.id);
                                     }}
                                 >
-                                    <Icon src={Codicon.Close} />
+                                    <Icon src={Codicon.Close} style={textColor ? { color: textColor } : undefined} />
                                 </Button>
                             )}
                         </span>
@@ -135,7 +178,7 @@ export class TagInput extends UIComponent<ITagInputProperties, ITagInputState> {
                         </ul>
                     )}
                 </div>
-            </div>
+            </Container>
         );
     }
 
@@ -197,3 +240,20 @@ export class TagInput extends UIComponent<ITagInputProperties, ITagInputState> {
         }
     };
 }
+
+/**
+ * Determines whether a hex color is "light" (suitable for dark text)
+ * using relative luminance.
+ *
+ * @param hex The hex color string (e.g. "#a1b2c3").
+ * @returns True if the color is light enough for dark text.
+ */
+const isLightColor = (hex: string): boolean => {
+    const r = parseInt(hex.slice(1, 3), 16) / 255;
+    const g = parseInt(hex.slice(3, 5), 16) / 255;
+    const b = parseInt(hex.slice(5, 7), 16) / 255;
+
+    const luminance = (0.2126 * r) + (0.7152 * g) + (0.0722 * b);
+
+    return luminance > 0.5;
+};

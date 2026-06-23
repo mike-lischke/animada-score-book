@@ -56,6 +56,7 @@ const createTablesSQL = [
         id          SERIAL PRIMARY KEY,
         name        VARCHAR(255) NOT NULL UNIQUE,
         description TEXT,
+        color       VARCHAR(7)  NOT NULL DEFAULT '#808080',
         created_at  TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP
     )`,
 
@@ -172,6 +173,15 @@ export class PostgresAdapter implements IDatabaseAdapter {
             try {
                 await client.query(
                     "ALTER TABLE users ADD COLUMN IF NOT EXISTS refresh_token_hash VARCHAR(256)",
+                );
+            } catch {
+                // Safe to ignore.
+            }
+
+            // Migration: add color column to groups.
+            try {
+                await client.query(
+                    "ALTER TABLE groups ADD COLUMN IF NOT EXISTS color VARCHAR(7) NOT NULL DEFAULT '#808080'",
                 );
             } catch {
                 // Safe to ignore.

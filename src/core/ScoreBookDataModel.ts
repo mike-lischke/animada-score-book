@@ -521,6 +521,32 @@ export interface IUserInfo {
     isAdmin: boolean;
 }
 
+/** A user row as returned by listUsers. */
+export interface IUserRow {
+    id: number;
+    username: string;
+    displayName: string;
+    isAdmin: boolean;
+    createdAt: string;
+    updatedAt: string;
+}
+
+/** A group row as returned by listGroups. */
+export interface IGroupRow {
+    id: number;
+    name: string;
+    description: string;
+    color: string;
+    createdAt: string;
+}
+
+/** A group member as returned by listGroupMembers. */
+export interface IGroupMember {
+    id: number;
+    username: string;
+    displayName: string;
+}
+
 export interface ICapabilities {
     canEditScores: boolean;
     canManageUsers: boolean;
@@ -946,6 +972,292 @@ export class ScoreBookDataModel {
         void requisitions.execute("authChanged", undefined);
 
         return restored;
+    }
+
+    public async listUsers(): Promise<IUserRow[]> {
+        const res = await this.fetchApi("/api?action=listUsers", { method: "POST" });
+
+        if (!res) {
+            return [];
+        }
+
+        const data = await res.json() as { users?: IUserRow[]; error?: string; };
+
+        if (data.error) {
+            throw new Error(data.error);
+        }
+
+        return data.users ?? [];
+    }
+
+    /**
+     * Creates a new user. Admin-only.
+     *
+     * @param username    The username (min 3 chars).
+     * @param password    The password (min 6 chars).
+     * @param displayName The display name.
+     * @param isAdmin     Whether the user is an admin.
+     * @returns The new user's id.
+     */
+    public async createUser(username: string, password: string, displayName: string, isAdmin: boolean,
+    ): Promise<number> {
+        const res = await this.fetchApi("/api?action=createUser", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ username, password, displayName, isAdmin }),
+        });
+
+        if (!res) {
+            throw new Error("Backend unreachable.");
+        }
+
+        const data = await res.json() as { success?: boolean; id?: number; error?: string; };
+
+        if (data.error) {
+            throw new Error(data.error);
+        }
+
+        return data.id!;
+    }
+
+    /**
+     * Updates an existing user. Admin-only.
+     *
+     * @param id                 The user id.
+     * @param fields             Fields to update.
+     * @param fields.displayName The new display name (optional).
+     * @param fields.isAdmin     Whether the user is an admin (optional).
+     * @param fields.password    The new password, if changing (optional).
+     */
+    public async updateUser(id: number, fields: {
+        displayName?: string; isAdmin?: boolean; password?: string;
+    },): Promise<void> {
+        const body: Record<string, unknown> = { id };
+
+        if (fields.displayName !== undefined) {
+            body.displayName = fields.displayName;
+        }
+
+        if (fields.isAdmin !== undefined) {
+            body.isAdmin = fields.isAdmin;
+        }
+
+        if (fields.password) {
+            body.password = fields.password;
+        }
+
+        const res = await this.fetchApi("/api?action=updateUser", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+        });
+
+        if (!res) {
+            return;
+        }
+
+        const data = await res.json() as { error?: string; };
+
+        if (data.error) {
+            throw new Error(data.error);
+        }
+    }
+
+    /**
+     * Deletes a user. Admin-only.
+     *
+     * @param id The user id.
+     */
+    public async deleteUser(id: number): Promise<void> {
+        const res = await this.fetchApi("/api?action=deleteUser", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id }),
+        });
+
+        if (!res) {
+            return;
+        }
+
+        const data = await res.json() as { error?: string; };
+
+        if (data.error) {
+            throw new Error(data.error);
+        }
+    }
+
+    /**
+     * Lists all groups. Admin-only.
+     *
+     * @returns The list of group rows.
+     */
+    public async listGroups(): Promise<IGroupRow[]> {
+        const res = await this.fetchApi("/api?action=listGroups", { method: "POST" });
+
+        if (!res) {
+            return [];
+        }
+
+        const data = await res.json() as { groups?: IGroupRow[]; error?: string; };
+
+        if (data.error) {
+            throw new Error(data.error);
+        }
+
+        return data.groups ?? [];
+    }
+
+    /**
+     * Creates a new group. Admin-only.
+     *
+     * @param name        The group name.
+     * @param description The group description (optional).
+     * @param color       The group color (optional, random if omitted).
+     * @returns The new group's id and color.
+     */
+    public async createGroup(name: string, description: string, color?: string,
+    ): Promise<{ id: number; color: string; }> {
+        const body: Record<string, unknown> = { name, description };
+
+        if (color) {
+            body.color = color;
+        }
+
+        const res = await this.fetchApi("/api?action=createGroup", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+        });
+
+        if (!res) {
+            throw new Error("Backend unreachable.");
+        }
+
+        const data = await res.json() as { success?: boolean; id?: number; color?: string; error?: string; };
+
+        if (data.error) {
+            throw new Error(data.error);
+        }
+
+        return { id: data.id!, color: data.color! };
+    }
+
+    /**
+     * Updates an existing group. Admin-only.
+     *
+     * @param id               The group id.
+     * @param fields            Fields to update.
+     * @param fields.name       The new name (optional).
+     * @param fields.description The new description (optional).
+     * @param fields.color      The new color (optional).
+     */
+    public async updateGroup(id: number, fields: {
+        name?: string; description?: string; color?: string;
+    },): Promise<void> {
+        const body: Record<string, unknown> = { id };
+
+        if (fields.name !== undefined) {
+            body.name = fields.name;
+        }
+
+        if (fields.description !== undefined) {
+            body.description = fields.description;
+        }
+
+        if (fields.color !== undefined) {
+            body.color = fields.color;
+        }
+
+        const res = await this.fetchApi("/api?action=updateGroup", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+        });
+
+        if (!res) {
+            return;
+        }
+
+        const data = await res.json() as { error?: string; };
+
+        if (data.error) {
+            throw new Error(data.error);
+        }
+    }
+
+    /**
+     * Deletes a group. Admin-only.
+     *
+     * @param id The group id.
+     */
+    public async deleteGroup(id: number): Promise<void> {
+        const res = await this.fetchApi("/api?action=deleteGroup", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id }),
+        });
+
+        if (!res) {
+            return;
+        }
+
+        const data = await res.json() as { error?: string; };
+
+        if (data.error) {
+            throw new Error(data.error);
+        }
+    }
+
+    /**
+     * Adds a user to a group. Admin-only.
+     *
+     * @param userId  The user id.
+     * @param groupId The group id.
+     */
+    public async addUserToGroup(userId: number, groupId: number): Promise<void> {
+        await this.fetchApi("/api?action=addUserToGroup", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ userId, groupId }),
+        });
+    }
+
+    /**
+     * Removes a user from a group. Admin-only.
+     *
+     * @param userId  The user id.
+     * @param groupId The group id.
+     */
+    public async removeUserFromGroup(userId: number, groupId: number): Promise<void> {
+        await this.fetchApi("/api?action=removeUserFromGroup", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ userId, groupId }),
+        });
+    }
+
+    /**
+     * Lists the members of a group. Admin-only.
+     *
+     * @param groupId The group id.
+     * @returns The list of member rows.
+     */
+    public async listGroupMembers(groupId: number): Promise<IGroupMember[]> {
+        const res = await this.fetchApi(
+            `/api?action=listGroupMembers&groupId=${groupId}`, { method: "POST" },
+        );
+
+        if (!res) {
+            return [];
+        }
+
+        const data = await res.json() as { members?: IGroupMember[]; error?: string; };
+
+        if (data.error) {
+            throw new Error(data.error);
+        }
+
+        return data.members ?? [];
     }
 
     /**

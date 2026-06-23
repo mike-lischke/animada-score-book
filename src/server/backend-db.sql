@@ -38,12 +38,12 @@ CREATE TABLE instruments (
 CREATE TABLE instrument_images (
   id             INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   instrumentid   INT UNSIGNED NOT NULL,
-  filepath       VARCHAR(255) NOT NULL,  -- e.g. /uploads/instruments/abc123.webp
+  filepath       VARCHAR(255) NOT NULL,
   alttext        VARCHAR(255) NULL,
   mimetype       VARCHAR(100) NOT NULL,
   width          INT NULL,
   height         INT NULL,
-  filesize      INT NULL,                -- Bytes
+  filesize       INT NULL,                -- Bytes
   CONSTRAINT fk_instrument_images_instrument
     FOREIGN KEY (instrumentid) REFERENCES instruments(id)
     ON DELETE CASCADE
@@ -68,6 +68,7 @@ CREATE TABLE `groups` (
   id          INT UNSIGNED NOT NULL AUTO_INCREMENT,
   name        VARCHAR(255) NOT NULL,
   description TEXT NULL,
+  color       VARCHAR(7)   NOT NULL DEFAULT '#808080',
   created_at  TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   UNIQUE KEY uk_groups_name (name)

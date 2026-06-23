@@ -240,6 +240,52 @@ const clearRefreshTokenCookie = (res: ServerResponse): void => {
     res.setHeader("Set-Cookie", "refreshToken=; HttpOnly; Secure; Path=/; Max-Age=0; SameSite=Lax");
 };
 
+// ---------- Color Helpers ----------
+
+/**
+ * Generates a random hex color string using the golden-angle distribution
+ * for visually pleasing hue spacing.
+ *
+ * @returns A hex color string like "#a1b2c3".
+ */
+const randomGroupColor = (): string => {
+    const goldenAngle = 137.508;
+    const hue = ((Math.random() * 360) + (goldenAngle * Math.random())) % 360;
+    const saturation = 45 + (Math.random() * 20);
+    const lightness = 40 + (Math.random() * 15);
+
+    const h = hue / 60;
+    const c = ((1 - Math.abs((2 * lightness / 100) - 1)) * saturation) / 100;
+    const x = c * (1 - Math.abs((h % 2) - 1));
+    const m = (lightness / 100) - (c / 2);
+
+    let r: number;
+    let g: number;
+    let b: number;
+
+    if (h < 1) {
+        r = c; g = x; b = 0;
+    } else if (h < 2) {
+        r = x; g = c; b = 0;
+    } else if (h < 3) {
+        r = 0; g = c; b = x;
+    } else if (h < 4) {
+        r = 0; g = x; b = c;
+    } else if (h < 5) {
+        r = x; g = 0; b = c;
+    } else {
+        r = c; g = 0; b = x;
+    }
+
+    const toHex = (v: number): string => {
+        const hex = Math.round((v + m) * 255).toString(16);
+
+        return hex.length === 1 ? "0" + hex : hex;
+    };
+
+    return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+};
+
 // ---------- Anonymous User Seed ----------
 
 /**
@@ -1280,6 +1326,7 @@ const handleListGroups = async (req: IncomingMessage, res: ServerResponse): Prom
                 id: g.id,
                 name: g.name,
                 description: g.description,
+                color: g.color,
                 createdAt: g.created_at,
             };
         }),
@@ -1298,6 +1345,7 @@ const handleCreateGroup = async (req: IncomingMessage, res: ServerResponse): Pro
     const body = await readJsonBody(req);
     const name = String(body.name ?? "").trim();
     const description = body.description !== undefined ? String(body.description).trim() : "";
+    const color = typeof body.color === "string" && body.color ? body.color : randomGroupColor();
 
     if (!name) {
         sendError(res, "Group name required");
@@ -1317,11 +1365,11 @@ const handleCreateGroup = async (req: IncomingMessage, res: ServerResponse): Pro
     }
 
     const result = await adapter.insertReturningId(
-        "INSERT INTO `groups` (name, description) VALUES (?, ?)",
-        [name, description],
+        "INSERT INTO `groups` (name, description, color) VALUES (?, ?, ?)",
+        [name, description, color],
     );
 
-    sendJson(res, { success: true, id: result.insertId });
+    sendJson(res, { success: true, id: result.insertId, color });
 };
 
 const handleUpdateGroup = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
@@ -1344,8 +1392,9 @@ const handleUpdateGroup = async (req: IncomingMessage, res: ServerResponse): Pro
 
     const name = body.name !== undefined ? String(body.name).trim() : undefined;
     const description = body.description !== undefined ? String(body.description).trim() : undefined;
+    const color = body.color !== undefined ? String(body.color) : undefined;
 
-    if (!name && description === undefined) {
+    if (!name && description === undefined && color === undefined) {
         sendError(res, "No fields to update");
 
         return;
@@ -1362,6 +1411,11 @@ const handleUpdateGroup = async (req: IncomingMessage, res: ServerResponse): Pro
     if (description !== undefined) {
         updates.push("description = ?");
         params.push(description);
+    }
+
+    if (color !== undefined) {
+        updates.push("color = ?");
+        params.push(color);
     }
 
     params.push(id);

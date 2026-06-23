@@ -1341,3 +1341,17 @@ dialog {
         opacity: 0;
     }
 }
+
+.tagInput {
+    .du-badge {
+        font-size: 12px;
+        padding: 2px 4px;
+    }
+
+    .tag-input-close-button {
+        z-index: 1;
+        justify-self: center;
+        height: 16px;
+        width: 16px;
+    }
+}

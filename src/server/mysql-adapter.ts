@@ -75,6 +75,7 @@ const createTablesSQL = [
         id          INT UNSIGNED NOT NULL AUTO_INCREMENT,
         name        VARCHAR(255) NOT NULL,
         description TEXT NULL,
+        color       VARCHAR(7)  NOT NULL DEFAULT '#808080',
         created_at  TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
         PRIMARY KEY (id),
         UNIQUE KEY uk_groups_name (name)
@@ -187,6 +188,15 @@ export class MySqlAdapter implements IDatabaseAdapter {
             try {
                 await connection.execute(
                     "ALTER TABLE users ADD COLUMN refresh_token_hash VARCHAR(256) NULL",
+                );
+            } catch {
+                // Column may already exist — safe to ignore.
+            }
+
+            // Migration: add color column to groups.
+            try {
+                await connection.execute(
+                    "ALTER TABLE `groups` ADD COLUMN color VARCHAR(7) NOT NULL DEFAULT '#808080'",
                 );
             } catch {
                 // Column may already exist — safe to ignore.
