@@ -1,0 +1,49 @@
+/*
+ * Copyright (c) Mike Lischke. All rights reserved.
+ * Licensed under the MIT License. See License.txt in the project root for license information.
+ */
+
+.statusbar {
+    display: grid;
+    grid-template-columns: 1fr auto;
+
+    flex: 0 0 24px;
+    align-items: stretch;
+
+    padding: 0 4px;
+
+    background-color: var(--color-primary);
+    color: var(--color-primary-content);
+
+    cursor: default;
+    font-size: 10pt;
+
+    .statusbar-left {
+        min-width: 0;
+        margin-left: 4px;
+    }
+
+    .statusbar-right {
+        overflow: hidden;
+        max-width: fit-content;
+        margin-right: 4px;
+    }
+
+    .statusbar-item {
+        display: flex;
+        align-items: center;
+
+        padding: 0 6px;
+        height: 100%;
+        border-radius: 0;
+        font-size: inherit;
+
+        &.statusbar-item-clickable {
+            cursor: pointer;
+
+            &:hover {
+                background-color: color-mix(in oklch, var(--color-primary), white 15%);
+            }
+        }
+    }
+}

@@ -69,8 +69,17 @@ export class LoginDialog extends UIComponent<ILoginDialogProperties, ILoginDialo
                 id="loginDialog"
                 onClose={this.handleClose}
                 actions={[
-                    <Button id="login-button-anonymous" value="anonymous" caption="Continue Anonymously" />,
-                    <Button id="login-button-login" type="button" caption="Log In" onClick={this.handleLoginClick} />,
+                    <Button
+                        id="login-button-anonymous"
+                        caption="Continue Anonymously"
+                        onClick={this.handleAnonymousClick}
+                    />,
+                    <Button
+                        id="login-button-login"
+                        type="button"
+                        caption="Log In"
+                        onClick={this.handleLoginClick}
+                    />,
                 ]}
             >
                 <Container
@@ -139,23 +148,23 @@ export class LoginDialog extends UIComponent<ILoginDialogProperties, ILoginDialo
         );
     }
 
-    private handleUsernameChange = (_e: Event, props: { value?: string; }): void => {
+    private handleUsernameChange = (e: Event, props: { value?: string; }): void => {
         this.setState({ username: props.value ?? "", errorMessage: "" });
     };
 
-    private handleUsernameConfirm = (_e: KeyboardEvent, _props: { value?: string; }): void => {
+    private handleUsernameConfirm = (): void => {
         this.passwordRef.current?.focus();
     };
 
-    private handlePasswordChange = (_e: Event, props: { value?: string; }): void => {
+    private handlePasswordChange = (e: Event, props: { value?: string; }): void => {
         this.setState({ password: props.value ?? "", errorMessage: "" });
     };
 
-    private handlePasswordConfirm = (_e: KeyboardEvent, _props: { value?: string; }): void => {
+    private handlePasswordConfirm = (): void => {
         void this.attemptLogin();
     };
 
-    private handleClose = (_returnValue: string): void => {
+    private handleClose = (): void => {
         if (this.loginSucceeded) {
             return;
         }
@@ -167,6 +176,10 @@ export class LoginDialog extends UIComponent<ILoginDialogProperties, ILoginDialo
 
     private handleLoginClick = (): void => {
         void this.attemptLogin();
+    };
+
+    private handleAnonymousClick = (): void => {
+        this.dialogRef.current?.close(true);
     };
 
     private async attemptLogin(): Promise<void> {

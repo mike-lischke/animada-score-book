@@ -16,7 +16,7 @@ const openPrintDialog = async (page: Page) => {
     await expect(printButton).toBeVisible();
     await printButton.click();
 
-    const dialog = page.locator("dialog#printDialog");
+    const dialog = page.locator("#printDialog");
     await expect(dialog).toBeVisible();
 
     return dialog;

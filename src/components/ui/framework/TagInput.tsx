@@ -62,7 +62,7 @@ export class TagInput extends UIComponent<ITagInputProperties, ITagInputState> {
     }
 
     public render(): ComponentChild {
-        const { tags, removable, completions, id, style, onBadgeColorChange } = this.props;
+        const { tags, removable, completions, id, style, onBadgeColorChange, onRemove } = this.props;
         const { inputValue, activeCompletionIndex } = this.state;
         const className = this.generateFinalClassName(["tagInput"]);
 
@@ -131,7 +131,7 @@ export class TagInput extends UIComponent<ITagInputProperties, ITagInputState> {
                                     className="du-btn-ghost du-btn-xs tag-input-close-button"
                                     onClick={(e) => {
                                         e.stopPropagation();
-                                        this.props.onRemove?.(tag.id);
+                                        onRemove?.(tag.id);
                                     }}
                                 >
                                     <Icon src={Codicon.Close} style={textColor ? { color: textColor } : undefined} />
@@ -183,7 +183,9 @@ export class TagInput extends UIComponent<ITagInputProperties, ITagInputState> {
     }
 
     private commitInput(value: string): void {
-        this.props.onAdd?.(value);
+        const { onAdd } = this.props;
+
+        onAdd?.(value);
         this.setState({ inputValue: "", activeCompletionIndex: -1 }, () => {
             this.inputRef.current?.focus();
         });

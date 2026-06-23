@@ -5,7 +5,7 @@
 
 import { ComponentChild, createRef } from "preact";
 
-import { escapeStack } from "../../../supplement/EscapeStack.js";
+import { Portal, type IPortalOptions } from "./Portal.js";
 import { UIComponent, type ICommonUIProperties } from "./UIComponent.js";
 
 /** What decision made the user to close a dialog. */
@@ -46,87 +46,98 @@ export interface IDialogResponse {
     data: Record<string, unknown>;
 }
 
-/**
- * Describes a collection of react nodes that should be rendered in an action area, separated
- * by their alignment.
- */
-
 interface IDialogProperties extends ICommonUIProperties {
     caption?: ComponentChild;
 
     actions?: ComponentChild[];
 
-    /** Called when the dialog is closed. The return value indicates how the dialog was closed. */
+    /** Called when the dialog is closed. */
     onClose?: (returnValue: string) => void;
 }
 
-/** A modal popup component to interact with the user (e.g. in wizards or task lists). */
+/**
+ * A modal dialog built on {@link Portal}. Renders centered with a
+ * semi-transparent backdrop. Escape and click-outside-to-close are
+ * handled by the underlying Portal.
+ */
 export class Dialog extends UIComponent<IDialogProperties> {
-    private dialogRef = createRef<HTMLDialogElement>();
+    private portalRef = createRef<Portal>();
 
-    public override componentDidMount(): void {
-        this.dialogRef.current?.addEventListener("close", this.handleCloseEvent);
-        this.dialogRef.current?.addEventListener("cancel", this.handleCancelEvent);
-    }
-
-    public override componentWillUnmount(): void {
-
-        this.dialogRef.current?.removeEventListener("close", this.handleCloseEvent);
-        this.dialogRef.current?.removeEventListener("cancel", this.handleCancelEvent);
-    }
+    /** When set, suppresses the default onClose mapping in handlePortalClose. */
+    private customReturnValue?: string;
 
     public render(): ComponentChild {
         const { id, children, caption, actions } = this.props;
 
-        const className = this.generateFinalClassName(["dialog", "du-modal"]);
+        const className = this.generateFinalClassName(["dialog"]);
 
         return (
-            <dialog
-                id={id}
-                className={className}
-                ref={this.dialogRef}>
-                <div className="du-modal-box">
-                    {caption && <h3 id="dialog-caption">{caption}</h3>}
-                    {children}
-                    <div className="du-modal-action">
-                        <form method="dialog">
-                            {actions}
-                        </form>
+            <Portal
+                ref={this.portalRef}
+                onClose={this.handlePortalClose}
+            >
+                <div
+                    id={id}
+                    class={className}
+                    onClick={(e: Event) => {
+                        e.stopPropagation();
+                    }}
+                >
+                    {caption && <div class="dialog-caption">{caption}</div>}
+                    <div class="dialog-content">
+                        {children}
                     </div>
+                    {actions && actions.length > 0 && (
+                        <div class="dialog-actions" onClick={this.handleActionClick}>
+                            {actions}
+                        </div>
+                    )}
                 </div>
-            </dialog>
+            </Portal>
         );
     }
 
     public open(): void {
-        if (this.dialogRef.current) {
-            this.dialogRef.current.returnValue = "cancel";
-            this.dialogRef.current.showModal();
+        const options: IPortalOptions = {
+            backgroundOpacity: 0.5,
+            closeOnEscape: true,
+            closeOnPortalClick: false,
+        };
 
-            escapeStack.push(this.onEscape);
-        }
+        this.portalRef.current?.open(options);
     }
 
     public close(cancelled: boolean): void {
-        this.dialogRef.current?.close(cancelled ? "cancel" : "accept");
+        this.portalRef.current?.close(cancelled);
     }
 
-    private handleCloseEvent = (): void => {
+    private handlePortalClose = (cancelled: boolean): void => {
         const { onClose } = this.props;
 
-        escapeStack.remove(this.onEscape);
-        const returnValue = this.dialogRef.current?.returnValue ?? "cancel";
-        onClose?.(returnValue);
+        if (this.customReturnValue) {
+            onClose?.(this.customReturnValue);
+            this.customReturnValue = undefined;
+        } else {
+            onClose?.(cancelled ? "cancel" : "accept");
+        }
     };
 
-    private onEscape = (): void => {
-        // At this point the escape handler is already popped from the stack, so we don't need to worry about that.
-        this.close(true);
-    };
+    private handleActionClick = (e: MouseEvent): void => {
+        const target = e.target as HTMLElement;
+        const button = target.closest("button");
 
-    private handleCancelEvent = (event: Event): void => {
-        // No automatic closing on escape key, we want to handle this ourselves via the EscapeStack to ensure
-        // correct stacking of dialogs.
-        event.preventDefault();
+        if (!button) {
+            return;
+        }
+
+        // Only handle default buttons (type=submit or no type).
+        if (button.type === "button") {
+            return;
+        }
+
+        if (button.value) {
+            this.customReturnValue = button.value;
+            this.portalRef.current?.close(button.value !== "accept");
+        }
     };
 }

@@ -17,6 +17,7 @@ import { TagInput } from "../components/ui/framework/TagInput.js";
 import { ChildAlignment, Orientation } from "../components/ui/framework/ui-types.js";
 import { UIComponent, type ICommonUIProperties } from "../components/ui/framework/UIComponent.js";
 import { ConfirmDialog } from "../components/ui/composites/ConfirmDialog.js";
+import { Popup } from "../components/ui/composites/Popup.js";
 import type { IGroupRow, IUserRow, ScoreBookDataModel } from "../core/ScoreBookDataModel.js";
 
 enum EditorMode {
@@ -59,6 +60,7 @@ interface IUserGroupEditorState {
 export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUserGroupEditorState> {
     private dialogRef = createRef<Dialog>();
     private confirmDialogRef = createRef<ConfirmDialog>();
+    private popupRef = createRef<Popup>();
 
     /** Counter for generating temporary negative IDs for pending groups. */
     private pendingIdCounter = -1;
@@ -112,6 +114,9 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
         return (
             <>
                 <ConfirmDialog ref={this.confirmDialogRef} />
+                <Popup ref={this.popupRef} showArrow={true}>
+                    {editorMode !== EditorMode.None && this.renderEditorForm()}
+                </Popup>
                 <Dialog
                     ref={this.dialogRef}
                     id="userGroupEditorDialog"
@@ -147,8 +152,6 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
                                 onClick={this.handleAddClick}
                             />
                         </Container>
-
-                        {editorMode !== EditorMode.None && this.renderEditorForm()}
 
                         <Container
                             orientation={Orientation.TopDown}
@@ -191,8 +194,10 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
                                             imageOnly
                                             className="du-btn-xs"
                                             data-tooltip="Edit"
-                                            onClick={() => {
-                                                void this.handleEditClick(u);
+                                            onClick={(e) => {
+                                                const trigger = e.currentTarget as HTMLElement;
+
+                                                void this.handleEditClick(u, trigger);
                                             }}
                                         >
                                             <Icon src={Codicon.Edit} />
@@ -201,8 +206,10 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
                                             imageOnly
                                             className="du-btn-xs"
                                             data-tooltip="Reset Password"
-                                            onClick={() => {
-                                                this.handleResetPasswordClick(u);
+                                            onClick={(e) => {
+                                                const trigger = e.currentTarget as HTMLElement;
+
+                                                this.handleResetPasswordClick(u, trigger);
                                             }}
                                         >
                                             <Icon src={Codicon.Key} />
@@ -374,9 +381,10 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
 
     private async loadUserGroupIds(userId: number): Promise<Set<number>> {
         const { dataModel } = this.props;
+        const { groups } = this.state;
         const groupIds = new Set<number>();
 
-        for (const g of this.state.groups) {
+        for (const g of groups) {
             try {
                 const members = await dataModel.listGroupMembers(g.id);
 
@@ -393,7 +401,9 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
         return groupIds;
     }
 
-    private handleAddClick = (): void => {
+    private handleAddClick = (e: MouseEvent | KeyboardEvent): void => {
+        const trigger = e.currentTarget as HTMLElement;
+
         this.pendingIdCounter = -1;
         this.setState({
             pendingGroups: [],
@@ -405,10 +415,12 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
             formIsAdmin: false,
             formGroupIds: new Set(),
             errorMessage: "",
+        }, () => {
+            this.openEditorPopup(trigger);
         });
     };
 
-    private handleEditClick = async (user: IUserRow): Promise<void> => {
+    private handleEditClick = async (user: IUserRow, trigger: HTMLElement): Promise<void> => {
         const groupIds = await this.loadUserGroupIds(user.id);
 
         this.setState({
@@ -420,19 +432,28 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
             formIsAdmin: user.isAdmin,
             formGroupIds: groupIds,
             errorMessage: "",
+        }, () => {
+            this.openEditorPopup(trigger);
         });
     };
 
-    private handleResetPasswordClick = (user: IUserRow): void => {
+    private handleResetPasswordClick = (user: IUserRow, trigger: HTMLElement): void => {
         this.setState({
             editorMode: EditorMode.ResetPassword,
             editingUserId: user.id,
             formPassword: "",
             errorMessage: "",
+        }, () => {
+            this.openEditorPopup(trigger);
         });
     };
 
+    private openEditorPopup(target: HTMLElement): void {
+        this.popupRef.current?.open(target.getBoundingClientRect());
+    }
+
     private handleCancelEdit = (): void => {
+        this.popupRef.current?.close();
         this.setState({
             pendingGroups: [],
             editorMode: EditorMode.None,
@@ -447,7 +468,9 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
      * @returns The merged group list.
      */
     private getAllGroups(): IGroupRow[] {
-        return [...this.state.groups, ...this.state.pendingGroups];
+        const { groups, pendingGroups } = this.state;
+
+        return [...groups, ...pendingGroups];
     }
 
     /**
@@ -628,6 +651,7 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
             }
         }
 
+        this.popupRef.current?.close();
         this.setState({
             pendingGroups: [],
             editorMode: EditorMode.None,
@@ -707,7 +731,7 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
         this.setState({ formIsAdmin: checked });
     };
 
-    private handleClose = (_returnValue: string): void => {
+    private handleClose = (): void => {
         // Nothing special on close.
     };
 }

@@ -1,0 +1,139 @@
+/*
+ * Copyright (c) Mike Lischke. All rights reserved.
+ * Licensed under the MIT License. See License.txt in the project root for license information.
+ */
+
+.popup {
+    display: none;
+    position: absolute;
+
+    min-width: min-content;
+    max-width: 360px;
+
+    padding: 12px;
+    border: 1px solid var(--color-base-300);
+    border-radius: 0.5rem;
+
+    background: var(--color-base-100);
+    color: var(--color-base-content);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.popup.visible {
+    display: flex;
+}
+
+.popup > .header {
+    font-size: 1em;
+    line-height: 1.2;
+    font-weight: bold;
+
+    margin-bottom: 0.5em;
+}
+
+/* Arrow pointer via ::before pseudo-element. */
+.popup::before {
+    position: absolute;
+    content: "";
+
+    width: 0;
+    height: 0;
+
+    border: 8px solid transparent;
+}
+
+.popup.noArrow::before {
+    display: none;
+}
+
+/* ── Top placements: arrow at bottom ── */
+
+.popup.top-start::before {
+    bottom: -16px;
+    left: 1em;
+
+    border-top-color: var(--color-base-300);
+}
+
+.popup.top::before {
+    bottom: -16px;
+    left: calc(50% - 8px);
+
+    border-top-color: var(--color-base-300);
+}
+
+.popup.top-end::before {
+    bottom: -16px;
+    right: 1em;
+
+    border-top-color: var(--color-base-300);
+}
+
+/* ── Bottom placements: arrow at top ── */
+
+.popup.bottom-start::before {
+    top: -16px;
+    left: 1em;
+
+    border-bottom-color: var(--color-base-300);
+}
+
+.popup.bottom::before {
+    top: -16px;
+    left: calc(50% - 8px);
+
+    border-bottom-color: var(--color-base-300);
+}
+
+.popup.bottom-end::before {
+    top: -16px;
+    right: 1em;
+
+    border-bottom-color: var(--color-base-300);
+}
+
+/* ── Left placements: arrow at right ── */
+
+.popup.left-start::before {
+    right: -16px;
+    top: 1em;
+
+    border-left-color: var(--color-base-300);
+}
+
+.popup.left::before {
+    right: -16px;
+    top: calc(50% - 8px);
+
+    border-left-color: var(--color-base-300);
+}
+
+.popup.left-end::before {
+    right: -16px;
+    bottom: 1em;
+
+    border-left-color: var(--color-base-300);
+}
+
+/* ── Right placements: arrow at left ── */
+
+.popup.right-start::before {
+    left: -16px;
+    top: 1em;
+
+    border-right-color: var(--color-base-300);
+}
+
+.popup.right::before {
+    left: -16px;
+    top: calc(50% - 8px);
+
+    border-right-color: var(--color-base-300);
+}
+
+.popup.right-end::before {
+    left: -16px;
+    bottom: 1em;
+
+    border-right-color: var(--color-base-300);
+}

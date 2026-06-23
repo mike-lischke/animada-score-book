@@ -1,0 +1,28 @@
+/*
+ * Copyright (c) Mike Lischke. All rights reserved.
+ * Licensed under the MIT License. See License.txt in the project root for license information.
+ */
+
+.portal {
+    --background-opacity: 0.5;
+
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+
+    background: color-mix(in srgb,
+            var(--color-neutral, #000) calc(var(--background-opacity) * 100%),
+            transparent);
+}
+
+/* Allows mouse events to pass through to elements behind the portal.
+   Child elements still receive events. */
+.portal.ignoreMouse {
+    pointer-events: none;
+}
+
+.portal > * {
+    pointer-events: auto;
+}

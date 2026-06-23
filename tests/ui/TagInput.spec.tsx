@@ -28,7 +28,7 @@ describe("TagInput", () => {
         ];
 
         renderResult = render(<TagInput tags={tags} />);
-        const badges = renderResult.container.querySelectorAll(".badge");
+        const badges = renderResult.container.querySelectorAll(".du-badge");
 
         expect(badges.length).toBe(2);
         expect(badges[0].textContent).toContain("Alpha");

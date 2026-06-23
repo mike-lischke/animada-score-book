@@ -1,0 +1,66 @@
+/*
+ * Copyright (c) Mike Lischke. All rights reserved.
+ * Licensed under the MIT License. See License.txt in the project root for license information.
+ */
+
+.divider {
+    display: flex;
+    --divider-background-color: transparent;
+    background-color: var(--divider-background-color);
+
+    --divider-title-background-color: white;
+
+    flex: 0 0 auto;
+
+    &.sash.hover {
+        animation: fadeIn 100ms ease-in forwards;
+    }
+
+    &.horizontal {
+        flex-direction: column;
+
+        height: var(--thickness);
+        margin: 0;
+        overflow: visible;
+
+        width: 100%;
+
+        &[data-text]::after {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            flex: 0 0 auto;
+            content: attr(data-text);
+            padding: 0 8px;
+            background: radial-gradient(circle closest-side, var(--divider-title-background-color) 98%, transparent 100%);
+
+            color: var(--foreground);
+            transform: translateY(-44%);
+            z-index: 10;
+        }
+    }
+
+    &.vertical {
+        flex-direction: row;
+
+        width: var(--thickness);
+        margin: 0;
+        overflow: visible;
+
+        height: 100%;
+
+        &[data-text]::after {
+            display: flex;
+            flex-direction: row;
+            align-items: center;
+            flex: 0 0 auto;
+            content: attr(data-text);
+            padding: 0 8px;
+            background: radial-gradient(circle closest-side, var(--divider-title-background-color) 98%, transparent 100%);
+
+            color: var(--foreground);
+            transform: translateX(-44%);
+            z-index: 10;
+        }
+    }
+}

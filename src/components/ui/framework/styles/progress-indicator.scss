@@ -1,0 +1,85 @@
+/*
+ * Copyright (c) Mike Lischke. All rights reserved.
+ * Licensed under the MIT License. See License.txt in the project root for license information.
+ */
+
+@use "sass:math";
+.progressIndicatorHost {
+    flex: 1 1 auto;
+    background: var(--color-base-100);
+    overflow: hidden;
+
+    --position: 0;
+    --width: 150;
+    --height: 150;
+    --strokeWidth: 10;
+
+    /* 10 is the stroke width of the circle. */
+    --perimeter: calc((var(--width) - calc(2 * var(--strokeWidth))) * #{math.$pi});
+
+    svg {
+        width: calc(var(--width) * 1px);
+        height: calc(var(--height) * 1px);
+    }
+
+    .linearBackground {
+        background: var(--color-base-200);
+        justify-content: flex-start;
+        border-radius: 100px;
+        align-items: center;
+        position: relative;
+        padding: 2px 4px;
+        display: flex;
+        height: calc(var(--height) * 1px);
+        width: 100%;
+
+        overflow: hidden;
+    }
+
+    .linear {
+        animation: linearFrames 0.5s normal forwards;
+        box-shadow: 0 10px 40px -10px var(--color-primary);
+        border-radius: 100px;
+        background: var(--color-primary);
+        height: 100%;
+        width: 0;
+
+        &.animated {
+            animation: indeterminateLinearFrames 2s normal infinite;
+            width: 100%;
+        }
+    }
+
+    .circleBackground {
+        &.animated {
+            animation: rotate 3s linear infinite;
+
+            circle:nth-child(2) {
+                animation: indeterminateCircleFrames 2s linear infinite;
+                stroke-dashoffset: 0;
+            }
+        }
+
+        circle {
+            width: 100%;
+            height: 100%;
+            fill: none;
+            stroke-width: calc(var(--strokeWidth) * 1px);
+            stroke-linecap: round;
+            transform: translate(calc(var(--strokeWidth) * 0.5px), calc(var(--strokeWidth) * 0.5px));
+
+            &:nth-child(1) {
+                stroke-dashoffset: 0;
+                stroke: var(--color-base-300);
+            }
+
+            &:nth-child(2) {
+                animation: circleFrames 1s ease-in-out forwards;
+                stroke: var(--color-primary);
+
+                /* Move by one quadrant to start from top. */
+                stroke-dashoffset: calc(var(--perimeter) * 0.25px);
+            }
+        }
+    }
+}

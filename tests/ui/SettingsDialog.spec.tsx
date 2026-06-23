@@ -3,7 +3,8 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import { cleanup, render, type RenderResult } from "@testing-library/preact";
+import { cleanup, render, waitFor, type RenderResult } from "@testing-library/preact";
+import { createRef, type FunctionComponent } from "preact";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { IUISettings } from "../../src/core/AppStorage.js";
@@ -162,13 +163,22 @@ describe.sequential("SettingsDialog (class)", () => {
         });
     });
 
-    it("renders the settings dialog structure", () => {
-        renderResult = render(<TestableSettingsDialog />);
+    it("renders the settings dialog structure", async () => {
+        const dialogRef = createRef<SettingsDialog>();
+        const Wrapper: FunctionComponent = () => {
+            return <TestableSettingsDialog ref={dialogRef} />;
+        };
 
-        expect(renderResult.container.querySelector("#settingsDialog")).toBeTruthy();
-        expect(renderResult.container.querySelector(".settings-card")).toBeTruthy();
-        expect(renderResult.container.querySelector("#settings-button-cancel")).toBeTruthy();
-        expect(renderResult.container.querySelector("#settings-button-save")).toBeTruthy();
+        renderResult = render(<Wrapper />);
+        dialogRef.current?.open();
+
+        await waitFor(() => {
+            expect(document.body.querySelector("#settingsDialog")).toBeTruthy();
+        });
+
+        expect(document.body.querySelector(".settings-card")).toBeTruthy();
+        expect(document.body.querySelector("#settings-button-cancel")).toBeTruthy();
+        expect(document.body.querySelector("#settings-button-save")).toBeTruthy();
     });
 
     it("matches snapshot for default rendering", () => {
@@ -179,6 +189,7 @@ describe.sequential("SettingsDialog (class)", () => {
 
         renderResult = render(<TestableSettingsDialog />);
 
-        expect(renderResult.container.firstElementChild).toMatchSnapshot();
+        // Dialog now renders via Portal into document.body.
+        expect(document.body.firstElementChild).toMatchSnapshot();
     });
 });

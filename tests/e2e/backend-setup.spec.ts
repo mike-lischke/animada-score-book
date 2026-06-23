@@ -118,7 +118,7 @@ test.describe("Setup: no database", () => {
         await page.waitForSelector("#backendSetupDialog", { state: "visible", timeout: 5000 });
 
         await expect(page.locator("#backendSetupDialog")).toBeVisible();
-        await expect(page.locator("#backendSetupDialog .du-modal-box")).toContainText("Database Setup");
+        await expect(page.locator("#backendSetupDialog")).toContainText("Database Setup");
     });
 
     test("test connection shows success", async ({ page }) => {
