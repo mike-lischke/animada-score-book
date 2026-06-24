@@ -6,7 +6,6 @@
 import { ComponentChild, createRef } from "preact";
 
 import { Button } from "../components/ui/framework/Button.js";
-import { Checkbox } from "../components/ui/framework/Checkbox.js";
 import { Codicon } from "../components/ui/framework/Codicon.js";
 import { Container } from "../components/ui/framework/Container.js";
 import { Dialog, DialogResponseClosure } from "../components/ui/framework/Dialog.js";
@@ -15,9 +14,10 @@ import { Input } from "../components/ui/framework/Input.js";
 import { Label } from "../components/ui/framework/Label.js";
 import { TagInput } from "../components/ui/framework/TagInput.js";
 import { ChildAlignment, Orientation } from "../components/ui/framework/ui-types.js";
-import { UIComponent, type ICommonUIProperties } from "../components/ui/framework/UIComponent.js";
+import { UIComponent, ComponentPlacement, type ICommonUIProperties } from "../components/ui/framework/UIComponent.js";
 import { ConfirmDialog } from "../components/ui/composites/ConfirmDialog.js";
 import { Popup } from "../components/ui/composites/Popup.js";
+import { NotificationCenter } from "../components/ui/NotificationCenter/NotificationCenter.js";
 import type { IGroupRow, IUserRow, ScoreBookDataModel } from "../core/ScoreBookDataModel.js";
 
 enum EditorMode {
@@ -51,7 +51,6 @@ interface IUserGroupEditorState {
     formUsername: string;
     formDisplayName: string;
     formPassword: string;
-    formIsAdmin: boolean;
 
     /** Group IDs the edited/created user should belong to (real + pending). */
     formGroupIds: Set<number>;
@@ -79,7 +78,6 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
             formUsername: "",
             formDisplayName: "",
             formPassword: "",
-            formIsAdmin: false,
             formGroupIds: new Set(),
         };
     }
@@ -94,7 +92,6 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
             formUsername: "",
             formDisplayName: "",
             formPassword: "",
-            formIsAdmin: false,
             formGroupIds: new Set(),
         }, () => {
             this.dialogRef.current?.open();
@@ -109,7 +106,6 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
         if (loading) {
             actions.push(<Label key="loading" caption="Loading…" />);
         }
-        actions.push(<Button key="close" id="ug-close" value="close" caption="Close" />);
 
         return (
             <>
@@ -120,234 +116,255 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
                 <Dialog
                     ref={this.dialogRef}
                     id="userGroupEditorDialog"
-                    caption={
-                        <Container
-                            orientation={Orientation.LeftToRight}
-                            crossAlignment={ChildAlignment.Center}
-                        >
-                            <Icon src={Codicon.Organization} style={{ fontSize: "20px", marginRight: "6px" }} />
-                            Users &amp; Groups
-                        </Container>
-                    }
+                    closeOnBackdropClick={true}
                     onClose={this.handleClose}
-                    actions={actions}
+                    actions={actions.length > 0 ? actions : undefined}
                 >
+                    <Container
+                        className="font-bold text-lg"
+                        orientation={Orientation.LeftToRight}
+                        crossAlignment={ChildAlignment.Center}
+                    >
+                        <Icon src={Codicon.Organization} style={{ fontSize: "24px", marginRight: "8px" }} />
+                        Users &amp; Groups
+                    </Container>
+
                     {errorMessage && (
                         <Label className="text-error text-sm" caption={errorMessage} />
                     )}
 
-                    <Container
-                        orientation={Orientation.TopDown}
-                        style={{ marginTop: "8px" }}
-                    >
-                        <Container
-                            orientation={Orientation.LeftToRight}
-                            mainAlignment={ChildAlignment.SpaceBetween}
-                            crossAlignment={ChildAlignment.Center}
-                            style={{ marginBottom: "8px" }}
-                        >
-                            <Button
-                                id="ug-add-user"
-                                caption="+"
-                                onClick={this.handleAddClick}
-                            />
-                        </Container>
+                    {!loading && (
+                        <Container className="settings-card" orientation={Orientation.TopDown}>
+                            <Container
+                                className="settings-row"
+                                orientation={Orientation.LeftToRight}
+                                mainAlignment={ChildAlignment.SpaceBetween}
+                                crossAlignment={ChildAlignment.Center}
+                            >
+                                <span></span>
+                                <Button
+                                    id="ug-add-user"
+                                    caption="+ Add User"
+                                    onClick={this.handleAddClick}
+                                />
+                            </Container>
 
-                        <Container
-                            orientation={Orientation.TopDown}
-                            className="ug-list"
-                            style={{ maxHeight: "400px", overflowY: "auto" }}
-                        >
-                            {users.length === 0 && !loading && (
-                                <Label className="text-base-content/50" caption="No users found." />
-                            )}
-                            {users.map((u) => {
-                                return (
-                                    <Container
-                                        key={u.id}
-                                        orientation={Orientation.LeftToRight}
-                                        crossAlignment={ChildAlignment.Center}
-                                        className="ug-list-item"
-                                        style={{
-                                            padding: "6px 8px",
-                                            borderBottom: "1px solid var(--color-base-300)",
-                                        }}
-                                    >
+                            {users.length === 0 ? (
+                                <Container className="settings-row">
+                                    <Label className="text-base-content/50" caption="No users found." />
+                                </Container>
+                            ) : (
+                                users.map((u) => {
+                                    return (
                                         <Container
-                                            orientation={Orientation.TopDown}
-                                            style={{ flex: 1, minWidth: 0 }}
+                                            key={u.id}
+                                            className="settings-row"
+                                            orientation={Orientation.LeftToRight}
+                                            crossAlignment={ChildAlignment.Center}
                                         >
-                                            <Label caption={u.displayName || u.username} />
-                                            <Label
-                                                className="text-xs text-base-content/50"
-                                                caption={`@${u.username}`}
-                                            />
+                                            <Container
+                                                orientation={Orientation.TopDown}
+                                                style={{ flex: 1, minWidth: 0 }}
+                                            >
+                                                <Label caption={u.displayName || u.username} />
+                                                <Label
+                                                    className="text-xs text-base-content/50"
+                                                    caption={`@${u.username}`}
+                                                />
+                                            </Container>
+                                            {u.isAdmin && (
+                                                <Label
+                                                    className="text-xs text-accent"
+                                                    caption="admin"
+                                                    style={{ marginRight: "8px" }}
+                                                />
+                                            )}
+                                            <Button
+                                                imageOnly
+                                                className="du-btn-xs"
+                                                data-tooltip="Edit"
+                                                onClick={(e) => {
+                                                    const trigger = e.currentTarget as HTMLElement;
+
+                                                    void this.handleEditClick(u, trigger);
+                                                }}
+                                            >
+                                                <Icon src={Codicon.Edit} />
+                                            </Button>
+                                            <Button
+                                                imageOnly
+                                                className="du-btn-xs"
+                                                data-tooltip="Reset Password"
+                                                onClick={(e) => {
+                                                    const trigger = e.currentTarget as HTMLElement;
+
+                                                    this.handleResetPasswordClick(u, trigger);
+                                                }}
+                                            >
+                                                <Icon src={Codicon.Key} />
+                                            </Button>
+                                            <Button
+                                                imageOnly
+                                                className="du-btn-xs"
+                                                data-tooltip="Delete"
+                                                onClick={() => {
+                                                    void this.handleDeleteUser(u);
+                                                }}
+                                            >
+                                                <Icon src={Codicon.Trash} />
+                                            </Button>
                                         </Container>
-                                        {u.isAdmin && (
-                                            <Label
-                                                className="text-xs text-accent"
-                                                caption="admin"
-                                                style={{ marginRight: "8px" }}
-                                            />
-                                        )}
-                                        <Button
-                                            imageOnly
-                                            className="du-btn-xs"
-                                            data-tooltip="Edit"
-                                            onClick={(e) => {
-                                                const trigger = e.currentTarget as HTMLElement;
-
-                                                void this.handleEditClick(u, trigger);
-                                            }}
-                                        >
-                                            <Icon src={Codicon.Edit} />
-                                        </Button>
-                                        <Button
-                                            imageOnly
-                                            className="du-btn-xs"
-                                            data-tooltip="Reset Password"
-                                            onClick={(e) => {
-                                                const trigger = e.currentTarget as HTMLElement;
-
-                                                this.handleResetPasswordClick(u, trigger);
-                                            }}
-                                        >
-                                            <Icon src={Codicon.Key} />
-                                        </Button>
-                                        <Button
-                                            imageOnly
-                                            className="du-btn-xs"
-                                            data-tooltip="Delete"
-                                            disabled={u.username === "anonymous"}
-                                            onClick={() => {
-                                                void this.handleDeleteUser(u);
-                                            }}
-                                        >
-                                            <Icon src={Codicon.Trash} />
-                                        </Button>
-                                    </Container>
-                                );
-                            })}
+                                    );
+                                })
+                            )}
                         </Container>
-                    </Container>
+                    )}
                 </Dialog>
             </>
         );
     }
 
     private renderEditorForm(): ComponentChild {
-        const { editorMode, formUsername, formDisplayName, formPassword, formIsAdmin, formGroupIds } = this.state;
+        const { editorMode, formUsername, formDisplayName, formPassword, formGroupIds } = this.state;
 
         const isCreate = editorMode === EditorMode.Create;
         const isReset = editorMode === EditorMode.ResetPassword;
 
         return (
-            <Container
-                orientation={Orientation.TopDown}
-                className="ug-form"
-                style={{
-                    padding: "8px 12px",
-                    marginBottom: "8px",
-                    border: "1px solid var(--color-base-300)",
-                    borderRadius: "4px",
-                    gap: "6px",
-                }}
-            >
+            <Container orientation={Orientation.TopDown}>
                 {isReset ? (
-                    <>
-                        <Label caption="Reset Password" />
+                    <Container
+                        className="settings-row"
+                        orientation={Orientation.LeftToRight}
+                        mainAlignment={ChildAlignment.SpaceBetween}
+                        crossAlignment={ChildAlignment.Center}
+                    >
+                        <Label className="settings-row-label" caption="New Password" style={{ minWidth: "100px" }} />
                         <Input
-                            placeholder="New password (min 6 chars)"
+                            placeholder="Min 6 characters"
                             password
                             value={formPassword}
+                            style={{ padding: "3px" }}
                             onChange={this.handleFormPasswordChange}
                         />
-                    </>
+                    </Container>
                 ) : (
                     <>
-                        <Label caption={isCreate ? "New User" : "Edit User"} />
-                        <Input
-                            placeholder="Username"
-                            value={formUsername}
-                            onChange={this.handleFormUsernameChange}
-                        />
-                        <Input
-                            placeholder="Display Name"
-                            value={formDisplayName}
-                            onChange={this.handleFormDisplayNameChange}
-                        />
-                        {isCreate && (
-                            <Input
-                                placeholder="Password (min 6 chars)"
-                                password
-                                value={formPassword}
-                                onChange={this.handleFormPasswordChange}
-                            />
-                        )}
                         <Container
+                            className="settings-row"
                             orientation={Orientation.LeftToRight}
+                            mainAlignment={ChildAlignment.SpaceBetween}
                             crossAlignment={ChildAlignment.Center}
                         >
-                            <Checkbox
-                                id="ug-form-is-admin"
-                                checked={formIsAdmin}
-                                onChange={this.handleFormIsAdminChange}
+                            <Label className="settings-row-label" caption="Username" style={{ minWidth: "100px" }} />
+                            <Input
+                                placeholder="Username"
+                                value={formUsername}
+                                style={{ padding: "3px" }}
+                                onChange={this.handleFormUsernameChange}
                             />
-                            <Label caption="Admin" style={{ marginLeft: "4px" }} />
                         </Container>
-                        <Label caption="Group Membership" style={{ marginTop: "2px" }} />
-                        <TagInput
-                            tags={this.getAllGroups()
-                                .filter((g) => {
-                                    return formGroupIds.has(g.id);
-                                })
-                                .map((g) => {
-                                    return { id: g.id, caption: g.name, color: g.color };
-                                })}
-                            completions={this.getAllGroups()
-                                .filter((g) => {
-                                    return !formGroupIds.has(g.id);
-                                })
-                                .map((g) => {
-                                    return g.name;
-                                })}
-                            removable
-                            onAdd={(caption) => {
-                                this.handleTagAdd(caption);
-                            }}
-                            onRemove={(id) => {
-                                const next = new Set(formGroupIds);
-                                next.delete(id);
 
-                                // Also remove from pending if it was a pending group.
-                                const { pendingGroups } = this.state;
-                                const filtered = pendingGroups.filter((g) => {
-                                    return g.id !== id;
-                                });
+                        <Container
+                            className="settings-row"
+                            orientation={Orientation.LeftToRight}
+                            mainAlignment={ChildAlignment.SpaceBetween}
+                            crossAlignment={ChildAlignment.Center}
+                        >
+                            <Label
+                                className="settings-row-label"
+                                caption="Display Name"
+                                style={{ minWidth: "100px" }}
+                            />
+                            <Input
+                                placeholder="Display Name"
+                                value={formDisplayName}
+                                style={{ padding: "3px" }}
+                                onChange={this.handleFormDisplayNameChange}
+                            />
+                        </Container>
 
-                                this.setState({ formGroupIds: next, pendingGroups: filtered });
-                            }}
-                            onBadgeColorChange={(id, color) => {
-                                void this.handleGroupColorChange(id, color);
-                            }}
-                        />
+                        {isCreate && (
+                            <Container
+                                className="settings-row"
+                                orientation={Orientation.LeftToRight}
+                                mainAlignment={ChildAlignment.SpaceBetween}
+                                crossAlignment={ChildAlignment.Center}
+                            >
+                                <Label
+                                    className="settings-row-label"
+                                    caption="Password"
+                                    style={{ minWidth: "100px" }}
+                                />
+                                <Input
+                                    placeholder="Min 6 characters"
+                                    password
+                                    value={formPassword}
+                                    style={{ padding: "3px" }}
+                                    onChange={this.handleFormPasswordChange}
+                                />
+                            </Container>
+                        )}
+
+                        <Container
+                            className="settings-row settings-row-stacked"
+                            orientation={Orientation.TopDown}
+                        >
+                            <Label className="settings-row-label" caption="Group Membership" />
+                            <TagInput
+                                tags={this.getAllGroups()
+                                    .filter((g) => {
+                                        return formGroupIds.has(g.id);
+                                    })
+                                    .map((g) => {
+                                        return { id: g.id, caption: g.name, color: g.color };
+                                    })}
+                                completions={this.getAllGroups()
+                                    .filter((g) => {
+                                        return !formGroupIds.has(g.id);
+                                    })
+                                    .map((g) => {
+                                        return g.name;
+                                    })}
+                                removable
+                                onAdd={(caption) => {
+                                    this.handleTagAdd(caption);
+                                }}
+                                onRemove={(id) => {
+                                    const next = new Set(formGroupIds);
+                                    next.delete(id);
+
+                                    // Also remove from pending if it was a pending group.
+                                    const { pendingGroups } = this.state;
+                                    const filtered = pendingGroups.filter((g) => {
+                                        return g.id !== id;
+                                    });
+
+                                    this.setState({ formGroupIds: next, pendingGroups: filtered });
+                                }}
+                                onBadgeColorChange={(id, color) => {
+                                    void this.handleGroupColorChange(id, color);
+                                }}
+                            />
+                        </Container>
                     </>
                 )}
 
                 <Container
+                    className="settings-row"
                     orientation={Orientation.LeftToRight}
-                    style={{ gap: "8px", marginTop: "4px" }}
+                    mainAlignment={ChildAlignment.SpaceBetween}
+                    crossAlignment={ChildAlignment.Center}
                 >
-                    <Button
-                        caption={isCreate ? "Create" : (isReset ? "Set Password" : "Save")}
-                        onClick={() => {
-                            void this.handleSave();
-                        }}
-                    />
-                    <Button
-                        caption="Cancel"
-                        onClick={this.handleCancelEdit}
-                    />
+                    <span></span>
+                    <Container orientation={Orientation.LeftToRight} style={{ gap: "8px" }}>
+                        <Button
+                            caption={isCreate ? "Create" : (isReset ? "Set Password" : "Save")}
+                            onClick={() => {
+                                void this.handleSave();
+                            }}
+                        />
+                    </Container>
                 </Container>
             </Container>
         );
@@ -363,7 +380,12 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
         const { dataModel } = this.props;
 
         try {
-            this.setState({ users: await dataModel.listUsers() });
+            const users = await dataModel.listUsers();
+            this.setState({
+                users: users.filter((u) => {
+                    return u.username !== "anonymous";
+                })
+            });
         } catch (e) {
             this.setState({ errorMessage: (e as Error).message });
         }
@@ -412,7 +434,6 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
             formUsername: "",
             formDisplayName: "",
             formPassword: "",
-            formIsAdmin: false,
             formGroupIds: new Set(),
             errorMessage: "",
         }, () => {
@@ -429,7 +450,6 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
             formUsername: user.username,
             formDisplayName: user.displayName,
             formPassword: "",
-            formIsAdmin: user.isAdmin,
             formGroupIds: groupIds,
             errorMessage: "",
         }, () => {
@@ -449,18 +469,8 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
     };
 
     private openEditorPopup(target: HTMLElement): void {
-        this.popupRef.current?.open(target.getBoundingClientRect());
+        this.popupRef.current?.open(target.getBoundingClientRect(), ComponentPlacement.TopCenter);
     }
-
-    private handleCancelEdit = (): void => {
-        this.popupRef.current?.close();
-        this.setState({
-            pendingGroups: [],
-            editorMode: EditorMode.None,
-            editingUserId: 0,
-            errorMessage: "",
-        });
-    };
 
     /**
      * Returns all groups — both persisted and pending.
@@ -557,7 +567,7 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
     private async handleSave(): Promise<void> {
         const {
             editorMode, editingUserId, formUsername, formDisplayName,
-            formPassword, formIsAdmin, formGroupIds,
+            formPassword, formGroupIds,
         } = this.state;
 
         const username = formUsername.trim();
@@ -575,6 +585,10 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
             try {
                 await dataModel.updateUser(editingUserId, { password: formPassword });
                 this.setState({ editorMode: EditorMode.None, editingUserId: 0, errorMessage: "" });
+                const targetUser = this.state.users.find((u) => {
+                    return u.id === editingUserId;
+                });
+                void NotificationCenter.showInfo(`Password reset for @${targetUser?.username ?? editingUserId}.`);
             } catch (e) {
                 this.setState({ errorMessage: (e as Error).message });
             }
@@ -606,7 +620,7 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
                 const idMap = await this.persistPendingGroups();
 
                 const newId = await dataModel.createUser(
-                    username, formPassword, displayName || username, formIsAdmin,
+                    username, formPassword, displayName || username,
                 );
 
                 for (const groupId of formGroupIds) {
@@ -614,6 +628,8 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
 
                     await dataModel.addUserToGroup(newId, realId);
                 }
+
+                void NotificationCenter.showInfo(`User "${displayName || username}" created.`);
             } catch (e) {
                 this.setState({ errorMessage: (e as Error).message });
 
@@ -626,7 +642,6 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
 
                 await dataModel.updateUser(editingUserId, {
                     displayName: displayName || username,
-                    isAdmin: formIsAdmin,
                 });
 
                 const currentIds = await this.loadUserGroupIds(editingUserId);
@@ -644,6 +659,8 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
                         await dataModel.addUserToGroup(editingUserId, realId);
                     }
                 }
+
+                void NotificationCenter.showInfo(`User "${displayName || username}" updated.`);
             } catch (e) {
                 this.setState({ errorMessage: (e as Error).message });
 
@@ -683,16 +700,13 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
     }
 
     private async handleDeleteUser(user: IUserRow): Promise<void> {
-        if (user.username === "anonymous") {
-            this.setState({ errorMessage: "The anonymous system user cannot be deleted." });
-
-            return;
-        }
-
         const closure = await this.confirmDialogRef.current?.show(
             `Delete user "${user.displayName || user.username}"? This cannot be undone.`,
-            { accept: "Delete", refuse: "Cancel" },
+            { accept: "Delete" },
             "Delete User",
+            undefined,
+            undefined,
+            true,
         );
 
         if (closure !== DialogResponseClosure.Accept) {
@@ -703,6 +717,7 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
 
         try {
             await dataModel.deleteUser(user.id);
+            void NotificationCenter.showInfo(`User "${user.displayName || user.username}" deleted.`);
         } catch (e) {
             this.setState({ errorMessage: (e as Error).message });
 
@@ -725,10 +740,6 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
     private handleFormPasswordChange = (e: InputEvent): void => {
         const target = e.target as HTMLInputElement;
         this.setState({ formPassword: target.value });
-    };
-
-    private handleFormIsAdminChange = (checked: boolean): void => {
-        this.setState({ formIsAdmin: checked });
     };
 
     private handleClose = (): void => {

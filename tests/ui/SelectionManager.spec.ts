@@ -104,7 +104,7 @@ const makeNote = (id: number): Mutable<ISbDmNoteEvent> => {
     };
 };
 
-describe("SelectionManager (class)", () => {
+describe.sequential("SelectionManager (class)", () => {
     let manager: SelectionManager;
     let track: ISbDmTrack;
     let noteA: Mutable<ISbDmNoteEvent>;
@@ -134,7 +134,7 @@ describe("SelectionManager (class)", () => {
         requisitions.unregister("selectionChanged", publishSpy);
     });
 
-    it.skip("clicking the same anchor again clears selection", () => {
+    it("clicking the same anchor again clears selection", () => {
         manager.handleClick(noteA);
         manager.handleClick(noteA);
         expect(manager.isSelected(noteA)).toBe(false);

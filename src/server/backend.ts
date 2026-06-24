@@ -13,8 +13,9 @@ import { extname, join, resolve } from "node:path";
 
 import { convertErrorToString } from "../core/utils.js";
 import {
-    buildCapabilities, checkPermission, createAccessToken, createRefreshToken, hashPassword, hasUsers, makePermBits,
-    Permission, refreshTokenExpirySeconds, setPermissions, verifyAndRotateRefreshToken, verifyPassword, verifyToken,
+    adminGroupName, buildCapabilities, checkPermission, createAccessToken, createRefreshToken, hashPassword,
+    hasUsers, isUserInAdminGroup, makePermBits, Permission, refreshTokenExpirySeconds, setPermissions,
+    verifyAndRotateRefreshToken, verifyPassword, verifyToken,
     type ITokenPayload,
 } from "./auth.js";
 import { DatabaseEngine, type IDatabaseAdapter, type IDatabaseConfig } from "./database.js";
@@ -308,9 +309,9 @@ const seedAnonymousUser = async (targetAdapter: IDatabaseAdapter): Promise<void>
     const passwordHash = await hashPassword(randomPassword);
 
     await targetAdapter.insertReturningId(
-        `INSERT INTO users (username, password_hash, display_name, is_admin)
-         VALUES (?, ?, ?, ?)`,
-        ["anonymous", passwordHash, "Anonymous", 0],
+        `INSERT INTO users (username, password_hash, display_name)
+         VALUES (?, ?, ?)`,
+        ["anonymous", passwordHash, "Anonymous"],
     );
 
     console.log("Seeded anonymous system user.");
@@ -354,7 +355,7 @@ const handleSetup = async (req: IncomingMessage, res: ServerResponse): Promise<v
         if (usersExist) {
             const user = getAuthUser(req);
 
-            if (!user?.isAdmin) {
+            if (!user || !(await isUserInAdminGroup(adapter, user.userId))) {
                 sendError(res, "Forbidden", 403);
 
                 return;
@@ -872,7 +873,7 @@ const handleMove = async (req: IncomingMessage, res: ServerResponse): Promise<vo
 const handleClearAll = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
     const user = getAuthUser(req);
 
-    if (!user?.isAdmin) {
+    if (!user || !(await isUserInAdminGroup(adapter, user.userId))) {
         sendError(res, "Forbidden", 403);
 
         return;
@@ -905,9 +906,9 @@ const handleLogin = async (req: IncomingMessage, res: ServerResponse): Promise<v
 
     const rows = await adapter.query<{
         id: number; username: string; passwordHash: string;
-        displayName: string; isAdmin: number | boolean;
+        displayName: string;
     }>(
-        "SELECT id, username, password_hash AS passwordHash, display_name AS displayName, is_admin AS isAdmin" +
+        "SELECT id, username, password_hash AS passwordHash, display_name AS displayName" +
         " FROM users WHERE username = ?",
         [username],
     );
@@ -927,10 +928,12 @@ const handleLogin = async (req: IncomingMessage, res: ServerResponse): Promise<v
         return;
     }
 
+    const admin = await isUserInAdminGroup(adapter, user.id);
+
     const payload: ITokenPayload = {
         userId: user.id,
         username: user.username,
-        isAdmin: Boolean(user.isAdmin),
+        isAdmin: admin,
     };
 
     const accessToken = createAccessToken(payload);
@@ -944,7 +947,7 @@ const handleLogin = async (req: IncomingMessage, res: ServerResponse): Promise<v
 
     setRefreshTokenCookie(res, refreshToken.raw, refreshToken.maxAge);
 
-    const capabilities = buildCapabilities(payload);
+    const capabilities = await buildCapabilities(adapter, payload);
 
     sendJson(res, {
         token: accessToken,
@@ -977,8 +980,8 @@ const handleRefresh = async (req: IncomingMessage, res: ServerResponse): Promise
     }
 
     // Verify the user still exists.
-    const rows = await adapter.query<{ id: number; username: string; isAdmin: number | boolean; }>(
-        "SELECT id, username, is_admin AS isAdmin FROM users WHERE id = ?",
+    const rows = await adapter.query<{ id: number; username: string; }>(
+        "SELECT id, username FROM users WHERE id = ?",
         [result.userId],
     );
 
@@ -990,10 +993,11 @@ const handleRefresh = async (req: IncomingMessage, res: ServerResponse): Promise
     }
 
     const user = rows[0];
+    const admin = await isUserInAdminGroup(adapter, user.id);
     const accessToken = createAccessToken({
         userId: user.id,
         username: user.username,
-        isAdmin: Boolean(user.isAdmin),
+        isAdmin: admin,
     });
 
     setRefreshTokenCookie(res, result.newRawToken, refreshTokenExpirySeconds);
@@ -1010,7 +1014,7 @@ const handleWhoAmI = async (req: IncomingMessage, res: ServerResponse): Promise<
     const user = getAuthUser(req);
 
     if (!user) {
-        const capabilities = buildCapabilities(undefined);
+        const capabilities = await buildCapabilities(adapter, undefined);
 
         sendJson(res, { authenticated: false, capabilities });
 
@@ -1020,14 +1024,13 @@ const handleWhoAmI = async (req: IncomingMessage, res: ServerResponse): Promise<
     // Verify the user still exists.
     const rows = await adapter.query<{
         id: number; username: string; displayName: string;
-        isAdmin: number | boolean;
     }>(
-        "SELECT id, username, display_name AS displayName, is_admin AS isAdmin FROM users WHERE id = ?",
+        "SELECT id, username, display_name AS displayName FROM users WHERE id = ?",
         [user.userId],
     );
 
     if (rows.length === 0) {
-        const capabilities = buildCapabilities(undefined);
+        const capabilities = await buildCapabilities(adapter, undefined);
 
         sendJson(res, { authenticated: false, capabilities });
 
@@ -1035,7 +1038,9 @@ const handleWhoAmI = async (req: IncomingMessage, res: ServerResponse): Promise<
     }
 
     const dbUser = rows[0];
-    const capabilities = buildCapabilities(user);
+    const admin = await isUserInAdminGroup(adapter, dbUser.id);
+    const payload: ITokenPayload = { userId: dbUser.id, username: dbUser.username, isAdmin: admin };
+    const capabilities = await buildCapabilities(adapter, payload);
 
     sendJson(res, {
         authenticated: true,
@@ -1043,7 +1048,7 @@ const handleWhoAmI = async (req: IncomingMessage, res: ServerResponse): Promise<
             id: dbUser.id,
             username: dbUser.username,
             displayName: dbUser.displayName,
-            isAdmin: Boolean(dbUser.isAdmin),
+            isAdmin: admin,
         },
         capabilities,
     });
@@ -1091,15 +1096,15 @@ const handleCreateInitialAdmin = async (req: IncomingMessage, res: ServerRespons
 
     const passwordHash = await hashPassword(password);
     const result = await adapter.insertReturningId(
-        `INSERT INTO users (username, password_hash, display_name, is_admin)
-         VALUES (?, ?, ?, ?)`,
-        [username, passwordHash, displayName, 1],
+        `INSERT INTO users (username, password_hash, display_name)
+         VALUES (?, ?, ?)`,
+        [username, passwordHash, displayName],
     );
 
     // Create an "Admins" group and add the user to it.
     const groupResult = await adapter.insertReturningId(
         "INSERT INTO `groups` (name, description) VALUES (?, ?)",
-        ["Admins", "System administrators with full access"],
+        [adminGroupName, "System administrators with full access"],
     );
 
     await adapter.execute(
@@ -1123,7 +1128,7 @@ const handleCreateInitialAdmin = async (req: IncomingMessage, res: ServerRespons
 
     setRefreshTokenCookie(res, refreshToken.raw, refreshToken.maxAge);
 
-    const capabilities = buildCapabilities(payload);
+    const capabilities = await buildCapabilities(adapter, payload);
 
     console.log(`Initial admin user created: id=${result.insertId}, username=${username}.`);
 
@@ -1137,14 +1142,20 @@ const handleCreateInitialAdmin = async (req: IncomingMessage, res: ServerRespons
 const handleListUsers = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
     const user = getAuthUser(req);
 
-    if (!user?.isAdmin) {
+    if (!user || !(await isUserInAdminGroup(adapter, user.userId))) {
         sendError(res, "Forbidden", 403);
 
         return;
     }
 
     const rows = await adapter.query(
-        "SELECT id, username, display_name, is_admin, created_at, updated_at FROM users ORDER BY username",
+        `SELECT u.id, u.username, u.display_name, u.created_at, u.updated_at,
+                (ug.user_id IS NOT NULL) AS is_admin
+         FROM users u
+         LEFT JOIN user_groups ug ON u.id = ug.user_id
+             AND ug.group_id = (SELECT id FROM \`groups\` WHERE name = ?)
+         ORDER BY u.username`,
+        [adminGroupName],
     );
 
     sendJson(res, {
@@ -1164,7 +1175,7 @@ const handleListUsers = async (req: IncomingMessage, res: ServerResponse): Promi
 const handleCreateUser = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
     const authUser = getAuthUser(req);
 
-    if (!authUser?.isAdmin) {
+    if (!authUser || !(await isUserInAdminGroup(adapter, authUser.userId))) {
         sendError(res, "Forbidden", 403);
 
         return;
@@ -1174,7 +1185,6 @@ const handleCreateUser = async (req: IncomingMessage, res: ServerResponse): Prom
     const username = String(body.username ?? "").trim();
     const password = String(body.password ?? "");
     const displayName = String(body.displayName ?? username).trim();
-    const isAdmin = Boolean(body.isAdmin ?? false);
 
     if (!username || !password) {
         sendError(res, "Username and password required");
@@ -1207,9 +1217,9 @@ const handleCreateUser = async (req: IncomingMessage, res: ServerResponse): Prom
 
     const passwordHash = await hashPassword(password);
     const result = await adapter.insertReturningId(
-        `INSERT INTO users (username, password_hash, display_name, is_admin)
-         VALUES (?, ?, ?, ?)`,
-        [username, passwordHash, displayName, isAdmin ? 1 : 0],
+        `INSERT INTO users (username, password_hash, display_name)
+         VALUES (?, ?, ?)`,
+        [username, passwordHash, displayName],
     );
 
     sendJson(res, { success: true, id: result.insertId });
@@ -1218,7 +1228,7 @@ const handleCreateUser = async (req: IncomingMessage, res: ServerResponse): Prom
 const handleUpdateUser = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
     const authUser = getAuthUser(req);
 
-    if (!authUser?.isAdmin) {
+    if (!authUser || !(await isUserInAdminGroup(adapter, authUser.userId))) {
         sendError(res, "Forbidden", 403);
 
         return;
@@ -1239,11 +1249,6 @@ const handleUpdateUser = async (req: IncomingMessage, res: ServerResponse): Prom
     if (body.displayName !== undefined) {
         updates.push("display_name = ?");
         params.push(String(body.displayName).trim());
-    }
-
-    if (body.isAdmin !== undefined) {
-        updates.push("is_admin = ?");
-        params.push(body.isAdmin ? 1 : 0);
     }
 
     if (body.password) {
@@ -1272,7 +1277,7 @@ const handleUpdateUser = async (req: IncomingMessage, res: ServerResponse): Prom
 const handleDeleteUser = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
     const authUser = getAuthUser(req);
 
-    if (!authUser?.isAdmin) {
+    if (!authUser || !(await isUserInAdminGroup(adapter, authUser.userId))) {
         sendError(res, "Forbidden", 403);
 
         return;
@@ -1287,10 +1292,12 @@ const handleDeleteUser = async (req: IncomingMessage, res: ServerResponse): Prom
         return;
     }
 
-    // Prevent deleting the last admin.
+    // Prevent deleting the last admin (last member of the Admins group).
     if (id === authUser.userId) {
         const adminCount = await adapter.query<{ cnt: number; }>(
-            "SELECT COUNT(*) AS cnt FROM users WHERE is_admin = 1",
+            `SELECT COUNT(*) AS cnt FROM user_groups
+             WHERE group_id = (SELECT id FROM \`groups\` WHERE name = ?)`,
+            [adminGroupName],
         );
 
         if ((adminCount[0]?.cnt ?? 0) <= 1) {
@@ -1310,7 +1317,7 @@ const handleDeleteUser = async (req: IncomingMessage, res: ServerResponse): Prom
 const handleListGroups = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
     const user = getAuthUser(req);
 
-    if (!user?.isAdmin) {
+    if (!user || !(await isUserInAdminGroup(adapter, user.userId))) {
         sendError(res, "Forbidden", 403);
 
         return;
@@ -1336,7 +1343,7 @@ const handleListGroups = async (req: IncomingMessage, res: ServerResponse): Prom
 const handleCreateGroup = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
     const user = getAuthUser(req);
 
-    if (!user?.isAdmin) {
+    if (!user || !(await isUserInAdminGroup(adapter, user.userId))) {
         sendError(res, "Forbidden", 403);
 
         return;
@@ -1375,7 +1382,7 @@ const handleCreateGroup = async (req: IncomingMessage, res: ServerResponse): Pro
 const handleUpdateGroup = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
     const user = getAuthUser(req);
 
-    if (!user?.isAdmin) {
+    if (!user || !(await isUserInAdminGroup(adapter, user.userId))) {
         sendError(res, "Forbidden", 403);
 
         return;
@@ -1431,7 +1438,7 @@ const handleUpdateGroup = async (req: IncomingMessage, res: ServerResponse): Pro
 const handleDeleteGroup = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
     const user = getAuthUser(req);
 
-    if (!user?.isAdmin) {
+    if (!user || !(await isUserInAdminGroup(adapter, user.userId))) {
         sendError(res, "Forbidden", 403);
 
         return;
@@ -1456,7 +1463,7 @@ const handleDeleteGroup = async (req: IncomingMessage, res: ServerResponse): Pro
 const handleAddUserToGroup = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
     const user = getAuthUser(req);
 
-    if (!user?.isAdmin) {
+    if (!user || !(await isUserInAdminGroup(adapter, user.userId))) {
         sendError(res, "Forbidden", 403);
 
         return;
@@ -1483,7 +1490,7 @@ const handleAddUserToGroup = async (req: IncomingMessage, res: ServerResponse): 
 const handleRemoveUserFromGroup = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
     const user = getAuthUser(req);
 
-    if (!user?.isAdmin) {
+    if (!user || !(await isUserInAdminGroup(adapter, user.userId))) {
         sendError(res, "Forbidden", 403);
 
         return;
@@ -1510,7 +1517,7 @@ const handleRemoveUserFromGroup = async (req: IncomingMessage, res: ServerRespon
 const handleListGroupMembers = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
     const authUser = getAuthUser(req);
 
-    if (!authUser?.isAdmin) {
+    if (!authUser || !(await isUserInAdminGroup(adapter, authUser.userId))) {
         sendError(res, "Forbidden", 403);
 
         return;
@@ -1580,7 +1587,7 @@ const handleGetPermissions = async (req: IncomingMessage, res: ServerResponse): 
     const perm = rows[0];
 
     // Restrict access: non-admins can only see permissions for entities they own.
-    if (!user?.isAdmin && perm.ownerId !== user?.userId) {
+    if (!user || (!(await isUserInAdminGroup(adapter, user.userId)) && perm.ownerId !== user.userId)) {
         sendError(res, "Forbidden", 403);
 
         return;
@@ -1607,7 +1614,7 @@ const handleGetPermissions = async (req: IncomingMessage, res: ServerResponse): 
 const handleSetPermissions = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
     const user = getAuthUser(req);
 
-    if (!user?.isAdmin) {
+    if (!user || !(await isUserInAdminGroup(adapter, user.userId))) {
         sendError(res, "Forbidden", 403);
 
         return;
@@ -1731,7 +1738,7 @@ const serveSoundLibFile = (req: IncomingMessage, res: ServerResponse): void => {
 const handleUploadInstrumentImage = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
     const user = getAuthUser(req);
 
-    if (!user?.isAdmin) {
+    if (!user || !(await isUserInAdminGroup(adapter, user.userId))) {
         sendError(res, "Forbidden", 403);
 
         return;

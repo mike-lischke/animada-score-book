@@ -86,6 +86,9 @@ const worldShift = 0;
 const groupShift = 3;
 const ownerShift = 6;
 
+/** Name of the built-in administrators group. */
+export const adminGroupName = "Admins";
+
 /** Entity types used in the permissions table. */
 export const enum EntityType {
     Score = "score",
@@ -298,10 +301,28 @@ const getRolePerm = (permBits: number, shift: number): number => {
  * @param requiredPerm The required permission bit(s) (e.g. Perm.R | Perm.W).
  * @returns True if the user has the required permission.
  */
+/**
+ * Checks whether a user is a member of the Admins group.
+ *
+ * @param adapter The database adapter.
+ * @param userId  The user id.
+ * @returns True if the user is in the Admins group.
+ */
+export const isUserInAdminGroup = async (adapter: IDatabaseAdapter, userId: number): Promise<boolean> => {
+    const rows = await adapter.query<{ cnt: number; }>(
+        `SELECT COUNT(*) AS cnt FROM user_groups ug
+         JOIN \`groups\` g ON ug.group_id = g.id
+         WHERE ug.user_id = ? AND g.name = ?`,
+        [userId, adminGroupName],
+    );
+
+    return (rows[0]?.cnt ?? 0) > 0;
+};
+
 export const checkPermission = async (adapter: IDatabaseAdapter, user: ITokenPayload | undefined, entityType: string,
     entityId: number | null, requiredPerm: number,): Promise<boolean> => {
     // Admin users always have full access.
-    if (user?.isAdmin) {
+    if (user && await isUserInAdminGroup(adapter, user.userId)) {
         return true;
     }
 
@@ -448,11 +469,13 @@ export const makePermBits = (ownerPerm: number, groupPerm: number, worldPerm: nu
  * Currently a simple admin check. When per-feature permissions are seeded,
  * this will check individual feature permissions.
  *
- * @param user The authenticated user, or undefined for anonymous.
+ * @param adapter The database adapter.
+ * @param user    The authenticated user, or undefined for anonymous.
  * @returns The capabilities object.
  */
-export const buildCapabilities = (user: ITokenPayload | undefined): ICapabilities => {
-    if (user?.isAdmin) {
+export const buildCapabilities = async (adapter: IDatabaseAdapter, user: ITokenPayload | undefined,
+): Promise<ICapabilities> => {
+    if (user && await isUserInAdminGroup(adapter, user.userId)) {
         return {
             canEditScores: true,
             canManageUsers: true,

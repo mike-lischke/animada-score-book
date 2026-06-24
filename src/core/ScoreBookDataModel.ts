@@ -996,15 +996,14 @@ export class ScoreBookDataModel {
      * @param username    The username (min 3 chars).
      * @param password    The password (min 6 chars).
      * @param displayName The display name.
-     * @param isAdmin     Whether the user is an admin.
      * @returns The new user's id.
      */
-    public async createUser(username: string, password: string, displayName: string, isAdmin: boolean,
+    public async createUser(username: string, password: string, displayName: string,
     ): Promise<number> {
         const res = await this.fetchApi("/api?action=createUser", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ username, password, displayName, isAdmin }),
+            body: JSON.stringify({ username, password, displayName }),
         });
 
         if (!res) {
@@ -1026,20 +1025,15 @@ export class ScoreBookDataModel {
      * @param id                 The user id.
      * @param fields             Fields to update.
      * @param fields.displayName The new display name (optional).
-     * @param fields.isAdmin     Whether the user is an admin (optional).
      * @param fields.password    The new password, if changing (optional).
      */
     public async updateUser(id: number, fields: {
-        displayName?: string; isAdmin?: boolean; password?: string;
+        displayName?: string; password?: string;
     },): Promise<void> {
         const body: Record<string, unknown> = { id };
 
         if (fields.displayName !== undefined) {
             body.displayName = fields.displayName;
-        }
-
-        if (fields.isAdmin !== undefined) {
-            body.isAdmin = fields.isAdmin;
         }
 
         if (fields.password) {

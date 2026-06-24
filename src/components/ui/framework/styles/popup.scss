@@ -31,109 +31,132 @@
     margin-bottom: 0.5em;
 }
 
-/* Arrow pointer via ::before pseudo-element. */
+/*
+ * Arrow pointer via a rotated square.
+ * The square has the popup background and only the two outward-facing
+ * sides get a border matching the popup border. The popup background
+ * covers the inner half, making the arrow blend seamlessly.
+ */
 .popup::before {
     position: absolute;
     content: "";
 
-    width: 0;
-    height: 0;
+    width: 10px;
+    height: 10px;
 
-    border: 8px solid transparent;
+    background: var(--color-base-100);
+    border-radius: 2px;
+    transform: rotate(45deg);
 }
 
 .popup.noArrow::before {
     display: none;
 }
 
-/* ── Top placements: arrow at bottom ── */
+/* ── Top placements: arrow at bottom (points down) ── */
+/* Outward sides: bottom + right */
 
 .popup.top-start::before {
-    bottom: -16px;
+    bottom: -6px;
     left: 1em;
 
-    border-top-color: var(--color-base-300);
+    border-bottom: 1px solid var(--color-base-300);
+    border-right: 1px solid var(--color-base-300);
 }
 
 .popup.top::before {
-    bottom: -16px;
-    left: calc(50% - 8px);
+    bottom: -6px;
+    left: calc(50% - 5px);
 
-    border-top-color: var(--color-base-300);
+    border-bottom: 1px solid var(--color-base-300);
+    border-right: 1px solid var(--color-base-300);
 }
 
 .popup.top-end::before {
-    bottom: -16px;
+    bottom: -6px;
     right: 1em;
 
-    border-top-color: var(--color-base-300);
+    border-bottom: 1px solid var(--color-base-300);
+    border-right: 1px solid var(--color-base-300);
 }
 
-/* ── Bottom placements: arrow at top ── */
+/* ── Bottom placements: arrow at top (points up) ── */
+/* Outward sides: top + left */
 
 .popup.bottom-start::before {
-    top: -16px;
+    top: -6px;
     left: 1em;
 
-    border-bottom-color: var(--color-base-300);
+    border-top: 1px solid var(--color-base-300);
+    border-left: 1px solid var(--color-base-300);
 }
 
 .popup.bottom::before {
-    top: -16px;
-    left: calc(50% - 8px);
+    top: -6px;
+    left: calc(50% - 5px);
 
-    border-bottom-color: var(--color-base-300);
+    border-top: 1px solid var(--color-base-300);
+    border-left: 1px solid var(--color-base-300);
 }
 
 .popup.bottom-end::before {
-    top: -16px;
+    top: -6px;
     right: 1em;
 
-    border-bottom-color: var(--color-base-300);
+    border-top: 1px solid var(--color-base-300);
+    border-left: 1px solid var(--color-base-300);
 }
 
-/* ── Left placements: arrow at right ── */
+/* ── Left placements: arrow at right (points right) ── */
+/* Outward sides: top + right */
 
 .popup.left-start::before {
-    right: -16px;
+    right: -6px;
     top: 1em;
 
-    border-left-color: var(--color-base-300);
+    border-top: 1px solid var(--color-base-300);
+    border-right: 1px solid var(--color-base-300);
 }
 
 .popup.left::before {
-    right: -16px;
-    top: calc(50% - 8px);
+    right: -6px;
+    top: calc(50% - 5px);
 
-    border-left-color: var(--color-base-300);
+    border-top: 1px solid var(--color-base-300);
+    border-right: 1px solid var(--color-base-300);
 }
 
 .popup.left-end::before {
-    right: -16px;
+    right: -6px;
     bottom: 1em;
 
-    border-left-color: var(--color-base-300);
+    border-top: 1px solid var(--color-base-300);
+    border-right: 1px solid var(--color-base-300);
 }
 
-/* ── Right placements: arrow at left ── */
+/* ── Right placements: arrow at left (points left) ── */
+/* Outward sides: bottom + left */
 
 .popup.right-start::before {
-    left: -16px;
+    left: -6px;
     top: 1em;
 
-    border-right-color: var(--color-base-300);
+    border-bottom: 1px solid var(--color-base-300);
+    border-left: 1px solid var(--color-base-300);
 }
 
 .popup.right::before {
-    left: -16px;
-    top: calc(50% - 8px);
+    left: -6px;
+    top: calc(50% - 5px);
 
-    border-right-color: var(--color-base-300);
+    border-bottom: 1px solid var(--color-base-300);
+    border-left: 1px solid var(--color-base-300);
 }
 
 .popup.right-end::before {
-    left: -16px;
+    left: -6px;
     bottom: 1em;
 
-    border-right-color: var(--color-base-300);
+    border-bottom: 1px solid var(--color-base-300);
+    border-left: 1px solid var(--color-base-300);
 }

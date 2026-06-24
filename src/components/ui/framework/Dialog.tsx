@@ -51,6 +51,12 @@ interface IDialogProperties extends ICommonUIProperties {
 
     actions?: ComponentChild[];
 
+    /**
+     * When true, clicking the backdrop closes the dialog (default: false).
+     * ESC always closes the dialog.
+     */
+    closeOnBackdropClick?: boolean;
+
     /** Called when the dialog is closed. */
     onClose?: (returnValue: string) => void;
 }
@@ -98,10 +104,11 @@ export class Dialog extends UIComponent<IDialogProperties> {
     }
 
     public open(): void {
+        const { closeOnBackdropClick } = this.props;
         const options: IPortalOptions = {
             backgroundOpacity: 0.5,
             closeOnEscape: true,
-            closeOnPortalClick: false,
+            closeOnPortalClick: closeOnBackdropClick ?? false,
         };
 
         this.portalRef.current?.open(options);

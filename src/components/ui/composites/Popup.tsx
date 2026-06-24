@@ -127,12 +127,16 @@ export class Popup extends UIComponent<IPopupProperties, IPopupState> {
         const el = this.containerRef.current;
 
         if (el && this.pendingTarget) {
-            const { showArrow } = this.props;
-            const { left, top } = computeContentPosition(
-                this.currentPlacement, el, this.pendingTarget, showArrow ? 10 : 0, true,
-            );
-            el.style.left = `${left}px`;
-            el.style.top = `${top}px`;
+            // Defer to the next animation frame so the browser has laid out
+            // the popup before we measure its dimensions.
+            requestAnimationFrame(() => {
+                const { showArrow } = this.props;
+                const { left, top } = computeContentPosition(
+                    this.currentPlacement, el, this.pendingTarget!, showArrow ? 10 : 0, true,
+                );
+                el.style.left = `${left}px`;
+                el.style.top = `${top}px`;
+            });
         }
     };
 

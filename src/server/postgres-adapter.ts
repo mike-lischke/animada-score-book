@@ -47,7 +47,6 @@ const createTablesSQL = [
         password_hash      VARCHAR(512) NOT NULL,
         refresh_token_hash VARCHAR(256),
         display_name       VARCHAR(255) NOT NULL,
-        is_admin      BOOLEAN      NOT NULL DEFAULT FALSE,
         created_at    TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
         updated_at    TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP
     )`,

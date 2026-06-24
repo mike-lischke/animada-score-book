@@ -175,6 +175,7 @@
     font-weight: bold;
     margin-right: 4px;
 }
+
 #transcriptionEditor {
     min-width: 800px;
     min-height: 600px;
@@ -214,6 +215,7 @@
 #scoreNotes {
     max-height: 150px;
 }
+
 #settingsDialog .zoomButton {
     width: 32px;
     height: 32px;
@@ -228,4 +230,8 @@
 
 #backendSetupDialog #backend-setup-header {
     margin-bottom: 12px;
+}
+
+.ug-form {
+    padding: 8px 12px;
 }

@@ -29,6 +29,7 @@ interface IConfirmDialogState {
     buttons: IConfirmDialogButtons;
     values?: Record<string, unknown>;
     description?: string[];
+    closeOnBackdropClick?: boolean;
 }
 
 export class ConfirmDialog extends UIComponent<{}, IConfirmDialogState> {
@@ -44,9 +45,9 @@ export class ConfirmDialog extends UIComponent<{}, IConfirmDialogState> {
     }
 
     public async show(message: string, buttons: IConfirmDialogButtons, title?: string, description?: string[],
-        values?: Record<string, unknown>): Promise<DialogResponseClosure> {
+        values?: Record<string, unknown>, closeOnBackdropClick?: boolean): Promise<DialogResponseClosure> {
         this.signal = new Semaphore<DialogResponseClosure>();
-        this.setState({ title, message, buttons, values, description }, () => {
+        this.setState({ title, message, buttons, values, description, closeOnBackdropClick }, () => {
             return this.dialogRef.current?.open();
         });
 
@@ -113,6 +114,7 @@ export class ConfirmDialog extends UIComponent<{}, IConfirmDialogState> {
             <Dialog
                 ref={this.dialogRef}
                 className={className}
+                closeOnBackdropClick={this.state.closeOnBackdropClick}
                 caption={
                     <>
                         <Icon src={Codicon.Question} />
