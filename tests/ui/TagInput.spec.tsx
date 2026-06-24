@@ -97,7 +97,7 @@ describe("TagInput", () => {
         fireEvent.input(input, { target: { value: "Delta" } });
         fireEvent.keyDown(input, { key: "Enter" });
 
-        expect((input as HTMLInputElement).value).toBe("");
+        expect(input.value).toBe("");
     });
 
     it("does not call onAdd when Enter is pressed with empty input", () => {
