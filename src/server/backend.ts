@@ -941,7 +941,7 @@ const handleLogin = async (req: IncomingMessage, res: ServerResponse): Promise<v
 
     // Store the hash in the database for rotation.
     await adapter.execute(
-        "UPDATE users SET refresh_token_hash = ? WHERE id = ?",
+        "UPDATE users SET refresh_token_hash = ?, last_login = NOW() WHERE id = ?",
         [refreshToken.hash, user.id],
     );
 
@@ -956,6 +956,94 @@ const handleLogin = async (req: IncomingMessage, res: ServerResponse): Promise<v
             username: user.username,
             displayName: user.displayName,
             isAdmin: payload.isAdmin,
+        },
+        capabilities,
+    });
+};
+
+const handleGroupLogin = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
+    const body = await readJsonBody(req);
+    const groupName = String(body.groupName ?? "").trim();
+    const password = String(body.password ?? "");
+
+    if (!groupName || !password) {
+        sendError(res, "Group name and password required");
+
+        return;
+    }
+
+    const rows = await adapter.query<{
+        id: number; name: string; passwordHash: string | null;
+    }>(
+        "SELECT id, name, password_hash AS passwordHash FROM `groups` WHERE name = ?",
+        [groupName],
+    );
+
+    if (rows.length === 0 || !rows[0].passwordHash) {
+        sendError(res, "Invalid group name or password", 401);
+
+        return;
+    }
+
+    const group = rows[0];
+    const valid = await verifyPassword(password, group.passwordHash!);
+
+    if (!valid) {
+        sendError(res, "Invalid group name or password", 401);
+
+        return;
+    }
+
+    // Log in as the anonymous user but with group rights.
+    const anonRows = await adapter.query<{ id: number; username: string; displayName: string; }>(
+        "SELECT id, username, display_name AS displayName FROM users WHERE username = 'anonymous'",
+    );
+
+    if (anonRows.length === 0) {
+        sendError(res, "Anonymous user not found", 500);
+
+        return;
+    }
+
+    const anon = anonRows[0];
+
+    const payload: ITokenPayload = {
+        userId: anon.id,
+        username: anon.username,
+        isAdmin: false,
+        authType: "group",
+        groupId: group.id,
+    };
+
+    const accessToken = createAccessToken(payload);
+    const refreshToken = createRefreshToken();
+
+    await adapter.execute(
+        "UPDATE users SET refresh_token_hash = ?, last_login = NOW() WHERE id = ?",
+        [refreshToken.hash, anon.id],
+    );
+
+    // Update group last_login.
+    await adapter.execute(
+        "UPDATE `groups` SET last_login = NOW() WHERE id = ?",
+        [group.id],
+    );
+
+    setRefreshTokenCookie(res, refreshToken.raw, refreshToken.maxAge);
+
+    const capabilities = await buildCapabilities(adapter, payload);
+
+    sendJson(res, {
+        token: accessToken,
+        user: {
+            id: anon.id,
+            username: anon.username,
+            displayName: anon.displayName,
+            isAdmin: false,
+        },
+        group: {
+            id: group.id,
+            name: group.name,
         },
         capabilities,
     });
@@ -994,10 +1082,27 @@ const handleRefresh = async (req: IncomingMessage, res: ServerResponse): Promise
 
     const user = rows[0];
     const admin = await isUserInAdminGroup(adapter, user.id);
+
+    // Preserve group-login info from the old access token, if present.
+    const authHeader = req.headers.authorization;
+    let authType: string | undefined;
+    let groupId: number | undefined;
+
+    if (authHeader?.startsWith("Bearer ")) {
+        const oldPayload = verifyToken(authHeader.slice(7));
+
+        if (oldPayload?.authType === "group") {
+            authType = oldPayload.authType;
+            groupId = oldPayload.groupId;
+        }
+    }
+
     const accessToken = createAccessToken({
         userId: user.id,
         username: user.username,
         isAdmin: admin,
+        authType,
+        groupId,
     });
 
     setRefreshTokenCookie(res, result.newRawToken, refreshTokenExpirySeconds);
@@ -1039,8 +1144,26 @@ const handleWhoAmI = async (req: IncomingMessage, res: ServerResponse): Promise<
 
     const dbUser = rows[0];
     const admin = await isUserInAdminGroup(adapter, dbUser.id);
-    const payload: ITokenPayload = { userId: dbUser.id, username: dbUser.username, isAdmin: admin };
+    const payload: ITokenPayload = {
+        userId: dbUser.id,
+        username: dbUser.username,
+        isAdmin: admin,
+        authType: user.authType,
+        groupId: user.groupId,
+    };
     const capabilities = await buildCapabilities(adapter, payload);
+
+    let group: { id: number; name: string; } | undefined;
+    if (user.authType === "group" && user.groupId !== undefined) {
+        const groupRows = await adapter.query<{ id: number; name: string; }>(
+            "SELECT id, name FROM `groups` WHERE id = ?",
+            [user.groupId],
+        );
+
+        if (groupRows.length > 0) {
+            group = { id: groupRows[0].id, name: groupRows[0].name };
+        }
+    }
 
     sendJson(res, {
         authenticated: true,
@@ -1050,6 +1173,7 @@ const handleWhoAmI = async (req: IncomingMessage, res: ServerResponse): Promise<
             displayName: dbUser.displayName,
             isAdmin: admin,
         },
+        group,
         capabilities,
     });
 };
@@ -1149,7 +1273,7 @@ const handleListUsers = async (req: IncomingMessage, res: ServerResponse): Promi
     }
 
     const rows = await adapter.query(
-        `SELECT u.id, u.username, u.display_name, u.created_at, u.updated_at,
+        `SELECT u.id, u.username, u.display_name, u.last_login, u.created_at, u.updated_at,
                 (ug.user_id IS NOT NULL) AS is_admin
          FROM users u
          LEFT JOIN user_groups ug ON u.id = ug.user_id
@@ -1165,6 +1289,7 @@ const handleListUsers = async (req: IncomingMessage, res: ServerResponse): Promi
                 username: u.username,
                 displayName: u.display_name,
                 isAdmin: Boolean(u.is_admin),
+                lastLogin: u.last_login,
                 createdAt: u.created_at,
                 updatedAt: u.updated_at,
             };
@@ -1211,6 +1336,18 @@ const handleCreateUser = async (req: IncomingMessage, res: ServerResponse): Prom
 
     if ((existing[0]?.cnt ?? 0) > 0) {
         sendError(res, "Username already exists");
+
+        return;
+    }
+
+    // Check for group name collisions.
+    const groupCollision = await adapter.query<{ cnt: number; }>(
+        "SELECT COUNT(*) AS cnt FROM `groups` WHERE name = ?",
+        [username],
+    );
+
+    if ((groupCollision[0]?.cnt ?? 0) > 0) {
+        sendError(res, "A group with this name already exists");
 
         return;
     }
@@ -1324,7 +1461,10 @@ const handleListGroups = async (req: IncomingMessage, res: ServerResponse): Prom
     }
 
     const rows = await adapter.query(
-        "SELECT * FROM `groups` ORDER BY name",
+        "SELECT id, name, description, color, admin_id AS adminId," +
+        " (password_hash IS NOT NULL) AS hasPassword," +
+        " last_login AS lastLogin, created_at AS createdAt" +
+        " FROM `groups` ORDER BY name",
     );
 
     sendJson(res, {
@@ -1334,8 +1474,24 @@ const handleListGroups = async (req: IncomingMessage, res: ServerResponse): Prom
                 name: g.name,
                 description: g.description,
                 color: g.color,
-                createdAt: g.created_at,
+                adminId: g.adminId,
+                hasPassword: Boolean(g.hasPassword),
+                lastLogin: g.lastLogin,
+                createdAt: g.createdAt,
             };
+        }),
+    });
+};
+
+const handleListPublicGroups = async (_req: IncomingMessage, res: ServerResponse): Promise<void> => {
+    // Public endpoint: only returns groups that have a shared password set.
+    const rows = await adapter.query(
+        "SELECT name FROM `groups` WHERE password_hash IS NOT NULL ORDER BY name",
+    );
+
+    sendJson(res, {
+        groups: rows.map((g) => {
+            return g.name;
         }),
     });
 };
@@ -1353,9 +1509,23 @@ const handleCreateGroup = async (req: IncomingMessage, res: ServerResponse): Pro
     const name = String(body.name ?? "").trim();
     const description = body.description !== undefined ? String(body.description).trim() : "";
     const color = typeof body.color === "string" && body.color ? body.color : randomGroupColor();
+    const password = typeof body.password === "string" && body.password ? body.password : undefined;
+    const adminId = body.adminId !== undefined ? Number(body.adminId) || null : null;
 
     if (!name) {
         sendError(res, "Group name required");
+
+        return;
+    }
+
+    // Check for name collisions with users.
+    const userCollision = await adapter.query<{ cnt: number; }>(
+        "SELECT COUNT(*) AS cnt FROM users WHERE username = ?",
+        [name],
+    );
+
+    if ((userCollision[0]?.cnt ?? 0) > 0) {
+        sendError(res, "A user with this name already exists");
 
         return;
     }
@@ -1371,9 +1541,14 @@ const handleCreateGroup = async (req: IncomingMessage, res: ServerResponse): Pro
         return;
     }
 
+    let passwordHash: string | null = null;
+    if (password) {
+        passwordHash = await hashPassword(password);
+    }
+
     const result = await adapter.insertReturningId(
-        "INSERT INTO `groups` (name, description, color) VALUES (?, ?, ?)",
-        [name, description, color],
+        "INSERT INTO `groups` (name, description, color, password_hash, admin_id) VALUES (?, ?, ?, ?, ?)",
+        [name, description, color, passwordHash, adminId],
     );
 
     sendJson(res, { success: true, id: result.insertId, color });
@@ -1382,12 +1557,7 @@ const handleCreateGroup = async (req: IncomingMessage, res: ServerResponse): Pro
 const handleUpdateGroup = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
     const user = getAuthUser(req);
 
-    if (!user || !(await isUserInAdminGroup(adapter, user.userId))) {
-        sendError(res, "Forbidden", 403);
-
-        return;
-    }
-
+    // Full admins OR the group's designated admin can update.
     const body = await readJsonBody(req);
     const id = body.id !== undefined ? Number(body.id) : undefined;
 
@@ -1397,14 +1567,52 @@ const handleUpdateGroup = async (req: IncomingMessage, res: ServerResponse): Pro
         return;
     }
 
+    const groupRow = await adapter.query<{ admin_id: number | null; }>(
+        "SELECT admin_id FROM `groups` WHERE id = ?",
+        [id],
+    );
+
+    if (groupRow.length === 0) {
+        sendError(res, "Group not found", 404);
+
+        return;
+    }
+
+    const isGroupAdmin = groupRow[0].admin_id === user?.userId;
+
+    if (!user || (!(await isUserInAdminGroup(adapter, user.userId)) && !isGroupAdmin)) {
+        sendError(res, "Forbidden", 403);
+
+        return;
+    }
+
     const name = body.name !== undefined ? String(body.name).trim() : undefined;
     const description = body.description !== undefined ? String(body.description).trim() : undefined;
     const color = body.color !== undefined ? String(body.color) : undefined;
+    const password = body.password !== undefined
+        ? (typeof body.password === "string" && body.password ? body.password : null)
+        : undefined;
+    const adminId = body.adminId !== undefined ? (Number(body.adminId) || null) : undefined;
 
-    if (!name && description === undefined && color === undefined) {
+    if (!name && description === undefined && color === undefined
+        && password === undefined && adminId === undefined) {
         sendError(res, "No fields to update");
 
         return;
+    }
+
+    if (name) {
+        // Check for name collisions with users.
+        const userCollision = await adapter.query<{ cnt: number; }>(
+            "SELECT COUNT(*) AS cnt FROM users WHERE username = ?",
+            [name],
+        );
+
+        if ((userCollision[0]?.cnt ?? 0) > 0) {
+            sendError(res, "A user with this name already exists");
+
+            return;
+        }
     }
 
     const updates: string[] = [];
@@ -1423,6 +1631,32 @@ const handleUpdateGroup = async (req: IncomingMessage, res: ServerResponse): Pro
     if (color !== undefined) {
         updates.push("color = ?");
         params.push(color);
+    }
+
+    if (password !== undefined) {
+        // Prevent setting a password on the Admins group.
+        const groupInfo = await adapter.query<{ name: string; }>(
+            "SELECT name FROM `groups` WHERE id = ?",
+            [id],
+        );
+
+        if (groupInfo[0]?.name === adminGroupName && password !== null) {
+            sendError(res, "Cannot set a shared password on the Admins group.");
+
+            return;
+        }
+
+        if (password === null) {
+            updates.push("password_hash = NULL");
+        } else {
+            updates.push("password_hash = ?");
+            params.push(await hashPassword(password));
+        }
+    }
+
+    if (adminId !== undefined) {
+        updates.push("admin_id = ?");
+        params.push(adminId);
     }
 
     params.push(id);
@@ -2082,6 +2316,16 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse): Promise
 
                 case "login":
                     await handleLogin(req, res);
+
+                    break;
+
+                case "groupLogin":
+                    await handleGroupLogin(req, res);
+
+                    break;
+
+                case "listPublicGroups":
+                    await handleListPublicGroups(req, res);
 
                     break;
 

@@ -527,6 +527,7 @@ export interface IUserRow {
     username: string;
     displayName: string;
     isAdmin: boolean;
+    lastLogin: string | null;
     createdAt: string;
     updatedAt: string;
 }
@@ -537,6 +538,9 @@ export interface IGroupRow {
     name: string;
     description: string;
     color: string;
+    adminId: number | null;
+    hasPassword: boolean;
+    lastLogin: string | null;
     createdAt: string;
 }
 
@@ -557,12 +561,23 @@ export interface ICapabilities {
 interface ILoginResponse {
     token: string;
     user: IUserInfo;
+
+    /** Set when the user authenticated via a group password. */
+    group?: {
+        id: number;
+        name: string;
+    };
+
     capabilities: ICapabilities;
 }
 
 interface IWhoamiResponse {
     authenticated: boolean;
     user?: IUserInfo;
+
+    /** Set when authenticated via group shared password. */
+    group?: { id: number; name: string; };
+
     capabilities: ICapabilities;
 }
 
@@ -585,12 +600,22 @@ export class ScoreBookDataModel {
         return this.currentUser;
     }
 
+    /**
+     * The group the user authenticated as (only set for group login).
+     *
+     * @returns The active group, or undefined if logged in as a user or anonymously.
+     */
+    public get activeGroup(): { id: number; name: string; } | undefined {
+        return this.currentGroup;
+    }
+
     public get capabilities(): ICapabilities {
         return this.currentCapabilities;
     }
 
     private accessToken: string | undefined;
     private currentUser: IUserInfo | undefined;
+    private currentGroup: { id: number; name: string; } | undefined;
     private currentCapabilities: ICapabilities = {
         canEditScores: false,
         canManageUsers: false,
@@ -894,6 +919,38 @@ export class ScoreBookDataModel {
 
         this.accessToken = data.token;
         this.currentUser = data.user;
+        this.currentGroup = undefined;
+        this.currentCapabilities = data.capabilities;
+
+        void requisitions.execute("authChanged", undefined);
+
+        return true;
+    }
+
+    /**
+     * Authenticates using a group name and its shared password.
+     * Logs in as the anonymous user but with the group's permissions.
+     *
+     * @param groupName The group name.
+     * @param password  The group's shared password.
+     * @returns True if login was successful.
+     */
+    public async groupLogin(groupName: string, password: string): Promise<boolean> {
+        const res = await this.fetchApi("/api?action=groupLogin", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ groupName, password }),
+        }, false);
+
+        if (!res) {
+            return false;
+        }
+
+        const data = await res.json() as ILoginResponse;
+
+        this.accessToken = data.token;
+        this.currentUser = data.user;
+        this.currentGroup = data.group;
         this.currentCapabilities = data.capabilities;
 
         void requisitions.execute("authChanged", undefined);
@@ -910,6 +967,7 @@ export class ScoreBookDataModel {
 
         this.accessToken = undefined;
         this.currentUser = undefined;
+        this.currentGroup = undefined;
         this.currentCapabilities = {
             canEditScores: false,
             canManageUsers: false,
@@ -934,6 +992,7 @@ export class ScoreBookDataModel {
 
         this.accessToken = undefined;
         this.currentUser = undefined;
+        this.currentGroup = undefined;
         this.currentCapabilities = {
             canEditScores: false,
             canManageUsers: false,
@@ -965,6 +1024,7 @@ export class ScoreBookDataModel {
             if (res) {
                 const data = await res.json() as IWhoamiResponse;
 
+                this.currentGroup = undefined;
                 this.currentCapabilities = data.capabilities;
             }
         }
@@ -1081,6 +1141,23 @@ export class ScoreBookDataModel {
     }
 
     /**
+     * Lists groups that have a shared password set. Public endpoint.
+     *
+     * @returns The list of group names.
+     */
+    public async listPublicGroups(): Promise<string[]> {
+        const res = await this.fetchApi("/api?action=listPublicGroups", { method: "POST" }, false);
+
+        if (!res) {
+            return [];
+        }
+
+        const data = await res.json() as { groups?: string[]; };
+
+        return data.groups ?? [];
+    }
+
+    /**
      * Lists all groups. Admin-only.
      *
      * @returns The list of group rows.
@@ -1107,14 +1184,25 @@ export class ScoreBookDataModel {
      * @param name        The group name.
      * @param description The group description (optional).
      * @param color       The group color (optional, random if omitted).
+     * @param password    The group password (optional, no password if omitted).
+     * @param adminId     The user id of the group admin (optional, no admin if omitted).
      * @returns The new group's id and color.
      */
     public async createGroup(name: string, description: string, color?: string,
+        password?: string, adminId?: number | null,
     ): Promise<{ id: number; color: string; }> {
         const body: Record<string, unknown> = { name, description };
 
         if (color) {
             body.color = color;
+        }
+
+        if (password) {
+            body.password = password;
+        }
+
+        if (adminId !== undefined) {
+            body.adminId = adminId;
         }
 
         const res = await this.fetchApi("/api?action=createGroup", {
@@ -1139,14 +1227,17 @@ export class ScoreBookDataModel {
     /**
      * Updates an existing group. Admin-only.
      *
-     * @param id               The group id.
-     * @param fields            Fields to update.
-     * @param fields.name       The new name (optional).
-     * @param fields.description The new description (optional).
-     * @param fields.color      The new color (optional).
+     * @param id                  The group id.
+     * @param fields              Fields to update.
+     * @param fields.name         The new name (optional).
+     * @param fields.description  The new description (optional).
+     * @param fields.color        The new color (optional).
+     * @param fields.password     The new password, or null to remove (optional).
+     * @param fields.adminId      The new admin user ID, or null to remove (optional).
      */
     public async updateGroup(id: number, fields: {
         name?: string; description?: string; color?: string;
+        password?: string | null; adminId?: number | null;
     },): Promise<void> {
         const body: Record<string, unknown> = { id };
 
@@ -1160,6 +1251,14 @@ export class ScoreBookDataModel {
 
         if (fields.color !== undefined) {
             body.color = fields.color;
+        }
+
+        if (fields.password !== undefined) {
+            body.password = fields.password;
+        }
+
+        if (fields.adminId !== undefined) {
+            body.adminId = fields.adminId;
         }
 
         const res = await this.fetchApi("/api?action=updateGroup", {
@@ -1447,6 +1546,7 @@ export class ScoreBookDataModel {
         const res = await this.fetchApi("/api?action=refresh", {
             method: "POST",
             credentials: "include",
+            headers: this.accessToken ? { Authorization: `Bearer ${this.accessToken}` } : undefined,
         }, false);
 
         if (!res) {
@@ -1467,6 +1567,7 @@ export class ScoreBookDataModel {
 
             if (whoami.authenticated && whoami.user) {
                 this.currentUser = whoami.user;
+                this.currentGroup = whoami.group;
                 this.currentCapabilities = whoami.capabilities;
             }
         }

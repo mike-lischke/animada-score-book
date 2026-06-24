@@ -25,6 +25,8 @@ enum EditorMode {
     Create,
     Edit,
     ResetPassword,
+    ManageGroup,
+    CreateGroup,
 }
 
 interface IUserGroupEditorProperties extends ICommonUIProperties {
@@ -43,6 +45,17 @@ interface IUserGroupEditorState {
 
     /** The user being edited / reset, if any. */
     editingUserId: number;
+
+    /** The group being edited, if any. */
+    editingGroupId: number;
+
+    /** Form fields for group management. */
+    formGroupName: string;
+    formGroupPassword: string;
+    formGroupAdminId: number;
+
+    /** Error message shown inside the editor popup. */
+    formErrorMessage: string;
 
     errorMessage: string;
     loading: boolean;
@@ -73,6 +86,11 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
             pendingGroups: [],
             editorMode: EditorMode.None,
             editingUserId: 0,
+            editingGroupId: 0,
+            formGroupName: "",
+            formGroupPassword: "",
+            formGroupAdminId: 0,
+            formErrorMessage: "",
             errorMessage: "",
             loading: false,
             formUsername: "",
@@ -88,6 +106,10 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
             pendingGroups: [],
             editorMode: EditorMode.None,
             editingUserId: 0,
+            editingGroupId: 0,
+            formGroupName: "",
+            formGroupPassword: "",
+            formGroupAdminId: 0,
             errorMessage: "",
             formUsername: "",
             formDisplayName: "",
@@ -141,10 +163,12 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
                                 mainAlignment={ChildAlignment.SpaceBetween}
                                 crossAlignment={ChildAlignment.Center}
                             >
-                                <span></span>
+                                <Label className="settings-row-heading" caption="Users" />
                                 <Button
                                     id="ug-add-user"
-                                    caption="+ Add User"
+                                    className="settings-row-add-button"
+                                    caption="+"
+                                    data-tooltip="Add User"
                                     onClick={this.handleAddClick}
                                 />
                             </Container>
@@ -219,19 +243,179 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
                             )}
                         </Container>
                     )}
+
+                    {!loading && (
+                        <Container className="settings-card" orientation={Orientation.TopDown}>
+                            <Container
+                                className="settings-row"
+                                orientation={Orientation.LeftToRight}
+                                mainAlignment={ChildAlignment.SpaceBetween}
+                                crossAlignment={ChildAlignment.Center}
+                            >
+                                <Label className="settings-row-heading" caption="Groups" />
+                                <Button
+                                    id="ug-add-group"
+                                    className="settings-row-add-button"
+                                    caption="+"
+                                    data-tooltip="Add Group"
+                                    onClick={this.handleAddGroupClick}
+                                />
+                            </Container>
+
+                            {this.state.groups.length === 0 ? (
+                                <Container className="settings-row">
+                                    <Label className="text-base-content/50" caption="No groups found." />
+                                </Container>
+                            ) : (
+                                this.state.groups.map((g) => {
+                                    return (
+                                        <Container
+                                            key={g.id}
+                                            className="settings-row"
+                                            orientation={Orientation.LeftToRight}
+                                            crossAlignment={ChildAlignment.Center}
+                                        >
+                                            <Container
+                                                orientation={Orientation.TopDown}
+                                                style={{ flex: 1, minWidth: 0 }}
+                                            >
+                                                <Container
+                                                    orientation={Orientation.LeftToRight}
+                                                    crossAlignment={ChildAlignment.Center}
+                                                    style={{ gap: "6px" }}
+                                                >
+                                                    <Label caption={g.name} />
+                                                    {g.hasPassword && (
+                                                        <Icon
+                                                            src={Codicon.Lock}
+                                                            style={{ fontSize: "12px", color: "var(--color-warning)" }}
+                                                        />
+                                                    )}
+                                                </Container>
+                                                {g.adminId && (
+                                                    <Label
+                                                        className="text-xs text-base-content/50"
+                                                        caption={`Admin: ${this.state.users.find((u) => {
+                                                            return u.id === g.adminId;
+                                                        })?.username ?? String(g.adminId)}`}
+                                                    />
+                                                )}
+                                            </Container>
+                                            <Button
+                                                imageOnly
+                                                className="du-btn-xs"
+                                                data-tooltip="Edit Group"
+                                                onClick={(e) => {
+                                                    const trigger = e.currentTarget as HTMLElement;
+                                                    this.handleEditGroupClick(g, trigger);
+                                                }}
+                                            >
+                                                <Icon src={Codicon.Edit} />
+                                            </Button>
+                                            <Button
+                                                imageOnly
+                                                className="du-btn-xs"
+                                                data-tooltip="Delete Group"
+                                                onClick={() => {
+                                                    void this.handleDeleteGroup(g);
+                                                }}
+                                            >
+                                                <Icon src={Codicon.Trash} />
+                                            </Button>
+                                        </Container>
+                                    );
+                                })
+                            )}
+                        </Container>
+                    )}
                 </Dialog>
             </>
         );
     }
 
     private renderEditorForm(): ComponentChild {
-        const { editorMode, formUsername, formDisplayName, formPassword, formGroupIds } = this.state;
+        const { editorMode, formUsername, formDisplayName, formPassword, formGroupIds, formGroupName,
+            formGroupPassword, formErrorMessage } =
+            this.state;
+
+        if (editorMode === EditorMode.ManageGroup || editorMode === EditorMode.CreateGroup) {
+            const isCreate = editorMode === EditorMode.CreateGroup;
+
+            return (
+                <Container orientation={Orientation.TopDown}>
+                    {formErrorMessage && (
+                        <Container className="settings-row">
+                            <Label
+                                caption={formErrorMessage}
+                                style={{ color: "var(--color-error)", fontSize: "13px" }}
+                            />
+                        </Container>
+                    )}
+                    {isCreate && (
+                        <Container
+                            className="settings-row"
+                            orientation={Orientation.LeftToRight}
+                            mainAlignment={ChildAlignment.SpaceBetween}
+                            crossAlignment={ChildAlignment.Center}
+                        >
+                            <Label className="settings-row-label" caption="Name" style={{ minWidth: "100px" }} />
+                            <Input
+                                placeholder="Group name"
+                                value={formGroupName}
+                                style={{ padding: "3px" }}
+                                onChange={this.handleFormGroupNameChange}
+                            />
+                        </Container>
+                    )}
+
+                    <Container
+                        className="settings-row"
+                        orientation={Orientation.LeftToRight}
+                        mainAlignment={ChildAlignment.SpaceBetween}
+                        crossAlignment={ChildAlignment.Center}
+                    >
+                        <Label className="settings-row-label" caption="Password" style={{ minWidth: "100px" }} />
+                        <Input
+                            placeholder={isCreate ? "Optional shared password" : "Set shared password"}
+                            password
+                            showPasswordToggle
+                            value={formGroupPassword}
+                            style={{ padding: "3px" }}
+                            onChange={this.handleFormGroupPasswordChange}
+                        />
+                    </Container>
+
+                    <Container
+                        className="settings-row"
+                        orientation={Orientation.LeftToRight}
+                        mainAlignment={ChildAlignment.SpaceBetween}
+                        crossAlignment={ChildAlignment.Center}
+                    >
+                        <span></span>
+                        <Container orientation={Orientation.LeftToRight} style={{ gap: "8px" }}>
+                            <Button
+                                caption={isCreate ? "Create" : "Save"}
+                                onClick={() => {
+                                    void (isCreate ? this.handleCreateGroup() : this.handleSaveGroup());
+                                }}
+                            />
+                        </Container>
+                    </Container>
+                </Container>
+            );
+        }
 
         const isCreate = editorMode === EditorMode.Create;
         const isReset = editorMode === EditorMode.ResetPassword;
 
         return (
             <Container orientation={Orientation.TopDown}>
+                {formErrorMessage && (
+                    <Container className="settings-row">
+                        <Label caption={formErrorMessage} style={{ color: "var(--color-error)", fontSize: "13px" }} />
+                    </Container>
+                )}
+
                 {isReset ? (
                     <Container
                         className="settings-row"
@@ -243,6 +427,7 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
                         <Input
                             placeholder="Min 6 characters"
                             password
+                            showPasswordToggle
                             value={formPassword}
                             style={{ padding: "3px" }}
                             onChange={this.handleFormPasswordChange}
@@ -259,6 +444,7 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
                             <Label className="settings-row-label" caption="Username" style={{ minWidth: "100px" }} />
                             <Input
                                 placeholder="Username"
+                                autoFocus={isCreate}
                                 value={formUsername}
                                 style={{ padding: "3px" }}
                                 onChange={this.handleFormUsernameChange}
@@ -299,6 +485,7 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
                                 <Input
                                     placeholder="Min 6 characters"
                                     password
+                                    showPasswordToggle
                                     value={formPassword}
                                     style={{ padding: "3px" }}
                                     onChange={this.handleFormPasswordChange}
@@ -468,6 +655,153 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
         });
     };
 
+    private handleEditGroupClick = (group: IGroupRow, trigger: HTMLElement): void => {
+        this.setState({
+            editorMode: EditorMode.ManageGroup,
+            editingGroupId: group.id,
+            formGroupPassword: "",
+            formGroupAdminId: group.adminId ?? 0,
+            formErrorMessage: "",
+            errorMessage: "",
+        }, () => {
+            this.openEditorPopup(trigger);
+        });
+    };
+
+    private handleAddGroupClick = (e: MouseEvent | KeyboardEvent): void => {
+        const trigger = e.currentTarget as HTMLElement;
+
+        this.setState({
+            editorMode: EditorMode.CreateGroup,
+            formGroupName: "",
+            formGroupPassword: "",
+            formErrorMessage: "",
+            errorMessage: "",
+        }, () => {
+            this.openEditorPopup(trigger);
+        });
+    };
+
+    private async handleDeleteGroup(group: IGroupRow): Promise<void> {
+        const { dataModel } = this.props;
+
+        let memberCount = 0;
+
+        try {
+            const members = await dataModel.listGroupMembers(group.id);
+            memberCount = members.length;
+        } catch {
+            // Ignore — proceed without member info.
+        }
+
+        const description: string[] = [];
+
+        if (group.hasPassword) {
+            description.push(
+                "This group has a shared password set. Group members will no longer be able to log in with it.",
+            );
+        }
+
+        if (memberCount > 0) {
+            description.push(
+                `${memberCount} user${memberCount === 1 ? "" : "s"} will be removed from this group.`,
+            );
+        }
+
+        const closure = await this.confirmDialogRef.current?.show(
+            `Delete group "${group.name}"?`,
+            { accept: "Delete" },
+            "Delete Group",
+            description.length > 0 ? description : undefined,
+            undefined,
+            true,
+        );
+
+        if (closure !== DialogResponseClosure.Accept) {
+            return;
+        }
+
+        try {
+            await dataModel.deleteGroup(group.id);
+            void NotificationCenter.showInfo(`Group "${group.name}" deleted.`);
+        } catch (e) {
+            this.setState({ errorMessage: (e as Error).message });
+
+            return;
+        }
+
+        await this.loadGroups();
+    }
+
+    private handleFormGroupPasswordChange = (e: Event, props: { value?: string; }): void => {
+        this.setState({ formGroupPassword: props.value ?? "" });
+    };
+
+    private handleFormGroupNameChange = (e: Event, props: { value?: string; }): void => {
+        this.setState({ formGroupName: props.value ?? "" });
+    };
+
+    private async handleCreateGroup(): Promise<void> {
+        const { formGroupName, formGroupPassword } = this.state;
+        const { dataModel } = this.props;
+
+        const name = formGroupName.trim();
+
+        if (!name) {
+            this.setState({ formErrorMessage: "Group name is required." });
+
+            return;
+        }
+
+        try {
+            await dataModel.createGroup(name, "", undefined, formGroupPassword || undefined);
+        } catch (e) {
+            this.setState({ formErrorMessage: (e as Error).message });
+
+            return;
+        }
+
+        this.popupRef.current?.close();
+        this.setState({
+            editorMode: EditorMode.None,
+            formGroupName: "",
+            formGroupPassword: "",
+            formErrorMessage: "",
+        });
+        await this.loadGroups();
+        void NotificationCenter.showInfo(`Group "${name}" created.`);
+    }
+
+    private async handleSaveGroup(): Promise<void> {
+        const { editingGroupId, formGroupPassword, groups } = this.state;
+        const { dataModel } = this.props;
+
+        const group = groups.find((g) => {
+            return g.id === editingGroupId;
+        });
+
+        try {
+            await dataModel.updateGroup(editingGroupId, {
+                password: formGroupPassword || null,
+            });
+        } catch (e) {
+            this.setState({ formErrorMessage: (e as Error).message });
+
+            return;
+        }
+
+        this.popupRef.current?.close();
+        this.setState({
+            editorMode: EditorMode.None,
+            editingGroupId: 0,
+            formErrorMessage: "",
+            formGroupPassword: "",
+            errorMessage: "",
+        });
+        await this.loadGroups();
+        void NotificationCenter.showInfo(`Password updated for group "${group?.name ?? editingGroupId}".`);
+    }
+
     private openEditorPopup(target: HTMLElement): void {
         this.popupRef.current?.open(target.getBoundingClientRect(), ComponentPlacement.TopCenter);
     }
@@ -526,6 +860,9 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
             name: caption,
             description: "",
             color: randomColor(),
+            adminId: null,
+            hasPassword: false,
+            lastLogin: null,
             createdAt: "",
         };
 
@@ -577,40 +914,40 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
 
         if (editorMode === EditorMode.ResetPassword) {
             if (!formPassword || formPassword.length < 6) {
-                this.setState({ errorMessage: "Password must be at least 6 characters." });
+                this.setState({ formErrorMessage: "Password must be at least 6 characters." });
 
                 return;
             }
 
             try {
                 await dataModel.updateUser(editingUserId, { password: formPassword });
-                this.setState({ editorMode: EditorMode.None, editingUserId: 0, errorMessage: "" });
+                this.setState({ editorMode: EditorMode.None, editingUserId: 0, formErrorMessage: "" });
                 const targetUser = this.state.users.find((u) => {
                     return u.id === editingUserId;
                 });
                 void NotificationCenter.showInfo(`Password reset for @${targetUser?.username ?? editingUserId}.`);
             } catch (e) {
-                this.setState({ errorMessage: (e as Error).message });
+                this.setState({ formErrorMessage: (e as Error).message });
             }
 
             return;
         }
 
         if (!username) {
-            this.setState({ errorMessage: "Username is required." });
+            this.setState({ formErrorMessage: "Username is required." });
 
             return;
         }
 
         if (username.length < 3) {
-            this.setState({ errorMessage: "Username must be at least 3 characters." });
+            this.setState({ formErrorMessage: "Username must be at least 3 characters." });
 
             return;
         }
 
         if (editorMode === EditorMode.Create) {
             if (!formPassword || formPassword.length < 6) {
-                this.setState({ errorMessage: "Password must be at least 6 characters." });
+                this.setState({ formErrorMessage: "Password must be at least 6 characters." });
 
                 return;
             }
@@ -631,7 +968,7 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
 
                 void NotificationCenter.showInfo(`User "${displayName || username}" created.`);
             } catch (e) {
-                this.setState({ errorMessage: (e as Error).message });
+                this.setState({ formErrorMessage: (e as Error).message });
 
                 return;
             }
@@ -700,11 +1037,21 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
     }
 
     private async handleDeleteUser(user: IUserRow): Promise<void> {
+        const { dataModel } = this.props;
+        const currentUser = dataModel.user;
+        const isSelf = currentUser?.id === user.id;
+
+        const description: string[] = [];
+
+        if (isSelf) {
+            description.push("You are about to delete your own account. You will be logged out immediately.");
+        }
+
         const closure = await this.confirmDialogRef.current?.show(
             `Delete user "${user.displayName || user.username}"? This cannot be undone.`,
             { accept: "Delete" },
             "Delete User",
-            undefined,
+            description.length > 0 ? description : undefined,
             undefined,
             true,
         );
@@ -713,13 +1060,21 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
             return;
         }
 
-        const { dataModel } = this.props;
-
         try {
             await dataModel.deleteUser(user.id);
             void NotificationCenter.showInfo(`User "${user.displayName || user.username}" deleted.`);
         } catch (e) {
             this.setState({ errorMessage: (e as Error).message });
+
+            return;
+        }
+
+        if (isSelf) {
+            this.dialogRef.current?.close(true);
+            await new Promise((resolve) => {
+                setTimeout(resolve, 0);
+            });
+            this.props.dataModel.reset();
 
             return;
         }

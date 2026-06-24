@@ -51,10 +51,7 @@ interface IDialogProperties extends ICommonUIProperties {
 
     actions?: ComponentChild[];
 
-    /**
-     * When true, clicking the backdrop closes the dialog (default: false).
-     * ESC always closes the dialog.
-     */
+    /** When true, clicking the backdrop closes the dialog (default: false). ESC always closes. */
     closeOnBackdropClick?: boolean;
 
     /** Called when the dialog is closed. */

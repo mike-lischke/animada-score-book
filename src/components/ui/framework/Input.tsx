@@ -6,6 +6,9 @@
 import { ComponentChild, createRef } from "preact";
 
 import { KeyboardKeys } from "../../../core/utils.js";
+import { Button } from "./Button.js";
+import { Codicon } from "./Codicon.js";
+import { Icon } from "./Icon.js";
 import { UIComponent, type ICommonUIProperties } from "./UIComponent.js";
 import type { TextAlignment } from "./ui-types.js";
 
@@ -22,6 +25,9 @@ export interface IInputProperties extends ICommonUIProperties {
     spellCheck?: boolean;
     readOnly?: boolean;
 
+    /** Shows a toggle button to reveal the password in plain text. */
+    showPasswordToggle?: boolean;
+
     innerRef?: preact.RefObject<HTMLElement>;
 
     onChange?: (e: InputEvent, props: IInputProperties) => void;
@@ -30,7 +36,11 @@ export interface IInputProperties extends ICommonUIProperties {
     onBlur?: (e: FocusEvent, props: IInputProperties) => void;
 }
 
-export class Input extends UIComponent<IInputProperties> {
+interface IInputState {
+    passwordVisible: boolean;
+}
+
+export class Input extends UIComponent<IInputProperties, IInputState> {
 
     public static override defaultProps = {
         spellCheck: true,
@@ -42,6 +52,7 @@ export class Input extends UIComponent<IInputProperties> {
         super(props);
 
         this.inputRef = props.innerRef ?? createRef<HTMLElement>();
+        this.state = { passwordVisible: false };
     }
 
     /**
@@ -50,6 +61,16 @@ export class Input extends UIComponent<IInputProperties> {
     public select(): void {
         if (this.inputRef.current instanceof HTMLInputElement) {
             this.inputRef.current.select();
+        }
+    }
+
+    public override componentDidUpdate(): void {
+        // Reset visibility when switching from password to non-password mode.
+        const { password } = this.props;
+        const { passwordVisible } = this.state;
+
+        if (!password && passwordVisible) {
+            this.setState({ passwordVisible: false });
         }
     }
 
@@ -66,8 +87,10 @@ export class Input extends UIComponent<IInputProperties> {
 
     public render(): ComponentChild {
         const {
-            id, password, textAlignment, value, spellCheck, readOnly, style, placeholder,
+            id, password, showPasswordToggle, textAlignment, value, spellCheck, readOnly, disabled, style,
+            placeholder,
         } = this.props;
+        const { passwordVisible } = this.state;
 
         const className = this.generateFinalClassName(["input"]);
 
@@ -77,7 +100,9 @@ export class Input extends UIComponent<IInputProperties> {
             textAlign: textAlignment,
         };
 
-        return (
+        const inputType = password && !passwordVisible ? "password" : "text";
+
+        const inputElement = (
             <input
                 id={id}
                 ref={this.inputRef as preact.Ref<HTMLInputElement>}
@@ -85,14 +110,50 @@ export class Input extends UIComponent<IInputProperties> {
                 onKeyDown={this.handleKeyDown}
                 onBlur={this.handleBlur}
                 className={className}
-                type={password ? "password" : "text"}
+                type={inputType}
                 value={value}
                 spellcheck={spellCheck}
-                style={newStyle}
+                style={password && showPasswordToggle ? { ...newStyle, paddingRight: "28px" } : newStyle}
                 readOnly={readOnly}
+                disabled={disabled}
                 placeholder={placeholder}
             />
         );
+
+        if (password && showPasswordToggle) {
+            return (
+                <div style={{ position: "relative", display: "inline-flex", alignItems: "center" }}>
+                    {inputElement}
+                    <Button
+                        imageOnly
+                        className="du-btn-xs du-btn-ghost"
+                        style={{
+                            position: "absolute",
+                            right: "2px",
+                            padding: "0",
+                            minHeight: "unset",
+                            height: "20px",
+                            width: "24px",
+                        }}
+                        tabIndex={-1}
+                        onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            this.setState({ passwordVisible: !passwordVisible }, () => {
+                                this.inputRef.current?.focus();
+                            });
+                        }}
+                    >
+                        <Icon
+                            src={passwordVisible ? Codicon.EyeClosed : Codicon.Eye}
+                            style={{ fontSize: "14px" }}
+                        />
+                    </Button>
+                </div>
+            );
+        }
+
+        return inputElement;
     }
 
     private handleInput = (e: Event): void => {

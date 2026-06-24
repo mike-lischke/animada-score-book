@@ -57,7 +57,6 @@ describe("Menu", () => {
 
     it("renders menu items when open", () => {
         renderResult = render(<Menu items={items} caption="Actions" />);
-        const instance = (renderResult as unknown as { _component?: { state: { open: boolean; }; }; })._component;
 
         // Open the menu programmatically.
         const popover = renderResult.container.querySelector("[popover]");

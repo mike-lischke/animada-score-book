@@ -600,7 +600,13 @@ export class App extends UIComponent<{}, IAppState> {
     };
 
     private handleAuthChanged = (): Promise<boolean> => {
-        this.forceUpdate();
+        if (!this.dataModel.authenticated && this.state.phase === AppPhase.Running) {
+            this.setState({ phase: AppPhase.Login }, () => {
+                this.loginDialogRef.current?.open();
+            });
+        } else {
+            this.forceUpdate();
+        }
 
         return Promise.resolve(true);
     };
@@ -608,8 +614,11 @@ export class App extends UIComponent<{}, IAppState> {
     private handleLoginSuccess = (): void => {
         this.signInFromRunning = false;
         void this.initializeApp().then(() => {
-            void requisitions.execute("showInfo",
-                `Signed in as ${this.dataModel.user?.displayName ?? this.dataModel.user?.username}`);
+            const group = this.dataModel.activeGroup;
+            const message = group
+                ? `Signed in as "${group.name}" (shared access)`
+                : `Signed in as ${this.dataModel.user?.displayName ?? this.dataModel.user?.username}`;
+            void requisitions.execute("showInfo", message);
         });
     };
 
@@ -730,13 +739,20 @@ export class App extends UIComponent<{}, IAppState> {
     };
 
     private buildUserMenuItems(): IDropdownItem[] {
-        const { user } = this.dataModel;
-        const items: IDropdownItem[] = [
-            {
+        const { user, activeGroup } = this.dataModel;
+        const items: IDropdownItem[] = [];
+
+        if (activeGroup) {
+            items.push({
+                label: activeGroup.name,
+                icon: <Icon src={Codicon.Organization} />,
+            });
+        } else {
+            items.push({
                 label: user?.displayName ?? user?.username ?? "",
                 icon: <Icon src={Codicon.Account} />,
-            },
-        ];
+            });
+        }
 
         if (user?.isAdmin) {
             items.push({

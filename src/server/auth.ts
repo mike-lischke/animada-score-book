@@ -49,6 +49,12 @@ export interface ITokenPayload {
     userId: number;
     username: string;
     isAdmin: boolean;
+
+    /** "user" for normal login, "group" for group-shared login. */
+    authType?: string;
+
+    /** The authenticated group ID (only set for group login). */
+    groupId?: number;
 }
 
 export interface IWhoamiResponse {
@@ -59,6 +65,13 @@ export interface IWhoamiResponse {
         displayName: string;
         isAdmin: boolean;
     };
+
+    /** Set when the user authenticated via a group password. */
+    group?: {
+        id: number;
+        name: string;
+    };
+
     capabilities: ICapabilities;
 }
 
@@ -265,7 +278,13 @@ export const verifyToken = (token: string): ITokenPayload | undefined => {
             return undefined;
         }
 
-        return { userId: decoded.userId, username: decoded.username, isAdmin: decoded.isAdmin };
+        return {
+            userId: decoded.userId,
+            username: decoded.username,
+            isAdmin: decoded.isAdmin,
+            authType: decoded.authType,
+            groupId: decoded.groupId,
+        };
     } catch {
         return undefined;
     }
@@ -338,8 +357,14 @@ export const checkPermission = async (adapter: IDatabaseAdapter, user: ITokenPay
         return (getRolePerm(permRow.permBits, ownerShift) & requiredPerm) === requiredPerm;
     }
 
-    // Check group bits if the user belongs to the entity's group.
+    // Check group bits.
     if (user && permRow.groupId !== null) {
+        // For group login, the user belongs to the authenticated group.
+        if (user.authType === "group" && user.groupId === permRow.groupId) {
+            return (getRolePerm(permRow.permBits, groupShift) & requiredPerm) === requiredPerm;
+        }
+
+        // For normal login, check user_groups membership.
         const memberRows = await adapter.query<{ userId: number; }>(
             "SELECT user_id AS userId FROM user_groups WHERE group_id = ? AND user_id = ?",
             [permRow.groupId, user.userId],

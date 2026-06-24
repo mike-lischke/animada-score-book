@@ -1224,6 +1224,43 @@
     margin-right: 16px;
 }
 
+.settings-row-heading {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--color-base-content);
+    margin-right: 16px;
+}
+
+.settings-row-add-button {
+    min-height: 24px;
+    height: 24px;
+    width: 24px;
+    padding: 0;
+}
+
+/* Keyboard navigation highlight for dropdown menus and completion lists. */
+.du-dropdown li.active > a,
+.du-dropdown li.du-active > a {
+    background-color: color-mix(in srgb, var(--color-base-content) 10%, transparent);
+}
+
+/* Non-interactive caption items in dropdown menus. */
+.du-dropdown li.dropdown-caption {
+    pointer-events: none;
+
+    & > a {
+        color: var(--color-primary);
+        opacity: 1;
+    }
+}
+
+/* Focused inputs inside settings rows get the main background so they don't look disabled. */
+.settings-row input:focus,
+.settings-row textarea:focus,
+.settings-row select:focus {
+    background-color: var(--color-base-100);
+}
+
 .settings-section-title {
     font-size: 12px;
     font-weight: 600;

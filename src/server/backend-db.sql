@@ -57,6 +57,7 @@ CREATE TABLE users (
   password_hash     VARCHAR(512) NOT NULL,
   refresh_token_hash VARCHAR(256) NULL,
   display_name      VARCHAR(255) NOT NULL,
+  last_login   TIMESTAMP    NULL,
   created_at    TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at    TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
@@ -68,9 +69,15 @@ CREATE TABLE `groups` (
   name        VARCHAR(255) NOT NULL,
   description TEXT NULL,
   color       VARCHAR(7)   NOT NULL DEFAULT '#808080',
+  password_hash VARCHAR(512) NULL,
+  admin_id    INT UNSIGNED NULL,
+  last_login  TIMESTAMP    NULL,
   created_at  TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
-  UNIQUE KEY uk_groups_name (name)
+  UNIQUE KEY uk_groups_name (name),
+  CONSTRAINT fk_groups_admin
+    FOREIGN KEY (admin_id) REFERENCES users(id)
+    ON DELETE SET NULL
 ) ENGINE=InnoDB;
 
 CREATE TABLE user_groups (
