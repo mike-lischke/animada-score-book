@@ -53,8 +53,6 @@ export class Portal extends UIComponent<IPortalProperties, IPortalState> {
     /** Stack of all currently open portals, for stacking and Escape handling. */
     private static portalStack = new Stack<Portal>();
 
-    private static zIndexCounter = 1000;
-
     private host?: HTMLDivElement;
 
     public constructor(props: IPortalProperties) {
@@ -87,8 +85,6 @@ export class Portal extends UIComponent<IPortalProperties, IPortalState> {
                 this.host.style.setProperty(
                     "--background-opacity", String(options.backgroundOpacity ?? 0.5),
                 );
-                this.host.style.zIndex = String(Portal.zIndexCounter);
-                Portal.zIndexCounter += 1;
 
                 this.host.addEventListener("mousedown", this.handlePortalMouseDown);
                 this.host.addEventListener("wheel", this.handlePortalMouseWheel);

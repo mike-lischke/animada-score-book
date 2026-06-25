@@ -122,7 +122,7 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
     }
 
     public render(): ComponentChild {
-        const { users, editorMode, errorMessage, loading } = this.state;
+        const { users, groups, editorMode, errorMessage, loading } = this.state;
 
         const actions: ComponentChild[] = [];
         if (loading) {
@@ -262,15 +262,15 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
                                 />
                             </Container>
 
-                            {this.state.groups.length === 0 ? (
+                            {groups.length === 0 ? (
                                 <Container className="settings-row">
                                     <Label className="text-base-content/50" caption="No groups found." />
                                 </Container>
                             ) : (
-                                this.state.groups.map((g) => {
+                                groups.map((group) => {
                                     return (
                                         <Container
-                                            key={g.id}
+                                            key={group.id}
                                             className="settings-row"
                                             orientation={Orientation.LeftToRight}
                                             crossAlignment={ChildAlignment.Center}
@@ -284,20 +284,20 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
                                                     crossAlignment={ChildAlignment.Center}
                                                     style={{ gap: "6px" }}
                                                 >
-                                                    <Label caption={g.name} />
-                                                    {g.hasPassword && (
+                                                    <Label caption={group.name} />
+                                                    {group.hasPassword && (
                                                         <Icon
                                                             src={Codicon.Lock}
                                                             style={{ fontSize: "12px", color: "var(--color-warning)" }}
                                                         />
                                                     )}
                                                 </Container>
-                                                {g.adminId && (
+                                                {group.adminId && (
                                                     <Label
                                                         className="text-xs text-base-content/50"
-                                                        caption={`Admin: ${this.state.users.find((u) => {
-                                                            return u.id === g.adminId;
-                                                        })?.username ?? String(g.adminId)}`}
+                                                        caption={`Admin: ${users.find((u) => {
+                                                            return u.id === group.adminId;
+                                                        })?.username ?? String(group.adminId)}`}
                                                     />
                                                 )}
                                             </Container>
@@ -307,7 +307,7 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
                                                 data-tooltip="Edit Group"
                                                 onClick={(e) => {
                                                     const trigger = e.currentTarget as HTMLElement;
-                                                    this.handleEditGroupClick(g, trigger);
+                                                    this.handleEditGroupClick(group, trigger);
                                                 }}
                                             >
                                                 <Icon src={Codicon.Edit} />
@@ -317,7 +317,7 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
                                                 className="du-btn-xs"
                                                 data-tooltip="Delete Group"
                                                 onClick={() => {
-                                                    void this.handleDeleteGroup(g);
+                                                    void this.handleDeleteGroup(group);
                                                 }}
                                             >
                                                 <Icon src={Codicon.Trash} />
@@ -903,8 +903,7 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
 
     private async handleSave(): Promise<void> {
         const {
-            editorMode, editingUserId, formUsername, formDisplayName,
-            formPassword, formGroupIds,
+            users, editorMode, editingUserId, formUsername, formDisplayName, formPassword, formGroupIds
         } = this.state;
 
         const username = formUsername.trim();
@@ -921,8 +920,9 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
 
             try {
                 await dataModel.updateUser(editingUserId, { password: formPassword });
+                this.popupRef.current?.close();
                 this.setState({ editorMode: EditorMode.None, editingUserId: 0, formErrorMessage: "" });
-                const targetUser = this.state.users.find((u) => {
+                const targetUser = users.find((u) => {
                     return u.id === editingUserId;
                 });
                 void NotificationCenter.showInfo(`Password reset for @${targetUser?.username ?? editingUserId}.`);

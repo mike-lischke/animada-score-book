@@ -23,7 +23,7 @@ export class Checkbox extends UIComponent<ICheckboxProperties> {
     }
 
     public render(): ComponentChild {
-        const { id, checked, disabled, style, onChange } = this.props;
+        const { id, checked, disabled, style } = this.props;
         const className = this.generateFinalClassName(["checkbox"]);
 
         return (
@@ -35,10 +35,15 @@ export class Checkbox extends UIComponent<ICheckboxProperties> {
                 checked={checked}
                 disabled={disabled}
                 style={style}
-                onChange={(event) => {
-                    return onChange?.(event.currentTarget.checked);
-                }}
+                onChange={this.handleChange}
             />
         );
     }
+
+    private handleChange = (event: Event): void => {
+        const { onChange } = this.props;
+
+        const target = event.currentTarget as HTMLInputElement;
+        onChange?.(target.checked);
+    };
 }

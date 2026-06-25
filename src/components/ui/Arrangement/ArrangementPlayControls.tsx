@@ -217,7 +217,7 @@ export class ArrangementPlayControls
                     <FieldSet legend="Play Options" style={{ flex: "1 1 auto" }} className="flex">
                         <Container
                             gap={16}
-                            style={{ flex: "1 1 auto", padding: "0 24px" }}
+                            style={{ flex: "1 1 auto", padding: "0 24px", whiteSpace: "nowrap" }}
                             mainAlignment={ChildAlignment.SpaceBetween}
                         >
                             <Container gap={4}>

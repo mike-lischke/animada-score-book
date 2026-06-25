@@ -89,8 +89,9 @@ export class TagInput extends UIComponent<ITagInputProperties, ITagInputState> {
                 {tags.map((tag) => {
                     const badgeStyle: Record<string, string> = {};
                     if (tag.color) {
-                        badgeStyle.backgroundColor = tag.color;
-                        badgeStyle.color = isLightColor(tag.color) ? "#1a1a2e" : "#ffffff";
+                        const effectiveBackgroundColor = tag.color + "80"; // Add some transparency to the background.
+                        badgeStyle.backgroundColor = effectiveBackgroundColor;
+                        badgeStyle.color = isLightColor(effectiveBackgroundColor) ? "#1a1a2e" : "#ffffff";
                         badgeStyle.borderColor = tag.color;
                     }
 
@@ -101,7 +102,7 @@ export class TagInput extends UIComponent<ITagInputProperties, ITagInputState> {
                     return (
                         <span
                             key={tag.id}
-                            className="du-badge gap-1"
+                            className="du-badge du-badge-soft gap-1"
                             style={{
                                 ...badgeStyle,
                                 position: "relative",

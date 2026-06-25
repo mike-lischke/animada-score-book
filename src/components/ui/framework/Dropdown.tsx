@@ -41,7 +41,7 @@ export class Dropdown extends UIComponent<IDropdownProperties, IDropdownState> {
     }
 
     public render(): ComponentChild {
-        const { caption, disabled, icon, items, selectedItem, style } = this.props;
+        const { id, caption, disabled, icon, items, selectedItem, style } = this.props;
         const { activeIndex } = this.state;
 
         const children = items.map((item, index) => {
@@ -77,7 +77,7 @@ export class Dropdown extends UIComponent<IDropdownProperties, IDropdownState> {
         const className = this.generateFinalClassName(["dropdownHost"]);
 
         return (
-            <div className={className}>
+            <div id={id} className={className}>
                 <Button
                     className="du-btn-ghost"
                     popoverTarget={disabled ? undefined : this.popoverId}
