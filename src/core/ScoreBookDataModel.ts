@@ -327,6 +327,24 @@ export interface ISbDmVisual extends ISbDmCommon {
      *         is a leaf node {@link isLeaf} is true).
      */
     getChildren?(): ScoreBookDataModelEntry[];
+
+    /** Permission info for the current user (undefined until the backend provides it). */
+    readonly perm?: ISbDmPermissionInfo;
+}
+
+/** Permission summary for the current user on a score or folder. */
+export interface ISbDmPermissionInfo {
+    /** The current user is the owner of this entity. */
+    readonly isOwner: boolean;
+
+    /** The current user has access via group membership. */
+    readonly isGroup: boolean;
+
+    /** The entity is world-readable. */
+    readonly isWorld: boolean;
+
+    /** The raw 9-bit permission mask (owner/group/world × rwx). */
+    readonly permBits: number;
 }
 
 export interface ISbDmSoundFolder extends ISbDmVisual {
@@ -744,6 +762,7 @@ export class ScoreBookDataModel {
                     expandedOnce: false,
                 },
                 children: [],
+                perm: { isOwner: true, isGroup: false, isWorld: true, permBits: 492 },
             };
 
             if (!parent) {
@@ -783,6 +802,7 @@ export class ScoreBookDataModel {
                     expanded: true,
                     expandedOnce: true,
                 },
+                perm: { isOwner: true, isGroup: false, isWorld: true, permBits: 492 },
             };
 
             if (!parent) {
@@ -922,6 +942,9 @@ export class ScoreBookDataModel {
         this.currentGroup = undefined;
         this.currentCapabilities = data.capabilities;
 
+        sessionStorage.removeItem("authType");
+        sessionStorage.removeItem("groupId");
+
         void requisitions.execute("authChanged", undefined);
 
         return true;
@@ -953,6 +976,9 @@ export class ScoreBookDataModel {
         this.currentGroup = data.group;
         this.currentCapabilities = data.capabilities;
 
+        sessionStorage.setItem("authType", "group");
+        sessionStorage.setItem("groupId", String(data.group?.id ?? ""));
+
         void requisitions.execute("authChanged", undefined);
 
         return true;
@@ -974,6 +1000,9 @@ export class ScoreBookDataModel {
             canManageInstruments: false,
             canExportMP3: false,
         };
+
+        sessionStorage.removeItem("authType");
+        sessionStorage.removeItem("groupId");
 
         void requisitions.execute("authChanged", undefined);
     }
@@ -999,6 +1028,9 @@ export class ScoreBookDataModel {
             canManageInstruments: false,
             canExportMP3: false,
         };
+
+        sessionStorage.removeItem("authType");
+        sessionStorage.removeItem("groupId");
 
         void requisitions.execute("authChanged", undefined);
     }
@@ -1490,6 +1522,7 @@ export class ScoreBookDataModel {
                     isLeaf: !folder.hasChildren,
                 },
                 children: [],
+                perm: folder.perm,
                 refresh: async (cb?: ProgressCallback) => {
                     (entry.state as Mutable<ISbDmEntityState>).initialized = true;
 
@@ -1518,6 +1551,7 @@ export class ScoreBookDataModel {
                 },
                 parent,
                 content: score.content,
+                perm: score.perm,
             });
         });
 
@@ -1543,10 +1577,25 @@ export class ScoreBookDataModel {
      * @returns True if the refresh was successful.
      */
     private async refreshAccessToken(): Promise<boolean> {
+        // Restore group-login context from sessionStorage (lost from in-memory token on reload).
+        const headers: Record<string, string> = {};
+        const storedAuthType = sessionStorage.getItem("authType");
+        const storedGroupId = sessionStorage.getItem("groupId");
+
+        if (storedAuthType) {
+            headers["X-Auth-Type"] = storedAuthType;
+        }
+        if (storedGroupId) {
+            headers["X-Group-Id"] = storedGroupId;
+        }
+        if (this.accessToken) {
+            headers.Authorization = `Bearer ${this.accessToken}`;
+        }
+
         const res = await this.fetchApi("/api?action=refresh", {
             method: "POST",
             credentials: "include",
-            headers: this.accessToken ? { Authorization: `Bearer ${this.accessToken}` } : undefined,
+            headers: Object.keys(headers).length > 0 ? headers : undefined,
         }, false);
 
         if (!res) {
@@ -1569,6 +1618,14 @@ export class ScoreBookDataModel {
                 this.currentUser = whoami.user;
                 this.currentGroup = whoami.group;
                 this.currentCapabilities = whoami.capabilities;
+
+                if (whoami.group) {
+                    sessionStorage.setItem("authType", "group");
+                    sessionStorage.setItem("groupId", String(whoami.group.id));
+                } else {
+                    sessionStorage.removeItem("authType");
+                    sessionStorage.removeItem("groupId");
+                }
             }
         }
 

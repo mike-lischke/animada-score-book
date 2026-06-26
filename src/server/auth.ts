@@ -379,6 +379,61 @@ export const checkPermission = async (adapter: IDatabaseAdapter, user: ITokenPay
     return (getRolePerm(permRow.permBits, worldShift) & requiredPerm) === requiredPerm;
 };
 
+/** Summary of a user's relationship to an entity's permissions. */
+export interface IPermissionSummary {
+    isOwner: boolean;
+    isGroup: boolean;
+    isWorld: boolean;
+    canRead: boolean;
+    permBits: number;
+}
+
+/**
+ * Computes a permission summary for a user on an entity without repeating the full permission-check logic.
+ * Used by list endpoints that need to attach permission metadata to each returned row.
+ *
+ * @param adapter    The database adapter.
+ * @param user       The authenticated user, or undefined for anonymous.
+ * @param entityType The type of entity ("score", "folder", "feature").
+ * @param entityId   The entity id.
+ *
+ * @returns A summary of the user's access.
+ */
+export const getPermissionSummary = async (adapter: IDatabaseAdapter, user: ITokenPayload | undefined,
+    entityType: string, entityId: number): Promise<IPermissionSummary> => {
+    const isAdmin = user ? await isUserInAdminGroup(adapter, user.userId) : false;
+
+    const permRow = await resolvePermission(adapter, entityType, entityId);
+
+    if (!permRow) {
+        return { isOwner: false, isGroup: false, isWorld: false, canRead: isAdmin, permBits: 0 };
+    }
+
+    const isOwner = permRow.ownerId !== null && permRow.ownerId === user?.userId;
+
+    let isGroup = false;
+    if (user && permRow.groupId !== null) {
+        if (user.authType === "group" && user.groupId === permRow.groupId) {
+            isGroup = true;
+        } else {
+            const memberRows = await adapter.query<{ userId: number; }>(
+                "SELECT user_id AS userId FROM user_groups WHERE group_id = ? AND user_id = ?",
+                [permRow.groupId, user.userId],
+            );
+            isGroup = memberRows.length > 0;
+        }
+    }
+
+    const isWorld = (getRolePerm(permRow.permBits, worldShift) & Permission.R) !== 0;
+
+    const canRead = isAdmin
+        || (isOwner && (getRolePerm(permRow.permBits, ownerShift) & Permission.R) !== 0)
+        || (isGroup && (getRolePerm(permRow.permBits, groupShift) & Permission.R) !== 0)
+        || isWorld;
+
+    return { isOwner, isGroup, isWorld, canRead, permBits: permRow.permBits };
+};
+
 /**
  * Resolves the effective permission row for an entity, following the inheritance chain.
  *

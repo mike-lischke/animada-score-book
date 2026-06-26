@@ -163,8 +163,17 @@ export class ValueDialog extends UIComponent<{}, IValueDialogState> {
 
         const className = this.generateFinalClassName(["valueDialog"]);
 
+        // Find the index of the last Value-type entry so we can wire Enter → accept.
+        let lastValueIndex = -1;
+        for (let i = entries.length - 1; i >= 0; i--) {
+            if (entries[i].type === ValueEditorEntryType.Value) {
+                lastValueIndex = i;
+                break;
+            }
+        }
+
         const cells: ComponentChild[] = [];
-        entries.forEach((entry) => {
+        entries.forEach((entry, index) => {
             let cellContent: ComponentChild = null;
             let cellProps: Partial<IGridCellProperties> = {};
 
@@ -183,12 +192,25 @@ export class ValueDialog extends UIComponent<{}, IValueDialogState> {
                 case ValueEditorEntryType.Value: {
                     const valueEntry = valueMap.get(entry.id)!;
 
+                    let onConfirm = valueEntry.onConfirm;
+
+                    // When this is the last value field and the dialog has a default action,
+                    // wire Enter to trigger the accept button.
+                    if (isDefault && index === lastValueIndex) {
+                        const entryOnConfirm = valueEntry.onConfirm;
+
+                        onConfirm = (e: KeyboardEvent) => {
+                            entryOnConfirm?.(e, { id: entry.id, value: valueEntry.content as string });
+                            this.dialogRef.current?.close(false);
+                        };
+                    }
+
                     cellContent = <Input
                         id={entry.id}
                         value={valueEntry.content as string}
                         placeholder={valueEntry.placeholder}
                         password={valueEntry.password}
-                        onConfirm={valueEntry.onConfirm}
+                        onConfirm={onConfirm}
                         style={{ flex: "1" }}
                         onChange={this.handleValueChange}
                     />;
@@ -245,13 +267,15 @@ export class ValueDialog extends UIComponent<{}, IValueDialogState> {
                     isDefault={isDefault}
                     onClick={this.handleButtonClick}
                 />,
-                <Button
-                    id="cancel"
-                    key="cancel"
-                    caption={declineLabel}
-                    onClick={this.handleButtonClick}
-                />,
-            ]}
+                declineLabel && (
+                    <Button
+                        id="cancel"
+                        key="cancel"
+                        caption={declineLabel}
+                        onClick={this.handleButtonClick}
+                    />
+                ),
+            ].filter(Boolean)}
             onClose={this.closeDialog}
         >
             {errorMessage && (

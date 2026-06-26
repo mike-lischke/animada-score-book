@@ -13,7 +13,8 @@ import { extname, join, resolve } from "node:path";
 
 import { convertErrorToString } from "../core/utils.js";
 import {
-    adminGroupName, buildCapabilities, checkPermission, createAccessToken, createRefreshToken, hashPassword,
+    adminGroupName, buildCapabilities, checkPermission, createAccessToken, createRefreshToken,
+    getPermissionSummary, hashPassword,
     hasUsers, isUserInAdminGroup, makePermBits, Permission, refreshTokenExpirySeconds, setPermissions,
     verifyAndRotateRefreshToken, verifyPassword, verifyToken,
     type ITokenPayload,
@@ -558,18 +559,34 @@ const handleListScoreFolderContent = async (req: IncomingMessage, res: ServerRes
         scoreParams,
     );
 
-    // Filter out entries the user cannot read.
-    const readableFolders = [];
+    // Filter out entries the user cannot read and attach permission summaries.
+    const readableFolders: Array<Record<string, unknown>> = [];
     for (const f of folders) {
-        if (await checkPermission(adapter, user, "folder", f.id as number, Permission.R)) {
-            readableFolders.push(f);
+        const summary = await getPermissionSummary(adapter, user, "folder", f.id as number);
+
+        if (summary.canRead) {
+            readableFolders.push({
+                ...f,
+                perm: {
+                    isOwner: summary.isOwner, isGroup: summary.isGroup, isWorld: summary.isWorld,
+                    permBits: summary.permBits,
+                },
+            });
         }
     }
 
-    const readableScores = [];
+    const readableScores: Array<Record<string, unknown>> = [];
     for (const s of scores) {
-        if (await checkPermission(adapter, user, "score", s.id as number, Permission.R)) {
-            readableScores.push(s);
+        const summary = await getPermissionSummary(adapter, user, "score", s.id as number);
+
+        if (summary.canRead) {
+            readableScores.push({
+                ...s,
+                perm: {
+                    isOwner: summary.isOwner, isGroup: summary.isGroup, isWorld: summary.isWorld,
+                    permBits: summary.permBits,
+                },
+            });
         }
     }
 
@@ -1083,7 +1100,8 @@ const handleRefresh = async (req: IncomingMessage, res: ServerResponse): Promise
     const user = rows[0];
     const admin = await isUserInAdminGroup(adapter, user.id);
 
-    // Preserve group-login info from the old access token, if present.
+    // Preserve group-login info from the old access token, or from custom headers
+    // (sessionStorage backup for page reloads where the in-memory token is lost).
     const authHeader = req.headers.authorization;
     let authType: string | undefined;
     let groupId: number | undefined;
@@ -1095,6 +1113,14 @@ const handleRefresh = async (req: IncomingMessage, res: ServerResponse): Promise
             authType = oldPayload.authType;
             groupId = oldPayload.groupId;
         }
+    }
+
+    const headerAuthType = req.headers["x-auth-type"];
+    const headerGroupId = req.headers["x-group-id"];
+
+    if (!authType && headerAuthType === "group" && headerGroupId) {
+        authType = "group";
+        groupId = Number(headerGroupId);
     }
 
     const accessToken = createAccessToken({
@@ -1199,6 +1225,7 @@ const handleCreateInitialAdmin = async (req: IncomingMessage, res: ServerRespons
     const username = String(body.username ?? "").trim();
     const password = String(body.password ?? "");
     const displayName = String(body.displayName ?? username).trim();
+    const groupName = String(body.groupName ?? "My first group").trim();
 
     if (!username || !password) {
         sendError(res, "Username and password required");
@@ -1234,6 +1261,66 @@ const handleCreateInitialAdmin = async (req: IncomingMessage, res: ServerRespons
     await adapter.execute(
         "INSERT INTO user_groups (user_id, group_id) VALUES (?, ?)",
         [result.insertId, groupResult.insertId],
+    );
+
+    // Create the default group (idempotent — may already exist from seed).
+    const defaultGroupRows = await adapter.query<{ id: number; }>(
+        "SELECT id FROM `groups` WHERE name = ?", [groupName],
+    );
+
+    let defaultGroupId: number;
+
+    if (defaultGroupRows.length > 0) {
+        defaultGroupId = defaultGroupRows[0].id;
+    } else {
+        const agResult = await adapter.insertReturningId(
+            "INSERT INTO `groups` (name, description, color) VALUES (?, ?, ?)",
+            [groupName, "", "#2a9d8f"],
+        );
+        defaultGroupId = agResult.insertId;
+    }
+
+    // Assign permissions: the new admin owns all entities that have no owner yet,
+    // and they belong to the default group.
+    const ownerPermBits = makePermBits(Permission.RWX, Permission.RX, Permission.R);
+
+    // Folders without permissions.
+    const orphanFolders = await adapter.query<{ id: number; }>(
+        `SELECT f.id FROM folders f
+         WHERE NOT EXISTS (
+             SELECT 1 FROM permissions p
+             WHERE p.entity_type = 'folder' AND p.entity_id = f.id
+         )`,
+    );
+
+    for (const f of orphanFolders) {
+        await adapter.execute(
+            `INSERT INTO permissions (entity_type, entity_id, owner_id, group_id, perm_bits)
+             VALUES ('folder', ?, ?, ?, ?)`,
+            [f.id, result.insertId, defaultGroupId, ownerPermBits],
+        );
+    }
+
+    // Scores without permissions.
+    const orphanScores = await adapter.query<{ id: number; }>(
+        `SELECT s.id FROM scores s
+         WHERE NOT EXISTS (
+             SELECT 1 FROM permissions p
+             WHERE p.entity_type = 'score' AND p.entity_id = s.id
+         )`,
+    );
+
+    for (const s of orphanScores) {
+        await adapter.execute(
+            `INSERT INTO permissions (entity_type, entity_id, owner_id, group_id, perm_bits)
+             VALUES ('score', ?, ?, ?, ?)`,
+            [s.id, result.insertId, defaultGroupId, ownerPermBits],
+        );
+    }
+
+    console.log(
+        `Assigned permissions: ${orphanFolders.length} folders, ${orphanScores.length} scores ` +
+        `→ owner=${username}, group=${groupName}.`,
     );
 
     const payload: ITokenPayload = {

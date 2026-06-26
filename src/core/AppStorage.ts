@@ -60,6 +60,9 @@ export interface IUISettings {
 
     /** Whether to use a count-in before starting arrangement playback. */
     countIn?: boolean;
+
+    /** Whether to show the permission matrix in the Score Library tree. Defaults to true. */
+    showPermMatrix?: boolean;
 }
 
 /**

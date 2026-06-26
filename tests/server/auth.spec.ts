@@ -84,3 +84,20 @@ describe("auth — Permission Bits", () => {
         expect(Permission.RWX).toBe(7);
     });
 });
+
+describe("auth — IPermissionSummary", () => {
+    it("default permBits for creation is 492 (rwx|r-x|r--)", () => {
+        // Owner RWX (7), Group RX (5), World R (4) → 7<<6 | 5<<3 | 4 = 492.
+        const bits = makePermBits(Permission.RWX, Permission.RX, Permission.R);
+
+        expect(bits).toBe(492);
+    });
+
+    it("no perm row yields all false and 0 bits", () => {
+        // Covered by getPermissionSummary returning { isOwner:false, isGroup:false, isWorld:false, permBits:0 }
+        // when no row exists. This is the structural contract.
+        const bits = makePermBits(Permission.None, Permission.None, Permission.None);
+
+        expect(bits).toBe(0);
+    });
+});

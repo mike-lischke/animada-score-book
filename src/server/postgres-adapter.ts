@@ -47,16 +47,20 @@ const createTablesSQL = [
         password_hash      VARCHAR(512) NOT NULL,
         refresh_token_hash VARCHAR(256),
         display_name       VARCHAR(255) NOT NULL,
+        last_login    TIMESTAMP,
         created_at    TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
         updated_at    TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP
     )`,
 
     `CREATE TABLE IF NOT EXISTS groups (
-        id          SERIAL PRIMARY KEY,
-        name        VARCHAR(255) NOT NULL UNIQUE,
-        description TEXT,
-        color       VARCHAR(7)  NOT NULL DEFAULT '#808080',
-        created_at  TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP
+        id            SERIAL PRIMARY KEY,
+        name          VARCHAR(255) NOT NULL UNIQUE,
+        description   TEXT,
+        color         VARCHAR(7)   NOT NULL DEFAULT '#808080',
+        password_hash VARCHAR(512),
+        admin_id      INT REFERENCES users(id) ON DELETE SET NULL,
+        last_login    TIMESTAMP,
+        created_at    TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP
     )`,
 
     `CREATE TABLE IF NOT EXISTS user_groups (

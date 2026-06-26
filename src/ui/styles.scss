@@ -141,6 +141,33 @@
     background-color: var(--selection-background);
 }
 
+/* ---- Permission dot matrix ---- */
+
+#scoreTreeHost .permMatrix {
+    display: inline-flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: 0 0 auto;
+    margin-left: auto;
+    margin-right: 4px;
+}
+
+#scoreTreeHost .permRow {
+    display: flex;
+    gap: 2px;
+}
+
+#scoreTreeHost .permDot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--color-base-content, #888) 20%, transparent);
+
+    &.filled {
+        background: var(--color-primary);
+    }
+}
+
 #instrumentManagerSplitter .divider.vertical {
     background-image: linear-gradient(to bottom,
             rgba(100, 100, 100, 0) 0%,

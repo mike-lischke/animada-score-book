@@ -21,6 +21,9 @@ import { ChildAlignment, Orientation, SelectionType } from "../components/ui/fra
 import {
     SbDmEntityType, type ISbDmScore, type ISbDmScoreFolder, type ScoreBookDataModel
 } from "../core/ScoreBookDataModel.js";
+import { AppStorage, type IUISettings } from "../core/AppStorage.js";
+import { PermMatrix } from "./PermMatrix.js";
+import { requisitions } from "../supplement/Requisitions.js";
 
 export interface IScoreLibraryProperties extends ICommonUIProperties {
     dataModel: ScoreBookDataModel;
@@ -31,6 +34,8 @@ export interface IScoreLibraryProperties extends ICommonUIProperties {
 interface IScoreLibraryState {
     /** The URL of an audio or video file. */
     url?: string;
+
+    currentSettings: IUISettings;
 }
 
 /**
@@ -42,7 +47,17 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
 
     public constructor(props: IScoreLibraryProperties) {
         super(props);
-        this.state = {};
+        this.state = {
+            currentSettings: AppStorage.loadUISettings() ?? {}
+        };
+    }
+
+    public override componentDidMount(): void {
+        requisitions.register("settingsChanged", this.handleSettingsChanged);
+    }
+
+    public override componentWillUnmount(): void {
+        requisitions.unregister("settingsChanged", this.handleSettingsChanged);
     }
 
     public render(): ComponentChild {
@@ -114,6 +129,8 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
     }
 
     private scoreTreeCellFormatter = (cell: CellComponent): string | HTMLElement => {
+        const { currentSettings } = this.state;
+
         const row = cell.getRow();
         const data = cell.getData() as ISbDmScoreFolder | ISbDmScore;
 
@@ -155,6 +172,9 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
             icon = <Icon src={iconSrc} className={iconClass + " scoreTreeIcon"} />;
         };
 
+        const renderPermMatrix = data.perm && (data.perm.isOwner || data.perm.isGroup)
+            && (currentSettings.showPermMatrix ?? true);
+
         const content = <>
             {icon}
             <Label caption={data.name} />
@@ -168,6 +188,7 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
                     }}
                 />
             </Container>
+            {renderPermMatrix && <PermMatrix permBits={data.perm.permBits} />}
         </>;
 
         render(content, host);
@@ -321,6 +342,7 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
             entry.state.loading = true;
             row.reformat();
         }, 500);
+
         void entry.refresh?.().then(() => {
             clearTimeout(timer);
             entry.state.loading = false;
@@ -347,6 +369,17 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
 
     private handleScoreTreeRowContext = (event: Event, row: RowComponent): void => {
         //const entry = row.getData() as IScoreNode;
+    };
+
+    private handleSettingsChanged = (settings: IUISettings): Promise<boolean> => {
+        this.setState({ currentSettings: settings }, () => {
+            const rows = this.scoreTableRef.current?.getRows();
+            rows?.forEach((row) => {
+                row.reformat();
+            });
+        });
+
+        return Promise.resolve(true);
     };
 
     private isScoreTreeRowExpanded = (row: RowComponent): boolean => {

@@ -8,6 +8,7 @@ import { themeNames } from "../generated/theme-names.js";
 import { ComponentChild, createRef } from "preact";
 
 import { Button } from "../components/ui/framework/Button.js";
+import { Checkbox } from "../components/ui/framework/Checkbox.js";
 import { Codicon } from "../components/ui/framework/Codicon.js";
 import { Container } from "../components/ui/framework/Container.js";
 import { Dialog } from "../components/ui/framework/Dialog.js";
@@ -191,8 +192,26 @@ export class SettingsDialog extends UIComponent<{}, ISettingsDialogState> {
                             />
                         </Container>
                     </Container>
-                </Container>
 
+                    <Container
+                        className="settings-row"
+                        orientation={Orientation.LeftToRight}
+                        mainAlignment={ChildAlignment.SpaceBetween}
+                        crossAlignment={ChildAlignment.Center}
+                    >
+                        <span className="settings-row-label">Show permission matrix</span>
+                        <Checkbox
+                            id="showPermMatrix"
+                            checked={currentSettings.showPermMatrix ?? true}
+                            onChange={(checked) => {
+                                currentSettings.showPermMatrix = checked;
+                                this.setState({ currentSettings }, () => {
+                                    this.temporarySettingsChange();
+                                });
+                            }}
+                        />
+                    </Container>
+                </Container>
             </Dialog >
         );
     }

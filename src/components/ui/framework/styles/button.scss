@@ -8,3 +8,12 @@
     margin: 2px;
     min-width: 0;
 }
+
+.btn.default {
+    background-color: var(--color-primary);
+    color: var(--color-primary-content);
+
+    &:hover {
+        background-color: color-mix(in srgb, var(--color-primary) 85%, black);
+    }
+}
