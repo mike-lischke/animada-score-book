@@ -68,6 +68,7 @@ import { MouseHandler } from "./ui/MouseHandler.js";
 import { SelectionManager } from "./ui/SelectionManager.js";
 import { SettingsDialog } from "./ui/SettingsDialog.js";
 import { UserGroupEditor } from "./ui/UserGroupEditor.js";
+import { PermissionEditor } from "./ui/PermissionEditor.js";
 
 const ScoreLibrary = lazy(() => {
     return import("./ui/ScoreLibrary.js").then((m) => {
@@ -118,6 +119,7 @@ export class App extends UIComponent<{}, IAppState> {
     private loginDialogRef = createRef<LoginDialog>();
     private adminSetupDialogRef = createRef<AdminSetupDialog>();
     private userGroupEditorRef = createRef<UserGroupEditor>();
+    private permissionEditorRef = createRef<PermissionEditor>();
     private printDialogRef = createRef<PrintDialog>();
     private valueDialogRef = createRef<ValueDialog>();
     private confirmDialogRef = createRef<ConfirmDialog>();
@@ -501,7 +503,18 @@ export class App extends UIComponent<{}, IAppState> {
                             }}
                         />
                         <PrintDialog ref={this.printDialogRef} onAccept={this.handlePrintAccept} />
-                        <UserGroupEditor ref={this.userGroupEditorRef} dataModel={this.dataModel} />
+                        <UserGroupEditor
+                            ref={this.userGroupEditorRef}
+                            dataModel={this.dataModel}
+                            showUsers={this.dataModel.user?.isAdmin === true}
+                        />
+                        <PermissionEditor
+                            ref={this.permissionEditorRef}
+                            dataModel={this.dataModel}
+                            onSaved={() => {
+                                void requisitions.execute("permChanged", undefined);
+                            }}
+                        />
                         {
                             this.state.printing && this.dataModel.arrangement && this.state.printOptions
                             && this.arrangementPlayer && this.undoManager && (
@@ -757,6 +770,14 @@ export class App extends UIComponent<{}, IAppState> {
         if (user?.isAdmin) {
             items.push({
                 label: "Users & Groups",
+                icon: <Icon src={Codicon.Organization} />,
+                onClick: () => {
+                    this.userGroupEditorRef.current?.open();
+                },
+            });
+        } else if (user) {
+            items.push({
+                label: "My Groups",
                 icon: <Icon src={Codicon.Organization} />,
                 onClick: () => {
                     this.userGroupEditorRef.current?.open();
@@ -1106,6 +1127,21 @@ export class App extends UIComponent<{}, IAppState> {
                 }
 
                 break;
+            }
+
+            case "editPerm": {
+                if (!this.permissionEditorRef.current) {
+                    return false;
+                }
+
+                const entityType = data.type === SbDmEntityType.ScoreFolder ? "folder" : "score";
+                // Find the button element that was clicked (the PermMatrix span).
+                const target = document.querySelector<HTMLElement>(".permMatrix")!;
+
+                void this.permissionEditorRef.current.open(target, entityType, data.id, data.name,
+                    data.perm?.permBits);
+
+                return false;
             }
 
             default:

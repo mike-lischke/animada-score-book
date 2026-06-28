@@ -39,11 +39,12 @@ const getRolePerm = (permBits: number, shift: number): number => {
  *
  * @param props           The component props.
  * @param props.permBits  The raw 9-bit permission mask.
+ * @param props.onClick   Optional click handler for opening the permission editor.
  *
  * @returns A 3×2 grid of dots.
  */
-export const PermMatrix = (props: { permBits: number; }): ComponentChild => {
-    const { permBits } = props;
+export const PermMatrix = (props: { permBits: number; onClick?: () => void; }): ComponentChild => {
+    const { permBits, onClick } = props;
 
     const owner = getRolePerm(permBits, ownerShift);
     const group = getRolePerm(permBits, groupShift);
@@ -54,7 +55,12 @@ export const PermMatrix = (props: { permBits: number; }): ComponentChild => {
     };
 
     return (
-        <span class="permMatrix">
+        <span class="permMatrix" onClick={(e) => {
+            e.stopPropagation();
+            onClick?.();
+        }} onMouseDown={(e) => {
+            e.stopPropagation();
+        }}>
             <span class="permRow">
                 <span class={dot(owner, 4)} />
                 <span class={dot(owner, 2)} />

@@ -347,6 +347,18 @@ export interface ISbDmPermissionInfo {
     readonly permBits: number;
 }
 
+/** Decomposed permissions returned by getPermissions. */
+export interface IPermissionDecomposition {
+    id: number;
+    entityType: string;
+    entityId: number | null;
+    ownerId: number | null;
+    groupId: number | null;
+    ownerPerm: number;
+    groupPerm: number;
+    worldPerm: number;
+}
+
 export interface ISbDmSoundFolder extends ISbDmVisual {
     readonly type: SbDmEntityType.SoundFolder;
     readonly parentId: number | null;
@@ -762,7 +774,6 @@ export class ScoreBookDataModel {
                     expandedOnce: false,
                 },
                 children: [],
-                perm: { isOwner: true, isGroup: false, isWorld: true, permBits: 492 },
             };
 
             if (!parent) {
@@ -772,8 +783,7 @@ export class ScoreBookDataModel {
             }
 
             parent.children.push(newFolder);
-
-            void requisitions.execute("scoreBookLoaded", undefined);
+            await this.refreshScoreLib();
         }
     }
 
@@ -802,7 +812,6 @@ export class ScoreBookDataModel {
                     expanded: true,
                     expandedOnce: true,
                 },
-                perm: { isOwner: true, isGroup: false, isWorld: true, permBits: 492 },
             };
 
             if (!parent) {
@@ -810,8 +819,7 @@ export class ScoreBookDataModel {
             } else {
                 parent.children.push(newScore);
             }
-
-            void requisitions.execute("scoreBookLoaded", undefined);
+            await this.refreshScoreLib();
         }
     }
 
@@ -883,6 +891,55 @@ export class ScoreBookDataModel {
         if (index >= 0) {
             parentChildren.splice(index, 1);
             void requisitions.execute("scoreBookLoaded", undefined);
+        }
+    }
+
+    /**
+     * Fetches the decomposed permissions for a score library entity.
+     *
+     * @param entityType "score" or "folder".
+     * @param entityId   The entity's database id.
+     * @returns The permission decomposition, or null if none exists.
+     */
+    public async getPermissions(entityType: string, entityId: number): Promise<IPermissionDecomposition | null> {
+        const res = await this.fetchApi(
+            `/api?action=getPermissions&entityType=${encodeURIComponent(entityType)}&entityId=${entityId}`,
+            { method: "POST" },
+        );
+
+        if (!res?.ok) {
+            return null;
+        }
+
+        const data = await res.json() as { permission: IPermissionDecomposition | null; };
+
+        return data.permission ?? null;
+    }
+
+    /**
+     * Sets permissions for a score library entity. Admin-only.
+     *
+     * @param entityType "score" or "folder".
+     * @param entityId   The entity's database id.
+     * @param ownerId    The owning user id (or null).
+     * @param groupId    The owning group id (or null).
+     * @param ownerPerm  Owner permission bits (0-7).
+     * @param groupPerm  Group permission bits (0-7).
+     * @param worldPerm  World permission bits (0-7).
+     */
+    public async setPermissions(entityType: string, entityId: number, ownerId: number | null, groupId: number | null,
+        ownerPerm: number, groupPerm: number, worldPerm: number,
+    ): Promise<void> {
+        const res = await this.fetchApi("/api?action=setPermissions", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ entityType, entityId, ownerId, groupId, ownerPerm, groupPerm, worldPerm }),
+        });
+
+        if (!res?.ok) {
+            const data = await res?.json() as { error?: string; };
+
+            throw new Error(data.error ?? "Failed to set permissions.");
         }
     }
 
@@ -1393,6 +1450,18 @@ export class ScoreBookDataModel {
      * @param score       The score entry whose content should be rewritten.
      * @param arrangement The already-migrated arrangement to serialize.
      */
+
+    /**
+     * Refreshes the root level of the score library from the backend.
+     * Useful after permission changes to reflect updated visibility.
+     */
+    public async refreshScoreLib(): Promise<void> {
+        const freshList: Array<ISbDmScoreFolder | ISbDmScore> = [];
+        await this.updateScoreLibFolder(freshList);
+        this.data.scoreLib = freshList;
+        void requisitions.execute("scoreBookLoaded", undefined);
+    }
+
     private async rewriteMigratedScore(score: ISbDmScore, arrangement: Arrangement): Promise<void> {
         if (!this.canWriteScores) {
             return;
@@ -1646,6 +1715,7 @@ export class ScoreBookDataModel {
      *                     Set to false for login, refresh, and whoami requests.
      * @returns The response on success, or `undefined` when the backend is unreachable.
      */
+
     private async fetchApi(
         url: string, options?: RequestInit, attachAuth = true,
     ): Promise<Response | undefined> {

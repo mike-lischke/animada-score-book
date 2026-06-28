@@ -54,10 +54,14 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
 
     public override componentDidMount(): void {
         requisitions.register("settingsChanged", this.handleSettingsChanged);
+        requisitions.register("scoreBookLoaded", this.handleScoreBookLoaded);
+        requisitions.register("permChanged", this.handlePermChanged);
     }
 
     public override componentWillUnmount(): void {
         requisitions.unregister("settingsChanged", this.handleSettingsChanged);
+        requisitions.unregister("scoreBookLoaded", this.handleScoreBookLoaded);
+        requisitions.unregister("permChanged", this.handlePermChanged);
     }
 
     public render(): ComponentChild {
@@ -130,6 +134,7 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
 
     private scoreTreeCellFormatter = (cell: CellComponent): string | HTMLElement => {
         const { currentSettings } = this.state;
+        const { dataModel } = this.props;
 
         const row = cell.getRow();
         const data = cell.getData() as ISbDmScoreFolder | ISbDmScore;
@@ -172,7 +177,8 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
             icon = <Icon src={iconSrc} className={iconClass + " scoreTreeIcon"} />;
         };
 
-        const renderPermMatrix = data.perm && (data.perm.isOwner || data.perm.isGroup)
+        const isAdmin = dataModel.user?.isAdmin ?? false;
+        const renderPermMatrix = data.perm && (data.perm.isOwner || data.perm.isGroup || isAdmin)
             && (currentSettings.showPermMatrix ?? true);
 
         const content = <>
@@ -188,7 +194,14 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
                     }}
                 />
             </Container>
-            {renderPermMatrix && <PermMatrix permBits={data.perm.permBits} />}
+            {renderPermMatrix && (
+                <PermMatrix
+                    permBits={data.perm.permBits}
+                    onClick={() => {
+                        this.handleMenuItemClick("editPerm", data);
+                    }}
+                />
+            )}
         </>;
 
         render(content, host);
@@ -378,6 +391,22 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
                 row.reformat();
             });
         });
+
+        return Promise.resolve(true);
+    };
+
+    private handleScoreBookLoaded = (): Promise<boolean> => {
+        const { dataModel } = this.props;
+        const tree = this.scoreTableRef.current;
+        void tree?.setData(dataModel.scoreLib, SetDataAction.Replace);
+
+        return Promise.resolve(true);
+    };
+
+    private handlePermChanged = (): Promise<boolean> => {
+        const { dataModel } = this.props;
+        const tree = this.scoreTableRef.current;
+        void tree?.setData(dataModel.scoreLib, SetDataAction.Update);
 
         return Promise.resolve(true);
     };

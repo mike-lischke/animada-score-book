@@ -176,7 +176,7 @@ describe.sequential("SettingsDialog (class)", () => {
             expect(document.body.querySelector("#settingsDialog")).toBeTruthy();
         });
 
-        expect(document.body.querySelector(".settings-card")).toBeTruthy();
+        expect(document.body.querySelector(".form-card")).toBeTruthy();
         expect(document.body.querySelector("#settings-button-cancel")).toBeTruthy();
         expect(document.body.querySelector("#settings-button-save")).toBeTruthy();
     });

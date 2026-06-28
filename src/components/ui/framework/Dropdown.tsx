@@ -94,7 +94,7 @@ export class Dropdown extends UIComponent<IDropdownProperties, IDropdownState> {
 
                 <ul
                     ref={this.listRef}
-                    className="du-dropdown du-menu w-52 rounded-box bg-base-100 shadow-sm"
+                    className="du-dropdown du-menu dropdown-popup"
                     popover="auto"
                     id={this.popoverId}
                     style={{ positionAnchor: this.anchorName }}

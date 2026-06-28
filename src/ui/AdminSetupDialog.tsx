@@ -113,15 +113,15 @@ export class AdminSetupDialog extends UIComponent<IAdminSetupDialogProperties, I
                     className="font-semibold"
                     style={{ marginTop: "4px", marginBottom: "4px" }}
                 />
-                <Container className="settings-card" orientation={Orientation.TopDown}>
+                <Container className="form-card" orientation={Orientation.TopDown}>
                     <Container
-                        className="settings-row"
+                        className="form-row"
                         orientation={Orientation.LeftToRight}
                         mainAlignment={ChildAlignment.SpaceBetween}
                         crossAlignment={ChildAlignment.Center}
                     >
                         <Label
-                            className="settings-row-label"
+                            className="form-row-label"
                             caption="Username"
                             style={{ minWidth: "100px" }}
                         />
@@ -138,13 +138,13 @@ export class AdminSetupDialog extends UIComponent<IAdminSetupDialogProperties, I
                     </Container>
 
                     <Container
-                        className="settings-row"
+                        className="form-row"
                         orientation={Orientation.LeftToRight}
                         mainAlignment={ChildAlignment.SpaceBetween}
                         crossAlignment={ChildAlignment.Center}
                     >
                         <Label
-                            className="settings-row-label"
+                            className="form-row-label"
                             caption="Password"
                             style={{ minWidth: "100px" }}
                         />
@@ -162,13 +162,13 @@ export class AdminSetupDialog extends UIComponent<IAdminSetupDialogProperties, I
                     </Container>
 
                     <Container
-                        className="settings-row"
+                        className="form-row"
                         orientation={Orientation.LeftToRight}
                         mainAlignment={ChildAlignment.SpaceBetween}
                         crossAlignment={ChildAlignment.Center}
                     >
                         <Label
-                            className="settings-row-label"
+                            className="form-row-label"
                             caption="Confirm"
                             style={{ minWidth: "100px" }}
                         />
@@ -186,13 +186,13 @@ export class AdminSetupDialog extends UIComponent<IAdminSetupDialogProperties, I
                     </Container>
 
                     <Container
-                        className="settings-row"
+                        className="form-row"
                         orientation={Orientation.LeftToRight}
                         mainAlignment={ChildAlignment.SpaceBetween}
                         crossAlignment={ChildAlignment.Center}
                     >
                         <Label
-                            className="settings-row-label"
+                            className="form-row-label"
                             caption="Display Name"
                             style={{ minWidth: "100px" }}
                         />
@@ -214,15 +214,15 @@ export class AdminSetupDialog extends UIComponent<IAdminSetupDialogProperties, I
                     className="font-semibold"
                     style={{ marginTop: "12px", marginBottom: "4px" }}
                 />
-                <Container className="settings-card" orientation={Orientation.TopDown}>
+                <Container className="form-card" orientation={Orientation.TopDown}>
                     <Container
-                        className="settings-row"
+                        className="form-row"
                         orientation={Orientation.LeftToRight}
                         mainAlignment={ChildAlignment.SpaceBetween}
                         crossAlignment={ChildAlignment.Center}
                     >
                         <Label
-                            className="settings-row-label"
+                            className="form-row-label"
                             caption="Group Name"
                             style={{ minWidth: "100px" }}
                         />
@@ -242,7 +242,7 @@ export class AdminSetupDialog extends UIComponent<IAdminSetupDialogProperties, I
 
                 {errorMessage && (
                     <Container
-                        className="settings-row"
+                        className="form-row"
                         orientation={Orientation.LeftToRight}
                         crossAlignment={ChildAlignment.Center}
                     >

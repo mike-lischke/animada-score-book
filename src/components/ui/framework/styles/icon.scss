@@ -29,6 +29,12 @@
     min-height: 16px;
     color: var(--color-base-content);
 
+    &.codicon {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+
     &:not(.codicon) {
         mask-repeat: no-repeat;
         mask-position: center;

@@ -29,6 +29,7 @@ export interface IRequestTypeMap {
     "arrangementChanged": (arrangementId: number) => Promise<boolean>;
     "timeParamsChanged": SimpleCallback;
     "scoreBookLoaded": SimpleCallback;
+    "permChanged": SimpleCallback;
 
     // --- Undo/redo topics ---
     "undoStateChanged": SimpleCallback;

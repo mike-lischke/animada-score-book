@@ -359,7 +359,7 @@ export class BackendSetupDialog extends UIComponent<IBackendSetupDialogPropertie
         const { lastTestSucceeded } = this.state;
 
         return (
-            <Container className="settings-card" orientation={Orientation.TopDown}>
+            <Container className="form-card" orientation={Orientation.TopDown}>
                 {errorMessage && (
                     <Container
                         className="text-error bg-error/10 rounded p-2"
@@ -386,12 +386,12 @@ export class BackendSetupDialog extends UIComponent<IBackendSetupDialogPropertie
                 )}
 
                 <Container
-                    className="settings-row"
+                    className="form-row"
                     orientation={Orientation.LeftToRight}
                     mainAlignment={ChildAlignment.SpaceBetween}
                     crossAlignment={ChildAlignment.Center}
                 >
-                    <span className="settings-row-label">Database Engine</span>
+                    <span className="form-row-label">Database Engine</span>
                     <Dropdown
                         caption={engineLabels[engine]}
                         items={Object.values(DatabaseEngine).map((e) => {
@@ -411,12 +411,12 @@ export class BackendSetupDialog extends UIComponent<IBackendSetupDialogPropertie
                 </Container>
 
                 <Container
-                    className="settings-row"
+                    className="form-row"
                     orientation={Orientation.LeftToRight}
                     mainAlignment={ChildAlignment.SpaceBetween}
                     crossAlignment={ChildAlignment.Center}
                 >
-                    <span className="settings-row-label">Host</span>
+                    <span className="form-row-label">Host</span>
                     <Input
                         value={host}
                         disabled={!canEdit}
@@ -428,12 +428,12 @@ export class BackendSetupDialog extends UIComponent<IBackendSetupDialogPropertie
                 </Container>
 
                 <Container
-                    className="settings-row"
+                    className="form-row"
                     orientation={Orientation.LeftToRight}
                     mainAlignment={ChildAlignment.SpaceBetween}
                     crossAlignment={ChildAlignment.Center}
                 >
-                    <span className="settings-row-label">Port</span>
+                    <span className="form-row-label">Port</span>
                     <Input
                         value={String(port)}
                         disabled={!canEdit}
@@ -449,12 +449,12 @@ export class BackendSetupDialog extends UIComponent<IBackendSetupDialogPropertie
                 </Container>
 
                 <Container
-                    className="settings-row"
+                    className="form-row"
                     orientation={Orientation.LeftToRight}
                     mainAlignment={ChildAlignment.SpaceBetween}
                     crossAlignment={ChildAlignment.Center}
                 >
-                    <span className="settings-row-label">Database Name</span>
+                    <span className="form-row-label">Database Name</span>
                     <Input
                         value={database}
                         disabled={!canEdit}
@@ -466,12 +466,12 @@ export class BackendSetupDialog extends UIComponent<IBackendSetupDialogPropertie
                 </Container>
 
                 <Container
-                    className="settings-row"
+                    className="form-row"
                     orientation={Orientation.LeftToRight}
                     mainAlignment={ChildAlignment.SpaceBetween}
                     crossAlignment={ChildAlignment.Center}
                 >
-                    <span className="settings-row-label">User</span>
+                    <span className="form-row-label">User</span>
                     <Input
                         value={user}
                         disabled={!canEdit}
@@ -483,12 +483,12 @@ export class BackendSetupDialog extends UIComponent<IBackendSetupDialogPropertie
                 </Container>
 
                 <Container
-                    className="settings-row"
+                    className="form-row"
                     orientation={Orientation.LeftToRight}
                     mainAlignment={ChildAlignment.SpaceBetween}
                     crossAlignment={ChildAlignment.Center}
                 >
-                    <span className="settings-row-label">Password</span>
+                    <span className="form-row-label">Password</span>
                     <Container orientation={Orientation.LeftToRight}
                         crossAlignment={ChildAlignment.Center}
                         style={{ position: "relative", width: "200px" }}>

@@ -154,17 +154,17 @@ export class LoginDialog extends UIComponent<ILoginDialogProperties, ILoginDialo
                     />
                 </Container>
 
-                <Container className="settings-card" orientation={Orientation.TopDown}>
+                <Container className="form-card" orientation={Orientation.TopDown}>
                     {loginMode === LoginMode.User ? (
                         <>
                             <Container
-                                className="settings-row"
+                                className="form-row"
                                 orientation={Orientation.LeftToRight}
                                 mainAlignment={ChildAlignment.SpaceBetween}
                                 crossAlignment={ChildAlignment.Center}
                             >
                                 <Label
-                                    className="settings-row-label"
+                                    className="form-row-label"
                                     caption="Username"
                                     style={{ minWidth: "80px" }}
                                 />
@@ -181,13 +181,13 @@ export class LoginDialog extends UIComponent<ILoginDialogProperties, ILoginDialo
                             </Container>
 
                             <Container
-                                className="settings-row"
+                                className="form-row"
                                 orientation={Orientation.LeftToRight}
                                 mainAlignment={ChildAlignment.SpaceBetween}
                                 crossAlignment={ChildAlignment.Center}
                             >
                                 <Label
-                                    className="settings-row-label"
+                                    className="form-row-label"
                                     caption="Password"
                                     style={{ minWidth: "80px" }}
                                 />
@@ -208,13 +208,13 @@ export class LoginDialog extends UIComponent<ILoginDialogProperties, ILoginDialo
                     ) : (
                         <>
                             <Container
-                                className="settings-row"
+                                className="form-row"
                                 orientation={Orientation.LeftToRight}
                                 mainAlignment={ChildAlignment.SpaceBetween}
                                 crossAlignment={ChildAlignment.Center}
                             >
                                 <Label
-                                    className="settings-row-label"
+                                    className="form-row-label"
                                     caption="Group"
                                     style={{ minWidth: "80px" }}
                                 />
@@ -234,13 +234,13 @@ export class LoginDialog extends UIComponent<ILoginDialogProperties, ILoginDialo
                             </Container>
 
                             <Container
-                                className="settings-row"
+                                className="form-row"
                                 orientation={Orientation.LeftToRight}
                                 mainAlignment={ChildAlignment.SpaceBetween}
                                 crossAlignment={ChildAlignment.Center}
                             >
                                 <Label
-                                    className="settings-row-label"
+                                    className="form-row-label"
                                     caption="Password"
                                     style={{ minWidth: "80px" }}
                                 />
@@ -263,7 +263,7 @@ export class LoginDialog extends UIComponent<ILoginDialogProperties, ILoginDialo
 
                     {errorMessage && (
                         <Container
-                            className="settings-row"
+                            className="form-row"
                             orientation={Orientation.LeftToRight}
                             crossAlignment={ChildAlignment.Center}
                         >

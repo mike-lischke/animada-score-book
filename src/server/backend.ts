@@ -625,8 +625,9 @@ const handleAddScoreFolder = async (req: IncomingMessage, res: ServerResponse): 
         [parentId === -1 ? null : parentId, name],
     );
 
-    // Assign default permissions: owner = current user, group = null, world = read-only.
-    if (user) {
+    // Assign default permissions for root-level folders only.
+    // Nested folders inherit from their parent.
+    if (user && (parentId === null || parentId === -1)) {
         const permBits = makePermBits(Permission.RWX, Permission.RX, Permission.R);
 
         await setPermissions(adapter, "folder", result.insertId, user.userId, null, permBits);
@@ -668,8 +669,9 @@ const handleAddScore = async (req: IncomingMessage, res: ServerResponse): Promis
         [folderId === -1 ? null : folderId, name, content],
     );
 
-    // Assign default permissions: owner = current user, group = null, world = read-only.
-    if (user) {
+    // Assign default permissions for root-level scores only.
+    // Nested scores inherit from their parent folder.
+    if (user && (folderId === null || folderId === -1)) {
         const permBits = makePermBits(Permission.RWX, Permission.RX, Permission.R);
 
         await setPermissions(adapter, "score", result.insertId, user.userId, null, permBits);
@@ -1353,7 +1355,7 @@ const handleCreateInitialAdmin = async (req: IncomingMessage, res: ServerRespons
 const handleListUsers = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
     const user = getAuthUser(req);
 
-    if (!user || !(await isUserInAdminGroup(adapter, user.userId))) {
+    if (!user) {
         sendError(res, "Forbidden", 403);
 
         return;
@@ -1541,7 +1543,7 @@ const handleDeleteUser = async (req: IncomingMessage, res: ServerResponse): Prom
 const handleListGroups = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
     const user = getAuthUser(req);
 
-    if (!user || !(await isUserInAdminGroup(adapter, user.userId))) {
+    if (!user) {
         sendError(res, "Forbidden", 403);
 
         return;
@@ -1784,17 +1786,28 @@ const handleDeleteGroup = async (req: IncomingMessage, res: ServerResponse): Pro
 const handleAddUserToGroup = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
     const user = getAuthUser(req);
 
-    if (!user || !(await isUserInAdminGroup(adapter, user.userId))) {
+    const body = await readJsonBody(req);
+    const groupId = body.groupId !== undefined ? Number(body.groupId) : undefined;
+
+    if (groupId === undefined) {
+        return;
+    }
+
+    const groupRow = await adapter.query<{ admin_id: number | null; }>(
+        "SELECT admin_id FROM `groups` WHERE id = ?",
+        [groupId],
+    );
+    const isGroupAdmin = groupRow[0]?.admin_id === user?.userId;
+
+    if (!user || (!(await isUserInAdminGroup(adapter, user.userId)) && !isGroupAdmin)) {
         sendError(res, "Forbidden", 403);
 
         return;
     }
 
-    const body = await readJsonBody(req);
     const userId = body.userId !== undefined ? Number(body.userId) : undefined;
-    const groupId = body.groupId !== undefined ? Number(body.groupId) : undefined;
 
-    if (userId === undefined || groupId === undefined) {
+    if (userId === undefined) {
         sendError(res, "userId and groupId required");
 
         return;
@@ -1811,17 +1824,28 @@ const handleAddUserToGroup = async (req: IncomingMessage, res: ServerResponse): 
 const handleRemoveUserFromGroup = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
     const user = getAuthUser(req);
 
-    if (!user || !(await isUserInAdminGroup(adapter, user.userId))) {
+    const body = await readJsonBody(req);
+    const groupId = body.groupId !== undefined ? Number(body.groupId) : undefined;
+
+    if (groupId === undefined) {
+        return;
+    }
+
+    const groupRow = await adapter.query<{ admin_id: number | null; }>(
+        "SELECT admin_id FROM `groups` WHERE id = ?",
+        [groupId],
+    );
+    const isGroupAdmin = groupRow[0]?.admin_id === user?.userId;
+
+    if (!user || (!(await isUserInAdminGroup(adapter, user.userId)) && !isGroupAdmin)) {
         sendError(res, "Forbidden", 403);
 
         return;
     }
 
-    const body = await readJsonBody(req);
     const userId = body.userId !== undefined ? Number(body.userId) : undefined;
-    const groupId = body.groupId !== undefined ? Number(body.groupId) : undefined;
 
-    if (userId === undefined || groupId === undefined) {
+    if (userId === undefined) {
         sendError(res, "userId and groupId required");
 
         return;
@@ -1838,17 +1862,23 @@ const handleRemoveUserFromGroup = async (req: IncomingMessage, res: ServerRespon
 const handleListGroupMembers = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
     const authUser = getAuthUser(req);
 
-    if (!authUser || !(await isUserInAdminGroup(adapter, authUser.userId))) {
-        sendError(res, "Forbidden", 403);
-
-        return;
-    }
-
     const url = getRequestUrl(req);
     const groupId = Number(url.searchParams.get("groupId"));
 
     if (!groupId) {
         sendError(res, "groupId required");
+
+        return;
+    }
+
+    const groupRow = await adapter.query<{ admin_id: number | null; }>(
+        "SELECT admin_id FROM `groups` WHERE id = ?",
+        [groupId],
+    );
+    const isGroupAdmin = groupRow[0]?.admin_id === authUser?.userId;
+
+    if (!authUser || (!(await isUserInAdminGroup(adapter, authUser.userId)) && !isGroupAdmin)) {
+        sendError(res, "Forbidden", 403);
 
         return;
     }
@@ -1943,9 +1973,9 @@ const handleSetPermissions = async (req: IncomingMessage, res: ServerResponse): 
 
     const body = await readJsonBody(req);
     const entityType = String(body.entityType ?? "");
-    const entityId = body.entityId !== undefined ? Number(body.entityId) : null;
-    const ownerId = body.ownerId !== undefined ? Number(body.ownerId) : null;
-    const groupId = body.groupId !== undefined ? Number(body.groupId) : null;
+    const entityId = body.entityId !== undefined && body.entityId !== null ? Number(body.entityId) : null;
+    const ownerId = body.ownerId !== undefined && body.ownerId !== null ? Number(body.ownerId) : null;
+    const groupId = body.groupId !== undefined && body.groupId !== null ? Number(body.groupId) : null;
     const ownerPerm = body.ownerPerm !== undefined ? Number(body.ownerPerm) : Permission.RWX;
     const groupPerm = body.groupPerm !== undefined ? Number(body.groupPerm) : Permission.RX;
     const worldPerm = body.worldPerm !== undefined ? Number(body.worldPerm) : Permission.None;

@@ -3,10 +3,11 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import { cleanup, render, waitFor, type RenderResult } from "@testing-library/preact";
+import { cleanup, fireEvent, render, waitFor, type RenderResult } from "@testing-library/preact";
 import { createRef, type FunctionComponent } from "preact";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { renderNotificationCenter } from "../../src/components/ui/NotificationCenter/NotificationCenter.js";
 import type { IGroupRow, IUserRow, ScoreBookDataModel } from "../../src/core/ScoreBookDataModel.js";
 import * as utils from "../../src/core/utils.js";
 import { UserGroupEditor } from "../../src/ui/UserGroupEditor.js";
@@ -88,6 +89,7 @@ describe.sequential("UserGroupEditor", () => {
             return nextId++;
         });
         renderResult = null;
+        render(renderNotificationCenter());
     });
 
     afterEach(() => {
@@ -289,8 +291,10 @@ describe.sequential("UserGroupEditor", () => {
 
             expect(dialog.textContent).toContain("Percussion");
             expect(dialog.textContent).toContain("Vocals");
-            // Password-protected group "Percussion" should show admin info.
-            expect(dialog.textContent).toContain("Admin:");
+            // Password-protected group "Percussion" has adminId=1 (Administrator).
+            expect(dialog.textContent).toContain("Administrator");
+            // "Vocals" has no admin — should show "No admin".
+            expect(dialog.textContent).toContain("No admin");
         });
     });
 
@@ -395,8 +399,197 @@ describe.sequential("UserGroupEditor", () => {
 
             expect(popupContent).toBeTruthy();
             expect(popupContent!.textContent).toContain("Name");
+            expect(popupContent!.textContent).toContain("Admin");
             expect(popupContent!.textContent).toContain("Password");
             expect(popupContent!.textContent).toContain("Create");
+        });
+    });
+
+    it("passes adminId to createGroup when creating a group", async () => {
+        const createGroupMock = vi.fn().mockResolvedValue({ id: 10, color: "#aabbcc" });
+        const dataModel = createMockDataModel({
+            listUsers: vi.fn().mockResolvedValue(sampleUsers),
+            listGroups: vi.fn().mockResolvedValue([]),
+            createGroup: createGroupMock,
+            user: sampleUsers[0],
+        });
+        const ref = createRef<UserGroupEditor>();
+        const Wrapper: FunctionComponent = () => {
+            return <UserGroupEditor ref={ref} dataModel={dataModel} />;
+        };
+
+        renderResult = render(<Wrapper />);
+        ref.current!.open();
+
+        await waitFor(() => {
+            expect(document.body.querySelector("#ug-add-group")).toBeTruthy();
+        });
+
+        const addButton = document.body.querySelector<HTMLElement>("#ug-add-group")!;
+        addButton.click();
+
+        await waitFor(() => {
+            expect(document.body.querySelector(".popup")).toBeTruthy();
+        });
+
+        const nameInput = document.body.querySelector<HTMLInputElement>(".popup input")!;
+        nameInput.value = "TestGroup";
+        nameInput.dispatchEvent(new Event("input", { bubbles: true }));
+
+        await waitFor(() => {
+            expect(nameInput.value).toBe("TestGroup");
+        });
+
+        const createButton = Array.from(
+            document.body.querySelectorAll<HTMLElement>(".popup button"),
+        ).find((b) => {
+            return b.textContent === "Create";
+        })!;
+        createButton.click();
+
+        await waitFor(() => {
+            expect(createGroupMock).toHaveBeenCalledWith(
+                "TestGroup", "", undefined, undefined, sampleUsers[0].id,
+            );
+        });
+    });
+
+    it("shows error when creating group with empty name", async () => {
+        const dataModel = createMockDataModel({
+            listUsers: vi.fn().mockResolvedValue(sampleUsers),
+            listGroups: vi.fn().mockResolvedValue([]),
+            user: sampleUsers[0],
+        });
+        const ref = createRef<UserGroupEditor>();
+        const Wrapper: FunctionComponent = () => {
+            return <UserGroupEditor ref={ref} dataModel={dataModel} />;
+        };
+
+        renderResult = render(<Wrapper />);
+        ref.current!.open();
+
+        await waitFor(() => {
+            expect(document.body.querySelector("#ug-add-group")).toBeTruthy();
+        });
+
+        const addButton = document.body.querySelector<HTMLElement>("#ug-add-group")!;
+        addButton.click();
+
+        await waitFor(() => {
+            expect(document.body.querySelector(".popup")).toBeTruthy();
+        });
+
+        const createButton = Array.from(
+            document.body.querySelectorAll<HTMLElement>(".popup button"),
+        ).find((b) => {
+            return b.textContent === "Create";
+        })!;
+        createButton.click();
+
+        await waitFor(() => {
+            const popupContent = document.body.querySelector(".popup")!;
+
+            expect(popupContent.textContent).toContain("Group name is required.");
+        });
+    });
+
+    it("passes password to createGroup when provided", async () => {
+        const createGroupMock = vi.fn().mockResolvedValue({ id: 10, color: "#aabbcc" });
+        const dataModel = createMockDataModel({
+            listUsers: vi.fn().mockResolvedValue(sampleUsers),
+            listGroups: vi.fn().mockResolvedValue([]),
+            createGroup: createGroupMock,
+            user: sampleUsers[0],
+        });
+        const ref = createRef<UserGroupEditor>();
+        const Wrapper: FunctionComponent = () => {
+            return <UserGroupEditor ref={ref} dataModel={dataModel} />;
+        };
+
+        renderResult = render(<Wrapper />);
+        ref.current!.open();
+
+        await waitFor(() => {
+            expect(document.body.querySelector("#ug-add-group")).toBeTruthy();
+        });
+
+        const addButton = document.body.querySelector<HTMLElement>("#ug-add-group")!;
+        addButton.click();
+
+        await waitFor(() => {
+            expect(document.body.querySelector(".popup")).toBeTruthy();
+        });
+
+        const nameInput = document.body.querySelector<HTMLInputElement>(".popup input")!;
+        nameInput.value = "LockedGroup";
+        nameInput.dispatchEvent(new Event("input", { bubbles: true }));
+
+        await waitFor(() => {
+            expect(nameInput.value).toBe("LockedGroup");
+        });
+
+        const passwordInput = document.body.querySelectorAll<HTMLInputElement>(".popup input")[1];
+        fireEvent.input(passwordInput, { target: { value: "secret123" } });
+
+        const createButton = Array.from(
+            document.body.querySelectorAll<HTMLElement>(".popup button"),
+        ).find((b) => {
+            return b.textContent === "Create";
+        })!;
+        createButton.click();
+
+        await waitFor(() => {
+            expect(createGroupMock).toHaveBeenCalledWith(
+                "LockedGroup", "", undefined, "secret123", sampleUsers[0].id,
+            );
+        });
+    });
+
+    it("defaults admin to current user when no user is logged in", async () => {
+        const createGroupMock = vi.fn().mockResolvedValue({ id: 10, color: "#aabbcc" });
+        const dataModel = createMockDataModel({
+            listUsers: vi.fn().mockResolvedValue(sampleUsers),
+            listGroups: vi.fn().mockResolvedValue([]),
+            createGroup: createGroupMock,
+        });
+        const ref = createRef<UserGroupEditor>();
+        const Wrapper: FunctionComponent = () => {
+            return <UserGroupEditor ref={ref} dataModel={dataModel} />;
+        };
+
+        renderResult = render(<Wrapper />);
+        ref.current!.open();
+
+        await waitFor(() => {
+            expect(document.body.querySelector("#ug-add-group")).toBeTruthy();
+        });
+
+        const addButton = document.body.querySelector<HTMLElement>("#ug-add-group")!;
+        addButton.click();
+
+        await waitFor(() => {
+            expect(document.body.querySelector(".popup")).toBeTruthy();
+        });
+
+        const nameInput = document.body.querySelector<HTMLInputElement>(".popup input")!;
+        nameInput.value = "NoAdminGroup";
+        nameInput.dispatchEvent(new Event("input", { bubbles: true }));
+
+        await waitFor(() => {
+            expect(nameInput.value).toBe("NoAdminGroup");
+        });
+
+        const createButton = Array.from(
+            document.body.querySelectorAll<HTMLElement>(".popup button"),
+        ).find((b) => {
+            return b.textContent === "Create";
+        })!;
+        createButton.click();
+
+        await waitFor(() => {
+            expect(createGroupMock).toHaveBeenCalledWith(
+                "NoAdminGroup", "", undefined, undefined, undefined,
+            );
         });
     });
 

@@ -1,5 +1,12 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
-exports[`UserGroupEditor > matches snapshot for default rendering 1`] = `<div />`;
+exports[`UserGroupEditor > matches snapshot for default rendering 1`] = `
+<div>
+  <div
+    class="container notificationCenter"
+    style="flex-direction: column;"
+  />
+</div>
+`;
 
-exports[`UserGroupEditor > matches snapshot when dialog is open with populated data 1`] = `"<div></div><div class="portal" style="--background-opacity: 0.5;"><div id="userGroupEditorDialog" class="dialog"><div class="dialog-content"><div style="flex-direction: row; align-items: center;" class="container font-bold text-lg"><div class="icon codicon codicon-organization" style="font-size: 24px; margin-right: 8px;"></div>Users &amp; Groups</div></div><div class="dialog-actions"><span class="label">Loading…</span></div></div></div>"`;
+exports[`UserGroupEditor > matches snapshot when dialog is open with populated data 1`] = `"<div><div style="flex-direction: column;" class="container notificationCenter"></div></div><div></div><div class="portal" style="--background-opacity: 0.5;"><div id="userGroupEditorDialog" class="dialog"><div class="dialog-content"><div style="flex-direction: row; align-items: center;" class="container font-bold text-lg"><div class="icon codicon codicon-organization" style="font-size: 24px; margin-right: 8px;"></div>Users &amp; Groups</div></div><div class="dialog-actions"><span class="label">Loading…</span></div></div></div>"`;
