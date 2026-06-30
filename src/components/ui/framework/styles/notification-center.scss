@@ -1,0 +1,139 @@
+/*
+ * Copyright (c) Mike Lischke. All rights reserved.
+ * Licensed under the MIT License. See License.txt in the project root for license information.
+ */
+
+.notificationCenter {
+    width: 500px;
+    position: absolute;
+    right: 8px;
+
+    /* Have to take the status bar into account here. */
+    bottom: 32px;
+
+    overflow: hidden;
+
+    z-index: 10;
+
+    &.history {
+        max-height: 50%;
+        border-radius: 4px;
+        overflow: auto;
+        border: 1px solid var(--color-base-300);
+    }
+
+    #historyHeader {
+        flex: 0 0 35px;
+        min-height: 0;
+        column-gap: 2px;
+        padding: 0 8px;
+        background-color: var(--color-base-200);
+        color: var(--color-base-content);
+        font-size: 12px;
+
+        .actionIcon {
+            font-size: 110%;
+        }
+
+        > .btn {
+            border: none;
+            width: 24px;
+            height: 24px;
+        }
+
+        > .btn:first-of-type {
+            /* To align the buttons right. */
+            margin-left: auto;
+        }
+    }
+
+    #historyContainer {
+        flex: 1 1 auto;
+    }
+
+    .toast {
+        display: flex;
+        flex: 1 1 auto;
+        width: 100%;
+        padding: 12px;
+        z-index: 12;
+
+        line-height: 1.75em;
+
+        background-color: var(--color-base-100);
+        color: var(--color-base-content);
+        border-radius: 4px;
+
+        .itemButton {
+            border: none;
+            min-width: 0;
+        }
+
+        .label {
+            flex: 1 1 auto;
+        }
+
+        > .container > .icon {
+            margin-right: 8px;
+            margin-top: 2px;
+            height: 22px;
+            width: 22px;
+            font-size: 110%;
+        }
+
+        &.info > .container > .icon {
+            color: var(--color-info);
+        }
+
+        &.warning > .container > .icon {
+            color: var(--color-warning);
+        }
+
+        &.error > .container > .icon {
+            color: var(--color-error);
+        }
+
+        > .container > .closeButton {
+            flex: 0;
+            border: none;
+            background: none;
+            align-self: baseline;
+            margin: 0 8px;
+
+            /*
+             * Since there's no background we have to switch to a different foreground color,
+             * or the button will not be visible.
+             */
+            color: var(--color-base-content);
+        }
+    }
+
+    &.history .toast:last-child {
+        border-bottom: none;
+    }
+
+    &:not(.history) .toast.normal {
+        transition: margin-bottom 0.25s ease-out;
+    }
+
+    &:not(.history) .toast.removing {
+        /* Lower the z-index to have hidden toasts behind normal ones when sliding. */
+        z-index: 10;
+        animation: notificationFadeOut .25s normal forwards;
+        transition: margin-bottom 0.25s ease-out;
+    }
+
+    &:not(.history) .toast {
+        border: 1px solid var(--color-base-300);
+    }
+}
+
+@keyframes notificationFadeOut {
+    0% {
+        opacity: 1;
+    }
+
+    100% {
+        opacity: 0;
+    }
+}

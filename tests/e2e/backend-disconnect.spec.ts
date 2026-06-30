@@ -4,6 +4,7 @@
  */
 
 import { expect, test, type Page } from "@playwright/test";
+import { setupAuthenticatedSession } from "./helpers.js";
 
 /**
  * Sets up a dynamic API route mock that can be toggled between "connected" and "disconnected"
@@ -14,6 +15,8 @@ import { expect, test, type Page } from "@playwright/test";
  */
 const routeApiToggleable = async (page: Page): Promise<{ disconnect: () => void; reconnect: () => void; }> => {
     let connected = true;
+
+    await setupAuthenticatedSession(page);
 
     await page.route("**/api**", async (route) => {
         if (!connected) {
@@ -29,7 +32,10 @@ const routeApiToggleable = async (page: Page): Promise<{ disconnect: () => void;
             await route.fulfill({
                 status: 200,
                 contentType: "application/json",
-                body: JSON.stringify({ status: "ok", initialized: true, engine: "mysql", hasData: true }),
+                body: JSON.stringify({
+                    status: "ok", initialized: true, engine: "mysql", hasData: true,
+                    hasUsers: true
+                }),
             });
 
             return;
@@ -131,9 +137,7 @@ test.describe("Backend disconnect handling", () => {
         // Wait for the disconnect dialog.
         await expect(page.locator("#backendDisconnectedDialog")).toBeVisible({ timeout: 5000 });
         await expect(page.locator("#backendDisconnectedDialog")).toContainText("Backend Connection Lost");
-        await expect(page.locator("#backendDisconnectedDialog")).toContainText(
-            "Automatic reconnection will be attempted.",
-        );
+        await expect(page.locator("#backendDisconnectedDialog")).toContainText("Reconnecting…");
 
         // Simulate backend coming back.
         toggle.reconnect();

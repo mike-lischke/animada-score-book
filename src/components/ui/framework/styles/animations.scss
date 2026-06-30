@@ -1,0 +1,79 @@
+/*
+ * Copyright (c) Mike Lischke. All rights reserved.
+ * Licensed under the MIT License. See License.txt in the project root for license information.
+ */
+
+@keyframes fadeIn {
+    0% {
+        background-color: var(--divider-background-color);
+    }
+
+    100% {
+        background-color: var(--selection-background);
+    }
+}
+
+@keyframes linearFrames {
+    0% {
+        width: 0;
+    }
+
+    100% {
+        width: calc(var(--position) * 100%);
+    }
+}
+
+@keyframes indeterminateLinearFrames {
+    0% {
+        margin-left: 0;
+        margin-right: 100%;
+    }
+
+    50% {
+        margin-left: 20%;
+        margin-right: 20%;
+    }
+
+    100% {
+        margin-left: 100%;
+        margin-right: 0;
+    }
+}
+
+@keyframes circleFrames {
+    0% {
+        stroke-dasharray: 0 calc(var(--perimeter) * 1px);
+    }
+
+    100% {
+        stroke-dasharray:
+            calc(var(--position) * var(--perimeter) * 1px) calc((1 - var(--position)) * var(--perimeter) * 1px);
+    }
+}
+
+@keyframes indeterminateCircleFrames {
+    0% {
+        stroke-dasharray: 0 calc(var(--perimeter) * 1px);
+        stroke-dashoffset: 0;
+    }
+
+    50% {
+        stroke-dasharray: calc(var(--perimeter) * 0.5px) calc(var(--perimeter) * 1px);
+        stroke-dashoffset: calc(var(--perimeter) * -0.5px);
+    }
+
+    100% {
+        stroke-dasharray: calc(var(--perimeter) * 1px) calc(var(--perimeter) * 1px);
+        stroke-dashoffset: calc(var(--perimeter) * -1px);
+    }
+}
+
+@keyframes rotate {
+    0% {
+        transform: rotate(0deg);
+    }
+
+    100% {
+        transform: rotate(360deg);
+    }
+}

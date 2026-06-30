@@ -4,6 +4,7 @@
  */
 
 import type { IUISettings } from "../core/AppStorage.js";
+import type { ISbDmScore, ISbDmScoreFolder } from "../core/ScoreBookDataModel.js";
 import type { PlayerPlayState } from "../player/ArrangementPlayer.js";
 import type { ISelectionDelta, ISelectionRectChange } from "../ui/selection-types.js";
 
@@ -29,6 +30,7 @@ export interface IRequestTypeMap {
     "arrangementChanged": (arrangementId: number) => Promise<boolean>;
     "timeParamsChanged": SimpleCallback;
     "scoreBookLoaded": SimpleCallback;
+    "permChanged": (entry: ISbDmScoreFolder | ISbDmScore) => Promise<boolean>;
 
     // --- Undo/redo topics ---
     "undoStateChanged": SimpleCallback;
@@ -55,6 +57,9 @@ export interface IRequestTypeMap {
 
     // --- Backend connectivity ---
     "backendDisconnected": SimpleCallback;
+
+    // --- Authentication ---
+    "authChanged": SimpleCallback;
 }
 
 type CallbackType = IRequestTypeMap[keyof IRequestTypeMap];

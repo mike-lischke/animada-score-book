@@ -3,9 +3,7 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-/**
- * Supported database engine types for the backend.
- */
+/** Supported database engine types for the backend. */
 export enum DatabaseEngine {
     MySQL = "mysql",
     MariaDB = "mariadb",

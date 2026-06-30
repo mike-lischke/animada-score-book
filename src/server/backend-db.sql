@@ -38,13 +38,94 @@ CREATE TABLE instruments (
 CREATE TABLE instrument_images (
   id             INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   instrumentid   INT UNSIGNED NOT NULL,
-  filepath       VARCHAR(255) NOT NULL,  -- e.g. /uploads/instruments/abc123.webp
+  filepath       VARCHAR(255) NOT NULL,
   alttext        VARCHAR(255) NULL,
   mimetype       VARCHAR(100) NOT NULL,
   width          INT NULL,
   height         INT NULL,
-  filesize      INT NULL,                -- Bytes
+  filesize       INT NULL,                -- Bytes
   CONSTRAINT fk_instrument_images_instrument
     FOREIGN KEY (instrumentid) REFERENCES instruments(id)
     ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT AUTO_INCREMENT = 30000;
+
+-- User management tables.
+
+CREATE TABLE users (
+  id            INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  username      VARCHAR(255) NOT NULL,
+  password_hash     VARCHAR(512) NOT NULL,
+  refresh_token_hash VARCHAR(256) NULL,
+  auth_type     VARCHAR(16)  NULL,
+  group_id      INT UNSIGNED NULL,
+  display_name      VARCHAR(255) NOT NULL,
+  created_at    TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at    TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_users_username (username)
+) ENGINE=InnoDB;
+
+CREATE TABLE login_audit (
+  id         INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  user_id    INT UNSIGNED NOT NULL,
+  event      ENUM('login', 'group_login', 'refresh', 'logout') NOT NULL,
+  group_id   INT UNSIGNED NULL,
+  ip_address VARCHAR(45) NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  INDEX idx_audit_user_time (user_id, created_at),
+  CONSTRAINT fk_audit_user
+    FOREIGN KEY (user_id) REFERENCES users(id)
+    ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+CREATE TABLE `groups` (
+  id          INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  name        VARCHAR(255) NOT NULL,
+  description TEXT NULL,
+  color       VARCHAR(7)   NOT NULL DEFAULT '#808080',
+  password_hash VARCHAR(512) NULL,
+  admin_id    INT UNSIGNED NULL,
+  last_login  TIMESTAMP    NULL,
+  created_at  TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_groups_name (name),
+  CONSTRAINT fk_groups_admin
+    FOREIGN KEY (admin_id) REFERENCES users(id)
+    ON DELETE SET NULL
+) ENGINE=InnoDB;
+
+CREATE TABLE user_groups (
+  user_id  INT UNSIGNED NOT NULL,
+  group_id INT UNSIGNED NOT NULL,
+  PRIMARY KEY (user_id, group_id),
+  CONSTRAINT fk_user_groups_user
+    FOREIGN KEY (user_id) REFERENCES users(id)
+    ON DELETE CASCADE,
+  CONSTRAINT fk_user_groups_group
+    FOREIGN KEY (group_id) REFERENCES `groups`(id)
+    ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+CREATE TABLE permissions (
+  id          INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  entity_type VARCHAR(32)  NOT NULL,
+  entity_id   INT UNSIGNED NULL,
+  owner_id    INT UNSIGNED NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_permissions_entity (entity_type, entity_id),
+  CONSTRAINT fk_permissions_owner
+    FOREIGN KEY (owner_id) REFERENCES users(id)
+    ON DELETE SET NULL
+) ENGINE=InnoDB;
+
+CREATE TABLE entity_groups (
+  entity_type VARCHAR(32)  NOT NULL,
+  entity_id   INT UNSIGNED NOT NULL,
+  group_id    INT UNSIGNED NOT NULL,
+  writable    TINYINT(1)   NOT NULL DEFAULT 0,
+  PRIMARY KEY (entity_type, entity_id, group_id),
+  CONSTRAINT fk_entity_groups_group
+    FOREIGN KEY (group_id) REFERENCES `groups`(id)
+    ON DELETE CASCADE
+) ENGINE=InnoDB;

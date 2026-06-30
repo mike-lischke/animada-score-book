@@ -5,6 +5,10 @@
 
 import { beforeEach, vi } from "vitest";
 
+// Required by auth.ts — the JWT secret is mandatory.
+// eslint-disable-next-line no-restricted-syntax
+process.env.JWT_SECRET = "test-secret";
+
 class StorageMock implements Storage {
     private data = new Map<string, string>();
 
@@ -191,4 +195,16 @@ Object.defineProperty(globalThis, "DOMRect", {
             left: x ?? 0,
         };
     }),
+});
+
+class ResizeObserverMock {
+    public observe = vi.fn();
+    public unobserve = vi.fn();
+    public disconnect = vi.fn();
+}
+
+Object.defineProperty(globalThis, "ResizeObserver", {
+    writable: true,
+    enumerable: true,
+    value: ResizeObserverMock,
 });

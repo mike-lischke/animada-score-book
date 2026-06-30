@@ -1,0 +1,432 @@
+/*
+ * Copyright (c) Mike Lischke. All rights reserved.
+ * Licensed under the MIT License. See License.txt in the project root for license information.
+ */
+
+#instrumentManagerSplitter {
+    .splitHost {
+        flex-direction: column;
+    }
+
+    .divider.vertical {
+        background-image: linear-gradient(to bottom,
+                rgba(100, 100, 100, 0) 0%,
+                rgba(150, 150, 150, 1) 50%,
+                rgba(100, 100, 100, 0) 100%);
+        background-repeat: no-repeat;
+        background-size: 1px 100%;
+        background-position: center center;
+    }
+}
+
+.file-tree {
+    list-style: none;
+    margin: 0;
+    padding-left: 1rem;
+    display: flex;
+    flex-direction: column;
+
+    ul {
+        list-style: none;
+        margin: 0;
+        padding-left: 1rem;
+    }
+}
+
+.tree-item {
+    cursor: pointer;
+    user-select: none;
+    line-height: 1.4;
+
+    &.file {
+        cursor: default;
+    }
+}
+
+.waveform-panel {
+    width: 100%;
+    height: 136px;
+    border: 1px solid #E0E0E0;
+    border-radius: 8px;
+    padding: 8px;
+    background-color: #F9F9F9;
+}
+
+#libraryPaneContent {
+    height: 100%;
+    padding: 8px;
+    width: 25vw;
+    min-width: 250px;
+}
+
+#scoreTreeHost {
+    height: 100%;
+    min-height: 0;
+
+    .scoreTreeEntry {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        min-width: 0;
+        width: 100%;
+        font-size: 12pt;
+        user-select: none;
+
+        .btn {
+            margin: 0;
+            padding: 0;
+            height: auto;
+
+            .codicon {
+                font-size: 22px;
+            }
+        }
+
+        .label {
+            display: block;
+            flex: 1 1 auto;
+            color: currentColor;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            min-width: 0;
+            user-select: none;
+        }
+
+        .codicon {
+            flex: 0 0 auto;
+        }
+
+        > .actionBox {
+            display: flex;
+            justify-content: flex-end;
+            overflow: hidden;
+            min-width: fit-content;
+
+            > .actionButton,
+            > .dropdownHost > .btn {
+                top: 1px;
+                right: 0;
+                width: 20px;
+                min-width: 0;
+                min-height: 0;
+                margin: 0;
+                border: none;
+                color: var(--color-primary);
+                background-color: transparent;
+            }
+
+            > .actionButton:first-of-type {
+                margin-left: auto;
+            }
+        }
+
+        &:hover > .actionBox > .actionButton:hover .icon {
+            color: var(--color-primary);
+            border: 1px solid var(--color-primary);
+            border-radius: 4px;
+        }
+    }
+
+    .scoreTreeIcon {
+        font-size: 24px;
+        margin-right: 8px;
+
+        &.score {
+            color: cornflowerblue;
+        }
+    }
+
+    .tabulator-row:hover .actionBox {
+        display: flex;
+    }
+
+    .tabulator {
+        .tabulator-cell {
+            display: flex;
+            align-items: center;
+        }
+
+        .tabulator-tableholder .tabulator-table {
+            background: none;
+
+            .tabulator-row {
+                background: none;
+
+                &.tabulator-selected {
+                    background-color: var(--selection-background);
+                }
+            }
+        }
+    }
+
+    /* ---- Permission indicator ---- */
+
+    .permIndicator {
+        display: inline-flex;
+        align-items: center;
+        gap: 2px;
+        flex: 0 0 auto;
+        margin-left: auto;
+        margin-right: 4px;
+        cursor: default;
+        opacity: 0.7;
+
+        &:hover {
+            opacity: 1;
+        }
+    }
+
+    .permLockIcon,
+    .permWorldIcon,
+    .permReadOnlyIcon {
+        width: 14px;
+        height: 14px;
+    }
+
+    .permReadOnlyIcon {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+
+        /* Diagonal strikethrough line */
+        &::after {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: 50%;
+            width: 1.5px;
+            height: 100%;
+            background: currentColor;
+            transform: rotate(-45deg);
+            transform-origin: center;
+        }
+    }
+}
+
+/* ---- Permission editor dialog ---- */
+
+#permissionEditor {
+    padding: 16px;
+
+    #permissionEditorHeader {
+        font-size: 1rem;
+        font-weight: bold;
+        margin-bottom: 12px;
+    }
+
+    .perm-editor-layout {
+        min-width: 360px;
+    }
+
+    .perm-editor-left {
+        flex: 2;
+        min-width: 0;
+    }
+
+    .perm-editor-right {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .perm-column-title {
+        font-weight: bold;
+        font-size: 0.8rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: var(--color-base-content, #666);
+    }
+
+    .perm-drop-zone {
+        display: flex;
+        flex-wrap: wrap;
+        align-content: flex-start;
+        gap: 4px;
+        min-height: 36px;
+        max-width: 250px;
+        padding: 4px;
+        border: 1px dashed var(--color-base-300, #ccc);
+        border-radius: 4px;
+    }
+
+    .perm-group-pool {
+        display: flex;
+        flex-wrap: wrap;
+        align-content: flex-start;
+        gap: 4px;
+        min-height: 36px;
+        padding: 4px;
+    }
+
+    .perm-drop-hint {
+        font-size: 0.75rem;
+        color: var(--color-base-content, #999);
+        opacity: 0.5;
+        padding: 4px;
+    }
+
+    .perm-chip {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+
+        padding: 2px 8px 2px 8px;
+
+        border-radius: 12px;
+        border: 1px solid;
+
+        font-size: 0.7rem;
+        cursor: grab;
+        user-select: none;
+        white-space: nowrap;
+
+        &[draggable="false"] {
+            cursor: default;
+        }
+
+        &.dragging {
+            opacity: 0.4;
+        }
+    }
+
+    .perm-chip-remove {
+        width: 16px;
+        height: 16px;
+        opacity: 0.5;
+        padding: 0;
+        min-height: unset;
+
+        &:hover {
+            opacity: 1;
+        }
+    }
+}
+
+/* ---- Old classes kept for compatibility ---- */
+
+.perm-group-row {
+    padding: 4px 0;
+    border-bottom: 1px solid var(--color-base-300, #ddd);
+}
+
+.perm-group-color {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    margin-right: 6px;
+    flex-shrink: 0;
+}
+
+.perm-group-badge {
+    font-size: 0.75rem;
+    background: var(--color-base-200, #eee);
+    color: var(--color-base-content, #666);
+    padding: 1px 6px;
+    border-radius: 4px;
+    margin-left: 6px;
+}
+
+.perm-write-label {
+    margin-left: 4px;
+    margin-right: 8px;
+    font-size: 0.85rem;
+}
+
+.perm-section {
+    margin-top: 12px;
+}
+
+.perm-section-title {
+    font-weight: bold;
+    margin-bottom: 4px;
+}
+
+#transcriptionPaneContent {
+    flex: 1;
+    margin-left: 16px;
+}
+
+#scoreDetailsPaneContent {
+    height: 100%;
+
+    > .grid {
+        height: 100%;
+    }
+}
+
+#scoreDetailsGrid {
+    grid-template-rows: auto min-content min-content 1fr auto;
+}
+
+#scoreDetailsDescription {
+    border: 1px solid var(--color-base-200);
+    border-radius: 8px;
+    padding: 12px;
+}
+
+.scoreDetailsPropertyName {
+    font-weight: bold;
+    margin-right: 4px;
+}
+
+#transcriptionEditor {
+    min-width: 800px;
+    min-height: 600px;
+    position: absolute;
+    z-index: 5;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+
+    background: var(--color-base-200);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2), 0 6px 20px rgba(0, 0, 0, 0.19);
+    border-radius: 16px;
+
+    padding: 20pt;
+    transition: opacity 0.2s;
+
+    @media (max-width: 900px) {
+        min-width: 0;
+        min-height: 0;
+        width: 94vw;
+        max-height: 90vh;
+        overflow-y: auto;
+        padding: 16px;
+    }
+
+    @supports (max-height: 90dvh) {
+        @media (max-width: 900px) {
+            max-height: 90dvh;
+        }
+    }
+}
+
+#scoreNotes {
+    max-height: 150px;
+}
+
+#settingsDialog {
+    .zoomButton {
+        width: 32px;
+        height: 32px;
+        margin: 0 2px;
+    }
+
+    .resetButton {
+        height: 32px;
+        margin-left: 8px;
+        padding: 0 12px;
+    }
+}
+
+#backendSetupDialog {
+    #backend-setup-header {
+        margin-bottom: 12px;
+    }
+}
+
+.ug-form {
+    padding: 8px 12px;
+}

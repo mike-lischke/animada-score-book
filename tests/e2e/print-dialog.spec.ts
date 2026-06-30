@@ -16,7 +16,7 @@ const openPrintDialog = async (page: Page) => {
     await expect(printButton).toBeVisible();
     await printButton.click();
 
-    const dialog = page.locator("dialog#printDialog");
+    const dialog = page.locator("#printDialog");
     await expect(dialog).toBeVisible();
 
     return dialog;
@@ -36,8 +36,10 @@ test("print dialog shows expected option rows", async ({ page }) => {
 
     const dialog = await openPrintDialog(page);
 
-    // The settings card contains labels for the supported options.
-    const card = dialog.locator(".settings-card");
+    // The form card contains labels for the supported options.
+    const card = dialog.locator(".form-card");
+
+    await expect(card).toBeVisible({ timeout: 5000 });
     await expect(card).toContainText("Bars per line");
     await expect(card).toContainText("Include legend");
     await expect(card).toContainText("Tracks");

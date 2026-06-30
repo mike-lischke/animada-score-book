@@ -85,7 +85,8 @@ export class Menu extends UIComponent<IMenuProperties, IMenuState> {
                         return (
                             <div
                                 key={item.id}
-                                onClick={() => {
+                                onClick={(e) => {
+                                    e.stopPropagation();
                                     if (!item.disabled && item.label !== "-") {
                                         this.props.onItemClick?.(item.id);
                                         this.close();

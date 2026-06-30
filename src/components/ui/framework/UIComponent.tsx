@@ -3,12 +3,12 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import "./component-styles.scss";
+import "./styles/index.scss";
 
 import cx from "classnames";
 import {
-    Component, type AriaRole, type ComponentChildren, type CSSProperties, type GenericEventHandler,
-    type WheelEventHandler
+    Component, type AriaRole, type ComponentChildren, type CSSProperties,
+    type GenericEventHandler, type WheelEventHandler
 } from "preact";
 
 // Click events can also be triggered using the keyboard.

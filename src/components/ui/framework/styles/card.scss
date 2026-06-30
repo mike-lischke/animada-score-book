@@ -1,0 +1,13 @@
+/*
+ * Copyright (c) Mike Lischke. All rights reserved.
+ * Licensed under the MIT License. See License.txt in the project root for license information.
+ */
+
+.card {
+    background-color: var(--card-background);
+    border: 1px solid var(--card-border);
+
+    padding: 12px;
+
+    /*box-shadow: 1px 1px 12px 1px rgba(0, 0, 0, 0.1);*/
+}

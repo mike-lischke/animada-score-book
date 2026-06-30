@@ -1,0 +1,19 @@
+/*
+ * Copyright (c) Mike Lischke. All rights reserved.
+ * Licensed under the MIT License. See License.txt in the project root for license information.
+ */
+
+.btn.imageOnly {
+    padding: 2px 2px;
+    margin: 2px;
+    min-width: 0;
+}
+
+.btn.default {
+    background-color: var(--color-primary);
+    color: var(--color-primary-content);
+
+    &:hover {
+        background-color: color-mix(in srgb, var(--color-primary) 85%, black);
+    }
+}

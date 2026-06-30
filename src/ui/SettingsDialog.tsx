@@ -8,6 +8,7 @@ import { themeNames } from "../generated/theme-names.js";
 import { ComponentChild, createRef } from "preact";
 
 import { Button } from "../components/ui/framework/Button.js";
+import { Checkbox } from "../components/ui/framework/Checkbox.js";
 import { Codicon } from "../components/ui/framework/Codicon.js";
 import { Container } from "../components/ui/framework/Container.js";
 import { Dialog } from "../components/ui/framework/Dialog.js";
@@ -117,14 +118,14 @@ export class SettingsDialog extends UIComponent<{}, ISettingsDialogState> {
                     Settings
                 </Container>
 
-                <Container className="settings-card" orientation={Orientation.TopDown}>
+                <Container className="form-card" orientation={Orientation.TopDown}>
                     <Container
-                        className="settings-row"
+                        className="form-row"
                         orientation={Orientation.LeftToRight}
                         mainAlignment={ChildAlignment.SpaceBetween}
                         crossAlignment={ChildAlignment.Center}
                     >
-                        <span className="settings-row-label">Color theme</span>
+                        <span className="form-row-label">Color theme</span>
                         <Dropdown
                             caption={currentTheme}
                             items={themeItems}
@@ -134,19 +135,19 @@ export class SettingsDialog extends UIComponent<{}, ISettingsDialogState> {
                     </Container>
 
                     <Container
-                        className="settings-row"
+                        className="form-row"
                         orientation={Orientation.LeftToRight}
                         mainAlignment={ChildAlignment.SpaceBetween}
                         crossAlignment={ChildAlignment.Center}
                     >
-                        <span className="settings-row-label">Track viewer zoom</span>
+                        <span className="form-row-label">Track viewer zoom</span>
                         <Container
                             orientation={Orientation.LeftToRight}
                             crossAlignment={ChildAlignment.Center}
                         >
                             <Label caption={`${currentViewerZoom}%`} style={{ marginRight: "8px" }} />
                             <Button
-                                className="zoomButton"
+                                className="zoomButton du-btn-ghost"
                                 caption="-"
                                 onClick={() => {
                                     const newZoom = clampValue(currentViewerZoom - 10, 50, 150);
@@ -162,7 +163,7 @@ export class SettingsDialog extends UIComponent<{}, ISettingsDialogState> {
                             />
 
                             <Button
-                                className="zoomButton"
+                                className="zoomButton du-btn-ghost"
                                 caption="+"
                                 onClick={() => {
                                     const newZoom = clampValue(currentViewerZoom + 10, 50, 150);
@@ -179,7 +180,7 @@ export class SettingsDialog extends UIComponent<{}, ISettingsDialogState> {
 
                             <Button
                                 caption="Reset"
-                                className="resetButton"
+                                className="resetButton du-btn-ghost"
                                 onClick={() => {
                                     currentSettings.viewSettings ??= {};
                                     currentSettings.viewSettings.arrangementViewSettings ??= {};
@@ -191,8 +192,26 @@ export class SettingsDialog extends UIComponent<{}, ISettingsDialogState> {
                             />
                         </Container>
                     </Container>
-                </Container>
 
+                    <Container
+                        className="form-row"
+                        orientation={Orientation.LeftToRight}
+                        mainAlignment={ChildAlignment.SpaceBetween}
+                        crossAlignment={ChildAlignment.Center}
+                    >
+                        <span className="form-row-label">Show permission indicator</span>
+                        <Checkbox
+                            id="showPermMatrix"
+                            checked={currentSettings.showPermMatrix ?? true}
+                            onChange={(checked) => {
+                                currentSettings.showPermMatrix = checked;
+                                this.setState({ currentSettings }, () => {
+                                    this.temporarySettingsChange();
+                                });
+                            }}
+                        />
+                    </Container>
+                </Container>
             </Dialog >
         );
     }

@@ -1,0 +1,43 @@
+/*
+ * Copyright (c) Mike Lischke. All rights reserved.
+ * Licensed under the MIT License. See License.txt in the project root for license information.
+ */
+
+.message {
+    border-radius: 4px;
+    padding: 12px;
+    min-width: 80px;
+    outline: none;
+    overflow: auto;
+    white-space: pre-wrap;
+
+    &.error {
+        background-color: hsla(14, 88%, 42%, 0.1);
+        border: 1px solid hsl(14, 88%, 42%);
+        color: rgb(199, 56, 13);
+    }
+
+    &.warning {
+        background-color: hsla(54, 88%, 42%, 0.1);
+        border: 1px solid hsl(54, 88%, 42%);
+        color: hsl(54, 88%, 42%);
+    }
+
+    &.info {
+        background-color: var(--resultStatus-background);
+        border: none;
+        color: var(--resultStatus-color);
+    }
+
+    &.response {
+        background-color: hsla(0, 0%, 39%, 0.1);
+        border: 1px solid hsl(0, 0%, 39%);
+        color: hsl(0, 0%, 39%);
+    }
+
+    &.diagnose {
+        background-color: hsla(224, 58%, 50%, 0.1);
+        border: 1px solid hsl(224, 58%, 50%);
+        color: hsl(224, 58%, 50%);
+    }
+}

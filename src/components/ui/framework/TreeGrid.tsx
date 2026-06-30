@@ -781,7 +781,6 @@ export class TreeGrid<TRow extends object = {}> extends UIComponent<ITreeGridPro
         svg.classList.add("treeToggle");
 
         const poly = document.createElementNS(xmlns, "polyline");
-        // Pfeil nach rechts: oben -> Mitte -> unten
         poly.setAttribute("points", "9,6 15,12 9,18");
         poly.setAttribute("fill", "none");
         poly.setAttribute("stroke", "currentColor");

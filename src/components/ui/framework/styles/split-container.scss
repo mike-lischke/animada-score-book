@@ -1,0 +1,94 @@
+/*
+ * Copyright (c) Mike Lischke. All rights reserved.
+ * Licensed under the MIT License. See License.txt in the project root for license information.
+ */
+
+.splitContainer {
+    display: flex;
+    align-items: stretch;
+    position: relative;
+    overflow: hidden;
+
+    > .splitContentContainer {
+        flex: 1 1 auto;
+    }
+
+    .sashContainer {
+        position: absolute;
+        width: 100%;
+        height: 100%;
+
+        pointer-events: none;
+
+        > .sash {
+            margin: 0;
+            overflow: hidden;
+            position: absolute;
+
+            touch-action: none;
+            pointer-events: auto;
+            z-index: 5;
+
+            &.disabled {
+                pointer-events: none;
+            }
+
+            &.horizontal {
+                width: 100%;
+                cursor: row-resize;
+
+                &.minimum {
+                    cursor: s-resize;
+                }
+
+                &.maximum {
+                    cursor: n-resize;
+                }
+            }
+
+            &.vertical {
+                height: 100%;
+                cursor: col-resize;
+
+                &.minimum {
+                    cursor: e-resize;
+                }
+
+                &.maximum {
+                    cursor: w-resize;
+                }
+            }
+        }
+    }
+
+    .horizontalSeparator {
+        position: absolute;
+
+        cursor: col-resize;
+        background-repeat: no-repeat;
+        background-position: center;
+        height: 100%;
+
+        user-select: none;
+        z-index: 1;
+    }
+
+    .verticalSeparator {
+        position: absolute;
+        bottom: -6px;
+
+        cursor: row-resize;
+        background-repeat: no-repeat;
+        background-position: center;
+        width: 100%;
+
+        user-select: none;
+        z-index: 1;
+    }
+
+    .splitHost {
+        position: absolute;
+        width: 100%;
+        height: 100%;
+    }
+}

@@ -1,0 +1,84 @@
+/*
+ * Copyright (c) Mike Lischke. All rights reserved.
+ * Licensed under the MIT License. See License.txt in the project root for license information.
+ */
+
+.label {
+    user-select: text;
+    color: currentColor;
+
+    &.quote {
+        display: block;
+        background-color: var(--textBlockQuote-background);
+
+        border: 1px solid var(--textBlockQuote-border);
+        border-left-width: 8px;
+
+        margin: 8px 0;
+        padding: 12px;
+
+        font-family: Cambria, Cochin, Georgia, Times, 'Times New Roman', serif;
+        font-style: oblique;
+
+        &::before {
+            content: "„";
+        }
+
+        &::after {
+            content: "“";
+        }
+    }
+
+    &.code {
+        display: block;
+        white-space: pre;
+
+        background-color: var(--textCodeBlock-background);
+        color: var(--textPreformat-foreground);
+
+        padding: 4px 8px;
+        margin: 0;
+
+        font-family: var(--monospace-font-family);
+    }
+
+    &.heading {
+        font-weight: 800;
+        font-size: 150%;
+    }
+
+    &.wrap {
+        white-space: normal;
+        word-break: break-word;
+    }
+
+    &[disabled] {
+        color: var(--color-disabled);
+    }
+
+    &.error {
+        padding: 0 4px;
+        background-color: hsla(14, 88%, 42%, 0.1);
+        color: var(--color-error);
+    }
+
+    &.warning {
+        padding: 0 4px;
+        background-color: hsla(54, 88%, 42%, 0.1);
+        color: var(--color-warning);
+    }
+
+    &.info {
+        padding: 0 4px;
+        color: var(--color-info);
+    }
+
+    &.success {
+        padding: 0 4px;
+        color: var(--color-success);
+    }
+
+    &.faded {
+        color: color-mix(in oklab, currentColor 60%, transparent);
+    }
+}

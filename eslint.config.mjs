@@ -309,6 +309,10 @@ export default tseslint.config(
                 },
                 {
                     selector: "property",
+                    format: ["camelCase"],
+                },
+                {
+                    selector: "property",
                     format: [
                         "camelCase",
                         "UPPER_CASE",

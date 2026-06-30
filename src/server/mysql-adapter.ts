@@ -57,6 +57,70 @@ const createTablesSQL = [
             FOREIGN KEY (instrumentid) REFERENCES instruments(id)
             ON DELETE CASCADE
     ) ENGINE=InnoDB, AUTO_INCREMENT = 30000`,
+
+    `CREATE TABLE IF NOT EXISTS users (
+        id                 INT UNSIGNED NOT NULL AUTO_INCREMENT,
+        username           VARCHAR(255) NOT NULL,
+        password_hash      VARCHAR(512) NOT NULL,
+        refresh_token_hash VARCHAR(256) NULL,
+        display_name       VARCHAR(255) NOT NULL,
+        last_login    TIMESTAMP    NULL,
+        created_at    TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at    TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        UNIQUE KEY uk_users_username (username)
+    ) ENGINE=InnoDB`,
+
+    `CREATE TABLE IF NOT EXISTS \`groups\` (
+        id            INT UNSIGNED NOT NULL AUTO_INCREMENT,
+        name          VARCHAR(255) NOT NULL,
+        description   TEXT NULL,
+        color         VARCHAR(7)   NOT NULL DEFAULT '#808080',
+        password_hash VARCHAR(512) NULL,
+        admin_id      INT UNSIGNED NULL,
+        last_login    TIMESTAMP    NULL,
+        created_at    TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        UNIQUE KEY uk_groups_name (name),
+        CONSTRAINT fk_groups_admin
+            FOREIGN KEY (admin_id) REFERENCES users(id)
+            ON DELETE SET NULL
+    ) ENGINE=InnoDB`,
+
+    `CREATE TABLE IF NOT EXISTS user_groups (
+        user_id  INT UNSIGNED NOT NULL,
+        group_id INT UNSIGNED NOT NULL,
+        PRIMARY KEY (user_id, group_id),
+        CONSTRAINT fk_user_groups_user
+            FOREIGN KEY (user_id) REFERENCES users(id)
+            ON DELETE CASCADE,
+        CONSTRAINT fk_user_groups_group
+            FOREIGN KEY (group_id) REFERENCES \`groups\`(id)
+            ON DELETE CASCADE
+    ) ENGINE=InnoDB`,
+
+    `CREATE TABLE IF NOT EXISTS permissions (
+        id          INT UNSIGNED NOT NULL AUTO_INCREMENT,
+        entity_type VARCHAR(32)  NOT NULL,
+        entity_id   INT UNSIGNED NULL,
+        owner_id    INT UNSIGNED NULL,
+        PRIMARY KEY (id),
+        UNIQUE KEY uk_permissions_entity (entity_type, entity_id),
+        CONSTRAINT fk_permissions_owner
+            FOREIGN KEY (owner_id) REFERENCES users(id)
+            ON DELETE SET NULL
+    ) ENGINE=InnoDB`,
+
+    `CREATE TABLE IF NOT EXISTS entity_groups (
+        entity_type VARCHAR(32)  NOT NULL,
+        entity_id   INT UNSIGNED NOT NULL,
+        group_id    INT UNSIGNED NOT NULL,
+        writable    TINYINT(1)   NOT NULL DEFAULT 0,
+        PRIMARY KEY (entity_type, entity_id, group_id),
+        CONSTRAINT fk_entity_groups_group
+            FOREIGN KEY (group_id) REFERENCES \`groups\`(id)
+            ON DELETE CASCADE
+    ) ENGINE=InnoDB`,
 ];
 
 export class MySqlAdapter implements IDatabaseAdapter {
@@ -131,6 +195,24 @@ export class MySqlAdapter implements IDatabaseAdapter {
             await connection.execute(
                 "ALTER TABLE scores MODIFY folderid INT UNSIGNED NULL",
             );
+
+            // Migration: add refresh_token_hash column for token rotation.
+            try {
+                await connection.execute(
+                    "ALTER TABLE users ADD COLUMN refresh_token_hash VARCHAR(256) NULL",
+                );
+            } catch {
+                // Column may already exist — safe to ignore.
+            }
+
+            // Migration: add color column to groups.
+            try {
+                await connection.execute(
+                    "ALTER TABLE `groups` ADD COLUMN color VARCHAR(7) NOT NULL DEFAULT '#808080'",
+                );
+            } catch {
+                // Column may already exist — safe to ignore.
+            }
         } finally {
             connection.release();
         }

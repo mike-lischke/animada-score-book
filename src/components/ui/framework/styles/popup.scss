@@ -1,0 +1,166 @@
+/*
+ * Copyright (c) Mike Lischke. All rights reserved.
+ * Licensed under the MIT License. See License.txt in the project root for license information.
+ */
+
+.popup {
+    display: none;
+    position: absolute;
+    top: 0;
+    overflow: visible;
+
+    min-width: min-content;
+    max-width: 500px;
+
+    margin: 0;
+    padding: 8px;
+
+    border: 1px solid var(--color-base-300);
+    border-radius: 0.5rem;
+
+    background: var(--color-base-100);
+    color: var(--color-base-content);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.popup.visible {
+    display: flex;
+}
+
+.popup > .header {
+    font-size: 1em;
+    line-height: 1.2;
+    font-weight: bold;
+
+    margin-bottom: 0.5em;
+}
+
+/*
+ * Arrow pointer via a rotated square.
+ * The square has the popup background and only the two outward-facing
+ * sides get a border matching the popup border. The popup background
+ * covers the inner half, making the arrow blend seamlessly.
+ */
+.popup::before {
+    position: absolute;
+    content: "";
+
+    width: 10px;
+    height: 10px;
+
+    background: var(--color-base-100);
+    border-radius: 2px;
+    transform: rotate(45deg);
+}
+
+.popup.noArrow::before {
+    display: none;
+}
+
+/* ── Top placements: arrow at bottom (points down) ── */
+/* Outward sides: bottom + right */
+
+.popup.top-start::before {
+    bottom: -6px;
+    left: 1em;
+
+    border-bottom: 1px solid var(--color-base-300);
+    border-right: 1px solid var(--color-base-300);
+}
+
+.popup.top::before {
+    bottom: -6px;
+    left: calc(50% - 5px);
+
+    border-bottom: 1px solid var(--color-base-300);
+    border-right: 1px solid var(--color-base-300);
+}
+
+.popup.top-end::before {
+    bottom: -6px;
+    right: 1em;
+
+    border-bottom: 1px solid var(--color-base-300);
+    border-right: 1px solid var(--color-base-300);
+}
+
+/* ── Bottom placements: arrow at top (points up) ── */
+/* Outward sides: top + left */
+
+.popup.bottom-start::before {
+    top: -6px;
+    left: 1em;
+
+    border-top: 1px solid var(--color-base-300);
+    border-left: 1px solid var(--color-base-300);
+}
+
+.popup.bottom::before {
+    top: -6px;
+    left: calc(50% - 5px);
+
+    border-top: 1px solid var(--color-base-300);
+    border-left: 1px solid var(--color-base-300);
+}
+
+.popup.bottom-end::before {
+    top: -6px;
+    right: 1em;
+
+    border-top: 1px solid var(--color-base-300);
+    border-left: 1px solid var(--color-base-300);
+}
+
+/* ── Left placements: arrow at right (points right) ── */
+/* Outward sides: top + right */
+
+.popup.left-start::before {
+    right: -6px;
+    top: 1em;
+
+    border-top: 1px solid var(--color-base-300);
+    border-right: 1px solid var(--color-base-300);
+}
+
+.popup.left::before {
+    right: -6px;
+    top: calc(50% - 5px);
+
+    border-top: 1px solid var(--color-base-300);
+    border-right: 1px solid var(--color-base-300);
+}
+
+.popup.left-end::before {
+    right: -6px;
+    bottom: 1em;
+
+    border-top: 1px solid var(--color-base-300);
+    border-right: 1px solid var(--color-base-300);
+}
+
+/* ── Right placements: arrow at left (points left) ── */
+/* Outward sides: bottom + left */
+
+.popup.right-start::before {
+    left: -6px;
+    top: 1em;
+
+    border-bottom: 1px solid var(--color-base-300);
+    border-left: 1px solid var(--color-base-300);
+}
+
+.popup.right::before {
+    left: -6px;
+    top: calc(50% - 5px);
+
+    border-bottom: 1px solid var(--color-base-300);
+    border-left: 1px solid var(--color-base-300);
+}
+
+.popup.right-end::before {
+    left: -6px;
+    bottom: 1em;
+
+    border-bottom: 1px solid var(--color-base-300);
+    border-left: 1px solid var(--color-base-300);
+}

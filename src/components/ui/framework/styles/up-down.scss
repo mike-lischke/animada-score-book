@@ -1,0 +1,88 @@
+/*
+ * Copyright (c) Mike Lischke. All rights reserved.
+ * Licensed under the MIT License. See License.txt in the project root for license information.
+ */
+
+.upDown {
+    /* Set by the control on mount to the real size. */
+    --item-height: 20px;
+
+    flex: 1 1 auto;
+
+    .input {
+        border: none;
+        border-top-right-radius: 0;
+        border-bottom-right-radius: 0;
+    }
+
+    .btn {
+        flex: 1 1 auto;
+
+        min-width: 0;
+        min-height: 0;
+        height: auto;
+        width: auto;
+
+        padding: 0;
+        margin: 0;
+
+        border-radius: 0;
+        border: none;
+
+        pointer-events: all;
+
+        &::after {
+            display: inline-block;
+            content: "";
+            width: 5px;
+            height: 5px;
+
+            position: absolute;
+            right: 5px;
+
+            border-right: 1px solid var(--color-base-content);
+            border-bottom: 1px solid var(--color-base-content);
+
+            transform: translateY(1px) rotate(-135deg);
+            pointer-events: none;
+        }
+    }
+
+    #down::after {
+        transform: translateY(-2px) rotate(45deg);
+    }
+
+    #outerList {
+        flex: 1 1 auto;
+
+        background-color: var(--dropdown-background);
+        border: 1px solid var(--dropdown-border);
+        border-radius: 4px;
+        color: var(--input-foreground);
+
+        margin: 0 2px 0 0;
+        padding: 0;
+        border-top-right-radius: 0;
+        border-bottom-right-radius: 0;
+
+        min-width: 80px;
+
+        font-size: 11pt;
+
+        overflow: hidden;
+    }
+
+    #innerList {
+        flex: 1 1 auto;
+        align-items: stretch;
+
+        padding: 0 8px;
+        height: max-content;
+        top: 0;
+        transition: top 0.25s ease-out;
+
+        > .container {
+            flex: 1 1 var(--item-height);
+        }
+    }
+}

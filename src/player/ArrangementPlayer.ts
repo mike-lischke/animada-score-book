@@ -384,7 +384,7 @@ export class ArrangementPlayer {
      * @returns True if this player handles the given arrangement.
      */
     private handleArrangementChanged = (arrangementId: number): Promise<boolean> => {
-        if (arrangementId !== this.dataModel.arrangement!.id) {
+        if (arrangementId !== this.dataModel.arrangement?.id) {
             return Promise.resolve(false);
         }
 

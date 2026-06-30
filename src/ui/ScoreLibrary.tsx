@@ -21,6 +21,9 @@ import { ChildAlignment, Orientation, SelectionType } from "../components/ui/fra
 import {
     SbDmEntityType, type ISbDmScore, type ISbDmScoreFolder, type ScoreBookDataModel
 } from "../core/ScoreBookDataModel.js";
+import { AppStorage, type IUISettings } from "../core/AppStorage.js";
+import { PermIndicator } from "./PermIndicator.js";
+import { requisitions } from "../supplement/Requisitions.js";
 
 export interface IScoreLibraryProperties extends ICommonUIProperties {
     dataModel: ScoreBookDataModel;
@@ -31,6 +34,8 @@ export interface IScoreLibraryProperties extends ICommonUIProperties {
 interface IScoreLibraryState {
     /** The URL of an audio or video file. */
     url?: string;
+
+    currentSettings: IUISettings;
 }
 
 /**
@@ -42,7 +47,21 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
 
     public constructor(props: IScoreLibraryProperties) {
         super(props);
-        this.state = {};
+        this.state = {
+            currentSettings: AppStorage.loadUISettings() ?? {}
+        };
+    }
+
+    public override componentDidMount(): void {
+        requisitions.register("settingsChanged", this.handleSettingsChanged);
+        requisitions.register("scoreBookLoaded", this.handleScoreBookLoaded);
+        requisitions.register("permChanged", this.handlePermChanged);
+    }
+
+    public override componentWillUnmount(): void {
+        requisitions.unregister("settingsChanged", this.handleSettingsChanged);
+        requisitions.unregister("scoreBookLoaded", this.handleScoreBookLoaded);
+        requisitions.unregister("permChanged", this.handlePermChanged);
     }
 
     public render(): ComponentChild {
@@ -54,6 +73,7 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
             resizable: false,
             hozAlign: "left",
             formatter: this.scoreTreeCellFormatter,
+            cellDblClick: this.handleScoreTreeDblClick,
         }];
 
         const scoreTreeOptions: ITreeGridOptions = {
@@ -102,7 +122,6 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
                         columns={scoreTreeColumns}
                         tableData={scores}
 
-                        onRowClick={this.handleScoreTreeRowClick}
                         onRowExpanded={this.handleScoreTreeRowExpanded}
                         onRowCollapsed={this.handleScoreTreeRowCollapsed}
                         isRowExpanded={this.isScoreTreeRowExpanded}
@@ -114,11 +133,16 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
     }
 
     private scoreTreeCellFormatter = (cell: CellComponent): string | HTMLElement => {
+        const { currentSettings } = this.state;
+        const { dataModel } = this.props;
+
         const row = cell.getRow();
         const data = cell.getData() as ISbDmScoreFolder | ISbDmScore;
 
         const host = document.createElement("div");
         host.className = "scoreTreeEntry";
+        host.dataset.entryType = String(data.type);
+        host.dataset.entryId = String(data.id);
 
         let icon: ComponentChild;
         const menuItems: IMenuItem[] = [];
@@ -140,6 +164,7 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
                     { id: "import", label: "Import Score", icon: Codicon.CloudDownload },
                     { id: "addFolder", label: "Add New Sub Folder", icon: Codicon.NewFolder },
                     { id: "edit", label: "Rename Folder", icon: Codicon.Edit },
+                    { id: "separator1", label: "-" },
                     { id: "remove", label: "Remove Folder", icon: Codicon.Trash },
                 );
             } else {
@@ -148,6 +173,7 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
 
                 menuItems.push(
                     { id: "load", label: "Load Score" },
+                    { id: "separator2", label: "-" },
                     { id: "remove", label: "Remove Score", icon: Codicon.Trash },
                 );
             }
@@ -155,9 +181,35 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
             icon = <Icon src={iconSrc} className={iconClass + " scoreTreeIcon"} />;
         };
 
+        const isAdmin = dataModel.user?.isAdmin ?? false;
+        const { perm } = data;
+        const canManage = isAdmin || (perm?.isOwner === true);
+        const showIndicator = (currentSettings.showPermMatrix ?? true) && perm != null;
+        const canWrite = perm?.canWrite === true;
+        const isWorld = perm?.isWorld === true;
+
+        if (canManage) {
+            menuItems.push(
+                { id: "separator3", label: "-" },
+            );
+            menuItems.push(
+                { id: "managePerm", label: "Group Access", icon: Codicon.Key },
+            );
+        }
+
         const content = <>
             {icon}
             <Label caption={data.name} />
+            {showIndicator && (
+                <PermIndicator
+                    canWrite={canWrite}
+                    isWorld={isWorld}
+                    canManage={canManage}
+                    onManage={canManage ? () => {
+                        this.handleMenuItemClick("managePerm", data);
+                    } : undefined}
+                />
+            )}
             <Container className="actionBox" orientation={Orientation.LeftToRight}>
                 <Menu
                     icon={Codicon.KebabVertical}
@@ -184,6 +236,18 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
         const actionParent: ISbDmScoreFolder | undefined = needsParent
             && entry.type === SbDmEntityType.ScoreFolder
             ? entry : undefined;
+
+        if (id === "managePerm") {
+            const tree = this.scoreTableRef.current;
+
+            tree?.deselectRow();
+
+            const rows = tree?.searchAllRows("id", entry.id);
+
+            if (rows && rows.length > 0) {
+                tree?.selectRow(rows);
+            }
+        }
 
         void onAction?.(id, actionData, actionParent).then((handled) => {
             if (handled) {
@@ -299,14 +363,11 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
         });
     };
 
-    private handleScoreTreeRowClick = (event: UIEvent, row: RowComponent): void => {
-        const entry = row.getData() as ISbDmScoreFolder | ISbDmScore;
-        if (entry.type === SbDmEntityType.Score) {
-            if (event instanceof MouseEvent && event.detail >= 2) {
-                this.handleActionClick(event, "load", entry);
+    private handleScoreTreeDblClick = (event: UIEvent, cell: CellComponent): void => {
+        const entry = cell.getRow().getData() as ISbDmScoreFolder | ISbDmScore;
 
-                return;
-            }
+        if (entry.type === SbDmEntityType.Score) {
+            this.handleActionClick(event as MouseEvent, "load", entry);
         }
     };
 
@@ -321,6 +382,7 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
             entry.state.loading = true;
             row.reformat();
         }, 500);
+
         void entry.refresh?.().then(() => {
             clearTimeout(timer);
             entry.state.loading = false;
@@ -347,6 +409,36 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
 
     private handleScoreTreeRowContext = (event: Event, row: RowComponent): void => {
         //const entry = row.getData() as IScoreNode;
+    };
+
+    private handleSettingsChanged = (settings: IUISettings): Promise<boolean> => {
+        this.setState({ currentSettings: settings }, () => {
+            const rows = this.scoreTableRef.current?.getRows();
+            rows?.forEach((row) => {
+                row.reformat();
+            });
+        });
+
+        return Promise.resolve(true);
+    };
+
+    private handleScoreBookLoaded = (): Promise<boolean> => {
+        const { dataModel } = this.props;
+        const tree = this.scoreTableRef.current;
+        void tree?.setData(dataModel.scoreLib, SetDataAction.Replace);
+
+        return Promise.resolve(true);
+    };
+
+    private handlePermChanged = (entry: ISbDmScoreFolder | ISbDmScore): Promise<boolean> => {
+        const tree = this.scoreTableRef.current;
+        const rows = tree?.searchAllRows("id", entry.id);
+
+        rows?.forEach((row) => {
+            row.reformat();
+        });
+
+        return Promise.resolve(true);
     };
 
     private isScoreTreeRowExpanded = (row: RowComponent): boolean => {

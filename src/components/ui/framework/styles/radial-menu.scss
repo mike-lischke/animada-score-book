@@ -1,0 +1,30 @@
+/*
+ * Copyright (c) Mike Lischke. All rights reserved.
+ * Licensed under the MIT License. See License.txt in the project root for license information.
+ */
+
+.radial-menu {
+    position: fixed;
+    pointer-events: none;
+    inset: 0;
+
+    .radial-background {
+        position: absolute;
+        transform: translate(-50%, -50%);
+        background: color-mix(in oklch, var(--color-base-300) 65%, transparent);
+        border-radius: 999px;
+        transition: width 0.25s ease, height 0.25s ease;
+        backdrop-filter: blur(5px);
+    }
+
+    .radial-content {
+        position: absolute;
+        pointer-events: none;
+    }
+}
+
+.radial-btn {
+    color: currentColor;
+    background-color: var(--color-base-200);
+    border: none;
+}

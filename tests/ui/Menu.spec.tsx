@@ -57,16 +57,15 @@ describe("Menu", () => {
 
     it("renders menu items when open", () => {
         renderResult = render(<Menu items={items} caption="Actions" />);
-        const instance = (renderResult as unknown as { _component?: { state: { open: boolean; }; }; })._component;
 
         // Open the menu programmatically.
-        const popover = renderResult.container.querySelector("[popover]");
+        const popover = renderResult.container.querySelector<HTMLElement>("[popover]");
         if (popover) {
-            (popover as HTMLElement).dispatchEvent(new Event("toggle"));
+            popover.dispatchEvent(new Event("toggle"));
         }
 
         // The popover div should be in the DOM (always rendered).
-        const popoverDiv = renderResult.container.querySelector("[popover]");
+        const popoverDiv = renderResult.container.querySelector<HTMLElement>("[popover]");
 
         expect(popoverDiv).toBeTruthy();
         expect(popoverDiv!.textContent).toContain("New");
@@ -78,7 +77,7 @@ describe("Menu", () => {
 
         renderResult = render(<Menu items={items} caption="Actions" onItemClick={onClick} />);
 
-        const newItem = renderResult.container.querySelector(".menuItem:not(.separator):not(.disabled)");
+        const newItem = renderResult.container.querySelector<HTMLElement>(".menuItem:not(.separator):not(.disabled)");
 
         expect(newItem).toBeTruthy();
         newItem!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
@@ -90,7 +89,7 @@ describe("Menu", () => {
 
         renderResult = render(<Menu items={items} caption="Actions" onItemClick={onClick} />);
 
-        const separator = renderResult.container.querySelector(".menuItem.separator");
+        const separator = renderResult.container.querySelector<HTMLElement>(".menuItem.separator");
 
         expect(separator).toBeTruthy();
         separator!.dispatchEvent(new MouseEvent("click", { bubbles: true }));

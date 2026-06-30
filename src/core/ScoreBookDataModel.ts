@@ -8,12 +8,11 @@ import { Arrangement } from "./Arrangement.js";
 import { ArrangementMigrator } from "./serialisation/migration/ArrangementMigrator.js";
 import { stringifyPackedArrangement } from "./serialisation/snapshot-packing.js";
 
+import { requisitions } from "../supplement/Requisitions.js";
 import type { IScoreDBEntry, ISoundLibFsNode } from "./DatabaseTypes.js";
 import { Instrument } from "./Instrument.js";
-import { requisitions } from "../supplement/Requisitions.js";
 import type {
-    IArrangementSnapshot, IFraction, IMeasureStep, IMeterSnapshot, IAudioData, INoteStyleSymbol,
-    ISubdivision, Mutable
+    IArrangementSnapshot, IAudioData, IFraction, IMeasureStep, IMeterSnapshot, INoteStyleSymbol, ISubdivision, Mutable
 } from "./types/general.js";
 import { getNewId } from "./utils.js";
 
@@ -328,6 +327,35 @@ export interface ISbDmVisual extends ISbDmCommon {
      *         is a leaf node {@link isLeaf} is true).
      */
     getChildren?(): ScoreBookDataModelEntry[];
+
+    /** Permission info for the current user (undefined until the backend provides it). */
+    readonly perm?: ISbDmPermissionInfo;
+}
+
+/** Permission summary for the current user on a score or folder. */
+export interface ISbDmPermissionInfo {
+    /** The current user is the owner of this entity. */
+    readonly isOwner: boolean;
+
+    /** The current user can read this entity. */
+    readonly canRead: boolean;
+
+    /** The current user can write this entity. */
+    readonly canWrite: boolean;
+
+    /** The entity is assigned to the World group (publicly readable). */
+    readonly isWorld: boolean;
+
+    /** IDs of groups assigned to this entity. */
+    readonly groupIds: number[];
+}
+
+/** Permissions returned by getPermissions (explicit, not inherited). */
+export interface IPermissionDecomposition {
+    entityType: string;
+    entityId: number;
+    ownerId: number | null;
+    groups: Array<{ groupId: number; writable: boolean; }>;
 }
 
 export interface ISbDmSoundFolder extends ISbDmVisual {
@@ -513,14 +541,116 @@ export type ScoreBookDataModelEntry =
 /**
  * A data model to share score book data between components.
  */
+
+/** Mirrors IWhoamiResponse / ICapabilities from the backend. */
+export interface IUserInfo {
+    id: number;
+    username: string;
+    displayName: string;
+    isAdmin: boolean;
+}
+
+/** A user row as returned by listUsers. */
+export interface IUserRow {
+    id: number;
+    username: string;
+    displayName: string;
+    isAdmin: boolean;
+    lastLogin: string | null;
+    createdAt: string;
+    updatedAt: string;
+}
+
+/** A group row as returned by listGroups. */
+export interface IGroupRow {
+    id: number;
+    name: string;
+    description: string;
+    color: string;
+    adminId: number | null;
+    hasPassword: boolean;
+    lastLogin: string | null;
+    createdAt: string;
+}
+
+/** A group member as returned by listGroupMembers. */
+export interface IGroupMember {
+    id: number;
+    username: string;
+    displayName: string;
+}
+
+export interface ICapabilities {
+    canEditScores: boolean;
+    canManageUsers: boolean;
+    canManageInstruments: boolean;
+    canExportMP3: boolean;
+}
+
+interface ILoginResponse {
+    token: string;
+    user: IUserInfo;
+
+    /** Set when the user authenticated via a group password. */
+    group?: {
+        id: number;
+        name: string;
+    };
+
+    capabilities: ICapabilities;
+}
+
+interface IWhoamiResponse {
+    authenticated: boolean;
+    user?: IUserInfo;
+
+    /** Set when authenticated via group shared password. */
+    group?: { id: number; name: string; };
+
+    capabilities: ICapabilities;
+}
+
 export class ScoreBookDataModel {
     /**
      * Indicates whether the current session is allowed to mutate scores on the backend.
-     * Until proper user management exists this defaults to `true`. Read-only viewers will
-     * later set this to `false` so opportunistic rewrites (e.g. legacy → compact migration)
-     * are skipped.
+     * Derived from the capabilities returned by the backend after authentication.
+     *
+     * @returns True if the current user can edit scores.
      */
-    public canWriteScores = false;
+    public get canWriteScores(): boolean {
+        return this.capabilities.canEditScores;
+    }
+
+    public get authenticated(): boolean {
+        return this.accessToken !== undefined;
+    }
+
+    public get user(): IUserInfo | undefined {
+        return this.currentUser;
+    }
+
+    /**
+     * The group the user authenticated as (only set for group login).
+     *
+     * @returns The active group, or undefined if logged in as a user or anonymously.
+     */
+    public get activeGroup(): { id: number; name: string; } | undefined {
+        return this.currentGroup;
+    }
+
+    public get capabilities(): ICapabilities {
+        return this.currentCapabilities;
+    }
+
+    private accessToken: string | undefined;
+    private currentUser: IUserInfo | undefined;
+    private currentGroup: { id: number; name: string; } | undefined;
+    private currentCapabilities: ICapabilities = {
+        canEditScores: false,
+        canManageUsers: false,
+        canManageInstruments: false,
+        canExportMP3: false,
+    };
 
     private data: IScoreBookDataModelData = {
         soundLib: [],
@@ -534,7 +664,9 @@ export class ScoreBookDataModel {
             this.loadInstruments(),
             this.loadNumberSounds(),
             (async () => {
-                await this.updateScoreLibFolder(this.data.scoreLib);
+                const freshList: Array<ISbDmScoreFolder | ISbDmScore> = [];
+                await this.updateScoreLibFolder(freshList);
+                this.data.scoreLib = freshList;
             })(),
         ];
 
@@ -650,8 +782,7 @@ export class ScoreBookDataModel {
             }
 
             parent.children.push(newFolder);
-
-            void requisitions.execute("scoreBookLoaded", undefined);
+            await this.refreshScoreLib();
         }
     }
 
@@ -687,8 +818,7 @@ export class ScoreBookDataModel {
             } else {
                 parent.children.push(newScore);
             }
-
-            void requisitions.execute("scoreBookLoaded", undefined);
+            await this.refreshScoreLib();
         }
     }
 
@@ -764,6 +894,87 @@ export class ScoreBookDataModel {
     }
 
     /**
+     * Fetches the explicit (non-inherited) permissions for an entity.
+     * Owners and admins can call this.
+     *
+     * @param entityType "score" or "folder".
+     * @param entityId   The entity's database id.
+     *
+     * @returns The permission decomposition, or null if none exists.
+     */
+    public async getPermissions(entityType: string, entityId: number): Promise<IPermissionDecomposition | null> {
+        const res = await this.fetchApi(
+            `/api?action=getPermissions&entityType=${encodeURIComponent(entityType)}&entityId=${entityId}`,
+            { method: "POST" },
+        );
+
+        if (!res?.ok) {
+            return null;
+        }
+
+        const data = await res.json() as { permission: IPermissionDecomposition | null; };
+
+        return data.permission ?? null;
+    }
+
+    /**
+     * Sets permissions for a score library entity. Owner or admin only.
+     *
+     * @param entityType   "score" or "folder".
+     * @param entityId     The entity's database id.
+     * @param ownerId      The new owner id, or null to inherit from parent. Omit to leave unchanged.
+     * @param addGroups    Groups to add with writable flag.
+     * @param removeGroups Group ids to remove from the entity.
+     */
+    public async setPermissions(entityType: string, entityId: number,
+        ownerId?: number | null,
+        addGroups?: Array<{ groupId: number; writable: boolean; }>,
+        removeGroups?: Array<{ groupId: number; }>,
+    ): Promise<void> {
+        const body: Record<string, unknown> = { entityType, entityId };
+
+        if (ownerId !== undefined) {
+            body.ownerId = ownerId;
+        }
+
+        if (addGroups) {
+            body.addGroups = addGroups;
+        }
+
+        if (removeGroups) {
+            body.removeGroups = removeGroups;
+        }
+
+        const res = await this.fetchApi("/api?action=setPermissions", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+        });
+
+        if (!res?.ok) {
+            const data = await res?.json() as { error?: string; };
+
+            throw new Error(data.error ?? "Failed to set permissions.");
+        }
+    }
+
+    /**
+     * Directly sets the session from a token and user info returned by
+     * createInitialAdmin, without going through the normal login flow.
+     *
+     * @param token        The access token.
+     * @param user         The user info.
+     * @param capabilities The capabilities.
+     */
+    public setSession(token: string, user: IUserInfo, capabilities: ICapabilities): void {
+        this.accessToken = token;
+        this.currentUser = user;
+        this.currentCapabilities = capabilities;
+
+        void requisitions.execute("authChanged", undefined);
+    }
+
+    /**
      * Retrieves an instrument by its ID.
      *
      * @param id The ID of the instrument.
@@ -776,6 +987,477 @@ export class ScoreBookDataModel {
     }
 
     /**
+     * Authenticates the user with the backend.
+     *
+     * On success the access token, user info and capabilities are stored in memory.
+     * The refresh token is stored by the backend in an httpOnly cookie.
+     *
+     * @param username The username.
+     * @param password The password.
+     * @returns True if login was successful.
+     */
+    public async login(username: string, password: string): Promise<boolean> {
+        const res = await this.fetchApi("/api?action=login", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ username, password }),
+        }, false); // Don't attach auth header for login request.
+
+        if (!res) {
+            return false;
+        }
+
+        const data = await res.json() as ILoginResponse;
+
+        this.accessToken = data.token;
+        this.currentUser = data.user;
+        this.currentGroup = undefined;
+        this.currentCapabilities = data.capabilities;
+
+        sessionStorage.removeItem("authType");
+        sessionStorage.removeItem("groupId");
+
+        void requisitions.execute("authChanged", undefined);
+
+        return true;
+    }
+
+    /**
+     * Authenticates using a group name and its shared password.
+     * Logs in as the anonymous user but with the group's permissions.
+     *
+     * @param groupName The group name.
+     * @param password  The group's shared password.
+     * @returns True if login was successful.
+     */
+    public async groupLogin(groupName: string, password: string): Promise<boolean> {
+        const res = await this.fetchApi("/api?action=groupLogin", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ groupName, password }),
+        }, false);
+
+        if (!res) {
+            return false;
+        }
+
+        const data = await res.json() as ILoginResponse;
+
+        this.accessToken = data.token;
+        this.currentUser = data.user;
+        this.currentGroup = data.group;
+        this.currentCapabilities = data.capabilities;
+
+        sessionStorage.setItem("authType", "group");
+        sessionStorage.setItem("groupId", String(data.group?.id ?? ""));
+
+        void requisitions.execute("authChanged", undefined);
+
+        return true;
+    }
+
+    /**
+     * Logs out the current user and clears all auth state.
+     */
+    public async logout(): Promise<void> {
+        // Notify the backend to clear the refresh token cookie.
+        await this.fetchApi("/api?action=logout", { method: "POST" });
+
+        this.accessToken = undefined;
+        this.currentUser = undefined;
+        this.currentGroup = undefined;
+        this.currentCapabilities = {
+            canEditScores: false,
+            canManageUsers: false,
+            canManageInstruments: false,
+            canExportMP3: false,
+        };
+
+        sessionStorage.removeItem("authType");
+        sessionStorage.removeItem("groupId");
+
+        void requisitions.execute("authChanged", undefined);
+    }
+
+    /**
+     * Resets the entire data model to its initial, unloaded state.
+     * Clears all loaded data (scores, instruments, sound library, arrangement,
+     * undo manager state) so a fresh login can reload everything.
+     */
+    public reset(): void {
+        this.data = {
+            soundLib: [],
+            scoreLib: [],
+            instruments: [],
+        };
+
+        this.accessToken = undefined;
+        this.currentUser = undefined;
+        this.currentGroup = undefined;
+        this.currentCapabilities = {
+            canEditScores: false,
+            canManageUsers: false,
+            canManageInstruments: false,
+            canExportMP3: false,
+        };
+
+        sessionStorage.removeItem("authType");
+        sessionStorage.removeItem("groupId");
+
+        void requisitions.execute("authChanged", undefined);
+    }
+
+    /**
+     * Fetches the current auth state from the backend.
+     * Use this on app startup to restore a session from the refresh token cookie.
+     *
+     * @returns True if the session was restored.
+     */
+    public async restoreSession(): Promise<boolean> {
+        // refreshAccessToken uses the httpOnly refresh cookie to get a new access token,
+        // then calls whoami with it to populate user + capabilities.
+        const restored = await this.refreshAccessToken();
+
+        if (!restored) {
+            // No valid session — fetch anonymous capabilities.
+            const res = await this.fetchApi("/api?action=whoami", {
+                headers: { Accept: "application/json" },
+                credentials: "include",
+            }, false);
+
+            if (res) {
+                const data = await res.json() as IWhoamiResponse;
+
+                this.currentGroup = undefined;
+                this.currentCapabilities = data.capabilities;
+            }
+        }
+
+        void requisitions.execute("authChanged", undefined);
+
+        return restored;
+    }
+
+    public async listUsers(): Promise<IUserRow[]> {
+        const res = await this.fetchApi("/api?action=listUsers", { method: "POST" });
+
+        if (!res) {
+            return [];
+        }
+
+        const data = await res.json() as { users?: IUserRow[]; error?: string; };
+
+        if (data.error) {
+            throw new Error(data.error);
+        }
+
+        return data.users ?? [];
+    }
+
+    /**
+     * Creates a new user. Admin-only.
+     *
+     * @param username    The username (min 3 chars).
+     * @param password    The password (min 6 chars).
+     * @param displayName The display name.
+     * @returns The new user's id.
+     */
+    public async createUser(username: string, password: string, displayName: string,
+    ): Promise<number> {
+        const res = await this.fetchApi("/api?action=createUser", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ username, password, displayName }),
+        });
+
+        if (!res) {
+            throw new Error("Backend unreachable.");
+        }
+
+        const data = await res.json() as { success?: boolean; id?: number; error?: string; };
+
+        if (data.error) {
+            throw new Error(data.error);
+        }
+
+        return data.id!;
+    }
+
+    /**
+     * Updates an existing user. Admin-only.
+     *
+     * @param id                 The user id.
+     * @param fields             Fields to update.
+     * @param fields.displayName The new display name (optional).
+     * @param fields.password    The new password, if changing (optional).
+     */
+    public async updateUser(id: number, fields: {
+        displayName?: string; password?: string;
+    },): Promise<void> {
+        const body: Record<string, unknown> = { id };
+
+        if (fields.displayName !== undefined) {
+            body.displayName = fields.displayName;
+        }
+
+        if (fields.password) {
+            body.password = fields.password;
+        }
+
+        const res = await this.fetchApi("/api?action=updateUser", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+        });
+
+        if (!res) {
+            return;
+        }
+
+        const data = await res.json() as { error?: string; };
+
+        if (data.error) {
+            throw new Error(data.error);
+        }
+    }
+
+    /**
+     * Deletes a user. Admin-only.
+     *
+     * @param id The user id.
+     */
+    public async deleteUser(id: number): Promise<void> {
+        const res = await this.fetchApi("/api?action=deleteUser", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id }),
+        });
+
+        if (!res) {
+            return;
+        }
+
+        const data = await res.json() as { error?: string; };
+
+        if (data.error) {
+            throw new Error(data.error);
+        }
+    }
+
+    /**
+     * Lists groups that have a shared password set. Public endpoint.
+     *
+     * @returns The list of group names.
+     */
+    public async listPublicGroups(): Promise<string[]> {
+        const res = await this.fetchApi("/api?action=listPublicGroups", { method: "POST" }, false);
+
+        if (!res) {
+            return [];
+        }
+
+        const data = await res.json() as { groups?: string[]; };
+
+        return data.groups ?? [];
+    }
+
+    /**
+     * Lists all groups. Admin-only.
+     *
+     * @returns The list of group rows.
+     */
+    public async listGroups(): Promise<IGroupRow[]> {
+        const res = await this.fetchApi("/api?action=listGroups", { method: "POST" });
+
+        if (!res) {
+            return [];
+        }
+
+        const data = await res.json() as { groups?: IGroupRow[]; error?: string; };
+
+        if (data.error) {
+            throw new Error(data.error);
+        }
+
+        return data.groups ?? [];
+    }
+
+    /**
+     * Creates a new group. Admin-only.
+     *
+     * @param name        The group name.
+     * @param description The group description (optional).
+     * @param color       The group color (optional, random if omitted).
+     * @param password    The group password (optional, no password if omitted).
+     * @param adminId     The user id of the group admin (optional, no admin if omitted).
+     * @returns The new group's id and color.
+     */
+    public async createGroup(name: string, description: string, color?: string,
+        password?: string, adminId?: number | null,
+    ): Promise<{ id: number; color: string; }> {
+        const body: Record<string, unknown> = { name, description };
+
+        if (color) {
+            body.color = color;
+        }
+
+        if (password) {
+            body.password = password;
+        }
+
+        if (adminId !== undefined) {
+            body.adminId = adminId;
+        }
+
+        const res = await this.fetchApi("/api?action=createGroup", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+        });
+
+        if (!res) {
+            throw new Error("Backend unreachable.");
+        }
+
+        const data = await res.json() as { success?: boolean; id?: number; color?: string; error?: string; };
+
+        if (data.error) {
+            throw new Error(data.error);
+        }
+
+        return { id: data.id!, color: data.color! };
+    }
+
+    /**
+     * Updates an existing group. Admin-only.
+     *
+     * @param id                  The group id.
+     * @param fields              Fields to update.
+     * @param fields.name         The new name (optional).
+     * @param fields.description  The new description (optional).
+     * @param fields.color        The new color (optional).
+     * @param fields.password     The new password, or null to remove (optional).
+     * @param fields.adminId      The new admin user ID, or null to remove (optional).
+     */
+    public async updateGroup(id: number, fields: {
+        name?: string; description?: string; color?: string;
+        password?: string | null; adminId?: number | null;
+    },): Promise<void> {
+        const body: Record<string, unknown> = { id };
+
+        if (fields.name !== undefined) {
+            body.name = fields.name;
+        }
+
+        if (fields.description !== undefined) {
+            body.description = fields.description;
+        }
+
+        if (fields.color !== undefined) {
+            body.color = fields.color;
+        }
+
+        if (fields.password !== undefined) {
+            body.password = fields.password;
+        }
+
+        if (fields.adminId !== undefined) {
+            body.adminId = fields.adminId;
+        }
+
+        const res = await this.fetchApi("/api?action=updateGroup", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+        });
+
+        if (!res) {
+            return;
+        }
+
+        const data = await res.json() as { error?: string; };
+
+        if (data.error) {
+            throw new Error(data.error);
+        }
+    }
+
+    /**
+     * Deletes a group. Admin-only.
+     *
+     * @param id The group id.
+     */
+    public async deleteGroup(id: number): Promise<void> {
+        const res = await this.fetchApi("/api?action=deleteGroup", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id }),
+        });
+
+        if (!res) {
+            return;
+        }
+
+        const data = await res.json() as { error?: string; };
+
+        if (data.error) {
+            throw new Error(data.error);
+        }
+    }
+
+    /**
+     * Adds a user to a group. Admin-only.
+     *
+     * @param userId  The user id.
+     * @param groupId The group id.
+     */
+    public async addUserToGroup(userId: number, groupId: number): Promise<void> {
+        await this.fetchApi("/api?action=addUserToGroup", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ userId, groupId }),
+        });
+    }
+
+    /**
+     * Removes a user from a group. Admin-only.
+     *
+     * @param userId  The user id.
+     * @param groupId The group id.
+     */
+    public async removeUserFromGroup(userId: number, groupId: number): Promise<void> {
+        await this.fetchApi("/api?action=removeUserFromGroup", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ userId, groupId }),
+        });
+    }
+
+    /**
+     * Lists the members of a group. Admin-only.
+     *
+     * @param groupId The group id.
+     * @returns The list of member rows.
+     */
+    public async listGroupMembers(groupId: number): Promise<IGroupMember[]> {
+        const res = await this.fetchApi(
+            `/api?action=listGroupMembers&groupId=${groupId}`, { method: "POST" },
+        );
+
+        if (!res) {
+            return [];
+        }
+
+        const data = await res.json() as { members?: IGroupMember[]; error?: string; };
+
+        if (data.error) {
+            throw new Error(data.error);
+        }
+
+        return data.members ?? [];
+    }
+
+    /**
      * Rewrites a score whose content was just migrated from a legacy format
      * to the current compact representation. Failures are silently ignored —
      * the legacy content remains intact and will be retried on the next load.
@@ -783,6 +1465,18 @@ export class ScoreBookDataModel {
      * @param score       The score entry whose content should be rewritten.
      * @param arrangement The already-migrated arrangement to serialize.
      */
+
+    /**
+     * Refreshes the root level of the score library from the backend.
+     * Useful after permission changes to reflect updated visibility.
+     */
+    public async refreshScoreLib(): Promise<void> {
+        const freshList: Array<ISbDmScoreFolder | ISbDmScore> = [];
+        await this.updateScoreLibFolder(freshList);
+        this.data.scoreLib = freshList;
+        void requisitions.execute("scoreBookLoaded", undefined);
+    }
+
     private async rewriteMigratedScore(score: ISbDmScore, arrangement: Arrangement): Promise<void> {
         if (!this.canWriteScores) {
             return;
@@ -912,6 +1606,7 @@ export class ScoreBookDataModel {
                     isLeaf: !folder.hasChildren,
                 },
                 children: [],
+                perm: folder.perm,
                 refresh: async (cb?: ProgressCallback) => {
                     (entry.state as Mutable<ISbDmEntityState>).initialized = true;
 
@@ -940,6 +1635,7 @@ export class ScoreBookDataModel {
                 },
                 parent,
                 content: score.content,
+                perm: score.perm,
             });
         });
 
@@ -959,19 +1655,102 @@ export class ScoreBookDataModel {
     };
 
     /**
-     * Wraps a fetch call with backend-disconnect detection. On any network or HTTP error the
-     * `backendDisconnected` requisition is dispatched and `undefined` is returned so the caller
-     * can bail out gracefully instead of throwing an unhandled rejection.
+     * Refreshes the access token using the refresh token cookie.
+     * Called automatically when a 401 response is received.
      *
-     * @param url The URL to fetch.
-     * @param options Optional fetch options.
+     * @returns True if the refresh was successful.
+     */
+    private async refreshAccessToken(): Promise<boolean> {
+        // Restore group-login context from sessionStorage (lost from in-memory token on reload).
+        const headers: Record<string, string> = {};
+        const storedAuthType = sessionStorage.getItem("authType");
+        const storedGroupId = sessionStorage.getItem("groupId");
+
+        if (storedAuthType) {
+            headers["X-Auth-Type"] = storedAuthType;
+        }
+        if (storedGroupId) {
+            headers["X-Group-Id"] = storedGroupId;
+        }
+        if (this.accessToken) {
+            headers.Authorization = `Bearer ${this.accessToken}`;
+        }
+
+        const res = await this.fetchApi("/api?action=refresh", {
+            method: "POST",
+            credentials: "include",
+            headers: Object.keys(headers).length > 0 ? headers : undefined,
+        }, false);
+
+        if (!res) {
+            return false;
+        }
+
+        const data = await res.json() as { token: string; };
+
+        this.accessToken = data.token;
+
+        // Also refresh user info and capabilities.
+        const whoamiRes = await this.fetchApi("/api?action=whoami", {
+            headers: { Accept: "application/json" },
+        }, true);
+
+        if (whoamiRes) {
+            const whoami = await whoamiRes.json() as IWhoamiResponse;
+
+            if (whoami.authenticated && whoami.user) {
+                this.currentUser = whoami.user;
+                this.currentGroup = whoami.group;
+                this.currentCapabilities = whoami.capabilities;
+
+                if (whoami.group) {
+                    sessionStorage.setItem("authType", "group");
+                    sessionStorage.setItem("groupId", String(whoami.group.id));
+                } else {
+                    sessionStorage.removeItem("authType");
+                    sessionStorage.removeItem("groupId");
+                }
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Wraps a fetch call with backend-disconnect detection and automatic token refresh.
+     * On any network or HTTP error the `backendDisconnected` requisition is dispatched
+     * and `undefined` is returned so the caller can bail out gracefully.
+     *
+     * On a 401 response the access token is automatically refreshed once and the
+     * request is retried. If the refresh also fails the user is effectively logged out.
+     *
+     * @param url          The URL to fetch.
+     * @param options      Optional fetch options.
+     * @param attachAuth   Whether to attach the Authorization header. Defaults to true.
+     *                     Set to false for login, refresh, and whoami requests.
      * @returns The response on success, or `undefined` when the backend is unreachable.
      */
-    private async fetchApi(url: string, options?: RequestInit): Promise<Response | undefined> {
+
+    private async fetchApi(
+        url: string, options?: RequestInit, attachAuth = true,
+    ): Promise<Response | undefined> {
+        const mergedOptions: RequestInit = {
+            ...options,
+            headers: {
+                ...(options?.headers as Record<string, string> | undefined),
+            },
+            credentials: options?.credentials ?? "include",
+        };
+
+        if (attachAuth && this.accessToken) {
+            (mergedOptions.headers as Record<string, string>).Authorization =
+                `Bearer ${this.accessToken}`;
+        }
+
         let res: Response;
 
         try {
-            res = await fetch(url, options);
+            res = await fetch(url, mergedOptions);
         } catch {
             void requisitions.execute("backendDisconnected", undefined);
             void requisitions.execute("showError", "Backend connection lost — network request failed.");
@@ -979,7 +1758,38 @@ export class ScoreBookDataModel {
             return undefined;
         }
 
+        // Auto-refresh on 401 and retry once.
+        if (res.status === 401 && attachAuth && this.accessToken) {
+            const refreshed = await this.refreshAccessToken();
+
+            if (refreshed) {
+                (mergedOptions.headers as Record<string, string>).Authorization =
+                    `Bearer ${this.accessToken}`;
+
+                try {
+                    res = await fetch(url, mergedOptions);
+                } catch {
+                    void requisitions.execute("backendDisconnected", undefined);
+                    void requisitions.execute("showError", "Backend connection lost — retry failed.");
+
+                    return undefined;
+                }
+            }
+        }
+
         if (!res.ok) {
+            // 401 is an expected auth response — not a backend disconnect.
+            if (res.status === 401) {
+                return undefined;
+            }
+
+            // 403 means the user lacks permission — not a disconnect.
+            if (res.status === 403) {
+                void requisitions.execute("showError", "You do not have permission for this action.");
+
+                return undefined;
+            }
+
             void requisitions.execute("backendDisconnected", undefined);
             void requisitions.execute("showError", `Backend request failed: HTTP ${res.status} ${res.statusText}`);
 

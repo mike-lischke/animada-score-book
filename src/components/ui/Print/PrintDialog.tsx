@@ -92,14 +92,14 @@ export class PrintDialog extends UIComponent<IPrintDialogProps, IPrintDialogStat
                     Print / Export to PDF
                 </Container>
 
-                <Container className="settings-card" orientation={Orientation.TopDown}>
+                <Container className="form-card" orientation={Orientation.TopDown}>
                     <Container
-                        className="settings-row"
+                        className="form-row"
                         orientation={Orientation.LeftToRight}
                         mainAlignment={ChildAlignment.SpaceBetween}
                         crossAlignment={ChildAlignment.Center}
                     >
-                        <span className="settings-row-label">Bars per line</span>
+                        <span className="form-row-label">Bars per line</span>
                         <Dropdown
                             caption={barsPerLineLabel}
                             items={barsPerLineItems}
@@ -109,12 +109,12 @@ export class PrintDialog extends UIComponent<IPrintDialogProps, IPrintDialogStat
                     </Container>
 
                     <Container
-                        className="settings-row"
+                        className="form-row"
                         orientation={Orientation.LeftToRight}
                         mainAlignment={ChildAlignment.SpaceBetween}
                         crossAlignment={ChildAlignment.Center}
                     >
-                        <span className="settings-row-label">Include legend</span>
+                        <span className="form-row-label">Include legend</span>
                         <Toggle
                             id="print-show-legend"
                             checkState={options.showLegend ? CheckState.Checked : CheckState.Unchecked}
@@ -125,13 +125,13 @@ export class PrintDialog extends UIComponent<IPrintDialogProps, IPrintDialogStat
                     </Container>
 
                     <Container
-                        className="settings-row settings-row-stacked"
+                        className="form-row form-row-stacked"
                         orientation={Orientation.TopDown}
                         crossAlignment={ChildAlignment.Stretch}
                     >
-                        <span className="settings-row-label">Tracks</span>
+                        <span className="form-row-label">Tracks</span>
                         <Container
-                            className="settings-row-values"
+                            className="form-row-values"
                             orientation={Orientation.TopDown}
                             crossAlignment={ChildAlignment.Start}
                         >

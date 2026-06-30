@@ -10,19 +10,20 @@ import "./tailwind.css";
 
 import timbauImage from "./assets/images/instrument-icons/timbau.svg";
 
-import { createRef } from "preact";
+import { createRef, type ComponentChild } from "preact";
 import { lazy, Suspense } from "preact/compat";
 
 import { ErrorBoundary } from "./components/ui/ErrorBoundary.js";
-import { renderNotificationCenter } from "./components/ui/NotificationCenter/NotificationCenter.js";
-import { renderStatusBar, Statusbar } from "./components/ui/Statusbar/Statusbar.js";
-import { StatusBarAlignment, type IStatusBarItem } from "./components/ui/Statusbar/StatusBarItem.js";
 import { Button } from "./components/ui/framework/Button.js";
 import { Container } from "./components/ui/framework/Container.js";
+import { Dropdown, type IDropdownItem } from "./components/ui/framework/Dropdown.js";
 import { Label } from "./components/ui/framework/Label.js";
 import { ProgressIndicator } from "./components/ui/framework/ProgressIndicator.js";
 import { ChildAlignment, Orientation } from "./components/ui/framework/ui-types.js";
 import { UIComponent } from "./components/ui/framework/UIComponent.js";
+import { renderNotificationCenter } from "./components/ui/NotificationCenter/NotificationCenter.js";
+import { renderStatusBar, Statusbar } from "./components/ui/Statusbar/Statusbar.js";
+import { StatusBarAlignment, type IStatusBarItem } from "./components/ui/Statusbar/StatusBarItem.js";
 
 import { ArrangementEditControls } from "./components/ui/Arrangement/ArrangementEditControls.js";
 import { ArrangementPlayControls } from "./components/ui/Arrangement/ArrangementPlayControls.js";
@@ -43,6 +44,7 @@ import { Overlay } from "./components/ui/Overlay.js";
 import { PrintDialog } from "./components/ui/Print/PrintDialog.js";
 import { PrintView, type IPrintOptions } from "./components/ui/Print/PrintView.js";
 import { AppStorage, type IUISettings } from "./core/AppStorage.js";
+import { Arrangement } from "./core/Arrangement.js";
 import {
     SbDmEntityType, ScoreBookDataModel, type ISbDmScore, type ISbDmScoreFolder
 } from "./core/ScoreBookDataModel.js";
@@ -52,18 +54,21 @@ import {
 } from "./core/serialisation/snapshot-packing.js";
 import type { IArrangementSnapshot } from "./core/types/general.js";
 import { UndoManager } from "./core/UndoManager.js";
-import { Arrangement } from "./core/Arrangement.js";
 import { convertErrorToString } from "./core/utils.js";
 import { ArrangementPlayer } from "./player/ArrangementPlayer.js";
 import type { ScoreBookUiServices } from "./player/types.js";
 import { escapeStack } from "./supplement/EscapeStack.js";
 import { requisitions } from "./supplement/Requisitions.js";
+import { BackendDisconnectedDialog } from "./ui/BackendDisconnectedDialog.js";
+import { BackendSetupDialog } from "./ui/BackendSetupDialog.js";
+import { LoginDialog } from "./ui/LoginDialog.js";
+import { AdminSetupDialog } from "./ui/AdminSetupDialog.js";
 import { ModeManager } from "./ui/ModeManager.js";
 import { MouseHandler } from "./ui/MouseHandler.js";
 import { SelectionManager } from "./ui/SelectionManager.js";
 import { SettingsDialog } from "./ui/SettingsDialog.js";
-import { BackendSetupDialog } from "./ui/BackendSetupDialog.js";
-import { BackendDisconnectedDialog } from "./ui/BackendDisconnectedDialog.js";
+import { UserGroupEditor } from "./ui/UserGroupEditor.js";
+import { PermissionEditor } from "./ui/PermissionEditor.js";
 
 const ScoreLibrary = lazy(() => {
     return import("./ui/ScoreLibrary.js").then((m) => {
@@ -76,8 +81,25 @@ enum DisplayMode {
     Editing
 }
 
+enum AppPhase {
+    /** Checking backend health. */
+    Checking,
+
+    /** Backend not initialised — show setup form. */
+    Setup,
+
+    /** First-time installation — no admin user exists yet. */
+    AdminSetup,
+
+    /** Backend ready, no session — show login dialog. */
+    Login,
+
+    /** App fully loaded and running. */
+    Running,
+}
+
 interface IAppState {
-    ready: boolean;
+    phase: AppPhase;
     editingTitle: boolean;
     displayMode: DisplayMode;
     sidebarOpen: boolean;
@@ -94,6 +116,10 @@ export class App extends UIComponent<{}, IAppState> {
     private settingsDialogRef = createRef<SettingsDialog>();
     private backendSetupDialogRef = createRef<BackendSetupDialog>();
     private backendDisconnectedDialogRef = createRef<BackendDisconnectedDialog>();
+    private loginDialogRef = createRef<LoginDialog>();
+    private adminSetupDialogRef = createRef<AdminSetupDialog>();
+    private userGroupEditorRef = createRef<UserGroupEditor>();
+    private permissionEditorRef = createRef<PermissionEditor>();
     private printDialogRef = createRef<PrintDialog>();
     private valueDialogRef = createRef<ValueDialog>();
     private confirmDialogRef = createRef<ConfirmDialog>();
@@ -114,6 +140,7 @@ export class App extends UIComponent<{}, IAppState> {
     private currentPlayRange?: { startBar: number; endBar: number; };
     private selectedThemePreference = "Light+";
     private systemThemeQuery = window.matchMedia("(prefers-color-scheme: dark)");
+    private signInFromRunning = false;
     private statsItem?: IStatusBarItem;
     private notificationItem?: IStatusBarItem;
 
@@ -121,7 +148,7 @@ export class App extends UIComponent<{}, IAppState> {
         super(props);
 
         this.state = {
-            ready: false,
+            phase: AppPhase.Checking,
             editingTitle: false,
             displayMode: DisplayMode.Standard,
             sidebarOpen: false,
@@ -149,21 +176,22 @@ export class App extends UIComponent<{}, IAppState> {
         requisitions.register("playRangeChanged", this.handlePlayRangeChanged);
         requisitions.register("notificationStateChanged", this.handleNotificationStateChanged);
         requisitions.register("backendDisconnected", this.handleBackendDisconnected);
+        requisitions.register("authChanged", this.handleAuthChanged);
 
         void this.checkBackendThenInitialize();
     }
 
     public override shouldComponentUpdate(nextProps: {}, nextState: IAppState): boolean {
-        const { displayMode, sidebarOpen, ready, headerPinned, printing } = this.state;
+        const { displayMode, sidebarOpen, phase, headerPinned, printing } = this.state;
 
         return displayMode !== nextState.displayMode
-            || sidebarOpen !== nextState.sidebarOpen || ready !== nextState.ready
+            || sidebarOpen !== nextState.sidebarOpen || phase !== nextState.phase
             || headerPinned !== nextState.headerPinned
             || printing !== nextState.printing;
     }
 
     public override componentDidUpdate(_prevProps: {}, prevState: IAppState): void {
-        if (!prevState.ready && this.state.ready) {
+        if (prevState.phase !== AppPhase.Running && this.state.phase === AppPhase.Running) {
             this.updateStatsItem();
         }
     }
@@ -173,241 +201,356 @@ export class App extends UIComponent<{}, IAppState> {
         this.systemThemeQuery.removeEventListener("change", this.handleSystemThemeChange);
         window.removeEventListener("afterprint", this.handleAfterPrint);
         escapeStack.detach();
+
         requisitions.unregister("settingsChanged", this.handleSettingsChanged);
         requisitions.unregister("playRangeChanged", this.handlePlayRangeChanged);
         requisitions.unregister("notificationStateChanged", this.handleNotificationStateChanged);
         requisitions.unregister("backendDisconnected", this.handleBackendDisconnected);
+        requisitions.unregister("authChanged", this.handleAuthChanged);
     }
 
     public render() {
-        const { ready, displayMode, sidebarOpen, headerPinned } = this.state;
+        const { phase, displayMode, sidebarOpen, headerPinned } = this.state;
+        const isRunning = phase === AppPhase.Running;
 
-        if (!ready) {
-            return (
-                <>
-                    <ProgressIndicator />
+        let splashContent: ComponentChild;
+        switch (phase) {
+            case AppPhase.Checking:
+                break;
+
+            case AppPhase.Setup:
+                splashContent = (
                     <BackendSetupDialog
                         ref={this.backendSetupDialogRef}
                         onSetupComplete={() => {
                             void this.handleBackendSetupComplete();
                         }}
                     />
-                </>
-            );
+                );
+
+                break;
+
+            case AppPhase.AdminSetup:
+                splashContent = (
+                    <AdminSetupDialog
+                        ref={this.adminSetupDialogRef}
+                        dataModel={this.dataModel}
+                        onSetupComplete={this.handleAdminSetupComplete}
+                    />
+                );
+
+                break;
+
+            case AppPhase.Login:
+                splashContent = (
+                    <LoginDialog
+                        ref={this.loginDialogRef}
+                        dataModel={this.dataModel}
+                        onLoginSuccess={this.handleLoginSuccess}
+                        onContinueAnonymous={this.handleContinueAnonymous}
+                    />
+                );
+
+                break;
+
+            case AppPhase.Running:
+                break;
         }
 
-        const arrangementView = this.dataModel.arrangement!;
-
         let titleBlock;
-        if (this.arrangementPlayer) {
-            titleBlock = <Container
-                orientation={Orientation.LeftToRight}
-                mainAlignment={ChildAlignment.End}
-                crossAlignment={ChildAlignment.Center}
-                style={{ width: "100%" }}
-            >
-                <ArrangementTitle
-                    id="mainArrangementTitle"
-                    arrangement={arrangementView}
-                    data-tooltip="expand"
-                    undoManager={this.undoManager!}
-                    editMode={displayMode === DisplayMode.Editing}
-                    onEditEnd={this.onEditEnd}
-                />
-                <Button
-                    imageOnly
-                    data-role="restore-top"
-                    style={{ margin: "2px 16px 0 0", width: "24px", height: "24px" }}
-                    className="normal-case btn-ghost"
-                    onClick={() => {
-                        this.setState({ headerPinned: !headerPinned });
-                    }}
-                >
-                    <Icon
-                        src={headerPinned ? Codicon.Pinned : Codicon.Pin}
-                        data-tooltip={headerPinned ? "Pinned Header" : "Automatic Header"}
-                    />
-                </Button>
+        let isAdmin = false;
+        if (isRunning) {
+            const arrangementView = this.dataModel.arrangement!;
+            isAdmin = this.dataModel.user?.isAdmin ?? false;
 
-            </Container>;
+            if (this.arrangementPlayer) {
+                titleBlock = <Container
+                    orientation={Orientation.LeftToRight}
+                    mainAlignment={ChildAlignment.End}
+                    crossAlignment={ChildAlignment.Center}
+                    style={{ width: "100%" }}
+                >
+                    <ArrangementTitle
+                        id="mainArrangementTitle"
+                        arrangement={arrangementView}
+                        data-tooltip="expand"
+                        undoManager={this.undoManager!}
+                        editMode={displayMode === DisplayMode.Editing}
+                        onEditEnd={this.onEditEnd}
+                    />
+                    <Button
+                        imageOnly
+                        data-role="restore-top"
+                        style={{ margin: "2px 16px 0 0", width: "24px", height: "24px" }}
+                        className="normal-case btn-ghost"
+                        onClick={() => {
+                            this.setState({ headerPinned: !headerPinned });
+                        }}
+                    >
+                        <Icon
+                            src={headerPinned ? Codicon.Pinned : Codicon.Pin}
+                            data-tooltip={headerPinned ? "Pinned Header" : "Automatic Header"}
+                        />
+                    </Button>
+
+                </Container>;
+            }
         }
 
         return (
-            <ErrorBoundary>
-                <Container
-                    id="appRoot"
-                    orientation={Orientation.TopDown}
-                    crossAlignment={ChildAlignment.Stretch}
-                >
-                    <DrawerSidebar
-                        id="mainDrawer"
-                        ref={this.scoreLibraryRef}
-                        open={sidebarOpen}
-                        sidebarContent={
-                            <Suspense fallback={<ProgressIndicator />}>
-                                <ScoreLibrary
-                                    onAction={this.handleScoreLibraryAction}
-                                    dataModel={this.dataModel}
-                                />
-                            </Suspense>
-                        }
-                        onOpenChange={(open) => {
-                            this.setState({ sidebarOpen: open }, () => {
-                                if (!open) {
-                                    escapeStack.remove(this.onSidebarEscape);
+            <>
+                {isRunning && (
+                    <ErrorBoundary>
+                        <Container
+                            id="appRoot"
+                            orientation={Orientation.TopDown}
+                            crossAlignment={ChildAlignment.Stretch}
+                        >
+                            <DrawerSidebar
+                                id="mainDrawer"
+                                ref={this.scoreLibraryRef}
+                                open={sidebarOpen}
+                                sidebarContent={
+                                    <Suspense fallback={<ProgressIndicator />}>
+                                        <ScoreLibrary
+                                            onAction={this.handleScoreLibraryAction}
+                                            dataModel={this.dataModel}
+                                        />
+                                    </Suspense>
                                 }
-                            });
-                        }}
-                    >
-                        <CollapsingTopContainer
-                            top={
-                                <Container
-                                    orientation={Orientation.LeftToRight}
-                                    crossAlignment={ChildAlignment.Center}
-                                >
-                                    <Container
-                                        id="headerContent"
-                                        className="rounded-3xl shadow-md border border-base-200/70 gap-4"
-                                    >
+                                onOpenChange={(open) => {
+                                    this.setState({ sidebarOpen: open }, () => {
+                                        if (!open) {
+                                            escapeStack.remove(this.onSidebarEscape);
+                                        }
+                                    });
+                                }}
+                            >
+                                <CollapsingTopContainer
+                                    top={
                                         <Container
-                                            id="toolbarButtons"
-                                            orientation={Orientation.TopDown}
-                                            mainAlignment={ChildAlignment.Center}
-                                            className="bg-base-100/80 p-2"
+                                            orientation={Orientation.LeftToRight}
+                                            crossAlignment={ChildAlignment.Center}
                                         >
-                                            <Button
-                                                imageOnly
-                                                className="du-btn-ghost"
-                                                data-tooltip="Display Options"
-                                                onClick={this.handleDisplayOptionsClick}
+                                            <Container
+                                                id="headerContent"
+                                                className="rounded-3xl shadow-md border border-base-200/70 gap-4"
                                             >
-                                                <Icon src={Codicon.Gear} data-tooltip="inherit" />
-                                            </Button>
-                                            <Button
-                                                id="scoreLibraryButton"
-                                                imageOnly
-                                                className="du-btn-ghost"
-                                                data-tooltip="Score Library"
-                                                onClick={this.handleScoreLibraryClick}
-                                            >
-                                                <Icon src={Codicon.Library} data-tooltip="inherit" />
-                                            </Button>
-                                            <Button
-                                                id="instrumentEditor"
-                                                imageOnly
-                                                className="du-btn-ghost"
-                                                data-tooltip="Instrument Editor"
-                                                disabled
-                                                onClick={this.handleInstrumentEditorClick}
-                                            >
-                                                <Icon src={timbauImage} width={24} height={24} data-tooltip="inherit" />
-                                            </Button>
-                                            <Button
-                                                id="printButton"
-                                                imageOnly
-                                                className="du-btn-ghost"
-                                                data-tooltip="Print / Export to PDF"
-                                                onClick={this.handlePrintClick}
-                                            >
-                                                <Icon src={Codicon.FilePdf} data-tooltip="inherit" />
-                                            </Button>
-                                        </Container>
-                                        <Container
-                                            id="appTitleContainer"
-                                            orientation={Orientation.TopDown}
-                                            crossAlignment={ChildAlignment.Stretch}
-                                        >
-                                            <Container>
-                                                <img id="titleLogo" src="/logo.svg" />
-                                                <Label className="appTitle top faded">ANIMADA</Label>
-                                            </Container>
-                                            <Container>
-                                                <Label className="appTitle bottom faded">Score</Label>
-                                                <Label className="appTitle bottom accent">Book</Label>
-                                            </Container>
+                                                <Container
+                                                    id="toolbarButtons"
+                                                    orientation={Orientation.TopDown}
+                                                    mainAlignment={ChildAlignment.Center}
+                                                    className="bg-base-100/80 p-2"
+                                                >
+                                                    <Button
+                                                        imageOnly
+                                                        className="du-btn-ghost"
+                                                        data-tooltip="Display Options"
+                                                        onClick={this.handleDisplayOptionsClick}
+                                                    >
+                                                        <Icon
+                                                            src={Codicon.Gear}
+                                                            data-tooltip="inherit"
+                                                        />
+                                                    </Button>
+                                                    <Button
+                                                        id="scoreLibraryButton"
+                                                        imageOnly
+                                                        className="du-btn-ghost"
+                                                        data-tooltip="Score Library"
+                                                        onClick={this.handleScoreLibraryClick}
+                                                    >
+                                                        <Icon
+                                                            src={Codicon.Library}
+                                                            data-tooltip="inherit"
+                                                        />
+                                                    </Button>
+                                                    <Button
+                                                        id="instrumentEditor"
+                                                        imageOnly
+                                                        className="du-btn-ghost"
+                                                        data-tooltip="Instrument Editor"
+                                                        disabled
+                                                        onClick={this.handleInstrumentEditorClick}
+                                                    >
+                                                        <Icon
+                                                            src={timbauImage}
+                                                            width={24}
+                                                            height={24}
+                                                            data-tooltip="inherit"
+                                                        />
+                                                    </Button>
+                                                    <Button
+                                                        id="printButton"
+                                                        imageOnly
+                                                        className="du-btn-ghost"
+                                                        data-tooltip="Print / Export to PDF"
+                                                        onClick={this.handlePrintClick}
+                                                    >
+                                                        <Icon
+                                                            src={Codicon.FilePdf}
+                                                            data-tooltip="inherit"
+                                                        />
+                                                    </Button>
+                                                    {this.dataModel.authenticated ? (
+                                                        <Dropdown
+                                                            id="userMenu"
+                                                            icon={<Icon src={Codicon.Account} />}
+                                                            items={this.buildUserMenuItems()}
+                                                            closeOnSelect
+                                                            style={{ backgroundColor: isAdmin ? "tomato" : undefined }}
+                                                        />
+                                                    ) : (
+                                                        <Button
+                                                            id="signInButton"
+                                                            imageOnly
+                                                            className="du-btn-ghost"
+                                                            data-tooltip="Sign In"
+                                                            onClick={this.handleSignInClick}
+                                                        >
+                                                            <Icon
+                                                                src={Codicon.SignIn}
+                                                                data-tooltip="inherit"
+                                                            />
+                                                        </Button>
+                                                    )}
+                                                </Container>
+                                                <Container
+                                                    id="appTitleContainer"
+                                                    orientation={Orientation.TopDown}
+                                                    crossAlignment={ChildAlignment.Stretch}
+                                                >
+                                                    <Container>
+                                                        <img id="titleLogo" src="/logo.svg" />
+                                                        <Label className="appTitle top faded">ANIMADA</Label>
+                                                    </Container>
+                                                    <Container>
+                                                        <Label className="appTitle bottom faded">Score</Label>
+                                                        <Label className="appTitle bottom accent">Book</Label>
+                                                    </Container>
 
+                                                </Container>
+                                                <ArrangementPlayControls
+                                                    arrangementPlayer={this.arrangementPlayer!}
+                                                    dataModel={this.dataModel}
+                                                    services={this.services}
+                                                    undoManager={this.undoManager!}
+                                                />
+                                                <Container
+                                                    id="arrangementPalette"
+                                                    orientation={Orientation.TopDown}
+                                                    mainAlignment={ChildAlignment.Start}
+                                                    crossAlignment={ChildAlignment.Stretch}
+                                                >
+                                                    {titleBlock}
+                                                    {displayMode === DisplayMode.Editing && <ArrangementEditControls
+                                                        dataModel={this.dataModel}
+                                                        services={this.services}
+                                                        undoManager={this.undoManager!}
+                                                    />}
+                                                </Container>
+                                            </Container>
                                         </Container>
-                                        <ArrangementPlayControls
-                                            arrangementPlayer={this.arrangementPlayer!}
+                                    }
+                                    collapsedTop={
+                                        <Container
+                                            className="collapsed-header"
+                                            orientation={Orientation.LeftToRight}
+                                            crossAlignment={ChildAlignment.Center}
+                                        >
+                                            <PlayStopButton
+                                                id="standalonePlayButton"
+                                                arrangementPlayer={this.arrangementPlayer!}
+                                            />
+                                            {titleBlock}
+                                        </Container>
+                                    }
+                                    bottom={
+                                        this.arrangementPlayer && <ArrangementViewer
+                                            arrangementPlayer={this.arrangementPlayer}
                                             dataModel={this.dataModel}
                                             services={this.services}
                                             undoManager={this.undoManager!}
+                                            touchEditingEnabled={displayMode === DisplayMode.Editing}
                                         />
-                                        <Container
-                                            id="arrangementPalette"
-                                            orientation={Orientation.TopDown}
-                                            mainAlignment={ChildAlignment.Start}
-                                            crossAlignment={ChildAlignment.Stretch}
-                                        >
-                                            {titleBlock}
-                                            {displayMode === DisplayMode.Editing && <ArrangementEditControls
-                                                dataModel={this.dataModel}
-                                                services={this.services}
-                                                undoManager={this.undoManager!}
-                                            />}
-                                        </Container>
-                                    </Container>
-                                </Container>
-                            }
-                            collapsedTop={
-                                <Container
-                                    className="collapsed-header"
-                                    orientation={Orientation.LeftToRight}
-                                    crossAlignment={ChildAlignment.Center}
-                                >
-                                    <PlayStopButton
-                                        id="standalonePlayButton"
-                                        arrangementPlayer={this.arrangementPlayer!}
-                                    />
-                                    {titleBlock}
-                                </Container>
-                            }
-                            bottom={
-                                this.arrangementPlayer && <ArrangementViewer
-                                    arrangementPlayer={this.arrangementPlayer}
-                                    dataModel={this.dataModel}
-                                    services={this.services}
-                                    undoManager={this.undoManager!}
-                                    touchEditingEnabled={displayMode === DisplayMode.Editing}
+                                    }
+                                    forceExpanded={headerPinned}
                                 />
-                            }
-                            forceExpanded={headerPinned}
+                            </DrawerSidebar>
+                            {renderStatusBar()}
+                            {renderNotificationCenter()}
+                        </Container>
+                        <TooltipProvider />
+                        <ValueDialog ref={this.valueDialogRef} />
+                        <ConfirmDialog ref={this.confirmDialogRef} />
+                        <SettingsDialog ref={this.settingsDialogRef} />
+                        <BackendDisconnectedDialog
+                            ref={this.backendDisconnectedDialogRef}
+                            onReconnected={() => {
+                                // The app continues normally — nothing special needed.
+                            }}
                         />
-                    </DrawerSidebar>
-                    {renderStatusBar()}
-                    {renderNotificationCenter()}
-                </Container>
-                <TooltipProvider />
-                <ValueDialog ref={this.valueDialogRef} />
-                <ConfirmDialog ref={this.confirmDialogRef} />
-                <SettingsDialog ref={this.settingsDialogRef} />
-                <BackendSetupDialog
-                    ref={this.backendSetupDialogRef}
-                    onSetupComplete={() => {
-                        void this.handleBackendSetupComplete();
-                    }}
-                />
-                <BackendDisconnectedDialog
-                    ref={this.backendDisconnectedDialogRef}
-                    onReconnected={() => {
-                        // The app continues normally — nothing special needed.
-                    }}
-                />
-                <PrintDialog ref={this.printDialogRef} onAccept={this.handlePrintAccept} />
-                {
-                    this.state.printing && this.dataModel.arrangement && this.state.printOptions
-                    && this.arrangementPlayer && this.undoManager && (
-                        <PrintView
-                            arrangement={this.dataModel.arrangement as Arrangement}
-                            options={this.state.printOptions}
+                        <LoginDialog
+                            ref={this.loginDialogRef}
                             dataModel={this.dataModel}
-                            arrangementPlayer={this.arrangementPlayer}
-                            services={this.services}
-                            undoManager={this.undoManager}
+                            onLoginSuccess={this.handleLoginSuccess}
+                            onContinueAnonymous={this.handleContinueAnonymous}
                         />
-                    )
-                }
-            </ErrorBoundary>
+                        <BackendSetupDialog
+                            ref={this.backendSetupDialogRef}
+                            onSetupComplete={() => {
+                                void this.handleBackendSetupComplete();
+                            }}
+                        />
+                        <PrintDialog ref={this.printDialogRef} onAccept={this.handlePrintAccept} />
+                        <UserGroupEditor
+                            ref={this.userGroupEditorRef}
+                            dataModel={this.dataModel}
+                            showUsers={this.dataModel.user?.isAdmin === true}
+                        />
+                        <PermissionEditor
+                            ref={this.permissionEditorRef}
+                            dataModel={this.dataModel}
+                            onSaved={(entry) => {
+                                void requisitions.execute("permChanged", entry);
+                            }}
+                        />
+                        {
+                            this.state.printing && this.dataModel.arrangement && this.state.printOptions
+                            && this.arrangementPlayer && this.undoManager && (
+                                <PrintView
+                                    arrangement={this.dataModel.arrangement as Arrangement}
+                                    options={this.state.printOptions}
+                                    dataModel={this.dataModel}
+                                    arrangementPlayer={this.arrangementPlayer}
+                                    services={this.services}
+                                    undoManager={this.undoManager}
+                                />
+                            )
+                        }
+                    </ErrorBoundary>
+                )}
+
+                {phase === AppPhase.Checking && (
+                    <div className="progressIndicatorCard" style={{
+                        position: "fixed", inset: 0, display: "flex",
+                        justifyContent: "center", alignItems: "center",
+                    }}>
+                        <ProgressIndicator />
+                    </div>
+                )}
+
+                <Container
+                    id="splashScreen"
+                    className={phase === AppPhase.Setup || phase === AppPhase.AdminSetup
+                        || phase === AppPhase.Login ? "splash-visible" : ""}
+                    orientation={Orientation.TopDown}
+                    mainAlignment={ChildAlignment.Center}
+                    crossAlignment={ChildAlignment.Center}
+                >
+                    {!isRunning && splashContent}
+                </Container>
+            </>
         );
     }
 
@@ -417,22 +560,45 @@ export class App extends UIComponent<{}, IAppState> {
      */
     private async checkBackendThenInitialize(): Promise<void> {
         let initialized = false;
+        let anyUsers = false;
 
         try {
             const res = await fetch("/api?action=health");
-            const data = await res.json() as { status: string; initialized: boolean; };
+            const data = await res.json() as { status: string; initialized: boolean; hasUsers: boolean; };
             initialized = data.initialized;
+            anyUsers = data.hasUsers;
         } catch {
-            // Backend not reachable — show setup dialog.
+            // Backend not reachable.
         }
 
         if (!initialized) {
-            this.backendSetupDialogRef.current?.open();
+            this.setState({ phase: AppPhase.Setup }, () => {
+                this.backendSetupDialogRef.current?.open();
+            });
 
             return;
         }
 
-        await this.initializeApp();
+        if (!anyUsers) {
+            this.setState({ phase: AppPhase.AdminSetup }, () => {
+                this.adminSetupDialogRef.current?.open();
+            });
+
+            return;
+        }
+
+        const sessionRestored = await this.dataModel.restoreSession();
+        // ...rest same
+
+        if (sessionRestored) {
+            await this.initializeApp();
+
+            return;
+        }
+
+        this.setState({ phase: AppPhase.Login }, () => {
+            this.loginDialogRef.current?.open();
+        });
     }
 
     /**
@@ -446,17 +612,77 @@ export class App extends UIComponent<{}, IAppState> {
         return Promise.resolve(true);
     };
 
+    private handleAuthChanged = (): Promise<boolean> => {
+        if (!this.dataModel.authenticated && this.state.phase === AppPhase.Running) {
+            this.setState({ phase: AppPhase.Login }, () => {
+                this.loginDialogRef.current?.open();
+            });
+        } else {
+            this.forceUpdate();
+        }
+
+        return Promise.resolve(true);
+    };
+
+    private handleLoginSuccess = (): void => {
+        this.signInFromRunning = false;
+        void this.initializeApp().then(() => {
+            const group = this.dataModel.activeGroup;
+            const message = group
+                ? `Signed in as "${group.name}" (shared access)`
+                : `Signed in as ${this.dataModel.user?.displayName ?? this.dataModel.user?.username}`;
+            void requisitions.execute("showInfo", message);
+        });
+    };
+
+    /**
+     * Called when the user chooses to continue without logging in.
+     * Hides the login dialog. The app continues with anonymous capabilities.
+     */
+    private handleContinueAnonymous = (): void => {
+        if (this.signInFromRunning) {
+            this.signInFromRunning = false;
+            this.setState({ phase: AppPhase.Running });
+
+            return;
+        }
+
+        void this.initializeApp();
+    };
+
     /**
      * Called when the backend setup dialog is closed.
      * If setup completed successfully, proceed with app initialisation.
      */
+    private handleAdminSetupComplete = (): void => {
+        void this.initializeApp();
+    };
+
     private handleBackendSetupComplete = async (): Promise<void> => {
         try {
             const res = await fetch("/api?action=health");
-            const data = await res.json() as { status: string; initialized: boolean; };
+            const data = await res.json() as { status: string; initialized: boolean; hasUsers: boolean; };
 
             if (data.initialized) {
-                await this.initializeApp();
+                if (!data.hasUsers) {
+                    this.setState({ phase: AppPhase.AdminSetup }, () => {
+                        this.adminSetupDialogRef.current?.open();
+                    });
+
+                    return;
+                }
+
+                const sessionRestored = await this.dataModel.restoreSession();
+
+                if (sessionRestored) {
+                    await this.initializeApp();
+
+                    return;
+                }
+
+                this.setState({ phase: AppPhase.Login }, () => {
+                    this.loginDialogRef.current?.open();
+                });
 
                 return;
             }
@@ -472,8 +698,9 @@ export class App extends UIComponent<{}, IAppState> {
         const hasBananaDrum = params.has("a") || params.has("a2");
 
         this.loadScorebook(hasBananaDrum ? params : undefined);
-        this.setState({ ready: true }, () => {
-            Statusbar.setStatusBarMessage("App loaded", 5000);
+
+        this.setState({ phase: AppPhase.Running }, () => {
+            Statusbar.setStatusBarMessage("App loaded", 3000);
         });
     }
 
@@ -494,6 +721,80 @@ export class App extends UIComponent<{}, IAppState> {
     private handlePrintClick = () => {
         this.openPrintDialog();
     };
+
+    private handleSignInClick = () => {
+        this.signInFromRunning = true;
+        this.setState({ phase: AppPhase.Login }, () => {
+            this.loginDialogRef.current?.open();
+        });
+    };
+
+    private handleLogoutClick = async () => {
+        await this.dataModel.logout();
+        this.dataModel.reset();
+
+        // Dispose player and undo manager so they don't hold stale references.
+        if (this.arrangementPlayer) {
+            requisitions.unregister("timeParamsChanged", this.handleTimeParamsChange);
+            this.arrangementPlayer.dispose();
+            this.arrangementPlayer = undefined;
+        }
+
+        this.undoManager = undefined;
+
+        // Clear status bar item references — they belong to the old (now-unmounted) Statusbar.
+        this.statsItem = undefined;
+        this.notificationItem = undefined;
+
+        this.setState({ phase: AppPhase.Login }, () => {
+            this.loginDialogRef.current?.open();
+        });
+    };
+
+    private buildUserMenuItems(): IDropdownItem[] {
+        const { user, activeGroup } = this.dataModel;
+        const items: IDropdownItem[] = [];
+
+        if (activeGroup) {
+            items.push({
+                label: activeGroup.name,
+                icon: <Icon src={Codicon.Organization} />,
+            });
+        } else {
+            items.push({
+                label: user?.displayName ?? user?.username ?? "",
+                icon: <Icon src={Codicon.Account} />,
+            });
+        }
+
+        if (user?.isAdmin) {
+            items.push({
+                label: "Users & Groups",
+                icon: <Icon src={Codicon.Organization} />,
+                onClick: () => {
+                    this.userGroupEditorRef.current?.open();
+                },
+            });
+        } else if (user) {
+            items.push({
+                label: "My Groups",
+                icon: <Icon src={Codicon.Organization} />,
+                onClick: () => {
+                    this.userGroupEditorRef.current?.open();
+                },
+            });
+        }
+
+        items.push({
+            label: "Sign Out",
+            icon: <Icon src={Codicon.SignOut} />,
+            onClick: () => {
+                void this.handleLogoutClick();
+            },
+        });
+
+        return items;
+    }
 
     private openPrintDialog(): void {
         if (!this.dataModel.arrangement) {
@@ -828,6 +1129,23 @@ export class App extends UIComponent<{}, IAppState> {
                 break;
             }
 
+            case "managePerm": {
+                if (!this.permissionEditorRef.current) {
+                    return false;
+                }
+
+                const row = document.querySelector<HTMLElement>(
+                    `.scoreTreeEntry[data-entry-type="${String(data.type)}"][data-entry-id="${data.id}"]`,
+                );
+
+                if (row) {
+                    const rowRect = row.getBoundingClientRect();
+                    void this.permissionEditorRef.current.open(rowRect, data);
+                }
+
+                return false;
+            }
+
             default:
         };
 
@@ -914,24 +1232,6 @@ export class App extends UIComponent<{}, IAppState> {
                 Overlay.closeAllOverlays();
                 this.services.selectionManager.clearSelection();
                 this.services.modeManager.deletePolyrhythmMode = false;
-
-                break;
-            }
-
-            case " ": {
-                if (this.arrangementPlayer) {
-                    if (this.arrangementPlayer.state === "stopped") {
-                        if (this.currentPlayRange) {
-                            void this.arrangementPlayer.playBars(this.currentPlayRange.startBar,
-                                this.currentPlayRange.endBar - this.currentPlayRange.startBar + 1);
-                        } else {
-                            void this.arrangementPlayer.play();
-                        }
-                    } else {
-                        this.arrangementPlayer.stop();
-                    }
-                }
-                event.preventDefault(); // This is to prevent spaces getting written in number inputs
 
                 break;
             }
