@@ -250,11 +250,15 @@ export const createRefreshToken = (): { raw: string; hash: string; maxAge: numbe
  * @returns The userId and new raw token if valid, or undefined.
  */
 export const verifyAndRotateRefreshToken = async (adapter: IDatabaseAdapter,
-    rawToken: string,): Promise<{ userId: number; newRawToken: string; } | undefined> => {
+    rawToken: string,): Promise<{
+        userId: number; newRawToken: string; authType?: string; groupId?: number;
+    } | undefined> => {
     const hash = crypto.createHash("sha256").update(rawToken).digest("hex");
 
-    const rows = await adapter.query<{ id: number; }>(
-        "SELECT id FROM users WHERE refresh_token_hash = ?",
+    const rows = await adapter.query<{
+        id: number; auth_type: string | null; group_id: number | null;
+    }>(
+        "SELECT id, auth_type, group_id FROM users WHERE refresh_token_hash = ?",
         [hash],
     );
 
@@ -264,13 +268,43 @@ export const verifyAndRotateRefreshToken = async (adapter: IDatabaseAdapter,
         return undefined;
     }
 
-    const userId = rows[0].id;
+    const { id: userId, auth_type: authType, group_id: groupId } = rows[0];
     const newRaw = crypto.randomBytes(32).toString("hex");
     const newHash = crypto.createHash("sha256").update(newRaw).digest("hex");
 
     await adapter.execute("UPDATE users SET refresh_token_hash = ? WHERE id = ?", [newHash, userId]);
 
-    return { userId, newRawToken: newRaw };
+    return {
+        userId,
+        newRawToken: newRaw,
+        authType: authType ?? undefined,
+        groupId: groupId ?? undefined,
+    };
+};
+
+export enum LoginAuditEvent {
+    Login = "login",
+    GroupLogin = "group_login",
+    Refresh = "refresh",
+    Logout = "logout",
+}
+
+/**
+ * Records a login audit event.
+ *
+ * @param adapter   The database adapter.
+ * @param userId    The user ID.
+ * @param event     The type of login event.
+ * @param groupId   The group ID (only for group_login events).
+ * @param ipAddress The client IP address (optional).
+ */
+export const recordLoginAudit = async (adapter: IDatabaseAdapter, userId: number, event: LoginAuditEvent,
+    groupId?: number, ipAddress?: string): Promise<void> => {
+    await adapter.execute(
+        `INSERT INTO login_audit (user_id, event, group_id, ip_address)
+         VALUES (?, ?, ?, ?)`,
+        [userId, event, groupId ?? null, ipAddress ?? null],
+    );
 };
 
 /**

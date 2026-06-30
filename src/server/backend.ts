@@ -16,7 +16,7 @@ import {
     adminGroupName, worldGroupName, getWorldGroupId,
     buildCapabilities, checkPermission, createAccessToken, createRefreshToken,
     getPermissionSummary, hashPassword,
-    hasUsers, isUserInAdminGroup, refreshTokenExpirySeconds,
+    hasUsers, isUserInAdminGroup, LoginAuditEvent, recordLoginAudit, refreshTokenExpirySeconds,
     setOwner, addEntityGroup, removeEntityGroup, getExplicitEntityGroups, getExplicitOwner,
     verifyAndRotateRefreshToken, verifyPassword, verifyToken,
     AccessLevel,
@@ -91,6 +91,18 @@ const createAdapter = (): IDatabaseAdapter => {
     }
 };
 
+// ---------- Network helpers ----------
+
+const getClientIp = (req: IncomingMessage): string | undefined => {
+    const forwarded = getHeader(req, "x-forwarded-for");
+
+    if (forwarded) {
+        return forwarded.split(",")[0].trim() || undefined;
+    }
+
+    return req.socket.remoteAddress ?? undefined;
+};
+
 // ---------- JSON helpers ----------
 
 const sendJson = (res: ServerResponse, data: unknown, status = 200): void => {
@@ -103,11 +115,22 @@ const sendError = (res: ServerResponse, message: string, status = 400): void => 
     sendJson(res, { error: message }, status);
 };
 
-const readJsonBody = (req: IncomingMessage): Promise<Record<string, unknown>> => {
+const readJsonBody = (req: IncomingMessage, maxSize = 10 * 1024 * 1024): Promise<Record<string, unknown>> => {
     return new Promise((resolve, reject) => {
         const chunks: Buffer[] = [];
+        let totalSize = 0;
 
         req.on("data", (chunk: Buffer) => {
+            totalSize += chunk.length;
+
+            if (totalSize > maxSize) {
+                req.destroy();
+
+                reject(new Error("Request body too large"));
+
+                return;
+            }
+
             chunks.push(chunk);
         });
         req.on("end", () => {
@@ -471,6 +494,14 @@ const seedIfExists = async (targetAdapter: IDatabaseAdapter): Promise<void> => {
 };
 
 const handleTestConnection = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
+    const user = getAuthUser(req);
+
+    if (!user || !(await isUserInAdminGroup(adapter, user.userId))) {
+        sendError(res, "Forbidden", 403);
+
+        return;
+    }
+
     const body = await readJsonBody(req);
 
     const testConfig: IDatabaseConfig = {
@@ -976,11 +1007,13 @@ const handleLogin = async (req: IncomingMessage, res: ServerResponse): Promise<v
     const accessToken = createAccessToken(payload);
     const refreshToken = createRefreshToken();
 
-    // Store the hash in the database for rotation.
+    // Store the hash in the database for rotation. Normal login: no group context.
     await adapter.execute(
-        "UPDATE users SET refresh_token_hash = ?, last_login = NOW() WHERE id = ?",
+        "UPDATE users SET refresh_token_hash = ?, auth_type = NULL, group_id = NULL WHERE id = ?",
         [refreshToken.hash, user.id],
     );
+
+    await recordLoginAudit(adapter, user.id, LoginAuditEvent.Login, undefined, getClientIp(req));
 
     setRefreshTokenCookie(res, refreshToken.raw, refreshToken.maxAge);
 
@@ -1056,9 +1089,11 @@ const handleGroupLogin = async (req: IncomingMessage, res: ServerResponse): Prom
     const refreshToken = createRefreshToken();
 
     await adapter.execute(
-        "UPDATE users SET refresh_token_hash = ?, last_login = NOW() WHERE id = ?",
-        [refreshToken.hash, anon.id],
+        "UPDATE users SET refresh_token_hash = ?, auth_type = 'group', group_id = ? WHERE id = ?",
+        [refreshToken.hash, group.id, anon.id],
     );
+
+    await recordLoginAudit(adapter, anon.id, LoginAuditEvent.GroupLogin, group.id, getClientIp(req));
 
     // Update group last_login.
     await adapter.execute(
@@ -1120,28 +1155,11 @@ const handleRefresh = async (req: IncomingMessage, res: ServerResponse): Promise
     const user = rows[0];
     const admin = await isUserInAdminGroup(adapter, user.id);
 
-    // Preserve group-login info from the old access token, or from custom headers
-    // (sessionStorage backup for page reloads where the in-memory token is lost).
-    const authHeader = req.headers.authorization;
-    let authType: string | undefined;
-    let groupId: number | undefined;
-
-    if (authHeader?.startsWith("Bearer ")) {
-        const oldPayload = verifyToken(authHeader.slice(7));
-
-        if (oldPayload?.authType === "group") {
-            authType = oldPayload.authType;
-            groupId = oldPayload.groupId;
-        }
-    }
-
-    const headerAuthType = req.headers["x-auth-type"];
-    const headerGroupId = req.headers["x-group-id"];
-
-    if (!authType && headerAuthType === "group" && headerGroupId) {
-        authType = "group";
-        groupId = Number(headerGroupId);
-    }
+    // Restore group-login context from the database (set during handleLogin/handleGroupLogin).
+    // Never trust client-provided headers — they were only needed as a backup before this data
+    // was persisted server-side. The sessionStorage fallback on the frontend can now be removed.
+    const authType = result.authType;
+    const groupId = result.groupId;
 
     const accessToken = createAccessToken({
         userId: user.id,
@@ -1153,10 +1171,18 @@ const handleRefresh = async (req: IncomingMessage, res: ServerResponse): Promise
 
     setRefreshTokenCookie(res, result.newRawToken, refreshTokenExpirySeconds);
 
+    await recordLoginAudit(adapter, user.id, LoginAuditEvent.Refresh, groupId, getClientIp(req));
+
     sendJson(res, { token: accessToken });
 };
 
-const handleLogout = (req: IncomingMessage, res: ServerResponse): void => {
+const handleLogout = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
+    const user = getAuthUser(req);
+
+    if (user) {
+        await recordLoginAudit(adapter, user.userId, LoginAuditEvent.Logout, undefined, getClientIp(req));
+    }
+
     clearRefreshTokenCookie(res);
     sendJson(res, { success: true });
 };
@@ -1387,15 +1413,16 @@ const handleCreateInitialAdmin = async (req: IncomingMessage, res: ServerRespons
 const handleListUsers = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
     const user = getAuthUser(req);
 
-    if (!user) {
+    if (!user || !(await isUserInAdminGroup(adapter, user.userId))) {
         sendError(res, "Forbidden", 403);
 
         return;
     }
 
     const rows = await adapter.query(
-        `SELECT u.id, u.username, u.display_name, u.last_login, u.created_at, u.updated_at,
-                (ug.user_id IS NOT NULL) AS is_admin
+        `SELECT u.id, u.username, u.display_name, u.created_at, u.updated_at,
+                (ug.user_id IS NOT NULL) AS is_admin,
+                (SELECT MAX(la.created_at) FROM login_audit la WHERE la.user_id = u.id) AS last_login
          FROM users u
          LEFT JOIN user_groups ug ON u.id = ug.user_id
              AND ug.group_id = (SELECT id FROM \`groups\` WHERE name = ?)
@@ -1726,6 +1753,15 @@ const handleUpdateGroup = async (req: IncomingMessage, res: ServerResponse): Pro
         ? (typeof body.password === "string" && body.password ? body.password : null)
         : undefined;
     const adminId = body.adminId !== undefined ? (Number(body.adminId) || null) : undefined;
+
+    // Only full admins can reassign group ownership.
+    if (adminId !== undefined) {
+        if (!await isUserInAdminGroup(adapter, user.userId)) {
+            sendError(res, "Only admins can change the group owner.", 403);
+
+            return;
+        }
+    }
 
     if (!name && description === undefined && color === undefined
         && password === undefined && adminId === undefined) {
@@ -2295,14 +2331,27 @@ interface IMultipartPart {
 /**
  * Reads the full raw request body.
  *
- * @param req The incoming HTTP request.
+ * @param req     The incoming HTTP request.
+ * @param maxSize Maximum allowed body size in bytes (default 50 MB).
+ *
  * @returns The full body as a Buffer.
  */
-const readRawBody = (req: IncomingMessage): Promise<Buffer> => {
+const readRawBody = (req: IncomingMessage, maxSize = 50 * 1024 * 1024): Promise<Buffer> => {
     return new Promise((resolve, reject) => {
         const chunks: Buffer[] = [];
+        let totalSize = 0;
 
         req.on("data", (chunk: Buffer) => {
+            totalSize += chunk.length;
+
+            if (totalSize > maxSize) {
+                req.destroy();
+
+                reject(new Error("Request body too large"));
+
+                return;
+            }
+
             chunks.push(chunk);
         });
         req.on("end", () => {
@@ -2529,7 +2578,7 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse): Promise
                     break;
 
                 case "logout":
-                    handleLogout(req, res);
+                    await handleLogout(req, res);
 
                     break;
 

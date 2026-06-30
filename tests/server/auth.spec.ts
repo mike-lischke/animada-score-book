@@ -6,7 +6,7 @@
 import { describe, expect, it } from "vitest";
 
 import { createAccessToken, createRefreshToken, verifyToken } from "../../src/server/auth.js";
-import { AccessLevel, adminGroupName, worldGroupName, EntityType } from "../../src/server/auth.js";
+import { AccessLevel, adminGroupName, worldGroupName, EntityType, LoginAuditEvent } from "../../src/server/auth.js";
 
 describe("auth — JWT", () => {
     it("round-trip: access token", () => {
@@ -63,5 +63,20 @@ describe("auth — Constants", () => {
         expect(EntityType.Score).toBe("score");
         expect(EntityType.Folder).toBe("folder");
         expect(EntityType.Feature).toBe("feature");
+    });
+});
+
+describe("auth — LoginAuditEvent", () => {
+    it("has four event types with correct string values", () => {
+        expect(LoginAuditEvent.Login).toBe("login");
+        expect(LoginAuditEvent.GroupLogin).toBe("group_login");
+        expect(LoginAuditEvent.Refresh).toBe("refresh");
+        expect(LoginAuditEvent.Logout).toBe("logout");
+    });
+
+    it("all enum values are unique", () => {
+        const values = Object.values(LoginAuditEvent);
+
+        expect(new Set(values).size).toBe(values.length);
     });
 });
