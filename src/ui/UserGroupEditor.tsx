@@ -236,7 +236,7 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
                     })
                     : undefined;
                 const isSet = admin !== undefined;
-                const badgeColor = isSet ? (group.color || "#808080") : "#6b7280";
+                const badgeColor = isSet ? userBadgeColor(admin.id) : "#6b7280";
                 const background = isSet ? badgeColor + "80" : "transparent";
                 const label = isSet ? (admin.displayName || admin.username) : "No admin";
 
@@ -1462,4 +1462,19 @@ const isLightHex = (hex: string): boolean => {
     const luminance = (0.2126 * r) + (0.7152 * g) + (0.0722 * b);
 
     return luminance > 0.5;
+};
+
+const userBadgeColors = [
+    "#e06c75", "#d19a66", "#e5c07b", "#98c379", "#56b6c2",
+    "#61afef", "#c678dd", "#be5046", "#7ec8a0", "#e091ca",
+    "#5cacee", "#a9cce3", "#c39bd3", "#f0b27a", "#82e0aa",
+];
+
+/**
+ * @param userId The user's ID.
+ *
+ * @returns A consistent badge color for the given user.
+ */
+const userBadgeColor = (userId: number): string => {
+    return userBadgeColors[userId % userBadgeColors.length];
 };

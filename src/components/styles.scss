@@ -534,7 +534,7 @@
 
 .staff-note-viewer-final-barline {
     position: absolute;
-    top: 50%;
+    top: calc(50% + 32px);
     right: 0;
     width: 6px;
     height: var(--staff-barline-height);
