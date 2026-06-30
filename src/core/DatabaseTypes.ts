@@ -18,9 +18,10 @@ export interface ISoundLibFsNode {
 /** Permission summary for the current user on a score or folder, as returned by the backend. */
 export interface IPermissionDBEntry {
     isOwner: boolean;
-    isGroup: boolean;
+    canRead: boolean;
+    canWrite: boolean;
     isWorld: boolean;
-    permBits: number;
+    groupIds: number[];
 }
 
 /** Structure of a score lib folder entry as returned by the REST endpoint. */

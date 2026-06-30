@@ -13,10 +13,13 @@ import { extname, join, resolve } from "node:path";
 
 import { convertErrorToString } from "../core/utils.js";
 import {
-    adminGroupName, buildCapabilities, checkPermission, createAccessToken, createRefreshToken,
+    adminGroupName, worldGroupName, getWorldGroupId,
+    buildCapabilities, checkPermission, createAccessToken, createRefreshToken,
     getPermissionSummary, hashPassword,
-    hasUsers, isUserInAdminGroup, makePermBits, Permission, refreshTokenExpirySeconds, setPermissions,
+    hasUsers, isUserInAdminGroup, refreshTokenExpirySeconds,
+    setOwner, addEntityGroup, removeEntityGroup, getExplicitEntityGroups, getExplicitOwner,
     verifyAndRotateRefreshToken, verifyPassword, verifyToken,
+    AccessLevel,
     type ITokenPayload,
 } from "./auth.js";
 import { DatabaseEngine, type IDatabaseAdapter, type IDatabaseConfig } from "./database.js";
@@ -568,8 +571,8 @@ const handleListScoreFolderContent = async (req: IncomingMessage, res: ServerRes
             readableFolders.push({
                 ...f,
                 perm: {
-                    isOwner: summary.isOwner, isGroup: summary.isGroup, isWorld: summary.isWorld,
-                    permBits: summary.permBits,
+                    isOwner: summary.isOwner, canRead: summary.canRead, canWrite: summary.canWrite,
+                    isWorld: summary.isWorld, groupIds: summary.groupIds,
                 },
             });
         }
@@ -583,8 +586,8 @@ const handleListScoreFolderContent = async (req: IncomingMessage, res: ServerRes
             readableScores.push({
                 ...s,
                 perm: {
-                    isOwner: summary.isOwner, isGroup: summary.isGroup, isWorld: summary.isWorld,
-                    permBits: summary.permBits,
+                    isOwner: summary.isOwner, canRead: summary.canRead, canWrite: summary.canWrite,
+                    isWorld: summary.isWorld, groupIds: summary.groupIds,
                 },
             });
         }
@@ -607,7 +610,7 @@ const handleAddScoreFolder = async (req: IncomingMessage, res: ServerResponse): 
 
     // Check write permission on parent folder (or require auth for root).
     if (parentId !== null && parentId !== -1) {
-        const allowed = await checkPermission(adapter, user, "folder", parentId, Permission.W);
+        const allowed = await checkPermission(adapter, user, "folder", parentId, AccessLevel.Write);
 
         if (!allowed) {
             sendError(res, "Forbidden", 403);
@@ -625,12 +628,17 @@ const handleAddScoreFolder = async (req: IncomingMessage, res: ServerResponse): 
         [parentId === -1 ? null : parentId, name],
     );
 
-    // Assign default permissions for root-level folders only.
+    // Assign the creator as owner for root-level folders only.
     // Nested folders inherit from their parent.
     if (user && (parentId === null || parentId === -1)) {
-        const permBits = makePermBits(Permission.RWX, Permission.RX, Permission.R);
+        await setOwner(adapter, "folder", result.insertId, user.userId);
 
-        await setPermissions(adapter, "folder", result.insertId, user.userId, null, permBits);
+        // Also assign to the World group for public readability by default.
+        const worldId = await getWorldGroupId(adapter);
+
+        if (worldId !== undefined) {
+            await addEntityGroup(adapter, "folder", result.insertId, worldId, false);
+        }
     }
 
     sendJson(res, { success: true, id: result.insertId });
@@ -651,7 +659,7 @@ const handleAddScore = async (req: IncomingMessage, res: ServerResponse): Promis
 
     // Check write permission on parent folder (or require auth for root).
     if (folderId !== null && folderId !== -1) {
-        const allowed = await checkPermission(adapter, user, "folder", folderId, Permission.W);
+        const allowed = await checkPermission(adapter, user, "folder", folderId, AccessLevel.Write);
 
         if (!allowed) {
             sendError(res, "Forbidden", 403);
@@ -669,12 +677,16 @@ const handleAddScore = async (req: IncomingMessage, res: ServerResponse): Promis
         [folderId === -1 ? null : folderId, name, content],
     );
 
-    // Assign default permissions for root-level scores only.
+    // Assign the creator as owner for root-level scores only.
     // Nested scores inherit from their parent folder.
     if (user && (folderId === null || folderId === -1)) {
-        const permBits = makePermBits(Permission.RWX, Permission.RX, Permission.R);
+        await setOwner(adapter, "score", result.insertId, user.userId);
 
-        await setPermissions(adapter, "score", result.insertId, user.userId, null, permBits);
+        const worldId = await getWorldGroupId(adapter);
+
+        if (worldId !== undefined) {
+            await addEntityGroup(adapter, "score", result.insertId, worldId, false);
+        }
     }
 
     sendJson(res, { success: true, id: result.insertId });
@@ -699,7 +711,7 @@ const handleRenameEntry = async (req: IncomingMessage, res: ServerResponse): Pro
         return;
     }
 
-    const allowed = await checkPermission(adapter, user, type, id, Permission.W);
+    const allowed = await checkPermission(adapter, user, type, id, AccessLevel.Write);
 
     if (!allowed) {
         sendError(res, "Forbidden", 403);
@@ -726,7 +738,7 @@ const handleUpdateScore = async (req: IncomingMessage, res: ServerResponse): Pro
         return;
     }
 
-    const allowed = await checkPermission(adapter, user, "score", id, Permission.W);
+    const allowed = await checkPermission(adapter, user, "score", id, AccessLevel.Write);
 
     if (!allowed) {
         sendError(res, "Forbidden", 403);
@@ -751,7 +763,7 @@ const handleDelete = async (req: IncomingMessage, res: ServerResponse): Promise<
         return;
     }
 
-    const allowed = await checkPermission(adapter, user, type, id, Permission.W);
+    const allowed = await checkPermission(adapter, user, type, id, AccessLevel.Write);
 
     if (!allowed) {
         sendError(res, "Forbidden", 403);
@@ -761,9 +773,12 @@ const handleDelete = async (req: IncomingMessage, res: ServerResponse): Promise<
 
     if (type === "score") {
         await adapter.execute("DELETE FROM scores WHERE id = ?", [id]);
-        // Also delete the permission entry.
+        // Also delete the permission and entity_groups entries.
         await adapter.execute(
             "DELETE FROM permissions WHERE entity_type = 'score' AND entity_id = ?", [id],
+        );
+        await adapter.execute(
+            "DELETE FROM entity_groups WHERE entity_type = 'score' AND entity_id = ?", [id],
         );
         sendJson(res, { success: true });
 
@@ -795,9 +810,12 @@ const handleDelete = async (req: IncomingMessage, res: ServerResponse): Promise<
 
         // Remove the folder itself.
         await adapter.execute("DELETE FROM folders WHERE id = ?", [id]);
-        // Also delete the permission entry.
+        // Also delete the permission and entity_groups entries.
         await adapter.execute(
             "DELETE FROM permissions WHERE entity_type = 'folder' AND entity_id = ?", [id],
+        );
+        await adapter.execute(
+            "DELETE FROM entity_groups WHERE entity_type = 'folder' AND entity_id = ?", [id],
         );
 
         sendJson(res, { success: true });
@@ -824,7 +842,7 @@ const handleMove = async (req: IncomingMessage, res: ServerResponse): Promise<vo
         }
 
         // Need write permission on both the folder being moved and the target parent.
-        const allowed = await checkPermission(adapter, user, "folder", id, Permission.W);
+        const allowed = await checkPermission(adapter, user, "folder", id, AccessLevel.Write);
 
         if (!allowed) {
             sendError(res, "Forbidden", 403);
@@ -833,7 +851,7 @@ const handleMove = async (req: IncomingMessage, res: ServerResponse): Promise<vo
         }
 
         if (newParentId !== -1) {
-            const targetAllowed = await checkPermission(adapter, user, "folder", newParentId, Permission.W);
+            const targetAllowed = await checkPermission(adapter, user, "folder", newParentId, AccessLevel.Write);
 
             if (!targetAllowed) {
                 sendError(res, "Forbidden", 403);
@@ -860,7 +878,7 @@ const handleMove = async (req: IncomingMessage, res: ServerResponse): Promise<vo
         }
 
         // Need write permission on the score being moved.
-        const allowed = await checkPermission(adapter, user, "score", id, Permission.W);
+        const allowed = await checkPermission(adapter, user, "score", id, AccessLevel.Write);
 
         if (!allowed) {
             sendError(res, "Forbidden", 403);
@@ -869,7 +887,7 @@ const handleMove = async (req: IncomingMessage, res: ServerResponse): Promise<vo
         }
 
         if (newFolderId !== -1) {
-            const targetAllowed = await checkPermission(adapter, user, "folder", newFolderId, Permission.W);
+            const targetAllowed = await checkPermission(adapter, user, "folder", newFolderId, AccessLevel.Write);
 
             if (!targetAllowed) {
                 sendError(res, "Forbidden", 403);
@@ -1255,17 +1273,23 @@ const handleCreateInitialAdmin = async (req: IncomingMessage, res: ServerRespons
     );
 
     // Create an "Admins" group and add the user to it.
-    const groupResult = await adapter.insertReturningId(
+    const adminGroupResult = await adapter.insertReturningId(
         "INSERT INTO `groups` (name, description) VALUES (?, ?)",
         [adminGroupName, "System administrators with full access"],
     );
 
     await adapter.execute(
         "INSERT INTO user_groups (user_id, group_id) VALUES (?, ?)",
-        [result.insertId, groupResult.insertId],
+        [result.insertId, adminGroupResult.insertId],
     );
 
-    // Create the default group (idempotent — may already exist from seed).
+    // Create the "World" group (public access, read-only by default).
+    await adapter.insertReturningId(
+        "INSERT INTO `groups` (name, description, color) VALUES (?, ?, ?)",
+        [worldGroupName, "Public access — everyone can read", "#808080"],
+    );
+
+    // Create the default user group (idempotent — may already exist from seed).
     const defaultGroupRows = await adapter.query<{ id: number; }>(
         "SELECT id FROM `groups` WHERE name = ?", [groupName],
     );
@@ -1282,9 +1306,9 @@ const handleCreateInitialAdmin = async (req: IncomingMessage, res: ServerRespons
         defaultGroupId = agResult.insertId;
     }
 
-    // Assign permissions: the new admin owns all entities that have no owner yet,
-    // and they belong to the default group.
-    const ownerPermBits = makePermBits(Permission.RWX, Permission.RX, Permission.R);
+    // Assign permissions: the new admin owns all orphan entities.
+    // Orphan = entities without an explicit permissions row.
+    const worldId = await getWorldGroupId(adapter);
 
     // Folders without permissions.
     const orphanFolders = await adapter.query<{ id: number; }>(
@@ -1296,11 +1320,15 @@ const handleCreateInitialAdmin = async (req: IncomingMessage, res: ServerRespons
     );
 
     for (const f of orphanFolders) {
-        await adapter.execute(
-            `INSERT INTO permissions (entity_type, entity_id, owner_id, group_id, perm_bits)
-             VALUES ('folder', ?, ?, ?, ?)`,
-            [f.id, result.insertId, defaultGroupId, ownerPermBits],
-        );
+        await setOwner(adapter, "folder", f.id, result.insertId);
+
+        if (worldId !== undefined) {
+            await addEntityGroup(adapter, "folder", f.id, worldId, false);
+        }
+
+        if (defaultGroupId) {
+            await addEntityGroup(adapter, "folder", f.id, defaultGroupId, false);
+        }
     }
 
     // Scores without permissions.
@@ -1313,11 +1341,15 @@ const handleCreateInitialAdmin = async (req: IncomingMessage, res: ServerRespons
     );
 
     for (const s of orphanScores) {
-        await adapter.execute(
-            `INSERT INTO permissions (entity_type, entity_id, owner_id, group_id, perm_bits)
-             VALUES ('score', ?, ?, ?, ?)`,
-            [s.id, result.insertId, defaultGroupId, ownerPermBits],
-        );
+        await setOwner(adapter, "score", s.id, result.insertId);
+
+        if (worldId !== undefined) {
+            await addEntityGroup(adapter, "score", s.id, worldId, false);
+        }
+
+        if (defaultGroupId) {
+            await addEntityGroup(adapter, "score", s.id, defaultGroupId, false);
+        }
     }
 
     console.log(
@@ -1675,6 +1707,18 @@ const handleUpdateGroup = async (req: IncomingMessage, res: ServerResponse): Pro
         return;
     }
 
+    // The World group cannot be edited.
+    const groupInfo = await adapter.query<{ name: string; }>(
+        "SELECT name FROM `groups` WHERE id = ?",
+        [id],
+    );
+
+    if (groupInfo[0]?.name === worldGroupName) {
+        sendError(res, "The World group cannot be edited.");
+
+        return;
+    }
+
     const name = body.name !== undefined ? String(body.name).trim() : undefined;
     const description = body.description !== undefined ? String(body.description).trim() : undefined;
     const color = body.color !== undefined ? String(body.color) : undefined;
@@ -1776,6 +1820,18 @@ const handleDeleteGroup = async (req: IncomingMessage, res: ServerResponse): Pro
         return;
     }
 
+    // The Admins group cannot be deleted.
+    const groupInfo = await adapter.query<{ name: string; }>(
+        "SELECT name FROM `groups` WHERE id = ?",
+        [id],
+    );
+
+    if (groupInfo[0]?.name === adminGroupName) {
+        sendError(res, "The Admins group cannot be deleted.");
+
+        return;
+    }
+
     await adapter.execute("DELETE FROM `groups` WHERE id = ?", [id]);
 
     sendJson(res, { success: true });
@@ -1851,6 +1907,25 @@ const handleRemoveUserFromGroup = async (req: IncomingMessage, res: ServerRespon
         return;
     }
 
+    // Prevent removing the last member of the Admins group.
+    const groupInfo = await adapter.query<{ name: string; }>(
+        "SELECT name FROM `groups` WHERE id = ?",
+        [groupId],
+    );
+
+    if (groupInfo[0]?.name === adminGroupName) {
+        const adminCount = await adapter.query<{ cnt: number; }>(
+            "SELECT COUNT(*) AS cnt FROM user_groups WHERE group_id = ?",
+            [groupId],
+        );
+
+        if ((adminCount[0]?.cnt ?? 0) <= 1) {
+            sendError(res, "Cannot remove the last admin user.");
+
+            return;
+        }
+    }
+
     await adapter.execute(
         "DELETE FROM user_groups WHERE user_id = ? AND group_id = ?",
         [userId, groupId],
@@ -1912,52 +1987,32 @@ const handleGetPermissions = async (req: IncomingMessage, res: ServerResponse): 
     const entityIdStr = url.searchParams.get("entityId");
     const entityId = entityIdStr !== null ? Number(entityIdStr) : null;
 
-    if (!entityType) {
-        sendError(res, "entityType required");
+    if (!entityType || entityId === null) {
+        sendError(res, "entityType and entityId required");
 
         return;
     }
 
-    // Non-admins can only read permissions for entities they own.
-    const rows = await adapter.query<{
-        id: number; entityType: string; entityId: number | null;
-        ownerId: number | null; groupId: number | null; permBits: number;
-    }>(
-        "SELECT id, entity_type AS entityType, entity_id AS entityId," +
-        " owner_id AS ownerId, group_id AS groupId, perm_bits AS permBits" +
-        " FROM permissions WHERE entity_type = ? AND entity_id <=> ?",
-        [entityType, entityId],
-    );
+    // Owners and admins can view permissions.
+    const resolvedOwner = await getExplicitOwner(adapter, entityType, entityId);
 
-    if (rows.length === 0) {
-        sendJson(res, { permission: null });
-
-        return;
-    }
-
-    const perm = rows[0];
-
-    // Restrict access: non-admins can only see permissions for entities they own.
-    if (!user || (!(await isUserInAdminGroup(adapter, user.userId)) && perm.ownerId !== user.userId)) {
+    if (!user || (!(await isUserInAdminGroup(adapter, user.userId))
+        && resolvedOwner !== user.userId)) {
         sendError(res, "Forbidden", 403);
 
         return;
     }
 
-    const ownerBits = (perm.permBits >> 6) & 0x7;
-    const groupBits = (perm.permBits >> 3) & 0x7;
-    const worldBits = perm.permBits & 0x7;
+    const groups = await getExplicitEntityGroups(adapter, entityType, entityId);
 
     sendJson(res, {
         permission: {
-            id: perm.id,
-            entityType: perm.entityType,
-            entityId: perm.entityId,
-            ownerId: perm.ownerId,
-            groupId: perm.groupId,
-            ownerPerm: ownerBits,
-            groupPerm: groupBits,
-            worldPerm: worldBits,
+            entityType,
+            entityId,
+            ownerId: resolvedOwner,
+            groups: groups.map((g) => {
+                return { groupId: g.groupId, writable: g.writable };
+            }),
         },
     });
 };
@@ -1965,7 +2020,7 @@ const handleGetPermissions = async (req: IncomingMessage, res: ServerResponse): 
 const handleSetPermissions = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
     const user = getAuthUser(req);
 
-    if (!user || !(await isUserInAdminGroup(adapter, user.userId))) {
+    if (!user) {
         sendError(res, "Forbidden", 403);
 
         return;
@@ -1974,21 +2029,43 @@ const handleSetPermissions = async (req: IncomingMessage, res: ServerResponse): 
     const body = await readJsonBody(req);
     const entityType = String(body.entityType ?? "");
     const entityId = body.entityId !== undefined && body.entityId !== null ? Number(body.entityId) : null;
-    const ownerId = body.ownerId !== undefined && body.ownerId !== null ? Number(body.ownerId) : null;
-    const groupId = body.groupId !== undefined && body.groupId !== null ? Number(body.groupId) : null;
-    const ownerPerm = body.ownerPerm !== undefined ? Number(body.ownerPerm) : Permission.RWX;
-    const groupPerm = body.groupPerm !== undefined ? Number(body.groupPerm) : Permission.RX;
-    const worldPerm = body.worldPerm !== undefined ? Number(body.worldPerm) : Permission.None;
 
-    if (!entityType) {
-        sendError(res, "entityType required");
+    if (!entityType || entityId === null) {
+        sendError(res, "entityType and entityId required");
 
         return;
     }
 
-    const permBits = makePermBits(ownerPerm, groupPerm, worldPerm);
+    // Only the owner or an admin can set permissions.
+    const isAdmin = await isUserInAdminGroup(adapter, user.userId);
+    const resolvedOwner = await getExplicitOwner(adapter, entityType, entityId);
 
-    await setPermissions(adapter, entityType, entityId, ownerId, groupId, permBits);
+    if (!isAdmin && resolvedOwner !== user.userId) {
+        sendError(res, "Forbidden", 403);
+
+        return;
+    }
+
+    // Set owner if provided (null = inherit).
+    if (body.ownerId !== undefined) {
+        const newOwnerId = body.ownerId !== null ? Number(body.ownerId) : null;
+
+        await setOwner(adapter, entityType, entityId, newOwnerId);
+    }
+
+    // Add groups if provided.
+    if (Array.isArray(body.addGroups)) {
+        for (const g of body.addGroups as Array<{ groupId: number; writable: boolean; }>) {
+            await addEntityGroup(adapter, entityType, entityId, g.groupId, g.writable);
+        }
+    }
+
+    // Remove groups if provided.
+    if (Array.isArray(body.removeGroups)) {
+        for (const g of body.removeGroups as Array<{ groupId: number; }>) {
+            await removeEntityGroup(adapter, entityType, entityId, g.groupId);
+        }
+    }
 
     sendJson(res, { success: true });
 };

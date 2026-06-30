@@ -420,7 +420,7 @@ test.describe("Users & Groups Dialog", () => {
         await expect(dialog).toContainText("Vocals");
 
         // Percussion has a password → lock icon should be present.
-        const percussionRow = dialog.locator(".settings-row").filter({ hasText: "Percussion" });
+        const percussionRow = dialog.locator(".form-row").filter({ hasText: "Percussion" });
 
         await expect(percussionRow.locator(".codicon-lock")).toBeVisible();
     });
@@ -539,7 +539,7 @@ test.describe("Users & Groups Dialog", () => {
         await openUsersGroupsDialog(page);
 
         // Find the delete button on the Editor row (second user).
-        const editorRow = page.locator("#userGroupEditorDialog .settings-row")
+        const editorRow = page.locator("#userGroupEditorDialog .form-row")
             .filter({ hasText: "Editor" });
 
         // Click the trash button (last button in the row).
@@ -557,7 +557,7 @@ test.describe("Users & Groups Dialog", () => {
         await page.goto("/");
         await openUsersGroupsDialog(page);
 
-        const editorRow = page.locator("#userGroupEditorDialog .settings-row")
+        const editorRow = page.locator("#userGroupEditorDialog .form-row")
             .filter({ hasText: "Editor" });
 
         await editorRow.locator("button").last().click();
@@ -633,7 +633,7 @@ test.describe("Users & Groups Dialog", () => {
         await page.goto("/");
         await openUsersGroupsDialog(page);
 
-        const vocalsRow = page.locator("#userGroupEditorDialog .settings-row")
+        const vocalsRow = page.locator("#userGroupEditorDialog .form-row")
             .filter({ hasText: "Vocals" });
 
         await vocalsRow.locator("button").last().click();
@@ -648,7 +648,7 @@ test.describe("Users & Groups Dialog", () => {
         await page.goto("/");
         await openUsersGroupsDialog(page);
 
-        const vocalsRow = page.locator("#userGroupEditorDialog .settings-row")
+        const vocalsRow = page.locator("#userGroupEditorDialog .form-row")
             .filter({ hasText: "Vocals" });
 
         await vocalsRow.locator("button").last().click();
@@ -670,7 +670,7 @@ test.describe("Users & Groups Dialog", () => {
         await page.goto("/");
         await openUsersGroupsDialog(page);
 
-        const editorRow = page.locator("#userGroupEditorDialog .settings-row")
+        const editorRow = page.locator("#userGroupEditorDialog .form-row")
             .filter({ hasText: "Editor" });
 
         // The reset-password button has the key icon (second-to-last button).
@@ -691,7 +691,7 @@ test.describe("Users & Groups Dialog", () => {
         await page.goto("/");
         await openUsersGroupsDialog(page);
 
-        const editorRow = page.locator("#userGroupEditorDialog .settings-row")
+        const editorRow = page.locator("#userGroupEditorDialog .form-row")
             .filter({ hasText: "Editor" });
         const buttons = editorRow.locator("button");
         const count = await buttons.count();
@@ -714,7 +714,7 @@ test.describe("Users & Groups Dialog", () => {
         await page.goto("/");
         await openUsersGroupsDialog(page);
 
-        const percussionRow = page.locator("#userGroupEditorDialog .settings-row")
+        const percussionRow = page.locator("#userGroupEditorDialog .form-row")
             .filter({ hasText: "Percussion" });
 
         // Edit button is the first action button (second-to-last overall).
@@ -728,7 +728,7 @@ test.describe("Users & Groups Dialog", () => {
         await expect(popup).toBeVisible();
         await expect(popup).toContainText("Password");
 
-        await popup.locator("input").fill("shared-secret");
+        await popup.locator("input[type='password']").fill("shared-secret");
         await popup.locator("button").filter({ hasText: "Save" }).click();
 
         await expect(popup).not.toBeVisible();

@@ -13,17 +13,26 @@
  * 3. **Refresh**: When the access token expires, client calls `/api?action=refresh` with the refresh token
  *    cookie to get a new access token.
  *
- * ## Permission Model (Linux-style rwx)
+ * ## Permission Model
  *
- * Each entity (score, folder, feature) has one `permissions` row with:
- * - `owner_id`   — the owning user (NULL for world-only entities)
- * - `group_id`   — the owning group (NULL for no group access)
- * - `perm_bits`  — 9-bit mask: `OOOGGGWWW` where each triple is rwx (4=read, 2=write, 1=execute)
+ * Each entity (score, folder) has an optional `permissions` row with:
+ * - `owner_id` — the owning user (NULL = inherited from parent)
  *
- * - Admin users bypass all permission checks.
- * - Scores inherit permissions from their parent folder when no explicit permission entry exists.
- * - Folders inherit from their parent folder.
- * - Anonymous users only get world bits.
+ * Groups are assigned via the `entity_groups` junction table:
+ * - `entity_type`, `entity_id`, `group_id` — composite PK
+ * - `writable` — whether the group has write access (read is implicit)
+ *
+ * Inheritance:
+ * - An entity without its own `permissions` row inherits the owner from its parent.
+ * - An entity inherits ALL group assignments from its ancestors (additive).
+ * - An entity can add its own group assignments on top of inherited ones.
+ * - Group assignments can never be removed from ancestors — only added.
+ *
+ * Special groups:
+ * - **Admins**: Members bypass all permission checks. The group always exists, is editable (name, members),
+ *   but not deletable. At least one admin must always exist.
+ * - **World**: Members are all users (and anonymous visitors). The group always exists, is not editable,
+ *   but can be removed from entity assignments. Removing it makes the entity non-public.
  *
  * ## Token Storage
  *
@@ -36,13 +45,18 @@ import crypto from "node:crypto";
 
 import type { IDatabaseAdapter } from "./database.js";
 
-export interface IPermissionRow {
-    id: number;
-    entityType: string;
-    entityId: number | null;
+/** A single group assignment on an entity (from entity_groups). */
+export interface IEntityGroupEntry {
+    groupId: number;
+    writable: boolean;
+}
+
+/** The fully resolved permission state for an entity (after inheritance). */
+export interface IResolvedPermission {
+    /** The effective owner id, or null if no owner is set anywhere in the chain. */
     ownerId: number | null;
-    groupId: number | null;
-    permBits: number;
+    /** All group assignments, collected from the entity and all ancestors. */
+    groupEntries: IEntityGroupEntry[];
 }
 
 export interface ITokenPayload {
@@ -82,25 +96,17 @@ export interface ICapabilities {
     canExportMP3: boolean;
 }
 
-/** Permission bit constants (r=4, w=2, x=1). */
-export const enum Permission {
-    None = 0,
-    X = 1,
-    W = 2,
-    WX = 3,
-    R = 4,
-    RX = 5,
-    RW = 6,
-    RWX = 7,
+/** Access level for permission checks. */
+export const enum AccessLevel {
+    Read = 1,
+    Write = 2,
 }
-
-/** Bit shifts for the three triples in a 9-bit permission mask. */
-const worldShift = 0;
-const groupShift = 3;
-const ownerShift = 6;
 
 /** Name of the built-in administrators group. */
 export const adminGroupName = "Admins";
+
+/** Name of the built-in world (public) group. */
+export const worldGroupName = "World";
 
 /** Entity types used in the permissions table. */
 export const enum EntityType {
@@ -147,6 +153,7 @@ export const refreshTokenExpirySeconds = 7 * 24 * 60 * 60; // 7 days
  *   <hash>      — hex-encoded derived key
  *
  * @param password The plaintext password.
+ *
  * @returns The hashed password string.
  */
 export const hashPassword = async (password: string): Promise<string> => {
@@ -172,6 +179,7 @@ export const hashPassword = async (password: string): Promise<string> => {
  *
  * @param password The plaintext password to verify.
  * @param hash     The stored hash string.
+ *
  * @returns True if the password matches.
  */
 export const verifyPassword = async (password: string, hash: string): Promise<boolean> => {
@@ -210,6 +218,7 @@ export const verifyPassword = async (password: string, hash: string): Promise<bo
  * Creates an access token for the given user.
  *
  * @param payload The token payload.
+ *
  * @returns The signed JWT string.
  */
 export const createAccessToken = (payload: ITokenPayload): string => {
@@ -237,6 +246,7 @@ export const createRefreshToken = (): { raw: string; hash: string; maxAge: numbe
  *
  * @param adapter  The database adapter.
  * @param rawToken The raw refresh token from the cookie.
+ *
  * @returns The userId and new raw token if valid, or undefined.
  */
 export const verifyAndRotateRefreshToken = async (adapter: IDatabaseAdapter,
@@ -267,6 +277,7 @@ export const verifyAndRotateRefreshToken = async (adapter: IDatabaseAdapter,
  * Verifies a JWT access token and returns its payload.
  *
  * @param token The JWT string.
+ *
  * @returns The decoded payload, or undefined if invalid/expired.
  */
 export const verifyToken = (token: string): ITokenPayload | undefined => {
@@ -291,36 +302,6 @@ export const verifyToken = (token: string): ITokenPayload | undefined => {
 };
 
 /**
- * Extracts the permission bits for a specific role from a 9-bit permission mask.
- *
- * @param permBits The full 9-bit permission mask.
- * @param shift    The bit shift for the role (worldShift, groupShift, or ownerShift).
- * @returns The 3-bit permission value (0-7).
- */
-const getRolePerm = (permBits: number, shift: number): number => {
-    return (permBits >> shift) & 0x7;
-};
-
-/**
- * Checks whether a user has the required permission on an entity.
- *
- * Permission check order:
- * 1. Admin users always have full access.
- * 2. If the user is the owner, check owner bits.
- * 3. If the user is a member of the entity's group, check group bits.
- * 4. Otherwise, check world bits.
- * 5. Anonymous users only get world bits.
- *
- * For scores without explicit permissions, permissions are inherited from the parent folder.
- *
- * @param adapter      The database adapter.
- * @param user         The authenticated user, or undefined for anonymous.
- * @param entityType   The type of entity ("score", "folder", "feature").
- * @param entityId     The entity id, or null for features.
- * @param requiredPerm The required permission bit(s) (e.g. Perm.R | Perm.W).
- * @returns True if the user has the required permission.
- */
-/**
  * Checks whether a user is a member of the Admins group.
  *
  * @param adapter The database adapter.
@@ -338,63 +319,268 @@ export const isUserInAdminGroup = async (adapter: IDatabaseAdapter, userId: numb
     return (rows[0]?.cnt ?? 0) > 0;
 };
 
-export const checkPermission = async (adapter: IDatabaseAdapter, user: ITokenPayload | undefined, entityType: string,
-    entityId: number | null, requiredPerm: number,): Promise<boolean> => {
+/**
+ * Returns the ID of the World group.
+ *
+ * @param adapter The database adapter.
+ * @returns The World group id, or undefined if it does not exist.
+ */
+export const getWorldGroupId = async (adapter: IDatabaseAdapter): Promise<number | undefined> => {
+    const rows = await adapter.query<{ id: number; }>(
+        "SELECT id FROM `groups` WHERE name = ?",
+        [worldGroupName],
+    );
+
+    return rows[0]?.id;
+};
+
+/**
+ * Returns the ID of the Admins group.
+ *
+ * @param adapter The database adapter.
+ * @returns The Admins group id, or undefined if it does not exist.
+ */
+export const getAdminGroupId = async (adapter: IDatabaseAdapter): Promise<number | undefined> => {
+    const rows = await adapter.query<{ id: number; }>(
+        "SELECT id FROM `groups` WHERE name = ?",
+        [adminGroupName],
+    );
+
+    return rows[0]?.id;
+};
+
+/**
+ * Resolves the effective owner for an entity by walking up the tree.
+ * Returns the first non-null owner_id found, or null if none exists.
+ *
+ * @param adapter    The database adapter.
+ * @param entityType The type of entity.
+ * @param entityId   The entity id.
+ * @returns The resolved owner id, or null.
+ */
+const resolveOwner = async (adapter: IDatabaseAdapter, entityType: string,
+    entityId: number): Promise<number | null> => {
+    // Check for an explicit owner on this entity.
+    const rows = await adapter.query<{ owner_id: number | null; }>(
+        "SELECT owner_id FROM permissions WHERE entity_type = ? AND entity_id = ?",
+        [entityType, entityId],
+    );
+
+    if (rows.length > 0 && rows[0].owner_id !== null) {
+        return rows[0].owner_id;
+    }
+
+    // For scores, walk up to the parent folder.
+    if ((entityType as EntityType) === EntityType.Score) {
+        const scoreRows = await adapter.query<{ folderid: number | null; }>(
+            "SELECT folderid FROM scores WHERE id = ?",
+            [entityId],
+        );
+
+        if (scoreRows[0]?.folderid !== null) {
+            return resolveOwner(adapter, EntityType.Folder, scoreRows[0].folderid);
+        }
+    }
+
+    // For folders, walk up to the parent folder.
+    if ((entityType as EntityType) === EntityType.Folder) {
+        const folderRows = await adapter.query<{ parentid: number | null; }>(
+            "SELECT parentid FROM folders WHERE id = ?",
+            [entityId],
+        );
+
+        if (folderRows[0]?.parentid !== null) {
+            return resolveOwner(adapter, EntityType.Folder, folderRows[0].parentid);
+        }
+    }
+
+    return null;
+};
+
+/**
+ * Collects all group assignments for an entity by walking up the tree.
+ * Groups are additive: the entity inherits all groups from all ancestors
+ * plus any explicitly assigned groups.
+ *
+ * @param adapter    The database adapter.
+ * @param entityType The type of entity.
+ * @param entityId   The entity id.
+ * @param collected  Accumulator map (groupId → writable). Pass a new Map() on first call.
+ * @returns A map of groupId → writable.
+ */
+const collectGroupEntries = async (adapter: IDatabaseAdapter, entityType: string, entityId: number,
+    collected: Map<number, boolean>,): Promise<Map<number, boolean>> => {
+    // Collect explicit group assignments for this entity.
+    const rows = await adapter.query<{ group_id: number; writable: number; }>(
+        "SELECT group_id, writable FROM entity_groups WHERE entity_type = ? AND entity_id = ?",
+        [entityType, entityId],
+    );
+
+    for (const r of rows) {
+        // Children can upgrade from read to write but never downgrade from write to read.
+        const existing = collected.get(r.group_id);
+
+        if (existing === undefined || (!existing && Boolean(r.writable))) {
+            collected.set(r.group_id, Boolean(r.writable));
+        }
+    }
+
+    // Walk up to the parent.
+    if ((entityType as EntityType) === EntityType.Score) {
+        const scoreRows = await adapter.query<{ folderid: number | null; }>(
+            "SELECT folderid FROM scores WHERE id = ?",
+            [entityId],
+        );
+
+        if (scoreRows[0]?.folderid !== null) {
+            return collectGroupEntries(adapter, EntityType.Folder, scoreRows[0].folderid, collected);
+        }
+    }
+
+    if ((entityType as EntityType) === EntityType.Folder) {
+        const folderRows = await adapter.query<{ parentid: number | null; }>(
+            "SELECT parentid FROM folders WHERE id = ?",
+            [entityId],
+        );
+
+        if (folderRows[0]?.parentid !== null) {
+            return collectGroupEntries(adapter, EntityType.Folder, folderRows[0].parentid, collected);
+        }
+    }
+
+    return collected;
+};
+
+/**
+ * Resolves the full effective permission state for an entity by combining
+ * the inherited owner and the additive group assignments.
+ *
+ * @param adapter    The database adapter.
+ * @param entityType The type of entity.
+ * @param entityId   The entity id.
+ * @returns The resolved permission state.
+ */
+const resolvePermission = async (adapter: IDatabaseAdapter, entityType: string,
+    entityId: number): Promise<IResolvedPermission> => {
+    const [ownerId, groupEntries] = await Promise.all([
+        resolveOwner(adapter, entityType, entityId),
+        collectGroupEntries(adapter, entityType, entityId, new Map()),
+    ]);
+
+    return {
+        ownerId,
+        groupEntries: Array.from(groupEntries.entries()).map(([groupId, writable]) => {
+            return { groupId, writable };
+        }),
+    };
+};
+
+/**
+ * Checks whether a user has the required access level on an entity.
+ *
+ * Permission check order:
+ * 1. Admin users always have full access.
+ * 2. Owner always has full access.
+ * 3. Check group assignments for the required access level.
+ * 4. Access denied.
+ *
+ * For features without explicit permissions, only admins have access.
+ *
+ * @param adapter      The database adapter.
+ * @param user         The authenticated user, or undefined for anonymous.
+ * @param entityType   The type of entity ("score", "folder", "feature").
+ * @param entityId     The entity id, or null for features.
+ * @param requiredLevel The required access level (Read or Write).
+ * @returns True if the user has the required access.
+ */
+export const checkPermission = async (adapter: IDatabaseAdapter, user: ITokenPayload | undefined,
+    entityType: string, entityId: number | null, requiredLevel: AccessLevel,): Promise<boolean> => {
     // Admin users always have full access.
     if (user && await isUserInAdminGroup(adapter, user.userId)) {
         return true;
     }
 
-    const permRow = await resolvePermission(adapter, entityType, entityId);
-
-    // No permission row exists — deny access for safety.
-    if (!permRow) {
+    // Features: currently only admins get access (features will be reworked separately).
+    if ((entityType as EntityType) === EntityType.Feature) {
         return false;
     }
 
-    // Check owner bits.
-    if (permRow.ownerId === user?.userId) {
-        return (getRolePerm(permRow.permBits, ownerShift) & requiredPerm) === requiredPerm;
+    if (entityId === null) {
+        return false;
     }
 
-    // Check group bits.
-    if (user && permRow.groupId !== null) {
-        // For group login, the user belongs to the authenticated group.
-        if (user.authType === "group" && user.groupId === permRow.groupId) {
-            return (getRolePerm(permRow.permBits, groupShift) & requiredPerm) === requiredPerm;
-        }
+    const resolved = await resolvePermission(adapter, entityType, entityId);
 
-        // For normal login, check user_groups membership.
-        const memberRows = await adapter.query<{ userId: number; }>(
-            "SELECT user_id AS userId FROM user_groups WHERE group_id = ? AND user_id = ?",
-            [permRow.groupId, user.userId],
-        );
+    // Owner always has full access.
+    if (resolved.ownerId !== null && resolved.ownerId === user?.userId) {
+        return true;
+    }
 
-        if (memberRows.length > 0) {
-            return (getRolePerm(permRow.permBits, groupShift) & requiredPerm) === requiredPerm;
+    // Collect all group IDs the user belongs to.
+    const userGroupIds = new Set<number>();
+
+    if (user) {
+        // Group login: user belongs only to the authenticated group.
+        if (user.authType === "group" && user.groupId !== undefined) {
+            userGroupIds.add(user.groupId);
+        } else {
+            // Normal login: collect all group memberships.
+            const memberRows = await adapter.query<{ group_id: number; }>(
+                "SELECT group_id FROM user_groups WHERE user_id = ?",
+                [user.userId],
+            );
+
+            for (const r of memberRows) {
+                userGroupIds.add(r.group_id);
+            }
         }
     }
 
-    // Fall back to world bits (also used for anonymous users).
-    return (getRolePerm(permRow.permBits, worldShift) & requiredPerm) === requiredPerm;
+    // Also include the World group — everyone is a member.
+    const worldId = await getWorldGroupId(adapter);
+
+    if (worldId !== undefined) {
+        userGroupIds.add(worldId);
+    }
+
+    // Check group assignments.
+    for (const entry of resolved.groupEntries) {
+        if (!userGroupIds.has(entry.groupId)) {
+            continue;
+        }
+
+        // Read is always granted for any matching group.
+        if (requiredLevel === AccessLevel.Read) {
+            return true;
+        }
+
+        // Write requires the writable flag.
+        if (entry.writable) {
+            return true;
+        }
+    }
+
+    return false;
 };
 
 /** Summary of a user's relationship to an entity's permissions. */
 export interface IPermissionSummary {
     isOwner: boolean;
-    isGroup: boolean;
-    isWorld: boolean;
     canRead: boolean;
-    permBits: number;
+    canWrite: boolean;
+    /** Whether the entity is assigned to the World group (publicly readable). */
+    isWorld: boolean;
+    /** Group IDs that the entity is assigned to. */
+    groupIds: number[];
 }
 
 /**
- * Computes a permission summary for a user on an entity without repeating the full permission-check logic.
+ * Computes a permission summary for a user on an entity.
  * Used by list endpoints that need to attach permission metadata to each returned row.
  *
  * @param adapter    The database adapter.
  * @param user       The authenticated user, or undefined for anonymous.
- * @param entityType The type of entity ("score", "folder", "feature").
+ * @param entityType The type of entity ("score", "folder").
  * @param entityId   The entity id.
  *
  * @returns A summary of the user's access.
@@ -403,145 +589,167 @@ export const getPermissionSummary = async (adapter: IDatabaseAdapter, user: ITok
     entityType: string, entityId: number): Promise<IPermissionSummary> => {
     const isAdmin = user ? await isUserInAdminGroup(adapter, user.userId) : false;
 
-    const permRow = await resolvePermission(adapter, entityType, entityId);
+    const resolved = await resolvePermission(adapter, entityType, entityId);
 
-    if (!permRow) {
-        return { isOwner: false, isGroup: false, isWorld: false, canRead: isAdmin, permBits: 0 };
-    }
+    const isOwner = resolved.ownerId !== null && resolved.ownerId === user?.userId;
 
-    const isOwner = permRow.ownerId !== null && permRow.ownerId === user?.userId;
+    // Collect user's group memberships.
+    const userGroupIds = new Set<number>();
 
-    let isGroup = false;
-    if (user && permRow.groupId !== null) {
-        if (user.authType === "group" && user.groupId === permRow.groupId) {
-            isGroup = true;
+    if (user) {
+        if (user.authType === "group" && user.groupId !== undefined) {
+            userGroupIds.add(user.groupId);
         } else {
-            const memberRows = await adapter.query<{ userId: number; }>(
-                "SELECT user_id AS userId FROM user_groups WHERE group_id = ? AND user_id = ?",
-                [permRow.groupId, user.userId],
+            const memberRows = await adapter.query<{ group_id: number; }>(
+                "SELECT group_id FROM user_groups WHERE user_id = ?",
+                [user.userId],
             );
-            isGroup = memberRows.length > 0;
+
+            for (const r of memberRows) {
+                userGroupIds.add(r.group_id);
+            }
         }
     }
 
-    const isWorld = (getRolePerm(permRow.permBits, worldShift) & Permission.R) !== 0;
+    const worldId = await getWorldGroupId(adapter);
 
-    const canRead = isAdmin
-        || (isOwner && (getRolePerm(permRow.permBits, ownerShift) & Permission.R) !== 0)
-        || (isGroup && (getRolePerm(permRow.permBits, groupShift) & Permission.R) !== 0)
-        || isWorld;
+    if (worldId !== undefined) {
+        userGroupIds.add(worldId);
+    }
 
-    return { isOwner, isGroup, isWorld, canRead, permBits: permRow.permBits };
+    let canRead = isAdmin || isOwner;
+    let canWrite = isAdmin || isOwner;
+
+    const isWorld = worldId !== undefined
+        && resolved.groupEntries.some((e) => {
+            return e.groupId === worldId;
+        });
+
+    for (const entry of resolved.groupEntries) {
+        if (!userGroupIds.has(entry.groupId)) {
+            continue;
+        }
+
+        canRead = true;
+
+        if (entry.writable) {
+            canWrite = true;
+        }
+    }
+
+    return {
+        isOwner,
+        canRead,
+        canWrite,
+        isWorld,
+        groupIds: resolved.groupEntries.map((e) => {
+            return e.groupId;
+        }),
+    };
 };
 
 /**
- * Resolves the effective permission row for an entity, following the inheritance chain.
- *
- * - For features: looks up the exact row.
- * - For folders: looks up the exact row; if none exists, inherits from parent folder.
- * - For scores: looks up the exact row; if none exists, inherits from the score's folder.
- *
- * @param adapter    The database adapter.
- * @param entityType The type of entity.
- * @param entityId   The entity id, or null for features.
- * @returns The resolved permission row, or undefined if no permission could be resolved.
- */
-const resolvePermission = async (adapter: IDatabaseAdapter, entityType: string,
-    entityId: number | null): Promise<IPermissionRow | undefined> => {
-    // Look for an explicit permission entry.
-    const rows = await adapter.query(
-        "SELECT * FROM permissions WHERE entity_type = ? AND entity_id <=> ?",
-        [entityType, entityId],
-    );
-
-    if (rows.length > 0) {
-        const r = rows[0];
-
-        return {
-            id: Number(r.id),
-            entityType: String(r.entity_type),
-            entityId: r.entity_id !== null ? Number(r.entity_id) : null,
-            ownerId: r.owner_id !== null ? Number(r.owner_id) : null,
-            groupId: r.group_id !== null ? Number(r.group_id) : null,
-            permBits: Number(r.perm_bits),
-        };
-    }
-
-    // For scores, inherit from the parent folder.
-    if (entityType === "score" && entityId !== null) {
-        const scoreRows = await adapter.query<{ folderid: number | null; }>(
-            "SELECT folderid FROM scores WHERE id = ?",
-            [entityId],
-        );
-
-        const folderId = scoreRows[0]?.folderid ?? null;
-
-        if (folderId !== null) {
-            return resolvePermission(adapter, "folder", folderId);
-        }
-
-        // Score at root — look for root folder permissions or return undefined.
-        return undefined;
-    }
-
-    // For folders, inherit from the parent folder.
-    if (entityType === "folder" && entityId !== null) {
-        const folderRows = await adapter.query<{ parentid: number | null; }>(
-            "SELECT parentid FROM folders WHERE id = ?",
-            [entityId],
-        );
-
-        const parentId = folderRows[0]?.parentid ?? null;
-
-        if (parentId !== null) {
-            return resolvePermission(adapter, "folder", parentId);
-        }
-
-        // Root folder — no inheritance, return undefined.
-        return undefined;
-    }
-
-    // Features without explicit permissions are denied.
-    return undefined;
-};
-
-/**
- * Sets or updates permissions for an entity.
- * Uses INSERT … ON DUPLICATE KEY UPDATE (MySQL) / INSERT … ON CONFLICT (Postgres) semantics.
+ * Sets the owner for an entity. An explicit NULL means "inherit from parent"
+ * (the row is deleted, so the inheritance chain takes over).
  *
  * @param adapter    The database adapter.
  * @param entityType The entity type.
- * @param entityId   The entity id, or null for features.
- * @param ownerId    The owning user id, or null.
- * @param groupId    The owning group id, or null.
- * @param permBits   The 9-bit permission mask.
+ * @param entityId   The entity id.
+ * @param ownerId    The new owner id, or null to remove the explicit owner (inherit).
  */
-export const setPermissions = async (adapter: IDatabaseAdapter, entityType: string, entityId: number | null,
-    ownerId: number | null, groupId: number | null, permBits: number): Promise<void> => {
-    // Delete any existing row for this entity first.
-    await adapter.execute(
-        "DELETE FROM permissions WHERE entity_type = ? AND entity_id <=> ?",
-        [entityType, entityId],
-    );
+export const setOwner = async (adapter: IDatabaseAdapter, entityType: string, entityId: number,
+    ownerId: number | null): Promise<void> => {
+    if (ownerId === null) {
+        // Remove the explicit row — inheritance takes over.
+        await adapter.execute(
+            "DELETE FROM permissions WHERE entity_type = ? AND entity_id = ?",
+            [entityType, entityId],
+        );
 
-    // Insert new row.
+        return;
+    }
+
+    // Upsert: set the owner.
     await adapter.execute(
-        `INSERT INTO permissions (entity_type, entity_id, owner_id, group_id, perm_bits)
-         VALUES (?, ?, ?, ?, ?)`,
-        [entityType, entityId, ownerId, groupId, permBits],
+        `INSERT INTO permissions (entity_type, entity_id, owner_id)
+         VALUES (?, ?, ?)
+         ON DUPLICATE KEY UPDATE owner_id = VALUES(owner_id)`,
+        [entityType, entityId, ownerId],
     );
 };
 
 /**
- * Computes a 9-bit permission mask from individual owner, group, and world permission values.
+ * Adds a group assignment to an entity. If the group is already assigned,
+ * the writable flag is updated (only upgraded — never downgraded via this function).
  *
- * @param ownerPerm The owner permission bits (0-7).
- * @param groupPerm The group permission bits (0-7).
- * @param worldPerm The world permission bits (0-7).
- * @returns The combined 9-bit mask.
+ * @param adapter    The database adapter.
+ * @param entityType The entity type.
+ * @param entityId   The entity id.
+ * @param groupId    The group id.
+ * @param writable   Whether the group has write access.
  */
-export const makePermBits = (ownerPerm: number, groupPerm: number, worldPerm: number): number => {
-    return (ownerPerm << ownerShift) | (groupPerm << groupShift) | (worldPerm << worldShift);
+export const addEntityGroup = async (adapter: IDatabaseAdapter, entityType: string, entityId: number,
+    groupId: number, writable: boolean): Promise<void> => {
+    await adapter.execute(
+        `INSERT INTO entity_groups (entity_type, entity_id, group_id, writable)
+         VALUES (?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE writable = GREATEST(writable, VALUES(writable))`,
+        [entityType, entityId, groupId, writable ? 1 : 0],
+    );
+};
+
+/**
+ * Removes a group assignment from an entity.
+ *
+ * @param adapter    The database adapter.
+ * @param entityType The entity type.
+ * @param entityId   The entity id.
+ * @param groupId    The group id.
+ */
+export const removeEntityGroup = async (adapter: IDatabaseAdapter, entityType: string, entityId: number,
+    groupId: number): Promise<void> => {
+    await adapter.execute(
+        "DELETE FROM entity_groups WHERE entity_type = ? AND entity_id = ? AND group_id = ?",
+        [entityType, entityId, groupId],
+    );
+};
+
+/**
+ * Returns the explicit group assignments for an entity (not inherited).
+ *
+ * @param adapter    The database adapter.
+ * @param entityType The entity type.
+ * @param entityId   The entity id.
+ * @returns The list of group entries for this entity only.
+ */
+export const getExplicitEntityGroups = async (adapter: IDatabaseAdapter, entityType: string,
+    entityId: number): Promise<IEntityGroupEntry[]> => {
+    const rows = await adapter.query<{ group_id: number; writable: number; }>(
+        "SELECT group_id, writable FROM entity_groups WHERE entity_type = ? AND entity_id = ?",
+        [entityType, entityId],
+    );
+
+    return rows.map((r) => {
+        return { groupId: r.group_id, writable: Boolean(r.writable) };
+    });
+};
+
+/**
+ * Returns the explicit owner for an entity (or null if inherited/deleted).
+ *
+ * @param adapter    The database adapter.
+ * @param entityType The entity type.
+ * @param entityId   The entity id.
+ * @returns The owner id, or null.
+ */
+export const getExplicitOwner = async (adapter: IDatabaseAdapter, entityType: string,
+    entityId: number): Promise<number | null> => {
+    const rows = await adapter.query<{ owner_id: number | null; }>(
+        "SELECT owner_id FROM permissions WHERE entity_type = ? AND entity_id = ?",
+        [entityType, entityId],
+    );
+
+    return rows[0]?.owner_id ?? null;
 };
 
 /**

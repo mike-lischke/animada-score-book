@@ -25,7 +25,7 @@ interface ISerializedError {
     stack?: string;
 }
 
-const renderFatal = (error?: unknown) => {
+const showFatalError = (error?: unknown) => {
     let text;
 
     if (error instanceof LoadAudioError) {
@@ -50,18 +50,8 @@ const renderFatal = (error?: unknown) => {
             (e.stack ? `Stack: ${e.stack}\n` : "");
     }
 
-    console.error("Global fatal error:", text);
-    render(
-        <Message messageType={MessageType.Error}>
-            <Container
-                orientation={Orientation.TopDown}
-                crossAlignment={ChildAlignment.Center}
-            >
-                <p>{text}</p>
-            </Container>
-        </Message>,
-        root
-    );
+    void requisitions.execute("showError", `Fatal error: ${text}`);
+
 };
 
 window.onerror = (message, source, lineno, colno, error) => {
@@ -75,9 +65,9 @@ window.onerror = (message, source, lineno, colno, error) => {
     }
 
     if (error instanceof Error) {
-        renderFatal(error);
+        showFatalError(error);
     } else {
-        renderFatal({
+        showFatalError({
             message: String(message),
             source,
             lineno: lineno ?? undefined,
@@ -89,7 +79,7 @@ window.onerror = (message, source, lineno, colno, error) => {
 };
 
 window.onunhandledrejection = (event) => {
-    renderFatal(event.reason);
+    showFatalError(event.reason);
 };
 
 try {

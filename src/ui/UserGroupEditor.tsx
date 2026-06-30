@@ -17,7 +17,7 @@ import { TagInput } from "../components/ui/framework/TagInput.js";
 import { ChildAlignment, Orientation } from "../components/ui/framework/ui-types.js";
 import { UIComponent, ComponentPlacement, type ICommonUIProperties } from "../components/ui/framework/UIComponent.js";
 import { ConfirmDialog } from "../components/ui/composites/ConfirmDialog.js";
-import { Popup } from "../components/ui/composites/Popup.js";
+import { Popup } from "../components/ui/framework/Popup.js";
 import { NotificationCenter } from "../components/ui/NotificationCenter/NotificationCenter.js";
 import type { IGroupMember, IGroupRow, IUserRow, ScoreBookDataModel } from "../core/ScoreBookDataModel.js";
 
@@ -280,18 +280,20 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
                             )}
                             {adminBadge}
                         </Container>
-                        <Button
-                            imageOnly
-                            className="du-btn-xs"
-                            data-tooltip="Edit Group"
-                            onClick={(e) => {
-                                const trigger = e.currentTarget as HTMLElement;
-                                void this.handleEditGroupClick(group, trigger);
-                            }}
-                        >
-                            <Icon src={Codicon.Edit} />
-                        </Button>
-                        {isFullAdmin && (
+                        {group.name !== "World" && (
+                            <Button
+                                imageOnly
+                                className="du-btn-xs"
+                                data-tooltip="Edit Group"
+                                onClick={(e) => {
+                                    const trigger = e.currentTarget as HTMLElement;
+                                    void this.handleEditGroupClick(group, trigger);
+                                }}
+                            >
+                                <Icon src={Codicon.Edit} />
+                            </Button>
+                        )}
+                        {isFullAdmin && group.name !== "Admins" && (
                             <Button
                                 imageOnly
                                 className="du-btn-xs"
@@ -311,7 +313,11 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
         return (
             <>
                 <ConfirmDialog ref={this.confirmDialogRef} />
-                <Popup ref={this.popupRef} showArrow={true}>
+                <Popup
+                    ref={this.popupRef}
+                    showArrow={true}
+                    placement={ComponentPlacement.TopCenter}
+                >
                     {editorMode !== EditorMode.None && this.renderEditorForm()}
                 </Popup>
                 <Dialog
@@ -566,7 +572,7 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
                                         const f = formMemberFilter.toLowerCase();
 
                                         return m.username.toLowerCase().includes(f)
-                                                || m.displayName.toLowerCase().includes(f);
+                                            || m.displayName.toLowerCase().includes(f);
                                     })
                                     .map((m) => {
                                         return (
@@ -1045,13 +1051,9 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
             return;
         }
 
-        this.popupRef.current?.close();
-        this.setState({
-            editorMode: EditorMode.None,
-            formGroupName: "",
-            formGroupPassword: "",
-            formErrorMessage: "",
-        });
+        this.popupRef.current?.close(false);
+        this.setState({ editorMode: EditorMode.None, formGroupName: "", formGroupPassword: "", formErrorMessage: "" });
+
         await this.loadGroups();
         void NotificationCenter.showInfo(`Group "${name}" created.`);
     }
@@ -1096,20 +1098,20 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
             return;
         }
 
-        this.popupRef.current?.close();
+        this.popupRef.current?.close(false);
         this.setState({
             editorMode: EditorMode.None,
             editingGroupId: 0,
             formErrorMessage: "",
             formGroupPassword: "",
-            errorMessage: "",
+            errorMessage: ""
         });
         await this.loadGroups();
         void NotificationCenter.showInfo(`Group "${group?.name ?? editingGroupId}" updated.`);
     }
 
     private openEditorPopup(target: HTMLElement): void {
-        this.popupRef.current?.open(target.getBoundingClientRect(), ComponentPlacement.TopCenter);
+        this.popupRef.current?.open(target.getBoundingClientRect());
     }
 
     /**
@@ -1226,7 +1228,7 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
 
             try {
                 await dataModel.updateUser(editingUserId, { password: formPassword });
-                this.popupRef.current?.close();
+                this.popupRef.current?.close(false);
                 this.setState({ editorMode: EditorMode.None, editingUserId: 0, formErrorMessage: "" });
                 const targetUser = users.find((u) => {
                     return u.id === editingUserId;
@@ -1311,13 +1313,8 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
             }
         }
 
-        this.popupRef.current?.close();
-        this.setState({
-            pendingGroups: [],
-            editorMode: EditorMode.None,
-            editingUserId: 0,
-            errorMessage: "",
-        });
+        this.popupRef.current?.close(false);
+        this.setState({ pendingGroups: [], editorMode: EditorMode.None, editingUserId: 0, errorMessage: "" });
         await this.loadUsers();
         await this.loadGroups();
     }

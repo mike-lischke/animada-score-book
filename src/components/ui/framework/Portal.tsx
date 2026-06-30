@@ -71,10 +71,10 @@ export class Portal extends UIComponent<IPortalProperties, IPortalState> {
         if (open) {
             if (!this.host) {
                 const blockMouseEvents = options.blockMouseEvents ?? true;
-                const className = [
+                const className = this.generateFinalClassName([
                     "portal",
-                    blockMouseEvents ? "" : "ignoreMouse",
-                ].filter(Boolean).join(" ");
+                    this.classFromProperty(blockMouseEvents, ["ignoreMouse", ""]),
+                ]);
 
                 this.host = document.createElement("div");
                 if (id) {

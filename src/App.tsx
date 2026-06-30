@@ -511,8 +511,8 @@ export class App extends UIComponent<{}, IAppState> {
                         <PermissionEditor
                             ref={this.permissionEditorRef}
                             dataModel={this.dataModel}
-                            onSaved={() => {
-                                void requisitions.execute("permChanged", undefined);
+                            onSaved={(entry) => {
+                                void requisitions.execute("permChanged", entry);
                             }}
                         />
                         {
@@ -1129,17 +1129,19 @@ export class App extends UIComponent<{}, IAppState> {
                 break;
             }
 
-            case "editPerm": {
+            case "managePerm": {
                 if (!this.permissionEditorRef.current) {
                     return false;
                 }
 
-                const entityType = data.type === SbDmEntityType.ScoreFolder ? "folder" : "score";
-                // Find the button element that was clicked (the PermMatrix span).
-                const target = document.querySelector<HTMLElement>(".permMatrix")!;
+                const row = document.querySelector<HTMLElement>(
+                    `.scoreTreeEntry[data-entry-type="${String(data.type)}"][data-entry-id="${data.id}"]`,
+                );
 
-                void this.permissionEditorRef.current.open(target, entityType, data.id, data.name,
-                    data.perm?.permBits);
+                if (row) {
+                    const rowRect = row.getBoundingClientRect();
+                    void this.permissionEditorRef.current.open(rowRect, data);
+                }
 
                 return false;
             }

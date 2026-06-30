@@ -3,391 +3,428 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import { ComponentChild, createRef } from "preact";
+import { createRef, type ComponentChild } from "preact";
 
 import { Button } from "../components/ui/framework/Button.js";
-import { Checkbox } from "../components/ui/framework/Checkbox.js";
 import { Codicon } from "../components/ui/framework/Codicon.js";
 import { Container } from "../components/ui/framework/Container.js";
-import { Dropdown, type IDropdownItem } from "../components/ui/framework/Dropdown.js";
 import { Icon } from "../components/ui/framework/Icon.js";
 import { Label } from "../components/ui/framework/Label.js";
-import { ChildAlignment, Orientation } from "../components/ui/framework/ui-types.js";
+import { Orientation } from "../components/ui/framework/ui-types.js";
 import { UIComponent, ComponentPlacement, type ICommonUIProperties } from "../components/ui/framework/UIComponent.js";
-import { Popup } from "../components/ui/composites/Popup.js";
-import type { IGroupRow, IUserRow, ScoreBookDataModel } from "../core/ScoreBookDataModel.js";
+import { Popup } from "../components/ui/framework/Popup.js";
+import type {
+    IGroupRow, ISbDmPermissionInfo, ISbDmScore, ISbDmScoreFolder, ScoreBookDataModel,
+} from "../core/ScoreBookDataModel.js";
+import { SbDmEntityType } from "../core/ScoreBookDataModel.js";
+import type { Mutable } from "../core/types/general.js";
+
+/** The well-known name of the World group, matching the backend constant. */
+const worldGroupName = "World";
+
+/** The well-known name of the Admins group. Admins have full access — exclude from the pool. */
+const adminGroupName = "Admins";
 
 interface IPermissionEditorProperties extends ICommonUIProperties {
     dataModel: ScoreBookDataModel;
 
-    /** Called after permissions are saved successfully. */
-    onSaved: () => void;
+    /** Called after permissions are saved, with the updated entry. */
+    onSaved: (entry: ISbDmScoreFolder | ISbDmScore) => void;
 }
 
 interface IPermissionEditorState {
-    loading: boolean;
     errorMessage: string;
-    entityType: string;
-    entityId: number;
-    entityName: string;
-    users: IUserRow[];
-    groups: IGroupRow[];
-    /** Whether permissions are inherited (no explicit row in DB). */
-    inherited: boolean;
-    /** Initial inherited perm bits for change detection. */
-    inheritedOwnerPerm: number;
-    inheritedGroupPerm: number;
-    inheritedWorldPerm: number;
-    ownerId: number | null;
-    groupId: number | null;
-    ownerRead: boolean;
-    ownerWrite: boolean;
-    groupRead: boolean;
-    groupWrite: boolean;
-    worldRead: boolean;
-    worldWrite: boolean;
-    saving: boolean;
+
+    /** The entry whose permissions we are editing. */
+    entry?: ISbDmScoreFolder | ISbDmScore;
+
+    ownerName: string;
+    allGroups: IGroupRow[];
+
+    /** Group IDs with read access. */
+    readGroupIds: Set<number>;
+
+    /** Group IDs with write access (subset of readGroupIds). */
+    writeGroupIds: Set<number>;
 }
+
+const dragType = "application/x-perm-group";
 
 export class PermissionEditor extends UIComponent<IPermissionEditorProperties, IPermissionEditorState> {
     private popupRef = createRef<Popup>();
+    private dragGroupId: number | undefined;
 
     public constructor(props: IPermissionEditorProperties) {
         super(props);
 
         this.state = {
-            loading: false,
             errorMessage: "",
-            entityType: "",
-            entityId: 0,
-            entityName: "",
-            users: [],
-            groups: [],
-            inherited: false,
-            inheritedOwnerPerm: 0,
-            inheritedGroupPerm: 0,
-            inheritedWorldPerm: 0,
-            ownerId: null,
-            groupId: null,
-            ownerRead: false,
-            ownerWrite: false,
-            groupRead: false,
-            groupWrite: false,
-            worldRead: false,
-            worldWrite: false,
-            saving: false,
+            ownerName: "",
+            allGroups: [],
+            readGroupIds: new Set(),
+            writeGroupIds: new Set(),
         };
     }
 
-    public async open(target: HTMLElement, entityType: string, entityId: number, entityName: string,
-        inheritedPermBits?: number,
-    ): Promise<void> {
+    /**
+     * Opens the permission editor for the given score library entry.
+     *
+     * @param target The DOM element or rect to anchor the popup to.
+     * @param entry  The data model entry whose permissions are being edited.
+     */
+    public async open(target: HTMLElement | DOMRect,
+        entry: ISbDmScoreFolder | ISbDmScore): Promise<void> {
         const { dataModel } = this.props;
+        const entityType = entry.type === SbDmEntityType.ScoreFolder ? "folder" : "score";
 
-        this.setState({
-            loading: true, errorMessage: "",
-            entityType, entityId, entityName, inherited: false,
-        }, () => {
-            this.popupRef.current?.open(target.getBoundingClientRect(), ComponentPlacement.RightCenter);
+        this.setState({ errorMessage: "", entry }, () => {
+            const rect = target instanceof DOMRect ? target : target.getBoundingClientRect();
+
+            this.popupRef.current?.open(rect);
         });
 
         try {
             const [perm, users, groups] = await Promise.all([
-                dataModel.getPermissions(entityType, entityId),
+                dataModel.getPermissions(entityType, entry.id),
                 dataModel.listUsers(),
                 dataModel.listGroups(),
             ]);
 
-            const filteredUsers = users.filter((u) => {
-                return u.username !== "anonymous";
-            });
+            let ownerName = "Inherited";
 
-            if (perm) {
-                this.setState({
-                    users: filteredUsers,
-                    groups,
-                    inherited: false,
-                    ownerId: perm.ownerId,
-                    groupId: perm.groupId,
-                    ownerRead: (perm.ownerPerm & 4) !== 0,
-                    ownerWrite: (perm.ownerPerm & 2) !== 0,
-                    groupRead: (perm.groupPerm & 4) !== 0,
-                    groupWrite: (perm.groupPerm & 2) !== 0,
-                    worldRead: (perm.worldPerm & 4) !== 0,
-                    worldWrite: (perm.worldPerm & 2) !== 0,
-                    loading: false,
+            if (perm?.ownerId != null) {
+                const owner = users.find((u) => {
+                    return u.id === perm.ownerId;
                 });
-            } else if (inheritedPermBits !== undefined) {
-                const bits = inheritedPermBits;
-                const o = (bits >> 6) & 0x7;
-                const g = (bits >> 3) & 0x7;
-                const w = bits & 0x7;
 
-                this.setState({
-                    users: filteredUsers,
-                    groups,
-                    inherited: true,
-                    inheritedOwnerPerm: o,
-                    inheritedGroupPerm: g,
-                    inheritedWorldPerm: w,
-                    ownerId: null,
-                    groupId: null,
-                    ownerRead: ((bits >> 6) & 4) !== 0,
-                    ownerWrite: ((bits >> 6) & 2) !== 0,
-                    groupRead: ((bits >> 3) & 4) !== 0,
-                    groupWrite: ((bits >> 3) & 2) !== 0,
-                    worldRead: (bits & 4) !== 0,
-                    worldWrite: (bits & 2) !== 0,
-                    loading: false,
-                });
-            } else {
-                this.setState({ users: filteredUsers, groups, loading: false });
+                ownerName = owner ? owner.displayName : `User #${perm.ownerId}`;
             }
+
+            const readGroupIds = new Set<number>();
+            const writeGroupIds = new Set<number>();
+
+            if (perm?.groups) {
+                // The World group must never have write access.
+                const worldGroup = groups.find((g) => {
+                    return g.name === worldGroupName;
+                });
+
+                for (const g of perm.groups) {
+                    readGroupIds.add(g.groupId);
+
+                    if (g.writable && g.groupId !== worldGroup?.id) {
+                        writeGroupIds.add(g.groupId);
+                    }
+                }
+            }
+
+            // Sync state with the entry's current perm (the single source of truth).
+            // If the entry was edited before without closing, its perm already
+            // reflects the latest saved state.
+            if (entry.perm) {
+                for (const id of entry.perm.groupIds) {
+                    readGroupIds.add(id);
+                }
+            }
+
+            this.setState({
+                allGroups: groups.filter((g) => {
+                    return g.name !== adminGroupName;
+                }),
+                readGroupIds,
+                writeGroupIds,
+                ownerName,
+            });
         } catch (e) {
-            this.setState({ errorMessage: (e as Error).message, loading: false });
+            this.setState({ errorMessage: (e as Error).message });
         }
     }
 
     public render(): ComponentChild {
-        const { loading, errorMessage, entityName, users, groups, ownerId, groupId, ownerRead, ownerWrite, groupRead,
-            groupWrite, worldRead, worldWrite, saving } = this.state;
+        const { errorMessage, ownerName, allGroups, readGroupIds, writeGroupIds } = this.state;
 
-        if (loading) {
-            return (
-                <Popup ref={this.popupRef} showArrow={true}>
-                    <Label caption="Loading…" />
-                </Popup>
-            );
-        }
+        const poolGroups = allGroups.filter((g) => {
+            return !readGroupIds.has(g.id) && g.name !== adminGroupName;
+        });
 
-        const ownerItems: IDropdownItem[] = [
-            {
-                label: "None",
-                onClick: () => {
-                    this.setState({ ownerId: null });
-                },
-            },
-        ];
+        const readGroups = allGroups.filter((g) => {
+            return readGroupIds.has(g.id);
+        });
 
-        for (const u of users) {
-            ownerItems.push({
-                label: `${u.displayName || u.username} (@${u.username})`,
-                onClick: () => {
-                    this.setState({ ownerId: u.id });
-                },
-            });
-        }
-
-        const ownerCaption = ownerId
-            ? (users.find((u) => {
-                return u.id === ownerId;
-            })?.username ?? String(ownerId))
-            : "None";
-
-        const groupItems: IDropdownItem[] = [
-            {
-                label: "None",
-                onClick: () => {
-                    this.setState({ groupId: null });
-                },
-            },
-        ];
-
-        for (const g of groups) {
-            groupItems.push({
-                label: g.name,
-                onClick: () => {
-                    this.setState({ groupId: g.id });
-                },
-            });
-        }
-
-        const groupCaption = groupId
-            ? (groups.find((g) => {
-                return g.id === groupId;
-            })?.name ?? String(groupId))
-            : "None";
-
-        const permRow = (label: string, read: boolean, write: boolean,
-            onRead: (v: boolean) => void, onWrite: (v: boolean) => void,
-        ): ComponentChild => {
-            return (
-                <Container
-                    className="form-row"
-                    orientation={Orientation.LeftToRight}
-                    mainAlignment={ChildAlignment.SpaceBetween}
-                    crossAlignment={ChildAlignment.Center}
-                >
-                    <Label className="form-row-label" caption={label} />
-                    <Container
-                        orientation={Orientation.LeftToRight}
-                        crossAlignment={ChildAlignment.Center}
-                        className="form-row-actions"
-                    >
-                        <Container
-                            orientation={Orientation.LeftToRight}
-                            crossAlignment={ChildAlignment.Center}
-                            style={{ gap: "4px" }}
-                        >
-                            <Checkbox
-                                checked={read}
-                                onChange={(v) => {
-                                    onRead(v);
-                                }}
-                            />
-                            <Label caption="R" />
-                        </Container>
-                        <Container
-                            orientation={Orientation.LeftToRight}
-                            crossAlignment={ChildAlignment.Center}
-                            style={{ gap: "4px" }}
-                        >
-                            <Checkbox
-                                checked={write}
-                                onChange={(v) => {
-                                    onWrite(v);
-                                }}
-                            />
-                            <Label caption="W" />
-                        </Container>
-                    </Container>
-                </Container>
-            );
-        };
+        const writeGroups = allGroups.filter((g) => {
+            return writeGroupIds.has(g.id);
+        });
 
         return (
-            <Popup ref={this.popupRef} showArrow={true}>
-                <Container
-                    className="font-bold text-lg"
-                    orientation={Orientation.LeftToRight}
-                    crossAlignment={ChildAlignment.Center}
-                >
-                    <Icon src={Codicon.Key} style={{ fontSize: "20px", marginRight: "8px" }} />
-                    {entityName}
-                </Container>
+            <Popup
+                id="permissionEditor"
+                ref={this.popupRef}
+                showArrow
+                header={<Label id="permissionEditorHeader" caption={`Owner: ${ownerName}`} />}
+                placement={ComponentPlacement.BottomCenter}
+            >
+                {errorMessage && <Label caption={errorMessage} />}
+                {!errorMessage && (
+                    <Container
+                        className="perm-editor-layout"
+                        orientation={Orientation.LeftToRight}
+                        gap="12px"
+                    >
+                        <Container
+                            className="perm-editor-left"
+                            orientation={Orientation.TopDown}
+                            gap="8px"
+                        >
+                            <Container orientation={Orientation.TopDown} gap="4px">
+                                <Label caption="Read" className="perm-column-title" />
+                                <div
+                                    class="perm-drop-zone"
+                                    onDragOver={this.handleDragOver}
+                                    onDrop={this.handleDropOnRead}
+                                >
+                                    {readGroups.map((g) => {
+                                        return this.renderGroupChip(g, false, () => {
+                                            this.removeReadGroup(g.id);
+                                        });
+                                    })}
+                                    {readGroups.length === 0 && (
+                                        <span class="perm-drop-hint">Drop groups here</span>
+                                    )}
+                                </div>
+                            </Container>
 
-                {errorMessage && (
-                    <Container className="form-row">
-                        <Label caption={errorMessage} className="text-error text-sm" />
+                            <Container orientation={Orientation.TopDown} gap="4px">
+                                <Label caption="Write" className="perm-column-title" />
+                                <div
+                                    class="perm-drop-zone"
+                                    onDragOver={this.handleDragOverWrite}
+                                    onDrop={this.handleDropOnWrite}
+                                >
+                                    {writeGroups.map((g) => {
+                                        return this.renderGroupChip(g, false, () => {
+                                            this.removeWriteGroup(g.id);
+                                        });
+                                    })}
+                                    {writeGroups.length === 0 && (
+                                        <span class="perm-drop-hint">Drop groups here</span>
+                                    )}
+                                </div>
+                            </Container>
+                        </Container>
+
+                        <Container
+                            className="perm-editor-right"
+                            orientation={Orientation.TopDown}
+                            gap="4px"
+                        >
+                            <Label caption="Groups" className="perm-column-title" />
+                            <div class="perm-group-pool">
+                                {poolGroups.map((g) => {
+                                    return this.renderGroupChip(g, true);
+                                })}
+                                {poolGroups.length === 0 && (
+                                    <span class="perm-drop-hint">All groups assigned</span>
+                                )}
+                            </div>
+                        </Container>
                     </Container>
                 )}
-
-                <Container className="form-card" orientation={Orientation.TopDown}>
-                    <Container
-                        className="form-row"
-                        orientation={Orientation.LeftToRight}
-                        mainAlignment={ChildAlignment.SpaceBetween}
-                        crossAlignment={ChildAlignment.Center}
-                    >
-                        <Label className="form-row-label" caption="Owner" />
-                        <div style={{ flex: 1 }}>
-                            <Dropdown
-                                caption={ownerCaption}
-                                items={ownerItems}
-                                selectedItem={ownerCaption}
-                                closeOnSelect
-                                style={{ width: "100%" }}
-                            />
-                        </div>
-                    </Container>
-
-                    <Container
-                        className="form-row"
-                        orientation={Orientation.LeftToRight}
-                        mainAlignment={ChildAlignment.SpaceBetween}
-                        crossAlignment={ChildAlignment.Center}
-                    >
-                        <Label className="form-row-label" caption="Group" />
-                        <div style={{ flex: 1 }}>
-                            <Dropdown
-                                caption={groupCaption}
-                                items={groupItems}
-                                selectedItem={groupCaption}
-                                closeOnSelect
-                                style={{ width: "100%" }}
-                            />
-                        </div>
-                    </Container>
-                </Container>
-
-                <Container className="form-card" orientation={Orientation.TopDown}>
-                    {permRow("Owner", ownerRead, ownerWrite,
-                        (v) => {
-                            this.setState({ ownerRead: v });
-                        },
-                        (v) => {
-                            this.setState({ ownerWrite: v });
-                        },
-                    )}
-                    {permRow("Group", groupRead, groupWrite,
-                        (v) => {
-                            this.setState({ groupRead: v });
-                        },
-                        (v) => {
-                            this.setState({ groupWrite: v });
-                        },
-                    )}
-                    {permRow("World", worldRead, worldWrite,
-                        (v) => {
-                            this.setState({ worldRead: v });
-                        },
-                        (v) => {
-                            this.setState({ worldWrite: v });
-                        },
-                    )}
-                </Container>
-
-                <Container
-                    className="form-row"
-                    orientation={Orientation.LeftToRight}
-                    mainAlignment={ChildAlignment.SpaceBetween}
-                    crossAlignment={ChildAlignment.Center}
-                >
-                    <span></span>
-                    <Container orientation={Orientation.LeftToRight} className="form-row-actions">
-                        <Button
-                            caption="Save"
-                            disabled={saving}
-                            onClick={() => {
-                                void this.handleSave();
-                            }}
-                        />
-                    </Container>
-                </Container>
             </Popup>
         );
     }
 
-    private async handleSave(): Promise<void> {
-        const { ownerId, groupId, ownerRead, ownerWrite, groupRead, groupWrite, worldRead, worldWrite,
-            entityType, entityId, inherited, inheritedOwnerPerm, inheritedGroupPerm, inheritedWorldPerm,
-        } = this.state;
-        const { dataModel, onSaved } = this.props;
+    private renderGroupChip(group: IGroupRow, draggable: boolean, onRemove?: () => void): ComponentChild {
+        return (
+            <span
+                class="perm-chip"
+                draggable={draggable}
+                onDragStart={draggable ? (e) => {
+                    this.handleDragStart(e, group.id);
+                } : undefined}
+                onDragEnd={draggable ? this.handleDragEnd : undefined}
+                style={{ borderColor: group.color, backgroundColor: group.color + "20" }}
+            >
+                {group.name}
+                {onRemove && (
+                    <Button
+                        imageOnly
+                        className="perm-chip-remove"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            onRemove();
+                        }}
+                    >
+                        <Icon src={Codicon.Close} />
+                    </Button>
+                )}
+            </span>
+        );
+    }
 
-        const ownerPerm = (ownerRead ? 4 : 0) | (ownerWrite ? 2 : 0);
-        const groupPerm = (groupRead ? 4 : 0) | (groupWrite ? 2 : 0);
-        const worldPerm = (worldRead ? 4 : 0) | (worldWrite ? 2 : 0);
+    private handleDragStart = (e: DragEvent, groupId: number): void => {
+        e.dataTransfer!.setData(dragType, String(groupId));
+        (e.target as HTMLElement).classList.add("dragging");
+        this.dragGroupId = groupId;
+    };
 
-        // If inherited and nothing changed, just close without saving.
-        if (inherited && ownerId === null && groupId === null
-            && ownerPerm === inheritedOwnerPerm
-            && groupPerm === inheritedGroupPerm
-            && worldPerm === inheritedWorldPerm
-        ) {
-            this.popupRef.current?.close();
+    private handleDragEnd = (e: DragEvent): void => {
+        (e.target as HTMLElement).classList.remove("dragging");
+        this.dragGroupId = undefined;
+    };
+
+    private handleDropOnRead = (e: DragEvent): void => {
+        e.preventDefault();
+        const raw = e.dataTransfer?.getData(dragType);
+
+        if (!raw) {
+            return;
+        }
+
+        const groupId = Number(raw);
+
+        if (!groupId) {
+            return;
+        }
+
+        this.addGroup(groupId, false);
+    };
+
+    private handleDropOnWrite = (e: DragEvent): void => {
+        e.preventDefault();
+        const raw = e.dataTransfer?.getData(dragType);
+
+        if (!raw) {
+            return;
+        }
+
+        const groupId = Number(raw);
+
+        if (!groupId) {
+            return;
+        }
+
+        const group = this.state.allGroups.find((g) => {
+            return g.id === groupId;
+        });
+
+        if (group?.name === worldGroupName) {
+            return;
+        }
+
+        this.addGroup(groupId, true);
+    };
+
+    private handleDragOver = (e: DragEvent): void => {
+        e.preventDefault();
+    };
+
+    private handleDragOverWrite = (e: DragEvent): void => {
+        if (this.dragGroupId === undefined) {
+            return;
+        }
+
+        const group = this.state.allGroups.find((g) => {
+            return g.id === this.dragGroupId;
+        });
+
+        if (group?.name === worldGroupName) {
+            e.dataTransfer!.dropEffect = "none";
 
             return;
         }
 
-        this.setState({ saving: true, errorMessage: "" });
+        e.preventDefault();
+    };
+
+    private addGroup(groupId: number, writable: boolean): void {
+        const { readGroupIds, writeGroupIds } = this.state;
+
+        const nextRead = new Set(readGroupIds);
+
+        nextRead.add(groupId);
+
+        const nextWrite = new Set(writeGroupIds);
+
+        if (writable) {
+            nextWrite.add(groupId);
+        }
+
+        this.setState({ readGroupIds: nextRead, writeGroupIds: nextWrite }, () => {
+            void this.saveChanges();
+        });
+    }
+
+    private removeReadGroup(groupId: number): void {
+        const { readGroupIds, writeGroupIds } = this.state;
+
+        const nextRead = new Set(readGroupIds);
+
+        nextRead.delete(groupId);
+
+        const nextWrite = new Set(writeGroupIds);
+
+        nextWrite.delete(groupId);
+
+        this.setState({ readGroupIds: nextRead, writeGroupIds: nextWrite }, () => {
+            void this.saveChanges();
+        });
+    }
+
+    private removeWriteGroup(groupId: number): void {
+        const { writeGroupIds } = this.state;
+
+        const nextWrite = new Set(writeGroupIds);
+
+        nextWrite.delete(groupId);
+
+        this.setState({ writeGroupIds: nextWrite }, () => {
+            void this.saveChanges();
+        });
+    }
+
+    private saveChanges = async (): Promise<void> => {
+        const { dataModel, onSaved } = this.props;
+        const { entry, readGroupIds, writeGroupIds, allGroups } = this.state;
+
+        if (!entry) {
+            return;
+        }
+
+        const entityType = entry.type === SbDmEntityType.ScoreFolder ? "folder" : "score";
+        const prevGroupIds = entry.perm?.groupIds ?? [];
+        const worldGroup = allGroups.find((g) => {
+            return g.name === worldGroupName;
+        });
+
+        const addGroups: Array<{ groupId: number; writable: boolean; }> = [];
+
+        for (const id of readGroupIds) {
+            addGroups.push({ groupId: id, writable: id !== worldGroup?.id && writeGroupIds.has(id) });
+        }
+
+        const removeGroups: Array<{ groupId: number; }> = [];
+
+        for (const id of prevGroupIds) {
+            if (!readGroupIds.has(id)) {
+                removeGroups.push({ groupId: id });
+            }
+        }
 
         try {
-            await dataModel.setPermissions(entityType, entityId, ownerId, groupId,
-                ownerPerm, groupPerm, worldPerm);
-            this.popupRef.current?.close();
-            onSaved();
+            await dataModel.setPermissions(entityType, entry.id, undefined,
+                addGroups.length > 0 ? addGroups : undefined, removeGroups.length > 0 ? removeGroups : undefined);
+
+            // Update the entry's perm directly — it is the single source of truth.
+            // Only update fields affected by group drag operations.
+            // canWrite, canRead, isOwner are user-relative and were set correctly by the backend.
+            const perm = entry.perm as Mutable<ISbDmPermissionInfo>;
+
+            perm.groupIds = [...readGroupIds];
+            perm.isWorld = worldGroup !== undefined && readGroupIds.has(worldGroup.id);
+
+            onSaved(entry);
         } catch (e) {
-            this.setState({ errorMessage: (e as Error).message, saving: false });
+            this.setState({ errorMessage: (e as Error).message });
         }
-    }
+    };
 }

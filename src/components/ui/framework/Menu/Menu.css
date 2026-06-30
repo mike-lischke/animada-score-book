@@ -35,6 +35,7 @@
 
 .menuItem.separator {
     height: 1px;
+    width: 100%;
     margin: 4px 0;
     padding: 0;
 

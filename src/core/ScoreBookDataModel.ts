@@ -337,26 +337,25 @@ export interface ISbDmPermissionInfo {
     /** The current user is the owner of this entity. */
     readonly isOwner: boolean;
 
-    /** The current user has access via group membership. */
-    readonly isGroup: boolean;
+    /** The current user can read this entity. */
+    readonly canRead: boolean;
 
-    /** The entity is world-readable. */
+    /** The current user can write this entity. */
+    readonly canWrite: boolean;
+
+    /** The entity is assigned to the World group (publicly readable). */
     readonly isWorld: boolean;
 
-    /** The raw 9-bit permission mask (owner/group/world × rwx). */
-    readonly permBits: number;
+    /** IDs of groups assigned to this entity. */
+    readonly groupIds: number[];
 }
 
-/** Decomposed permissions returned by getPermissions. */
+/** Permissions returned by getPermissions (explicit, not inherited). */
 export interface IPermissionDecomposition {
-    id: number;
     entityType: string;
-    entityId: number | null;
+    entityId: number;
     ownerId: number | null;
-    groupId: number | null;
-    ownerPerm: number;
-    groupPerm: number;
-    worldPerm: number;
+    groups: Array<{ groupId: number; writable: boolean; }>;
 }
 
 export interface ISbDmSoundFolder extends ISbDmVisual {
@@ -895,10 +894,12 @@ export class ScoreBookDataModel {
     }
 
     /**
-     * Fetches the decomposed permissions for a score library entity.
+     * Fetches the explicit (non-inherited) permissions for an entity.
+     * Owners and admins can call this.
      *
      * @param entityType "score" or "folder".
      * @param entityId   The entity's database id.
+     *
      * @returns The permission decomposition, or null if none exists.
      */
     public async getPermissions(entityType: string, entityId: number): Promise<IPermissionDecomposition | null> {
@@ -917,23 +918,37 @@ export class ScoreBookDataModel {
     }
 
     /**
-     * Sets permissions for a score library entity. Admin-only.
+     * Sets permissions for a score library entity. Owner or admin only.
      *
-     * @param entityType "score" or "folder".
-     * @param entityId   The entity's database id.
-     * @param ownerId    The owning user id (or null).
-     * @param groupId    The owning group id (or null).
-     * @param ownerPerm  Owner permission bits (0-7).
-     * @param groupPerm  Group permission bits (0-7).
-     * @param worldPerm  World permission bits (0-7).
+     * @param entityType   "score" or "folder".
+     * @param entityId     The entity's database id.
+     * @param ownerId      The new owner id, or null to inherit from parent. Omit to leave unchanged.
+     * @param addGroups    Groups to add with writable flag.
+     * @param removeGroups Group ids to remove from the entity.
      */
-    public async setPermissions(entityType: string, entityId: number, ownerId: number | null, groupId: number | null,
-        ownerPerm: number, groupPerm: number, worldPerm: number,
+    public async setPermissions(entityType: string, entityId: number,
+        ownerId?: number | null,
+        addGroups?: Array<{ groupId: number; writable: boolean; }>,
+        removeGroups?: Array<{ groupId: number; }>,
     ): Promise<void> {
+        const body: Record<string, unknown> = { entityType, entityId };
+
+        if (ownerId !== undefined) {
+            body.ownerId = ownerId;
+        }
+
+        if (addGroups) {
+            body.addGroups = addGroups;
+        }
+
+        if (removeGroups) {
+            body.removeGroups = removeGroups;
+        }
+
         const res = await this.fetchApi("/api?action=setPermissions", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ entityType, entityId, ownerId, groupId, ownerPerm, groupPerm, worldPerm }),
+            body: JSON.stringify(body),
         });
 
         if (!res?.ok) {

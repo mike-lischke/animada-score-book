@@ -196,3 +196,15 @@ Object.defineProperty(globalThis, "DOMRect", {
         };
     }),
 });
+
+class ResizeObserverMock {
+    public observe = vi.fn();
+    public unobserve = vi.fn();
+    public disconnect = vi.fn();
+}
+
+Object.defineProperty(globalThis, "ResizeObserver", {
+    writable: true,
+    enumerable: true,
+    value: ResizeObserverMock,
+});

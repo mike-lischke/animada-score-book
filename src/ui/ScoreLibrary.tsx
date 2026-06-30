@@ -22,7 +22,7 @@ import {
     SbDmEntityType, type ISbDmScore, type ISbDmScoreFolder, type ScoreBookDataModel
 } from "../core/ScoreBookDataModel.js";
 import { AppStorage, type IUISettings } from "../core/AppStorage.js";
-import { PermMatrix } from "./PermMatrix.js";
+import { PermIndicator } from "./PermIndicator.js";
 import { requisitions } from "../supplement/Requisitions.js";
 
 export interface IScoreLibraryProperties extends ICommonUIProperties {
@@ -73,6 +73,7 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
             resizable: false,
             hozAlign: "left",
             formatter: this.scoreTreeCellFormatter,
+            cellDblClick: this.handleScoreTreeDblClick,
         }];
 
         const scoreTreeOptions: ITreeGridOptions = {
@@ -121,7 +122,6 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
                         columns={scoreTreeColumns}
                         tableData={scores}
 
-                        onRowClick={this.handleScoreTreeRowClick}
                         onRowExpanded={this.handleScoreTreeRowExpanded}
                         onRowCollapsed={this.handleScoreTreeRowCollapsed}
                         isRowExpanded={this.isScoreTreeRowExpanded}
@@ -141,6 +141,8 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
 
         const host = document.createElement("div");
         host.className = "scoreTreeEntry";
+        host.dataset.entryType = String(data.type);
+        host.dataset.entryId = String(data.id);
 
         let icon: ComponentChild;
         const menuItems: IMenuItem[] = [];
@@ -162,6 +164,7 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
                     { id: "import", label: "Import Score", icon: Codicon.CloudDownload },
                     { id: "addFolder", label: "Add New Sub Folder", icon: Codicon.NewFolder },
                     { id: "edit", label: "Rename Folder", icon: Codicon.Edit },
+                    { id: "separator1", label: "-" },
                     { id: "remove", label: "Remove Folder", icon: Codicon.Trash },
                 );
             } else {
@@ -170,6 +173,7 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
 
                 menuItems.push(
                     { id: "load", label: "Load Score" },
+                    { id: "separator2", label: "-" },
                     { id: "remove", label: "Remove Score", icon: Codicon.Trash },
                 );
             }
@@ -178,12 +182,34 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
         };
 
         const isAdmin = dataModel.user?.isAdmin ?? false;
-        const renderPermMatrix = data.perm && (data.perm.isOwner || data.perm.isGroup || isAdmin)
-            && (currentSettings.showPermMatrix ?? true);
+        const { perm } = data;
+        const canManage = isAdmin || (perm?.isOwner === true);
+        const showIndicator = (currentSettings.showPermMatrix ?? true) && perm != null;
+        const canWrite = perm?.canWrite === true;
+        const isWorld = perm?.isWorld === true;
+
+        if (canManage) {
+            menuItems.push(
+                { id: "separator3", label: "-" },
+            );
+            menuItems.push(
+                { id: "managePerm", label: "Group Access", icon: Codicon.Key },
+            );
+        }
 
         const content = <>
             {icon}
             <Label caption={data.name} />
+            {showIndicator && (
+                <PermIndicator
+                    canWrite={canWrite}
+                    isWorld={isWorld}
+                    canManage={canManage}
+                    onManage={canManage ? () => {
+                        this.handleMenuItemClick("managePerm", data);
+                    } : undefined}
+                />
+            )}
             <Container className="actionBox" orientation={Orientation.LeftToRight}>
                 <Menu
                     icon={Codicon.KebabVertical}
@@ -194,14 +220,6 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
                     }}
                 />
             </Container>
-            {renderPermMatrix && (
-                <PermMatrix
-                    permBits={data.perm.permBits}
-                    onClick={() => {
-                        this.handleMenuItemClick("editPerm", data);
-                    }}
-                />
-            )}
         </>;
 
         render(content, host);
@@ -218,6 +236,18 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
         const actionParent: ISbDmScoreFolder | undefined = needsParent
             && entry.type === SbDmEntityType.ScoreFolder
             ? entry : undefined;
+
+        if (id === "managePerm") {
+            const tree = this.scoreTableRef.current;
+
+            tree?.deselectRow();
+
+            const rows = tree?.searchAllRows("id", entry.id);
+
+            if (rows && rows.length > 0) {
+                tree?.selectRow(rows);
+            }
+        }
 
         void onAction?.(id, actionData, actionParent).then((handled) => {
             if (handled) {
@@ -333,14 +363,11 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
         });
     };
 
-    private handleScoreTreeRowClick = (event: UIEvent, row: RowComponent): void => {
-        const entry = row.getData() as ISbDmScoreFolder | ISbDmScore;
-        if (entry.type === SbDmEntityType.Score) {
-            if (event instanceof MouseEvent && event.detail >= 2) {
-                this.handleActionClick(event, "load", entry);
+    private handleScoreTreeDblClick = (event: UIEvent, cell: CellComponent): void => {
+        const entry = cell.getRow().getData() as ISbDmScoreFolder | ISbDmScore;
 
-                return;
-            }
+        if (entry.type === SbDmEntityType.Score) {
+            this.handleActionClick(event as MouseEvent, "load", entry);
         }
     };
 
@@ -403,10 +430,13 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
         return Promise.resolve(true);
     };
 
-    private handlePermChanged = (): Promise<boolean> => {
-        const { dataModel } = this.props;
+    private handlePermChanged = (entry: ISbDmScoreFolder | ISbDmScore): Promise<boolean> => {
         const tree = this.scoreTableRef.current;
-        void tree?.setData(dataModel.scoreLib, SetDataAction.Update);
+        const rows = tree?.searchAllRows("id", entry.id);
+
+        rows?.forEach((row) => {
+            row.reformat();
+        });
 
         return Promise.resolve(true);
     };

@@ -199,7 +199,7 @@ export class SettingsDialog extends UIComponent<{}, ISettingsDialogState> {
                         mainAlignment={ChildAlignment.SpaceBetween}
                         crossAlignment={ChildAlignment.Center}
                     >
-                        <span className="form-row-label">Show permission matrix</span>
+                        <span className="form-row-label">Show permission indicator</span>
                         <Checkbox
                             id="showPermMatrix"
                             checked={currentSettings.showPermMatrix ?? true}

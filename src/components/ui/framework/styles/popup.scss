@@ -6,11 +6,15 @@
 .popup {
     display: none;
     position: absolute;
+    top: 0;
+    overflow: visible;
 
     min-width: min-content;
-    max-width: 360px;
+    max-width: 500px;
 
-    padding: 12px;
+    margin: 0;
+    padding: 8px;
+
     border: 1px solid var(--color-base-300);
     border-radius: 0.5rem;
 

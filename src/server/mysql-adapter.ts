@@ -104,16 +104,22 @@ const createTablesSQL = [
         entity_type VARCHAR(32)  NOT NULL,
         entity_id   INT UNSIGNED NULL,
         owner_id    INT UNSIGNED NULL,
-        group_id    INT UNSIGNED NULL,
-        perm_bits   INT UNSIGNED NOT NULL DEFAULT 0,
         PRIMARY KEY (id),
         UNIQUE KEY uk_permissions_entity (entity_type, entity_id),
         CONSTRAINT fk_permissions_owner
             FOREIGN KEY (owner_id) REFERENCES users(id)
-            ON DELETE SET NULL,
-        CONSTRAINT fk_permissions_group
-            FOREIGN KEY (group_id) REFERENCES \`groups\`(id)
             ON DELETE SET NULL
+    ) ENGINE=InnoDB`,
+
+    `CREATE TABLE IF NOT EXISTS entity_groups (
+        entity_type VARCHAR(32)  NOT NULL,
+        entity_id   INT UNSIGNED NOT NULL,
+        group_id    INT UNSIGNED NOT NULL,
+        writable    TINYINT(1)   NOT NULL DEFAULT 0,
+        PRIMARY KEY (entity_type, entity_id, group_id),
+        CONSTRAINT fk_entity_groups_group
+            FOREIGN KEY (group_id) REFERENCES \`groups\`(id)
+            ON DELETE CASCADE
     ) ENGINE=InnoDB`,
 ];
 

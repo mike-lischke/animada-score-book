@@ -74,9 +74,15 @@ const createTablesSQL = [
         entity_type VARCHAR(32)  NOT NULL,
         entity_id   INT NULL,
         owner_id    INT NULL REFERENCES users(id) ON DELETE SET NULL,
-        group_id    INT NULL REFERENCES groups(id) ON DELETE SET NULL,
-        perm_bits   INT NOT NULL DEFAULT 0,
         UNIQUE (entity_type, entity_id)
+    )`,
+
+    `CREATE TABLE IF NOT EXISTS entity_groups (
+        entity_type VARCHAR(32)  NOT NULL,
+        entity_id   INT NOT NULL,
+        group_id    INT NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+        writable    BOOLEAN NOT NULL DEFAULT FALSE,
+        PRIMARY KEY (entity_type, entity_id, group_id)
     )`,
 ];
 

@@ -95,9 +95,9 @@ test.describe("Settings — Permission Matrix Toggle", () => {
         await page.locator("#scoreLibraryButton").click();
         await expect(page.locator("#scoreTreeHost")).toBeVisible({ timeout: 5000 });
 
-        // The perm matrix should be visible by default (showPermMatrix defaults to true).
-        const permMatrix = page.locator("#scoreTreeHost .permMatrix");
-        await expect(permMatrix).toBeVisible({ timeout: 5000 });
+        // The perm indicator should be visible by default (showPermMatrix defaults to true).
+        const permIndicator = page.locator("#scoreTreeHost .permIndicator");
+        await expect(permIndicator).toBeVisible({ timeout: 5000 });
 
         // Close the drawer via Escape so it doesn't intercept toolbar clicks.
         await page.keyboard.press("Escape");
@@ -121,8 +121,8 @@ test.describe("Settings — Permission Matrix Toggle", () => {
         await page.waitForTimeout(500);
         await expect(page.locator("#scoreTreeHost")).toBeVisible({ timeout: 5000 });
 
-        // The perm matrix should now be hidden.
-        await expect(permMatrix).not.toBeVisible({ timeout: 5000 });
+        // The perm indicator should now be hidden.
+        await expect(permIndicator).not.toBeVisible({ timeout: 5000 });
 
         // Close drawer via Escape, reopen settings, re-enable.
         await page.keyboard.press("Escape");
@@ -142,7 +142,7 @@ test.describe("Settings — Permission Matrix Toggle", () => {
         await page.waitForTimeout(500);
         await expect(page.locator("#scoreTreeHost")).toBeVisible({ timeout: 5000 });
 
-        // The perm matrix should be visible again.
-        await expect(permMatrix).toBeVisible({ timeout: 5000 });
+        // The perm indicator should be visible again.
+        await expect(permIndicator).toBeVisible({ timeout: 5000 });
     });
 });
