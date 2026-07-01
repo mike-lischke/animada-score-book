@@ -12,10 +12,10 @@ import { existsSync, mkdirSync } from "node:fs";
 import { resolve } from "node:path";
 
 const testDbName = "animada_e2e_setup_test";
-const dbUser = "root";
-const dbPassword = "localRoot#123";
-const dbHost = "127.0.0.1";
-const dbPort = 3306;
+const dbUser = process.env.DB_USER ?? "root";
+const dbPassword = process.env.DB_PASSWORD ?? "localRoot#123";
+const dbHost = process.env.DB_HOST ?? "127.0.0.1";
+const dbPort = process.env.DB_PORT ? Number(process.env.DB_PORT) : 3306;
 
 // Use a different port to avoid conflicts with the dev server on 3100.
 const testBackendPort = 3199;
