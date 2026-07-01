@@ -46,11 +46,23 @@ const createTablesSQL = [
         username           VARCHAR(255) NOT NULL UNIQUE,
         password_hash      VARCHAR(512) NOT NULL,
         refresh_token_hash VARCHAR(256),
+        auth_type          VARCHAR(16),
+        group_id           INT,
         display_name       VARCHAR(255) NOT NULL,
-        last_login    TIMESTAMP,
-        created_at    TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        updated_at    TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP
+        last_login         TIMESTAMP,
+        created_at         TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at         TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP
     )`,
+
+    `CREATE TABLE IF NOT EXISTS login_audit (
+        id         SERIAL PRIMARY KEY,
+        user_id    INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        event      VARCHAR(16) NOT NULL CHECK (event IN ('login', 'group_login', 'refresh', 'logout')),
+        group_id   INT,
+        ip_address VARCHAR(45),
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_audit_user_time ON login_audit (user_id, created_at)`,
 
     `CREATE TABLE IF NOT EXISTS groups (
         id            SERIAL PRIMARY KEY,

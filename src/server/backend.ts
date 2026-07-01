@@ -79,7 +79,7 @@ const loadConfig = (): IServerConfig => {
         : undefined;
 
     // Environment variables take precedence over saved config.
-    return {
+    const merged = {
         ...defaultConfig,
         ...saved,
         host: process.env.HOST ?? saved.host ?? defaultConfig.host,
@@ -89,6 +89,20 @@ const loadConfig = (): IServerConfig => {
             ? process.env.TRUST_PROXY === "true"
             : (saved.trustProxy ?? defaultConfig.trustProxy),
     };
+
+    // Database config overrides via environment variables.
+    // These allow running the backend without persisting credentials on disk.
+    merged.database = {
+        ...merged.database,
+        engine: (process.env.DB_ENGINE as DatabaseEngine | undefined) ?? merged.database.engine,
+        host: process.env.DB_HOST ?? merged.database.host,
+        port: process.env.DB_PORT ? Number(process.env.DB_PORT) : merged.database.port,
+        database: process.env.DB_NAME ?? merged.database.database,
+        user: process.env.DB_USER ?? merged.database.user,
+        password: process.env.DB_PASSWORD ?? merged.database.password,
+    };
+
+    return merged;
 };
 
 const saveConfig = (): void => {
@@ -554,13 +568,16 @@ const seedIfExists = async (targetAdapter: IDatabaseAdapter): Promise<void> => {
 
 const handleTestConnection = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
     const user = getAuthUser(req);
-    const usersExist = await hasUsers(adapter);
 
-    // Allow during bootstrap (no users yet) or when authenticated as admin.
-    if (usersExist && (!user || !(await isUserInAdminGroup(adapter, user.userId)))) {
-        sendError(res, "Forbidden", 403);
+    // During bootstrap the adapter is not yet initialized — allow unrestricted.
+    if (adapter.isInitialized()) {
+        const usersExist = await hasUsers(adapter);
 
-        return;
+        if (usersExist && (!user || !(await isUserInAdminGroup(adapter, user.userId)))) {
+            sendError(res, "Forbidden", 403);
+
+            return;
+        }
     }
 
     const body = await readJsonBody(req);

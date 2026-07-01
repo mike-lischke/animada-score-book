@@ -63,12 +63,28 @@ const createTablesSQL = [
         username           VARCHAR(255) NOT NULL,
         password_hash      VARCHAR(512) NOT NULL,
         refresh_token_hash VARCHAR(256) NULL,
+        auth_type          VARCHAR(16)  NULL,
+        group_id           INT UNSIGNED NULL,
         display_name       VARCHAR(255) NOT NULL,
         last_login    TIMESTAMP    NULL,
         created_at    TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
         updated_at    TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         PRIMARY KEY (id),
         UNIQUE KEY uk_users_username (username)
+    ) ENGINE=InnoDB`,
+
+    `CREATE TABLE IF NOT EXISTS login_audit (
+        id         INT UNSIGNED NOT NULL AUTO_INCREMENT,
+        user_id    INT UNSIGNED NOT NULL,
+        event      ENUM('login', 'group_login', 'refresh', 'logout') NOT NULL,
+        group_id   INT UNSIGNED NULL,
+        ip_address VARCHAR(45) NULL,
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        INDEX idx_audit_user_time (user_id, created_at),
+        CONSTRAINT fk_audit_user
+            FOREIGN KEY (user_id) REFERENCES users(id)
+            ON DELETE CASCADE
     ) ENGINE=InnoDB`,
 
     `CREATE TABLE IF NOT EXISTS \`groups\` (
