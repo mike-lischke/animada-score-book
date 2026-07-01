@@ -34,6 +34,12 @@ interface IServerConfig {
     port: number;
     database: IDatabaseConfig;
     soundLibPath: string;
+
+    /** Origins allowed for CORS. Undefined = no CORS headers (strictest). */
+    allowedOrigins?: string[];
+
+    /** When true, trust x-forwarded-* proxy headers. Default false. */
+    trustProxy?: boolean;
 }
 
 const defaultConfig: IServerConfig = {
@@ -48,6 +54,7 @@ const defaultConfig: IServerConfig = {
         password: "",
     },
     soundLibPath: "public/sounds",
+    trustProxy: false,
 };
 
 let adapter: IDatabaseAdapter;
@@ -64,12 +71,23 @@ const loadConfig = (): IServerConfig => {
         }
     }
 
+    // Parse ALLOWED_ORIGINS env var (comma-separated).
+    const allowedOriginsEnv = process.env.ALLOWED_ORIGINS
+        ? process.env.ALLOWED_ORIGINS.split(",").map((s) => {
+            return s.trim();
+        }).filter(Boolean)
+        : undefined;
+
     // Environment variables take precedence over saved config.
     return {
         ...defaultConfig,
         ...saved,
         host: process.env.HOST ?? saved.host ?? defaultConfig.host,
         port: process.env.PORT ? Number(process.env.PORT) : (saved.port ?? defaultConfig.port),
+        allowedOrigins: allowedOriginsEnv ?? saved.allowedOrigins ?? defaultConfig.allowedOrigins,
+        trustProxy: process.env.TRUST_PROXY !== undefined
+            ? process.env.TRUST_PROXY === "true"
+            : (saved.trustProxy ?? defaultConfig.trustProxy),
     };
 };
 
@@ -93,11 +111,21 @@ const createAdapter = (): IDatabaseAdapter => {
 
 // ---------- Network helpers ----------
 
+/**
+ * Returns the client IP address.
+ * Only trusts x-forwarded-for when {@link IServerConfig.trustProxy} is true.
+ *
+ * @param req The incoming HTTP request.
+ *
+ * @returns The client IP or undefined.
+ */
 const getClientIp = (req: IncomingMessage): string | undefined => {
-    const forwarded = getHeader(req, "x-forwarded-for");
+    if (config.trustProxy) {
+        const forwarded = getHeader(req, "x-forwarded-for");
 
-    if (forwarded) {
-        return forwarded.split(",")[0].trim() || undefined;
+        if (forwarded) {
+            return forwarded.split(",")[0].trim() || undefined;
+        }
     }
 
     return req.socket.remoteAddress ?? undefined;
@@ -168,22 +196,53 @@ const getHeader = (req: IncomingMessage, name: string): string | undefined => {
 };
 
 /**
- * Returns the effective request URL, taking reverse-proxy headers into account.
+ * Returns the effective request URL.
+ * Only trusts reverse-proxy headers when {@link IServerConfig.trustProxy} is true.
  *
  * @param req The incoming HTTP request.
  * @returns The reconstructed URL.
  */
 const getRequestUrl = (req: IncomingMessage): URL => {
-    const proto = getHeader(req, "x-forwarded-proto") ?? "http";
-    const host = getHeader(req, "x-forwarded-host") ?? getHeader(req, "host") ?? "localhost";
+    const serverHost = getHeader(req, "host") ?? "localhost";
 
-    return new URL(req.url ?? "/", `${proto}://${host}`);
+    if (config.trustProxy) {
+        const proto = getHeader(req, "x-forwarded-proto") ?? "http";
+        const host = getHeader(req, "x-forwarded-host") ?? serverHost;
+
+        return new URL(req.url ?? "/", `${proto}://${host}`);
+    }
+
+    return new URL(req.url ?? "/", `http://${serverHost}`);
 };
 
 // ---------- CORS ----------
 
-const setCorsHeaders = (res: ServerResponse): void => {
-    res.setHeader("Access-Control-Allow-Origin", "*");
+/**
+ * Sets CORS headers based on the request origin and the configured allowlist.
+ * When no allowedOrigins are configured, sends no CORS headers (strictest default).
+ *
+ * @param req The incoming HTTP request.
+ * @param res The HTTP response.
+ */
+const setCorsHeaders = (req: IncomingMessage, res: ServerResponse): void => {
+    const allowed = config.allowedOrigins;
+
+    if (!allowed || allowed.length === 0) {
+        return;
+    }
+
+    const origin = getHeader(req, "origin");
+
+    if (!origin) {
+        return;
+    }
+
+    if (!allowed.includes(origin)) {
+        return;
+    }
+
+    res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader("Vary", "Origin");
     res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
     res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
 };
@@ -495,8 +554,10 @@ const seedIfExists = async (targetAdapter: IDatabaseAdapter): Promise<void> => {
 
 const handleTestConnection = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
     const user = getAuthUser(req);
+    const usersExist = await hasUsers(adapter);
 
-    if (!user || !(await isUserInAdminGroup(adapter, user.userId))) {
+    // Allow during bootstrap (no users yet) or when authenticated as admin.
+    if (usersExist && (!user || !(await isUserInAdminGroup(adapter, user.userId)))) {
         sendError(res, "Forbidden", 403);
 
         return;
@@ -959,6 +1020,100 @@ const handleClearAll = async (req: IncomingMessage, res: ServerResponse): Promis
     sendJson(res, { success: true });
 };
 
+// ---------- Rate Limiting ----------
+
+interface IRateLimitEntry {
+    failures: number;
+    blockedUntil: number;
+}
+
+/** In-memory rate limit store: key → { failures, blockedUntil }. */
+const rateLimitMap = new Map<string, IRateLimitEntry>();
+
+/** Maximum failed attempts before blocking. */
+const maxFailures = 7;
+
+/** Block duration in milliseconds (15 minutes). */
+const blockDuration = 15 * 60 * 1000;
+
+/**
+ * Checks whether a key is currently rate-limited. Increments the failure counter.
+ *
+ * @param key The rate-limit key (e.g. `ip:username` or `ip:groupName`).
+ * @returns True if the request should be blocked (429).
+ */
+const checkRateLimit = (key: string): boolean => {
+    const now = Date.now();
+    const entry = rateLimitMap.get(key);
+
+    if (entry) {
+        if (now < entry.blockedUntil) {
+            return true;
+        }
+
+        if (now >= entry.blockedUntil + blockDuration) {
+            // Block period expired — reset.
+            rateLimitMap.delete(key);
+        }
+    }
+
+    return false;
+};
+
+/**
+ * Records a failed attempt for a key. Blocks the key if the threshold is reached.
+ *
+ * @param key The rate-limit key.
+ */
+const recordFailedAttempt = (key: string): void => {
+    const now = Date.now();
+    const entry = rateLimitMap.get(key);
+
+    if (entry) {
+        entry.failures += 1;
+
+        if (entry.failures >= maxFailures) {
+            entry.blockedUntil = now + blockDuration;
+        }
+    } else {
+        rateLimitMap.set(key, { failures: 1, blockedUntil: 0 });
+    }
+};
+
+/**
+ * Clears rate-limit state for a key (called on successful login).
+ *
+ * @param key The rate-limit key.
+ */
+const clearRateLimit = (key: string): void => {
+    rateLimitMap.delete(key);
+};
+
+/**
+ * Builds a rate-limit key from client IP and a discriminator (username or group name).
+ *
+ * @param req           The incoming HTTP request.
+ * @param discriminator The username or group name to include in the key.
+ *
+ * @returns The rate-limit key.
+ */
+const rateLimitKey = (req: IncomingMessage, discriminator: string): string => {
+    const ip = getClientIp(req) ?? "unknown";
+
+    return `${ip}:${discriminator}`;
+};
+
+/** Periodically purge expired entries to prevent unbounded memory growth. */
+setInterval(() => {
+    const now = Date.now();
+
+    for (const [key, entry] of rateLimitMap) {
+        if (now >= entry.blockedUntil + blockDuration) {
+            rateLimitMap.delete(key);
+        }
+    }
+}, 5 * 60 * 1000); // Every 5 minutes.
+
 // ---------- Auth Handlers ----------
 
 const handleLogin = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
@@ -968,6 +1123,14 @@ const handleLogin = async (req: IncomingMessage, res: ServerResponse): Promise<v
 
     if (!username || !password) {
         sendError(res, "Username and password required");
+
+        return;
+    }
+
+    const rlKey = rateLimitKey(req, username);
+
+    if (checkRateLimit(rlKey)) {
+        sendError(res, "Too many attempts. Try again later.", 429);
 
         return;
     }
@@ -982,6 +1145,7 @@ const handleLogin = async (req: IncomingMessage, res: ServerResponse): Promise<v
     );
 
     if (rows.length === 0) {
+        recordFailedAttempt(rlKey);
         sendError(res, "Invalid username or password", 401);
 
         return;
@@ -991,10 +1155,13 @@ const handleLogin = async (req: IncomingMessage, res: ServerResponse): Promise<v
     const valid = await verifyPassword(password, user.passwordHash);
 
     if (!valid) {
+        recordFailedAttempt(rlKey);
         sendError(res, "Invalid username or password", 401);
 
         return;
     }
+
+    clearRateLimit(rlKey);
 
     const admin = await isUserInAdminGroup(adapter, user.id);
 
@@ -1042,6 +1209,14 @@ const handleGroupLogin = async (req: IncomingMessage, res: ServerResponse): Prom
         return;
     }
 
+    const rlKey = rateLimitKey(req, groupName);
+
+    if (checkRateLimit(rlKey)) {
+        sendError(res, "Too many attempts. Try again later.", 429);
+
+        return;
+    }
+
     const rows = await adapter.query<{
         id: number; name: string; passwordHash: string | null;
     }>(
@@ -1050,6 +1225,7 @@ const handleGroupLogin = async (req: IncomingMessage, res: ServerResponse): Prom
     );
 
     if (rows.length === 0 || !rows[0].passwordHash) {
+        recordFailedAttempt(rlKey);
         sendError(res, "Invalid group name or password", 401);
 
         return;
@@ -1059,10 +1235,13 @@ const handleGroupLogin = async (req: IncomingMessage, res: ServerResponse): Prom
     const valid = await verifyPassword(password, group.passwordHash!);
 
     if (!valid) {
+        recordFailedAttempt(rlKey);
         sendError(res, "Invalid group name or password", 401);
 
         return;
     }
+
+    clearRateLimit(rlKey);
 
     // Log in as the anonymous user but with group rights.
     const anonRows = await adapter.query<{ id: number; username: string; displayName: string; }>(
@@ -2192,12 +2371,65 @@ const serveSoundLibFile = (req: IncomingMessage, res: ServerResponse): void => {
         "Content-Type": mimeType,
         "Content-Length": data.length,
         "Cache-Control": "public, max-age=3600",
+        "X-Content-Type-Options": "nosniff",
     });
 
     res.end(data);
 };
 
 // ---------- Instrument Image Upload ----------
+
+/** Magic bytes for supported image formats. */
+const imageSignatures = new Map<string, number[]>([
+    ["png", [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]],
+    ["jpg", [0xFF, 0xD8, 0xFF]],
+    ["jpeg", [0xFF, 0xD8, 0xFF]],
+    ["webp", [0x52, 0x49, 0x46, 0x46]],
+]);
+
+/**
+ * Validates that a buffer starts with the expected magic bytes for the given extension.
+ * Also checks the WEBP subtype at offset 8.
+ *
+ * @param data      The file data buffer.
+ * @param extension The claimed file extension (without dot).
+ *
+ * @returns True if the magic bytes match.
+ */
+const validateImageSignature = (data: Buffer, extension: string): boolean => {
+    const sig = imageSignatures.get(extension);
+
+    if (!sig) {
+        return false;
+    }
+
+    if (data.length < sig.length) {
+        return false;
+    }
+
+    for (let i = 0; i < sig.length; i++) {
+        if (data[i] !== sig[i]) {
+            return false;
+        }
+    }
+
+    // WEBP: additionally check "WEBP" at offset 8.
+    if (extension === "webp") {
+        const webpSubtype = [0x57, 0x45, 0x42, 0x50]; // "WEBP"
+
+        if (data.length < 12) {
+            return false;
+        }
+
+        for (let i = 0; i < webpSubtype.length; i++) {
+            if (data[8 + i] !== webpSubtype[i]) {
+                return false;
+            }
+        }
+    }
+
+    return true;
+};
 
 const handleUploadInstrumentImage = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
     const user = getAuthUser(req);
@@ -2256,6 +2488,13 @@ const handleUploadInstrumentImage = async (req: IncomingMessage, res: ServerResp
         return;
     }
 
+    // Validate file signature (magic bytes) to reject mismatched payloads.
+    if (!validateImageSignature(filePart.data, extension)) {
+        sendError(res, "File content does not match its extension.");
+
+        return;
+    }
+
     // Generate unique filename.
     const basename = Array.from({ length: 32 }, () => {
         return Math.floor(Math.random() * 16).toString(16);
@@ -2300,7 +2539,7 @@ const handleUploadInstrumentImage = async (req: IncomingMessage, res: ServerResp
 
     const publicPath = `/uploads/instruments/${targetName}`;
     const lookedUp = lookupMimeType(extension);
-    const mimeType = filePart.contentType ?? (lookedUp || "application/octet-stream");
+    const mimeType = lookedUp || "application/octet-stream";
 
     const result = await adapter.insertReturningId(
         `INSERT INTO instrument_images
@@ -2466,7 +2705,7 @@ const parseMultipart = (body: Buffer, boundary: string): IMultipartPart[] => {
 // ---------- Router ----------
 
 const handleRequest = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
-    setCorsHeaders(res);
+    setCorsHeaders(req, res);
 
     if (req.method === "OPTIONS") {
         res.writeHead(204);
@@ -2711,6 +2950,7 @@ const serveStaticFile = (req: IncomingMessage, res: ServerResponse, pathname: st
                 "Content-Type": mimeType,
                 "Content-Length": data.length,
                 "Cache-Control": "public, max-age=3600",
+                "X-Content-Type-Options": "nosniff",
             });
 
             res.end(data);
@@ -2728,6 +2968,7 @@ const serveStaticFile = (req: IncomingMessage, res: ServerResponse, pathname: st
         res.writeHead(200, {
             "Content-Type": "text/html; charset=utf-8",
             "Content-Length": data.length,
+            "X-Content-Type-Options": "nosniff",
         });
 
         res.end(data);

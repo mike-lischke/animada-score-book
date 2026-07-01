@@ -263,8 +263,6 @@ export const verifyAndRotateRefreshToken = async (adapter: IDatabaseAdapter,
     );
 
     if (rows.length === 0) {
-        await adapter.execute("UPDATE users SET refresh_token_hash = NULL WHERE refresh_token_hash IS NOT NULL");
-
         return undefined;
     }
 
