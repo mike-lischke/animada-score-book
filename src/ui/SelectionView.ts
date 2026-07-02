@@ -32,6 +32,14 @@ export class SelectionView {
     private startX = 0;
     private startY = 0;
 
+    /**
+     * Ratio of viewport pixels to CSS pixels inside #trackViewerContainer.
+     * Viewport-pixel deltas from getBoundingClientRect() are divided by this
+     * factor to obtain CSS-pixel values for overlay positioning. CSS-pixel
+     * constants (offsetY, heightOffset, etc.) are never divided.
+     */
+    private zoomFactor = 1;
+
     public constructor(private manager: SelectionManager, private eventContainer: HTMLElement) {
         requisitions.register("selectionChanged", this.handleSelectionChanged);
         eventContainer.addEventListener("pointerdown", this.handlePointerDown);
@@ -224,6 +232,13 @@ export class SelectionView {
 
         const containerRect = overlayContainer.getBoundingClientRect();
 
+        // Measure the actual zoom factor from the DOM: offsetWidth gives CSS pixels,
+        // getBoundingClientRect().width gives viewport pixels (post-zoom). The ratio is
+        // the effective zoom factor, which is more reliable than parsing style.zoom.
+        const cssW = contentHost.offsetWidth;
+        const viewportW = contentHost.getBoundingClientRect().width;
+        this.zoomFactor = cssW > 0 ? viewportW / cssW : 1;
+
         // Separate entries by granularity.
         const trackEntries: ISelectionEntry[] = [];
         const measureEntries: ISelectionEntry[] = [];
@@ -399,21 +414,25 @@ export class SelectionView {
                 const firstContent = runs[0].querySelector<HTMLElement>(contentSelector);
                 if (firstContent) {
                     const firstRect = firstContent.getBoundingClientRect();
-                    minLeft = Math.max(minLeft, firstRect.left - 10);
+                    minLeft = Math.max(minLeft, firstRect.left - (10 * this.zoomFactor));
                 }
 
                 // Narrow right edge to the last run's inner content.
                 const lastContent = runs[runs.length - 1].querySelector<HTMLElement>(contentSelector);
                 if (lastContent) {
                     const lastRect = lastContent.getBoundingClientRect();
-                    maxRight = lastRect.right + 2;
+                    maxRight = lastRect.right + (2 * this.zoomFactor);
                 }
 
+                // Convert viewport-pixel deltas to CSS pixels. offsetY/heightOffset
+                // are CSS pixels and must not be divided.
+                const z = this.zoomFactor;
+
                 this.createOverlay(overlayContainer, {
-                    x: minLeft - containerRect.left,
-                    y: minTop - containerRect.top + offsetY,
-                    width: maxRight - minLeft,
-                    height: maxBottom - minTop + heightOffset,
+                    x: (minLeft - containerRect.left) / z,
+                    y: ((minTop - containerRect.top) / z) + offsetY,
+                    width: (maxRight - minLeft) / z,
+                    height: ((maxBottom - minTop) / z) + heightOffset,
                 });
             }
 
@@ -740,7 +759,8 @@ export class SelectionView {
 
             const rect = this.computeMergedRect(contentHost, selectors.join(","), containerRect);
             if (rect) {
-                rect.y -= 10;
+                rect.x += 4;
+                rect.width -= 8;
                 this.createOverlay(overlayContainer, rect);
             }
         }
@@ -778,13 +798,15 @@ export class SelectionView {
             }
         }
 
-        const padding = 2; // small visual breathing room on each side
+        // Convert viewport-pixel deltas to CSS pixels. offsetY/heightOffset are
+        // already CSS pixels and must not be divided.
+        const z = this.zoomFactor;
 
         this.createOverlay(overlayContainer, {
-            x: minLeft - containerRect.left - padding,
-            y: minTop - containerRect.top + offsetY,
-            width: (maxRight - minLeft) + (2 * padding),
-            height: maxBottom - minTop + heightOffset,
+            x: (minLeft - containerRect.left) / z,
+            y: ((minTop - containerRect.top) / z) + offsetY,
+            width: (maxRight - minLeft) / z,
+            height: ((maxBottom - minTop) / z) + heightOffset,
         });
     }
 
@@ -805,11 +827,13 @@ export class SelectionView {
         const marginBottom = parseFloat(style.marginBottom) || 0;
         const marginLeft = parseFloat(style.marginLeft) || 0;
 
+        // All values in viewport pixels for consistent min/max computation.
+        // Callers convert to CSS pixels before passing to createOverlay.
         return {
-            x: elRect.left - marginLeft - containerRect.left,
-            y: elRect.top - marginTop - containerRect.top,
-            width: elRect.width + marginLeft + marginRight,
-            height: elRect.height + marginTop + marginBottom,
+            x: elRect.left - (marginLeft * this.zoomFactor) - containerRect.left,
+            y: elRect.top - (marginTop * this.zoomFactor) - containerRect.top,
+            width: elRect.width + ((marginLeft + marginRight) * this.zoomFactor),
+            height: elRect.height + ((marginTop + marginBottom) * this.zoomFactor),
         };
     }
 
@@ -864,13 +888,13 @@ export class SelectionView {
             }
         }
 
-        const padding = 2;
+        const z = this.zoomFactor;
 
         return {
-            x: minLeft - containerRect.left - padding,
-            y: minTop - containerRect.top,
-            width: (maxRight - minLeft) + (2 * padding),
-            height: maxBottom - minTop,
+            x: (minLeft - containerRect.left) / z,
+            y: (minTop - containerRect.top) / z,
+            width: (maxRight - minLeft) / z,
+            height: (maxBottom - minTop) / z,
         };
     }
 

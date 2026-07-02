@@ -1201,6 +1201,11 @@ export class App extends UIComponent<{}, IAppState> {
         );
 
         this.forceUpdate();
+
+        const { phase } = this.state;
+        if (phase === AppPhase.Running) {
+            this.updateStatsItem();
+        }
     }
 
     private initEventHandlers(): void {
@@ -1328,12 +1333,18 @@ export class App extends UIComponent<{}, IAppState> {
             `${Math.round(100 * metrics.realTimeLength) / 100} s`;
 
         if (!this.statsItem) {
-            this.statsItem = Statusbar.createStatusBarItem({
-                id: "scoreStats",
-                text,
-                alignment: StatusBarAlignment.Right,
-                priority: 10,
-            });
+            try {
+                this.statsItem = Statusbar.createStatusBarItem({
+                    id: "scoreStats",
+                    text,
+                    alignment: StatusBarAlignment.Right,
+                    priority: 10,
+                });
+            } catch {
+                // Statusbar is not mounted yet — the item will be created on
+                // the next updateStatsItem call (e.g. when timeParamsChanged fires).
+                return;
+            }
         } else {
             this.statsItem.text = text;
         }
