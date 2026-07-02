@@ -1324,9 +1324,8 @@
 .arrangementViewer {
     padding: 15px;
     overflow-x: hidden;
-    overflow-y: auto;
     user-select: none;
-    height: 100%;
+    min-height: 100%;
 
     .minimap {
         --minimap-marker-top: -4px;
