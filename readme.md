@@ -2,7 +2,7 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg?style=for-the-badge&color=green)](./License.txt)
 
 <p align="center">
-<img src="/public/logo.svg" title="Animada Score Book" alt="Animada Score Book" style="height: 200px" /><br/>
+<img src="public/logo.svg" title="Animada Score Book" alt="Animada Score Book" style="height: 200px" /><br/>
 </p>
 
 <hr />
@@ -10,6 +10,13 @@
 # Animada Score Book
 
 Animada Score Book is your ensemble's digital home for rhythm — a rich, browser-based score management and playback platform built from the ground up for Samba groups. Browse your entire score library in a beautiful tree view, listen to arrangements come alive with synchronized multi-track audio playback driven by a precision metronome, and export your work as MP3 files or crisp print-ready sheet music. A full sound library manager with waveform previews lets you organize and assign instrument samples, while the built-in backend with user accounts, groups, and fine-grained permissions keeps everything secure and collaborative. Whether you're rehearsing, arranging, or archiving, Animada Score Book puts the pulse of your bateria right in the browser.
+
+<table>
+  <tr>
+    <td align="center"><img src="docs/grid-view.png" alt="Grid View" /><br/><em>Grid View</em></td>
+    <td align="center"><img src="docs/staff-view.png" alt="Staff View" /><br/><em>Staff View</em></td>
+  </tr>
+</table>
 
 ## Features
 
