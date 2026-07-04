@@ -105,10 +105,6 @@ const loadConfig = (): IServerConfig => {
     return merged;
 };
 
-const saveConfig = (): void => {
-    writeFileSync(configPath, JSON.stringify(config, null, 2), "utf-8");
-};
-
 const createAdapter = (): IDatabaseAdapter => {
     const { engine } = config.database;
 
@@ -505,7 +501,6 @@ const handleSetup = async (req: IncomingMessage, res: ServerResponse): Promise<v
                 await seedAnonymousUser(freshAdapter);
                 await adapter.shutdown();
                 adapter = freshAdapter;
-                saveConfig();
                 sendJson(res, { success: true });
 
                 return;
@@ -544,9 +539,7 @@ const handleSetup = async (req: IncomingMessage, res: ServerResponse): Promise<v
         config.soundLibPath = body.soundLibPath as string;
     }
 
-    saveConfig();
-
-    console.log("Database setup complete. Configuration saved.");
+    console.log("Database setup complete.");
     sendJson(res, { success: true });
 };
 
@@ -703,6 +696,125 @@ const handleListScoreFolderContent = async (req: IncomingMessage, res: ServerRes
     }
 
     sendJson(res, { folders: readableFolders, scores: readableScores });
+};
+
+const handleGetScore = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
+    const user = getAuthUser(req);
+    const url = getRequestUrl(req);
+    const idStr = url.searchParams.get("id");
+    const id = idStr !== null ? Number(idStr) : null;
+
+    if (id === null || isNaN(id)) {
+        sendError(res, "Score id required");
+
+        return;
+    }
+
+    const rows = await adapter.query(
+        "SELECT id, folderid, name, content FROM scores WHERE id = ?",
+        [id],
+    );
+
+    if (rows.length === 0) {
+        sendError(res, "Score not found", 404);
+
+        return;
+    }
+
+    const score = rows[0];
+    const summary = await getPermissionSummary(adapter, user, "score", score.id as number);
+
+    if (!summary.canRead) {
+        sendError(res, "Forbidden", 403);
+
+        return;
+    }
+
+    sendJson(res, {
+        id: score.id,
+        folderid: score.folderid,
+        name: score.name,
+        content: score.content,
+        perm: {
+            isOwner: summary.isOwner,
+            canRead: summary.canRead,
+            canWrite: summary.canWrite,
+            isWorld: summary.isWorld,
+            groupIds: summary.groupIds,
+        },
+    });
+};
+
+const handleResetChildPermissions = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
+    const user = getAuthUser(req);
+    const body = await readJsonBody(req);
+    const folderId = body.folderId !== undefined ? Number(body.folderId) : null;
+
+    if (folderId === null) {
+        sendError(res, "folderId required");
+
+        return;
+    }
+
+    const allowed = await checkPermission(adapter, user, "folder", folderId, AccessLevel.Write);
+
+    if (!allowed) {
+        sendError(res, "Forbidden", 403);
+
+        return;
+    }
+
+    // Recursively collect all descendant folder and score IDs.
+    const childFolderIds: number[] = [];
+    const childScoreIds: number[] = [];
+
+    const collectChildren = async (parentId: number): Promise<void> => {
+        const subFolders = await adapter.query<{ id: number; }>(
+            "SELECT id FROM folders WHERE parentid = ?", [parentId],
+        );
+
+        for (const f of subFolders) {
+            childFolderIds.push(f.id);
+            await collectChildren(f.id);
+        }
+
+        const scores = await adapter.query<{ id: number; }>(
+            "SELECT id FROM scores WHERE folderid = ?", [parentId],
+        );
+
+        for (const s of scores) {
+            childScoreIds.push(s.id);
+        }
+    };
+
+    await collectChildren(folderId);
+
+    // Delete explicit permissions and group assignments for all children.
+    const allEntityIds = [
+        ...childFolderIds.map((id) => {
+            return { type: "folder", id };
+        }),
+        ...childScoreIds.map((id) => {
+            return { type: "score", id };
+        }),
+    ];
+
+    for (const entity of allEntityIds) {
+        await adapter.execute(
+            "DELETE FROM permissions WHERE entity_type = ? AND entity_id = ?",
+            [entity.type, entity.id],
+        );
+        await adapter.execute(
+            "DELETE FROM entity_groups WHERE entity_type = ? AND entity_id = ?",
+            [entity.type, entity.id],
+        );
+    }
+
+    sendJson(res, {
+        success: true,
+        resetFolders: childFolderIds.length,
+        resetScores: childScoreIds.length,
+    });
 };
 
 const handleAddScoreFolder = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
@@ -2770,6 +2882,16 @@ const handleRequest = async (req: IncomingMessage, res: ServerResponse): Promise
 
                 case "listScoreFolderContent":
                     await handleListScoreFolderContent(req, res);
+
+                    break;
+
+                case "getScore":
+                    await handleGetScore(req, res);
+
+                    break;
+
+                case "resetChildPermissions":
+                    await handleResetChildPermissions(req, res);
 
                     break;
 

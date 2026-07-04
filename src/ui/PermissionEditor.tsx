@@ -4,9 +4,12 @@
  */
 
 import { createRef, type ComponentChild } from "preact";
+import type { RefObject } from "preact";
 
 import { Button } from "../components/ui/framework/Button.js";
 import { Codicon } from "../components/ui/framework/Codicon.js";
+import { ConfirmDialog } from "../components/ui/composites/ConfirmDialog.js";
+import { DialogResponseClosure } from "../components/ui/framework/Dialog.js";
 import { Container } from "../components/ui/framework/Container.js";
 import { Icon } from "../components/ui/framework/Icon.js";
 import { Label } from "../components/ui/framework/Label.js";
@@ -18,6 +21,7 @@ import type {
 } from "../core/ScoreBookDataModel.js";
 import { SbDmEntityType } from "../core/ScoreBookDataModel.js";
 import type { Mutable } from "../core/types/general.js";
+import { requisitions } from "../supplement/Requisitions.js";
 
 /** The well-known name of the World group, matching the backend constant. */
 const worldGroupName = "World";
@@ -30,6 +34,9 @@ interface IPermissionEditorProperties extends ICommonUIProperties {
 
     /** Called after permissions are saved, with the updated entry. */
     onSaved: (entry: ISbDmScoreFolder | ISbDmScore) => void;
+
+    /** Ref to the app-level ConfirmDialog for confirmation prompts. */
+    confirmRef: RefObject<ConfirmDialog>;
 }
 
 interface IPermissionEditorState {
@@ -46,6 +53,9 @@ interface IPermissionEditorState {
 
     /** Group IDs with write access (subset of readGroupIds). */
     writeGroupIds: Set<number>;
+
+    /** True while a recursive child-permission reset is in progress. */
+    resetting: boolean;
 }
 
 const dragType = "application/x-perm-group";
@@ -63,6 +73,7 @@ export class PermissionEditor extends UIComponent<IPermissionEditorProperties, I
             allGroups: [],
             readGroupIds: new Set(),
             writeGroupIds: new Set(),
+            resetting: false,
         };
     }
 
@@ -141,7 +152,9 @@ export class PermissionEditor extends UIComponent<IPermissionEditorProperties, I
     }
 
     public render(): ComponentChild {
-        const { errorMessage, ownerName, allGroups, readGroupIds, writeGroupIds } = this.state;
+        const { errorMessage, ownerName, allGroups, readGroupIds, writeGroupIds, entry, resetting } = this.state;
+
+        const isFolder = entry?.type === SbDmEntityType.ScoreFolder;
 
         const poolGroups = allGroups.filter((g) => {
             return !readGroupIds.has(g.id) && g.name !== adminGroupName;
@@ -161,7 +174,7 @@ export class PermissionEditor extends UIComponent<IPermissionEditorProperties, I
                 ref={this.popupRef}
                 showArrow
                 header={<Label id="permissionEditorHeader" caption={`Owner: ${ownerName}`} />}
-                placement={ComponentPlacement.BottomCenter}
+                placement={ComponentPlacement.RightCenter}
             >
                 {errorMessage && <Label caption={errorMessage} />}
                 {!errorMessage && (
@@ -227,6 +240,19 @@ export class PermissionEditor extends UIComponent<IPermissionEditorProperties, I
                                 )}
                             </div>
                         </Container>
+                    </Container>
+                )}
+                {!errorMessage && isFolder && (
+                    <Container style={{ marginTop: "8px" }}>
+                        <Button
+                            className="du-btn-sm"
+                            caption={resetting ? "Resetting…" : "Reset Children"}
+                            disabled={resetting}
+                            data-tooltip="Removes explicit permissions from all sub-folders and scores"
+                            onClick={() => {
+                                void this.handleResetChildren();
+                            }}
+                        />
                     </Container>
                 )}
             </Popup>
@@ -425,6 +451,53 @@ export class PermissionEditor extends UIComponent<IPermissionEditorProperties, I
             onSaved(entry);
         } catch (e) {
             this.setState({ errorMessage: (e as Error).message });
+        }
+    };
+
+    private handleResetChildren = async (): Promise<void> => {
+        const { dataModel, onSaved } = this.props;
+        const { entry, allGroups } = this.state;
+
+        if (entry?.type !== SbDmEntityType.ScoreFolder) {
+            return;
+        }
+
+        const confirmed = await this.props.confirmRef.current?.show(
+            "Remove explicit permissions from all sub-folders and scores inside this folder,"
+            + " so they inherit from their parents?",
+            { accept: "Reset Children", refuse: "Cancel" },
+            "Reset Child Permissions",
+        );
+
+        if (confirmed !== DialogResponseClosure.Accept) {
+            return;
+        }
+
+        this.setState({ resetting: true, errorMessage: "" });
+
+        try {
+            const result = await dataModel.resetChildPermissions(entry.id);
+
+            this.setState({ resetting: false });
+
+            const worldGroup = allGroups.find((g) => {
+                return g.name === worldGroupName;
+            });
+
+            // Update the entry's perm to match the current editor state so the UI stays in sync.
+            const { readGroupIds } = this.state;
+            const perm = entry.perm as Mutable<ISbDmPermissionInfo>;
+
+            perm.groupIds = [...readGroupIds];
+            perm.isWorld = worldGroup !== undefined && readGroupIds.has(worldGroup.id);
+
+            onSaved(entry);
+
+            void requisitions.execute("showInfo",
+                `Reset ${result.resetFolders} sub-folders and ${result.resetScores} scores.`,
+            );
+        } catch (e) {
+            this.setState({ errorMessage: (e as Error).message, resetting: false });
         }
     };
 }

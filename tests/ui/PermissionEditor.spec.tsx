@@ -5,9 +5,11 @@
 
 import { cleanup, render, waitFor, type RenderResult } from "@testing-library/preact";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { RefObject } from "preact";
 
 import type { IGroupRow, ISbDmScore, ScoreBookDataModel, } from "../../src/core/ScoreBookDataModel.js";
 import { SbDmEntityType } from "../../src/core/ScoreBookDataModel.js";
+import { ConfirmDialog } from "../../src/components/ui/composites/ConfirmDialog.js";
 import { PermissionEditor } from "../../src/ui/PermissionEditor.js";
 
 interface IMockDataModel {
@@ -92,6 +94,7 @@ const openWithScore = async (overrides?: {
     });
 
     const ref = { current: null as PermissionEditor | null };
+    const confirmRef = { current: { show: vi.fn().mockResolvedValue("accept") } };
     const renderResult = render(
         <PermissionEditor
             ref={(instance) => {
@@ -99,6 +102,7 @@ const openWithScore = async (overrides?: {
                 ref.current = instance;
             }}
             dataModel={dataModel}
+            confirmRef={confirmRef as unknown as RefObject<ConfirmDialog>}
             onSaved={onSaved}
         />,
     );

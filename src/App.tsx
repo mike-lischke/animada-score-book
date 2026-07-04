@@ -482,7 +482,6 @@ export class App extends UIComponent<{}, IAppState> {
                         </Container>
                         <TooltipProvider />
                         <ValueDialog ref={this.valueDialogRef} />
-                        <ConfirmDialog ref={this.confirmDialogRef} />
                         <SettingsDialog ref={this.settingsDialogRef} />
                         <BackendDisconnectedDialog
                             ref={this.backendDisconnectedDialogRef}
@@ -511,6 +510,7 @@ export class App extends UIComponent<{}, IAppState> {
                         <PermissionEditor
                             ref={this.permissionEditorRef}
                             dataModel={this.dataModel}
+                            confirmRef={this.confirmDialogRef}
                             onSaved={(entry) => {
                                 void requisitions.execute("permChanged", entry);
                             }}
@@ -530,6 +530,8 @@ export class App extends UIComponent<{}, IAppState> {
                         }
                     </ErrorBoundary>
                 )}
+
+                <ConfirmDialog ref={this.confirmDialogRef} />
 
                 {phase === AppPhase.Checking && (
                     <div className="progressIndicatorCard" style={{
@@ -588,12 +590,41 @@ export class App extends UIComponent<{}, IAppState> {
         }
 
         const sessionRestored = await this.dataModel.restoreSession();
-        // ...rest same
 
         if (sessionRestored) {
             await this.initializeApp();
 
             return;
+        }
+
+        // No active session. If a score URL parameter is present, try anonymous access first.
+        const params = new URL(window.location.href).searchParams;
+        const scoreIdStr = params.get("score");
+
+        if (scoreIdStr) {
+            const scoreId = Number(scoreIdStr);
+            if (!isNaN(scoreId)) {
+                const [score, status] = await this.dataModel.fetchScoreById(scoreId);
+                if (score) {
+                    await this.initializeApp();
+
+                    return;
+                }
+
+                if (status === 403) {
+                    await this.confirmDialogRef.current?.show(
+                        "This score is not publicly accessible. Please sign in to continue.",
+                        { accept: "Sign In" },
+                        "Access Restricted",
+                    );
+                } else if (status === 404) {
+                    await this.confirmDialogRef.current?.show(
+                        "This score no longer exists. It may have been deleted.",
+                        { accept: "OK" },
+                        "Score Not Found",
+                    );
+                }
+            }
         }
 
         this.setState({ phase: AppPhase.Login }, () => {
@@ -647,6 +678,14 @@ export class App extends UIComponent<{}, IAppState> {
             return;
         }
 
+        // If a score URL parameter was present, remove it — the user chose not to sign in.
+        const params = new URL(window.location.href).searchParams;
+        if (params.has("score")) {
+            const url = new URL(window.location.href);
+            url.searchParams.delete("score");
+            window.history.replaceState(null, "", url.toString());
+        }
+
         void this.initializeApp();
     };
 
@@ -697,10 +736,45 @@ export class App extends UIComponent<{}, IAppState> {
         const params = new URL(window.location.href).searchParams;
         const hasBananaDrum = params.has("a") || params.has("a2");
 
-        this.loadScorebook(hasBananaDrum ? params : undefined);
+        let pendingWarning: string | undefined;
+
+        if (hasBananaDrum) {
+            this.loadScorebook(params);
+        } else {
+            const scoreIdStr = params.get("score");
+            if (scoreIdStr) {
+                const scoreId = Number(scoreIdStr);
+                if (!isNaN(scoreId)) {
+                    const [score, status] = await this.dataModel.fetchScoreById(scoreId);
+                    if (score) {
+                        this.loadScorebook(score);
+
+                        this.setState({ phase: AppPhase.Running }, () => {
+                            Statusbar.setStatusBarMessage("App loaded", 3000);
+                        });
+
+                        return;
+                    }
+
+                    if (status === 404) {
+                        pendingWarning = "This score no longer exists. It may have been deleted.";
+                    } else if (status === 403) {
+                        pendingWarning = "You do not have access to this score."
+                            + " Try signing in or requesting access.";
+                    } else {
+                        pendingWarning = "Could not load the requested score. The server may be unavailable.";
+                    }
+                }
+            }
+
+            this.loadScorebook(undefined);
+        }
 
         this.setState({ phase: AppPhase.Running }, () => {
             Statusbar.setStatusBarMessage("App loaded", 3000);
+            if (pendingWarning) {
+                void requisitions.execute("showWarning", pendingWarning);
+            }
         });
     }
 

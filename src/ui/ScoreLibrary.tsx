@@ -24,6 +24,7 @@ import {
 import { AppStorage, type IUISettings } from "../core/AppStorage.js";
 import { PermIndicator } from "./PermIndicator.js";
 import { requisitions } from "../supplement/Requisitions.js";
+import { NotificationCenter } from "../components/ui/NotificationCenter/NotificationCenter.js";
 
 export interface IScoreLibraryProperties extends ICommonUIProperties {
     dataModel: ScoreBookDataModel;
@@ -173,6 +174,7 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
 
                 menuItems.push(
                     { id: "load", label: "Load Score" },
+                    { id: "copyUrl", label: "Copy Score URL", icon: Codicon.Link },
                     { id: "separator2", label: "-" },
                     { id: "remove", label: "Remove Score", icon: Codicon.Trash },
                 );
@@ -247,6 +249,14 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
             if (rows && rows.length > 0) {
                 tree?.selectRow(rows);
             }
+        }
+
+        if (id === "copyUrl" && entry.type === SbDmEntityType.Score) {
+            const url = `${window.location.origin}/?score=${entry.id}`;
+            void navigator.clipboard.writeText(url);
+            void NotificationCenter.showInfo("Score URL copied to clipboard.");
+
+            return;
         }
 
         void onAction?.(id, actionData, actionParent).then((handled) => {
@@ -430,16 +440,39 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
         return Promise.resolve(true);
     };
 
-    private handlePermChanged = (entry: ISbDmScoreFolder | ISbDmScore): Promise<boolean> => {
+    private handlePermChanged = async (entry: ISbDmScoreFolder | ISbDmScore): Promise<boolean> => {
         const tree = this.scoreTableRef.current;
         const rows = tree?.searchAllRows("id", entry.id);
 
+        // Refresh the folder's children from the backend so inherited perm data is up to date.
+        if (entry.type === SbDmEntityType.ScoreFolder) {
+            await entry.refresh?.();
+        }
+
         rows?.forEach((row) => {
             row.reformat();
+            this.reformatDescendants(row);
         });
 
-        return Promise.resolve(true);
+        return true;
     };
+
+    /**
+     * Recursively reformats all loaded tree children of a row so their permission indicators update.
+     *
+     * @param row The parent row whose descendants should be reformatted.
+     */
+    private reformatDescendants(row: RowComponent): void {
+        const children = row.getTreeChildren();
+        if (children.length === 0) {
+            return;
+        }
+
+        for (const child of children) {
+            child.reformat();
+            this.reformatDescendants(child);
+        }
+    }
 
     private isScoreTreeRowExpanded = (row: RowComponent): boolean => {
         const entry = row.getData() as ISbDmScoreFolder;

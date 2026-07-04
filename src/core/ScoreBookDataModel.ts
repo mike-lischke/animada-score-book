@@ -610,6 +610,21 @@ interface IWhoamiResponse {
     capabilities: ICapabilities;
 }
 
+/**
+ * Copies permission fields from a source into a target perm object in-place.
+ *
+ * @param target The existing perm to update.
+ * @param source The new perm values to copy.
+ */
+const applyPerm = (target: ISbDmPermissionInfo, source: ISbDmPermissionInfo): void => {
+    const t = target as Mutable<ISbDmPermissionInfo>;
+    t.isOwner = source.isOwner;
+    t.canRead = source.canRead;
+    t.canWrite = source.canWrite;
+    t.isWorld = source.isWorld;
+    t.groupIds = source.groupIds;
+};
+
 export class ScoreBookDataModel {
     /**
      * Indicates whether the current session is allowed to mutate scores on the backend.
@@ -730,6 +745,52 @@ export class ScoreBookDataModel {
         void requisitions.execute("scoreBookLoaded", undefined);
 
         return arrangement;
+    }
+
+    /**
+     * Fetches a single score entry from the backend by its database id.
+     * This bypasses the in-memory score library and is intended for
+     * direct URL-based loading (e.g. `?score=<id>`).
+     *
+     * @param id The score's database id.
+     *
+     * @returns A tuple of the score entry (or undefined) and the HTTP
+     *          status code (0 if the request didn't complete).
+     */
+    public async fetchScoreById(id: number): Promise<[ISbDmScore | undefined, number]> {
+        const res = await this.fetchApi(`/api?action=getScore&id=${id}`, {
+            method: "POST",
+            headers: { Accept: "application/json" },
+        }, true, true);
+
+        if (!res) {
+            return [undefined, 0];
+        }
+
+        if (!res.ok) {
+            return [undefined, res.status];
+        }
+
+        const data = await res.json() as {
+            id: number; folderid: number | null; name: string; content: string;
+            perm: ISbDmPermissionInfo;
+        };
+
+        const score: ISbDmScore = {
+            type: SbDmEntityType.Score,
+            id: data.id,
+            name: data.name,
+            state: {
+                initialized: true,
+                expanded: true,
+                expandedOnce: true,
+                isLeaf: true,
+            },
+            content: data.content,
+            perm: data.perm,
+        };
+
+        return [score, res.status];
     }
 
     /**
@@ -891,6 +952,35 @@ export class ScoreBookDataModel {
             parentChildren.splice(index, 1);
             void requisitions.execute("scoreBookLoaded", undefined);
         }
+    }
+
+    /**
+     * Recursively clears explicit permissions and group assignments from all
+     * child folders and scores of the given folder, so they inherit from their
+     * respective parents. The folder's own permissions are left untouched.
+     *
+     * @param folderId The folder whose descendants should have their permissions reset.
+     *
+     * @returns The number of folders and scores that were reset.
+     */
+    public async resetChildPermissions(folderId: number): Promise<{ resetFolders: number; resetScores: number; }> {
+        const res = await this.fetchApi("/api?action=resetChildPermissions", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ folderId }),
+        });
+
+        if (!res?.ok) {
+            if (!res) {
+                throw new Error("Backend unreachable.");
+            }
+
+            const data = await res.json() as { error?: string; };
+
+            throw new Error(data.error ?? "Failed to reset child permissions.");
+        }
+
+        return await res.json() as { resetFolders: number; resetScores: number; };
     }
 
     /**
@@ -1591,9 +1681,30 @@ export class ScoreBookDataModel {
             return false;
         }
 
-        list.length = 0;
         const data = (await res.json()) as IScoreDBEntry;
+
+        // Build a lookup of existing entries so we can update them in-place.
+        // Tree rows hold references to these objects — they must not be replaced.
+        const existingById = new Map<number, ISbDmScoreFolder | ISbDmScore>();
+        for (const entry of list) {
+            existingById.set(entry.id, entry);
+        }
+
+        // Build the new list in backend order. Entries found in the lookup are
+        // updated in-place; new entries are created. Entries not in the backend
+        // response are naturally dropped (no longer exist).
+        const newList: Array<ISbDmScoreFolder | ISbDmScore> = [];
+
         data.folders.forEach((folder) => {
+            const existing = existingById.get(folder.id) as ISbDmScoreFolder | undefined;
+            if (existing) {
+                existing.name = folder.name;
+                applyPerm(existing.perm!, folder.perm);
+                newList.push(existing);
+
+                return;
+            }
+
             const entry: ISbDmScoreFolder = {
                 type: SbDmEntityType.ScoreFolder,
                 id: folder.id,
@@ -1607,7 +1718,7 @@ export class ScoreBookDataModel {
                 },
                 children: [],
                 perm: folder.perm,
-                refresh: async (cb?: ProgressCallback) => {
+                refresh: async () => {
                     (entry.state as Mutable<ISbDmEntityState>).initialized = true;
 
                     const success = await this.updateScoreLibFolder(entry.children, entry);
@@ -1619,11 +1730,21 @@ export class ScoreBookDataModel {
                     }
                 },
             };
-            list.push(entry);
+            newList.push(entry);
         });
 
         data.scores.forEach((score) => {
-            list.push({
+            const existing = existingById.get(score.id) as ISbDmScore | undefined;
+            if (existing) {
+                existing.name = score.name;
+                existing.content = score.content;
+                applyPerm(existing.perm!, score.perm);
+                newList.push(existing);
+
+                return;
+            }
+
+            newList.push({
                 type: SbDmEntityType.Score,
                 id: score.id,
                 name: score.name,
@@ -1638,6 +1759,9 @@ export class ScoreBookDataModel {
                 perm: score.perm,
             });
         });
+
+        list.length = 0;
+        list.push(...newList);
 
         return true;
     }
@@ -1728,12 +1852,17 @@ export class ScoreBookDataModel {
      * @param options      Optional fetch options.
      * @param attachAuth   Whether to attach the Authorization header. Defaults to true.
      *                     Set to false for login, refresh, and whoami requests.
-     * @returns The response on success, or `undefined` when the backend is unreachable.
+     * @param returnNonOk  When true, non-2xx responses are returned as-is instead of
+     *                     triggering error requisitions and returning undefined.
+     *                     Callers that need to inspect the status code (e.g. 403 vs 404)
+     *                     should set this to true.
+     *
+     * @returns The response on success, or `undefined` when the backend is unreachable
+     *          (or when `returnNonOk` is false and a non-2xx status is received).
      */
 
-    private async fetchApi(
-        url: string, options?: RequestInit, attachAuth = true,
-    ): Promise<Response | undefined> {
+    private async fetchApi(url: string, options?: RequestInit, attachAuth = true,
+        returnNonOk = false): Promise<Response | undefined> {
         const mergedOptions: RequestInit = {
             ...options,
             headers: {
@@ -1778,6 +1907,10 @@ export class ScoreBookDataModel {
         }
 
         if (!res.ok) {
+            if (returnNonOk) {
+                return res;
+            }
+
             // 401 is an expected auth response — not a backend disconnect.
             if (res.status === 401) {
                 return undefined;
