@@ -109,6 +109,8 @@ interface IAppState {
     /** When true, the print view is rendered into the DOM and `window.print()` will be triggered. */
     printing: boolean;
     printOptions?: IPrintOptions;
+
+    instrumentEditorEnabled: boolean;
 }
 
 export class App extends UIComponent<{}, IAppState> {
@@ -154,6 +156,7 @@ export class App extends UIComponent<{}, IAppState> {
             sidebarOpen: false,
             headerPinned: false,
             printing: false,
+            instrumentEditorEnabled: false,
         };
 
         const selectionManager = new SelectionManager();
@@ -210,7 +213,7 @@ export class App extends UIComponent<{}, IAppState> {
     }
 
     public render() {
-        const { phase, displayMode, sidebarOpen, headerPinned } = this.state;
+        const { phase, displayMode, sidebarOpen, headerPinned, instrumentEditorEnabled } = this.state;
         const isRunning = phase === AppPhase.Running;
 
         let splashContent: ComponentChild;
@@ -297,6 +300,25 @@ export class App extends UIComponent<{}, IAppState> {
             }
         }
 
+        let instrumentEditorButton: ComponentChild;
+        if (isAdmin && instrumentEditorEnabled) {
+            instrumentEditorButton = <Button
+                id="instrumentEditor"
+                imageOnly
+                className="du-btn-ghost"
+                data-tooltip="Instrument Editor"
+                disabled
+                onClick={this.handleInstrumentEditorClick}
+            >
+                <Icon
+                    src={timbauImage}
+                    width={24}
+                    height={24}
+                    data-tooltip="inherit"
+                />
+            </Button>;
+        }
+
         return (
             <>
                 {isRunning && (
@@ -365,21 +387,7 @@ export class App extends UIComponent<{}, IAppState> {
                                                             data-tooltip="inherit"
                                                         />
                                                     </Button>
-                                                    <Button
-                                                        id="instrumentEditor"
-                                                        imageOnly
-                                                        className="du-btn-ghost"
-                                                        data-tooltip="Instrument Editor"
-                                                        disabled
-                                                        onClick={this.handleInstrumentEditorClick}
-                                                    >
-                                                        <Icon
-                                                            src={timbauImage}
-                                                            width={24}
-                                                            height={24}
-                                                            data-tooltip="inherit"
-                                                        />
-                                                    </Button>
+                                                    {instrumentEditorButton}
                                                     <Button
                                                         id="printButton"
                                                         imageOnly
