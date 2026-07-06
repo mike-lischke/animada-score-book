@@ -7,203 +7,36 @@
 
 import { lookup as lookupMimeType } from "mime-types";
 import { randomBytes } from "node:crypto";
-import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
-import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { Server, type IncomingMessage, type ServerResponse } from "node:http";
 import { extname, join, resolve } from "node:path";
 
 import { convertErrorToString } from "../core/utils.js";
-import { AccessLevel, Auth, type ITokenPayload, LoginAuditEvent } from "./Auth.js";
+import { AccessLevel, Auth, type ITokenPayload } from "./Auth.js";
+import { createAdapter, uploadsPath, type IServerConfig } from "./config.js";
 import { DatabaseEngine, type IDatabaseAdapter, type IDatabaseConfig } from "./database.js";
+import {
+    clearRefreshTokenCookie, getAuthUser, getClientIp, getCookie, getHeader,
+    randomGroupColor, readJsonBody, sendError, sendJson, setRefreshTokenCookie,
+} from "./helpers.js";
 import { MySqlAdapter } from "./mysql-adapter.js";
 import { PostgresAdapter } from "./postgres-adapter.js";
 
-const configPath = resolve(process.cwd(), "backend-config.json");
-const uploadsPath = resolve(process.cwd(), "public", "uploads", "instruments");
+export let config: IServerConfig;
+export let auth: Auth;
+export let startupStatus: { configLoaded: boolean; configError: string; dbReachable: boolean; dbError: string; };
 
-interface IServerConfig {
-    host: string;
-    port: number;
-    database: IDatabaseConfig;
-    soundLibPath: string;
-
-    /** Origins allowed for CORS. Undefined = no CORS headers (strictest). */
-    allowedOrigins?: string[];
-
-    /** When true, trust x-forwarded-* proxy headers. Default false. */
-    trustProxy?: boolean;
-}
-
-const defaultConfig: IServerConfig = {
-    host: process.env.HOST ?? "0.0.0.0",
-    port: 3100,
-    database: {
-        engine: DatabaseEngine.MySQL,
-        host: "127.0.0.1",
-        port: 3306,
-        database: "animada_score_book",
-        user: "root",
-        password: "",
-    },
-    soundLibPath: "public/sounds",
-    trustProxy: false,
+export const initHandlers = (
+    authInstance: Auth, c: IServerConfig,
+    s: { configLoaded: boolean; configError: string; dbReachable: boolean; dbError: string; },
+): void => {
+    auth = authInstance;
+    config = c;
+    startupStatus = s;
 };
 
-let config: IServerConfig;
-let auth: Auth;
-
-const loadConfig = (): IServerConfig => {
-    let saved: Partial<IServerConfig> = {};
-
-    if (existsSync(configPath)) {
-        try {
-            saved = JSON.parse(readFileSync(configPath, "utf-8")) as Partial<IServerConfig>;
-        } catch {
-            console.warn("Invalid backend-config.json, using defaults.");
-        }
-    }
-
-    // Parse ALLOWED_ORIGINS env var (comma-separated).
-    const allowedOriginsEnv = process.env.ALLOWED_ORIGINS
-        ? process.env.ALLOWED_ORIGINS.split(",").map((s) => {
-            return s.trim();
-        }).filter(Boolean)
-        : undefined;
-
-    // Environment variables take precedence over saved config.
-    const merged = {
-        ...defaultConfig,
-        ...saved,
-        host: process.env.HOST ?? saved.host ?? defaultConfig.host,
-        port: process.env.PORT ? Number(process.env.PORT) : (saved.port ?? defaultConfig.port),
-        allowedOrigins: allowedOriginsEnv ?? saved.allowedOrigins ?? defaultConfig.allowedOrigins,
-        trustProxy: process.env.TRUST_PROXY !== undefined
-            ? process.env.TRUST_PROXY === "true"
-            : (saved.trustProxy ?? defaultConfig.trustProxy),
-    };
-
-    // Database config overrides via environment variables.
-    // These allow running the backend without persisting credentials on disk.
-    merged.database = {
-        ...merged.database,
-        engine: (process.env.DB_ENGINE as DatabaseEngine | undefined) ?? merged.database.engine,
-        host: process.env.DB_HOST ?? merged.database.host,
-        port: process.env.DB_PORT ? Number(process.env.DB_PORT) : merged.database.port,
-        database: process.env.DB_NAME ?? merged.database.database,
-        user: process.env.DB_USER ?? merged.database.user,
-        password: process.env.DB_PASSWORD ?? merged.database.password,
-    };
-
-    return merged;
-};
-
-const createAdapter = (): IDatabaseAdapter => {
-    const { engine } = config.database;
-
-    switch (engine) {
-        case DatabaseEngine.Postgres:
-            return new PostgresAdapter();
-
-        case DatabaseEngine.MySQL:
-        case DatabaseEngine.MariaDB:
-        default:
-            return new MySqlAdapter();
-    }
-};
-
-/**
- * Returns the client IP address.
- * Only trusts x-forwarded-for when {@link IServerConfig.trustProxy} is true.
- *
- * @param req The incoming HTTP request.
- *
- * @returns The client IP or undefined.
- */
-const getClientIp = (req: IncomingMessage): string | undefined => {
-    if (config.trustProxy) {
-        const forwarded = getHeader(req, "x-forwarded-for");
-
-        if (forwarded) {
-            return forwarded.split(",")[0].trim() || undefined;
-        }
-    }
-
-    return req.socket.remoteAddress ?? undefined;
-};
-
-// ---------- JSON helpers ----------
-
-const sendJson = (res: ServerResponse, data: unknown, status = 200): void => {
-    res.writeHead(status, { "Content-Type": "application/json; charset=utf-8" });
-
-    res.end(JSON.stringify(data));
-};
-
-const sendError = (res: ServerResponse, message: string, status = 400): void => {
-    sendJson(res, { error: message }, status);
-};
-
-const readJsonBody = (req: IncomingMessage, maxSize = 10 * 1024 * 1024): Promise<Record<string, unknown>> => {
-    return new Promise((resolve, reject) => {
-        const chunks: Buffer[] = [];
-        let totalSize = 0;
-
-        req.on("data", (chunk: Buffer) => {
-            totalSize += chunk.length;
-
-            if (totalSize > maxSize) {
-                req.destroy();
-
-                reject(new Error("Request body too large"));
-
-                return;
-            }
-
-            chunks.push(chunk);
-        });
-        req.on("end", () => {
-            const raw = Buffer.concat(chunks).toString("utf-8");
-
-            if (!raw) {
-                resolve({});
-
-                return;
-            }
-
-            try {
-                resolve(JSON.parse(raw) as Record<string, unknown>);
-            } catch {
-                reject(new Error("Invalid JSON body"));
-            }
-        });
-        req.on("error", reject);
-    });
-};
-
-// ---------- Proxy helpers ----------
-
-/**
- * Extracts the first value of a request header, or undefined if absent.
- *
- * @param req  The incoming HTTP request.
- * @param name The header name (lowercase).
- * @returns The header value or undefined.
- */
-const getHeader = (req: IncomingMessage, name: string): string | undefined => {
-    const value = req.headers[name];
-
-    return Array.isArray(value) ? value[0] : value;
-};
-
-/**
- * Returns the effective request URL.
- * Only trusts reverse-proxy headers when {@link IServerConfig.trustProxy} is true.
- *
- * @param req The incoming HTTP request.
- * @returns The reconstructed URL.
- */
 const getRequestUrl = (req: IncomingMessage): URL => {
     const serverHost = getHeader(req, "host") ?? "localhost";
-
     if (config.trustProxy) {
         const proto = getHeader(req, "x-forwarded-proto") ?? "http";
         const host = getHeader(req, "x-forwarded-host") ?? serverHost;
@@ -214,167 +47,11 @@ const getRequestUrl = (req: IncomingMessage): URL => {
     return new URL(req.url ?? "/", `http://${serverHost}`);
 };
 
-// ---------- CORS ----------
-
-/**
- * Sets CORS headers based on the request origin and the configured allowlist.
- * When no allowedOrigins are configured, sends no CORS headers (strictest default).
- *
- * @param req The incoming HTTP request.
- * @param res The HTTP response.
- */
-const setCorsHeaders = (req: IncomingMessage, res: ServerResponse): void => {
-    const allowed = config.allowedOrigins;
-
-    if (!allowed || allowed.length === 0) {
-        return;
-    }
-
-    const origin = getHeader(req, "origin");
-
-    if (!origin) {
-        return;
-    }
-
-    if (!allowed.includes(origin)) {
-        return;
-    }
-
-    res.setHeader("Access-Control-Allow-Origin", origin);
-    res.setHeader("Vary", "Origin");
-    res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
-};
-
-/**
- * Extracts the Bearer token from the Authorization header.
- *
- * @param req The incoming HTTP request.
- * @returns The token string or undefined.
- */
-const extractToken = (req: IncomingMessage): string | undefined => {
-    const header = getHeader(req, "authorization");
-
-    if (!header?.startsWith("Bearer ")) {
-        return undefined;
-    }
-
-    return header.slice(7);
-};
-
-/**
- * Extracts a cookie value by name from the Cookie header.
- *
- * @param req  The incoming HTTP request.
- * @param name The cookie name.
- * @returns The cookie value or undefined.
- */
-const getCookie = (req: IncomingMessage, name: string): string | undefined => {
-    const cookieHeader = getHeader(req, "cookie");
-
-    if (!cookieHeader) {
-        return undefined;
-    }
-
-    for (const part of cookieHeader.split(";")) {
-        const [key, ...rest] = part.trim().split("=");
-        if (key === name) {
-            return rest.join("=");
-        }
-    }
-
-    return undefined;
-};
-
-/**
- * Extracts the authenticated user from the request, or returns undefined for anonymous.
- *
- * @param req The incoming HTTP request.
- * @returns The token payload or undefined.
- */
-const getAuthUser = (req: IncomingMessage): ITokenPayload | undefined => {
-    const token = extractToken(req);
-
-    if (!token) {
-        return undefined;
-    }
-
-    return Auth.verifyToken(token);
-};
-
-/**
- * Sets the refresh token as an httpOnly cookie on the response.
- *
- * @param res     The HTTP response.
- * @param token   The refresh token value.
- * @param maxAge  The cookie max age in seconds.
- */
-const setRefreshTokenCookie = (res: ServerResponse, token: string, maxAge: number): void => {
-    const cookie = `refreshToken=${token}; HttpOnly; Secure; Path=/; Max-Age=${maxAge}; SameSite=Lax`;
-
-    res.setHeader("Set-Cookie", cookie);
-};
-
-/**
- * Clears the refresh token cookie.
- *
- * @param res The HTTP response.
- */
-const clearRefreshTokenCookie = (res: ServerResponse): void => {
-    res.setHeader("Set-Cookie", "refreshToken=; HttpOnly; Secure; Path=/; Max-Age=0; SameSite=Lax");
-};
-
-/**
- * Generates a random hex color string using the golden-angle distribution
- * for visually pleasing hue spacing.
- *
- * @returns A hex color string like "#a1b2c3".
- */
-const randomGroupColor = (): string => {
-    const goldenAngle = 137.508;
-    const hue = ((Math.random() * 360) + (goldenAngle * Math.random())) % 360;
-    const saturation = 45 + (Math.random() * 20);
-    const lightness = 40 + (Math.random() * 15);
-
-    const h = hue / 60;
-    const c = ((1 - Math.abs((2 * lightness / 100) - 1)) * saturation) / 100;
-    const x = c * (1 - Math.abs((h % 2) - 1));
-    const m = (lightness / 100) - (c / 2);
-
-    let r: number;
-    let g: number;
-    let b: number;
-
-    if (h < 1) {
-        r = c; g = x; b = 0;
-    } else if (h < 2) {
-        r = x; g = c; b = 0;
-    } else if (h < 3) {
-        r = 0; g = c; b = x;
-    } else if (h < 4) {
-        r = 0; g = x; b = c;
-    } else if (h < 5) {
-        r = x; g = 0; b = c;
-    } else {
-        r = c; g = 0; b = x;
-    }
-
-    const toHex = (v: number): string => {
-        const hex = Math.round((v + m) * 255).toString(16);
-
-        return hex.length === 1 ? "0" + hex : hex;
-    };
-
-    return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
-};
-
-// ---------- Anonymous User Seed ----------
-
 /**
  * Seeds a system anonymous user. This user cannot log in — it exists only
  * as a permission reference for world-accessible entities.
  *
- * @param targetAdapter The database adapter.
+ * @param targetAdapter The database auth.adapter.
  */
 const seedAnonymousUser = async (targetAdapter: IDatabaseAdapter): Promise<void> => {
     const rows = await targetAdapter.query<{ cnt: number; }>(
@@ -398,7 +75,27 @@ const seedAnonymousUser = async (targetAdapter: IDatabaseAdapter): Promise<void>
     console.log("Seeded anonymous system user.");
 };
 
+// ---------- API Handlers ----------
+
 const handleHealth = async (_req: IncomingMessage, res: ServerResponse): Promise<void> => {
+    if (!startupStatus.configLoaded) {
+        sendJson(res, {
+            status: "ok",
+            configLoaded: false,
+            configError: startupStatus.configError,
+            initialized: false,
+            engine: "",
+            host: "",
+            port: 0,
+            database: "",
+            dbReachable: false,
+            hasData: false,
+            hasUsers: false,
+        });
+
+        return;
+    }
+
     let hasData = false;
     let anyUsers = false;
 
@@ -409,7 +106,7 @@ const handleHealth = async (_req: IncomingMessage, res: ServerResponse): Promise
             );
 
             hasData = (rows[0]?.cnt ?? 0) > 0;
-            anyUsers = await auth.hasUsers();
+            anyUsers = await Auth.hasUsers(auth.adapter);
         } catch {
             // Tables might not exist yet.
         }
@@ -423,6 +120,8 @@ const handleHealth = async (_req: IncomingMessage, res: ServerResponse): Promise
         host: config.database.host,
         port: config.database.port,
         database: config.database.database,
+        dbReachable: startupStatus.dbReachable,
+        dbError: startupStatus.dbError || undefined,
         hasData,
         hasUsers: anyUsers,
     });
@@ -430,10 +129,12 @@ const handleHealth = async (_req: IncomingMessage, res: ServerResponse): Promise
 
 const handleSetup = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
     const body = await readJsonBody(req);
+    const action = typeof body.action === "string" ? body.action : "initialize";
+    const overwrite = action === "reset";
 
-    // If the backend is already set up, only admins may reconfigure.
-    if (auth.adapter.isInitialized()) {
-        const usersExist = await auth.hasUsers();
+    // If users exist, only admins may reset.
+    if (overwrite && auth.adapter.isInitialized()) {
+        const usersExist = await Auth.hasUsers(auth.adapter);
 
         if (usersExist) {
             const user = getAuthUser(req);
@@ -446,69 +147,46 @@ const handleSetup = async (req: IncomingMessage, res: ServerResponse): Promise<v
         }
     }
 
-    // Merge incoming config with defaults.
-    config.database = {
-        engine: typeof body.engine === "string" ? body.engine as DatabaseEngine : config.database.engine,
-        host: typeof body.host === "string" ? body.host : config.database.host,
-        port: typeof body.port === "number" ? body.port : config.database.port,
-        database: typeof body.database === "string" ? body.database : config.database.database,
-        user: typeof body.user === "string" ? body.user : config.database.user,
-        password: typeof body.password === "string" ? body.password : config.database.password,
-    };
-
-    // Re-create the adapter if engine changed.
-    const newAdapter = createAdapter();
-
     try {
-        const result = await newAdapter.testConnection(config.database);
+        if (overwrite) {
+            const temp = createAdapter(config);
+            await temp.initialize(config.database);
+            await temp.execute("DROP TABLE IF EXISTS login_audit");
+            await temp.execute("DROP TABLE IF EXISTS entity_groups");
+            await temp.execute("DROP TABLE IF EXISTS permissions");
+            await temp.execute("DROP TABLE IF EXISTS user_groups");
+            await temp.execute("DROP TABLE IF EXISTS `groups`");
+            await temp.execute("DROP TABLE IF EXISTS users");
+            await temp.execute("DROP TABLE IF EXISTS instrument_images");
+            await temp.execute("DROP TABLE IF EXISTS instruments");
+            await temp.execute("DROP TABLE IF EXISTS scores");
+            await temp.execute("DROP TABLE IF EXISTS folders");
+            await temp.shutdown();
 
-        if (!result.success) {
-            sendError(res, "Connection test failed. Check your credentials.", 400);
+            const freshAdapter = createAdapter(config);
+            await freshAdapter.initialize(config.database);
+            await seedIfExists(freshAdapter);
+            await seedAnonymousUser(freshAdapter);
 
-            return;
-        }
-
-        // If overwrite is requested, drop existing tables first.
-        if (body.overwrite) {
-            try {
-                await newAdapter.initialize(config.database);
-                await newAdapter.execute("DROP TABLE IF EXISTS permissions");
-                await newAdapter.execute("DROP TABLE IF EXISTS user_groups");
-                await newAdapter.execute("DROP TABLE IF EXISTS `groups`");
-                await newAdapter.execute("DROP TABLE IF EXISTS users");
-                await newAdapter.execute("DROP TABLE IF EXISTS instrument_images");
-                await newAdapter.execute("DROP TABLE IF EXISTS instruments");
-                await newAdapter.execute("DROP TABLE IF EXISTS scores");
-                await newAdapter.execute("DROP TABLE IF EXISTS folders");
-                await newAdapter.shutdown();
-                const freshAdapter = createAdapter();
-
-                await freshAdapter.initialize(config.database);
-                await seedIfExists(freshAdapter);
-                await seedAnonymousUser(freshAdapter);
+            if (auth.adapter.isInitialized()) {
                 await auth.adapter.shutdown();
-                auth.adapter = freshAdapter;
-                sendJson(res, { success: true });
-            } catch (e) {
-                console.error("Overwrite failed:", convertErrorToString(e));
-                sendError(res, "Database overwrite failed. Check server logs for details.", 500);
+            }
+            auth.adapter = freshAdapter;
+        } else {
+            if (!auth.adapter.isInitialized()) {
+                await auth.adapter.initialize(config.database);
             }
 
-            return;
+            const existing = await auth.adapter.query<{ cnt: number; }>(
+                "SELECT COUNT(*) AS cnt FROM folders",
+            );
+
+            if ((existing[0]?.cnt ?? 0) === 0) {
+                await seedIfExists(auth.adapter);
+            }
+
+            await seedAnonymousUser(auth.adapter);
         }
-
-        await newAdapter.initialize(config.database);
-
-        // Only load seed if tables are empty.
-        const existing = await newAdapter.query<{ cnt: number; }>(
-            "SELECT COUNT(*) AS cnt FROM folders",
-        );
-
-        if ((existing[0]?.cnt ?? 0) === 0) {
-            await seedIfExists(newAdapter);
-        }
-
-        await seedAnonymousUser(newAdapter);
     } catch (e) {
         console.error("Database initialisation failed:", convertErrorToString(e));
         sendError(res, "Database initialisation failed. Check server logs for details.", 500);
@@ -516,22 +194,14 @@ const handleSetup = async (req: IncomingMessage, res: ServerResponse): Promise<v
         return;
     }
 
-    // Shutdown old adapter, activate new one.
-    await auth.adapter.shutdown();
-    auth.adapter = newAdapter;
-
-    if (body.soundLibPath) {
-        config.soundLibPath = body.soundLibPath as string;
-    }
-
-    console.log("Database setup complete.");
+    console.log(`Database ${action} complete.`);
     sendJson(res, { success: true });
 };
 
 /**
  * Imports seed.sql if it exists.
  *
- * @param targetAdapter The adapter to execute the seed SQL against.
+ * @param targetAdapter The auth.adapter to execute the seed SQL against.
  */
 const seedIfExists = async (targetAdapter: IDatabaseAdapter): Promise<void> => {
     const seedPath = resolve(process.cwd(), "build", "seed.sql");
@@ -547,9 +217,9 @@ const seedIfExists = async (targetAdapter: IDatabaseAdapter): Promise<void> => {
 const handleTestConnection = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
     const user = getAuthUser(req);
 
-    // During bootstrap the adapter is not yet initialized — allow unrestricted.
+    // During bootstrap the auth.adapter is not yet initialized — allow unrestricted.
     if (auth.adapter.isInitialized()) {
-        const usersExist = await auth.hasUsers();
+        const usersExist = await Auth.hasUsers(auth.adapter);
 
         if (usersExist && (!user || !(await auth.isUserInAdminGroup(user.userId)))) {
             sendError(res, "Forbidden", 403);
@@ -741,7 +411,8 @@ const handleResetChildPermissions = async (req: IncomingMessage, res: ServerResp
         return;
     }
 
-    const allowed = await auth.checkPermission(user, "folder", folderId, AccessLevel.Write);
+    const allowed = await auth.checkPermission(user,
+        "folder", folderId, AccessLevel.Write);
 
     if (!allowed) {
         sendError(res, "Forbidden", 403);
@@ -816,7 +487,8 @@ const handleAddScoreFolder = async (req: IncomingMessage, res: ServerResponse): 
 
     // Check write permission on parent folder (or require auth for root).
     if (parentId !== null && parentId !== -1) {
-        const allowed = await auth.checkPermission(user, "folder", parentId, AccessLevel.Write);
+        const allowed = await auth.checkPermission(user,
+            "folder", parentId, AccessLevel.Write);
 
         if (!allowed) {
             sendError(res, "Forbidden", 403);
@@ -840,7 +512,7 @@ const handleAddScoreFolder = async (req: IncomingMessage, res: ServerResponse): 
         await auth.setOwner("folder", result.insertId, user.userId);
 
         // Also assign to the World group for public readability by default.
-        const worldId = await auth.getWorldGroupId();
+        const worldId = await Auth.getWorldGroupId(auth.adapter);
 
         if (worldId !== undefined) {
             await auth.addEntityGroup("folder", result.insertId, worldId, false);
@@ -865,7 +537,8 @@ const handleAddScore = async (req: IncomingMessage, res: ServerResponse): Promis
 
     // Check write permission on parent folder (or require auth for root).
     if (folderId !== null && folderId !== -1) {
-        const allowed = await auth.checkPermission(user, "folder", folderId, AccessLevel.Write);
+        const allowed = await auth.checkPermission(user,
+            "folder", folderId, AccessLevel.Write);
 
         if (!allowed) {
             sendError(res, "Forbidden", 403);
@@ -888,7 +561,7 @@ const handleAddScore = async (req: IncomingMessage, res: ServerResponse): Promis
     if (user && (folderId === null || folderId === -1)) {
         await auth.setOwner("score", result.insertId, user.userId);
 
-        const worldId = await auth.getWorldGroupId();
+        const worldId = await Auth.getWorldGroupId(auth.adapter);
 
         if (worldId !== undefined) {
             await auth.addEntityGroup("score", result.insertId, worldId, false);
@@ -1048,7 +721,8 @@ const handleMove = async (req: IncomingMessage, res: ServerResponse): Promise<vo
         }
 
         // Need write permission on both the folder being moved and the target parent.
-        const allowed = await auth.checkPermission(user, "folder", id, AccessLevel.Write);
+        const allowed = await auth.checkPermission(user,
+            "folder", id, AccessLevel.Write);
 
         if (!allowed) {
             sendError(res, "Forbidden", 403);
@@ -1057,7 +731,8 @@ const handleMove = async (req: IncomingMessage, res: ServerResponse): Promise<vo
         }
 
         if (newParentId !== -1) {
-            const targetAllowed = await auth.checkPermission(user, "folder", newParentId, AccessLevel.Write);
+            const targetAllowed = await auth.checkPermission(user,
+                "folder", newParentId, AccessLevel.Write);
 
             if (!targetAllowed) {
                 sendError(res, "Forbidden", 403);
@@ -1093,7 +768,8 @@ const handleMove = async (req: IncomingMessage, res: ServerResponse): Promise<vo
         }
 
         if (newFolderId !== -1) {
-            const targetAllowed = await auth.checkPermission(user, "folder", newFolderId, AccessLevel.Write);
+            const targetAllowed = await auth.checkPermission(user,
+                "folder", newFolderId, AccessLevel.Write);
 
             if (!targetAllowed) {
                 sendError(res, "Forbidden", 403);
@@ -1212,7 +888,7 @@ const clearRateLimit = (key: string): void => {
  * @returns The rate-limit key.
  */
 const rateLimitKey = (req: IncomingMessage, discriminator: string): string => {
-    const ip = getClientIp(req) ?? "unknown";
+    const ip = getClientIp(req, config) ?? "unknown";
 
     return `${ip}:${discriminator}`;
 };
@@ -1294,7 +970,8 @@ const handleLogin = async (req: IncomingMessage, res: ServerResponse): Promise<v
         [refreshToken.hash, user.id],
     );
 
-    await auth.recordLoginAudit(user.id, LoginAuditEvent.Login, undefined, getClientIp(req));
+    await auth.recordLoginAudit(user.id,
+        Auth.LoginAuditEvent.Login, undefined, getClientIp(req, config));
 
     setRefreshTokenCookie(res, refreshToken.raw, refreshToken.maxAge);
 
@@ -1338,8 +1015,7 @@ const handleGroupLogin = async (req: IncomingMessage, res: ServerResponse): Prom
         [groupName],
     );
 
-    const hash = rows[0]?.passwordHash;
-    if (rows.length === 0 || !hash) {
+    if (rows.length === 0 || !rows[0].passwordHash) {
         recordFailedAttempt(rlKey);
         sendError(res, "Invalid group name or password", 401);
 
@@ -1347,7 +1023,7 @@ const handleGroupLogin = async (req: IncomingMessage, res: ServerResponse): Prom
     }
 
     const group = rows[0];
-    const valid = await Auth.verifyPassword(password, hash);
+    const valid = await Auth.verifyPassword(password, group.passwordHash!);
 
     if (!valid) {
         recordFailedAttempt(rlKey);
@@ -1387,7 +1063,8 @@ const handleGroupLogin = async (req: IncomingMessage, res: ServerResponse): Prom
         [refreshToken.hash, group.id, anon.id],
     );
 
-    await auth.recordLoginAudit(anon.id, LoginAuditEvent.GroupLogin, group.id, getClientIp(req));
+    await auth.recordLoginAudit(anon.id,
+        Auth.LoginAuditEvent.GroupLogin, group.id, getClientIp(req, config));
 
     // Update group last_login.
     await auth.adapter.execute(
@@ -1465,7 +1142,8 @@ const handleRefresh = async (req: IncomingMessage, res: ServerResponse): Promise
 
     setRefreshTokenCookie(res, result.newRawToken, Auth.refreshTokenExpirySeconds);
 
-    await auth.recordLoginAudit(user.id, LoginAuditEvent.Refresh, groupId, getClientIp(req));
+    await auth.recordLoginAudit(user.id,
+        Auth.LoginAuditEvent.Refresh, groupId, getClientIp(req, config));
 
     sendJson(res, { token: accessToken });
 };
@@ -1474,7 +1152,8 @@ const handleLogout = async (req: IncomingMessage, res: ServerResponse): Promise<
     const user = getAuthUser(req);
 
     if (user) {
-        await auth.recordLoginAudit(user.userId, LoginAuditEvent.Logout, undefined, getClientIp(req));
+        await auth.recordLoginAudit(user.userId,
+            Auth.LoginAuditEvent.Logout, undefined, getClientIp(req, config));
     }
 
     clearRefreshTokenCookie(res);
@@ -1553,7 +1232,7 @@ const handleWhoAmI = async (req: IncomingMessage, res: ServerResponse): Promise<
  * @param res The HTTP response.
  */
 const handleCreateInitialAdmin = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
-    const usersExist = await auth.hasUsers();
+    const usersExist = await Auth.hasUsers(auth.adapter);
 
     if (usersExist) {
         sendError(res, "Admin user already exists.", 403);
@@ -1628,7 +1307,7 @@ const handleCreateInitialAdmin = async (req: IncomingMessage, res: ServerRespons
 
     // Assign permissions: the new admin owns all orphan entities.
     // Orphan = entities without an explicit permissions row.
-    const worldId = await auth.getWorldGroupId();
+    const worldId = await Auth.getWorldGroupId(auth.adapter);
 
     // Folders without permissions.
     const orphanFolders = await auth.adapter.query<{ id: number; }>(
@@ -2819,395 +2498,43 @@ const parseMultipart = (body: Buffer, boundary: string): IMultipartPart[] => {
 
 // ---------- Router ----------
 
-const handleRequest = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
-    setCorsHeaders(req, res);
-
-    if (req.method === "OPTIONS") {
-        res.writeHead(204);
-
-        res.end();
-
-        return;
-    }
-
-    const url = getRequestUrl(req);
-    const pathname = url.pathname;
-    const action = url.searchParams.get("action");
-
-    // Sound library static files.
-    if (pathname.startsWith("/soundLib/")) {
-        serveSoundLibFile(req, res);
-
-        return;
-    }
-
-    // API routes.
-    if (pathname === "/api") {
-        if (!action) {
-            sendError(res, "Missing action");
-
-            return;
-        }
-
-        try {
-            switch (action) {
-                case "health":
-                    await handleHealth(req, res);
-
-                    break;
-
-                case "setup":
-                    await handleSetup(req, res);
-
-                    break;
-
-                case "testConnection":
-                    await handleTestConnection(req, res);
-
-                    break;
-
-                case "listScoreFolderContent":
-                    await handleListScoreFolderContent(req, res);
-
-                    break;
-
-                case "getScore":
-                    await handleGetScore(req, res);
-
-                    break;
-
-                case "resetChildPermissions":
-                    await handleResetChildPermissions(req, res);
-
-                    break;
-
-                case "addScoreFolder":
-                    await handleAddScoreFolder(req, res);
-
-                    break;
-
-                case "addScore":
-                    await handleAddScore(req, res);
-
-                    break;
-
-                case "renameEntry":
-                    await handleRenameEntry(req, res);
-
-                    break;
-
-                case "updateScore":
-                    await handleUpdateScore(req, res);
-
-                    break;
-
-                case "delete":
-                    await handleDelete(req, res);
-
-                    break;
-
-                case "move":
-                    await handleMove(req, res);
-
-                    break;
-
-                case "listSoundLib":
-                    handleListSoundLib(req, res);
-
-                    break;
-
-                case "clearAll":
-                    await handleClearAll(req, res);
-
-                    break;
-
-                case "login":
-                    await handleLogin(req, res);
-
-                    break;
-
-                case "groupLogin":
-                    await handleGroupLogin(req, res);
-
-                    break;
-
-                case "listPublicGroups":
-                    await handleListPublicGroups(req, res);
-
-                    break;
-
-                case "refresh":
-                    await handleRefresh(req, res);
-
-                    break;
-
-                case "logout":
-                    await handleLogout(req, res);
-
-                    break;
-
-                case "whoami":
-                    await handleWhoAmI(req, res);
-
-                    break;
-
-                case "createInitialAdmin":
-                    await handleCreateInitialAdmin(req, res);
-
-                    break;
-
-                case "listUsers":
-                    await handleListUsers(req, res);
-
-                    break;
-
-                case "createUser":
-                    await handleCreateUser(req, res);
-
-                    break;
-
-                case "updateUser":
-                    await handleUpdateUser(req, res);
-
-                    break;
-
-                case "deleteUser":
-                    await handleDeleteUser(req, res);
-
-                    break;
-
-                case "listGroups":
-                    await handleListGroups(req, res);
-
-                    break;
-
-                case "createGroup":
-                    await handleCreateGroup(req, res);
-
-                    break;
-
-                case "updateGroup":
-                    await handleUpdateGroup(req, res);
-
-                    break;
-
-                case "deleteGroup":
-                    await handleDeleteGroup(req, res);
-
-                    break;
-
-                case "addUserToGroup":
-                    await handleAddUserToGroup(req, res);
-
-                    break;
-
-                case "removeUserFromGroup":
-                    await handleRemoveUserFromGroup(req, res);
-
-                    break;
-
-                case "listGroupMembers":
-                    await handleListGroupMembers(req, res);
-
-                    break;
-
-                case "getPermissions":
-                    await handleGetPermissions(req, res);
-
-                    break;
-
-                case "setPermissions":
-                    await handleSetPermissions(req, res);
-
-                    break;
-
-                default:
-                    sendError(res, "Unknown action");
-            }
-        } catch (e) {
-            console.error("API error:", convertErrorToString(e));
-            sendError(res, "Internal server error.", 500);
-        }
-
-        return;
-    }
-
-    // Upload instrument image.
-    if (pathname === "/upload-instrument-image.php" && req.method === "POST") {
-        await handleUploadInstrumentImage(req, res);
-
-        return;
-    }
-
-    // Serve static frontend files (dist/) with SPA fallback.
-    serveStaticFile(req, res, pathname);
+export const Handlers = {
+    health: handleHealth,
+    setup: handleSetup,
+    testConnection: handleTestConnection,
+    listScoreFolderContent: handleListScoreFolderContent,
+    getScore: handleGetScore,
+    resetChildPermissions: handleResetChildPermissions,
+    addScoreFolder: handleAddScoreFolder,
+    addScore: handleAddScore,
+    renameEntry: handleRenameEntry,
+    updateScore: handleUpdateScore,
+    delete: handleDelete,
+    move: handleMove,
+    clearAll: handleClearAll,
+    login: handleLogin,
+    groupLogin: handleGroupLogin,
+    refresh: handleRefresh,
+    logout: handleLogout,
+    whoami: handleWhoAmI,
+    createInitialAdmin: handleCreateInitialAdmin,
+    listUsers: handleListUsers,
+    createUser: handleCreateUser,
+    updateUser: handleUpdateUser,
+    deleteUser: handleDeleteUser,
+    listGroups: handleListGroups,
+    listPublicGroups: handleListPublicGroups,
+    createGroup: handleCreateGroup,
+    updateGroup: handleUpdateGroup,
+    deleteGroup: handleDeleteGroup,
+    addUserToGroup: handleAddUserToGroup,
+    removeUserFromGroup: handleRemoveUserFromGroup,
+    listGroupMembers: handleListGroupMembers,
+    getPermissions: handleGetPermissions,
+    setPermissions: handleSetPermissions,
+    listSoundLib: handleListSoundLib,
+    uploadInstrumentImage: handleUploadInstrumentImage,
+    seedAnonymousUser,
+    seedIfExists,
+    serveSoundLibFile,
 };
-
-/**
- * Serves a static file from the dist/ or public/ directories.
- * Falls back to index.html for SPA client-side routing.
- *
- * @param req      The incoming HTTP request.
- * @param res      The HTTP response.
- * @param pathname The requested URL path.
- */
-const serveStaticFile = (req: IncomingMessage, res: ServerResponse, pathname: string): void => {
-    const distPath = resolve(process.cwd(), "dist");
-    const decodedPath = decodeURIComponent(pathname);
-
-    // Try public/ first (for uploads etc.), then dist/.
-    const candidates = [
-        resolve(process.cwd(), "public", `.${decodedPath}`),
-        resolve(distPath, `.${decodedPath}`),
-    ];
-
-    for (const filePath of candidates) {
-        if (!filePath.startsWith(distPath) && !filePath.startsWith(resolve(process.cwd(), "public"))) {
-            continue; // Directory traversal attempt.
-        }
-
-        if (existsSync(filePath) && !statSync(filePath).isDirectory()) {
-            const ext = extname(filePath);
-            const mimeType = lookupMimeType(ext) || "application/octet-stream";
-            const data = readFileSync(filePath);
-
-            res.writeHead(200, {
-                "Content-Type": mimeType,
-                "Content-Length": data.length,
-                "Cache-Control": "public, max-age=3600",
-                "X-Content-Type-Options": "nosniff",
-            });
-
-            res.end(data);
-
-            return;
-        }
-    }
-
-    // SPA fallback: serve index.html for any non-file route.
-    const indexPath = resolve(distPath, "index.html");
-
-    if (existsSync(indexPath)) {
-        const data = readFileSync(indexPath);
-
-        res.writeHead(200, {
-            "Content-Type": "text/html; charset=utf-8",
-            "Content-Length": data.length,
-            "X-Content-Type-Options": "nosniff",
-        });
-
-        res.end(data);
-
-        return;
-    }
-
-    res.writeHead(404);
-
-    res.end("Not found");
-};
-
-const main = (): void => {
-    config = loadConfig();
-    auth = new Auth(createAdapter());
-
-    // Try to initialise with saved or default config on startup.
-    auth.adapter.testConnection(config.database).then((result) => {
-        if (result.success) {
-            return auth.adapter.initialize(config.database).then(() => {
-                const { engine, host, port, database } = config.database;
-                console.log(
-                    `Backend initialised: ${engine} @ ${host}:${port}/${database}`,
-                );
-
-                // Load seed only if tables are empty (avoid duplicates).
-                return auth.adapter.query<{ cnt: number; }>(
-                    "SELECT COUNT(*) AS cnt FROM folders",
-                ).then((rows) => {
-                    if ((rows[0]?.cnt ?? 0) === 0) {
-                        return seedIfExists(auth.adapter);
-                    }
-
-                    return undefined;
-                }).then(() => {
-                    return seedAnonymousUser(auth.adapter);
-                });
-            });
-        }
-
-        console.log(`Could not auto-connect: ${result.error ?? "unknown reason"}`);
-        console.log("Waiting for setup from frontend…");
-
-        return undefined;
-    }).catch((e: unknown) => {
-        console.warn("Database init failed:", convertErrorToString(e));
-        console.log("Waiting for setup from frontend…");
-    });
-
-    // Ensure uploads directory exists.
-    if (!existsSync(uploadsPath)) {
-        mkdirSync(uploadsPath, { recursive: true });
-    }
-
-    const server = createServer((req, res) => {
-        void handleRequest(req, res);
-    });
-
-    // Keep track of open connections for graceful shutdown.
-    const connections = new Set<import("node:net").Socket>();
-
-    server.on("connection", (socket) => {
-        connections.add(socket);
-
-        socket.once("close", () => {
-            connections.delete(socket);
-        });
-    });
-
-    server.on("error", (err: NodeJS.ErrnoException) => {
-        if (err.code === "EADDRINUSE") {
-            console.error(`Port ${config.port} is already in use.`);
-            process.exit(1);
-        }
-
-        throw err;
-    });
-
-    server.listen(config.port, config.host, () => {
-        const displayHost = config.host === "0.0.0.0" ? "127.0.0.1" : config.host;
-
-        console.log(
-            `Backend server listening on http://${displayHost}:${config.port}`
-            + ` (bound to ${config.host}:${config.port})`,
-        );
-    });
-
-    const shutdown = () => {
-        console.log("\nShutting down…");
-
-        // Stop accepting new connections (Node 18+).
-        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-        if (server.closeIdleConnections) {
-            server.closeIdleConnections();
-        }
-
-        // Destroy all keep-alive connections.
-        for (const socket of connections) {
-            socket.destroy();
-        }
-
-        connections.clear();
-
-        auth.adapter.shutdown().then(() => {
-            server.close(() => {
-                process.exit(0);
-            });
-        }).catch(() => {
-            process.exit(1);
-        });
-    };
-
-    process.on("SIGINT", shutdown);
-    process.on("SIGTERM", shutdown);
-};
-
-main();

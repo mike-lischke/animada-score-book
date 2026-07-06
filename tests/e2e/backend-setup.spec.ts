@@ -28,17 +28,10 @@ const routeApiWithState = async (page: Page, state: IApiState): Promise<void> =>
             await route.fulfill({
                 status: 200,
                 contentType: "application/json",
-                body: JSON.stringify({ status: "ok", initialized, engine: state.engine, hasData }),
-            });
-
-            return;
-        }
-
-        if (action === "testConnection") {
-            await route.fulfill({
-                status: 200,
-                contentType: "application/json",
-                body: JSON.stringify({ success: true }),
+                body: JSON.stringify({
+                    status: "ok", initialized, engine: state.engine, hasData,
+                    configLoaded: true, host: "127.0.0.1", port: 3306, database: "animada_score_book",
+                }),
             });
 
             return;
@@ -94,14 +87,11 @@ test.describe("Setup Dialog rendering", () => {
         await page.waitForSelector("#backendSetupDialog", { state: "visible", timeout: 5000 });
 
         await expect(page.locator("#backendSetupDialog")).toBeVisible();
-        await expect(page.locator("#backendSetupDialog")).toContainText("Database Setup");
-        await expect(page.locator("#backendSetupDialog")).toContainText("Database Engine");
+        await expect(page.locator("#backendSetupDialog")).toContainText("Backend Setup");
+        await expect(page.locator("#backendSetupDialog")).toContainText("Engine");
         await expect(page.locator("#backendSetupDialog")).toContainText("Host");
         await expect(page.locator("#backendSetupDialog")).toContainText("Port");
-        await expect(page.locator("#backendSetupDialog")).toContainText("Database Name");
-        await expect(page.locator("#backendSetupDialog")).toContainText("User");
-        await expect(page.locator("#backendSetupDialog")).toContainText("Password");
-        await expect(page.locator("#backend-setup-test")).toBeVisible();
+        await expect(page.locator("#backendSetupDialog")).toContainText("Database");
         await expect(page.locator("#backend-setup-init")).toBeVisible();
     });
 });
@@ -118,16 +108,7 @@ test.describe("Setup: no database", () => {
         await page.waitForSelector("#backendSetupDialog", { state: "visible", timeout: 5000 });
 
         await expect(page.locator("#backendSetupDialog")).toBeVisible();
-        await expect(page.locator("#backendSetupDialog")).toContainText("Database Setup");
-    });
-
-    test("test connection shows success", async ({ page }) => {
-        await page.goto("/");
-        await page.waitForSelector("#backendSetupDialog", { state: "visible", timeout: 5000 });
-
-        await page.click("#backend-setup-test");
-        await expect(page.locator(".text-success")).toBeVisible({ timeout: 5000 });
-        await expect(page.locator(".text-success")).toContainText("Connection successful");
+        await expect(page.locator("#backendSetupDialog")).toContainText("Backend Setup");
     });
 
     test("initialize completes setup flow", async ({ page }) => {
@@ -165,7 +146,9 @@ test.describe("Setup: fresh start, database exists but empty", () => {
                     status: 200, contentType: "application/json",
                     body: JSON.stringify({
                         status: "ok", initialized, engine: "mysql",
-                        hasData: false, hasUsers: false
+                        hasData: false, hasUsers: false,
+                        configLoaded: true, host: "127.0.0.1", port: 3306,
+                        database: "animada_score_book",
                     }),
                 });
 
@@ -198,7 +181,7 @@ test.describe("Setup: fresh start, database exists but empty", () => {
 
         await page.goto("/");
         await page.waitForSelector("#backendSetupDialog", { state: "visible", timeout: 5000 });
-        await expect(page.locator("#backendSetupDialog")).toContainText("Database Engine");
+        await expect(page.locator("#backendSetupDialog")).toContainText("Engine");
 
         // Click Initialize → health says initialized but empty → no overwrite → Done.
         await page.click("#backend-setup-init");
@@ -211,10 +194,10 @@ test.describe("Setup: fresh start, database exists but empty", () => {
     });
 });
 
-// ── Scenario: DB exists, has data (fresh start → Initialize → overwrite → Done) ──
+// ── Scenario: DB exists, has data (initial mode — Initialize works directly) ──
 
 test.describe("Setup: fresh start, database has data", () => {
-    test("shows overwrite warning when DB has data, then initializes", async ({ page }) => {
+    test("initializes without overwrite prompt in initial mode", async ({ page }) => {
         let healthCalls = 0;
 
         await page.route("**/api**", async (route) => {
@@ -229,7 +212,9 @@ test.describe("Setup: fresh start, database has data", () => {
                     status: 200, contentType: "application/json",
                     body: JSON.stringify({
                         status: "ok", initialized, engine: "mysql",
-                        hasData: initialized, hasUsers: initialized
+                        hasData: initialized, hasUsers: initialized,
+                        configLoaded: true, host: "127.0.0.1", port: 3306,
+                        database: "animada_score_book",
                     }),
                 });
 
@@ -287,15 +272,10 @@ test.describe("Setup: fresh start, database has data", () => {
 
         await page.goto("/");
         await page.waitForSelector("#backendSetupDialog", { state: "visible", timeout: 5000 });
-        await expect(page.locator("#backendSetupDialog")).toContainText("Database Engine");
+        await expect(page.locator("#backendSetupDialog")).toContainText("Engine");
 
-        // Click Initialize → health says initialized with data → overwrite warning.
+        // Click Initialize — in initial mode this goes directly to setup without overwrite prompt.
         await page.click("#backend-setup-init");
-        await expect(page.locator("#backendSetupDialog")).toContainText("already contains data",
-            { timeout: 5000 });
-
-        // Click "Yes, overwrite".
-        await page.click("#backend-setup-confirm-overwrite");
         await page.waitForTimeout(1500);
         await expect(page.locator("#backendSetupDialog")).toContainText("Database setup complete");
 
@@ -310,14 +290,14 @@ test.describe("Setup: fresh start, database has data", () => {
 // ── Unreachable ──
 
 test.describe("Setup: backend unreachable", () => {
-    test("shows unreachable message", async ({ page }) => {
+    test("shows progress indicator when backend is unreachable", async ({ page }) => {
         await page.route("**/api**", async (route) => {
             await route.fulfill({ status: 502, contentType: "text/plain", body: "Bad Gateway" });
         });
 
         await page.goto("/");
-        await page.waitForSelector("#backendSetupDialog", { state: "visible", timeout: 5000 });
 
-        await expect(page.locator("#backendSetupDialog")).toContainText("not reachable");
+        // The app stays on the splash screen with a progress indicator.
+        await expect(page.locator(".progressIndicatorCard")).toBeVisible({ timeout: 5000 });
     });
 });

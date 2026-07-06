@@ -18,6 +18,8 @@ test.describe("Settings — Permission Matrix Toggle", () => {
                     body: JSON.stringify({
                         status: "ok", initialized: true, engine: "mysql",
                         hasData: true, hasUsers: true,
+                        configLoaded: true, host: "127.0.0.1", port: 3306,
+                        database: "animada_score_book",
                     }),
                 });
 

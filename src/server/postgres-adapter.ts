@@ -151,28 +151,6 @@ export class PostgresAdapter implements IDatabaseAdapter {
             await this.pool.end();
         }
 
-        // First, create the database if it does not exist.
-        const initPool = new pg.Pool({
-            host: config.host,
-            port: config.port,
-            database: "postgres",
-            user: config.user,
-            password: config.password,
-            max: 1,
-            connectionTimeoutMillis: 10000,
-        });
-
-        const dbName = config.database.replace(/"/g, '""');
-
-        try {
-            await initPool.query(`CREATE DATABASE "${dbName}"`);
-        } catch {
-            // Database may already exist — that is fine.
-        }
-
-        await initPool.end();
-
-        // Now connect to the target database and create tables.
         this.pool = new pg.Pool({
             host: config.host,
             port: config.port,

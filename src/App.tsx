@@ -569,27 +569,46 @@ export class App extends UIComponent<{}, IAppState> {
      * Once the backend is ready, proceeds with data model initialisation.
      */
     private async checkBackendThenInitialize(): Promise<void> {
-        let initialized = false;
-        let anyUsers = false;
+        let health: {
+            status: string; configLoaded: boolean; configError?: string;
+            initialized: boolean; hasUsers: boolean; dbError?: string;
+        } | undefined;
 
         try {
             const res = await fetch("/api?action=health");
-            const data = await res.json() as { status: string; initialized: boolean; hasUsers: boolean; };
-            initialized = data.initialized;
-            anyUsers = data.hasUsers;
+            health = await res.json() as typeof health;
         } catch {
             // Backend not reachable.
         }
 
-        if (!initialized) {
+        if (!health) {
+            // Backend not reachable — handled by the splash screen with a progress indicator.
+            return;
+        }
+
+        if (!health.configLoaded) {
             this.setState({ phase: AppPhase.Setup }, () => {
-                this.backendSetupDialogRef.current?.open();
+                this.backendSetupDialogRef.current?.open({
+                    mode: "fatal",
+                    configError: health.configError,
+                });
             });
 
             return;
         }
 
-        if (!anyUsers) {
+        if (!health.initialized) {
+            this.setState({ phase: AppPhase.Setup }, () => {
+                this.backendSetupDialogRef.current?.open({
+                    mode: "initial",
+                    dbError: health.dbError,
+                });
+            });
+
+            return;
+        }
+
+        if (!health.hasUsers) {
             this.setState({ phase: AppPhase.AdminSetup }, () => {
                 this.adminSetupDialogRef.current?.open();
             });
@@ -855,6 +874,13 @@ export class App extends UIComponent<{}, IAppState> {
                 icon: <Icon src={Codicon.Organization} />,
                 onClick: () => {
                     this.userGroupEditorRef.current?.open();
+                },
+            });
+            items.push({
+                label: "Reset Backend",
+                icon: <Icon src={Codicon.Server} />,
+                onClick: () => {
+                    this.backendSetupDialogRef.current?.open({ mode: "admin" });
                 },
             });
         } else if (user) {

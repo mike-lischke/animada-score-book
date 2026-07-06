@@ -174,21 +174,6 @@ export class MySqlAdapter implements IDatabaseAdapter {
             await this.pool.end();
         }
 
-        // First, create the database if it does not exist.
-        const initPool = createPool({
-            host: config.host,
-            port: config.port,
-            user: config.user,
-            password: config.password,
-            waitForConnections: true,
-            connectionLimit: 1,
-            connectTimeout: 10000,
-        });
-
-        await initPool.execute(`CREATE DATABASE IF NOT EXISTS \`${config.database}\``);
-        await initPool.end();
-
-        // Now connect to the target database and create tables.
         this.pool = createPool({
             host: config.host,
             port: config.port,

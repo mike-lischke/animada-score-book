@@ -5,14 +5,13 @@
 
 import { describe, expect, it } from "vitest";
 
-import { createAccessToken, createRefreshToken, verifyToken } from "../../src/server/auth.js";
-import { AccessLevel, adminGroupName, worldGroupName, EntityType, LoginAuditEvent } from "../../src/server/auth.js";
+import { Auth, AccessLevel, EntityType, LoginAuditEvent } from "../../src/server/Auth.js";
 
 describe("auth — JWT", () => {
     it("round-trip: access token", () => {
         const payload = { userId: 1, username: "test", isAdmin: false };
-        const token = createAccessToken(payload);
-        const decoded = verifyToken(token);
+        const token = Auth.createAccessToken(payload);
+        const decoded = Auth.verifyToken(token);
 
         expect(decoded).toBeDefined();
         expect(decoded!.userId).toBe(1);
@@ -21,7 +20,7 @@ describe("auth — JWT", () => {
     });
 
     it("refresh token: generates random raw and hash", () => {
-        const { raw, hash, maxAge } = createRefreshToken();
+        const { raw, hash, maxAge } = Auth.createRefreshToken();
 
         expect(raw).toBeDefined();
         expect(raw.length).toBe(64); // 32 bytes hex = 64 chars
@@ -32,15 +31,15 @@ describe("auth — JWT", () => {
     });
 
     it("refresh tokens are unique", () => {
-        const a = createRefreshToken();
-        const b = createRefreshToken();
+        const a = Auth.createRefreshToken();
+        const b = Auth.createRefreshToken();
 
         expect(a.raw).not.toBe(b.raw);
         expect(a.hash).not.toBe(b.hash);
     });
 
     it("invalid token returns undefined", () => {
-        expect(verifyToken("not.a.token")).toBeUndefined();
+        expect(Auth.verifyToken("not.a.token")).toBeUndefined();
     });
 });
 
@@ -52,11 +51,11 @@ describe("auth — AccessLevel", () => {
 
 describe("auth — Constants", () => {
     it("adminGroupName is 'Admins'", () => {
-        expect(adminGroupName).toBe("Admins");
+        expect(Auth.adminGroupName).toBe("Admins");
     });
 
     it("worldGroupName is 'World'", () => {
-        expect(worldGroupName).toBe("World");
+        expect(Auth.worldGroupName).toBe("World");
     });
 
     it("EntityType has expected values", () => {

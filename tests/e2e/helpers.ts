@@ -100,7 +100,8 @@ export const routeApi = async (page: Page): Promise<void> => {
                 contentType: "application/json",
                 body: JSON.stringify({
                     status: "ok", initialized: true, engine: "mysql", hasData: true,
-                    hasUsers: true
+                    hasUsers: true, configLoaded: true,
+                    host: "127.0.0.1", port: 3306, database: "animada_score_book",
                 }),
             });
 

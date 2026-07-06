@@ -70,8 +70,8 @@ test.describe.serial("Setup: real database integration", () => {
 
         // The Playwright webServer already built dist/ — we just need the backend to serve it.
 
-        // Start the backend entirely via env vars. No config file manipulation.
-        // A non-existent DB_NAME forces the setup dialog to appear.
+        // Start the backend with the test database name so it can auto-initialize.
+        // The setup dialog no longer has editable form fields — config comes from env vars.
         backendProcess = spawn("npx", ["tsx", "src/server/backend.ts"], {
             env: {
                 ...process.env,
@@ -81,9 +81,9 @@ test.describe.serial("Setup: real database integration", () => {
                 DB_ENGINE: "mysql",
                 DB_HOST: dbHost,
                 DB_PORT: String(dbPort),
-                DB_NAME: "nonexistent_db_to_force_setup_dialog",
+                DB_NAME: testDbName,
                 DB_USER: dbUser,
-                DB_PASSWORD: "",
+                DB_PASSWORD: dbPassword,
             },
             stdio: "pipe",
         });
@@ -119,39 +119,13 @@ test.describe.serial("Setup: real database integration", () => {
         await dbConnection.end();
     });
 
-    test("full setup flow: no config → credentials → test → init → admin", async ({ page }) => {
+    test("full setup flow: auto-init → admin", async ({ page }) => {
         // Navigate directly to the test backend — it serves both API and frontend.
         await page.goto(testBackendUrl);
-        await page.waitForSelector("#backendSetupDialog", { state: "visible", timeout: 10000 });
 
-        await expect(page.locator("#backendSetupDialog")).toContainText("Database Setup");
-
-        // Fill database credentials for the test database.
-        const visibleInputs = page.locator("input:visible");
-
-        await visibleInputs.nth(0).fill(dbHost);
-        await visibleInputs.nth(1).fill(String(dbPort));
-        await visibleInputs.nth(2).fill(testDbName);
-        await visibleInputs.nth(3).fill(dbUser);
-        await visibleInputs.nth(4).fill(dbPassword);
-
-        // Click "Test Connection".
-        await page.click("#backend-setup-test");
-        await expect(page.locator(".text-success")).toBeVisible({ timeout: 15000 });
-        await expect(page.locator(".text-success")).toContainText("Connection successful");
-
-        // Click "Initialize Database".
-        await page.click("#backend-setup-init");
-
-        await expect(page.locator("#backendSetupDialog")).toContainText(
-            "Database setup complete", { timeout: 30000 },
-        );
-
-        // Close the setup dialog.
-        await page.click("#backend-setup-close");
-
-        // The Admin Setup dialog should appear.
-        await expect(page.locator("#adminSetupDialog")).toBeVisible({ timeout: 10000 });
+        // The backend auto-initializes because the database is reachable via env vars.
+        // The setup dialog appears briefly showing the config, then the admin setup dialog appears.
+        await expect(page.locator("#adminSetupDialog")).toBeVisible({ timeout: 30000 });
         await expect(page.locator("#adminSetupDialog")).toContainText("Finish Installation");
 
         // Fill and submit the admin creation form.
