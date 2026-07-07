@@ -7,6 +7,7 @@ import pg from "pg";
 
 import type { DbRow, IDatabaseAdapter, IDatabaseConfig, IDbExecuteResult, ITestConnectionResult } from "./database.js";
 
+// KEEP IN SYNC with createTablesSQL in mysql-adapter.ts — same tables, same columns, same nullability.
 const createTablesSQL = [
     `CREATE TABLE IF NOT EXISTS folders (
         id       SERIAL PRIMARY KEY,
@@ -16,7 +17,7 @@ const createTablesSQL = [
 
     `CREATE TABLE IF NOT EXISTS scores (
         id       SERIAL PRIMARY KEY,
-        folderid INT NOT NULL REFERENCES folders(id) ON UPDATE CASCADE ON DELETE CASCADE,
+        folderid INT NULL REFERENCES folders(id) ON UPDATE CASCADE ON DELETE CASCADE,
         name     VARCHAR(255) NOT NULL,
         content  TEXT NOT NULL,
         notes    TEXT
@@ -167,6 +168,11 @@ export class PostgresAdapter implements IDatabaseAdapter {
             for (const stmt of createTablesSQL) {
                 await client.query(stmt);
             }
+
+            // Migration: allow scores at root level (folderid nullable).
+            await client.query(
+                "ALTER TABLE scores ALTER COLUMN folderid DROP NOT NULL",
+            );
 
             // Migration: add refresh_token_hash column for token rotation.
             try {

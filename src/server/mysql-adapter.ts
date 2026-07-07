@@ -8,6 +8,7 @@ import type { Pool, RowDataPacket, ResultSetHeader } from "mysql2/promise";
 
 import type { DbRow, IDatabaseAdapter, IDatabaseConfig, IDbExecuteResult, ITestConnectionResult } from "./database.js";
 
+// KEEP IN SYNC with createTablesSQL in postgres-adapter.ts — same tables, same columns, same nullability.
 const createTablesSQL = [
     `CREATE TABLE IF NOT EXISTS folders (
         id       INT UNSIGNED NOT NULL AUTO_INCREMENT,

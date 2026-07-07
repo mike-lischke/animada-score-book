@@ -46,13 +46,13 @@ import crypto from "node:crypto";
 import type { IDatabaseAdapter } from "./database.js";
 
 /** A single group assignment on an entity (from entity_groups). */
-export interface IEntityGroupEntry {
+interface IEntityGroupEntry {
     groupId: number;
     writable: boolean;
 }
 
 /** The fully resolved permission state for an entity (after inheritance). */
-export interface IResolvedPermission {
+interface IResolvedPermission {
     /** The effective owner id, or null if no owner is set anywhere in the chain. */
     ownerId: number | null;
     /** All group assignments, collected from the entity and all ancestors. */
@@ -71,25 +71,7 @@ export interface ITokenPayload {
     groupId?: number;
 }
 
-export interface IWhoamiResponse {
-    authenticated: boolean;
-    user?: {
-        id: number;
-        username: string;
-        displayName: string;
-        isAdmin: boolean;
-    };
-
-    /** Set when the user authenticated via a group password. */
-    group?: {
-        id: number;
-        name: string;
-    };
-
-    capabilities: ICapabilities;
-}
-
-export interface ICapabilities {
+interface ICapabilities {
     canEditScores: boolean;
     canManageUsers: boolean;
     canManageInstruments: boolean;
@@ -117,7 +99,7 @@ export enum LoginAuditEvent {
 }
 
 /** Summary of a user's relationship to an entity's permissions. */
-export interface IPermissionSummary {
+interface IPermissionSummary {
     isOwner: boolean;
     canRead: boolean;
     canWrite: boolean;
@@ -536,28 +518,6 @@ export class Auth {
     };
 
     /**
-     * Verifies a JWT access token and returns its payload.
-     *
-     * @param token The JWT string.
-     *
-     * @returns The decoded payload, or undefined if invalid/expired.
-     */
-    public verifyToken(token: string): ITokenPayload | undefined {
-        try {
-            const decoded = jwt.verify(token, Auth.jwtSecret) as ITokenPayload & { type?: string; };
-
-            // Refresh tokens cannot be used as access tokens.
-            if (decoded.type === "refresh") {
-                return undefined;
-            }
-
-            return decoded;
-        } catch {
-            return undefined;
-        }
-    };
-
-    /**
      * Checks whether a user is a member of the Admins group.
      *
      * @param userId  The user id.
@@ -589,102 +549,6 @@ export class Auth {
     public async getAdminGroupId(): Promise<number | undefined> {
         return this.firstMatchingGroupId(Auth.adminGroupName);
     };
-
-    /**
-     * Hashes a password using scrypt.
-     *
-     * The output format is: `$s0$<params>$<salt>$<hash>`
-     *   $s0$        — magic prefix
-     *   <params>    — hex-encoded JSON of scrypt options (N, r, p)
-     *   <salt>      — hex-encoded random salt (32 bytes)
-     *   <hash>      — hex-encoded derived key
-     *
-     * @param password The plaintext password.
-     *
-     * @returns The hashed password string.
-     */
-    public async hashPassword(password: string): Promise<string> {
-        const salt = crypto.randomBytes(32);
-        const paramsStr = Buffer.from(JSON.stringify(Auth.scryptOptions)).toString("hex");
-        const key = await new Promise<Buffer>((resolve, reject) => {
-            crypto.scrypt(password, salt, Auth.scryptKeyLen, Auth.scryptOptions, (err, derivedKey) => {
-                if (err) {
-                    reject(err);
-
-                    return;
-                }
-
-                resolve(derivedKey);
-            });
-        });
-
-        return `$s0$${paramsStr}$${salt.toString("hex")}$${key.toString("hex")}`;
-    };
-
-    /**
-     * Verifies a password against a hash produced by {@link hashPassword}.
-     *
-     * @param password The plaintext password to verify.
-     * @param hash     The stored hash string.
-     *
-     * @returns True if the password matches.
-     */
-    public async verifyPassword(password: string, hash: string): Promise<boolean> {
-        const parts = hash.split("$");
-
-        if (parts.length !== 5 || parts[1] !== "s0") {
-            return false;
-        }
-
-        try {
-            const options = JSON.parse(Buffer.from(parts[2], "hex").toString("utf-8")) as {
-                N: number; r: number; p: number;
-            };
-
-            const salt = Buffer.from(parts[3], "hex");
-            const expectedKey = Buffer.from(parts[4], "hex");
-            const derivedKey = await new Promise<Buffer>((resolve, reject) => {
-                crypto.scrypt(password, salt, Auth.scryptKeyLen, options, (err, key) => {
-                    if (err) {
-                        reject(err);
-
-                        return;
-                    }
-
-                    resolve(key);
-                });
-            });
-
-            return crypto.timingSafeEqual(derivedKey, expectedKey);
-        } catch {
-            return false;
-        }
-    };
-
-    /**
-     * Creates an access token for the given user.
-     *
-     * @param payload The token payload.
-     *
-     * @returns The signed JWT string.
-     */
-    public createAccessToken(payload: ITokenPayload): string {
-        return jwt.sign(payload, Auth.jwtSecret, { expiresIn: Auth.accessTokenExpiry });
-    }
-
-    /**
-     * Creates a refresh token for the given user.
-     * Generates a random token, returns both the raw token (for the cookie)
-     * and its SHA-256 hash (to store in the database for rotation).
-     *
-     * @returns The raw token, its hash, and its max age in seconds.
-     */
-    public createRefreshToken(): { raw: string; hash: string; maxAge: number; } {
-        const raw = crypto.randomBytes(32).toString("hex");
-        const hash = crypto.createHash("sha256").update(raw).digest("hex");
-
-        return { raw, hash, maxAge: Auth.refreshTokenExpirySeconds };
-    }
 
     /**
      * Verifies a refresh token against the stored hash and rotates it.
