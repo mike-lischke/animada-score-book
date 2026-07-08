@@ -3,8 +3,18 @@ name: Build & Test
 on:
   push:
     branches: [ main, 'features/**' ]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'License.txt'
+      - 'themes/**'
   pull_request:
     branches: [ main, 'features/**' ]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'License.txt'
+      - 'themes/**'
 
 jobs:
   build:
