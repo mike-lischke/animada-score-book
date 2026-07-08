@@ -5,7 +5,7 @@
 
 /* eslint-disable no-restricted-syntax */
 
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { DatabaseEngine, type IDatabaseConfig } from "./database.js";
@@ -27,7 +27,10 @@ export interface IServerConfig {
 }
 
 export const loadConfig = (): IServerConfig => {
-    const raw = JSON.parse(readFileSync(configPath, "utf-8")) as Partial<IServerConfig>;
+    let raw: Partial<IServerConfig> = {};
+    if (existsSync(configPath)) {
+        raw = JSON.parse(readFileSync(configPath, "utf-8")) as Partial<IServerConfig>;
+    }
 
     // Parse ALLOWED_ORIGINS env var (comma-separated).
     const allowedOriginsEnv = process.env.ALLOWED_ORIGINS
