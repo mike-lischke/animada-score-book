@@ -582,25 +582,24 @@ export class App extends UIComponent<{}, IAppState> {
         }
 
         if (!health.configLoaded) {
-            this.setState({ phase: AppPhase.Setup }, () => {
-                void this.backendSetupDialogRef.current?.show({
-                    mode: "fatal",
-                    configError: health.configError,
-                });
+            await this.setStatePromise({ phase: AppPhase.Setup });
+            await this.backendSetupDialogRef.current?.show({
+                mode: "fatal",
+                configError: health.configError,
             });
 
             return;
         }
 
         if (!health.initialized) {
-            this.setState({ phase: AppPhase.Setup }, () => {
-                void this.backendSetupDialogRef.current?.show({
-                    mode: "initial",
-                    dbError: health.dbError,
-                });
+            await this.setStatePromise({ phase: AppPhase.Setup });
+            await this.backendSetupDialogRef.current?.show({
+                mode: "initial",
+                dbError: health.dbError,
             });
 
-            return;
+            // Setup completed — restart the health check.
+            return this.checkBackendThenInitialize();
         }
 
         if (health.dbError) {
