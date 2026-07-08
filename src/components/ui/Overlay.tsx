@@ -109,7 +109,9 @@ export class Overlay extends UIComponent<IOverlayProps, IOverlayState> {
     };
 
     private handleOverlayVisibilityChanged = (data: { name: string; visible: boolean; }): Promise<boolean> => {
-        if (data.name !== this.props.name) {
+        const { name } = this.props;
+
+        if (data.name !== name) {
             return Promise.resolve(false);
         }
 

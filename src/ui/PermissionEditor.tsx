@@ -317,6 +317,8 @@ export class PermissionEditor extends UIComponent<IPermissionEditorProperties, I
 
     private handleDropOnWrite = (e: DragEvent): void => {
         e.preventDefault();
+        const { allGroups } = this.state;
+
         const raw = e.dataTransfer?.getData(dragType);
 
         if (!raw) {
@@ -329,7 +331,7 @@ export class PermissionEditor extends UIComponent<IPermissionEditorProperties, I
             return;
         }
 
-        const group = this.state.allGroups.find((g) => {
+        const group = allGroups.find((g) => {
             return g.id === groupId;
         });
 
@@ -349,7 +351,8 @@ export class PermissionEditor extends UIComponent<IPermissionEditorProperties, I
             return;
         }
 
-        const group = this.state.allGroups.find((g) => {
+        const { allGroups } = this.state;
+        const group = allGroups.find((g) => {
             return g.id === this.dragGroupId;
         });
 
@@ -462,7 +465,8 @@ export class PermissionEditor extends UIComponent<IPermissionEditorProperties, I
             return;
         }
 
-        const confirmed = await this.props.confirmRef.current?.show(
+        const { confirmRef } = this.props;
+        const confirmed = await confirmRef.current?.show(
             "Remove explicit permissions from all sub-folders and scores inside this folder,"
             + " so they inherit from their parents?",
             { accept: "Reset Children", refuse: "Cancel" },

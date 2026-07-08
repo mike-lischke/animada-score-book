@@ -6,6 +6,7 @@
 import pg from "pg";
 
 import type { DbRow, IDatabaseAdapter, IDatabaseConfig, IDbExecuteResult, ITestConnectionResult } from "./database.js";
+import { schemaVersion } from "./database.js";
 
 // KEEP IN SYNC with createTablesSQL in mysql-adapter.ts — same tables, same columns, same nullability.
 const createTablesSQL = [
@@ -97,6 +98,11 @@ const createTablesSQL = [
         writable    BOOLEAN NOT NULL DEFAULT FALSE,
         PRIMARY KEY (entity_type, entity_id, group_id)
     )`,
+
+    `CREATE TABLE IF NOT EXISTS features (
+        key   VARCHAR(255) NOT NULL PRIMARY KEY,
+        value TEXT         NOT NULL
+    )`,
 ];
 
 /**
@@ -165,31 +171,25 @@ export class PostgresAdapter implements IDatabaseAdapter {
         const client = await this.pool.connect();
 
         try {
-            for (const stmt of createTablesSQL) {
-                await client.query(stmt);
+            // Never modify an existing database — only create tables on a fresh install.
+            let exists = false;
+
+            try {
+                await client.query("SELECT 1 FROM folders LIMIT 1");
+                exists = true;
+            } catch {
+                // Table doesn't exist — fresh install.
             }
 
-            // Migration: allow scores at root level (folderid nullable).
-            await client.query(
-                "ALTER TABLE scores ALTER COLUMN folderid DROP NOT NULL",
-            );
+            if (!exists) {
+                for (const stmt of createTablesSQL) {
+                    await client.query(stmt);
+                }
 
-            // Migration: add refresh_token_hash column for token rotation.
-            try {
                 await client.query(
-                    "ALTER TABLE users ADD COLUMN IF NOT EXISTS refresh_token_hash VARCHAR(256)",
+                    "INSERT INTO features (key, value) VALUES ('schema_version', $1)",
+                    [String(schemaVersion)],
                 );
-            } catch {
-                // Safe to ignore.
-            }
-
-            // Migration: add color column to groups.
-            try {
-                await client.query(
-                    "ALTER TABLE groups ADD COLUMN IF NOT EXISTS color VARCHAR(7) NOT NULL DEFAULT '#808080'",
-                );
-            } catch {
-                // Safe to ignore.
             }
         } finally {
             client.release();
@@ -256,6 +256,18 @@ export class PostgresAdapter implements IDatabaseAdapter {
             }
         } finally {
             client.release();
+        }
+    }
+
+    public async getSchemaVersion(): Promise<number> {
+        try {
+            const rows = await this.query<{ value: string; }>(
+                "SELECT value FROM features WHERE key = 'schema_version'",
+            );
+
+            return rows[0] ? Number(rows[0].value) : 0;
+        } catch {
+            return 0;
         }
     }
 

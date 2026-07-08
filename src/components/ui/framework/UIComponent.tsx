@@ -107,6 +107,21 @@ export abstract class UIComponent<P extends ICommonUIProperties = {}, S = {}>
     extends Component<P, S> {
 
     /**
+     * Promisified version of `setState`.
+     *
+     * @param state The new state to set.
+     *
+     * @returns A promise which resolves when the `setState` action finished.
+     */
+    public setStatePromise<K extends keyof S>(
+        state: ((prevState: Readonly<S>, props: Readonly<P>) => (Pick<S, K> | S | null)) | (Pick<S, K> | S | null),
+    ): Promise<void> {
+        return new Promise((resolve) => {
+            super.setState(state, resolve);
+        });
+    }
+
+    /**
      * Takes the given base class names (CSS class names) and combines them with the class name of the component.
      * It automatically handles undefined values.
      *

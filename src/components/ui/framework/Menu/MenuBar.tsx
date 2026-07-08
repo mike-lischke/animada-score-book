@@ -42,7 +42,7 @@ export class MenuBar extends UIComponent<IMenuBarProperties, IMenuBarState> {
     }
 
     public render(): ComponentChild {
-        const { id, items, style } = this.props;
+        const { id, items, style, onItemClick } = this.props;
         const { openMenuId } = this.state;
         const className = this.generateFinalClassName(["menuBar"]);
 
@@ -88,7 +88,7 @@ export class MenuBar extends UIComponent<IMenuBarProperties, IMenuBarState> {
                                         });
                                     }
 
-                                    this.props.onItemClick?.(item.id);
+                                    onItemClick?.(item.id);
                                 }}
                             >
                                 {item.icon && <Icon src={item.icon} />}
@@ -100,7 +100,7 @@ export class MenuBar extends UIComponent<IMenuBarProperties, IMenuBarState> {
                                     items={item.children}
                                     onItemClick={(childId) => {
                                         this.setState({ openMenuId: "" });
-                                        this.props.onItemClick?.(childId);
+                                        onItemClick?.(childId);
                                     }}
                                 />
                             )}

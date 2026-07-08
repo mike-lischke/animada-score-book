@@ -194,7 +194,9 @@ export class App extends UIComponent<{}, IAppState> {
     }
 
     public override componentDidUpdate(_prevProps: {}, prevState: IAppState): void {
-        if (prevState.phase !== AppPhase.Running && this.state.phase === AppPhase.Running) {
+        const { phase } = this.state;
+
+        if (prevState.phase !== AppPhase.Running && phase === AppPhase.Running) {
             this.updateStatsItem();
         }
     }
@@ -213,7 +215,8 @@ export class App extends UIComponent<{}, IAppState> {
     }
 
     public render() {
-        const { phase, displayMode, sidebarOpen, headerPinned, instrumentEditorEnabled } = this.state;
+        const { phase, displayMode, sidebarOpen, headerPinned, instrumentEditorEnabled, printing,
+            printOptions } = this.state;
         const isRunning = phase === AppPhase.Running;
 
         let splashContent: ComponentChild;
@@ -225,9 +228,6 @@ export class App extends UIComponent<{}, IAppState> {
                 splashContent = (
                     <BackendSetupDialog
                         ref={this.backendSetupDialogRef}
-                        onSetupComplete={() => {
-                            void this.handleBackendSetupComplete();
-                        }}
                     />
                 );
 
@@ -249,8 +249,6 @@ export class App extends UIComponent<{}, IAppState> {
                     <LoginDialog
                         ref={this.loginDialogRef}
                         dataModel={this.dataModel}
-                        onLoginSuccess={this.handleLoginSuccess}
-                        onContinueAnonymous={this.handleContinueAnonymous}
                     />
                 );
 
@@ -500,14 +498,9 @@ export class App extends UIComponent<{}, IAppState> {
                         <LoginDialog
                             ref={this.loginDialogRef}
                             dataModel={this.dataModel}
-                            onLoginSuccess={this.handleLoginSuccess}
-                            onContinueAnonymous={this.handleContinueAnonymous}
                         />
                         <BackendSetupDialog
                             ref={this.backendSetupDialogRef}
-                            onSetupComplete={() => {
-                                void this.handleBackendSetupComplete();
-                            }}
                         />
                         <PrintDialog ref={this.printDialogRef} onAccept={this.handlePrintAccept} />
                         <UserGroupEditor
@@ -524,11 +517,11 @@ export class App extends UIComponent<{}, IAppState> {
                             }}
                         />
                         {
-                            this.state.printing && this.dataModel.arrangement && this.state.printOptions
+                            printing && this.dataModel.arrangement && printOptions
                             && this.arrangementPlayer && this.undoManager && (
                                 <PrintView
                                     arrangement={this.dataModel.arrangement as Arrangement}
-                                    options={this.state.printOptions}
+                                    options={printOptions}
                                     dataModel={this.dataModel}
                                     arrangementPlayer={this.arrangementPlayer}
                                     services={this.services}
@@ -567,6 +560,8 @@ export class App extends UIComponent<{}, IAppState> {
     /**
      * Checks if the backend is reachable and initialised. If not, opens the setup dialog.
      * Once the backend is ready, proceeds with data model initialisation.
+     *
+     * @returns A promise that resolves when the check is complete.
      */
     private async checkBackendThenInitialize(): Promise<void> {
         let health: {
@@ -588,7 +583,7 @@ export class App extends UIComponent<{}, IAppState> {
 
         if (!health.configLoaded) {
             this.setState({ phase: AppPhase.Setup }, () => {
-                this.backendSetupDialogRef.current?.open({
+                void this.backendSetupDialogRef.current?.show({
                     mode: "fatal",
                     configError: health.configError,
                 });
@@ -599,13 +594,57 @@ export class App extends UIComponent<{}, IAppState> {
 
         if (!health.initialized) {
             this.setState({ phase: AppPhase.Setup }, () => {
-                this.backendSetupDialogRef.current?.open({
+                void this.backendSetupDialogRef.current?.show({
                     mode: "initial",
                     dbError: health.dbError,
                 });
             });
 
             return;
+        }
+
+        if (health.dbError) {
+            // Pipeline: logout → setup dialog → confirmation → login → reset.
+            await this.dataModel.logout();
+            await this.setStatePromise({ phase: AppPhase.Setup });
+
+            const setupResult = await this.backendSetupDialogRef.current?.show({
+                mode: "admin",
+                dbError: health.dbError,
+            });
+
+            if (setupResult !== "reset") {
+                return;
+            }
+
+            const confirmed = await this.confirmDialogRef.current?.show(
+                "This will delete all scores, folders, users and groups.\n"
+                + "The database tables will be recreated from scratch.",
+                { accept: "Reset Database", refuse: "Cancel" },
+                "Reset Database",
+                ["This cannot be undone. Make sure to export your scores if you want to keep them."],
+            );
+
+            if (confirmed !== DialogResponseClosure.Accept) {
+                return;
+            }
+
+            await this.setStatePromise({ phase: AppPhase.Login });
+            const loggedIn = await this.loginDialogRef.current?.show(true);
+
+            if (!loggedIn) {
+                return;
+            }
+
+            const ok = await this.dataModel.resetDatabase();
+
+            if (!ok) {
+                // Reset failed — restart the health check so the setup dialog can show the error.
+                return this.checkBackendThenInitialize();
+            }
+
+            // Restart the health check — the backend is now fresh.
+            return this.checkBackendThenInitialize();
         }
 
         if (!health.hasUsers) {
@@ -655,7 +694,7 @@ export class App extends UIComponent<{}, IAppState> {
         }
 
         this.setState({ phase: AppPhase.Login }, () => {
-            this.loginDialogRef.current?.open();
+            void this.loginDialogRef.current?.show().then(this.handleLoginDialogResult);
         });
     }
 
@@ -671,15 +710,30 @@ export class App extends UIComponent<{}, IAppState> {
     };
 
     private handleAuthChanged = (): Promise<boolean> => {
-        if (!this.dataModel.authenticated && this.state.phase === AppPhase.Running) {
+        const { phase } = this.state;
+
+        if (!this.dataModel.authenticated && phase === AppPhase.Running) {
             this.setState({ phase: AppPhase.Login }, () => {
-                this.loginDialogRef.current?.open();
+                void this.loginDialogRef.current?.show().then(this.handleLoginDialogResult);
             });
         } else {
             this.forceUpdate();
         }
 
         return Promise.resolve(true);
+    };
+
+    /**
+     * Handles the result of a login dialog show() call for non-pipeline paths.
+     *
+     * @param loggedIn Whether the user logged in successfully.
+     */
+    private handleLoginDialogResult = (loggedIn: boolean): void => {
+        if (loggedIn) {
+            this.handleLoginSuccess();
+        } else {
+            this.handleContinueAnonymous();
+        }
     };
 
     private handleLoginSuccess = (): void => {
@@ -747,7 +801,7 @@ export class App extends UIComponent<{}, IAppState> {
                 }
 
                 this.setState({ phase: AppPhase.Login }, () => {
-                    this.loginDialogRef.current?.open();
+                    void this.loginDialogRef.current?.show().then(this.handleLoginDialogResult);
                 });
 
                 return;
@@ -826,7 +880,7 @@ export class App extends UIComponent<{}, IAppState> {
     private handleSignInClick = () => {
         this.signInFromRunning = true;
         this.setState({ phase: AppPhase.Login }, () => {
-            this.loginDialogRef.current?.open();
+            void this.loginDialogRef.current?.show().then(this.handleLoginDialogResult);
         });
     };
 
@@ -848,7 +902,7 @@ export class App extends UIComponent<{}, IAppState> {
         this.notificationItem = undefined;
 
         this.setState({ phase: AppPhase.Login }, () => {
-            this.loginDialogRef.current?.open();
+            void this.loginDialogRef.current?.show().then(this.handleLoginDialogResult);
         });
     };
 
@@ -880,7 +934,7 @@ export class App extends UIComponent<{}, IAppState> {
                 label: "Reset Backend",
                 icon: <Icon src={Codicon.Server} />,
                 onClick: () => {
-                    this.backendSetupDialogRef.current?.open({ mode: "admin" });
+                    void this.backendSetupDialogRef.current?.show({ mode: "admin" });
                 },
             });
         } else if (user) {

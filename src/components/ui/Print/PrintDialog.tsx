@@ -217,8 +217,10 @@ export class PrintDialog extends UIComponent<IPrintDialogProps, IPrintDialogStat
 
     private handleClose = (returnValue: string): void => {
         const { onAccept } = this.props;
+        const { options } = this.state;
+
         if (returnValue === "print") {
-            onAccept?.(this.state.options);
+            onAccept?.(options);
         }
     };
 }

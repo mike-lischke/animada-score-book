@@ -1377,7 +1377,7 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
             await new Promise((resolve) => {
                 setTimeout(resolve, 0);
             });
-            this.props.dataModel.reset();
+            dataModel.reset();
 
             return;
         }

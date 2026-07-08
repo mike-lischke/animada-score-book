@@ -67,7 +67,7 @@ Always put a blank line after blocks (`if`/`for`/`while`/`switch`/`case`/anonymo
 - Blank line before `@returns`; always use `@returns` (not `@return`).
 - `@param` descriptions follow the tag with a single space — never column-align across entries. Wrapped continuation lines indent to where the description text starts.
 
-### React
+### React + Preact
 
 - Never use `this.props.` or `this.state.` — destructure fields into individual variables at the top of the method.
 - **JSX must be logic-free.** The rendering tree (everything after `return (`) must contain only markup with minimal interpolations like `{userRows}` or `{condition && <Foo />}`. No inline `.map()`, no ternaries with more than one line per branch, no IIFEs, no `Array.from().find()`.

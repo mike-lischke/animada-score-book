@@ -51,7 +51,7 @@ export class Menu extends UIComponent<IMenuProperties, IMenuState> {
     }
 
     public render(): ComponentChild {
-        const { id, caption, icon, items, style } = this.props;
+        const { id, caption, icon, items, style, onItemClick } = this.props;
         const triggerShown = (caption ?? icon) !== undefined;
         const className = this.generateFinalClassName(["menuHost"]);
 
@@ -88,7 +88,7 @@ export class Menu extends UIComponent<IMenuProperties, IMenuState> {
                                 onClick={(e) => {
                                     e.stopPropagation();
                                     if (!item.disabled && item.label !== "-") {
-                                        this.props.onItemClick?.(item.id);
+                                        onItemClick?.(item.id);
                                         this.close();
                                     }
                                 }}

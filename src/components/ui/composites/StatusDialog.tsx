@@ -120,9 +120,11 @@ export class StatusDialog extends UIComponent<IStatusDialogProperties> {
      * Closes the dialog programmatically.
      */
     public dismiss(): void {
+        const { onClose } = this.props;
+
         this.closingIntentionally = true;
         this.valueDialogRef.current?.dismiss();
-        this.props.onClose?.();
+        onClose?.();
     }
 
     public render(): ComponentChild {

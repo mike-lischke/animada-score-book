@@ -294,6 +294,7 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
     private autoFollow = (realTime: RealTime) => {
         if (this.viewerRef.current && this.playBeamRef.current && this.viewerContentHostRef.current) {
             const { arrangementPlayer } = this.props;
+            const { trackViewMode } = this.state;
 
             const viewer = this.viewerRef.current;
             const contentHost = this.viewerContentHostRef.current;
@@ -303,7 +304,7 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
             const maxScroll = Math.max(0, contentWidth - clientWidth);
 
             const metrics = arrangementPlayer.scoreMetrics;
-            const prefixWidthPixels = this.state.trackViewMode === "staff" ? this.measureStaffPrefixWidthPx() : 0;
+            const prefixWidthPixels = trackViewMode === "staff" ? this.measureStaffPrefixWidthPx() : 0;
             const musicalContentWidth = Math.max(0, contentWidth - prefixWidthPixels);
             const barWidthPixels = metrics.bars > 0 ? musicalContentWidth / metrics.bars : 0;
             const stepWidthPixels = barWidthPixels / metrics.stepsPerBar;

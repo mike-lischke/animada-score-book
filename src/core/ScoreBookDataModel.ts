@@ -938,6 +938,22 @@ export class ScoreBookDataModel {
         void requisitions.execute("scoreBookLoaded", ScoreBookChangeReason.EntryRenamed);
     }
 
+    /**
+     * Resets the database by dropping and recreating all tables.
+     * This is a destructive operation — all data is lost.
+     *
+     * @returns True if the reset succeeded.
+     */
+    public async resetDatabase(): Promise<boolean> {
+        const res = await this.fetchApi("/api?action=setup", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ overwrite: true }),
+        });
+
+        return res?.ok === true;
+    }
+
     public async deleteEntry(entry: ISbDmScoreFolder | ISbDmScore): Promise<void> {
         // Check if the entry has children.
         if (entry.type === SbDmEntityType.ScoreFolder && entry.children.length > 0) {

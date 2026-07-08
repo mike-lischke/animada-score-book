@@ -12,7 +12,7 @@ import { resolve } from "node:path";
 
 import { convertErrorToString } from "../core/utils.js";
 import { Auth } from "./Auth.js";
-import { DatabaseEngine, type IDatabaseAdapter, type IDatabaseConfig } from "./database.js";
+import { DatabaseEngine, schemaVersion, type IDatabaseAdapter, type IDatabaseConfig } from "./database.js";
 import { MySqlAdapter } from "./mysql-adapter.js";
 import { PostgresAdapter } from "./postgres-adapter.js";
 import { type IServerConfig } from "./config.js";
@@ -355,8 +355,20 @@ export class Router {
 
         let hasData = false;
         let anyUsers = false;
+        let dbError: string | undefined;
 
         if (this.auth.adapter.isInitialized()) {
+            const dbVersion = await this.auth.adapter.getSchemaVersion();
+
+            if (dbVersion === 0) {
+                dbError = "Database schema is from an older version without version tracking. "
+                    + "A reset is required.";
+            } else if (dbVersion < schemaVersion) {
+                dbError = `Database schema is version ${dbVersion}, `
+                    + `but version ${schemaVersion} is required. Use Reset Database to upgrade.`;
+            }
+
+            // Always query actual data counts so the frontend can show the correct confirmation dialog.
             try {
                 const rows = await this.auth.adapter.query<{ cnt: number; }>(
                     "SELECT COUNT(*) AS cnt FROM folders",
@@ -364,8 +376,8 @@ export class Router {
 
                 hasData = (rows[0]?.cnt ?? 0) > 0;
                 anyUsers = await this.auth.hasUsers();
-            } catch {
-                // Tables might not exist yet.
+            } catch (e) {
+                dbError = `Schema check failed: ${convertErrorToString(e)}`;
             }
         }
 
@@ -379,6 +391,7 @@ export class Router {
             database: this.config.database.database,
             hasData,
             hasUsers: anyUsers,
+            dbError,
         });
     };
 
@@ -386,17 +399,22 @@ export class Router {
         const body = await this.ctx.readJsonBody(req);
 
         // If the backend is already set up, only admins may reconfigure.
+        // If hasUsers() fails the schema is truly broken — allow emergency reset without auth.
         if (this.auth.adapter.isInitialized()) {
-            const usersExist = await this.auth.hasUsers();
+            try {
+                const usersExist = await this.auth.hasUsers();
 
-            if (usersExist) {
-                const user = this.ctx.getAuthUser(req);
+                if (usersExist) {
+                    const user = this.ctx.getAuthUser(req);
 
-                if (!user || !(await this.auth.isUserInAdminGroup(user.userId))) {
-                    this.ctx.sendError(res, "Forbidden", 403);
+                    if (!user || !(await this.auth.isUserInAdminGroup(user.userId))) {
+                        this.ctx.sendError(res, "Forbidden", 403);
 
-                    return;
+                        return;
+                    }
                 }
+            } catch {
+                // hasUsers failed — schema is incompatible, allow emergency reset.
             }
         }
 
@@ -427,14 +445,18 @@ export class Router {
             if (body.overwrite) {
                 try {
                     await newAdapter.initialize(this.config.database);
+                    await newAdapter.execute("DROP TABLE IF EXISTS entity_groups");
                     await newAdapter.execute("DROP TABLE IF EXISTS permissions");
                     await newAdapter.execute("DROP TABLE IF EXISTS user_groups");
+                    await newAdapter.execute("DROP TABLE IF EXISTS login_audit");
                     await newAdapter.execute("DROP TABLE IF EXISTS `groups`");
                     await newAdapter.execute("DROP TABLE IF EXISTS users");
                     await newAdapter.execute("DROP TABLE IF EXISTS instrument_images");
                     await newAdapter.execute("DROP TABLE IF EXISTS instruments");
                     await newAdapter.execute("DROP TABLE IF EXISTS scores");
                     await newAdapter.execute("DROP TABLE IF EXISTS folders");
+                    await newAdapter.execute("DROP TABLE IF EXISTS features");
+                    await newAdapter.execute("DROP TABLE IF EXISTS schema_version");
                     await newAdapter.shutdown();
                     const freshAdapter = this.createAdapter();
 

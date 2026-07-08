@@ -5,6 +5,7 @@
 
 import { ComponentChild, createRef } from "preact";
 
+import { Semaphore } from "../supplement/Semaphore.js";
 import { Button } from "../components/ui/framework/Button.js";
 import { Codicon } from "../components/ui/framework/Codicon.js";
 import { Container } from "../components/ui/framework/Container.js";
@@ -27,7 +28,6 @@ enum BackendSetupState {
     Fatal,
     NeedsSetup,
     Initialising,
-    ConfirmReset,
     Done,
     Error,
 }
@@ -51,11 +51,11 @@ interface IBackendSetupDialogState {
 }
 
 interface IBackendSetupDialogProperties extends ICommonUIProperties {
-    onSetupComplete?: () => void;
 }
 
 export class BackendSetupDialog extends UIComponent<IBackendSetupDialogProperties, IBackendSetupDialogState> {
     private dialogRef = createRef<Dialog>();
+    private signal?: Semaphore<"done" | "reset">;
 
     public constructor(props: IBackendSetupDialogProperties) {
         super(props);
@@ -70,9 +70,20 @@ export class BackendSetupDialog extends UIComponent<IBackendSetupDialogPropertie
         };
     }
 
-    public open(options: {
+    /**
+     * Opens the dialog and returns a promise that resolves when the user takes action.
+     *
+     * @param options              The dialog configuration.
+     * @param options.mode         The setup mode (fatal, initial, admin).
+     * @param options.configError  An optional config error message.
+     * @param options.dbError      An optional database error message.
+     *
+     * @returns "reset" when the user clicks Reset Database, "done" when setup completes.
+     */
+    public async show(options: {
         mode: BackendSetupMode; configError?: string; dbError?: string;
-    } = { mode: "initial" }): void {
+    } = { mode: "initial" }): Promise<"done" | "reset"> {
+        this.signal = new Semaphore<"done" | "reset">();
         this.setState({
             mode: options.mode,
             errorMessage: options.dbError ?? "",
@@ -81,6 +92,8 @@ export class BackendSetupDialog extends UIComponent<IBackendSetupDialogPropertie
             this.dialogRef.current?.open();
             void this.checkBackendStatus();
         });
+
+        return this.signal.wait();
     }
 
     public render(): ComponentChild {
@@ -141,30 +154,6 @@ export class BackendSetupDialog extends UIComponent<IBackendSetupDialogPropertie
                 break;
             }
 
-            case BackendSetupState.ConfirmReset: {
-                content = (
-                    <Container
-                        orientation={Orientation.TopDown}
-                        crossAlignment={ChildAlignment.Center}
-                        style={{ flex: "1 1 auto" }}
-                    >
-                        <Icon
-                            src={Codicon.Warning}
-                            style={{ fontSize: "48px", color: "var(--color-warning)", marginBottom: "12px" }}
-                        />
-                        <Label
-                            caption="This will delete all scores, folders, users and groups."
-                            heading wrap />
-                        <Label
-                            caption="The database tables will be recreated from scratch."
-                            style={{ marginTop: "4px" }} wrap />
-                        <Label caption="This cannot be undone. Continue?" style={{ marginTop: "16px" }} wrap />
-                    </Container>
-                );
-
-                break;
-            }
-
             default:
         }
 
@@ -175,18 +164,6 @@ export class BackendSetupDialog extends UIComponent<IBackendSetupDialogPropertie
         } else if (phase === BackendSetupState.Done) {
             actions = [
                 <Button id="backend-setup-close" value="close" caption="Close" />,
-            ];
-        } else if (phase === BackendSetupState.ConfirmReset) {
-            actions = [
-                <Button
-                    id="backend-setup-confirm-reset"
-                    caption="Yes, reset everything"
-                    onClick={(e) => {
-                        e.preventDefault();
-                        void this.doInitializeDatabase(true);
-                    }}
-                />,
-                <Button id="backend-setup-cancel" value="cancel" caption="Cancel" />,
             ];
         } else if (isBusy) {
             actions = [];
@@ -210,11 +187,8 @@ export class BackendSetupDialog extends UIComponent<IBackendSetupDialogPropertie
                     disabled={isBusy}
                     onClick={(e) => {
                         e.preventDefault();
-                        if (this.state.hasData) {
-                            this.setState({ phase: BackendSetupState.ConfirmReset });
-                        } else {
-                            void this.doInitializeDatabase(true);
-                        }
+                        this.signal?.notify("reset");
+                        this.dialogRef.current?.close(true);
                     }}
                 />,
                 <Button id="backend-setup-cancel" value="cancel" caption="Close" />,
@@ -304,20 +278,8 @@ export class BackendSetupDialog extends UIComponent<IBackendSetupDialogPropertie
         );
     }
 
-    private handleClose = (returnValue: string): void => {
-        if (returnValue === "cancel" && this.state.phase === BackendSetupState.ConfirmReset) {
-            this.setState({ phase: BackendSetupState.NeedsSetup });
-
-            return;
-        }
-
-        if (returnValue === "close") {
-            const { phase } = this.state;
-
-            if (phase === BackendSetupState.Done) {
-                this.props.onSetupComplete?.();
-            }
-        }
+    private handleClose = (): void => {
+        this.signal?.notify("done");
     };
 
     private async checkBackendStatus(): Promise<void> {
@@ -392,33 +354,4 @@ export class BackendSetupDialog extends UIComponent<IBackendSetupDialogPropertie
         }
     }
 
-    private async doInitializeDatabase(overwrite: boolean): Promise<void> {
-        this.setState({ phase: BackendSetupState.Initialising, errorMessage: "" });
-
-        try {
-            const res = await fetch("/api?action=setup", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ action: overwrite ? "reset" : "initialize" }),
-            });
-
-            if (!res.ok) {
-                const data = await res.json() as { error?: string; };
-
-                this.setState({
-                    phase: BackendSetupState.Error,
-                    errorMessage: data.error ?? "Failed to reset database.",
-                });
-
-                return;
-            }
-
-            this.setState({ phase: BackendSetupState.Done });
-        } catch {
-            this.setState({
-                phase: BackendSetupState.Error,
-                errorMessage: "Backend not reachable.",
-            });
-        }
-    }
 }

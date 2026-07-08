@@ -36,10 +36,10 @@ export class DrawerSidebar extends UIComponent<IDrawerSidebarProps, IDrawerSideb
     }
 
     public override componentDidUpdate(prevProps: IDrawerSidebarProps, prevState: IDrawerSidebarState): void {
-
         const { open, alwaysOpen } = this.props;
+        const { everOpened } = this.state;
 
-        if (!this.state.everOpened && (open || alwaysOpen === true)) {
+        if (!everOpened && (open || alwaysOpen === true)) {
             this.setState({ everOpened: true });
         }
     }

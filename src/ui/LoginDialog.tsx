@@ -5,6 +5,7 @@
 
 import { createRef, type ComponentChild } from "preact";
 
+import { Semaphore } from "../supplement/Semaphore.js";
 import { Button } from "../components/ui/framework/Button.js";
 import { Codicon } from "../components/ui/framework/Codicon.js";
 import { Container } from "../components/ui/framework/Container.js";
@@ -24,12 +25,6 @@ enum LoginMode {
 
 interface ILoginDialogProperties extends ICommonUIProperties {
     dataModel: ScoreBookDataModel;
-
-    /** Called when login succeeds. */
-    onLoginSuccess?: () => void;
-
-    /** Called when the user chooses to continue anonymously. */
-    onContinueAnonymous?: () => void;
 }
 
 interface ILoginDialogState {
@@ -44,6 +39,9 @@ interface ILoginDialogState {
     loadingGroups: boolean;
 
     errorMessage: string;
+
+    /** When true, the anonymous and cancel options are hidden — login is mandatory. */
+    requireLogin: boolean;
 }
 
 /**
@@ -54,6 +52,7 @@ export class LoginDialog extends UIComponent<ILoginDialogProperties, ILoginDialo
     private passwordRef = createRef<HTMLElement>();
     private groupPasswordRef = createRef<HTMLElement>();
     private loginSucceeded = false;
+    private signal?: Semaphore<boolean>;
 
     public constructor(props: ILoginDialogProperties) {
         super(props);
@@ -67,13 +66,20 @@ export class LoginDialog extends UIComponent<ILoginDialogProperties, ILoginDialo
             groupNames: [],
             loadingGroups: false,
             errorMessage: "",
+            requireLogin: false,
         };
     }
 
     /**
-     * Opens the dialog and resets all fields.
+     * Opens the dialog and returns a promise that resolves with true when login succeeds,
+     * or false when the dialog is dismissed anonymously or cancelled.
+     *
+     * @param requireLogin When true, the anonymous and cancel options are hidden.
+     *
+     * @returns A promise that resolves with the login result.
      */
-    public open(): void {
+    public async show(requireLogin = false): Promise<boolean> {
+        this.signal = new Semaphore<boolean>();
         this.loginSucceeded = false;
         this.setState({
             loginMode: LoginMode.User,
@@ -84,15 +90,18 @@ export class LoginDialog extends UIComponent<ILoginDialogProperties, ILoginDialo
             groupNames: [],
             loadingGroups: true,
             errorMessage: "",
+            requireLogin,
         }, () => {
             this.dialogRef.current?.open();
             void this.loadGroupNames();
         });
+
+        return this.signal.wait();
     }
 
     public render(): ComponentChild {
-        const { loginMode, username, password, groupName, groupPassword, groupNames, loadingGroups, errorMessage } =
-            this.state;
+        const { loginMode, username, password, groupName, groupPassword, groupNames, loadingGroups,
+            errorMessage, requireLogin } = this.state;
 
         const groupDropdownItems: IDropdownItem[] = groupNames.map((name) => {
             return {
@@ -105,24 +114,33 @@ export class LoginDialog extends UIComponent<ILoginDialogProperties, ILoginDialo
             };
         });
 
+        const actions: ComponentChild[] = [];
+
+        if (!requireLogin) {
+            actions.push(
+                <Button
+                    id="login-button-anonymous"
+                    caption="Continue Anonymously"
+                    onClick={this.handleAnonymousClick}
+                />,
+            );
+        }
+
+        actions.push(
+            <Button
+                id="login-button-login"
+                type="button"
+                caption="Log In"
+                onClick={this.handleLoginClick}
+            />,
+        );
+
         return (
             <Dialog
                 ref={this.dialogRef}
                 id="loginDialog"
                 onClose={this.handleClose}
-                actions={[
-                    <Button
-                        id="login-button-anonymous"
-                        caption="Continue Anonymously"
-                        onClick={this.handleAnonymousClick}
-                    />,
-                    <Button
-                        id="login-button-login"
-                        type="button"
-                        caption="Log In"
-                        onClick={this.handleLoginClick}
-                    />,
-                ]}
+                actions={actions}
             >
                 <Container
                     className="font-bold text-lg"
@@ -314,13 +332,13 @@ export class LoginDialog extends UIComponent<ILoginDialogProperties, ILoginDialo
     };
 
     private handleClose = (): void => {
-        if (this.loginSucceeded) {
+        const { requireLogin } = this.state;
+
+        if (this.loginSucceeded || requireLogin) {
             return;
         }
 
-        // "anonymous", "" (Escape key), or "cancel" — continue anonymously.
-        const { onContinueAnonymous } = this.props;
-        onContinueAnonymous?.();
+        this.signal?.notify(false);
     };
 
     private handleLoginClick = (): void => {
@@ -328,11 +346,12 @@ export class LoginDialog extends UIComponent<ILoginDialogProperties, ILoginDialo
     };
 
     private handleAnonymousClick = (): void => {
+        this.signal?.notify(false);
         this.dialogRef.current?.close(true);
     };
 
     private async attemptLogin(): Promise<void> {
-        const { dataModel, onLoginSuccess } = this.props;
+        const { dataModel } = this.props;
         const { loginMode, username, password, groupName, groupPassword } = this.state;
 
         if (loginMode === LoginMode.Group) {
@@ -347,7 +366,7 @@ export class LoginDialog extends UIComponent<ILoginDialogProperties, ILoginDialo
             if (success) {
                 this.loginSucceeded = true;
                 this.dialogRef.current?.close(false);
-                onLoginSuccess?.();
+                this.signal?.notify(true);
 
                 return;
             }
@@ -368,7 +387,7 @@ export class LoginDialog extends UIComponent<ILoginDialogProperties, ILoginDialo
         if (success) {
             this.loginSucceeded = true;
             this.dialogRef.current?.close(false);
-            onLoginSuccess?.();
+            this.signal?.notify(true);
 
             return;
         }

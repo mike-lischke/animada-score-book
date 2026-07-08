@@ -7,6 +7,7 @@ import { createPool } from "mysql2/promise";
 import type { Pool, RowDataPacket, ResultSetHeader } from "mysql2/promise";
 
 import type { DbRow, IDatabaseAdapter, IDatabaseConfig, IDbExecuteResult, ITestConnectionResult } from "./database.js";
+import { schemaVersion } from "./database.js";
 
 // KEEP IN SYNC with createTablesSQL in postgres-adapter.ts — same tables, same columns, same nullability.
 const createTablesSQL = [
@@ -138,6 +139,11 @@ const createTablesSQL = [
             FOREIGN KEY (group_id) REFERENCES \`groups\`(id)
             ON DELETE CASCADE
     ) ENGINE=InnoDB`,
+
+    `CREATE TABLE IF NOT EXISTS features (
+        \`key\`   VARCHAR(255) NOT NULL PRIMARY KEY,
+        value TEXT         NOT NULL
+    ) ENGINE=InnoDB`,
 ];
 
 export class MySqlAdapter implements IDatabaseAdapter {
@@ -189,31 +195,25 @@ export class MySqlAdapter implements IDatabaseAdapter {
         const connection = await this.pool.getConnection();
 
         try {
-            for (const stmt of createTablesSQL) {
-                await connection.execute(stmt);
+            // Never modify an existing database — only create tables on a fresh install.
+            let exists = false;
+
+            try {
+                await connection.execute("SELECT 1 FROM folders LIMIT 1");
+                exists = true;
+            } catch {
+                // Table doesn't exist — fresh install.
             }
 
-            // Migration: allow scores at root level (folderid nullable).
-            await connection.execute(
-                "ALTER TABLE scores MODIFY folderid INT UNSIGNED NULL",
-            );
+            if (!exists) {
+                for (const stmt of createTablesSQL) {
+                    await connection.execute(stmt);
+                }
 
-            // Migration: add refresh_token_hash column for token rotation.
-            try {
                 await connection.execute(
-                    "ALTER TABLE users ADD COLUMN refresh_token_hash VARCHAR(256) NULL",
+                    "INSERT INTO features (`key`, value) VALUES ('schema_version', ?)",
+                    [String(schemaVersion)],
                 );
-            } catch {
-                // Column may already exist — safe to ignore.
-            }
-
-            // Migration: add color column to groups.
-            try {
-                await connection.execute(
-                    "ALTER TABLE `groups` ADD COLUMN color VARCHAR(7) NOT NULL DEFAULT '#808080'",
-                );
-            } catch {
-                // Column may already exist — safe to ignore.
             }
         } finally {
             connection.release();
@@ -261,6 +261,18 @@ export class MySqlAdapter implements IDatabaseAdapter {
             }
         } finally {
             connection.release();
+        }
+    }
+
+    public async getSchemaVersion(): Promise<number> {
+        try {
+            const rows = await this.query<{ value: string; }>(
+                "SELECT value FROM features WHERE `key` = 'schema_version'",
+            );
+
+            return rows[0] ? Number(rows[0].value) : 0;
+        } catch {
+            return 0;
         }
     }
 

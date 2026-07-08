@@ -58,7 +58,7 @@ export class ConfirmDialog extends UIComponent<{}, IConfirmDialogState> {
     }
 
     public render(): ComponentChild {
-        const { title, message, buttons, description } = this.state;
+        const { title, message, buttons, description, closeOnBackdropClick } = this.state;
 
         const className = this.generateFinalClassName(["confirmDialog"]);
         let dialogContent = null;
@@ -114,7 +114,7 @@ export class ConfirmDialog extends UIComponent<{}, IConfirmDialogState> {
             <Dialog
                 ref={this.dialogRef}
                 className={className}
-                closeOnBackdropClick={this.state.closeOnBackdropClick}
+                closeOnBackdropClick={closeOnBackdropClick}
                 caption={
                     <>
                         <Icon src={Codicon.Question} />
