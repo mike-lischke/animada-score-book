@@ -4,7 +4,7 @@
  */
 
 import type { IUISettings } from "../core/AppStorage.js";
-import type { ISbDmScore, ISbDmScoreFolder } from "../core/ScoreBookDataModel.js";
+import type { ISbDmScore, ISbDmScoreFolder, ScoreBookChangeReason } from "../core/ScoreBookDataModel.js";
 import type { PlayerPlayState } from "../player/ArrangementPlayer.js";
 import type { ISelectionDelta, ISelectionRectChange } from "../ui/selection-types.js";
 
@@ -29,7 +29,7 @@ export interface IRequestTypeMap {
     "trackChanged": (trackId: number) => Promise<boolean>;
     "arrangementChanged": (arrangementId: number) => Promise<boolean>;
     "timeParamsChanged": SimpleCallback;
-    "scoreBookLoaded": SimpleCallback;
+    "scoreBookLoaded": (reason: ScoreBookChangeReason) => Promise<boolean>;
     "permChanged": (entry: ISbDmScoreFolder | ISbDmScore) => Promise<boolean>;
 
     // --- Undo/redo topics ---

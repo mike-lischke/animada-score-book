@@ -202,12 +202,29 @@ export class NotificationCenter extends UIComponent<ICommonUIProperties, INotifi
      * Resolves and removes all stored messages.
      */
     public clearHistory = (): void => {
-        const { history } = this.state;
+        const { history, mainList } = this.state;
+        const historyIds = new Set(history.map((toast) => {
+            return toast.id;
+        }));
+
         for (const toast of history) {
             toast.resolve(undefined);
         }
 
-        this.setState({ history: [] }, () => {
+        // Also remove corresponding entries from the main list, clearing any pending timers.
+        const newMainList = mainList.filter((toast) => {
+            if (historyIds.has(toast.id)) {
+                if (toast.timer) {
+                    clearTimeout(toast.timer);
+                }
+
+                return false;
+            }
+
+            return true;
+        });
+
+        this.setState({ history: [], mainList: newMainList }, () => {
             this.updateStatusBarItem();
         });
     };
@@ -254,7 +271,7 @@ export class NotificationCenter extends UIComponent<ICommonUIProperties, INotifi
                         orientation={Orientation.LeftToRight}
                     >
                         <Icon src={NotificationCenter.typeToIconMap.get(details.type)} />
-                        <Label caption={details.text} />
+                        <Label caption={details.text} wrap />
                         <Button
                             className="closeButton"
                             imageOnly

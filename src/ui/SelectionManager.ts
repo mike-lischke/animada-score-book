@@ -5,6 +5,7 @@
 
 import { AppStorage } from "../core/AppStorage.js";
 import type { ISbDmNoteEvent, ISbDmTrack } from "../core/ScoreBookDataModel.js";
+import { ScoreBookChangeReason } from "../core/ScoreBookDataModel.js";
 import type { PlayerPlayState } from "../player/ArrangementPlayer.js";
 import { requisitions } from "../supplement/Requisitions.js";
 import {
@@ -1023,16 +1024,25 @@ export class SelectionManager {
     /**
      * Handles the scoreBookLoaded requisition.
      * On the first call (app startup) the persisted selection is restored from localStorage.
-     * On subsequent calls (user loads a different song) the selection is cleared.
+     * On subsequent ScoreLoaded events (user loads a different song) the selection is cleared.
+     * Non-structural changes like renames are ignored.
+     *
+     * @param reason What triggered the event.
      *
      * @returns A resolved promise to satisfy the requisition handler signature.
      */
-    private handleScoreBookLoaded = (): Promise<boolean> => {
+    private handleScoreBookLoaded = (reason: ScoreBookChangeReason): Promise<boolean> => {
+        if (reason === ScoreBookChangeReason.EntryRenamed) {
+            return Promise.resolve(true);
+        }
+
         // Delay slightly so the arrangement viewer has time to render its DOM before selection overlays
         // are applied.
         setTimeout(() => {
             if (this.firstLoadDone) {
-                this.clearSelection();
+                if (reason === ScoreBookChangeReason.ScoreLoaded) {
+                    this.clearSelection();
+                }
             } else {
                 this.firstLoadDone = true;
                 this.restorePersistedSelection();

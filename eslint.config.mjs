@@ -20,7 +20,7 @@ export default tseslint.config(
         files: ["*.ts", "*.tsx", "*.mjs" ],
     },
     {
-        ignores: ["build/serve-dist.mjs", "dist/**", ".vscode/chrome/**"],
+        ignores: ["dist/**", ".vscode/chrome/**"],
     },
     {
         plugins: {

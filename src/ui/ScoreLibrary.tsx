@@ -19,7 +19,7 @@ import { SetDataAction, TreeGrid, type ITreeGridOptions } from "../components/ui
 import { UIComponent, type ICommonUIProperties } from "../components/ui/framework/UIComponent.js";
 import { ChildAlignment, Orientation, SelectionType } from "../components/ui/framework/ui-types.js";
 import {
-    SbDmEntityType, type ISbDmScore, type ISbDmScoreFolder, type ScoreBookDataModel
+    SbDmEntityType, ScoreBookChangeReason, type ISbDmScore, type ISbDmScoreFolder, type ScoreBookDataModel
 } from "../core/ScoreBookDataModel.js";
 import { AppStorage, type IUISettings } from "../core/AppStorage.js";
 import { PermIndicator } from "./PermIndicator.js";
@@ -432,10 +432,15 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
         return Promise.resolve(true);
     };
 
-    private handleScoreBookLoaded = (): Promise<boolean> => {
-        const { dataModel } = this.props;
-        const tree = this.scoreTableRef.current;
-        void tree?.setData(dataModel.scoreLib, SetDataAction.Replace);
+    private handleScoreBookLoaded = (reason: ScoreBookChangeReason): Promise<boolean> => {
+        // Only replace the tree for structural changes. Loading a score or renaming an entry
+        // does not change the tree structure — those are handled by the individual action handlers.
+        if (reason === ScoreBookChangeReason.EntryDeleted
+            || reason === ScoreBookChangeReason.LibraryRefreshed) {
+            const { dataModel } = this.props;
+            const tree = this.scoreTableRef.current;
+            void tree?.setData(dataModel.scoreLib, SetDataAction.Replace);
+        }
 
         return Promise.resolve(true);
     };

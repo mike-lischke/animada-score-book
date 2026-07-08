@@ -289,6 +289,20 @@ export interface ISbDmEntityState {
     loading?: boolean;
 }
 
+export enum ScoreBookChangeReason {
+    /** A score was loaded into the player — no structural change to the library. */
+    ScoreLoaded,
+
+    /** An entry was renamed — no structural change. */
+    EntryRenamed,
+
+    /** An entry was deleted — the tree structure changed. */
+    EntryDeleted,
+
+    /** The entire library was refreshed from the backend — the tree structure changed. */
+    LibraryRefreshed,
+}
+
 export enum SbDmEntityType {
     SoundFolder,
     SoundFile,
@@ -742,7 +756,7 @@ export class ScoreBookDataModel {
 
         this.data.arrangement = arrangement;
         this.applyArrangementPlaybackSettings(arrangement);
-        void requisitions.execute("scoreBookLoaded", undefined);
+        void requisitions.execute("scoreBookLoaded", ScoreBookChangeReason.ScoreLoaded);
 
         return arrangement;
     }
@@ -921,7 +935,7 @@ export class ScoreBookDataModel {
         }
 
         entry.name = newName;
-        void requisitions.execute("scoreBookLoaded", undefined);
+        void requisitions.execute("scoreBookLoaded", ScoreBookChangeReason.EntryRenamed);
     }
 
     public async deleteEntry(entry: ISbDmScoreFolder | ISbDmScore): Promise<void> {
@@ -950,7 +964,7 @@ export class ScoreBookDataModel {
 
         if (index >= 0) {
             parentChildren.splice(index, 1);
-            void requisitions.execute("scoreBookLoaded", undefined);
+            void requisitions.execute("scoreBookLoaded", ScoreBookChangeReason.EntryDeleted);
         }
     }
 
@@ -1564,7 +1578,7 @@ export class ScoreBookDataModel {
         const freshList: Array<ISbDmScoreFolder | ISbDmScore> = [];
         await this.updateScoreLibFolder(freshList);
         this.data.scoreLib = freshList;
-        void requisitions.execute("scoreBookLoaded", undefined);
+        void requisitions.execute("scoreBookLoaded", ScoreBookChangeReason.LibraryRefreshed);
     }
 
     private async rewriteMigratedScore(score: ISbDmScore, arrangement: Arrangement): Promise<void> {
