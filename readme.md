@@ -9,7 +9,7 @@
 
 # Animada Score Book
 
-Animada Score Book is your ensemble's digital home for rhythm — a rich, browser-based score management and playback platform built from the ground up for Samba groups. Browse your entire score library in a beautiful tree view, listen to arrangements come alive with synchronized multi-track audio playback driven by a precision metronome, and export your work as MP3 files or crisp print-ready sheet music. A full sound library manager with waveform previews lets you organize and assign instrument samples, while the built-in backend with user accounts, groups, and fine-grained permissions keeps everything secure and collaborative. Whether you're rehearsing, arranging, or archiving, Animada Score Book puts the pulse of your bateria right in the browser.
+Animada Score Book is your ensemble's digital home for rhythm — a rich, browser-based score management and playback platform built from the ground up for Samba groups. Browse your entire score library in a beautiful tree view, listen to arrangements come alive with synchronized multi-track audio playback driven by a precision metronome, and export your work as MP3 files or crisp print-ready sheet music. The built-in backend with user accounts, groups, and fine-grained permissions keeps everything secure and collaborative. Whether you're rehearsing, arranging, or archiving, Animada Score Book puts the pulse of your bateria right in the browser.
 
 <table>
   <tr>
@@ -43,7 +43,7 @@ Animada Score Book is your ensemble's digital home for rhythm — a rich, browse
 
 > [!IMPORTANT]
 > **Editing is not yet implemented.** The current version focuses on score library browsing, arrangement playback,
-> printing, and sound management. Full score and arrangement editing capabilities are planned for a future release.
+> and printing. Full score and arrangement editing capabilities are planned for a future release.
 
 ## Getting Started
 
