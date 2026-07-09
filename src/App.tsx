@@ -628,11 +628,15 @@ export class App extends UIComponent<{}, IAppState> {
                 return;
             }
 
-            await this.setStatePromise({ phase: AppPhase.Login });
-            const loggedIn = await this.loginDialogRef.current?.show(true);
+            // Skip login when there are no users (e.g., schema broken,
+            // users table missing). The backend allows emergency reset without auth.
+            if (health.hasUsers) {
+                await this.setStatePromise({ phase: AppPhase.Login });
+                const loggedIn = await this.loginDialogRef.current?.show(true);
 
-            if (!loggedIn) {
-                return;
+                if (!loggedIn) {
+                    return;
+                }
             }
 
             const ok = await this.dataModel.resetDatabase();
