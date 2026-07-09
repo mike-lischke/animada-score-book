@@ -269,6 +269,7 @@ export class NotificationCenter extends UIComponent<ICommonUIProperties, INotifi
                 >
                     <Container
                         orientation={Orientation.LeftToRight}
+                        crossAlignment={ChildAlignment.Center}
                     >
                         <Icon src={NotificationCenter.typeToIconMap.get(details.type)} />
                         <Label caption={details.text} wrap />

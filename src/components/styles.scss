@@ -1189,6 +1189,7 @@
  * on the right.
  */
 .form-card {
+    flex: 1 1 auto;
     margin: 16px 0;
     background-color: color-mix(in srgb, var(--color-base-content) 4%, var(--color-base-100));
     border: 1px solid var(--color-base-300);
