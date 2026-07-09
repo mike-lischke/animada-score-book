@@ -343,7 +343,7 @@ export interface ISbDmVisual extends ISbDmCommon {
     getChildren?(): ScoreBookDataModelEntry[];
 
     /** Permission info for the current user (undefined until the backend provides it). */
-    readonly perm?: ISbDmPermissionInfo;
+    perm?: ISbDmPermissionInfo;
 }
 
 /** Permission summary for the current user on a score or folder. */
@@ -623,21 +623,6 @@ interface IWhoamiResponse {
 
     capabilities: ICapabilities;
 }
-
-/**
- * Copies permission fields from a source into a target perm object in-place.
- *
- * @param target The existing perm to update.
- * @param source The new perm values to copy.
- */
-const applyPerm = (target: ISbDmPermissionInfo, source: ISbDmPermissionInfo): void => {
-    const t = target as Mutable<ISbDmPermissionInfo>;
-    t.isOwner = source.isOwner;
-    t.canRead = source.canRead;
-    t.canWrite = source.canWrite;
-    t.isWorld = source.isWorld;
-    t.groupIds = source.groupIds;
-};
 
 export class ScoreBookDataModel {
     /**
@@ -1726,10 +1711,10 @@ export class ScoreBookDataModel {
         const newList: Array<ISbDmScoreFolder | ISbDmScore> = [];
 
         data.folders.forEach((folder) => {
-            const existing = existingById.get(folder.id) as ISbDmScoreFolder | undefined;
+            const existing = existingById.get(folder.id);
             if (existing) {
                 existing.name = folder.name;
-                applyPerm(existing.perm!, folder.perm);
+                existing.perm = folder.perm;
                 newList.push(existing);
 
                 return;
@@ -1768,7 +1753,7 @@ export class ScoreBookDataModel {
             if (existing) {
                 existing.name = score.name;
                 existing.content = score.content;
-                applyPerm(existing.perm!, score.perm);
+                existing.perm = score.perm;
                 newList.push(existing);
 
                 return;

@@ -3,6 +3,8 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
+import type { ISbDmPermissionInfo } from "./ScoreBookDataModel.js";
+
 /**
  * Types used for database entries.
  */
@@ -15,22 +17,13 @@ export interface ISoundLibFsNode {
     children?: ISoundLibFsNode[];
 }
 
-/** Permission summary for the current user on a score or folder, as returned by the backend. */
-export interface IPermissionDBEntry {
-    isOwner: boolean;
-    canRead: boolean;
-    canWrite: boolean;
-    isWorld: boolean;
-    groupIds: number[];
-}
-
 /** Structure of a score lib folder entry as returned by the REST endpoint. */
 export interface IScoreLibFolderDBEntry {
     id: number;
     parentid: number;
     name: string;
     hasChildren: boolean;
-    perm: IPermissionDBEntry;
+    perm: ISbDmPermissionInfo;
 }
 
 /** Structure of a score lib snippet entry as returned by the REST endpoint. */
@@ -39,7 +32,7 @@ export interface IScoreLibScoreDBEntry {
     folderid: number;
     name: string;
     content: string;
-    perm: IPermissionDBEntry;
+    perm: ISbDmPermissionInfo;
 }
 
 /** Structure of an entry returned by the folder list API. */
