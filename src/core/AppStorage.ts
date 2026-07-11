@@ -63,6 +63,9 @@ export interface IUISettings {
 
     /** Whether to show the permission matrix in the Score Library tree. Defaults to true. */
     showPermMatrix?: boolean;
+
+    /** Whether to show the tutorial wizard on app startup. Defaults to true. */
+    tutorialEnabled?: boolean;
 }
 
 /**

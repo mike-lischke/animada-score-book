@@ -15,6 +15,7 @@ export default defineConfig({
         trace: "on-first-retry",
         screenshot: "only-on-failure",
         video: "retain-on-failure",
+        storageState: "tests/e2e/storage-state.json",
     },
     webServer: {
         command: process.env.CI ? "npm run serve:e2e" : "npm run build && npm run serve:e2e",

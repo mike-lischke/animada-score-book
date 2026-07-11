@@ -60,7 +60,7 @@ export class Button extends UIComponent<IButtonProperties> {
             this.classFromProperty(round, "du-btn-circle"),
             this.classFromProperty(imageOnly, "imageOnly"),
             this.classFromProperty(disabled, "du-btn-disabled"),
-            this.classFromProperty(isDefault, "default"),
+            this.classFromProperty(isDefault, "du-btn-primary"),
         ]);
 
         const content = children ?? caption;

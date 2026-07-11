@@ -59,6 +59,7 @@ export class Grid extends UIComponent<IGridProperties> {
                 ref={innerRef as preact.RefObject<HTMLDivElement>}
                 className={className}
                 style={newStyle}
+                {...this.dataAttributes}
             >
                 {children}
             </div>

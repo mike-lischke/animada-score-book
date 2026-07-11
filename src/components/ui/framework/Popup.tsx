@@ -31,8 +31,11 @@ interface IPopupProperties extends IPortalProperties {
 }
 
 interface IPopupState {
-    hidden: boolean;         // Used to temporarily hide the popup on scroll.
-    currentTarget?: DOMRect; // The area for placement computation.
+    /** Used to temporarily hide the popup on scroll. */
+    hidden: boolean;
+
+    /** The area for placement computation. */
+    currentTarget?: DOMRect;
 }
 
 /**

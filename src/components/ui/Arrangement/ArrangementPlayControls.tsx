@@ -130,7 +130,7 @@ export class ArrangementPlayControls
         const arrangementView = dataModel.arrangement!;
 
         return (
-            <Grid id="arrangementPlayControls" columns={[160, "auto"]}>
+            <Grid id="arrangementPlayControls" columns={[160, "auto"]} {...this.dataAttributes}>
                 <Container
                     orientation={Orientation.TopDown}
                     mainAlignment={ChildAlignment.Start}

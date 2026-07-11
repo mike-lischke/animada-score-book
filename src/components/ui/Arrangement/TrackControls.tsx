@@ -165,7 +165,12 @@ export class TrackControls extends UIComponent<ITrackControlsProperties, ITrackC
         });
 
         return (
-            <Container innerRef={innerRef} className={listClassName} orientation={Orientation.TopDown}>
+            <Container
+                innerRef={innerRef}
+                className={listClassName}
+                orientation={Orientation.TopDown}
+                data-tutorial="mixer"
+            >
                 <Container className="trackControlsHeader" crossAlignment={ChildAlignment.Center}>
                     <Button
                         className="trackControlsToggle"

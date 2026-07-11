@@ -67,8 +67,10 @@ import { ModeManager } from "./ui/ModeManager.js";
 import { MouseHandler } from "./ui/MouseHandler.js";
 import { SelectionManager } from "./ui/SelectionManager.js";
 import { SettingsDialog } from "./ui/SettingsDialog.js";
+import { TutorialWizard } from "./ui/TutorialWizard.js";
 import { UserGroupEditor } from "./ui/UserGroupEditor.js";
 import { PermissionEditor } from "./ui/PermissionEditor.js";
+import { tutorialSteps, mixerStepIndex } from "./core/TutorialSteps.js";
 
 const ScoreLibrary = lazy(() => {
     return import("./ui/ScoreLibrary.js").then((m) => {
@@ -123,6 +125,7 @@ export class App extends UIComponent<{}, IAppState> {
     private userGroupEditorRef = createRef<UserGroupEditor>();
     private permissionEditorRef = createRef<PermissionEditor>();
     private printDialogRef = createRef<PrintDialog>();
+    private tutorialWizardRef = createRef<TutorialWizard>();
     private valueDialogRef = createRef<ValueDialog>();
     private confirmDialogRef = createRef<ConfirmDialog>();
 
@@ -145,6 +148,8 @@ export class App extends UIComponent<{}, IAppState> {
     private signInFromRunning = false;
     private statsItem?: IStatusBarItem;
     private notificationItem?: IStatusBarItem;
+
+    private currentTutorialStep = 0;
 
     public constructor(props: {}) {
         super(props);
@@ -366,6 +371,7 @@ export class App extends UIComponent<{}, IAppState> {
                                                         imageOnly
                                                         className="du-btn-ghost"
                                                         data-tooltip="Display Options"
+                                                        data-tutorial="display-options"
                                                         onClick={this.handleDisplayOptionsClick}
                                                     >
                                                         <Icon
@@ -378,6 +384,7 @@ export class App extends UIComponent<{}, IAppState> {
                                                         imageOnly
                                                         className="du-btn-ghost"
                                                         data-tooltip="Score Library"
+                                                        data-tutorial="score-library"
                                                         onClick={this.handleScoreLibraryClick}
                                                     >
                                                         <Icon
@@ -391,6 +398,7 @@ export class App extends UIComponent<{}, IAppState> {
                                                         imageOnly
                                                         className="du-btn-ghost"
                                                         data-tooltip="Print / Export to PDF"
+                                                        data-tutorial="print"
                                                         onClick={this.handlePrintClick}
                                                     >
                                                         <Icon
@@ -441,6 +449,7 @@ export class App extends UIComponent<{}, IAppState> {
                                                     dataModel={this.dataModel}
                                                     services={this.services}
                                                     undoManager={this.undoManager!}
+                                                    data-tutorial="playback"
                                                 />
                                                 <Container
                                                     id="arrangementPalette"
@@ -489,6 +498,14 @@ export class App extends UIComponent<{}, IAppState> {
                         <TooltipProvider />
                         <ValueDialog ref={this.valueDialogRef} />
                         <SettingsDialog ref={this.settingsDialogRef} />
+                        <TutorialWizard
+                            ref={this.tutorialWizardRef}
+                            steps={tutorialSteps}
+                            tutorialEnabled={AppStorage.loadUISettings()?.tutorialEnabled ?? true}
+                            onTutorialEnabledChange={this.handleTutorialEnabledChange}
+                            onStepChange={this.handleTutorialStepChange}
+                            onClose={this.handleTutorialClose}
+                        />
                         <BackendDisconnectedDialog
                             ref={this.backendDisconnectedDialogRef}
                             onReconnected={() => {
@@ -819,6 +836,25 @@ export class App extends UIComponent<{}, IAppState> {
 
         const params = new URL(window.location.href).searchParams;
         const hasBananaDrum = params.has("a") || params.has("a2");
+        const hasScoreParam = params.has("score");
+
+        const showTutorial = !hasBananaDrum && !hasScoreParam
+            && (AppStorage.loadUISettings()?.tutorialEnabled ?? true);
+
+        if (showTutorial) {
+            this.initAppState();
+            this.setState({ phase: AppPhase.Running }, () => {
+                this.tutorialWizardRef.current?.open();
+            });
+
+            return;
+        }
+
+        await this.loadInitialScore(params);
+    }
+
+    private async loadInitialScore(params: URLSearchParams): Promise<void> {
+        const hasBananaDrum = params.has("a") || params.has("a2");
 
         let pendingWarning: string | undefined;
 
@@ -861,6 +897,40 @@ export class App extends UIComponent<{}, IAppState> {
             }
         });
     }
+
+    private handleTutorialClose = (completed: boolean): void => {
+        this.tutorialWizardRef.current?.close(completed);
+        this.loadScorebook(undefined);
+    };
+
+    private handleTutorialStepChange = (stepIndex: number): void => {
+        const prevStep = this.currentTutorialStep;
+        this.currentTutorialStep = stepIndex;
+
+        if (stepIndex === mixerStepIndex) {
+            this.toggleMixerIf(!this.isMixerExpanded());
+        }
+
+        if (prevStep === mixerStepIndex && stepIndex !== mixerStepIndex) {
+            this.toggleMixerIf(this.isMixerExpanded());
+        }
+    };
+
+    private isMixerExpanded(): boolean {
+        return document.querySelector(".trackControlsList")?.classList.contains("expanded") ?? false;
+    }
+
+    private toggleMixerIf(condition: boolean): void {
+        if (!condition) {
+            return;
+        }
+
+        document.querySelector<HTMLElement>(".trackControlsToggle")?.click();
+    }
+
+    private handleTutorialEnabledChange = (enabled: boolean): void => {
+        AppStorage.saveSetting("tutorialEnabled", enabled);
+    };
 
     private handleGithubClick = () => {
         window.open("https://github.com/mike-lischke/animada-score-book", "_blank");
@@ -1317,7 +1387,12 @@ export class App extends UIComponent<{}, IAppState> {
         return true;
     };
 
-    private loadScorebook(source?: URLSearchParams | ISbDmScore) {
+    private initAppState(): void {
+        this.undoManager = new UndoManager(this.dataModel);
+        this.arrangementPlayer = new ArrangementPlayer(this.dataModel);
+    }
+
+    private loadScorebook(source?: IArrangementSnapshot | URLSearchParams | ISbDmScore) {
         let resolvedSource: IArrangementSnapshot | URLSearchParams | ISbDmScore | undefined;
 
         if (source) {
@@ -1362,7 +1437,8 @@ export class App extends UIComponent<{}, IAppState> {
             document.title = arrangement.title + " - Animada Score Book";
         }
 
-        AppStorage.saveSetting("currentScore", stringifyPackedArrangement((arrangement as Arrangement).toSnapshot()),
+        AppStorage.saveSetting("currentScore",
+            stringifyPackedArrangement((arrangement as Arrangement).toSnapshot()),
         );
 
         this.forceUpdate();

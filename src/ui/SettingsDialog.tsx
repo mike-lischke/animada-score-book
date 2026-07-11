@@ -211,6 +211,25 @@ export class SettingsDialog extends UIComponent<{}, ISettingsDialogState> {
                             }}
                         />
                     </Container>
+
+                    <Container
+                        className="form-row"
+                        orientation={Orientation.LeftToRight}
+                        mainAlignment={ChildAlignment.SpaceBetween}
+                        crossAlignment={ChildAlignment.Center}
+                    >
+                        <span className="form-row-label">Show tutorial on startup</span>
+                        <Checkbox
+                            id="tutorialEnabled"
+                            checked={currentSettings.tutorialEnabled ?? true}
+                            onChange={(checked) => {
+                                currentSettings.tutorialEnabled = checked;
+                                this.setState({ currentSettings }, () => {
+                                    this.temporarySettingsChange();
+                                });
+                            }}
+                        />
+                    </Container>
                 </Container>
             </Dialog >
         );
