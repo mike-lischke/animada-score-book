@@ -135,7 +135,7 @@ Always put a blank line after blocks (`if`/`for`/`while`/`switch`/`case`/anonymo
 
 - Use enums for discriminated union type literals (e.g., `enum SelectionGranularity { ... }` instead of `type X = "a" | "b"`).
 - Enum members do not carry string values unless the value is consumed directly as a string (e.g., CSS values).
-- Use `undefined` instead of `null` everywhere.
+- Use `undefined` instead of `null` everywhere in project-owned code. `null` from external APIs (database, libraries) is acceptable at the boundary — convert to `undefined` at the first opportunity.
 - Use `field?: Type` syntax instead of `field: Type | undefined` for optional fields.
 - Interface names always start with a capital `I` (e.g., `ISoundStyleMeta`, `IMeasureStep`).
 - Inline type casts (`as { ... }`) are acceptable for one-off use. If the same anonymous shape appears more than once, extract it to a named interface.

@@ -292,7 +292,7 @@ export class Auth {
             canManageInstruments: false,
             canExportMP3: false,
         };
-    };
+    }
 
     /**
      * Checks whether a user has the required access level on an entity.
@@ -309,13 +309,15 @@ export class Auth {
      * @param entityType The type of entity ("score", "folder", "feature").
      * @param entityId The entity id, or null for features.
      * @param requiredLevel The required access level (Read or Write).
+     * @param isAdmin Optional. If true, skips the admin group DB query.
      *
      * @returns True if the user has the required access.
      */
     public async checkPermission(user: ITokenPayload | undefined, entityType: EntityType,
-        entityId: number | null, requiredLevel: AccessLevel,): Promise<boolean> {
+        entityId: number | null, requiredLevel: AccessLevel, isAdmin?: boolean,): Promise<boolean> {
         // Admin users always have full access.
-        if (user && await this.isUserInAdminGroup(user.userId)) {
+        const admin = isAdmin ?? (user ? await this.isUserInAdminGroup(user.userId) : false);
+        if (admin) {
             return true;
         }
 
@@ -377,7 +379,7 @@ export class Auth {
         }
 
         return false;
-    };
+    }
 
     /**
      * Computes a permission summary for a user on an entity.
@@ -386,12 +388,13 @@ export class Auth {
      * @param user The authenticated user, or undefined for anonymous.
      * @param entityType The type of entity ("score", "folder").
      * @param entityId The entity id.
+     * @param isAdmin Optional. If true, skips the admin group DB query.
      *
      * @returns A summary of the user's access.
      */
     public async getPermissionSummary(user: ITokenPayload | undefined, entityType: EntityType,
-        entityId: number): Promise<IPermissionSummary> {
-        const isAdmin = user ? await this.isUserInAdminGroup(user.userId) : false;
+        entityId: number, isAdmin?: boolean,): Promise<IPermissionSummary> {
+        const admin = isAdmin ?? (user ? await this.isUserInAdminGroup(user.userId) : false);
 
         const resolved = await this.resolvePermission(entityType, entityId);
 
@@ -418,8 +421,8 @@ export class Auth {
             userGroupIds.add(worldId);
         }
 
-        let canRead = isAdmin || isOwner;
-        let canWrite = isAdmin || isOwner;
+        let canRead = admin || isOwner;
+        let canWrite = admin || isOwner;
 
         const isWorld = worldId !== undefined
             && resolved.groupEntries.some((e) => {
@@ -449,7 +452,7 @@ export class Auth {
             isWorld,
             groupIds,
         };
-    };
+    }
 
     /**
      * Sets the owner for an entity. An explicit NULL means "inherit from parent"
@@ -473,7 +476,7 @@ export class Auth {
         await this.adapter.execute(`INSERT INTO permissions (entity_type, entity_id, owner_id) VALUES (?, ?, ?) ` +
             `ON DUPLICATE KEY UPDATE owner_id = VALUES(owner_id)`, [entityType, entityId, ownerId],
         );
-    };
+    }
 
     /**
      * Adds a group assignment to an entity. If the group is already assigned,
@@ -491,7 +494,7 @@ export class Auth {
             `VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE writable = GREATEST(writable, VALUES(writable))`,
             [entityType, entityId, groupId, writable ? 1 : 0],
         );
-    };
+    }
 
     /**
      * Removes a group assignment from an entity.
@@ -506,7 +509,7 @@ export class Auth {
             "DELETE FROM entity_groups WHERE entity_type = ? AND entity_id = ? AND group_id = ?",
             [entityType, entityId, groupId],
         );
-    };
+    }
 
     /**
      * @returns the explicit group assignments for an entity (not inherited).
@@ -524,7 +527,7 @@ export class Auth {
         return rows.map((r) => {
             return { groupId: r.group_id, writable: Boolean(r.writable) };
         });
-    };
+    }
 
     /**
      * Returns the explicit owner for an entity (or null if inherited/deleted).
@@ -542,7 +545,7 @@ export class Auth {
         );
 
         return rows[0]?.owner_id ?? null;
-    };
+    }
 
     /**
      * Records a login audit event.
@@ -557,7 +560,7 @@ export class Auth {
         await this.adapter.execute(`INSERT INTO login_audit (user_id, event, group_id, ip_address) VALUES (?, ?, ?, ?)`,
             [userId, event, groupId ?? null, ipAddress ?? null],
         );
-    };
+    }
 
     /**
      * Checks whether a user is a member of the Admins group.
@@ -572,7 +575,7 @@ export class Auth {
         );
 
         return (rows[0]?.cnt ?? 0) > 0;
-    };
+    }
 
     /**
      * Returns the ID of the World group.
@@ -581,7 +584,7 @@ export class Auth {
      */
     public async getWorldGroupId(): Promise<number | undefined> {
         return this.firstMatchingGroupId(Auth.worldGroupName);
-    };
+    }
 
     /**
      * Returns the ID of the Admins group.
@@ -590,7 +593,7 @@ export class Auth {
      */
     public async getAdminGroupId(): Promise<number | undefined> {
         return this.firstMatchingGroupId(Auth.adminGroupName);
-    };
+    }
 
     /**
      * Verifies a refresh token against the stored hash and rotates it.
@@ -607,14 +610,15 @@ export class Auth {
         const hash = crypto.createHash("sha256").update(rawToken).digest("hex");
 
         const rows = await this.adapter.query<{
-            id: number; auth_type: string | null; group_id: number | null;
-        }>("SELECT id, auth_type, group_id FROM users WHERE refresh_token_hash = ?", [hash]);
+            userId: number; authType: string | null; groupId: number | null;
+        }>("SELECT id AS userId, auth_type AS authType, group_id AS groupId FROM users WHERE refresh_token_hash = ?",
+            [hash]);
 
         if (rows.length === 0) {
             return undefined;
         }
 
-        const { id: userId, auth_type: authType, group_id: groupId } = rows[0];
+        const { userId, authType, groupId } = rows[0];
         const newRaw = crypto.randomBytes(32).toString("hex");
         const newHash = crypto.createHash("sha256").update(newRaw).digest("hex");
 
@@ -626,7 +630,7 @@ export class Auth {
             authType: authType ?? undefined,
             groupId: groupId ?? undefined,
         };
-    };
+    }
 
     /**
      * Resolves the effective owner for an entity by walking up the tree.
@@ -681,7 +685,7 @@ export class Auth {
         }
 
         return null;
-    };
+    }
 
     /**
      * Collects all group assignments for an entity by walking up the tree.
@@ -742,7 +746,7 @@ export class Auth {
         }
 
         return collected;
-    };
+    }
 
     /**
      * Resolves the full effective permission state for an entity by combining
@@ -764,7 +768,7 @@ export class Auth {
                 return { groupId, writable };
             }),
         };
-    };
+    }
 
     private async getUserGroups(userId: number): Promise<Array<{ group_id: number; }>> {
         return this.adapter.query<{ group_id: number; }>(
@@ -778,6 +782,6 @@ export class Auth {
             [groupName]);
 
         return rows[0]?.id;
-    };
+    }
 
 }

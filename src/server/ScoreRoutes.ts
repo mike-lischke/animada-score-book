@@ -60,9 +60,11 @@ export class ScoreRoutes {
             scoreParams,
         );
 
+        const isAdmin = user ? await this.ctx.auth.isUserInAdminGroup(user.userId) : false;
+
         const readableFolders: Array<Record<string, unknown>> = [];
         for (const f of folders) {
-            const summary = await this.ctx.auth.getPermissionSummary(user, EntityType.Folder, f.id as number);
+            const summary = await this.ctx.auth.getPermissionSummary(user, EntityType.Folder, f.id as number, isAdmin);
 
             if (summary.canRead) {
                 readableFolders.push({
@@ -77,7 +79,7 @@ export class ScoreRoutes {
 
         const readableScores: Array<Record<string, unknown>> = [];
         for (const s of scores) {
-            const summary = await this.ctx.auth.getPermissionSummary(user, EntityType.Score, s.id as number);
+            const summary = await this.ctx.auth.getPermissionSummary(user, EntityType.Score, s.id as number, isAdmin);
 
             if (summary.canRead) {
                 readableScores.push({
