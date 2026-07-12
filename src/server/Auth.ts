@@ -55,8 +55,8 @@ interface IEntityGroupEntry {
 interface IResolvedPermission {
     /** The effective owner id, or null if no owner is set anywhere in the chain. */
     ownerId: number | null;
-    /** All group assignments, collected from the entity and all ancestors. */
-    groupEntries: IEntityGroupEntry[];
+    /** All group assignments, collected from the entity and all ancestors (groupId → writable). */
+    groupEntries: Map<number, boolean>;
 }
 
 export interface ITokenPayload {
@@ -132,8 +132,8 @@ export class Auth {
 
     private static readonly accessTokenExpiry = "15m";
 
-    private static scryptKeyLen = 64;
-    private static scryptOptions = { N: 16384, r: 8, p: 1 };
+    private static readonly scryptKeyLen = 64;
+    private static readonly scryptOptions = { N: 16384, r: 8, p: 1 };
 
     private static jwtSecret: string = (() => {
         // eslint-disable-next-line no-restricted-syntax
@@ -144,6 +144,8 @@ export class Auth {
 
         return secret;
     })();
+
+    private static readonly noUser = "anonymous";
 
     private currentAdapter: IDatabaseAdapter;
 
@@ -261,7 +263,7 @@ export class Auth {
      */
     public async hasUsers(): Promise<boolean> {
         const rows = await this.adapter.query<{ cnt: number; }>(
-            "SELECT COUNT(*) AS cnt FROM users WHERE username != 'anonymous'",
+            "SELECT COUNT(*) AS cnt FROM users WHERE username != ?", [Auth.noUser],
         );
 
         return (rows[0]?.cnt ?? 0) > 0;
@@ -362,8 +364,8 @@ export class Auth {
         }
 
         // Check group assignments.
-        for (const entry of resolved.groupEntries) {
-            if (!userGroupIds.has(entry.groupId)) {
+        for (const [groupId, writable] of resolved.groupEntries) {
+            if (!userGroupIds.has(groupId)) {
                 continue;
             }
 
@@ -373,7 +375,7 @@ export class Auth {
             }
 
             // Write requires the writable flag.
-            if (entry.writable) {
+            if (writable) {
                 return true;
             }
         }
@@ -424,26 +426,21 @@ export class Auth {
         let canRead = admin || isOwner;
         let canWrite = admin || isOwner;
 
-        const isWorld = worldId !== undefined
-            && resolved.groupEntries.some((e) => {
-                return e.groupId === worldId;
-            });
+        const isWorld = worldId !== undefined && resolved.groupEntries.has(worldId);
 
-        for (const entry of resolved.groupEntries) {
-            if (!userGroupIds.has(entry.groupId)) {
+        for (const [groupId, writable] of resolved.groupEntries) {
+            if (!userGroupIds.has(groupId)) {
                 continue;
             }
 
             canRead = true;
 
-            if (entry.writable) {
+            if (writable) {
                 canWrite = true;
             }
         }
 
-        const groupIds = resolved.groupEntries.map((e) => {
-            return e.groupId;
-        });
+        const groupIds = Array.from(resolved.groupEntries.keys());
 
         return {
             isOwner,
@@ -764,9 +761,7 @@ export class Auth {
 
         return {
             ownerId,
-            groupEntries: Array.from(groupEntries.entries()).map(([groupId, writable]) => {
-                return { groupId, writable };
-            }),
+            groupEntries,
         };
     }
 
