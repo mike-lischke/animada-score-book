@@ -878,6 +878,7 @@ export class ScoreBookDataModel {
             } else {
                 parent.children.push(newScore);
             }
+
             await this.refreshScoreLib();
         }
     }
@@ -1808,9 +1809,11 @@ export class ScoreBookDataModel {
         if (storedAuthType) {
             headers["X-Auth-Type"] = storedAuthType;
         }
+
         if (storedGroupId) {
             headers["X-Group-Id"] = storedGroupId;
         }
+
         if (this.accessToken) {
             headers.Authorization = `Bearer ${this.accessToken}`;
         }

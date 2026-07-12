@@ -217,6 +217,7 @@ export class ArrangementEditControls
 
             services.modeManager.deletePolyrhythmMode = false;
         }
+
         this.setState({ arePolyrhythms });
 
         return Promise.resolve(true);
@@ -261,6 +262,7 @@ export class ArrangementEditControls
             Overlay.toggleOverlay("delete_polyrhythms", "hide");
             services.modeManager.deletePolyrhythmMode = false;
         }
+
         this.setState({ arePolyrhythms });
 
         return Promise.resolve(true);

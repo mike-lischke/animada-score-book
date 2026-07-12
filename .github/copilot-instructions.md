@@ -138,6 +138,7 @@ Always put a blank line after blocks (`if`/`for`/`while`/`switch`/`case`/anonymo
 - Use `undefined` instead of `null` everywhere.
 - Use `field?: Type` syntax instead of `field: Type | undefined` for optional fields.
 - Interface names always start with a capital `I` (e.g., `ISoundStyleMeta`, `IMeasureStep`).
+- Inline type casts (`as { ... }`) are acceptable for one-off use. If the same anonymous shape appears more than once, extract it to a named interface.
 - No section-divider comments (e.g. `// ---------- api ----------`). Let method ordering speak for itself.
 
 ### Security

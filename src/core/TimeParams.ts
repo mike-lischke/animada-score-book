@@ -163,6 +163,7 @@ export class TimeParams implements ISbDmTimeParams {
         if (!this.validatePulse(newPulse)) {
             throw new Error("Invalid pulse");
         }
+
         if (newPulse !== this.usedPulse) {
             this.usedPulse = newPulse;
             this.regenerateTimings();
@@ -234,6 +235,7 @@ export class TimeParams implements ISbDmTimeParams {
         if (!this.validateNaturalNumber(beatsPerBar)) {
             return false;
         }
+
         if (!this.validateNoteValue(beatUnit)) {
             return false;
         }

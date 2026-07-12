@@ -149,6 +149,7 @@ export class TimeCoordinator {
         if (!Number.isInteger(stepsPerBar) || stepsPerBar < 1) {
             throw new Error(`Incompatible time grid: ${timeSignature} with step resolution ${stepResolution}`);
         }
+
         const stepsPerPulse = stepResolution * pulseFrequency / pulseResolution;
         const secondsPerPulse = 60 / tempo;
 

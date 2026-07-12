@@ -70,6 +70,7 @@ export class GridMeasureRow extends UIComponent<IGridMeasureRowProperties> {
                     />,
                 );
             }
+
             cumulative += groupSize;
         }
 
@@ -120,6 +121,7 @@ export class GridMeasureRow extends UIComponent<IGridMeasureRowProperties> {
                 if (i < steps.length) {
                     items.push({ type: "step", step: steps[i] });
                 }
+
                 i++;
             }
         }

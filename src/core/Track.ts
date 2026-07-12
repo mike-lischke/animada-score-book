@@ -134,6 +134,7 @@ export class Track implements ISbDmTrack {
                 }
             }
         }
+
         void requisitions.execute("trackChanged", this.id);
     }
 

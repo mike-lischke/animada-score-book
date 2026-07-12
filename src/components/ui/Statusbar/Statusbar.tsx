@@ -218,6 +218,7 @@ export class Statusbar extends UIComponent<ICommonUIProperties, IStatusBarState>
                 iconClass += "codicon-modifier-spin ";
                 icon = icon.slice(0, -5);
             }
+
             iconClass += `codicon codicon-${icon}`;
 
             elements.push(<span key={`icon-${index}-${i}`} className={iconClass} />);

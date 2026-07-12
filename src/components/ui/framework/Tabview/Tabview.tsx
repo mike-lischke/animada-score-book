@@ -336,6 +336,7 @@ export class Tabview extends UIComponent<ITabviewProperties, ITabviewState> {
             if (sliderLeft < 0) {
                 sliderLeft = 0;
             }
+
             if (sliderLeft > sliderLeftMax) {
                 sliderLeft = sliderLeftMax;
             }

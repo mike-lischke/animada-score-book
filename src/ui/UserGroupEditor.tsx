@@ -569,6 +569,7 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
                                         if (!formMemberFilter) {
                                             return true;
                                         }
+
                                         const f = formMemberFilter.toLowerCase();
 
                                         return m.username.toLowerCase().includes(f)

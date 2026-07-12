@@ -100,6 +100,7 @@ export class TrackPlayer {
         if (this.disposed) {
             return;
         }
+
         this.disposed = true;
 
         // Unsubscribe from all sources and clear any pending instrument setup subscription.
@@ -197,6 +198,7 @@ export class TrackPlayer {
                     slotMap = new Map();
                     childrenByParentId.set(sub.parentSubdivisionId, slotMap);
                 }
+
                 slotMap.set(relativeSlot, sub);
             }
         }

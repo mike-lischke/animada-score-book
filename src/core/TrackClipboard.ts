@@ -67,6 +67,7 @@ export class TrackClipboard {
             if (trackPos >= notes.length) {
                 break;
             }
+
             const note = notes[trackPos];
             note.audioData = this.buffer[i];
             if (end && isSameTiming(note.timing, end)) {

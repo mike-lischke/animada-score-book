@@ -117,6 +117,7 @@ describe("ArrangementMigrator", () => {
         const isPolyrhythmEvent = (event: { duration: { numerator: number; denominator: number; }; }) => {
             return !(event.duration.numerator === 1 && event.duration.denominator === stepsPerBar);
         };
+
         const bar1Polyrhythm = track.measures[0].events.filter(isPolyrhythmEvent);
         const bar2Polyrhythm = track.measures[1].events.filter(isPolyrhythmEvent);
         expect(bar1Polyrhythm).toHaveLength(3);

@@ -321,6 +321,7 @@ export class ArrangementMigrator {
                 if (globalStep >= measureBaseStart + stepsPerBar) {
                     break;
                 }
+
                 i++;
                 continue;
             }
@@ -355,6 +356,7 @@ export class ArrangementMigrator {
                     if (prStartStep >= measureBaseStart + stepsPerBar) {
                         break;
                     }
+
                     i++;
                     continue;
                 }
@@ -468,6 +470,7 @@ export class ArrangementMigrator {
                     break;
                 }
             }
+
             count++;
         }
 

@@ -119,6 +119,7 @@ const getVisibleSteps = (track: ISbDmTrack, measureNumber: number, stepsPerBar: 
             });
             visibleIndex += 1;
         }
+
         baseStep += subdivision.normal;
     }
 

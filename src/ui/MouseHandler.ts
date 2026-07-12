@@ -58,12 +58,15 @@ export class MouseHandler {
             if (this.onMouseDown) {
                 window.removeEventListener("mousedown", this.onMouseDown);
             }
+
             if (this.onMouseMove) {
                 window.removeEventListener("mousemove", this.onMouseMove);
             }
+
             if (this.onMouseUp) {
                 window.removeEventListener("mouseup", this.onMouseUp);
             }
+
             if (this.onBodyMouseEnter) {
                 document.body.removeEventListener("mouseenter", this.onBodyMouseEnter);
             }

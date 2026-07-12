@@ -149,6 +149,7 @@ export class Auth {
 
                     return;
                 }
+
                 resolve(derivedKey);
             });
         });
@@ -161,10 +162,19 @@ export class Auth {
         if (parts.length !== 5 || parts[1] !== "s0") {
             return false;
         }
+
         try {
-            const options = JSON.parse(Buffer.from(parts[2], "hex").toString("utf-8")) as {
-                N: number; r: number; p: number;
-            };
+            const raw: unknown = JSON.parse(Buffer.from(parts[2], "hex").toString("utf-8"));
+            if (typeof raw !== "object" || raw === null) {
+                return false;
+            }
+
+            const opts = raw as Record<string, unknown>;
+            if (typeof opts.N !== "number" || typeof opts.r !== "number" || typeof opts.p !== "number") {
+                return false;
+            }
+
+            const options = opts as { N: number; r: number; p: number; };
 
             const salt = Buffer.from(parts[3], "hex");
             const expectedKey = Buffer.from(parts[4], "hex");
@@ -175,6 +185,7 @@ export class Auth {
 
                         return;
                     }
+
                     resolve(key);
                 });
             });
@@ -198,14 +209,25 @@ export class Auth {
 
     public static verifyToken(token: string): ITokenPayload | undefined {
         try {
-            const decoded = jwt.verify(token, Auth.jwtSecret) as ITokenPayload & { type?: string; };
-            if (decoded.type === "refresh") {
+            const decoded = jwt.verify(token, Auth.jwtSecret);
+            if (typeof decoded !== "object") {
+                return undefined;
+            }
+
+            const payload = decoded as unknown as Record<string, unknown>;
+            if (payload.type === "refresh"
+                || typeof payload.userId !== "number"
+                || typeof payload.username !== "string"
+                || typeof payload.isAdmin !== "boolean") {
                 return undefined;
             }
 
             return {
-                userId: decoded.userId, username: decoded.username,
-                isAdmin: decoded.isAdmin, authType: decoded.authType, groupId: decoded.groupId,
+                userId: payload.userId,
+                username: payload.username,
+                isAdmin: payload.isAdmin,
+                authType: typeof payload.authType === "string" ? payload.authType : undefined,
+                groupId: typeof payload.groupId === "number" ? payload.groupId : undefined,
             };
         } catch {
             return undefined;

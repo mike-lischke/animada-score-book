@@ -190,6 +190,7 @@ test.describe("BananaDrum polyrhythm import", () => {
         if (!bar6Grid) {
             throw new Error("Bar 6 grid row not found");
         }
+
         expect(bar6Grid).toHaveLength(16);
         expect(bar6Grid[9].type).toBe("subdivision");
         const bar6Sub = bar6Grid[9] as { type: "subdivision"; flex: string; childCount: number; };
@@ -227,6 +228,7 @@ test.describe("BananaDrum polyrhythm import", () => {
         if (!bar7Grid) {
             throw new Error("Bar 7 grid row not found");
         }
+
         expect(bar7Grid).toHaveLength(16);
         expect(bar7Grid[9].type).toBe("subdivision");
         const bar7Sub = bar7Grid[9] as { type: "subdivision"; childCount: number; };
@@ -262,6 +264,7 @@ test.describe("BananaDrum polyrhythm import", () => {
         if (!bar8Grid) {
             throw new Error("Bar 8 grid row not found");
         }
+
         expect(bar8Grid).toHaveLength(15);
         expect(bar8Grid[14].type).toBe("subdivision");
         const bar8Sub = bar8Grid[14] as { type: "subdivision"; flex: string; childCount: number; };
@@ -276,6 +279,7 @@ test.describe("BananaDrum polyrhythm import", () => {
         if (!(await trackViewToggle.isChecked())) {
             await trackViewToggle.check({ force: true });
         }
+
         await expect(trackViewToggle).toBeChecked();
         await expect(page.locator(".bar-viewer.staff-mode").first()).toBeVisible();
 
@@ -343,6 +347,7 @@ test.describe("BananaDrum polyrhythm import", () => {
         if (!staff6) {
             throw new Error("Staff bar 6 not found");
         }
+
         // No tuplet labels — 2:1 is not a tuplet.
         expect(staff6.hasTupletLabels).toBe(false);
 
@@ -354,6 +359,7 @@ test.describe("BananaDrum polyrhythm import", () => {
         if (!staff6Sub) {
             throw new Error("Missing subdivision in bar 6 staff view");
         }
+
         expect(staff6Sub.noteCount).toBe(2);
         // 32nd notes have 3 beam segments (levels 1, 2, 3).
         expect(staff6Sub.beamCount).toBeGreaterThanOrEqual(3);
@@ -364,6 +370,7 @@ test.describe("BananaDrum polyrhythm import", () => {
         if (!staff7) {
             throw new Error("Staff bar 7 not found");
         }
+
         expect(staff7.hasTupletLabels).toBe(false);
 
         const staff7Sub = staff7.children.find((c) => {
@@ -373,6 +380,7 @@ test.describe("BananaDrum polyrhythm import", () => {
         if (!staff7Sub) {
             throw new Error("Missing subdivision in bar 7 staff view");
         }
+
         expect(staff7Sub.noteCount).toBe(2);
         expect(staff7Sub.beamCount).toBeGreaterThanOrEqual(3);
 
@@ -382,6 +390,7 @@ test.describe("BananaDrum polyrhythm import", () => {
         if (!staff8) {
             throw new Error("Staff bar 8 not found");
         }
+
         expect(staff8.hasTupletLabels).toBe(false);
 
         const staff8Sub = staff8.children.find((c) => {
@@ -391,6 +400,7 @@ test.describe("BananaDrum polyrhythm import", () => {
         if (!staff8Sub) {
             throw new Error("Missing subdivision in bar 8 staff view");
         }
+
         expect(staff8Sub.noteCount).toBe(4);
         expect(staff8Sub.beamCount).toBeGreaterThanOrEqual(3);
     });

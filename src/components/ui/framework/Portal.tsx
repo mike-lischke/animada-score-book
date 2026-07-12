@@ -90,6 +90,7 @@ export class Portal extends UIComponent<IPortalProperties, IPortalState> {
                 this.host.addEventListener("wheel", this.handlePortalMouseWheel);
                 container.appendChild(this.host);
             }
+
             render(children, this.host);
         } else {
             this.host?.remove();

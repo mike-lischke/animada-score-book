@@ -1382,7 +1382,9 @@ export class App extends UIComponent<{}, IAppState> {
             }
 
             default:
-        };
+        }
+
+        ;
 
         return true;
     };
@@ -1516,6 +1518,7 @@ export class App extends UIComponent<{}, IAppState> {
                         this.undoManager?.undo();
                     } // With ctrl, this doesn't even trigger on Mac. Seems harmless to include it anyway.
                 }
+
                 break;
             }
 

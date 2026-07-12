@@ -290,6 +290,7 @@ const packSubdivision = (subdivision: ISubdivision): PackedSubdivision => {
         // isTuplet is at index 5; push undefined placeholder for index 4.
         result.push(undefined);
     }
+
     if (subdivision.isTuplet) {
         result.push(true);
     }

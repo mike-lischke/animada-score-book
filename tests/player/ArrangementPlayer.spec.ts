@@ -82,9 +82,11 @@ vi.mock("../../src/player/TrackPlayer.js", () => {
                 firstEvent = event;
                 break;
             }
+
             if (firstEvent) {
                 events.push({ realTime: t, audioBuffer: {} as AudioBuffer, event: firstEvent });
             }
+
             events.push({
                 realTime: t,
                 callback: () => {

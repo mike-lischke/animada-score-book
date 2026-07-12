@@ -36,6 +36,7 @@ export class FaviconDirtyService {
             img.onload = () => {
                 resolve();
             };
+
             img.onerror = () => {
                 reject(new Error("Failed to load favicon"));
             };

@@ -46,6 +46,7 @@ export const primeFactors = (n: number): Set<number> => {
             factors.add(divisor);
             remaining /= divisor;
         }
+
         divisor++;
     }
 

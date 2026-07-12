@@ -130,12 +130,15 @@ export class RadialMenu extends UIComponent<IRadialMenuProps, IRadialMenuState> 
             if (isTop) {
                 return { start: 45, end: 135 };
             } // top
+
             if (isBottom) {
                 return { start: -135, end: -45 };
             } // bottom
+
             if (isRight) {
                 return { start: -45, end: 45 };
             } // right
+
             if (isLeft) {
                 return { start: 135, end: 225 };
             } // left
@@ -146,12 +149,15 @@ export class RadialMenu extends UIComponent<IRadialMenuProps, IRadialMenuState> 
             if (isTop) {
                 return { start: 0, end: 180 };
             } // opening upwards
+
             if (isBottom) {
                 return { start: 180, end: 360 };
             } // opening downwards
+
             if (isRight) {
                 return { start: -90, end: 90 };
             } // opening to the right
+
             if (isLeft) {
                 return { start: 90, end: 270 };
             } // opening to the left

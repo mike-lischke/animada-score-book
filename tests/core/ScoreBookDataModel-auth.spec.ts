@@ -22,6 +22,7 @@ describe.sequential("ScoreBookDataModel — Auth State", () => {
 
             return Promise.resolve(true);
         };
+
         requisitions.register("authChanged", authChangedHandler);
     });
 

@@ -181,7 +181,9 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
             }
 
             icon = <Icon src={iconSrc} className={iconClass + " scoreTreeIcon"} />;
-        };
+        }
+
+        ;
 
         const isAdmin = dataModel.user?.isAdmin ?? false;
         const { perm } = data;

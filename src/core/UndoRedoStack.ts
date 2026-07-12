@@ -117,6 +117,7 @@ export class UndoRedoStack {
         if (this.past.length === 1) {
             void requisitions.execute("canUndoChanged", undefined);
         }
+
         if (this.future.length === 1) {
             void requisitions.execute("canRedoChanged", undefined);
         }
@@ -141,6 +142,7 @@ export class UndoRedoStack {
         if (this.past.length === 2) {
             void requisitions.execute("canUndoChanged", undefined);
         }
+
         if (this.future.length === 0) {
             void requisitions.execute("canRedoChanged", undefined);
         }
@@ -216,6 +218,7 @@ export class UndoRedoStack {
                 if (distance > 0) {
                     noteCycleStacks.push({ start, distance });
                 }
+
                 historyIndex = start - 1;
             } else {
                 historyIndex--;
@@ -231,6 +234,7 @@ export class UndoRedoStack {
         if (!this.isNoteCommand(topCommand)) {
             return searchStart;
         }
+
         const stackNote = topCommand.note;
         let searchIndex = searchStart - 1;
 
@@ -240,6 +244,7 @@ export class UndoRedoStack {
             if (!this.isNoteCommand(command)) {
                 break;
             }
+
             const targetNoteAtIndex = command.note;
             if (targetNoteAtIndex !== stackNote) {
                 break;

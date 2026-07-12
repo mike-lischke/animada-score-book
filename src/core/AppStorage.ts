@@ -230,6 +230,7 @@ export class AppStorage {
         } else {
             settings[key] = value;
         }
+
         this.saveUISettings(settings);
     }
 

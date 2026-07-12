@@ -586,11 +586,13 @@ export class SelectionManager {
         for (; index < start; index++) {
             this.currentTrackSelections.delete(allTracks[index]);
         }
+
         for (; index <= end; index++) {
             if (!this.currentTrackSelections.has(allTracks[index])) {
                 this.currentTrackSelections.set(allTracks[index], this.createTrackSelection());
             }
         }
+
         for (; index < allTracks.length; index++) {
             this.currentTrackSelections.delete(allTracks[index]);
         }
@@ -622,6 +624,7 @@ export class SelectionManager {
                     // This element is to the right of the selection area, with no overlap.
                     return false;
                 }
+
                 if (left > leftBound) {
                     // This element covers the right edge of the selection area.
                     return (rightBound - left) / width > 0.4;
@@ -634,6 +637,7 @@ export class SelectionManager {
                     // This element is to the left of the selection area, with no overlap.
                     return false;
                 }
+
                 if (left < leftBound) {
                     // This element covers the left edge of the selection area.
                     return (right - leftBound) / width > 0.4;

@@ -178,6 +178,7 @@ export class PrintView extends UIComponent<IPrintViewProps> {
             for (let j = 0; j < perLine && (i + j) <= totalBars; j++) {
                 block.push(i + j);
             }
+
             blocks.push(block);
         }
 

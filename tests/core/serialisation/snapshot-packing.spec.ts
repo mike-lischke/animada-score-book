@@ -154,6 +154,7 @@ describe("CompactSnapshot", () => {
         if (!restored) {
             throw new Error("Expected packed snapshot to parse");
         }
+
         expect(restored.tracks[0]?.measures[0]?.subdivisions[0]?.parentSubdivisionId).toBe(1);
         expect(restored.tracks[0]?.measures[0]?.subdivisions[0]?.isTuplet).toBe(false);
     });

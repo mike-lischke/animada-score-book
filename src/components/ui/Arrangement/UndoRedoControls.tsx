@@ -45,6 +45,7 @@ export class UndoRedoControls extends UIComponent<IUndoRedoProps, IUndoRedoState
                 canRedo: undoManager.canRedo
             });
         }
+
         this.prepareSubscriptions();
     }
 

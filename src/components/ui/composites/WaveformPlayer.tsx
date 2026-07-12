@@ -106,7 +106,9 @@ export class WaveformPlayer extends UIComponent<IWaveformPlayerProps, IWaveformP
         let mediaElement: HTMLMediaElement | undefined;
         if (media) {
             mediaElement = document.getElementById(media) as HTMLMediaElement;
-        };
+        }
+
+        ;
 
         const ws = WaveSurfer.create({
             container: this.containerRef.current,

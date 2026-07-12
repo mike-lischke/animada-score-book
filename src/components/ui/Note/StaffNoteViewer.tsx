@@ -428,6 +428,7 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                     target.delete(pending.negativeKey);
                 }
             }
+
             pendingSubdivisionBeams.length = 0;
 
             run = [];
@@ -597,6 +598,7 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                     segments.push({ level, kind: "partial-left" });
                 }
             }
+
             if (segments.length > 0) {
                 const overwriteLevels = new Set(segments.map((segment) => {
                     return segment.level;
@@ -772,6 +774,7 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
             if (Number.isInteger(dottedSteps) && dottedSteps >= 2 && dottedSteps <= stepsPerBar) {
                 candidates.push({ steps: dottedSteps, alignmentSteps: base.steps, icon: base.icon, dotted: true });
             }
+
             if (Number.isInteger(base.steps) && base.steps >= 1 && base.steps <= stepsPerBar) {
                 candidates.push({ steps: base.steps, alignmentSteps: base.steps, icon: base.icon, dotted: false });
             }
@@ -854,6 +857,7 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                     flushRun(currentRun);
                     currentRun = [];
                 }
+
                 basePos++;
             }
         }
