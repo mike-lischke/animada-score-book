@@ -5,7 +5,7 @@
 
 import { type IncomingMessage, type ServerResponse } from "node:http";
 
-import { AccessLevel } from "./Auth.js";
+import { AccessLevel, EntityType, isValidEntityType } from "./Auth.js";
 import { type RequestContext } from "./RequestContext.js";
 
 export class ScoreRoutes {
@@ -62,7 +62,7 @@ export class ScoreRoutes {
 
         const readableFolders: Array<Record<string, unknown>> = [];
         for (const f of folders) {
-            const summary = await this.ctx.auth.getPermissionSummary(user, "folder", f.id as number);
+            const summary = await this.ctx.auth.getPermissionSummary(user, EntityType.Folder, f.id as number);
 
             if (summary.canRead) {
                 readableFolders.push({
@@ -77,7 +77,7 @@ export class ScoreRoutes {
 
         const readableScores: Array<Record<string, unknown>> = [];
         for (const s of scores) {
-            const summary = await this.ctx.auth.getPermissionSummary(user, "score", s.id as number);
+            const summary = await this.ctx.auth.getPermissionSummary(user, EntityType.Score, s.id as number);
 
             if (summary.canRead) {
                 readableScores.push({
@@ -117,7 +117,7 @@ export class ScoreRoutes {
         }
 
         const score = rows[0];
-        const summary = await this.ctx.auth.getPermissionSummary(user, "score", score.id as number);
+        const summary = await this.ctx.auth.getPermissionSummary(user, EntityType.Score, score.id as number);
 
         if (!summary.canRead) {
             this.ctx.sendError(res, "Forbidden", 403);
@@ -151,7 +151,7 @@ export class ScoreRoutes {
             return;
         }
 
-        const allowed = await this.ctx.auth.checkPermission(user, "folder", folderId, AccessLevel.Write);
+        const allowed = await this.ctx.auth.checkPermission(user, EntityType.Folder, folderId, AccessLevel.Write);
 
         if (!allowed) {
             this.ctx.sendError(res, "Forbidden", 403);
@@ -223,7 +223,7 @@ export class ScoreRoutes {
         }
 
         if (parentId !== null && parentId !== -1) {
-            const allowed = await this.ctx.auth.checkPermission(user, "folder", parentId, AccessLevel.Write);
+            const allowed = await this.ctx.auth.checkPermission(user, EntityType.Folder, parentId, AccessLevel.Write);
 
             if (!allowed) {
                 this.ctx.sendError(res, "Forbidden", 403);
@@ -242,12 +242,12 @@ export class ScoreRoutes {
         );
 
         if (user && (parentId === null || parentId === -1)) {
-            await this.ctx.auth.setOwner("folder", result.insertId, user.userId);
+            await this.ctx.auth.setOwner(EntityType.Folder, result.insertId, user.userId);
 
             const worldId = await this.ctx.auth.getWorldGroupId();
 
             if (worldId !== undefined) {
-                await this.ctx.auth.addEntityGroup("folder", result.insertId, worldId, false);
+                await this.ctx.auth.addEntityGroup(EntityType.Folder, result.insertId, worldId, false);
             }
         }
 
@@ -268,7 +268,7 @@ export class ScoreRoutes {
         }
 
         if (folderId !== null && folderId !== -1) {
-            const allowed = await this.ctx.auth.checkPermission(user, "folder", folderId, AccessLevel.Write);
+            const allowed = await this.ctx.auth.checkPermission(user, EntityType.Folder, folderId, AccessLevel.Write);
 
             if (!allowed) {
                 this.ctx.sendError(res, "Forbidden", 403);
@@ -287,12 +287,12 @@ export class ScoreRoutes {
         );
 
         if (user && (folderId === null || folderId === -1)) {
-            await this.ctx.auth.setOwner("score", result.insertId, user.userId);
+            await this.ctx.auth.setOwner(EntityType.Score, result.insertId, user.userId);
 
             const worldId = await this.ctx.auth.getWorldGroupId();
 
             if (worldId !== undefined) {
-                await this.ctx.auth.addEntityGroup("score", result.insertId, worldId, false);
+                await this.ctx.auth.addEntityGroup(EntityType.Score, result.insertId, worldId, false);
             }
         }
 
@@ -318,7 +318,9 @@ export class ScoreRoutes {
             return;
         }
 
-        const allowed = await this.ctx.auth.checkPermission(user, type, id, AccessLevel.Write);
+        const entityType = type as EntityType;
+
+        const allowed = await this.ctx.auth.checkPermission(user, entityType, id, AccessLevel.Write);
 
         if (!allowed) {
             this.ctx.sendError(res, "Forbidden", 403);
@@ -345,7 +347,7 @@ export class ScoreRoutes {
             return;
         }
 
-        const allowed = await this.ctx.auth.checkPermission(user, "score", id, AccessLevel.Write);
+        const allowed = await this.ctx.auth.checkPermission(user, EntityType.Score, id, AccessLevel.Write);
 
         if (!allowed) {
             this.ctx.sendError(res, "Forbidden", 403);
@@ -370,6 +372,12 @@ export class ScoreRoutes {
             return;
         }
 
+        if (!isValidEntityType(type)) {
+            this.ctx.sendError(res, `Invalid type: ${type}`);
+
+            return;
+        }
+
         const allowed = await this.ctx.auth.checkPermission(user, type, id, AccessLevel.Write);
 
         if (!allowed) {
@@ -378,7 +386,7 @@ export class ScoreRoutes {
             return;
         }
 
-        if (type === "score") {
+        if (type === EntityType.Score) {
             await this.ctx.auth.adapter.execute("DELETE FROM scores WHERE id = ?", [id]);
             await this.ctx.auth.adapter.execute(
                 "DELETE FROM permissions WHERE entity_type = 'score' AND entity_id = ?", [id],
@@ -391,7 +399,7 @@ export class ScoreRoutes {
             return;
         }
 
-        if (type === "folder") {
+        if (type === EntityType.Folder) {
             const folders = await this.ctx.auth.adapter.query<{ parentid: number | null; }>(
                 "SELECT parentid FROM folders WHERE id = ?", [id],
             );
@@ -443,7 +451,9 @@ export class ScoreRoutes {
                 return;
             }
 
-            const allowed = await this.ctx.auth.checkPermission(user, "folder", id, AccessLevel.Write);
+            const entityType = type as EntityType;
+
+            const allowed = await this.ctx.auth.checkPermission(user, entityType, id, AccessLevel.Write);
 
             if (!allowed) {
                 this.ctx.sendError(res, "Forbidden", 403);
@@ -453,7 +463,7 @@ export class ScoreRoutes {
 
             if (newParentId !== -1) {
                 const targetAllowed = await this.ctx.auth.checkPermission(
-                    user, "folder", newParentId, AccessLevel.Write,
+                    user, EntityType.Folder, newParentId, AccessLevel.Write,
                 );
 
                 if (!targetAllowed) {
@@ -471,7 +481,7 @@ export class ScoreRoutes {
             return;
         }
 
-        if (type === "score") {
+        if (type === EntityType.Score) {
             const newFolderId = body.newFolderId !== undefined ? Number(body.newFolderId) : undefined;
 
             if (id === undefined || newFolderId === undefined) {
@@ -480,7 +490,7 @@ export class ScoreRoutes {
                 return;
             }
 
-            const allowed = await this.ctx.auth.checkPermission(user, "score", id, AccessLevel.Write);
+            const allowed = await this.ctx.auth.checkPermission(user, EntityType.Score, id, AccessLevel.Write);
 
             if (!allowed) {
                 this.ctx.sendError(res, "Forbidden", 403);
@@ -490,7 +500,7 @@ export class ScoreRoutes {
 
             if (newFolderId !== -1) {
                 const targetAllowed = await this.ctx.auth.checkPermission(
-                    user, "folder", newFolderId, AccessLevel.Write,
+                    user, EntityType.Folder, newFolderId, AccessLevel.Write,
                 );
 
                 if (!targetAllowed) {

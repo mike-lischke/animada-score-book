@@ -85,11 +85,23 @@ export const enum AccessLevel {
 }
 
 /** Entity types used in the permissions table. */
-export const enum EntityType {
+export enum EntityType {
     Score = "score",
     Folder = "folder",
     Feature = "feature",
 }
+
+const entityTypeValues = Object.values(EntityType) as string[];
+
+/**
+ * Type guard: checks whether a string is a valid {@link EntityType} value.
+ *
+ * @param value The string to check.
+ * @returns True if the value is a valid EntityType.
+ */
+export const isValidEntityType = (value: string): value is EntityType => {
+    return entityTypeValues.includes(value);
+};
 
 export enum LoginAuditEvent {
     Login = "login",
@@ -123,7 +135,15 @@ export class Auth {
     private static scryptKeyLen = 64;
     private static scryptOptions = { N: 16384, r: 8, p: 1 };
 
-    private static readonly jwtSecret: string;
+    private static jwtSecret: string = (() => {
+        // eslint-disable-next-line no-restricted-syntax
+        const secret = process.env.JWT_SECRET;
+        if (!secret) {
+            throw new Error("JWT_SECRET environment variable is required.");
+        }
+
+        return secret;
+    })();
 
     private currentAdapter: IDatabaseAdapter;
 
@@ -292,7 +312,7 @@ export class Auth {
      *
      * @returns True if the user has the required access.
      */
-    public async checkPermission(user: ITokenPayload | undefined, entityType: string,
+    public async checkPermission(user: ITokenPayload | undefined, entityType: EntityType,
         entityId: number | null, requiredLevel: AccessLevel,): Promise<boolean> {
         // Admin users always have full access.
         if (user && await this.isUserInAdminGroup(user.userId)) {
@@ -300,7 +320,7 @@ export class Auth {
         }
 
         // Features: currently only admins get access (features will be reworked separately).
-        if ((entityType as EntityType) === EntityType.Feature) {
+        if (entityType === EntityType.Feature) {
             return false;
         }
 
@@ -369,7 +389,7 @@ export class Auth {
      *
      * @returns A summary of the user's access.
      */
-    public async getPermissionSummary(user: ITokenPayload | undefined, entityType: string,
+    public async getPermissionSummary(user: ITokenPayload | undefined, entityType: EntityType,
         entityId: number): Promise<IPermissionSummary> {
         const isAdmin = user ? await this.isUserInAdminGroup(user.userId) : false;
 
@@ -439,7 +459,7 @@ export class Auth {
      * @param entityId The entity id.
      * @param ownerId The new owner id, or null to remove the explicit owner (inherit).
      */
-    public async setOwner(entityType: string, entityId: number,
+    public async setOwner(entityType: EntityType, entityId: number,
         ownerId: number | null): Promise<void> {
         if (ownerId === null) {
             // Remove the explicit row — inheritance takes over.
@@ -464,7 +484,7 @@ export class Auth {
      * @param groupId The group id.
      * @param writable Whether the group has write access.
      */
-    public async addEntityGroup(entityType: string, entityId: number,
+    public async addEntityGroup(entityType: EntityType, entityId: number,
         groupId: number, writable: boolean): Promise<void> {
         await this.adapter.execute(
             `INSERT INTO entity_groups (entity_type, entity_id, group_id, writable) ` +
@@ -480,7 +500,7 @@ export class Auth {
      * @param entityId The entity id.
      * @param groupId The group id.
      */
-    public async removeEntityGroup(entityType: string, entityId: number,
+    public async removeEntityGroup(entityType: EntityType, entityId: number,
         groupId: number): Promise<void> {
         await this.adapter.execute(
             "DELETE FROM entity_groups WHERE entity_type = ? AND entity_id = ? AND group_id = ?",
@@ -494,7 +514,7 @@ export class Auth {
      * @param entityType The entity type.
      * @param entityId The entity id.
      */
-    public async getExplicitEntityGroups(entityType: string,
+    public async getExplicitEntityGroups(entityType: EntityType,
         entityId: number): Promise<IEntityGroupEntry[]> {
         const rows = await this.adapter.query<{ group_id: number; writable: number; }>(
             "SELECT group_id, writable FROM entity_groups WHERE entity_type = ? AND entity_id = ?",
@@ -514,7 +534,7 @@ export class Auth {
      *
      * @returns The owner id, or null.
      */
-    public async getExplicitOwner(entityType: string,
+    public async getExplicitOwner(entityType: EntityType,
         entityId: number): Promise<number | null> {
         const rows = await this.adapter.query<{ owner_id: number | null; }>(
             "SELECT owner_id FROM permissions WHERE entity_type = ? AND entity_id = ?",
@@ -614,9 +634,18 @@ export class Auth {
      *
      * @param entityType The type of entity.
      * @param entityId   The entity id.
+     * @param visited    Set of already-visited entity keys to detect cycles.
      * @returns The resolved owner id, or null.
      */
-    private async resolveOwner(entityType: string, entityId: number): Promise<number | null> {
+    private async resolveOwner(entityType: EntityType, entityId: number,
+        visited = new Set<string>(),): Promise<number | null> {
+        const key = `${entityType}:${entityId}`;
+        if (visited.has(key)) {
+            return null;
+        }
+
+        visited.add(key);
+
         // Check for an explicit owner on this entity.
         const rows = await this.adapter.query<{ owner_id: number | null; }>(
             "SELECT owner_id FROM permissions WHERE entity_type = ? AND entity_id = ?",
@@ -628,26 +657,26 @@ export class Auth {
         }
 
         // For scores, walk up to the parent folder.
-        if ((entityType as EntityType) === EntityType.Score) {
+        if (entityType === EntityType.Score) {
             const scoreRows = await this.adapter.query<{ folderid: number | null; }>(
                 "SELECT folderid FROM scores WHERE id = ?",
                 [entityId],
             );
 
             if (scoreRows[0]?.folderid !== null) {
-                return this.resolveOwner(EntityType.Folder, scoreRows[0].folderid);
+                return this.resolveOwner(EntityType.Folder, scoreRows[0].folderid, visited);
             }
         }
 
         // For folders, walk up to the parent folder.
-        if ((entityType as EntityType) === EntityType.Folder) {
+        if (entityType === EntityType.Folder) {
             const folderRows = await this.adapter.query<{ parentid: number | null; }>(
                 "SELECT parentid FROM folders WHERE id = ?",
                 [entityId],
             );
 
             if (folderRows[0]?.parentid !== null) {
-                return this.resolveOwner(EntityType.Folder, folderRows[0].parentid);
+                return this.resolveOwner(EntityType.Folder, folderRows[0].parentid, visited);
             }
         }
 
@@ -662,10 +691,18 @@ export class Auth {
      * @param entityType The type of entity.
      * @param entityId   The entity id.
      * @param collected  Accumulator map (groupId → writable). Pass a new Map() on first call.
+     * @param visited    Set of already-visited entity keys to detect cycles.
      * @returns A map of groupId → writable.
      */
-    private async collectGroupEntries(entityType: string, entityId: number,
-        collected: Map<number, boolean>,): Promise<Map<number, boolean>> {
+    private async collectGroupEntries(entityType: EntityType, entityId: number,
+        collected: Map<number, boolean>, visited = new Set<string>(),): Promise<Map<number, boolean>> {
+        const key = `${entityType}:${entityId}`;
+        if (visited.has(key)) {
+            return collected;
+        }
+
+        visited.add(key);
+
         // Collect explicit group assignments for this entity.
         const rows = await this.adapter.query<{ group_id: number; writable: number; }>(
             "SELECT group_id, writable FROM entity_groups WHERE entity_type = ? AND entity_id = ?",
@@ -682,25 +719,25 @@ export class Auth {
         }
 
         // Walk up to the parent.
-        if ((entityType as EntityType) === EntityType.Score) {
+        if (entityType === EntityType.Score) {
             const scoreRows = await this.adapter.query<{ folderid: number | null; }>(
                 "SELECT folderid FROM scores WHERE id = ?",
                 [entityId],
             );
 
             if (scoreRows[0]?.folderid !== null) {
-                return this.collectGroupEntries(EntityType.Folder, scoreRows[0].folderid, collected);
+                return this.collectGroupEntries(EntityType.Folder, scoreRows[0].folderid, collected, visited);
             }
         }
 
-        if ((entityType as EntityType) === EntityType.Folder) {
+        if (entityType === EntityType.Folder) {
             const folderRows = await this.adapter.query<{ parentid: number | null; }>(
                 "SELECT parentid FROM folders WHERE id = ?",
                 [entityId],
             );
 
             if (folderRows[0]?.parentid !== null) {
-                return this.collectGroupEntries(EntityType.Folder, folderRows[0].parentid, collected);
+                return this.collectGroupEntries(EntityType.Folder, folderRows[0].parentid, collected, visited);
             }
         }
 
@@ -715,7 +752,7 @@ export class Auth {
      * @param entityId   The entity id.
      * @returns The resolved permission state.
      */
-    private async resolvePermission(entityType: string, entityId: number): Promise<IResolvedPermission> {
+    private async resolvePermission(entityType: EntityType, entityId: number): Promise<IResolvedPermission> {
         const [ownerId, groupEntries] = await Promise.all([
             this.resolveOwner(entityType, entityId),
             this.collectGroupEntries(entityType, entityId, new Map()),
@@ -743,12 +780,4 @@ export class Auth {
         return rows[0]?.id;
     };
 
-    static {
-        // @ts-expect-error, the field is readonly.
-        // eslint-disable-next-line no-restricted-syntax
-        this.jwtSecret = process.env.JWT_SECRET;
-        if (!this.jwtSecret) {
-            throw new Error("JWT_SECRET environment variable is required.");
-        }
-    }
 }
