@@ -55,7 +55,9 @@ import {
 import type { IArrangementSnapshot } from "./core/types/general.js";
 import { UndoManager } from "./core/UndoManager.js";
 import { convertErrorToString } from "./core/utils.js";
+import { getSharedAudioContext } from "./core/audio-context.js";
 import { ArrangementPlayer } from "./player/ArrangementPlayer.js";
+import { AudioBufferPlayer } from "./player/AudioBufferPlayer.js";
 import type { ScoreBookUiServices } from "./player/types.js";
 import { escapeStack } from "./supplement/EscapeStack.js";
 import { requisitions } from "./supplement/Requisitions.js";
@@ -63,8 +65,6 @@ import { BackendDisconnectedDialog } from "./ui/BackendDisconnectedDialog.js";
 import { BackendSetupDialog } from "./ui/BackendSetupDialog.js";
 import { LoginDialog } from "./ui/LoginDialog.js";
 import { AdminSetupDialog } from "./ui/AdminSetupDialog.js";
-import { ModeManager } from "./ui/ModeManager.js";
-import { MouseHandler } from "./ui/MouseHandler.js";
 import { SelectionManager } from "./ui/SelectionManager.js";
 import { SettingsDialog } from "./ui/SettingsDialog.js";
 import { TutorialWizard } from "./ui/TutorialWizard.js";
@@ -138,8 +138,6 @@ export class App extends UIComponent<{}, IAppState> {
     private arrangementPlayer?: ArrangementPlayer;
     private undoManager?: UndoManager;
 
-    private mouseHandler?: MouseHandler;
-
     private justFinishedEditingTitle = false;
 
     private currentPlayRange?: { startBar: number; endBar: number; };
@@ -167,7 +165,6 @@ export class App extends UIComponent<{}, IAppState> {
         const selectionManager = new SelectionManager();
         this.services = {
             selectionManager,
-            modeManager: new ModeManager(selectionManager),
         };
 
         this.initEventHandlers();
@@ -185,6 +182,7 @@ export class App extends UIComponent<{}, IAppState> {
         requisitions.register("notificationStateChanged", this.handleNotificationStateChanged);
         requisitions.register("backendDisconnected", this.handleBackendDisconnected);
         requisitions.register("authChanged", this.handleAuthChanged);
+        requisitions.register("notesClicked", this.handleNoteClicked);
 
         void this.checkBackendThenInitialize();
     }
@@ -217,6 +215,7 @@ export class App extends UIComponent<{}, IAppState> {
         requisitions.unregister("notificationStateChanged", this.handleNotificationStateChanged);
         requisitions.unregister("backendDisconnected", this.handleBackendDisconnected);
         requisitions.unregister("authChanged", this.handleAuthChanged);
+        requisitions.unregister("notesClicked", this.handleNoteClicked);
     }
 
     public render() {
@@ -741,6 +740,33 @@ export class App extends UIComponent<{}, IAppState> {
         }
 
         return Promise.resolve(true);
+    };
+
+    private handleNoteClicked = (noteIds: number[]): Promise<boolean> => {
+        const arrangement = this.dataModel.arrangement;
+        if (!arrangement || noteIds.length === 0) {
+            return Promise.resolve(false);
+        }
+
+        const noteId = noteIds[0];
+
+        for (const track of arrangement.tracks) {
+            for (const measure of track.measures) {
+                const event = measure.events.find((e) => {
+                    return e.id === noteId;
+                });
+
+                if (event?.audioData?.audioBuffer) {
+                    const volume = arrangement.mainVolume / 100;
+
+                    new AudioBufferPlayer(event.audioData.audioBuffer, getSharedAudioContext(), 0, volume);
+
+                    return Promise.resolve(true);
+                }
+            }
+        }
+
+        return Promise.resolve(false);
     };
 
     /**
@@ -1458,8 +1484,6 @@ export class App extends UIComponent<{}, IAppState> {
         window.addEventListener("keyup", (event) => {
             this.handleKeyUp(event);
         });
-
-        this.mouseHandler = new MouseHandler(this.services.modeManager, this.services.selectionManager);
     }
 
     private onSidebarEscape = (): void => {
@@ -1479,13 +1503,11 @@ export class App extends UIComponent<{}, IAppState> {
             case "Escape": {
                 Overlay.closeAllOverlays();
                 this.services.selectionManager.clearSelection();
-                this.services.modeManager.deletePolyrhythmMode = false;
 
                 break;
             }
 
             case "Alt": {
-                this.services.modeManager.deletePolyrhythmMode = true;
                 event.preventDefault();
 
                 break;
@@ -1497,7 +1519,7 @@ export class App extends UIComponent<{}, IAppState> {
                     this.undoManager?.edit({
                         type: "EditCommand_ArrangementClearSelection",
                         arrangement: this.dataModel.arrangement!,
-                        clearSelection: this.services.selectionManager.currentTrackSelections
+                        clearSelection: new Map()
                     });
                     this.services.selectionManager.clearSelection();
                 }
@@ -1535,9 +1557,7 @@ export class App extends UIComponent<{}, IAppState> {
     }
 
     private handleKeyUp(event: KeyboardEvent): void {
-        if (event.key === "Alt") {
-            this.services.modeManager.deletePolyrhythmMode = false;
-        }
+        // No-op: previously reset deletePolyrhythmMode on Alt key up.
     }
 
     private onEditEnd = () => {

@@ -97,7 +97,7 @@ export class SelectionView {
         }
     };
 
-    private handlePointerUp = (_event: PointerEvent): void => {
+    private handlePointerUp = (event: PointerEvent): void => {
         if (!this.isDragging && this.dragPending) {
             // The user pressed and released without significant movement — treat as a click.
             // The selection mode is already live on the manager via handleKeyDown/handleKeyUp.
@@ -107,6 +107,10 @@ export class SelectionView {
             const clickRect = new DOMRect(this.startX - half, this.startY - half,
                 (half * 2) + 1, (half * 2) + 1);
             this.manager.endSelection(clickRect);
+        }
+
+        if (this.isDragging) {
+            //event.preventDefault();
         }
 
         this.cancelDrag();

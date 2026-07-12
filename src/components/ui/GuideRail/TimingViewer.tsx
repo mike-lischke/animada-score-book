@@ -8,7 +8,7 @@ import type { ComponentChild } from "preact";
 import type { ITiming } from "../../../core/ScoreBookDataModel.js";
 import type { ITimeParams } from "../../../core/types/general.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
-import { NoteViewer } from "../Note/NoteViewer.js";
+import { getParityClass } from "../../../core/utils.js";
 import { type BarDivisibility } from "./GuideRail.js";
 import { Container } from "../framework/Container.js";
 import { ChildAlignment } from "../framework/ui-types.js";
@@ -32,7 +32,7 @@ export class TimingViewer extends UIComponent<ITimingViewerProperties> {
         const className = this.generateFinalClassName([
             "guiderail-timing",
             "note-width",
-            NoteViewer.getParityClass(bar, step, timeSignature, stepResolution),
+            getParityClass(bar, step, timeSignature, stepResolution),
             this.classFromProperty(isStartOfBar, ["", "startOfBar"])
         ]);
 

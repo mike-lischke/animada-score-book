@@ -9,7 +9,6 @@ import {
     SbDmEntityType, type ISbDmArrangement, type ISbDmNoteEvent, type ISbDmTrack
 } from "../../src/core/ScoreBookDataModel.js";
 import type { Mutable } from "../../src/core/types/general.js";
-import { requisitions } from "../../src/supplement/Requisitions.js";
 import { SelectionManager } from "../../src/ui/SelectionManager.js";
 
 const makeArrangement = (tracks: ISbDmTrack[]): ISbDmArrangement => {
@@ -120,44 +119,8 @@ describe.sequential("SelectionManager (class)", () => {
     });
 
     it("starts with nothing selected", () => {
-        expect(manager.currentTrackSelections.size).toBe(0);
-        expect(manager.isSelected(noteA)).toBe(false);
-    });
-
-    it("selects a single note on click and publishes", () => {
-        const publishSpy = vi.fn();
-        requisitions.register("selectionChanged", publishSpy);
-        manager.handleClick(noteA);
-        expect(manager.isSelected(noteA)).toBe(true);
-        expect(manager.currentTrackSelections.get(track)!.range).toEqual([noteA, noteA]);
-        expect(publishSpy).toHaveBeenCalled();
-        requisitions.unregister("selectionChanged", publishSpy);
-    });
-
-    it("clicking the same anchor again clears selection", () => {
-        manager.handleClick(noteA);
-        manager.handleClick(noteA);
-        expect(manager.isSelected(noteA)).toBe(false);
-    });
-
-    it("drag selects a range on the same track", () => {
-        manager.handleClick(noteA);
-        manager.handleMouseDown(noteA);
-        manager.handleDragSelect(noteB);
-        const selection = manager.currentTrackSelections.get(track)!;
-        expect(selection.selectedNotes.has(noteA)).toBe(true);
-        expect(selection.selectedNotes.has(noteB)).toBe(true);
-        expect(selection.range).toEqual([noteA, noteB]);
-    });
-
-    it("deselectAll clears selection and publishes", () => {
-        const publishSpy = vi.fn();
-        requisitions.register("selectionChanged", publishSpy);
-        manager.handleClick(noteA);
-        manager.clearSelection();
-        expect(manager.currentTrackSelections.size).toBe(0);
-        expect(publishSpy).toHaveBeenCalled();
-        requisitions.unregister("selectionChanged", publishSpy);
+        expect(manager.currentSelection.size).toBe(0);
+        expect(manager.isNoteSelected(1, 1, 1)).toBe(false);
     });
 
     it("can construct via new", () => {

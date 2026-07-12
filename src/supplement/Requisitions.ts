@@ -38,7 +38,6 @@ export interface IRequestTypeMap {
     "canRedoChanged": SimpleCallback;
 
     // --- UI state topics ---
-    "modeChanged": SimpleCallback;
     "selectionChanged": (delta: ISelectionDelta) => Promise<boolean>;
     "selectionRectChanged": (data: ISelectionRectChange) => Promise<boolean>;
     "errorLogChanged": SimpleCallback;
@@ -60,6 +59,9 @@ export interface IRequestTypeMap {
 
     // --- Authentication ---
     "authChanged": SimpleCallback;
+
+    // --- Note interaction ---
+    "notesClicked": (noteIds: number[]) => Promise<boolean>;
 }
 
 type CallbackType = IRequestTypeMap[keyof IRequestTypeMap];

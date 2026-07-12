@@ -15,7 +15,6 @@ import type { IScoreMetrics } from "../../src/player/TimeCoordinator.js";
 import { requisitions } from "../../src/supplement/Requisitions.js";
 import type { ScoreBookUiServices } from "../../src/player/types.js";
 import type { SelectionManager } from "../../src/ui/SelectionManager.js";
-import { ModeManager } from "../../src/ui/ModeManager.js";
 
 /**
  * Creates a minimal mock ISbDmTimeParams for testing.
@@ -234,7 +233,6 @@ describe.sequential("Minimap (component)", () => {
 
     const services: ScoreBookUiServices = {
         selectionManager: selectionManagerMock,
-        modeManager: new ModeManager(selectionManagerMock),
     } as ScoreBookUiServices;
 
     const renderMinimap = (

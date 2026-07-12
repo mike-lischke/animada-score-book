@@ -41,7 +41,7 @@ export class ArrangementEditControls
     }
 
     public override componentDidMount(): void {
-        const { dataModel, services } = this.props;
+        const { dataModel } = this.props;
         const { arePolyrhythms } = this.state;
 
         const arrangement = dataModel.arrangement!;
@@ -57,7 +57,6 @@ export class ArrangementEditControls
         const hasPolyrhythms = this.hasPolyrhythms(arrangement);
         if (!hasPolyrhythms) {
             Overlay.toggleOverlay("delete_polyrhythms", "hide");
-            services.modeManager.deletePolyrhythmMode = false;
         }
 
         if (arePolyrhythms !== hasPolyrhythms) {
@@ -79,7 +78,6 @@ export class ArrangementEditControls
         const { arePolyrhythms } = this.state;
 
         const arrangementView = dataModel.arrangement!;
-        const modeManager = services.modeManager;
 
         // TODO: move this to a score creation dialog. Changing that in an existing score makes no sense.
         /*const signatureSelect = (
@@ -119,7 +117,6 @@ export class ArrangementEditControls
                         <>
                             <Button
                                 onClick={() => {
-                                    modeManager.deletePolyrhythmMode = true;
                                     Overlay.toggleOverlay("delete_polyrhythms", "show");
                                 }}
                             >Delete polyrhythms...</Button>
@@ -168,7 +165,7 @@ export class ArrangementEditControls
                         <ExpandingSpacer />
                         <Button
                             onClick={() => {
-                                return modeManager.deletePolyrhythmMode = false;
+                                Overlay.toggleOverlay("delete_polyrhythms", "hide");
                             }}
                         >
                             Done
@@ -204,7 +201,7 @@ export class ArrangementEditControls
     }
 
     private onArrangementChanged = (arrangementId: number): Promise<boolean> => {
-        const { dataModel, services } = this.props;
+        const { dataModel } = this.props;
         const arrangement = dataModel.arrangement!;
 
         if (arrangementId !== arrangement.id) {
@@ -214,8 +211,6 @@ export class ArrangementEditControls
         const arePolyrhythms = this.hasPolyrhythms(arrangement);
         if (!arePolyrhythms) {
             Overlay.toggleOverlay("delete_polyrhythms", "hide");
-
-            services.modeManager.deletePolyrhythmMode = false;
         }
 
         this.setState({ arePolyrhythms });
@@ -247,7 +242,7 @@ export class ArrangementEditControls
     };
 
     private onTrackChanged = (trackId: number): Promise<boolean> => {
-        const { dataModel, services } = this.props;
+        const { dataModel } = this.props;
         const arrangement = dataModel.arrangement!;
 
         // Only react if the changed track is one we care about.
@@ -260,7 +255,6 @@ export class ArrangementEditControls
         const arePolyrhythms = this.hasPolyrhythms(arrangement);
         if (!arePolyrhythms) {
             Overlay.toggleOverlay("delete_polyrhythms", "hide");
-            services.modeManager.deletePolyrhythmMode = false;
         }
 
         this.setState({ arePolyrhythms });
@@ -320,7 +314,7 @@ export class ArrangementEditControls
         const { services } = this.props;
 
         const selectionManager = services.selectionManager;
-        Overlay.toggleOverlay("selection_controls", selectionManager.currentTrackSelections.size ? "show" : "hide");
+        Overlay.toggleOverlay("selection_controls", selectionManager.currentSelection.size ? "show" : "hide");
 
         return Promise.resolve(true);
     };

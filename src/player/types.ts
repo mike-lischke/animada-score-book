@@ -4,7 +4,6 @@
  */
 
 import type { ISbDmNoteEvent, RealTime } from "../core/ScoreBookDataModel.js";
-import type { ModeManager } from "../ui/ModeManager.js";
 import type { SelectionManager } from "../ui/SelectionManager.js";
 
 export interface IEventDetails {
@@ -48,5 +47,4 @@ export interface IInterval {
 /** Stuff which is created once for the entire lifetime of the app. */
 export interface ScoreBookUiServices {
     selectionManager: SelectionManager;
-    modeManager: ModeManager;
 }

@@ -156,7 +156,7 @@ export class SelectionControls extends UIComponent<ISelectionControlsProperties,
         undoManager.edit({
             type: "EditCommand_ArrangementAddPolyrhythms",
             arrangement,
-            addPolyrhythms: { length, selection: selectionManager.currentTrackSelections }
+            addPolyrhythms: { length, selection: new Map() }
         });
 
         selectionManager.clearSelection();
@@ -171,7 +171,7 @@ export class SelectionControls extends UIComponent<ISelectionControlsProperties,
         undoManager.edit({
             type: "EditCommand_ArrangementClearSelection",
             arrangement,
-            clearSelection: selectionManager.currentTrackSelections
+            clearSelection: new Map()
         });
         selectionManager.clearSelection();
     };
@@ -194,7 +194,7 @@ export class SelectionControls extends UIComponent<ISelectionControlsProperties,
         const { services } = this.props;
 
         const selectionManager = services.selectionManager;
-        if (!(event.target instanceof HTMLInputElement) && selectionManager.currentTrackSelections.size
+        if (!(event.target instanceof HTMLInputElement) && selectionManager.currentSelection.size
             && this.polyrhythmInputRef.current && digitMatcher.test(event.key)) {
             this.polyrhythmInputRef.current.value = event.key;
 
