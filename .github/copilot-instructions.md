@@ -4,8 +4,56 @@ description: Project-wide coding guidelines and conventions for the Animada Scor
 
 # Animada Score Book — Project Instructions
 
-Score management and arrangement app.
+Score management and arrangement app for Samba/Bateria groups.
 Stack: TypeScript + Preact (Vite) frontend, Node.js backend (MySQL/PostgreSQL), Vitest + Playwright tests.
+
+---
+
+## Architecture
+
+### Entry Point & App Lifecycle
+
+`src/main.tsx` mounts `<App />` into `#app`. There is **no client-side router** — the app uses an `AppPhase` state machine:
+
+```
+Checking → Setup → AdminSetup → Login → Running
+```
+
+`App.render()` switches on `phase` to show the appropriate splash dialog or the full app layout. `App` owns the top-level singletons: `ScoreBookDataModel`, `ArrangementPlayer`, `UndoManager`, and `services` (SelectionManager + ModeManager).
+
+### Key Directories
+
+| Directory | Purpose |
+|-----------|---------|
+| `src/core/` | Domain model: `ScoreBookDataModel` (central data), `Arrangement`, `Track`, `Instrument`, `TimeParams`, `edit.ts` (single edit dispatcher with discriminated unions), `UndoManager`/`UndoRedoStack` |
+| `src/core/serialisation/` | Snapshot serialization, packing for URL/localStorage, `ArrangementMigrator` (legacy v1/v2 + BananaDrum import) |
+| `src/core/types/` | Core domain types: `general.ts` (IAudioData, IArrangementSnapshot, IFraction, etc.), `edit_commands.ts` (discriminated union of all edit commands) |
+| `src/player/` | Audio playback engine (Web Audio API): `ArrangementPlayer` orchestrates `TrackPlayer`s + `Metronome` via `TimeCoordinator` (score-time ↔ real-time math) |
+| `src/supplement/` | Utilities: `Requisitions` (typed pub/sub event bus — all cross-component communication), `EscapeStack`, `Stack`, `Semaphore`, `MP3Export` |
+| `src/components/ui/` | Feature components: `Arrangement/`, `Bar/` (Grid + Staff views), `Note/`, `Track/`, `Minimap/`, `GuideRail/`, `InstrumentBrowser/`, `NotificationCenter/`, `Statusbar/`, `Print/`, `composites/` |
+| `src/components/ui/framework/` | Custom UI component library: `UIComponent` (base class), `Container` (flex layout), `Dialog`, `Button`, `Menu/`, `TreeGrid`, `Tabview/`, `Popup`, `Tooltip`, etc. |
+| `src/ui/` | Top-level UI modules: `ScoreLibrary` (lazy-loaded tree-grid), `SettingsDialog`, `LoginDialog`, `SelectionManager`, `ModeManager`, `MouseHandler`, `AnimationEngine`, admin editors |
+| `src/server/` | Node.js backend: `backend.ts` (entry), `Router.ts` (flat `?action=` dispatch), `Auth.ts` + `AuthRoutes.ts` (JWT, scrypt, refresh tokens), `ScoreRoutes.ts`, `AdminRoutes.ts`, `StaticRoutes.ts`, `mysql-adapter.ts`/`postgres-adapter.ts` (canonical schema in `createTablesSQL`), `config.ts` |
+| `tests/` | `tests/core/` (domain unit tests), `tests/ui/` (component tests via `@testing-library/preact`), `tests/player/` (audio engine), `tests/server/` (auth unit tests), `tests/integration/` (cross-layer), `tests/e2e/` (Playwright), `tests/temp/` (throwaway debug tests) |
+
+### Data Flow
+
+- **Single source of truth:** `ScoreBookDataModel` holds `arrangement`, `instruments`, `user`, and `scoreBookTree`.
+- **All mutations** go through `edit.ts` → `UndoManager.edit(command)` — every edit is a discriminated union `EditCommand`.
+- **Cross-component communication** uses `Requisitions` (typed pub/sub): components `register`/`unregister` for topics like `settingsChanged`, `playbackStateChanged`, `selectionChanged`, `authChanged`, `backendDisconnected`.
+- **Persistence:** `AppStorage` (localStorage/sessionStorage) for UI settings; backend API for scores/users/groups.
+
+### Dual View System
+
+The score renders in **grid mode** (matrix-style, each bar a column) or **staff mode** (vertical notation, each bar a column of track rows). Toggled via `trackViewMode` in `ArrangementViewer`. Both modes implement `ISelectionHitTester` for hit-testing. `SelectionManager` maintains two parallel selection structures: legacy per-track `currentTrackSelections` and new granular `currentSelection` (Map with `SelectionGranularity` from Track down to Note).
+
+### Custom UI Framework
+
+All UI components extend `UIComponent<P, S>` (not raw `Component`). Key patterns:
+- `Container` for all flex layouts — never raw `<div>` with `display: flex`.
+- `generateFinalClassName(["base-class", this.props.className])` merges classes.
+- `data-*` props are auto-forwarded to DOM via `ICommonUIProperties`.
+- Styles are per-component SCSS files under `src/components/ui/framework/styles/`, imported centrally via `styles/index.scss`.
 
 ---
 
@@ -127,7 +175,7 @@ The backend server does NOT auto-reload. Whenever files in `src/server/` change,
 
 ### CSS Styles
 
-- CSS styles for UI framework components go into `src/components/ui/framework/<component-name>.scss`.
+- CSS styles for UI framework components go into `src/components/ui/framework/styles/<component-name>.scss`.
 - Component CSS files are imported in `src/components/ui/framework/styles/index.scss` only.
 
 ---
