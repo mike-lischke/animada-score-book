@@ -135,7 +135,7 @@ export class BackendDisconnectedDialog
 
         this.setState({ phase: DisconnectPhase.Reconnected });
         this.statusRef.current?.update(this.buildContent());
-        void requisitions.execute("showError", "Backend connection restored.");
+        void requisitions.execute("showInfo", "Backend connection restored.");
 
         this.dismissTimer = setTimeout(() => {
             this.closingIntentionally = true;
@@ -161,11 +161,24 @@ export class BackendDisconnectedDialog
             const res = await fetch("/api?action=health");
 
             if (res.ok) {
-                const data = await res.json() as { status: string; initialized: boolean; };
+                const data = await res.json() as {
+                    status: string; initialized: boolean; dbStatus?: string; dbError?: string;
+                };
 
                 if (data.status === "ok" && data.initialized) {
                     this.stopTimers();
                     this.handleBackendRestored();
+
+                    return;
+                }
+
+                // The backend is reachable but the database is not — show a specific detail.
+                if (data.dbStatus === "db_unreachable" && data.dbError) {
+                    this.setState({
+                        phase: DisconnectPhase.Disconnected,
+                        errorDetail: data.dbError,
+                    });
+                    this.statusRef.current?.update(this.buildContent());
 
                     return;
                 }

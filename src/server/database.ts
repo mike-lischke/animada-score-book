@@ -62,6 +62,14 @@ export interface IDatabaseAdapter {
     isInitialized(): boolean;
 
     /**
+     * Lightweight connectivity check using the existing pool. Runs SELECT 1 and returns
+     * true if the database is reachable. Throws with a descriptive error on failure.
+     *
+     * @returns True if the database responded.
+     */
+    ping(): Promise<boolean>;
+
+    /**
      * Executes a SELECT-like query and returns rows.
      *
      * @param sql    The SQL query.

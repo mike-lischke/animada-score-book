@@ -200,6 +200,13 @@ export class PostgresAdapter implements IDatabaseAdapter {
         return this.pool !== undefined;
     }
 
+    public async ping(): Promise<boolean> {
+        const pool = this.getPoolOrThrow();
+        const result = await pool.query("SELECT 1 AS result");
+
+        return result.rows.length > 0 && (result.rows[0] as { result: number; }).result === 1;
+    }
+
     public async query<T extends DbRow = DbRow>(sql: string, params?: unknown[]): Promise<T[]> {
         const pool = this.getPoolOrThrow();
         const result = await pool.query<T>(convertPlaceholders(sql), params);

@@ -97,6 +97,32 @@ const main = (): void => {
         );
     });
 
+    // Periodic database liveness check — logs a warning if the database becomes unreachable
+    // between requests, and a recovery message when it comes back. The health endpoint also
+    // performs a fresh ping on every call.
+    let dbWasDown = false;
+
+    const dbPingInterval = setInterval(() => {
+        if (auth.adapter.isInitialized()) {
+            auth.adapter.ping().then(() => {
+                if (dbWasDown) {
+                    dbWasDown = false;
+                    console.log("Database connection restored.");
+                }
+            }).catch((e: unknown) => {
+                if (!dbWasDown) {
+                    dbWasDown = true;
+                    console.warn(`Database liveness check failed: ${(e as Error).message}`);
+                }
+            });
+        }
+    }, 30_000);
+
+    // Allow the event loop to exit even with the interval active (Node 22.12+).
+    if (typeof dbPingInterval.unref === "function") {
+        dbPingInterval.unref();
+    }
+
     const shutdown = () => {
         console.log("\nShutting down…");
 

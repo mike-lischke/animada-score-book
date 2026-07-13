@@ -113,6 +113,12 @@ interface IAppState {
     printOptions?: IPrintOptions;
 
     instrumentEditorEnabled: boolean;
+
+    /** When true, the backend health endpoint was unreachable. */
+    backendUnreachable: boolean;
+
+    /** Error message shown during startup when the backend or database is unreachable. */
+    startupError?: string;
 }
 
 export class App extends UIComponent<{}, IAppState> {
@@ -160,6 +166,7 @@ export class App extends UIComponent<{}, IAppState> {
             headerPinned: false,
             printing: false,
             instrumentEditorEnabled: false,
+            backendUnreachable: false,
         };
 
         const selectionManager = new SelectionManager();
@@ -188,12 +195,15 @@ export class App extends UIComponent<{}, IAppState> {
     }
 
     public override shouldComponentUpdate(nextProps: {}, nextState: IAppState): boolean {
-        const { displayMode, sidebarOpen, phase, headerPinned, printing } = this.state;
+        const { displayMode, sidebarOpen, phase, headerPinned, printing, backendUnreachable,
+            startupError } = this.state;
 
         return displayMode !== nextState.displayMode
             || sidebarOpen !== nextState.sidebarOpen || phase !== nextState.phase
             || headerPinned !== nextState.headerPinned
-            || printing !== nextState.printing;
+            || printing !== nextState.printing
+            || backendUnreachable !== nextState.backendUnreachable
+            || startupError !== nextState.startupError;
     }
 
     public override componentDidUpdate(_prevProps: {}, prevState: IAppState): void {
@@ -220,7 +230,7 @@ export class App extends UIComponent<{}, IAppState> {
 
     public render() {
         const { phase, displayMode, sidebarOpen, headerPinned, instrumentEditorEnabled, printing,
-            printOptions } = this.state;
+            printOptions, backendUnreachable, startupError } = this.state;
         const isRunning = phase === AppPhase.Running;
 
         let splashContent: ComponentChild;
@@ -319,6 +329,24 @@ export class App extends UIComponent<{}, IAppState> {
                     data-tooltip="inherit"
                 />
             </Button>;
+        }
+
+        let checkingContent: ComponentChild;
+        if (phase === AppPhase.Checking) {
+            if (backendUnreachable) {
+                checkingContent = this.renderBackendUnreachable();
+            } else if (startupError) {
+                checkingContent = this.renderStartupError(startupError);
+            } else {
+                checkingContent = (
+                    <div className="progressIndicatorCard" style={{
+                        position: "fixed", inset: 0, display: "flex",
+                        justifyContent: "center", alignItems: "center",
+                    }}>
+                        <ProgressIndicator />
+                    </div>
+                );
+            }
         }
 
         return (
@@ -550,14 +578,7 @@ export class App extends UIComponent<{}, IAppState> {
 
                 <ConfirmDialog ref={this.confirmDialogRef} />
 
-                {phase === AppPhase.Checking && (
-                    <div className="progressIndicatorCard" style={{
-                        position: "fixed", inset: 0, display: "flex",
-                        justifyContent: "center", alignItems: "center",
-                    }}>
-                        <ProgressIndicator />
-                    </div>
-                )}
+                {checkingContent}
 
                 <Container
                     id="splashScreen"
@@ -574,15 +595,58 @@ export class App extends UIComponent<{}, IAppState> {
     }
 
     /**
-     * Checks if the backend is reachable and initialised. If not, opens the setup dialog.
-     * Once the backend is ready, proceeds with data model initialisation.
-     *
-     * @returns A promise that resolves when the check is complete.
+     * Retries the backend health check after a connection failure.
      */
+    private handleRetryConnection = (): void => {
+        void this.setStatePromise({ backendUnreachable: false, startupError: undefined }).then(() => {
+            return this.checkBackendThenInitialize();
+        });
+    };
+
+    private renderBackendUnreachable(): ComponentChild {
+        return (
+            <div className="backend-unreachable-card" style={{
+                position: "fixed", inset: 0, display: "flex",
+                flexDirection: "column", justifyContent: "center", alignItems: "center",
+            }}>
+                <div className="backend-unreachable-content">
+                    <div className="backend-unreachable-icon">⚠️</div>
+                    <h2>Server Unreachable</h2>
+                    <p>
+                        The Animada Score Book server could not be reached.
+                        Make sure the backend is running and try again.
+                    </p>
+                    <button className="du-btn du-btn-primary" onClick={this.handleRetryConnection}>
+                        Retry
+                    </button>
+                </div>
+            </div>
+        );
+    }
+
+    private renderStartupError(error: string): ComponentChild {
+        return (
+            <div className="backend-unreachable-card" style={{
+                position: "fixed", inset: 0, display: "flex",
+                flexDirection: "column", justifyContent: "center", alignItems: "center",
+            }}>
+                <div className="backend-unreachable-content">
+                    <div className="backend-unreachable-icon">⚠️</div>
+                    <h2>Connection Error</h2>
+                    <pre className="startup-error-message">{error}</pre>
+                    <button className="du-btn du-btn-primary" onClick={this.handleRetryConnection}>
+                        Retry
+                    </button>
+                </div>
+            </div>
+        );
+    }
+
     private async checkBackendThenInitialize(): Promise<void> {
         let health: {
             status: string; configLoaded: boolean; configError?: string;
-            initialized: boolean; hasUsers: boolean; dbError?: string;
+            initialized: boolean; hasUsers: boolean; dbStatus?: string; dbError?: string;
+            engine?: string; host?: string; port?: number; database?: string;
         } | undefined;
 
         try {
@@ -593,7 +657,8 @@ export class App extends UIComponent<{}, IAppState> {
         }
 
         if (!health) {
-            // Backend not reachable — handled by the splash screen with a progress indicator.
+            this.setState({ backendUnreachable: true });
+
             return;
         }
 
@@ -605,6 +670,23 @@ export class App extends UIComponent<{}, IAppState> {
             });
 
             return;
+        }
+
+        if (health.status === "error") {
+            const { dbStatus, dbError: errorMsg, engine, host, port, database } = health;
+
+            if (dbStatus === "db_unreachable") {
+                const connectionInfo = `${engine}://${host}:${port ?? ""}/${database ?? ""}`;
+                this.setState({
+                    startupError: `${errorMsg ?? "Database unreachable"}\n\n`
+                        + `Connection: ${connectionInfo}\n`
+                        + "Is the database server running and is the IP address correct?",
+                });
+
+                return;
+            }
+
+            // Schema mismatch — fall through to the dbError path below.
         }
 
         if (!health.initialized) {

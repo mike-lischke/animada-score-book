@@ -224,6 +224,13 @@ export class MySqlAdapter implements IDatabaseAdapter {
         return this.pool !== undefined;
     }
 
+    public async ping(): Promise<boolean> {
+        const pool = this.getPoolOrThrow();
+        const [rows] = await pool.execute<RowDataPacket[]>("SELECT 1 AS result");
+
+        return rows.length > 0 && (rows[0] as { result: number; }).result === 1;
+    }
+
     public async query<T extends DbRow = DbRow>(sql: string, params?: unknown[]): Promise<T[]> {
         const pool = this.getPoolOrThrow();
         const [rows] = await pool.execute<RowDataPacket[]>(sql, params);
