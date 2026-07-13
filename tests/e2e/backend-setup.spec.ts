@@ -290,14 +290,15 @@ test.describe("Setup: fresh start, database has data", () => {
 // ── Unreachable ──
 
 test.describe("Setup: backend unreachable", () => {
-    test("shows progress indicator when backend is unreachable", async ({ page }) => {
+    test("shows server unreachable error when backend is unreachable", async ({ page }) => {
         await page.route("**/api**", async (route) => {
             await route.fulfill({ status: 502, contentType: "text/plain", body: "Bad Gateway" });
         });
 
         await page.goto("/");
 
-        // The app stays on the splash screen with a progress indicator.
-        await expect(page.locator(".progressIndicatorCard")).toBeVisible({ timeout: 5000 });
+        // The app shows a "Server Unreachable" error card with a retry button.
+        await expect(page.locator(".backend-unreachable-card")).toBeVisible({ timeout: 5000 });
+        await expect(page.locator(".backend-unreachable-card")).toContainText("Server Unreachable");
     });
 });
