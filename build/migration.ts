@@ -26,6 +26,7 @@ const seedPath = resolve(process.cwd(), "build", "seed.sql");
 
 export interface IMigrationRow {
     filename: string;
+    checksum: string;
 }
 
 /**
@@ -277,10 +278,12 @@ const applyMigrations = async (pool: IMigrationPool, engine: string): Promise<vo
         )`,
     );
 
-    const appliedResult = await pool.query("SELECT filename FROM migration_history ORDER BY filename");
+    const appliedResult = await pool.query(
+        "SELECT filename, checksum FROM migration_history ORDER BY filename",
+    );
     const appliedRows = extractRows<IMigrationRow>(appliedResult);
-    const applied = new Set(appliedRows.map((r) => {
-        return r.filename;
+    const applied = new Map(appliedRows.map((r) => {
+        return [r.filename, r.checksum];
     }));
 
     // Collect migration files in timestamp order.
@@ -300,6 +303,25 @@ const applyMigrations = async (pool: IMigrationPool, engine: string): Promise<vo
         console.log("No migration files found.");
 
         return;
+    }
+
+    // Verify checksums of already-applied migrations. A mismatch means the file was
+    // changed after being applied — likely from a rebase. The branch DB must be dropped.
+    for (const file of files) {
+        const storedChecksum = applied.get(file);
+
+        if (storedChecksum !== undefined) {
+            const filePath = join(migrationsDir, file);
+            const rawSql = readFileSync(filePath, "utf-8");
+            const currentChecksum = checksum(rawSql);
+
+            if (currentChecksum !== storedChecksum) {
+                throw new Error(
+                    `Migration "${file}" was modified after it was applied.\n`
+                    + `Drop the branch database and restart the server to re-apply all migrations.`,
+                );
+            }
+        }
     }
 
     const pending = files.filter((f) => {
