@@ -12,7 +12,7 @@ import { resolve } from "node:path";
 
 import { convertErrorToString } from "../core/utils.js";
 import { Auth } from "./Auth.js";
-import { DatabaseEngine, schemaVersion, type IDatabaseAdapter, type IDatabaseConfig } from "./database.js";
+import { DatabaseEngine, type IDatabaseAdapter, type IDatabaseConfig } from "./database.js";
 import { MySqlAdapter } from "./mysql-adapter.js";
 import { PostgresAdapter } from "./postgres-adapter.js";
 import { type IServerConfig } from "./config.js";
@@ -447,16 +447,13 @@ export class Router {
         let dbError: string | undefined;
         let dbStatus: string | undefined;
 
-        const dbVersion = await this.auth.adapter.getSchemaVersion();
-
-        if (dbVersion === 0) {
+        // Check if migration_history exists to confirm the DB was properly initialised.
+        try {
+            await this.auth.adapter.query("SELECT 1 FROM migration_history LIMIT 1");
+        } catch {
             dbStatus = "schema_mismatch";
-            dbError = "Database schema is from an older version without version tracking. "
-                + "A reset is required.";
-        } else if (dbVersion < schemaVersion) {
-            dbStatus = "schema_mismatch";
-            dbError = `Database schema is version ${dbVersion}, `
-                + `but version ${schemaVersion} is required. Use Reset Database to upgrade.`;
+            dbError = "Database has not been initialised with the migration system. "
+                + "Restart the server to apply migrations.";
         }
 
         const rows = await this.auth.adapter.query<{ cnt: number; }>(

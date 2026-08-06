@@ -9,6 +9,7 @@ import { existsSync, mkdirSync } from "node:fs";
 import { createServer } from "node:http";
 
 import { convertErrorToString } from "../core/utils.js";
+import { runMigrations } from "../../build/migration.js";
 import { Auth } from "./Auth.js";
 
 import { loadConfig, uploadsPath } from "./config.js";
@@ -29,23 +30,30 @@ const main = (): void => {
     // Try to initialise with saved or default config on startup.
     auth.adapter.testConnection(config.database).then((result) => {
         if (result.success) {
-            return auth.adapter.initialize(config.database).then(() => {
-                const { engine, host, port, database } = config.database;
-                console.log(
-                    `Backend initialised: ${engine} @ ${host}:${port}/${database}`,
-                );
+            return runMigrations(config.database).then((effectiveDb) => {
+                // Use the branch-specific database name.
+                config.database.database = effectiveDb;
 
-                // Load seed only if tables are empty (avoid duplicates).
-                return auth.adapter.query<{ cnt: number; }>(
-                    "SELECT COUNT(*) AS cnt FROM folders",
-                ).then((rows) => {
-                    if ((rows[0]?.cnt ?? 0) === 0) {
-                        return router.seedIfExists(auth.adapter);
-                    }
+                return auth.adapter.initialize(config.database).then(() => {
+                    const { engine, host, port, database } = config.database;
+                    console.log(
+                        `Backend initialised: ${engine} @ ${host}:${port}/${database}`,
+                    );
 
-                    return undefined;
-                }).then(() => {
-                    return router.seedAnonymousUser(auth.adapter);
+                    // Load seed only if tables are empty (avoid duplicates).
+                    // Seed data is also applied by the migration runner for fresh DBs;
+                    // this is a safety net for the anonymous user seed.
+                    return auth.adapter.query<{ cnt: number; }>(
+                        "SELECT COUNT(*) AS cnt FROM folders",
+                    ).then((rows) => {
+                        if ((rows[0]?.cnt ?? 0) === 0) {
+                            return router.seedIfExists(auth.adapter);
+                        }
+
+                        return undefined;
+                    }).then(() => {
+                        return router.seedAnonymousUser(auth.adapter);
+                    });
                 });
             });
         }

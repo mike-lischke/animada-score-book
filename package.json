@@ -25,7 +25,9 @@
         "generate-themes": "tsx build/generate-daisyui-themes.ts",
         "fix-svgs": "tsx build/fix-svg-attributes.ts",
         "start": "tsx src/server/backend.ts",
-        "start-debug": "JWT_SECRET=\"for-debugging\" tsx src/server/backend.ts"
+        "start-debug": "JWT_SECRET=\"for-debugging\" tsx src/server/backend.ts",
+        "db:cleanup": "tsx build/db-cleanup.ts",
+        "db:migrate": "tsx build/migration.ts"
     },
     "dependencies": {
         "@mediabunny/mp3-encoder": "1.39.1",
