@@ -34,7 +34,7 @@
         "@vscode/codicons": "0.0.44",
         "classnames": "2.5.1",
         "daisyui": "5.5.19",
-        "jsonwebtoken": "^9.0.3",
+        "jsonwebtoken": "9.0.3",
         "mediabunny": "1.39.1",
         "mime-types": "3.0.2",
         "mysql2": "3.16.0",

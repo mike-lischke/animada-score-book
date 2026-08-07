@@ -111,13 +111,15 @@ const main = async (): Promise<void> => {
         });
 
         try {
-            const [rows] = await pool.execute(
-                "SHOW DATABASES LIKE ?",
-                [`${baseName}%`],
-            );
-            const dbNames = (rows as Array<{ Database: string; }>).map((r) => {
-                return r.Database;
-            });
+            const result = await pool.query("SHOW DATABASES");
+            const rows = (result as [Array<{ Database: string; }>, unknown])[0];
+            const dbNames = rows
+                .map((r) => {
+                    return r.Database;
+                })
+                .filter((name) => {
+                    return name.startsWith(baseName);
+                });
 
             checkOrphans(dbNames, expectedDbs, prefix);
         } finally {
