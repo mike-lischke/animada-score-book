@@ -7,7 +7,7 @@ import { ComponentChild, createRef } from "preact";
 
 import { Semaphore } from "../../../supplement/Semaphore.js";
 import { Button } from "../framework/Button.js";
-import { Codicon } from "../framework/Codicon.js";
+import { UIIcon } from "../framework/UIIcon.js";
 import { Container } from "../framework/Container.js";
 import { Dialog, DialogResponseClosure } from "../framework/Dialog.js";
 import { Icon } from "../framework/Icon.js";
@@ -117,7 +117,7 @@ export class ConfirmDialog extends UIComponent<{}, IConfirmDialogState> {
                 closeOnBackdropClick={closeOnBackdropClick}
                 caption={
                     <>
-                        <Icon src={Codicon.Question} />
+                        <Icon src={UIIcon.Question} />
                         <Label>{title ?? "Confirm"}</Label>
                     </>
                 }

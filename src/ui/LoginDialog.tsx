@@ -7,7 +7,7 @@ import { createRef, type ComponentChild } from "preact";
 
 import { Semaphore } from "../supplement/Semaphore.js";
 import { Button } from "../components/ui/framework/Button.js";
-import { Codicon } from "../components/ui/framework/Codicon.js";
+import { UIIcon } from "../components/ui/framework/UIIcon.js";
 import { Container } from "../components/ui/framework/Container.js";
 import { Dialog } from "../components/ui/framework/Dialog.js";
 import { Dropdown, type IDropdownItem } from "../components/ui/framework/Dropdown.js";
@@ -147,7 +147,7 @@ export class LoginDialog extends UIComponent<ILoginDialogProperties, ILoginDialo
                     orientation={Orientation.LeftToRight}
                     crossAlignment={ChildAlignment.Center}
                 >
-                    <Icon src={Codicon.Account} style={{ fontSize: "24px", marginRight: "8px" }} />
+                    <Icon src={UIIcon.Account} style={{ fontSize: "24px", marginRight: "8px" }} />
                     Sign In
                 </Container>
 

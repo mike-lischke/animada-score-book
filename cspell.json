@@ -88,6 +88,8 @@
         "Millis",
         "OOOGGGWWW",
         "TINYINT",
+        "Thumbsdown",
+        "Thumbsup",
         "VARCHAR",
         "alttext",
         "connectionrefused",

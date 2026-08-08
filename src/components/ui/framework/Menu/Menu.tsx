@@ -11,7 +11,7 @@ import { Button } from "../Button.js";
 import { Icon } from "../Icon.js";
 import { UIComponent, type ICommonUIProperties } from "../UIComponent.js";
 import { getNewId } from "../../../../core/utils.js";
-import { Codicon } from "../Codicon.js";
+import { UIIcon } from "../UIIcon.js";
 import { type IMenuItem, MenuItem } from "./MenuItem.js";
 
 interface IMenuProperties extends ICommonUIProperties {
@@ -22,7 +22,7 @@ interface IMenuProperties extends ICommonUIProperties {
     caption?: string;
 
     /** Shown as the trigger button icon when used standalone. */
-    icon?: Codicon;
+    icon?: UIIcon;
 
     /** Called when an item is clicked. The item id is passed. */
     onItemClick?: (id: string) => void;

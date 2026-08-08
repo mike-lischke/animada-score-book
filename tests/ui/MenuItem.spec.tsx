@@ -6,7 +6,7 @@
 import { cleanup, render, type RenderResult } from "@testing-library/preact";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { Codicon } from "../../src/components/ui/framework/Codicon.js";
+import { UIIcon } from "../../src/components/ui/framework/UIIcon.js";
 import { type IMenuItem, MenuItem } from "../../src/components/ui/framework/Menu/MenuItem.js";
 
 describe("MenuItem", () => {
@@ -30,10 +30,10 @@ describe("MenuItem", () => {
     });
 
     it("renders an icon when provided", () => {
-        const item: IMenuItem = { id: "test", label: "Save", icon: Codicon.Save };
+        const item: IMenuItem = { id: "test", label: "Save", icon: UIIcon.Save };
 
         renderResult = render(<MenuItem item={item} />);
-        const icon = renderResult.container.querySelector(".codicon-save");
+        const icon = renderResult.container.querySelector("svg.icon[data-icon='Save']");
 
         expect(icon).toBeTruthy();
     });
@@ -52,7 +52,7 @@ describe("MenuItem", () => {
         const item: IMenuItem = { id: "sub", label: "More", hasSubMenu: true };
 
         renderResult = render(<MenuItem item={item} />);
-        const icon = renderResult.container.querySelector(".codicon-chevron-right");
+        const icon = renderResult.container.querySelector("svg.icon[data-icon='ChevronRight']");
 
         expect(icon).toBeTruthy();
     });

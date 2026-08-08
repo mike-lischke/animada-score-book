@@ -6,7 +6,7 @@
 import { ComponentChild, createRef } from "preact";
 
 import { Button } from "../components/ui/framework/Button.js";
-import { Codicon } from "../components/ui/framework/Codicon.js";
+import { UIIcon } from "../components/ui/framework/UIIcon.js";
 import { Container } from "../components/ui/framework/Container.js";
 import { Dialog, DialogResponseClosure } from "../components/ui/framework/Dialog.js";
 import { Dropdown, type IDropdownItem } from "../components/ui/framework/Dropdown.js";
@@ -190,7 +190,7 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
                                     void this.handleEditClick(u, trigger);
                                 }}
                             >
-                                <Icon src={Codicon.Edit} />
+                                <Icon src={UIIcon.Edit} />
                             </Button>
                             <Button
                                 imageOnly
@@ -203,7 +203,7 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
                                     this.handleResetPasswordClick(u, trigger);
                                 }}
                             >
-                                <Icon src={Codicon.Key} />
+                                <Icon src={UIIcon.Key} />
                             </Button>
                             <Button
                                 imageOnly
@@ -213,7 +213,7 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
                                     void this.handleDeleteUser(u);
                                 }}
                             >
-                                <Icon src={Codicon.Trash} />
+                                <Icon src={UIIcon.Trash} />
                             </Button>
                         </Container>
                     );
@@ -253,7 +253,7 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
                         }}
                     >
                         <Icon
-                            src={Codicon.Account}
+                            src={UIIcon.Account}
                         />
                         {label}
                     </span>
@@ -274,7 +274,7 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
                             <Label caption={group.name} />
                             {group.hasPassword && (
                                 <Icon
-                                    src={Codicon.Lock}
+                                    src={UIIcon.Lock}
                                     className="user-group-lock-icon"
                                 />
                             )}
@@ -290,7 +290,7 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
                                     void this.handleEditGroupClick(group, trigger);
                                 }}
                             >
-                                <Icon src={Codicon.Edit} />
+                                <Icon src={UIIcon.Edit} />
                             </Button>
                         )}
                         {isFullAdmin && group.name !== "Admins" && (
@@ -302,7 +302,7 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
                                     void this.handleDeleteGroup(group);
                                 }}
                             >
-                                <Icon src={Codicon.Trash} />
+                                <Icon src={UIIcon.Trash} />
                             </Button>
                         )}
                     </Container>
@@ -332,7 +332,7 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
                         orientation={Orientation.LeftToRight}
                         crossAlignment={ChildAlignment.Center}
                     >
-                        <Icon src={Codicon.Organization} style={{ fontSize: "24px", marginRight: "8px" }} />
+                        <Icon src={UIIcon.Organization} style={{ fontSize: "24px", marginRight: "8px" }} />
                         {isFullAdmin ? "Users & Groups" : "My Groups"}
                     </Container>
 
@@ -463,7 +463,7 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
                         orientation={Orientation.LeftToRight}
                         crossAlignment={ChildAlignment.Center}
                     >
-                        <Icon src={Codicon.Organization} style={{ fontSize: "24px", marginRight: "8px" }} />
+                        <Icon src={UIIcon.Organization} style={{ fontSize: "24px", marginRight: "8px" }} />
                         {title}
                     </Container>
 
@@ -601,7 +601,7 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
                                                         this.handleRemoveMember(m.id);
                                                     }}
                                                 >
-                                                    <Icon src={Codicon.Close} style={{ fontSize: "10px" }} />
+                                                    <Icon src={UIIcon.Close} style={{ fontSize: "10px" }} />
                                                 </Button>
                                             </Container>
                                         );

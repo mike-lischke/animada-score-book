@@ -3,7 +3,6 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import "@vscode/codicons/dist/codicon.css";
 import "./App.scss";
 import "./print.scss";
 import "./tailwind.css";
@@ -34,7 +33,7 @@ import { ConfirmDialog } from "./components/ui/composites/ConfirmDialog.js";
 import {
     ValueDialog, ValueEditorEntryType, type IValueEditorValueEntry
 } from "./components/ui/composites/ValueDialog.js";
-import { Codicon } from "./components/ui/framework/Codicon.js";
+import { UIIcon } from "./components/ui/framework/UIIcon.js";
 import { CollapsingTopContainer } from "./components/ui/framework/CollapsingTopContainer.js";
 import { DialogResponseClosure } from "./components/ui/framework/Dialog.js";
 import { DrawerSidebar } from "./components/ui/framework/DrawerSidebar.js";
@@ -45,6 +44,7 @@ import { PrintDialog } from "./components/ui/Print/PrintDialog.js";
 import { PrintView, type IPrintOptions } from "./components/ui/Print/PrintView.js";
 import { AppStorage, type IUISettings } from "./core/AppStorage.js";
 import { Arrangement } from "./core/Arrangement.js";
+import { getSharedAudioContext } from "./core/audio-context.js";
 import {
     SbDmEntityType, ScoreBookDataModel, type ISbDmScore, type ISbDmScoreFolder
 } from "./core/ScoreBookDataModel.js";
@@ -52,25 +52,24 @@ import { ArrangementMigrator } from "./core/serialisation/migration/ArrangementM
 import {
     stringifyPackedArrangement, tryParsePackedArrangement
 } from "./core/serialisation/snapshot-packing.js";
+import { mixerStepIndex, tutorialSteps } from "./core/TutorialSteps.js";
 import type { IArrangementSnapshot } from "./core/types/general.js";
 import { UndoManager } from "./core/UndoManager.js";
 import { convertErrorToString } from "./core/utils.js";
-import { getSharedAudioContext } from "./core/audio-context.js";
 import { ArrangementPlayer } from "./player/ArrangementPlayer.js";
 import { AudioBufferPlayer } from "./player/AudioBufferPlayer.js";
 import type { ScoreBookUiServices } from "./player/types.js";
 import { escapeStack } from "./supplement/EscapeStack.js";
 import { requisitions } from "./supplement/Requisitions.js";
+import { AdminSetupDialog } from "./ui/AdminSetupDialog.js";
 import { BackendDisconnectedDialog } from "./ui/BackendDisconnectedDialog.js";
 import { BackendSetupDialog } from "./ui/BackendSetupDialog.js";
 import { LoginDialog } from "./ui/LoginDialog.js";
-import { AdminSetupDialog } from "./ui/AdminSetupDialog.js";
+import { PermissionEditor } from "./ui/PermissionEditor.js";
 import { SelectionManager } from "./ui/SelectionManager.js";
 import { SettingsDialog } from "./ui/SettingsDialog.js";
 import { TutorialWizard } from "./ui/TutorialWizard.js";
 import { UserGroupEditor } from "./ui/UserGroupEditor.js";
-import { PermissionEditor } from "./ui/PermissionEditor.js";
-import { tutorialSteps, mixerStepIndex } from "./core/TutorialSteps.js";
 
 const ScoreLibrary = lazy(() => {
     return import("./ui/ScoreLibrary.js").then((m) => {
@@ -303,7 +302,7 @@ export class App extends UIComponent<{}, IAppState> {
                         }}
                     >
                         <Icon
-                            src={headerPinned ? Codicon.Pinned : Codicon.Pin}
+                            src={headerPinned ? UIIcon.Pinned : UIIcon.Pin}
                             data-tooltip={headerPinned ? "Pinned Header" : "Automatic Header"}
                         />
                     </Button>
@@ -402,7 +401,7 @@ export class App extends UIComponent<{}, IAppState> {
                                                         onClick={this.handleDisplayOptionsClick}
                                                     >
                                                         <Icon
-                                                            src={Codicon.Gear}
+                                                            src={UIIcon.Gear}
                                                             data-tooltip="inherit"
                                                         />
                                                     </Button>
@@ -415,7 +414,7 @@ export class App extends UIComponent<{}, IAppState> {
                                                         onClick={this.handleScoreLibraryClick}
                                                     >
                                                         <Icon
-                                                            src={Codicon.Library}
+                                                            src={UIIcon.Library}
                                                             data-tooltip="inherit"
                                                         />
                                                     </Button>
@@ -429,14 +428,14 @@ export class App extends UIComponent<{}, IAppState> {
                                                         onClick={this.handlePrintClick}
                                                     >
                                                         <Icon
-                                                            src={Codicon.FilePdf}
+                                                            src={UIIcon.FilePdf}
                                                             data-tooltip="inherit"
                                                         />
                                                     </Button>
                                                     {this.dataModel.authenticated ? (
                                                         <Dropdown
                                                             id="userMenu"
-                                                            icon={<Icon src={Codicon.Account} />}
+                                                            icon={<Icon src={UIIcon.Account} />}
                                                             items={this.buildUserMenuItems()}
                                                             closeOnSelect
                                                             style={{ backgroundColor: isAdmin ? "tomato" : undefined }}
@@ -450,7 +449,7 @@ export class App extends UIComponent<{}, IAppState> {
                                                             onClick={this.handleSignInClick}
                                                         >
                                                             <Icon
-                                                                src={Codicon.SignIn}
+                                                                src={UIIcon.SignIn}
                                                                 data-tooltip="inherit"
                                                             />
                                                         </Button>
@@ -1094,26 +1093,26 @@ export class App extends UIComponent<{}, IAppState> {
         if (activeGroup) {
             items.push({
                 label: activeGroup.name,
-                icon: <Icon src={Codicon.Organization} />,
+                icon: <Icon src={UIIcon.Organization} />,
             });
         } else {
             items.push({
                 label: user?.displayName ?? user?.username ?? "",
-                icon: <Icon src={Codicon.Account} />,
+                icon: <Icon src={UIIcon.Account} />,
             });
         }
 
         if (user?.isAdmin) {
             items.push({
                 label: "Users & Groups",
-                icon: <Icon src={Codicon.Organization} />,
+                icon: <Icon src={UIIcon.Organization} />,
                 onClick: () => {
                     this.userGroupEditorRef.current?.open();
                 },
             });
             items.push({
                 label: "Reset Backend",
-                icon: <Icon src={Codicon.Server} />,
+                icon: <Icon src={UIIcon.Server} />,
                 onClick: () => {
                     void this.backendSetupDialogRef.current?.show({ mode: "admin" });
                 },
@@ -1121,7 +1120,7 @@ export class App extends UIComponent<{}, IAppState> {
         } else if (user) {
             items.push({
                 label: "My Groups",
-                icon: <Icon src={Codicon.Organization} />,
+                icon: <Icon src={UIIcon.Organization} />,
                 onClick: () => {
                     this.userGroupEditorRef.current?.open();
                 },
@@ -1130,7 +1129,7 @@ export class App extends UIComponent<{}, IAppState> {
 
         items.push({
             label: "Sign Out",
-            icon: <Icon src={Codicon.SignOut} />,
+            icon: <Icon src={UIIcon.SignOut} />,
             onClick: () => {
                 void this.handleLogoutClick();
             },
@@ -1268,7 +1267,7 @@ export class App extends UIComponent<{}, IAppState> {
                     const result = await this.valueDialogRef.current?.show(
                         "addFolderDialog",
                         "Add New Folder",
-                        Codicon.Add,
+                        UIIcon.Add,
                         [{
                             type: ValueEditorEntryType.Title,
                             id: "folderNameDescription",
@@ -1335,7 +1334,7 @@ export class App extends UIComponent<{}, IAppState> {
                         const result = await this.valueDialogRef.current?.show(
                             "importScoreDialog",
                             "Import Score",
-                            Codicon.CloudDownload,
+                            UIIcon.CloudDownload,
                             [{
                                 type: ValueEditorEntryType.Title,
                                 id: "importScoreDescription",
@@ -1400,7 +1399,7 @@ export class App extends UIComponent<{}, IAppState> {
                     const result = await this.valueDialogRef.current?.show(
                         "renameFolderDialog",
                         "Rename Folder",
-                        Codicon.Rename,
+                        UIIcon.Rename,
                         [{
                             type: ValueEditorEntryType.Title,
                             id: "renameFolderDescription",
@@ -1563,6 +1562,7 @@ export class App extends UIComponent<{}, IAppState> {
         window.addEventListener("keydown", (event) => {
             this.handleKeyDown(event);
         });
+
         window.addEventListener("keyup", (event) => {
             this.handleKeyUp(event);
         });
@@ -1703,17 +1703,22 @@ export class App extends UIComponent<{}, IAppState> {
 
         let text: string;
         let tooltip: string;
+        let icon: ComponentChild;
 
         if (showHistory) {
             tooltip = "Hide Notifications";
-            text = silent ? "$(bell-slash)" : "$(bell)";
+            text = "";
+            icon = <Icon src={silent ? UIIcon.BellSlash : UIIcon.Bell} width="16px" height="16px" />;
         } else {
             if (silent) {
-                text = newCount === 0 ? "$(bell-slash)" : "$(bell-slash-dot)";
+                icon = <Icon src={newCount === 0 ? UIIcon.BellSlash : UIIcon.BellSlashDot}
+                    width="16px" height="16px" />;
             } else {
-                text = newCount === 0 ? "$(bell)" : "$(bell-dot)";
+                icon = <Icon src={newCount === 0 ? UIIcon.Bell : UIIcon.BellDot}
+                    width="16px" height="16px" />;
             }
 
+            text = newCount === 0 ? "" : newCount.toString();
             tooltip = newCount === 0 ? "No" : newCount.toString();
             if (newCount === 0) {
                 if (totalCount > 0) {
@@ -1730,6 +1735,7 @@ export class App extends UIComponent<{}, IAppState> {
             this.notificationItem = Statusbar.createStatusBarItem({
                 id: "showNotificationHistory",
                 text,
+                icon,
                 tooltip,
                 command: "notifications:toggleHistory",
                 alignment: StatusBarAlignment.Right,
@@ -1737,6 +1743,7 @@ export class App extends UIComponent<{}, IAppState> {
             });
         } else {
             this.notificationItem.text = text;
+            this.notificationItem.icon = icon;
             this.notificationItem.tooltip = tooltip;
         }
 

@@ -423,7 +423,7 @@ test.describe("Users & Groups Dialog", () => {
         // Percussion has a password → lock icon should be present.
         const percussionRow = dialog.locator(".form-row").filter({ hasText: "Percussion" });
 
-        await expect(percussionRow.locator(".codicon-lock")).toBeVisible();
+        await expect(percussionRow.locator("svg.icon[data-icon='Lock']")).toBeVisible();
     });
 
     test("closes the dialog on backdrop click", async ({ page }) => {

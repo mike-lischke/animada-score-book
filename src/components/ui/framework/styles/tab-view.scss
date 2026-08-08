@@ -140,7 +140,7 @@
 
                 background-color: var(--tab-inactiveForeground);
 
-                &.codicon {
+                &:is(svg) {
                     background: none;
                     color: var(--tab-inactiveForeground);
                 }
@@ -149,7 +149,7 @@
             &.selected .icon {
                 background-color: var(--tab-activeForeground);
 
-                &.codicon {
+                &:is(svg) {
                     background: none;
                     color: var(--tab-activeForeground);
                 }

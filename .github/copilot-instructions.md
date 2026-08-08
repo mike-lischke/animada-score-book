@@ -86,6 +86,7 @@ All UI components extend `UIComponent<P, S>` (not raw `Component`). Key patterns
 - During active feature development (explicitly stated), do not constantly run the test suite — failures are expected. Wait for explicit instruction to run tests again. However, always run TS/linter checks after any code change.
 - Follow the coding guidelines laid out in the eslint.json and tsconfig.json files, as well as the conventions in this instructions file. If you notice any inconsistencies or missing rules, ask the user before making changes.
 - Place static blocks at the end of the class, after all methods. Static blocks are for static initialization only, not for general code execution.
+- Never add a suppression comment (`// @ts-ignore` or `// eslint-disable-next-line` or `// spell-checker: disable`) without first asking the user. If a suppression is necessary, add a comment explaining why it is safe and what the alternative would be.
 
 ### Git Commit Messages
 - Use present tense, imperative mood: "Fix bug" not "Fixed bug" or "Fixes bug".

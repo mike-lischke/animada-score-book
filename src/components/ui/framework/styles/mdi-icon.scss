@@ -1,0 +1,24 @@
+/*
+ * Copyright (c) Mike Lischke. All rights reserved.
+ * Licensed under the MIT License. See License.txt in the project root for license information.
+ */
+
+.mdi-icon {
+    display: inline-flex;
+    flex-shrink: 0;
+    vertical-align: middle;
+
+    &.mdi-spin {
+        animation: mdi-spin 2s infinite linear;
+    }
+}
+
+@keyframes mdi-spin {
+    from {
+        transform: rotate(0deg);
+    }
+
+    to {
+        transform: rotate(360deg);
+    }
+}

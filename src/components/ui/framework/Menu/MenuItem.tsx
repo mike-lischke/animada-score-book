@@ -7,12 +7,12 @@ import { ComponentChild } from "preact";
 
 import { Icon } from "../Icon.js";
 import { UIComponent, type ICommonUIProperties } from "../UIComponent.js";
-import { Codicon } from "../Codicon.js";
+import { UIIcon } from "../UIIcon.js";
 
 export interface IMenuItem {
     id: string;
     label: string;
-    icon?: Codicon;
+    icon?: UIIcon;
 
     /** If true, shows a right-pointing arrow indicating a submenu. */
     hasSubMenu?: boolean;
@@ -53,7 +53,7 @@ export class MenuItem extends UIComponent<IMenuItemViewProperties> {
                 {icon && <Icon src={icon} />}
                 <span>{label}</span>
                 {hasSubMenu && (
-                    <Icon src={Codicon.ChevronRight} style={{ marginLeft: "auto", fontSize: "12px" }} />
+                    <Icon src={UIIcon.ChevronRight} style={{ marginLeft: "auto", fontSize: "12px" }} />
                 )}
             </div>
         );

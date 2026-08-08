@@ -8,7 +8,7 @@ import type { ComponentChild } from "preact";
 import type { UndoManager } from "../../../core/UndoManager.js";
 import { requisitions } from "../../../supplement/Requisitions.js";
 import { Button } from "../framework/Button.js";
-import { Codicon } from "../framework/Codicon.js";
+import { UIIcon } from "../framework/UIIcon.js";
 import { Container } from "../framework/Container.js";
 import { Icon } from "../framework/Icon.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
@@ -69,7 +69,7 @@ export class UndoRedoControls extends UIComponent<IUndoRedoProps, IUndoRedoState
                     imageOnly
                     data-tooltip="Revert your last change"
                 >
-                    <Icon src={Codicon.Discard} data-tooltip="inherit" />
+                    <Icon src={UIIcon.Discard} data-tooltip="inherit" />
                 </Button>
                 <Button
                     disabled={!canRedo}
@@ -77,7 +77,7 @@ export class UndoRedoControls extends UIComponent<IUndoRedoProps, IUndoRedoState
                     imageOnly
                     data-tooltip="Redo the last change you reverted"
                 >
-                    <Icon src={Codicon.Redo} data-tooltip="inherit" />
+                    <Icon src={UIIcon.Redo} data-tooltip="inherit" />
                 </Button>
             </Container>
         );

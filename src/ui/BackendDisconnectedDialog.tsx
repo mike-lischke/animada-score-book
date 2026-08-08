@@ -5,7 +5,7 @@
 
 import { createRef } from "preact";
 
-import { Codicon } from "../components/ui/framework/Codicon.js";
+import { UIIcon } from "../components/ui/framework/UIIcon.js";
 import { UIComponent, type ICommonUIProperties } from "../components/ui/framework/UIComponent.js";
 import { StatusDialog, type IStatusContent } from "../components/ui/composites/StatusDialog.js";
 import { requisitions } from "../supplement/Requisitions.js";
@@ -102,7 +102,7 @@ export class BackendDisconnectedDialog
         switch (phase) {
             case DisconnectPhase.Disconnected: {
                 return {
-                    icon: Codicon.Error,
+                    icon: UIIcon.Error,
                     title: "Backend Connection Lost",
                     message: "The application cannot function without the backend.",
                     detail: errorDetail || undefined,
@@ -112,7 +112,7 @@ export class BackendDisconnectedDialog
 
             case DisconnectPhase.Reconnecting: {
                 return {
-                    icon: Codicon.Sync,
+                    icon: UIIcon.Sync,
                     title: "Backend Connection Lost",
                     message: "The application cannot function without the backend.",
                     detail: `Reconnecting… (attempt ${attemptCount})`,
@@ -122,7 +122,7 @@ export class BackendDisconnectedDialog
 
             case DisconnectPhase.Reconnected: {
                 return {
-                    icon: Codicon.Check,
+                    icon: UIIcon.Check,
                     title: "Backend Connection Restored!",
                     message: "Resuming normal operation…",
                 };

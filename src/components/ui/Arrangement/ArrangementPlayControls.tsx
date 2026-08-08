@@ -14,7 +14,7 @@ import { requisitions } from "../../../supplement/Requisitions.js";
 import { isMobile } from "../../../ui/index.js";
 import { Button } from "../framework/Button.js";
 import { Checkbox } from "../framework/Checkbox.js";
-import { Codicon } from "../framework/Codicon.js";
+import { UIIcon } from "../framework/UIIcon.js";
 import { Container } from "../framework/Container.js";
 import { FieldSet } from "../framework/FieldSet.js";
 import { Icon } from "../framework/Icon.js";
@@ -163,7 +163,7 @@ export class ArrangementPlayControls
                         crossAlignment={ChildAlignment.Center}
                         gap={4}
                     >
-                        <Icon src={Codicon.Pulse} data-tooltip="inherit" />
+                        <Icon src={UIIcon.Pulse} data-tooltip="inherit" />
                         <Slider
                             id="tempoSlider"
                             value={currentTempo}
@@ -192,7 +192,7 @@ export class ArrangementPlayControls
                         crossAlignment={ChildAlignment.Center}
                         gap={4}
                     >
-                        <Icon src={Codicon.Unmute} data-tooltip="inherit" />
+                        <Icon src={UIIcon.Unmute} data-tooltip="inherit" />
                         <Slider
                             id="volumeSlider"
                             value={currentVolume}

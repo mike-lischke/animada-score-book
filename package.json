@@ -30,8 +30,8 @@
         "db:migrate": "tsx build/migration.ts"
     },
     "dependencies": {
+        "@mdi/js": "^7.4.47",
         "@mediabunny/mp3-encoder": "1.39.1",
-        "@vscode/codicons": "0.0.44",
         "classnames": "2.5.1",
         "daisyui": "5.5.19",
         "jsonwebtoken": "9.0.3",

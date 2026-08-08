@@ -77,7 +77,7 @@
             padding: 0;
             height: auto;
 
-            .codicon {
+            .icon:is(svg) {
                 font-size: 22px;
             }
         }
@@ -93,7 +93,7 @@
             user-select: none;
         }
 
-        .codicon {
+        .icon:is(svg) {
             flex: 0 0 auto;
         }
 
@@ -475,7 +475,7 @@
             font-weight: bold;
         }
 
-        .codicon {
+        .icon:is(svg) {
             color: var(--color-base-100);
         }
     }

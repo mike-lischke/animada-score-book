@@ -12,7 +12,7 @@ import {
     SelectionGranularity, type ISelectionDelta, type ISelectionEntry, type ISelectionHitTester,
 } from "../../../ui/selection-types.js";
 import { Button } from "../framework/Button.js";
-import { Codicon } from "../framework/Codicon.js";
+import { UIIcon } from "../framework/UIIcon.js";
 import { Container } from "../framework/Container.js";
 import { Icon } from "../framework/Icon.js";
 import { NoteImage, NoteLength } from "../framework/NoteImage.js";
@@ -177,7 +177,7 @@ export class TrackControls extends UIComponent<ITrackControlsProperties, ITrackC
                         imageOnly
                         onClick={this.toggleMixer}
                     >
-                        <Icon src={Codicon.Settings} width={16} height={16} alt="Collapse mixer" />
+                        <Icon src={UIIcon.Settings} width={16} height={16} alt="Collapse mixer" />
                     </Button>
                     <Container
                         className="trackViewModeToggleGroup"
