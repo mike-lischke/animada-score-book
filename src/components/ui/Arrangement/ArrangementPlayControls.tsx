@@ -9,7 +9,6 @@ import { AppStorage } from "../../../core/AppStorage.js";
 import type { ScoreBookDataModel } from "../../../core/ScoreBookDataModel.js";
 import type { UndoManager } from "../../../core/UndoManager.js";
 import type { ArrangementPlayer } from "../../../player/ArrangementPlayer.js";
-import type { ScoreBookUiServices } from "../../../player/types.js";
 import { requisitions } from "../../../supplement/Requisitions.js";
 import { isMobile } from "../../../ui/index.js";
 import { Button } from "../framework/Button.js";
@@ -32,7 +31,6 @@ import { Dialog } from "../framework/Dialog.js";
 export interface IArrangementPlayControlsProperties extends ICommonUIProperties {
     arrangementPlayer: ArrangementPlayer,
     dataModel: ScoreBookDataModel;
-    services: ScoreBookUiServices;
     undoManager: UndoManager;
 }
 

@@ -6,8 +6,8 @@
 import type { ComponentChild } from "preact";
 
 import type { ISbDmArrangement } from "../../../core/ScoreBookDataModel.js";
-import type { ScoreBookUiServices } from "../../../player/types.js";
 import { requisitions } from "../../../supplement/Requisitions.js";
+import type { SelectionManager } from "../../../ui/SelectionManager.js";
 import {
     SelectionGranularity, type ISelectionDelta, type ISelectionEntry, type ISelectionHitTester,
 } from "../../../ui/selection-types.js";
@@ -18,7 +18,7 @@ export interface IMiniBarViewerProps extends ICommonUIProperties {
     barNumber: number;
     arrangement: ISbDmArrangement;
     stepsPerBar: number;
-    services: ScoreBookUiServices;
+    selectionManager: SelectionManager;
 }
 
 interface IMiniBarViewerState {
@@ -39,14 +39,14 @@ export class MiniBarViewer extends UIComponent<IMiniBarViewerProps, IMiniBarView
     }
 
     public override componentDidMount(): void {
-        const { services } = this.props;
-        services.selectionManager.registerHitTester(this);
+        const { selectionManager } = this.props;
+        selectionManager.registerHitTester(this);
         requisitions.register("selectionChanged", this.handleSelectionChanged);
     }
 
     public override componentWillUnmount(): void {
-        const { services } = this.props;
-        services.selectionManager.unregisterHitTester(this);
+        const { selectionManager } = this.props;
+        selectionManager.unregisterHitTester(this);
         requisitions.unregister("selectionChanged", this.handleSelectionChanged);
     }
 
@@ -126,8 +126,8 @@ export class MiniBarViewer extends UIComponent<IMiniBarViewerProps, IMiniBarView
     }
 
     private handleSelectionChanged = (_delta: ISelectionDelta): Promise<boolean> => {
-        const { barNumber, services } = this.props;
-        const sm = services.selectionManager;
+        const { barNumber, selectionManager } = this.props;
+        const sm = selectionManager;
 
         if (sm.isMeasureSelected(barNumber)) {
             this.setState({ measureSelected: true, selectedTrackIds: new Set() });

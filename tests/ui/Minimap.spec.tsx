@@ -13,7 +13,6 @@ import {
 } from "../../src/core/ScoreBookDataModel.js";
 import type { IScoreMetrics } from "../../src/player/TimeCoordinator.js";
 import { requisitions } from "../../src/supplement/Requisitions.js";
-import type { ScoreBookUiServices } from "../../src/player/types.js";
 import type { SelectionManager } from "../../src/ui/SelectionManager.js";
 
 /**
@@ -231,10 +230,6 @@ describe.sequential("Minimap (component)", () => {
         unregisterHitTester: vi.fn(),
     } as unknown as SelectionManager;
 
-    const services: ScoreBookUiServices = {
-        selectionManager: selectionManagerMock,
-    } as ScoreBookUiServices;
-
     const renderMinimap = (
         props: { arrangement?: ISbDmArrangement; onViewportMoved?: (position: number) => void; } = {}): void => {
         minimapRef = null;
@@ -247,7 +242,7 @@ describe.sequential("Minimap (component)", () => {
                 arrangement={props.arrangement ?? arrangement}
                 scoreMetrics={scoreMetrics}
                 onViewportMoved={props.onViewportMoved}
-                services={services}
+                selectionManager={selectionManagerMock}
             />
         );
 
@@ -442,7 +437,7 @@ describe.sequential("Minimap (component)", () => {
                     }}
                     arrangement={newArrangement}
                     scoreMetrics={scoreMetrics}
-                    services={services}
+                    selectionManager={selectionManagerMock}
                 />
             );
 
@@ -461,7 +456,7 @@ describe.sequential("Minimap (component)", () => {
                     }}
                     arrangement={newArrangement}
                     scoreMetrics={scoreMetrics}
-                    services={services}
+                    selectionManager={selectionManagerMock}
                 />
             );
 

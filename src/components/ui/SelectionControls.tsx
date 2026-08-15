@@ -7,7 +7,6 @@ import { createRef, type ComponentChild, type ContextType } from "preact";
 
 import type { ISbDmArrangement, ScoreBookDataModel } from "../../core/ScoreBookDataModel.js";
 import type { UndoManager } from "../../core/UndoManager.js";
-import type { ScoreBookUiServices } from "../../player/types.js";
 import type { SelectionManager } from "../../ui/SelectionManager.js";
 import { ExpandingSpacer } from "./ExpandingSpacer.js";
 import { Button } from "./framework/Button.js";
@@ -20,7 +19,7 @@ const digitMatcher = /^\d$/;
 
 export interface ISelectionControlsProperties extends ICommonUIProperties {
     dataModel: ScoreBookDataModel;
-    services: ScoreBookUiServices;
+    selectionManager: SelectionManager;
     undoManager: UndoManager;
 }
 
@@ -53,14 +52,13 @@ export class SelectionControls extends UIComponent<ISelectionControlsProperties,
     }
 
     public render(): ComponentChild {
-        const { dataModel, services } = this.props;
+        const { dataModel, selectionManager } = this.props;
         const { addingPolyrhythm } = this.state;
 
         return (
             <OverlayStateContext.Consumer>
                 {(overlayState) => {
                     const arrangement = dataModel.arrangement!;
-                    const selectionManager = services.selectionManager;
 
                     return (
                         <div
@@ -163,9 +161,8 @@ export class SelectionControls extends UIComponent<ISelectionControlsProperties,
     }
 
     private handleClearSounds = () => {
-        const { dataModel, services, undoManager } = this.props;
+        const { dataModel, selectionManager, undoManager } = this.props;
 
-        const selectionManager = services.selectionManager;
         const arrangement = dataModel.arrangement!;
 
         undoManager.edit({
@@ -177,9 +174,8 @@ export class SelectionControls extends UIComponent<ISelectionControlsProperties,
     };
 
     private handleNoteCountInputKeyPress = (event: KeyboardEvent) => {
-        const { dataModel, services } = this.props;
+        const { dataModel, selectionManager } = this.props;
 
-        const selectionManager = services.selectionManager;
         const arrangement = dataModel.arrangement!;
 
         if (event.key === "Enter") {
@@ -191,9 +187,8 @@ export class SelectionControls extends UIComponent<ISelectionControlsProperties,
     };
 
     private onWindowKeyPress = (event: KeyboardEvent) => {
-        const { services } = this.props;
+        const { selectionManager } = this.props;
 
-        const selectionManager = services.selectionManager;
         if (!(event.target instanceof HTMLInputElement) && selectionManager.currentSelection.size
             && this.polyrhythmInputRef.current && digitMatcher.test(event.key)) {
             this.polyrhythmInputRef.current.value = event.key;

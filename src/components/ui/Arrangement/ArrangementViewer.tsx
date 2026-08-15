@@ -11,8 +11,8 @@ import type { UndoManager } from "../../../core/UndoManager.js";
 import { clampValue } from "../../../core/utils.js";
 import type { ArrangementPlayer } from "../../../player/ArrangementPlayer.js";
 import type { PlayerPlayState } from "../../../player/ArrangementPlayer.js";
-import type { ScoreBookUiServices } from "../../../player/types.js";
 import { requisitions } from "../../../supplement/Requisitions.js";
+import type { SelectionManager } from "../../../ui/SelectionManager.js";
 import { GridMeasureViewer } from "../Bar/Grid/GridMeasureViewer.js";
 import { StaffBarViewer } from "../Bar/Staff/StaffBarViewer.js";
 import { StaffPrefixViewer } from "../Bar/Staff/StaffPrefixViewer.js";
@@ -25,7 +25,7 @@ import { TrackControls } from "./TrackControls.js";
 export interface IArrangementViewerProps extends ICommonUIProperties {
     arrangementPlayer: ArrangementPlayer;
     dataModel: ScoreBookDataModel;
-    services: ScoreBookUiServices;
+    selectionManager: SelectionManager;
     undoManager: UndoManager;
     touchEditingEnabled: boolean;
 }
@@ -90,10 +90,10 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
     }
 
     public override componentDidMount(): void {
-        const { arrangementPlayer, services } = this.props;
+        const { arrangementPlayer, selectionManager } = this.props;
         const { autoFollowIsOn, viewerZoom } = this.state;
 
-        services.selectionManager.setEventContainer(this.arrangementViewerRef.current!);
+        selectionManager.setEventContainer(this.arrangementViewerRef.current!);
 
         requisitions.register("settingsChanged", this.handleSettingsChanged);
         requisitions.register("trackViewModeToggled", this.handleTrackViewModeToggled);
@@ -114,7 +114,7 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
     }
 
     public override componentDidUpdate(prevProps: IArrangementViewerProps, prevState: IArrangementViewerState): void {
-        const { arrangementPlayer, services } = this.props;
+        const { arrangementPlayer, selectionManager } = this.props;
         const { autoFollowIsOn, viewerZoom, trackViewMode } = this.state;
 
         if (prevProps.arrangementPlayer !== arrangementPlayer) {
@@ -129,7 +129,7 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
 
         if (prevState.trackViewMode !== trackViewMode) {
             // View mode switched — newly mounted components need the current selection state.
-            services.selectionManager.republishSelection();
+            selectionManager.republishSelection();
         }
 
         this.trackViewerContainerRef.current!.style.zoom = `${viewerZoom}%`;
@@ -154,7 +154,7 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
     }
 
     public override render(): JSX.Element {
-        const { arrangementPlayer, dataModel, services, touchEditingEnabled, undoManager } = this.props;
+        const { arrangementPlayer, dataModel, selectionManager, touchEditingEnabled, undoManager } = this.props;
         const { autoFollowIsOn, trackViewMode, viewerZoom } = this.state;
 
         const arrangement = dataModel.arrangement!;
@@ -181,7 +181,7 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
                             arrangement,
                             arrangementPlayer,
                             touchEditingEnabled,
-                            services,
+                            selectionManager,
                             undoManager,
                             dataModel,
                         };
@@ -245,7 +245,7 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
                     style={{ zoom: `${viewerZoom}%` }}
                 >
                     <TrackControls innerRef={this.trackControlsRef} tracks={arrangement.tracks}
-                        services={services} />
+                        selectionManager={selectionManager} />
                     <Container
                         id="trackViewerHost"
                         innerRef={this.viewerRef}
@@ -268,7 +268,7 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
                     ref={this.minimapRef}
                     arrangement={arrangement}
                     scoreMetrics={arrangementPlayer.scoreMetrics}
-                    services={services}
+                    selectionManager={selectionManager}
                     onViewportMoved={this.handleViewportMoved}
                 />
             </Container >

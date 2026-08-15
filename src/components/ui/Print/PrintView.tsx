@@ -9,7 +9,7 @@ import type { Arrangement } from "../../../core/Arrangement.js";
 import type { ISbDmTrack, ScoreBookDataModel } from "../../../core/ScoreBookDataModel.js";
 import type { UndoManager } from "../../../core/UndoManager.js";
 import type { ArrangementPlayer } from "../../../player/ArrangementPlayer.js";
-import type { ScoreBookUiServices } from "../../../player/types.js";
+import type { SelectionManager } from "../../../ui/SelectionManager.js";
 import { GridMeasureViewer } from "../Bar/Grid/GridMeasureViewer.js";
 import { StaffBarViewer } from "../Bar/Staff/StaffBarViewer.js";
 import { StaffPrefixViewer } from "../Bar/Staff/StaffPrefixViewer.js";
@@ -37,7 +37,7 @@ export interface IPrintViewProps extends ICommonUIProperties {
 
     dataModel: ScoreBookDataModel;
     arrangementPlayer: ArrangementPlayer;
-    services: ScoreBookUiServices;
+    selectionManager: SelectionManager;
     undoManager: UndoManager;
 }
 
@@ -186,7 +186,7 @@ export class PrintView extends UIComponent<IPrintViewProps> {
     }
 
     private renderGridBar(barNumber: number, tracks: ISbDmTrack[]): ComponentChild {
-        const { dataModel, arrangementPlayer, services } = this.props;
+        const { dataModel, arrangementPlayer, selectionManager } = this.props;
 
         return (
             <GridMeasureViewer
@@ -194,7 +194,7 @@ export class PrintView extends UIComponent<IPrintViewProps> {
                 measureNumber={barNumber}
                 dataModel={dataModel}
                 scoreMetrics={arrangementPlayer.scoreMetrics}
-                services={services}
+                selectionManager={selectionManager}
                 tracks={tracks}
             />
         );
@@ -230,7 +230,7 @@ export class PrintView extends UIComponent<IPrintViewProps> {
     }
 
     private renderStaffBar(barNumber: number, tracks: ISbDmTrack[]): ComponentChild {
-        const { arrangement, arrangementPlayer, dataModel, services, undoManager } = this.props;
+        const { arrangement, arrangementPlayer, dataModel, selectionManager, undoManager } = this.props;
         const ownLabel = arrangement.measureLabels[barNumber] as string | undefined;
 
         return (
@@ -240,7 +240,7 @@ export class PrintView extends UIComponent<IPrintViewProps> {
                 arrangement={arrangement}
                 arrangementPlayer={arrangementPlayer}
                 touchEditingEnabled={false}
-                services={services}
+                selectionManager={selectionManager}
                 undoManager={undoManager}
                 dataModel={dataModel}
                 ownLabel={ownLabel}

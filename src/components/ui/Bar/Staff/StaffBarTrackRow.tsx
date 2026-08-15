@@ -12,7 +12,6 @@ import type {
 import type { UndoManager } from "../../../../core/UndoManager.js";
 import type { ArrangementPlayer } from "../../../../player/ArrangementPlayer.js";
 import type { TrackPlayer } from "../../../../player/TrackPlayer.js";
-import type { ScoreBookUiServices } from "../../../../player/types.js";
 import { requisitions } from "../../../../supplement/Requisitions.js";
 import { UIComponent, type ICommonUIProperties } from "../../framework/UIComponent.js";
 import { StaffNoteViewer } from "../../Note/StaffNoteViewer.js";
@@ -25,7 +24,6 @@ export interface IStaffBarTrackRowProps extends ICommonUIProperties {
     trackPlayer: TrackPlayer;
     arrangementPlayer: ArrangementPlayer;
     touchEditingEnabled: boolean;
-    services: ScoreBookUiServices;
     undoManager: UndoManager;
     dataModel: ScoreBookDataModel;
 }

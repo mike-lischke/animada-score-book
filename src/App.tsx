@@ -58,7 +58,6 @@ import { UndoManager } from "./core/UndoManager.js";
 import { convertErrorToString } from "./core/utils.js";
 import { ArrangementPlayer } from "./player/ArrangementPlayer.js";
 import { AudioBufferPlayer } from "./player/AudioBufferPlayer.js";
-import type { ScoreBookUiServices } from "./player/types.js";
 import { escapeStack } from "./supplement/EscapeStack.js";
 import { requisitions } from "./supplement/Requisitions.js";
 import { AdminSetupDialog } from "./ui/AdminSetupDialog.js";
@@ -139,7 +138,7 @@ export class App extends UIComponent<{}, IAppState> {
 
     private dataModel = new ScoreBookDataModel();
 
-    private services: ScoreBookUiServices;
+    private selectionManager: SelectionManager;
     private arrangementPlayer?: ArrangementPlayer;
     private undoManager?: UndoManager;
 
@@ -168,10 +167,7 @@ export class App extends UIComponent<{}, IAppState> {
             backendUnreachable: false,
         };
 
-        const selectionManager = new SelectionManager();
-        this.services = {
-            selectionManager,
-        };
+        this.selectionManager = new SelectionManager();
 
         this.initEventHandlers();
     }
@@ -473,7 +469,6 @@ export class App extends UIComponent<{}, IAppState> {
                                                 <ArrangementPlayControls
                                                     arrangementPlayer={this.arrangementPlayer!}
                                                     dataModel={this.dataModel}
-                                                    services={this.services}
                                                     undoManager={this.undoManager!}
                                                     data-tutorial="playback"
                                                 />
@@ -486,7 +481,7 @@ export class App extends UIComponent<{}, IAppState> {
                                                     {titleBlock}
                                                     {displayMode === DisplayMode.Editing && <ArrangementEditControls
                                                         dataModel={this.dataModel}
-                                                        services={this.services}
+                                                        selectionManager={this.selectionManager}
                                                         undoManager={this.undoManager!}
                                                     />}
                                                 </Container>
@@ -510,7 +505,7 @@ export class App extends UIComponent<{}, IAppState> {
                                         this.arrangementPlayer && <ArrangementViewer
                                             arrangementPlayer={this.arrangementPlayer}
                                             dataModel={this.dataModel}
-                                            services={this.services}
+                                            selectionManager={this.selectionManager}
                                             undoManager={this.undoManager!}
                                             touchEditingEnabled={displayMode === DisplayMode.Editing}
                                         />
@@ -567,7 +562,7 @@ export class App extends UIComponent<{}, IAppState> {
                                     options={printOptions}
                                     dataModel={this.dataModel}
                                     arrangementPlayer={this.arrangementPlayer}
-                                    services={this.services}
+                                    selectionManager={this.selectionManager}
                                     undoManager={this.undoManager}
                                 />
                             )
@@ -1584,7 +1579,7 @@ export class App extends UIComponent<{}, IAppState> {
         switch (event.key) {
             case "Escape": {
                 Overlay.closeAllOverlays();
-                this.services.selectionManager.clearSelection();
+                this.selectionManager.clearSelection();
 
                 break;
             }
@@ -1603,7 +1598,7 @@ export class App extends UIComponent<{}, IAppState> {
                         arrangement: this.dataModel.arrangement!,
                         clearSelection: new Map()
                     });
-                    this.services.selectionManager.clearSelection();
+                    this.selectionManager.clearSelection();
                 }
 
                 break;

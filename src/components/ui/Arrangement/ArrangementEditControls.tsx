@@ -7,8 +7,8 @@ import type { ISbDmArrangement, ISbDmTrack, ScoreBookDataModel } from "../../../
 import type { ISelectionDelta } from "../../../ui/selection-types.js";
 import type { EditCommand_TimeParamsTimeSignature } from "../../../core/types/edit_commands.js";
 import type { UndoManager } from "../../../core/UndoManager.js";
-import type { ScoreBookUiServices } from "../../../player/types.js";
 import { requisitions } from "../../../supplement/Requisitions.js";
+import type { SelectionManager } from "../../../ui/SelectionManager.js";
 import { ExpandingSpacer } from "../ExpandingSpacer.js";
 import { Button } from "../framework/Button.js";
 import { Container } from "../framework/Container.js";
@@ -21,7 +21,7 @@ import { UndoRedoControls } from "./UndoRedoControls.js";
 
 export interface IArrangementEditControlsProperties extends ICommonUIProperties {
     dataModel: ScoreBookDataModel;
-    services: ScoreBookUiServices,
+    selectionManager: SelectionManager,
     undoManager: UndoManager;
 }
 
@@ -74,7 +74,7 @@ export class ArrangementEditControls
     }
 
     public render() {
-        const { dataModel, services, undoManager } = this.props;
+        const { dataModel, selectionManager, undoManager } = this.props;
         const { arePolyrhythms } = this.state;
 
         const arrangementView = dataModel.arrangement!;
@@ -176,7 +176,7 @@ export class ArrangementEditControls
                 <Overlay name="selection_controls">
                     <SelectionControls
                         dataModel={dataModel}
-                        services={services}
+                        selectionManager={selectionManager}
                         undoManager={undoManager}
                     />
                 </Overlay>
@@ -311,9 +311,8 @@ export class ArrangementEditControls
     };
 
     private onSelectionChanged = (_delta: ISelectionDelta): Promise<boolean> => {
-        const { services } = this.props;
+        const { selectionManager } = this.props;
 
-        const selectionManager = services.selectionManager;
         Overlay.toggleOverlay("selection_controls", selectionManager.currentSelection.size ? "show" : "hide");
 
         return Promise.resolve(true);

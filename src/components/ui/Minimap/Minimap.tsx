@@ -8,7 +8,7 @@ import { createRef, type ComponentChild } from "preact";
 import type { ISbDmArrangement } from "../../../core/ScoreBookDataModel.js";
 import { clampValue } from "../../../core/utils.js";
 import type { IScoreMetrics } from "../../../player/TimeCoordinator.js";
-import type { ScoreBookUiServices } from "../../../player/types.js";
+import type { SelectionManager } from "../../../ui/SelectionManager.js";
 import { Container } from "../framework/Container.js";
 import { ChildAlignment, Orientation } from "../framework/ui-types.js";
 import type { ICommonUIProperties } from "../framework/UIComponent.js";
@@ -23,7 +23,7 @@ export interface IVisibleBarRange {
 interface IMinimapProps extends ICommonUIProperties {
     arrangement: ISbDmArrangement;
     scoreMetrics: IScoreMetrics;
-    services: ScoreBookUiServices;
+    selectionManager: SelectionManager;
 
     onViewportMoved?: (position: number) => void;
 }
@@ -103,7 +103,7 @@ export class Minimap extends UIComponent<IMinimapProps> {
      * @returns The rendered minimap content.
      */
     public override render(): ComponentChild {
-        const { arrangement, scoreMetrics, services } = this.props;
+        const { arrangement, scoreMetrics, selectionManager } = this.props;
 
         const className = this.generateFinalClassName(["minimap"]);
         const barCount = arrangement.timeParams.length;
@@ -133,7 +133,7 @@ export class Minimap extends UIComponent<IMinimapProps> {
                                         barNumber={barNumber}
                                         arrangement={arrangement}
                                         stepsPerBar={scoreMetrics.stepsPerBar}
-                                        services={services}
+                                        selectionManager={selectionManager}
                                     />
                                 );
                             })}

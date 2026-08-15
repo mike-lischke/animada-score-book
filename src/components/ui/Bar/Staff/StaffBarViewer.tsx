@@ -8,8 +8,8 @@ import type { ComponentChild } from "preact";
 import type { ISbDmArrangement, ISbDmTrack, ScoreBookDataModel } from "../../../../core/ScoreBookDataModel.js";
 import type { UndoManager } from "../../../../core/UndoManager.js";
 import type { ArrangementPlayer } from "../../../../player/ArrangementPlayer.js";
-import type { ScoreBookUiServices } from "../../../../player/types.js";
 import { requisitions } from "../../../../supplement/Requisitions.js";
+import type { SelectionManager } from "../../../../ui/SelectionManager.js";
 import {
     SelectionGranularity, type ISelectionEntry, type ISelectionHitTester,
 } from "../../../../ui/selection-types.js";
@@ -22,7 +22,7 @@ export interface IBarViewerProps extends ICommonUIProperties {
     arrangement: ISbDmArrangement;
     arrangementPlayer: ArrangementPlayer;
     touchEditingEnabled: boolean;
-    services: ScoreBookUiServices;
+    selectionManager: SelectionManager;
     undoManager: UndoManager;
     dataModel: ScoreBookDataModel;
 
@@ -56,8 +56,8 @@ export class StaffBarViewer extends UIComponent<IBarViewerProps, IBarViewerState
     }
 
     public override componentDidMount(): void {
-        const { services } = this.props;
-        services.selectionManager.registerHitTester(this);
+        const { selectionManager } = this.props;
+        selectionManager.registerHitTester(this);
 
         requisitions.register("arrangementChanged", this.handleArrangementChanged);
     }
@@ -72,8 +72,8 @@ export class StaffBarViewer extends UIComponent<IBarViewerProps, IBarViewerState
     }
 
     public override componentWillUnmount(): void {
-        const { services } = this.props;
-        services.selectionManager.unregisterHitTester(this);
+        const { selectionManager } = this.props;
+        selectionManager.unregisterHitTester(this);
 
         requisitions.unregister("arrangementChanged", this.handleArrangementChanged);
     }
@@ -556,7 +556,7 @@ export class StaffBarViewer extends UIComponent<IBarViewerProps, IBarViewerState
     }
 
     public override render(): ComponentChild {
-        const { barNumber, arrangement, arrangementPlayer, services, touchEditingEnabled, undoManager,
+        const { barNumber, arrangement, arrangementPlayer, touchEditingEnabled, undoManager,
             dataModel, ownLabel, inheritedLabel } = this.props;
         const { tracks } = this.state;
 
@@ -582,7 +582,6 @@ export class StaffBarViewer extends UIComponent<IBarViewerProps, IBarViewerState
                             trackPlayer={trackPlayer}
                             arrangementPlayer={arrangementPlayer}
                             touchEditingEnabled={touchEditingEnabled}
-                            services={services}
                             undoManager={undoManager}
                             dataModel={dataModel}
                         />
