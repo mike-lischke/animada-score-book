@@ -6,50 +6,12 @@
 import { describe, expect, it } from "vitest";
 
 import { Arrangement } from "../../../src/core/Arrangement.js";
-import { SbDmEntityType, type ISbDmInstrument } from "../../../src/core/ScoreBookDataModel.js";
+import type { ISbDmInstrument } from "../../../src/core/ScoreBookDataModel.js";
 import { ArrangementMigrator } from "../../../src/core/serialisation/migration/ArrangementMigrator.js";
 import { getArrangementSnapshot } from "../../../src/core/serialisation/snapshots.js";
 import type { ILegacyArrangementSnapshot } from "../../../src/core/serialisation/migration/legacy-snapshot-types.js";
-import type { IAudioData, Mutable } from "../../../src/core/types/general.js";
-import { TimeCoordinator } from "../../../src/player/TimeCoordinator.js";
-import { TrackPlayer } from "../../../src/player/TrackPlayer.js";
-
-const createInstrument = (typeId: string, id: number, displayOrder: number): ISbDmInstrument => {
-    return {
-        type: SbDmEntityType.Instrument,
-        id,
-        typeId,
-        displayOrder,
-        displayName: `Instrument ${typeId}`,
-        image: { type: SbDmEntityType.InstrumentImage, id: id + 1000, filePath: "" },
-        color: "",
-        range: [0, 0],
-        state: {
-            initialized: true,
-            isLeaf: true,
-            expanded: false,
-            expandedOnce: false,
-        },
-        noteStyles: {},
-    };
-};
-
-const hydrateMeasureEvents = (arrangement: Arrangement): void => {
-    const timeCoordinator = new TimeCoordinator(arrangement.timeParams, {
-        state: "stopped",
-        get currentTime() {
-            return -1;
-        },
-    });
-
-    const players = arrangement.tracks.map((track) => {
-        return new TrackPlayer(track, timeCoordinator);
-    });
-
-    players.forEach((player) => {
-        player.dispose();
-    });
-};
+import type { IArrangementSnapshot, IAudioData, Mutable } from "../../../src/core/types/general.js";
+import { createInstrument, hydrateMeasureEvents } from "../../unit-test-helpers.js";
 
 describe("snapshots", () => {
     it("writes arrangement snapshots as version 2 without legacy polyrhythm fields", () => {
@@ -66,25 +28,14 @@ describe("snapshots", () => {
         const sourceSnapshot: ILegacyArrangementSnapshot = {
             version: 1,
             title: "Source",
-            timeParams: {
-                timeSignature: "4/4",
-                tempo: 120,
-                length: 1,
-                pulse: "1/4",
-                stepResolution: 8,
-            },
+            timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4", stepResolution: 8 },
             tracks: [{
                 id: 100,
                 instrumentId: "0",
                 notes: Array.from({ length: 9 }, () => {
                     return "0";
                 }),
-                polyrhythms: [{
-                    id: 200,
-                    start: 0,
-                    end: 1,
-                    length: 3,
-                }],
+                polyrhythms: [{ id: 200, start: 0, end: 1, length: 3 }],
             }],
         };
 
@@ -92,22 +43,8 @@ describe("snapshots", () => {
         hydrateMeasureEvents(arrangement);
         const firstTrack = arrangement.tracks[0];
 
-        // Polyrhythm-shaped events have a duration whose denominator differs from stepsPerBar (here 8).
-        const stepsPerBar = 8;
-        const polyrhythmEventIndex = firstTrack.measures[0].events.findIndex((event) => {
-            return !(event.duration.numerator === 1 && event.duration.denominator === stepsPerBar);
-        });
-
-        if (polyrhythmEventIndex === -1) {
-            throw new Error("Expected polyrhythm event in migrated arrangement");
-        }
-
-        // Set the second polyrhythm event's noteStyle directly on the measure event.
-        const secondPolyrhythmEventIndex = polyrhythmEventIndex + 1;
-        firstTrack.measures[0].events[secondPolyrhythmEventIndex] = {
-            ...firstTrack.measures[0].events[secondPolyrhythmEventIndex],
-            audioData: noteStyle,
-        };
+        // Set the second polyrhythm note directly on the measure step (the source of truth).
+        firstTrack.measures[0].steps[1].noteStyleId = "1";
 
         const snapshot = getArrangementSnapshot(arrangement);
 
@@ -129,5 +66,54 @@ describe("snapshots", () => {
                 { index: 2, noteStyleId: undefined },
             ]);
         }
+    });
+
+    it("includes scoreId in snapshot when arrangement has a DB-backed ID", () => {
+        const instrument = createInstrument("0", 0, 0);
+        const arrangement = Arrangement.emptyArrangement([instrument]);
+        (arrangement as Mutable<Arrangement>).id = 12345;
+
+        const snapshot = getArrangementSnapshot(arrangement);
+
+        expect(snapshot.scoreId).toBe(12345);
+    });
+
+    it("omits scoreId from snapshot for local arrangements (id < 10000)", () => {
+        const instrument = createInstrument("0", 0, 0);
+        const arrangement = Arrangement.emptyArrangement([instrument]);
+
+        // emptyArrangement assigns a small ID via getNewId()
+        const snapshot = getArrangementSnapshot(arrangement);
+
+        expect(snapshot.scoreId).toBeUndefined();
+    });
+
+    it("ArrangementMigrator preserves scoreId from snapshot", () => {
+        const instrument = createInstrument("0", 0, 0);
+        const snapshot: IArrangementSnapshot = {
+            version: 2,
+            title: "Scored",
+            scoreId: 12345,
+            timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4", stepResolution: 8 },
+            tracks: [],
+        };
+
+        const { arrangement } = ArrangementMigrator.migrateToArrangement(snapshot, [instrument]);
+
+        expect(arrangement.id).toBe(12345);
+    });
+
+    it("preserves note styles when runtime events are not yet materialized", () => {
+        const instrument = createInstrument("0", 0, 0);
+        const arrangement = Arrangement.emptyArrangement([instrument]);
+        const track = arrangement.tracks[0];
+
+        // Simulate a freshly loaded score: notes live on the steps, events are empty until a TrackPlayer hydrates them.
+        track.measures[0].steps[0].noteStyleId = "1";
+        expect(track.measures[0].events).toHaveLength(0);
+
+        const snapshot = getArrangementSnapshot(arrangement);
+
+        expect(snapshot.tracks[0].measures[0].steps[0].noteStyleId).toBe("1");
     });
 });

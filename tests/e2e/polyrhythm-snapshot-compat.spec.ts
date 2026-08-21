@@ -9,7 +9,7 @@ import { tryParsePackedArrangement } from "../../src/core/serialisation/snapshot
 import {
     beijaFlorImportPath, beijaFlorTitle, beijaFlorDisplayedTitle, expectImportedPolyrhythmSong, expectPlaybackToMove,
     readStoredCurrentScore, routeApi,
-} from "./helpers.js";
+} from "./e2e-test-helpers.js";
 
 test.beforeEach(async ({ page }) => {
     await routeApi(page);

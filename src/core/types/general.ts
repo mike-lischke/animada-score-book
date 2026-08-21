@@ -20,9 +20,18 @@ export interface IAudioData extends Omit<ISoundStyleMeta, "file"> {
     readonly instrument: ISbDmInstrument;
 }
 
-export interface INoteStyleSymbol {
-    src?: string; // path to use an img src
-    string: string; // string to display for this note-style
+export interface IArticulationSymbol {
+    /** Path to use an img src. */
+    src?: string;
+
+    /**
+     * A small description for space limited text. Should be 1-2 words, e.g. "rim shot", "muted",
+     * "cross click".
+     */
+    shortDescription: string;
+
+    /** A longer description for tooltips or alt text. */
+    description?: string;
 }
 
 export interface ITimeParams extends ITimeParamsBase {
@@ -54,6 +63,9 @@ export interface IArrangementSnapshot {
     title?: string;
     timeParams: ITimeParamsBase;
     tracks: ITrackSnapshot[];
+
+    /** The database score ID, if this arrangement is backed by a DB score. */
+    scoreId?: number;
 
     /** Optional per-measure section labels, keyed by 1-based measure number. */
     measureLabels?: Record<number, string>;

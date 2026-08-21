@@ -5,13 +5,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import {
-    checksum,
-    deriveDbName,
-    extractRows,
-    parseMigrationSql,
-    sanitizeBranchName,
-} from "../../build/migration.js";
+import { checksum, deriveDbName, extractRows, parseMigrationSql, sanitizeBranchName } from "../../build/migration.js";
 
 describe("parseMigrationSql", () => {
     it("returns common SQL for both engines", () => {

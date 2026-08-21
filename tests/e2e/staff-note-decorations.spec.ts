@@ -7,7 +7,7 @@ import { expect, test } from "@playwright/test";
 
 import { stringifyPackedArrangement } from "../../src/core/serialisation/snapshot-packing.js";
 import type { IArrangementSnapshot } from "../../src/core/types/general.js";
-import { routeApi } from "./helpers.js";
+import { routeApi } from "./e2e-test-helpers.js";
 
 test.beforeEach(async ({ page }) => {
     await routeApi(page);
@@ -27,13 +27,7 @@ const buildPackedArrangement = (tracks: Array<{
     const snapshot: IArrangementSnapshot = {
         version: 3,
         title: "Decoration Test",
-        timeParams: {
-            timeSignature: "4/4",
-            tempo: 120,
-            length: 1,
-            pulse: "1/4",
-            stepResolution: 16,
-        },
+        timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4", stepResolution: 16 },
         tracks: tracks.map((track, trackIndex) => {
             return {
                 id: trackIndex + 1,

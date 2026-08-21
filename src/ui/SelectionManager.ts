@@ -101,6 +101,17 @@ export class SelectionManager {
         this.view = new SelectionView(this, container);
     }
 
+    /**
+     * Sets the scroll host elements for the selection view.
+     * Must be called after {@link setEventContainer}.
+     *
+     * @param horizontal The horizontally-scrollable container (typically `#trackViewerHost`).
+     * @param vertical The vertically-scrollable container.
+     */
+    public setScrollHosts(horizontal: HTMLElement, vertical: HTMLElement): void {
+        this.view?.setScrollHosts(horizontal, vertical);
+    }
+
     public registerHitTester(tester: ISelectionHitTester): void {
         this.hitTesters.add(tester);
     }
@@ -214,13 +225,23 @@ export class SelectionManager {
 
         this.applySelection(entries);
         this.publishPlayRange();
+    }
 
-        if (entries.length > 0 && entries[0].granularity === SelectionGranularity.Note
-            && entries[0].noteId !== undefined) {
-            const noteIds = entries.map((e) => {
-                return e.noteId!;
-            });
+    /**
+     * Previews a note at the pointer position before selection is committed.
+     *
+     * @param clickRect A tiny rect at the pointer position.
+     */
+    public previewNote(clickRect: DOMRect): void {
+        const entries = this.resolveEntries(clickRect);
+        if (entries.length === 0 || entries[0].granularity !== SelectionGranularity.Note) {
+            return;
+        }
 
+        const noteIds = entries.flatMap((entry) => {
+            return entry.noteId === undefined ? [] : [entry.noteId];
+        });
+        if (noteIds.length > 0) {
             void requisitions.execute("notesClicked", noteIds);
         }
     }
@@ -295,6 +316,26 @@ export class SelectionManager {
      */
     public clearSelection(): void {
         this.internalClearSelection();
+    }
+
+    /**
+     * Selects exactly one grid cell, replacing the current selection.
+     *
+     * @param entry The grid note or rest cell to select.
+     */
+    public selectSingleNote(entry: ISelectionEntry): void {
+        if (entry.granularity !== SelectionGranularity.Note) {
+            return;
+        }
+
+        const removed = [...this.currentSelection.values()];
+        const key = this.entryKey(entry);
+        this.currentSelection.clear();
+        this.currentSelection.set(key, entry);
+        this.previousEntries = [];
+
+        void requisitions.execute("selectionChanged", { added: [entry], removed });
+        this.schedulePersist();
     }
 
     /**
@@ -454,12 +495,11 @@ export class SelectionManager {
             rawEntries.push(...tester.hitTest(rect));
         }
 
-        if (rawEntries.some((e) => {
-            return e.granularity === SelectionGranularity.Track;
-        })) {
-            return rawEntries.filter((e) => {
-                return e.granularity === SelectionGranularity.Track;
-            });
+        const trackEntries = rawEntries.filter((entry) => {
+            return entry.granularity === SelectionGranularity.Track;
+        });
+        if (trackEntries.length > 0) {
+            return trackEntries;
         }
 
         return this.filterToDominantGranularity(rawEntries);

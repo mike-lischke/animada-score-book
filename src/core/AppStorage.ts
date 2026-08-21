@@ -37,6 +37,21 @@ export interface IViewSettings {
     selectionState?: string;
 }
 
+/** The values used when creating a new score. These are set by the last used settings. */
+export interface IScoreCreationSettings {
+    /** The time signature to use for the new score. */
+    timeSignature?: string;
+
+    /** The tempo to use for the new score. */
+    tempo?: string;
+
+    /** The initial number of bars for the new score. */
+    barCount?: number;
+
+    /** The instrument to pre-select in the new score dialog. */
+    instruments?: number[];
+}
+
 export interface IUISettings {
     /** Theme selection for the user interface. */
     theme?: string;
@@ -45,6 +60,9 @@ export interface IUISettings {
      * The score the user has currently opened - stored as snapshot.
      */
     currentScore?: string;
+
+    /** The last-used values for the new score dialog. */
+    scoreCreationSettings?: IScoreCreationSettings;
 
     /** UI element specific settings. */
     viewSettings?: IViewSettings;
@@ -66,6 +84,9 @@ export interface IUISettings {
 
     /** Whether to show the tutorial wizard on app startup. Defaults to true. */
     tutorialEnabled?: boolean;
+
+    /** Whether edit mode was active when the app was last closed. */
+    editMode?: boolean;
 }
 
 /**

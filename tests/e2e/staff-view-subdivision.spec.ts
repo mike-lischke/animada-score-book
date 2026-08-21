@@ -7,7 +7,7 @@ import { expect, test } from "@playwright/test";
 
 import { stringifyPackedArrangement } from "../../src/core/serialisation/snapshot-packing.js";
 import type { IArrangementSnapshot } from "../../src/core/types/general.js";
-import { routeApi } from "./helpers.js";
+import { routeApi } from "./e2e-test-helpers.js";
 
 test.beforeEach(async ({ page }) => {
     await routeApi(page);
@@ -67,13 +67,7 @@ test.describe("Staff view subdivision rendering", () => {
         const subdivisionSnapshot = {
             version: 3,
             title: "E2E Staff Subdivision",
-            timeParams: {
-                timeSignature: "4/4",
-                tempo: 120,
-                length: 1,
-                pulse: "1/4",
-                stepResolution: 16,
-            },
+            timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4", stepResolution: 16 },
             tracks: [{
                 id: 100,
                 instrumentId: "0",
@@ -93,13 +87,7 @@ test.describe("Staff view subdivision rendering", () => {
                             return { index: offset + 2 };
                         }),
                     ],
-                    subdivisions: [{
-                        id: 1,
-                        startStep: 0,
-                        actual: 2,
-                        normal: 1,
-                        isTuplet: false,
-                    }],
+                    subdivisions: [{ id: 1, startStep: 0, actual: 2, normal: 1, isTuplet: false }],
                 }],
             }],
         };
@@ -143,13 +131,7 @@ test.describe("Staff view subdivision rendering", () => {
         const mixedLengthsSnapshot = {
             version: 3,
             title: "E2E Staff Mixed Lengths",
-            timeParams: {
-                timeSignature: "4/4",
-                tempo: 120,
-                length: 1,
-                pulse: "1/4",
-                stepResolution: 32,
-            },
+            timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4", stepResolution: 32 },
             tracks: [{
                 id: 101,
                 instrumentId: "0",

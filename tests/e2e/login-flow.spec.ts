@@ -4,7 +4,7 @@
  */
 
 import { expect, test } from "@playwright/test";
-import { routeApi, setupAnonymousSession } from "./helpers.js";
+import { routeApi, setupAnonymousSession } from "./e2e-test-helpers.js";
 
 test.describe("Login Flow", () => {
     test.beforeEach(async ({ page }) => {
@@ -74,8 +74,8 @@ test.describe("Login Flow", () => {
 
         // Type character by character (simulates real user input, not .fill()).
         await usernameInput.click();
-        await page.keyboard.type("testuser");
-        await expect(usernameInput).toHaveValue("testuser");
+        await page.keyboard.type("test-user");
+        await expect(usernameInput).toHaveValue("test-user");
 
         await passwordInput.click();
         await page.keyboard.type("secret123");

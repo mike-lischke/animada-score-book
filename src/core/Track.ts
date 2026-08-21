@@ -9,6 +9,7 @@ import {
     type ISbDmTrackMeasure, type ITiming
 } from "./ScoreBookDataModel.js";
 import { reduceFraction } from "./serialisation/numeric-functions.js";
+import type { Mutable } from "./types/general.js";
 import { createBeatGroups, getNewId } from "./utils.js";
 
 /**
@@ -124,18 +125,86 @@ export class Track implements ISbDmTrack {
     }
 
     /**
-     * Clears every measure event by setting its `noteStyle` to undefined. Publishes once.
+     * Removes all notes and subdivisions from every measure.
      */
     public clear(): void {
         for (const measure of this.measures) {
-            for (const event of measure.events) {
-                if (event.audioData !== undefined) {
-                    event.audioData = undefined;
-                }
+            for (const step of measure.steps) {
+                step.noteStyleId = undefined;
+                step.articulation = undefined;
             }
+
+            measure.subdivisions.splice(0, measure.subdivisions.length);
+            measure.events.splice(0, measure.events.length);
         }
 
         void requisitions.execute("trackChanged", this.id);
+    }
+
+    /**
+     * Inserts a new measure at the given 0-based index. When a source measure is given, its steps and
+     * subdivisions are copied into the new measure; otherwise the measure is empty.
+     *
+     * @param atIndex The 0-based index at which to insert.
+     * @param source The measure to copy content from, or undefined for an empty measure.
+     */
+    public insertMeasure(atIndex: number, source?: ISbDmTrackMeasure): void {
+        const measure = this.createEmptyMeasure(atIndex + 1);
+        if (source) {
+            measure.steps.splice(0, measure.steps.length, ...source.steps.map((step) => {
+                return { ...step };
+            }));
+
+            measure.subdivisions.splice(0, measure.subdivisions.length, ...source.subdivisions.map((subdivision) => {
+                return { ...subdivision };
+            }));
+        }
+
+        this.measures.splice(atIndex, 0, measure);
+        this.renumberMeasures();
+    }
+
+    /**
+     * Deletes the measure at the given 0-based index.
+     *
+     * @param atIndex The 0-based index of the measure to delete.
+     */
+    public deleteMeasure(atIndex: number): void {
+        this.measures.splice(atIndex, 1);
+        this.renumberMeasures();
+    }
+
+    /**
+     * Removes all notes and subdivisions from the measure at the given 0-based index.
+     *
+     * @param atIndex The 0-based index of the measure to clear.
+     */
+    public clearMeasure(atIndex: number): void {
+        const measure = this.measures[atIndex];
+        for (const step of measure.steps) {
+            step.noteStyleId = undefined;
+            step.articulation = undefined;
+        }
+
+        measure.subdivisions.splice(0, measure.subdivisions.length);
+        measure.events.splice(0, measure.events.length);
+    }
+
+    /**
+     * Duplicates the measure at the given 0-based index, inserting the copy right after it.
+     *
+     * @param atIndex The 0-based index of the measure to duplicate.
+     */
+    public duplicateMeasure(atIndex: number): void {
+        this.insertMeasure(atIndex + 1, this.measures[atIndex]);
+    }
+
+    private renumberMeasures(): void {
+        for (let index = 0; index < this.measures.length; index++) {
+            const measure = this.measures[index] as Mutable<ISbDmTrackMeasure>;
+            measure.number = index + 1;
+            measure.id = this.getMeasureId(index + 1);
+        }
     }
 
     private createEmptyMeasure(measureNumber: number): ISbDmTrackMeasure {

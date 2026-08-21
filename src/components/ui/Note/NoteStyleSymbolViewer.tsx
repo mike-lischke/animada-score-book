@@ -24,14 +24,15 @@ export class NoteStyleSymbolViewer extends UIComponent<INoteStyleSymbolViewerPro
         const { symbol } = noteStyle;
         if (symbol) {
             if (symbol.src) {
-                return <Icon className="note-style-symbol" src={symbol.src} alt={symbol.string} />;
+                return <Icon className="note-style-symbol" src={symbol.src} alt={symbol.shortDescription}
+                    {...this.dataAttributes} />;
             }
 
-            if (symbol.string) {
-                return <span className="note-style-symbol">{symbol.string}</span>;
+            if (symbol.shortDescription) {
+                return <span className="note-style-symbol" {...this.dataAttributes}>{symbol.shortDescription}</span>;
             }
         }
 
-        return <span className="note-style-symbol">{noteStyle.id}</span>;
+        return <span className="note-style-symbol" {...this.dataAttributes}>{noteStyle.id}</span>;
     }
 }

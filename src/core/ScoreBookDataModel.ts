@@ -4,7 +4,7 @@
  */
 
 import { AppStorage } from "./AppStorage.js";
-import { Arrangement } from "./Arrangement.js";
+import { Arrangement, type IArrangementCreationOptions } from "./Arrangement.js";
 import { ArrangementMigrator } from "./serialisation/migration/ArrangementMigrator.js";
 import { stringifyPackedArrangement } from "./serialisation/snapshot-packing.js";
 
@@ -12,7 +12,8 @@ import { requisitions } from "../supplement/Requisitions.js";
 import type { IScoreDBEntry, ISoundLibFsNode } from "./DatabaseTypes.js";
 import { Instrument } from "./Instrument.js";
 import type {
-    IArrangementSnapshot, IAudioData, IFraction, IMeasureStep, IMeterSnapshot, INoteStyleSymbol, ISubdivision, Mutable
+    IArrangementSnapshot, IAudioData, IFraction, IMeasureStep, IMeterSnapshot, IArticulationSymbol, ISubdivision,
+    Mutable
 } from "./types/general.js";
 import { getNewId } from "./utils.js";
 
@@ -223,7 +224,7 @@ export type NoteCharacteristics =
 export interface ISoundStyleMeta {
     readonly id: string;
     readonly file: string;
-    readonly symbol?: INoteStyleSymbol;
+    readonly symbol?: IArticulationSymbol;
     readonly characteristics: NoteCharacteristics;
 
     /** The line on which the note is displayed (1-based), if the note represents a different sound/pitch. */
@@ -525,6 +526,7 @@ export interface ISbDmArrangement extends ISbDmCommon {
 
     addTrack(instrument: ISbDmInstrument, id?: number): ISbDmTrack;
     removeTrack(track: ISbDmTrack): void;
+    duplicateTrack(track: ISbDmTrack): ISbDmTrack;
 
     applyArrangementSnapshot(arrangementSnapshot: IArrangementSnapshot, instruments: ISbDmInstrument[]): void;
 }
@@ -624,6 +626,39 @@ interface IWhoamiResponse {
     capabilities: ICapabilities;
 }
 
+/** A clear target for {@link clearStepRanges}: a step range or a whole measure of one track. */
+export interface IGridClearRange {
+    /** The track containing the measure to clear. */
+    trackId: number;
+
+    /** The one-based measure number. */
+    bar: number;
+
+    /** First step index (inclusive) into the measure's steps. Omit to clear the whole measure. */
+    startStep?: number;
+
+    /** Last step index (inclusive) into the measure's steps. Omit to clear the whole measure. */
+    endStep?: number;
+}
+
+/** A replace target for {@link replaceMeasureContent}: a step range or a whole measure of one track. */
+export interface IMeasureReplace {
+    /** The track containing the measure to replace. */
+    trackId: number;
+
+    /** The one-based measure number. */
+    bar: number;
+
+    /** Steps to write, in display order. Replaces the whole measure when startStep/endStep are omitted. */
+    steps: IMeasureStep[];
+
+    /** First step index (inclusive) into the measure's steps. Omit to replace the whole measure. */
+    startStep?: number;
+
+    /** Last step index (inclusive) into the measure's steps. Omit to replace the whole measure. */
+    endStep?: number;
+}
+
 export class ScoreBookDataModel {
     /**
      * Indicates whether the current session is allowed to mutate scores on the backend.
@@ -655,6 +690,9 @@ export class ScoreBookDataModel {
     public get capabilities(): ICapabilities {
         return this.currentCapabilities;
     }
+
+    /** Token for the active score lock. Set by the lockScore flow. */
+    public lockToken?: string;
 
     private accessToken: string | undefined;
     private currentUser: IUserInfo | undefined;
@@ -739,11 +777,457 @@ export class ScoreBookDataModel {
             void this.rewriteMigratedScore(source, arrangement);
         }
 
+        if (this.isScoreEntry(source)) {
+            arrangement.id = source.id;
+        } else if (this.isArrangementSnapshot(input)) {
+            arrangement.id = input.scoreId ?? arrangement.id;
+        }
+
         this.data.arrangement = arrangement;
         this.applyArrangementPlaybackSettings(arrangement);
         void requisitions.execute("scoreBookLoaded", ScoreBookChangeReason.ScoreLoaded);
 
         return arrangement;
+    }
+
+    /**
+     * Replaces the current arrangement with a new, empty one that contains a single track for
+     * each of the given instruments.
+     *
+     * @param instruments The instruments that should appear in the new arrangement.
+     * @param options Optional initial title and timing parameters.
+     *
+     * @returns The new arrangement.
+     */
+    public startNewArrangement(instruments: ISbDmInstrument[],
+        options?: IArrangementCreationOptions): ISbDmArrangement {
+        const arrangement = Arrangement.emptyArrangementWithInstruments(instruments, options);
+        this.data.arrangement = arrangement;
+        this.applyArrangementPlaybackSettings(arrangement);
+        void requisitions.execute("scoreBookLoaded", ScoreBookChangeReason.ScoreLoaded);
+
+        return arrangement;
+    }
+
+    /**
+     * Sets the arrangement title. Fires {@link arrangementMutated} if changed.
+     *
+     * @param newTitle The new title for the arrangement.
+     *
+     * @returns True if the title was changed.
+     */
+    public setTitle(newTitle: string): boolean {
+        const arrangement = this.arrangement;
+        if (!arrangement || arrangement.title === newTitle) {
+            return false;
+        }
+
+        arrangement.title = newTitle;
+        void requisitions.execute("arrangementMutated", undefined);
+
+        return true;
+    }
+
+    /**
+     * Adds a new track for the given instrument to the arrangement.
+     *
+     * @param instrument The instrument to add a track for.
+     *
+     * @returns The newly created track.
+     */
+    public addTrack(instrument: ISbDmInstrument): ISbDmTrack {
+        const arrangement = this.arrangement;
+        if (!arrangement) {
+            throw new Error("No arrangement loaded.");
+        }
+
+        const track = arrangement.addTrack(instrument);
+        void requisitions.execute("arrangementMutated", undefined);
+
+        return track;
+    }
+
+    /**
+     * Removes a track from the arrangement.
+     *
+     * @param track The track to remove.
+     *
+     * @returns True if the track was removed.
+     */
+    public removeTrack(track: ISbDmTrack): boolean {
+        const arrangement = this.arrangement;
+        if (!arrangement) {
+            return false;
+        }
+
+        try {
+            arrangement.removeTrack(track);
+            void requisitions.execute("arrangementMutated", undefined);
+
+            return true;
+        } catch {
+            return false;
+        }
+    }
+
+    /**
+     * Duplicates a track in the arrangement.
+     *
+     * @param track The track to duplicate.
+     *
+     * @returns The duplicated track.
+     */
+    public duplicateTrack(track: ISbDmTrack): ISbDmTrack {
+        const arrangement = this.arrangement;
+        if (!arrangement) {
+            throw new Error("No arrangement loaded.");
+        }
+
+        const newTrack = arrangement.duplicateTrack(track);
+        void requisitions.execute("arrangementMutated", undefined);
+
+        return newTrack;
+    }
+
+    /**
+     * Clears all notes from a single track.
+     *
+     * @param track The track to clear.
+     *
+     * @returns True if any notes were cleared.
+     */
+    public clearTrack(track: ISbDmTrack): boolean {
+        if (!this.trackHasContent(track)) {
+            return false;
+        }
+
+        track.clear();
+        void requisitions.execute("arrangementMutated", undefined);
+
+        return true;
+    }
+
+    /**
+     * Clears all notes from all tracks in the arrangement.
+     *
+     * @returns True if any notes were cleared.
+     */
+    public clearAllTracks(): boolean {
+        const arrangement = this.arrangement;
+        if (!arrangement) {
+            return false;
+        }
+
+        if (!arrangement.tracks.some((track) => {
+            return this.trackHasContent(track);
+        })) {
+            return false;
+        }
+
+        arrangement.tracks.forEach((track) => {
+            track.clear();
+        });
+        void requisitions.execute("arrangementMutated", undefined);
+
+        return true;
+    }
+
+    /**
+     * Clears the audio data from a set of selected notes.
+     *
+     * @param clearSelection A map of tracks to their selected notes to clear.
+     *
+     * @returns True if any notes were cleared.
+     */
+    public clearSelection(
+        clearSelection: Map<ISbDmTrack, { selectedNotes: Set<ISbDmNoteEvent>; }>,
+    ): boolean {
+        let changedAnyNotes = false;
+
+        for (const trackSelection of clearSelection.values()) {
+            for (const note of trackSelection.selectedNotes) {
+                if (note.audioData) {
+                    note.audioData = undefined;
+                    changedAnyNotes = true;
+                }
+            }
+        }
+
+        if (changedAnyNotes) {
+            void requisitions.execute("arrangementMutated", undefined);
+        }
+
+        return changedAnyNotes;
+    }
+
+    /**
+     * Sets or clears the note style at a grid cell.
+     *
+     * @param trackId The track containing the cell.
+     * @param bar The one-based measure number.
+     * @param step The zero-based step index.
+     * @param noteStyleId The instrument note-style id, or undefined to clear the cell.
+     *
+     * @returns True when the cell changed.
+     */
+    public setGridNote(trackId: number, bar: number, step: number, noteStyleId?: string): boolean {
+        const arrangement = this.arrangement;
+        const track = arrangement?.tracks.find((candidate) => {
+            return candidate.id === trackId;
+        });
+
+        const measure = track?.measures[bar - 1];
+        const targetStep = measure?.steps.find((candidate) => {
+            return candidate.index === step;
+        });
+
+        if (!targetStep || targetStep.noteStyleId === noteStyleId) {
+            return false;
+        }
+
+        targetStep.noteStyleId = noteStyleId;
+        void requisitions.execute("trackChanged", trackId);
+        void requisitions.execute("arrangementMutated", undefined);
+
+        return true;
+    }
+
+    /**
+     * Clears note content across the given step ranges in one edit, turning the affected
+     * notes into rests. Clearing a whole measure also removes its subdivisions. Fires one
+     * arrangementMutated event (a single undo step) and one trackChanged event per affected
+     * track, so viewers recompute their note structure.
+     *
+     * @param ranges The ranges to clear. Ranges referencing a missing track or measure are ignored.
+     *
+     * @returns True when at least one step or subdivision changed.
+     */
+    public clearStepRanges(ranges: IGridClearRange[]): boolean {
+        const arrangement = this.arrangement;
+        if (!arrangement) {
+            return false;
+        }
+
+        const affectedTracks = new Set<number>();
+        let changed = false;
+
+        for (const range of ranges) {
+            const measure = arrangement.tracks.find((candidate) => {
+                return candidate.id === range.trackId;
+            })?.measures[range.bar - 1];
+
+            if (!measure) {
+                continue;
+            }
+
+            const rangeChanged = range.startStep === undefined || range.endStep === undefined
+                ? this.clearMeasureContent(measure)
+                : this.clearStepRangeContent(measure, range.startStep, range.endStep);
+
+            if (rangeChanged) {
+                changed = true;
+                affectedTracks.add(range.trackId);
+            }
+        }
+
+        if (changed) {
+            for (const trackId of affectedTracks) {
+                void requisitions.execute("trackChanged", trackId);
+            }
+
+            void requisitions.execute("arrangementMutated", undefined);
+        }
+
+        return changed;
+    }
+
+    /**
+     * Replaces note content across the given step ranges or whole measures in one edit. Fires one
+     * arrangementMutated event (a single undo step) and one trackChanged event per affected track.
+     * Ranges referencing a missing track or measure are ignored.
+     *
+     * @param replacements The replacements to apply.
+     *
+     * @returns True when at least one step changed.
+     */
+    public replaceMeasureContent(replacements: IMeasureReplace[]): boolean {
+        const arrangement = this.arrangement;
+        if (!arrangement) {
+            return false;
+        }
+
+        const affectedTracks = new Set<number>();
+        let changed = false;
+
+        for (const replacement of replacements) {
+            const measure = arrangement.tracks.find((candidate) => {
+                return candidate.id === replacement.trackId;
+            })?.measures[replacement.bar - 1];
+
+            if (!measure) {
+                continue;
+            }
+
+            const rangeChanged = replacement.startStep === undefined || replacement.endStep === undefined
+                ? this.replaceWholeMeasure(measure, replacement.steps)
+                : this.replaceStepRange(measure, replacement.startStep, replacement.endStep, replacement.steps);
+
+            if (rangeChanged) {
+                changed = true;
+                affectedTracks.add(replacement.trackId);
+            }
+        }
+
+        if (changed) {
+            for (const trackId of affectedTracks) {
+                void requisitions.execute("trackChanged", trackId);
+            }
+
+            void requisitions.execute("arrangementMutated", undefined);
+        }
+
+        return changed;
+    }
+
+    /**
+     * Sets the time signature of the arrangement.
+     *
+     * @param timeSignature The new time signature string (e.g. "4/4").
+     * @param pulse         The pulse value (e.g. "1/4").
+     * @param stepResolution The step resolution.
+     *
+     * @returns True if the time signature was changed.
+     */
+    public setTimeSignature(timeSignature: string, pulse: string, stepResolution: number): boolean {
+        const arrangement = this.arrangement;
+        if (!arrangement) {
+            return false;
+        }
+
+        const tp = arrangement.timeParams;
+        if (timeSignature === tp.timeSignature) {
+            return false;
+        }
+
+        tp.timeSignature = timeSignature;
+        tp.pulse = pulse;
+        tp.stepResolution = stepResolution;
+        void requisitions.execute("arrangementMutated", undefined);
+
+        return true;
+    }
+
+    /**
+     * Sets the arrangement length in bars.
+     *
+     * @param length The new length in bars.
+     *
+     * @returns True if the length was changed.
+     */
+    public setLength(length: number): boolean {
+        const arrangement = this.arrangement;
+        if (!arrangement) {
+            return false;
+        }
+
+        if (length === arrangement.timeParams.length) {
+            return false;
+        }
+
+        arrangement.timeParams.length = length;
+        void requisitions.execute("arrangementMutated", undefined);
+
+        return true;
+    }
+
+    /**
+     * Sets the arrangement tempo. Only call this from edit-mode controls.
+     *
+     * @param tempo The new tempo in BPM.
+     *
+     * @returns True if the tempo was changed.
+     */
+    public setTempo(tempo: number): boolean {
+        const arrangement = this.arrangement;
+        if (!arrangement) {
+            return false;
+        }
+
+        if (tempo === arrangement.timeParams.tempo) {
+            return false;
+        }
+
+        arrangement.timeParams.tempo = tempo;
+        void requisitions.execute("arrangementMutated", undefined);
+
+        return true;
+    }
+
+    /**
+     * Inserts a number of bars before or after the given bar.
+     *
+     * @param barNumber The 1-based bar the new bars are inserted relative to.
+     * @param count The number of bars to insert.
+     * @param before True to insert before barNumber, false to insert after it.
+     * @param copyContent True to copy the content of the preceding bar into the new bars.
+     */
+    public insertBars(barNumber: number, count: number, before: boolean, copyContent: boolean): void {
+        const arrangement = this.arrangement;
+        if (!arrangement) {
+            return;
+        }
+
+        (arrangement as Arrangement).insertBars(barNumber, count, before, copyContent);
+        void requisitions.execute("arrangementMutated", undefined);
+    }
+
+    /**
+     * Deletes the given bar from the arrangement.
+     *
+     * @param barNumber The 1-based bar to delete.
+     */
+    public deleteBar(barNumber: number): void {
+        const arrangement = this.arrangement;
+        if (!arrangement) {
+            return;
+        }
+
+        if (arrangement.timeParams.length <= 1) {
+            return;
+        }
+
+        (arrangement as Arrangement).deleteBar(barNumber);
+        void requisitions.execute("arrangementMutated", undefined);
+    }
+
+    /**
+     * Removes all notes and subdivisions from the given bar.
+     *
+     * @param barNumber The 1-based bar to clear.
+     */
+    public clearBar(barNumber: number): void {
+        const arrangement = this.arrangement;
+        if (!arrangement) {
+            return;
+        }
+
+        (arrangement as Arrangement).clearBar(barNumber);
+        void requisitions.execute("arrangementMutated", undefined);
+    }
+
+    /**
+     * Duplicates the given bar, inserting the copy right after it.
+     *
+     * @param barNumber The 1-based bar to duplicate.
+     */
+    public duplicateBar(barNumber: number): void {
+        const arrangement = this.arrangement;
+        if (!arrangement) {
+            return;
+        }
+
+        (arrangement as Arrangement).duplicateBar(barNumber);
+        void requisitions.execute("arrangementMutated", undefined);
     }
 
     /**
@@ -859,6 +1343,10 @@ export class ScoreBookDataModel {
 
         const { success, id } = await res.json() as { success: boolean; id: number; };
         if (success) {
+            if (this.data.arrangement) {
+                (this.data.arrangement as Arrangement).id = id;
+            }
+
             const newScore: ISbDmScore = {
                 type: SbDmEntityType.Score,
                 id,
@@ -892,14 +1380,26 @@ export class ScoreBookDataModel {
      * @param content The new content string to persist.
      */
     public async updateScoreContent(score: ISbDmScore, content: string): Promise<void> {
+        const body: Record<string, unknown> = { id: score.id, content };
+
+        if (this.lockToken) {
+            body.token = this.lockToken;
+        }
+
         const res = await this.fetchApi(`/api?action=updateScore`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ id: score.id, content }),
+            body: JSON.stringify(body),
         });
 
         if (!res) {
             return;
+        }
+
+        if (res.status === 409) {
+            const data = await res.json() as { error?: string; };
+
+            throw new Error(data.error ?? "Score is locked by another user.");
         }
 
         score.content = content;
@@ -1583,6 +2083,358 @@ export class ScoreBookDataModel {
         void requisitions.execute("scoreBookLoaded", ScoreBookChangeReason.LibraryRefreshed);
     }
 
+    /**
+     * Acquires an edit lock for a score. Returns the lock token on success, or conflict info
+     * if another user holds the lock.
+     *
+     * @param scoreId The ID of the score to lock.
+     * @param prevToken An optional previous token to attempt renewal of an expired lock.
+     *
+     * @returns Lock result with token or conflict details.
+     */
+    public async lockScore(scoreId: number, prevToken?: string): Promise<{
+        success: boolean; token?: string; locked?: boolean; username?: string; lockedAt?: string;
+    }> {
+        const body: Record<string, unknown> = { scoreId };
+
+        if (prevToken) {
+            body.prevToken = prevToken;
+        }
+
+        const res = await this.fetchApi("/api?action=lockScore", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+        }, true, true);
+
+        if (!res) {
+            return { success: false };
+        }
+
+        return res.json() as unknown as {
+            success: boolean; token?: string; locked?: boolean; username?: string;
+            lockedAt?: string;
+        };
+    }
+
+    /**
+     * Releases an edit lock for a score.
+     *
+     * @param scoreId The ID of the score to unlock.
+     * @param token The lock token to verify ownership.
+     */
+    public async unlockScore(scoreId: number, token: string): Promise<void> {
+        await this.fetchApi("/api?action=unlockScore", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ scoreId, token }),
+        });
+    }
+
+    /**
+     * Writes the current arrangement snapshot to the cached score in AppStorage.
+     * Keeps the cached copy in sync so a page reload restores the latest state.
+     */
+    public persistCurrentScore(): void {
+        const arrangement = this.arrangement;
+        if (!arrangement) {
+            return;
+        }
+
+        AppStorage.saveSetting("currentScore",
+            stringifyPackedArrangement((arrangement as Arrangement).toSnapshot()));
+    }
+
+    /**
+     * Persists the current arrangement to the backend.
+     *
+     * - For new arrangements (id &lt; 10000): creates a score entry via {@link addScore},
+     *   which assigns a permanent ID.
+     * - For existing scores (id &ge; 10000): updates the score content via the
+     *   `updateScore` API, attaching the active lock token.
+     *
+     * @returns The packed arrangement string that was saved, or undefined if the save failed or no
+     *          arrangement is loaded.
+     */
+    public async saveArrangement(): Promise<string | undefined> {
+        const arrangement = this.arrangement;
+        if (!arrangement) {
+            return undefined;
+        }
+
+        const content = stringifyPackedArrangement((arrangement as Arrangement).toSnapshot());
+
+        if (arrangement.id < 10000) {
+            // First-time save — create a new score entry in the database.
+            const res = await this.fetchApi("/api?action=addScore", {
+                method: "POST",
+                headers: { Accept: "application/json" },
+                body: JSON.stringify({ name: arrangement.title || "Untitled", content }),
+            });
+
+            if (!res) {
+                return undefined;
+            }
+
+            const data = await res.json() as { success: boolean; id: number; };
+            if (!data.success) {
+                return undefined;
+            }
+
+            (arrangement as Arrangement).id = data.id;
+
+            await this.refreshScoreLib();
+
+            return content;
+        }
+
+        // Existing score — update in-place with lock token.
+        const body: Record<string, unknown> = { id: arrangement.id, content };
+
+        if (this.lockToken) {
+            body.token = this.lockToken;
+        }
+
+        const res = await this.fetchApi("/api?action=updateScore", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+        }, true, true);
+
+        if (!res) {
+            return undefined;
+        }
+
+        if (res.status === 404) {
+            // Score was deleted from the backend — re-create it as a new entry.
+            return this.addScoreAsNew(arrangement, content);
+        }
+
+        if (res.status === 409) {
+            const data = await res.json() as { error?: string; };
+
+            throw new Error(data.error ?? "Score is locked by another user.");
+        }
+
+        if (!res.ok) {
+            return undefined;
+        }
+
+        // Keep the score library entry name in sync with the arrangement title.
+        await this.syncScoreLibName(arrangement.id, arrangement.title);
+
+        return content;
+    }
+
+    /**
+     * Clears all note styles and subdivisions from a measure.
+     *
+     * @param measure The measure to clear.
+     *
+     * @returns True when the measure had any content.
+     */
+    private clearMeasureContent(measure: ISbDmTrackMeasure): boolean {
+        let changed = measure.subdivisions.length > 0;
+        measure.subdivisions.splice(0, measure.subdivisions.length);
+
+        for (const step of measure.steps) {
+            if (step.noteStyleId !== undefined || step.articulation !== undefined) {
+                step.noteStyleId = undefined;
+                step.articulation = undefined;
+                changed = true;
+            }
+        }
+
+        return changed;
+    }
+
+    /**
+     * Clears the note styles of the steps in a contiguous index range.
+     *
+     * @param measure The measure containing the steps.
+     * @param startStep The first step index to clear (inclusive).
+     * @param endStep The last step index to clear (inclusive).
+     *
+     * @returns True when any step changed.
+     */
+    private clearStepRangeContent(measure: ISbDmTrackMeasure, startStep: number, endStep: number): boolean {
+        let changed = false;
+
+        for (const step of measure.steps) {
+            if (step.index >= startStep && step.index <= endStep && step.noteStyleId !== undefined) {
+                step.noteStyleId = undefined;
+                step.articulation = undefined;
+                changed = true;
+            }
+        }
+
+        return changed;
+    }
+
+    /**
+     * Replaces the note styles and articulations of every step in a measure. Steps are matched
+     * positionally, so the replacement steps must cover the same step count as the target measure.
+     *
+     * @param measure The measure to replace.
+     * @param steps The replacement steps, in display order.
+     *
+     * @returns True when any step changed.
+     */
+    private replaceWholeMeasure(measure: ISbDmTrackMeasure, steps: IMeasureStep[]): boolean {
+        let changed = false;
+
+        const count = Math.min(measure.steps.length, steps.length);
+        for (let index = 0; index < count; index++) {
+            const source = steps[index];
+            const target = measure.steps[index];
+            const noteStyleId = source.noteStyleId;
+            const articulation = source.articulation ? { ...source.articulation } : undefined;
+
+            if (target.noteStyleId !== noteStyleId || !this.sameArticulation(target.articulation, articulation)) {
+                target.noteStyleId = noteStyleId;
+                target.articulation = articulation;
+                changed = true;
+            }
+        }
+
+        for (let index = count; index < measure.steps.length; index++) {
+            const target = measure.steps[index];
+            if (target.noteStyleId !== undefined || target.articulation !== undefined) {
+                target.noteStyleId = undefined;
+                target.articulation = undefined;
+                changed = true;
+            }
+        }
+
+        return changed;
+    }
+
+    /**
+     * Replaces the note styles and articulations of a contiguous step range.
+     *
+     * @param measure The measure containing the steps.
+     * @param startStep The first step index to replace (inclusive).
+     * @param endStep The last step index to replace (inclusive).
+     * @param steps The replacement steps, covering exactly the range length.
+     *
+     * @returns True when any step changed.
+     */
+    private replaceStepRange(measure: ISbDmTrackMeasure, startStep: number, endStep: number,
+        steps: IMeasureStep[]): boolean {
+        let changed = false;
+
+        const lastStep = Math.min(endStep, measure.steps.length - 1);
+        for (let position = startStep; position <= lastStep; position++) {
+            const source = steps[position - startStep];
+            const target = measure.steps[position];
+            const noteStyleId = source.noteStyleId;
+            const articulation = source.articulation ? { ...source.articulation } : undefined;
+
+            if (target.noteStyleId !== noteStyleId || !this.sameArticulation(target.articulation, articulation)) {
+                target.noteStyleId = noteStyleId;
+                target.articulation = articulation;
+                changed = true;
+            }
+        }
+
+        return changed;
+    }
+
+    private sameArticulation(a: INoteArticulation | undefined, b: INoteArticulation | undefined): boolean {
+        if (a === undefined || b === undefined) {
+            return a === b;
+        }
+
+        return a.damping === b.damping && a.accent === b.accent && a.ghost === b.ghost;
+    }
+
+    private trackHasContent(track: ISbDmTrack): boolean {
+        return track.measures.some((measure) => {
+            return measure.steps.some((step) => {
+                return step.noteStyleId !== undefined || step.articulation !== undefined;
+            }) || measure.subdivisions.length > 0 || measure.events.some((event) => {
+                return event.audioData !== undefined;
+            });
+        });
+    }
+
+    /**
+     * Creates a new score entry on the backend for an arrangement that was previously saved but
+     * whose backend record no longer exists (e.g. deleted by another user). The arrangement gets
+     * a new permanent ID and the score library is refreshed.
+     *
+     * @param arrangement The local arrangement to persist.
+     * @param content     The packed arrangement content string.
+     *
+     * @returns The content string on success, or undefined on failure.
+     */
+    private async addScoreAsNew(arrangement: ISbDmArrangement, content: string): Promise<string | undefined> {
+        const res = await this.fetchApi("/api?action=addScore", {
+            method: "POST",
+            headers: { Accept: "application/json" },
+            body: JSON.stringify({ name: arrangement.title || "Untitled", content }),
+        });
+
+        if (!res) {
+            return undefined;
+        }
+
+        const data = await res.json() as { success: boolean; id: number; };
+        if (!data.success) {
+            return undefined;
+        }
+
+        (arrangement as Arrangement).id = data.id;
+
+        await this.refreshScoreLib();
+
+        // Re-serialize with the new ID so that AppStorage and future saves use the correct ID.
+        return stringifyPackedArrangement((arrangement as Arrangement).toSnapshot());
+    }
+
+    /**
+     * Updates the score library entry name to match the arrangement title, if they differ.
+     * This keeps the library display in sync with the arrangement after a save.
+     *
+     * @param scoreId The database ID of the score.
+     * @param title   The current arrangement title.
+     */
+    private async syncScoreLibName(scoreId: number, title: string): Promise<void> {
+        const score = this.findScoreInLib(this.data.scoreLib, scoreId);
+        if (!score || score.name === title) {
+            return;
+        }
+
+        // Persist the name change on the backend.
+        const res = await this.fetchApi("/api?action=renameEntry", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ type: "score", id: scoreId, name: title }),
+        });
+
+        if (res) {
+            score.name = title;
+            void requisitions.execute("scoreEntryUpdated", score);
+        }
+    }
+
+    private findScoreInLib(entries: Array<ISbDmScoreFolder | ISbDmScore>, id: number): ISbDmScore | undefined {
+        for (const entry of entries) {
+            if (entry.type === SbDmEntityType.Score && entry.id === id) {
+                return entry;
+            }
+
+            if (entry.type === SbDmEntityType.ScoreFolder) {
+                const found = this.findScoreInLib(entry.children, id);
+                if (found) {
+                    return found;
+                }
+            }
+        }
+
+        return undefined;
+    }
+
     private async rewriteMigratedScore(score: ISbDmScore, arrangement: Arrangement): Promise<void> {
         if (!this.canWriteScores) {
             return;
@@ -1604,6 +2456,16 @@ export class ScoreBookDataModel {
 
         return candidate.type === SbDmEntityType.Score
             && typeof candidate.content === "string";
+    }
+
+    private isArrangementSnapshot(source: unknown): source is IArrangementSnapshot {
+        if (!source || typeof source !== "object") {
+            return false;
+        }
+
+        const candidate = source as Partial<IArrangementSnapshot>;
+
+        return typeof candidate.scoreId === "number";
     }
 
     /**

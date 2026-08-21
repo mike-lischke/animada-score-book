@@ -51,6 +51,35 @@ const getLocalBranches = (): Set<string> => {
     }
 };
 
+const checkOrphans = (dbNames: string[], expectedDbs: Set<string>, prefix: string): void => {
+    const orphans: string[] = [];
+
+    for (const dbName of dbNames) {
+        if (dbName.includes("__") && !expectedDbs.has(dbName)) {
+            orphans.push(dbName);
+        }
+    }
+
+    if (orphans.length === 0) {
+        console.log("No orphaned branch databases found.");
+
+        return;
+    }
+
+    console.log("Orphaned branch databases (branch no longer exists locally):");
+
+    for (const db of orphans) {
+        console.log(`  - ${db}`);
+    }
+
+    console.log(
+        "\nTo drop these databases manually, run:\n"
+        + orphans.map((db) => {
+            return "  echo 'DROP DATABASE `" + db + "`;' | mysql -u root -p";
+        }).join("\n"),
+    );
+};
+
 const main = async (): Promise<void> => {
     const config = loadConfig();
 
@@ -126,40 +155,6 @@ const main = async (): Promise<void> => {
             await pool.end();
         }
     }
-};
-
-const checkOrphans = (
-    dbNames: string[],
-    expectedDbs: Set<string>,
-    prefix: string,
-): void => {
-    const orphans: string[] = [];
-
-    for (const dbName of dbNames) {
-        // Only check branch-specific databases (those with the __ prefix).
-        if (dbName.includes("__") && !expectedDbs.has(dbName)) {
-            orphans.push(dbName);
-        }
-    }
-
-    if (orphans.length === 0) {
-        console.log("No orphaned branch databases found.");
-
-        return;
-    }
-
-    console.log("Orphaned branch databases (branch no longer exists locally):");
-
-    for (const db of orphans) {
-        console.log(`  - ${db}`);
-    }
-
-    console.log(
-        "\nTo drop these databases manually, run:\n"
-        + orphans.map((db) => {
-            return "  echo 'DROP DATABASE `" + db + "`;' | mysql -u root -p";
-        }).join("\n"),
-    );
 };
 
 main().catch((e: unknown) => {

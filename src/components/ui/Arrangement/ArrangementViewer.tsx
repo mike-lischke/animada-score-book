@@ -7,27 +7,32 @@ import { createRef, type JSX } from "preact";
 
 import { AppStorage, type IUISettings } from "../../../core/AppStorage.js";
 import type { RealTime, ScoreBookDataModel } from "../../../core/ScoreBookDataModel.js";
-import type { UndoManager } from "../../../core/UndoManager.js";
 import { clampValue } from "../../../core/utils.js";
 import type { ArrangementPlayer } from "../../../player/ArrangementPlayer.js";
 import type { PlayerPlayState } from "../../../player/ArrangementPlayer.js";
 import { requisitions } from "../../../supplement/Requisitions.js";
 import type { SelectionManager } from "../../../ui/SelectionManager.js";
+import { GridMeasureEditor } from "../../../ui/GridMeasureEditor.js";
+import { TrackViewerInputController } from "../../../ui/TrackViewerInputController.js";
 import { GridMeasureViewer } from "../Bar/Grid/GridMeasureViewer.js";
 import { StaffBarViewer } from "../Bar/Staff/StaffBarViewer.js";
 import { StaffPrefixViewer } from "../Bar/Staff/StaffPrefixViewer.js";
 import { Container } from "../framework/Container.js";
+import { DialogResponseClosure } from "../framework/Dialog.js";
+import { RadialMenu } from "../framework/RadialMenu.js";
 import { ChildAlignment, Orientation } from "../framework/ui-types.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
 import { Minimap, type IVisibleBarRange } from "../Minimap/Minimap.js";
+import { InsertBarsDialog } from "../composites/InsertBarsDialog.js";
+import { BarActionKind, BarActionStrip } from "./BarActionStrip.js";
 import { TrackControls } from "./TrackControls.js";
+import { TrackEditSidebar } from "./TrackEditSidebar.js";
 
 export interface IArrangementViewerProps extends ICommonUIProperties {
     arrangementPlayer: ArrangementPlayer;
     dataModel: ScoreBookDataModel;
     selectionManager: SelectionManager;
-    undoManager: UndoManager;
-    touchEditingEnabled: boolean;
+    inEditMode: boolean;
 }
 
 interface IArrangementViewerState {
@@ -50,6 +55,10 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
     private trackControlsRef = createRef<HTMLDivElement>();
     private viewerContentHostRef = createRef<HTMLDivElement>();
     private minimapRef = createRef<Minimap>();
+    private insertBarsDialogRef = createRef<InsertBarsDialog>();
+    private barActionStripRef = createRef<BarActionStrip>();
+    private gridRadialMenuRef = createRef<RadialMenu>();
+    private trackViewerInputController?: TrackViewerInputController;
 
     //private animationEngine?: AnimationEngine;
     private resizeObserver: ResizeObserver;
@@ -95,10 +104,28 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
 
         selectionManager.setEventContainer(this.arrangementViewerRef.current!);
 
+        const verticalHost = this.arrangementViewerRef.current?.parentElement;
+        if (verticalHost) {
+            selectionManager.setScrollHosts(this.viewerRef.current!, verticalHost);
+        }
+
+        const contentHost = this.viewerContentHostRef.current!;
+        contentHost.tabIndex = -1;
+        contentHost.style.outline = "none";
+        const gridEditor = new GridMeasureEditor(this.props.dataModel);
+        this.trackViewerInputController = new TrackViewerInputController(
+            contentHost, this.gridRadialMenuRef.current!, selectionManager,
+        );
+        this.trackViewerInputController.setGridEditor(gridEditor);
+        this.trackViewerInputController.setEditMode(this.props.inEditMode);
+        this.trackViewerInputController.setViewMode(this.state.trackViewMode);
+        this.trackViewerInputController.attach();
+
         requisitions.register("settingsChanged", this.handleSettingsChanged);
         requisitions.register("trackViewModeToggled", this.handleTrackViewModeToggled);
         requisitions.register("timeParamsChanged", this.handleTimeParamsChange);
         requisitions.register("animationStateChanged", this.handleAnimationStateChanged);
+        requisitions.register("arrangementChanged", this.handleArrangementChanged);
 
         setTimeout(this.handleResize, 0);
         this.resizeObserver.observe(this.viewerRef.current!);
@@ -130,6 +157,11 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         if (prevState.trackViewMode !== trackViewMode) {
             // View mode switched — newly mounted components need the current selection state.
             selectionManager.republishSelection();
+            this.trackViewerInputController?.setViewMode(trackViewMode);
+        }
+
+        if (prevProps.inEditMode !== this.props.inEditMode) {
+            this.trackViewerInputController?.setEditMode(this.props.inEditMode);
         }
 
         this.trackViewerContainerRef.current!.style.zoom = `${viewerZoom}%`;
@@ -141,6 +173,8 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
 
         this.resizeObserver.disconnect();
         arrangementPlayer.animationEngine.disconnect(this.autoFollow);
+        this.trackViewerInputController?.dispose();
+        this.trackViewerInputController = undefined;
 
         if (this.scrollAnimationFrameId !== 0) {
             cancelAnimationFrame(this.scrollAnimationFrameId);
@@ -151,10 +185,11 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         requisitions.unregister("trackViewModeToggled", this.handleTrackViewModeToggled);
         requisitions.unregister("timeParamsChanged", this.handleTimeParamsChange);
         requisitions.unregister("animationStateChanged", this.handleAnimationStateChanged);
+        requisitions.unregister("arrangementChanged", this.handleArrangementChanged);
     }
 
     public override render(): JSX.Element {
-        const { arrangementPlayer, dataModel, selectionManager, touchEditingEnabled, undoManager } = this.props;
+        const { arrangementPlayer, dataModel, selectionManager, inEditMode } = this.props;
         const { autoFollowIsOn, trackViewMode, viewerZoom } = this.state;
 
         const arrangement = dataModel.arrangement!;
@@ -180,9 +215,8 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
                             barNumber,
                             arrangement,
                             arrangementPlayer,
-                            touchEditingEnabled,
+                            inEditMode,
                             selectionManager,
-                            undoManager,
                             dataModel,
                         };
 
@@ -230,50 +264,112 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
             </>
         );
 
+        const editSidebar = inEditMode ? (
+            <TrackEditSidebar tracks={arrangement.tracks} dataModel={dataModel} />
+        ) : undefined;
+
+        const barActionStrip = inEditMode ? (
+            <BarActionStrip
+                ref={this.barActionStripRef}
+                barCount={barCount}
+                canDelete={barCount > 1}
+                scrollHostRef={this.viewerRef}
+                onBarAction={this.handleBarAction}
+            />
+        ) : undefined;
+
         return (
-            <Container
-                className="arrangementViewer"
-                innerRef={this.arrangementViewerRef}
-                orientation={Orientation.TopDown}
-                crossAlignment={ChildAlignment.Stretch}
-            >
+            <>
                 <Container
-                    id="trackViewerContainer"
-                    innerRef={this.trackViewerContainerRef}
-                    orientation={Orientation.LeftToRight}
+                    className="arrangementViewer"
+                    innerRef={this.arrangementViewerRef}
+                    orientation={Orientation.TopDown}
                     crossAlignment={ChildAlignment.Stretch}
-                    style={{ zoom: `${viewerZoom}%` }}
                 >
-                    <TrackControls innerRef={this.trackControlsRef} tracks={arrangement.tracks}
-                        selectionManager={selectionManager} />
                     <Container
-                        id="trackViewerHost"
-                        innerRef={this.viewerRef}
-                        orientation={Orientation.TopDown}
-                        crossAlignment={ChildAlignment.Start}
-                        onWheel={autoFollowIsOn ? this.handleWheel : undefined}
-                        onScroll={this.handleTrackViewerScroll}
+                        id="trackViewerContainer"
+                        className={inEditMode ? "edit-mode" : undefined}
+                        innerRef={this.trackViewerContainerRef}
+                        orientation={Orientation.LeftToRight}
+                        crossAlignment={ChildAlignment.Stretch}
+                        style={{ zoom: `${viewerZoom}%` }}
                     >
+                        <TrackControls innerRef={this.trackControlsRef} tracks={arrangement.tracks}
+                            selectionManager={selectionManager} />
                         <Container
-                            id="trackViewerContentHost"
-                            innerRef={this.viewerContentHostRef}
-                            orientation={Orientation.LeftToRight}
+                            id="trackViewerHost"
+                            innerRef={this.viewerRef}
+                            orientation={Orientation.TopDown}
                             crossAlignment={ChildAlignment.Start}
+                            onWheel={autoFollowIsOn ? this.handleWheel : undefined}
+                            onScroll={this.handleTrackViewerScroll}
                         >
-                            {contentHostContent}
+                            {barActionStrip}
+                            <Container
+                                id="trackViewerContentHost"
+                                innerRef={this.viewerContentHostRef}
+                                orientation={Orientation.LeftToRight}
+                                crossAlignment={ChildAlignment.Start}
+                            >
+                                {contentHostContent}
+                            </Container>
                         </Container>
+                        {editSidebar}
                     </Container>
+                    <Minimap
+                        ref={this.minimapRef}
+                        arrangement={arrangement}
+                        scoreMetrics={arrangementPlayer.scoreMetrics}
+                        selectionManager={selectionManager}
+                        onViewportMoved={this.handleViewportMoved}
+                    />
+                    <InsertBarsDialog ref={this.insertBarsDialogRef} />
                 </Container>
-                <Minimap
-                    ref={this.minimapRef}
-                    arrangement={arrangement}
-                    scoreMetrics={arrangementPlayer.scoreMetrics}
-                    selectionManager={selectionManager}
-                    onViewportMoved={this.handleViewportMoved}
-                />
-            </Container >
+                <RadialMenu ref={this.gridRadialMenuRef} />
+            </>
         );
     }
+
+    private handleBarAction = (barNumber: number, action: BarActionKind): void => {
+        const { dataModel } = this.props;
+
+        switch (action) {
+            case BarActionKind.InsertLeft: {
+                void this.handleInsertBars(barNumber, true);
+                break;
+            }
+
+            case BarActionKind.Clear: {
+                dataModel.clearBar(barNumber);
+                break;
+            }
+
+            case BarActionKind.Delete: {
+                dataModel.deleteBar(barNumber);
+                break;
+            }
+
+            case BarActionKind.Duplicate: {
+                dataModel.duplicateBar(barNumber);
+                break;
+            }
+
+            case BarActionKind.InsertRight: {
+                void this.handleInsertBars(barNumber, false);
+                break;
+            }
+        }
+    };
+
+    private handleInsertBars = async (barNumber: number, before: boolean): Promise<void> => {
+        const { dataModel } = this.props;
+        const result = await this.insertBarsDialogRef.current?.show();
+        if (result?.closure !== DialogResponseClosure.Accept) {
+            return;
+        }
+
+        dataModel.insertBars(barNumber, result.count, before, result.copyContent);
+    };
 
     private handleResize = () => {
         this.handleTrackViewerScroll();
@@ -281,6 +377,18 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
 
     private handleTimeParamsChange = (): Promise<boolean> => {
         // Time params changed — internal layout may need recalculation.
+
+        return Promise.resolve(true);
+    };
+
+    private handleArrangementChanged = (arrangementId: number): Promise<boolean> => {
+        const { dataModel } = this.props;
+
+        if (arrangementId !== dataModel.arrangement?.id) {
+            return Promise.resolve(false);
+        }
+
+        this.forceUpdate();
 
         return Promise.resolve(true);
     };

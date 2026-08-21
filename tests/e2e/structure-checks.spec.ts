@@ -5,7 +5,7 @@
 
 import { expect, test } from "@playwright/test";
 
-import { ensureGridMode, routeApi } from "./helpers.js";
+import { ensureGridMode, routeApi } from "./e2e-test-helpers.js";
 
 /* cspell:disable */
 const iBreakQuery = "t=Beija%20Flor%202004%20-%20Bossa%202%20(%22I-Break%22)" +
@@ -42,7 +42,7 @@ test.describe("Beija Flor I-Break: Agogô DOM structure", () => {
 
             return Array.from(row.children)
                 .filter((c) => {
-                    return !c.classList.contains("grid-beat-overlay"); 
+                    return !c.classList.contains("grid-beat-overlay");
                 })
                 .map((child) => {
                     if (child.classList.contains("subdivision")) {

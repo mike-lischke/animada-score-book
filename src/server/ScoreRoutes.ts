@@ -4,9 +4,14 @@
  */
 
 import { type IncomingMessage, type ServerResponse } from "node:http";
+import { randomBytes } from "node:crypto";
 
 import { AccessLevel, EntityType, isValidEntityType } from "./Auth.js";
 import { type RequestContext } from "./RequestContext.js";
+
+/** Lock timeout in minutes. Locks older than this are considered expired. */
+const lockTimeoutMinutes = 30;
+const tokenBytes = 32;
 
 export class ScoreRoutes {
     public constructor(private readonly ctx: RequestContext) { }
@@ -342,8 +347,9 @@ export class ScoreRoutes {
         const body = await this.ctx.readJsonBody(req);
         const id = body.id !== undefined ? Number(body.id) : undefined;
         const content = body.content as string | undefined;
+        const token = body.token as string | undefined;
 
-        if (id === undefined || content === undefined) {
+        if (id === undefined || content === undefined || content.length === 0) {
             this.ctx.sendError(res, "id and content required");
 
             return;
@@ -357,7 +363,26 @@ export class ScoreRoutes {
             return;
         }
 
-        await this.ctx.auth.adapter.execute("UPDATE scores SET content = ? WHERE id = ?", [content, id]);
+        if (token) {
+            const locks = await this.ctx.auth.adapter.query<{ lock_token: string; }>(
+                "SELECT lock_token FROM score_locks WHERE score_id = ?",
+                [id],
+            );
+
+            if (locks.length === 0 || locks[0].lock_token !== token) {
+                this.ctx.sendError(res, "Score is locked by another user. Refresh and try again.", 409);
+
+                return;
+            }
+        }
+
+        const result = await this.ctx.auth.adapter.execute("UPDATE scores SET content = ? WHERE id = ?", [content, id]);
+
+        if (result.affectedRows === 0) {
+            this.ctx.sendError(res, "Score not found", 404);
+
+            return;
+        }
 
         this.ctx.sendJson(res, { success: true });
     };
@@ -540,6 +565,175 @@ export class ScoreRoutes {
 
         await this.ctx.auth.adapter.execute("DELETE FROM scores");
         await this.ctx.auth.adapter.execute("DELETE FROM folders");
+
+        this.ctx.sendJson(res, { success: true });
+    };
+
+    public async handleLockScore(req: IncomingMessage, res: ServerResponse) {
+        const user = this.ctx.getAuthUser(req);
+
+        if (!user) {
+            this.ctx.sendError(res, "Authentication required.", 401);
+
+            return;
+        }
+
+        const body = await this.ctx.readJsonBody(req);
+        const scoreId = body.scoreId !== undefined ? Number(body.scoreId) : undefined;
+        const prevToken = body.prevToken as string | undefined;
+
+        if (scoreId === undefined) {
+            this.ctx.sendError(res, "scoreId required");
+
+            return;
+        }
+
+        const allowed = await this.ctx.auth.checkPermission(user, EntityType.Score, scoreId, AccessLevel.Write);
+
+        if (!allowed) {
+            this.ctx.sendError(res, "Forbidden", 403);
+
+            return;
+        }
+
+        const scoreExists = await this.ctx.auth.adapter.query<{ id: number; }>(
+            "SELECT id FROM scores WHERE id = ?",
+            [scoreId],
+        );
+
+        if (scoreExists.length === 0) {
+            this.ctx.sendError(res, "Score not found", 404);
+
+            return;
+        }
+
+        const locks = await this.ctx.auth.adapter.query<{
+            user_id: number; username: string; lock_token: string; locked_at: string;
+        }>(
+            "SELECT user_id, username, lock_token, locked_at FROM score_locks WHERE score_id = ?",
+            [scoreId],
+        );
+
+        if (locks.length > 0) {
+            const lock = locks[0];
+            const rawLockedAt = lock.locked_at as unknown;
+            const lockedAt = rawLockedAt instanceof Date
+                ? rawLockedAt.getTime()
+                : new Date(String(rawLockedAt).replace(" ", "T") + "Z").getTime();
+            const lockAge = Date.now() - lockedAt;
+            const isExpired = lockAge > lockTimeoutMinutes * 60 * 1000;
+
+            // Same user reclaiming their own lock — always allowed, even if not expired.
+            if (lock.user_id === user.userId) {
+                const token = randomBytes(tokenBytes).toString("hex");
+
+                await this.ctx.auth.adapter.execute(
+                    "UPDATE score_locks SET lock_token = ?, locked_at = CURRENT_TIMESTAMP WHERE score_id = ?",
+                    [token, scoreId],
+                );
+
+                this.ctx.sendJson(res, { success: true, token });
+
+                return;
+            }
+
+            // Different user's lock — renew with prevToken only if expired.
+            if (isExpired && prevToken && prevToken === lock.lock_token) {
+                await this.ctx.auth.adapter.execute(
+                    "UPDATE score_locks SET locked_at = CURRENT_TIMESTAMP WHERE score_id = ?",
+                    [scoreId],
+                );
+
+                this.ctx.sendJson(res, { success: true, token: lock.lock_token, renewed: true });
+
+                return;
+            }
+
+            if (!isExpired) {
+                this.ctx.sendJson(res, {
+                    success: false,
+                    locked: true,
+                    username: lock.username,
+                    lockedAt: lock.locked_at,
+                }, 409);
+
+                return;
+            }
+
+            await this.ctx.auth.adapter.execute("DELETE FROM score_locks WHERE score_id = ?", [scoreId]);
+        }
+
+        const token = randomBytes(tokenBytes).toString("hex");
+        const username = user.username;
+
+        await this.ctx.auth.adapter.execute(
+            "INSERT INTO score_locks (score_id, user_id, username, lock_token) VALUES (?, ?, ?, ?)",
+            [scoreId, user.userId, username, token],
+        );
+
+        this.ctx.sendJson(res, { success: true, token });
+    };
+
+    public async handleUnlockScore(req: IncomingMessage, res: ServerResponse) {
+        const user = this.ctx.getAuthUser(req);
+
+        if (!user) {
+            this.ctx.sendError(res, "Authentication required.", 401);
+
+            return;
+        }
+
+        const body = await this.ctx.readJsonBody(req);
+        const scoreId = body.scoreId !== undefined ? Number(body.scoreId) : undefined;
+        const token = body.token as string | undefined;
+
+        if (scoreId === undefined || !token) {
+            this.ctx.sendError(res, "scoreId and token required");
+
+            return;
+        }
+
+        const locks = await this.ctx.auth.adapter.query<{ lock_token: string; }>(
+            "SELECT lock_token FROM score_locks WHERE score_id = ?",
+            [scoreId],
+        );
+
+        if (locks.length === 0) {
+            this.ctx.sendJson(res, { success: true });
+
+            return;
+        }
+
+        if (locks[0].lock_token !== token) {
+            this.ctx.sendError(res, "Invalid token", 403);
+
+            return;
+        }
+
+        await this.ctx.auth.adapter.execute("DELETE FROM score_locks WHERE score_id = ?", [scoreId]);
+
+        this.ctx.sendJson(res, { success: true });
+    };
+
+    public async handleForceUnlockScore(req: IncomingMessage, res: ServerResponse) {
+        const user = this.ctx.getAuthUser(req);
+
+        if (!user || !(await this.ctx.auth.isUserInAdminGroup(user.userId))) {
+            this.ctx.sendError(res, "Forbidden", 403);
+
+            return;
+        }
+
+        const body = await this.ctx.readJsonBody(req);
+        const scoreId = body.scoreId !== undefined ? Number(body.scoreId) : undefined;
+
+        if (scoreId === undefined) {
+            this.ctx.sendError(res, "scoreId required");
+
+            return;
+        }
+
+        await this.ctx.auth.adapter.execute("DELETE FROM score_locks WHERE score_id = ?", [scoreId]);
 
         this.ctx.sendJson(res, { success: true });
     };

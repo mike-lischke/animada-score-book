@@ -5,11 +5,8 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import {
-    ScoreBookDataModel, type ISbDmArrangement, type ISbDmInstrument, type ISbDmNoteEvent
-} from "../../src/core/ScoreBookDataModel.js";
+import { ScoreBookDataModel, type ISbDmArrangement } from "../../src/core/ScoreBookDataModel.js";
 import { ArrangementMigrator } from "../../src/core/serialisation/migration/ArrangementMigrator.js";
-import type { EditCommand } from "../../src/core/types/edit_commands.js";
 import type { IArrangementSnapshot } from "../../src/core/types/general.js";
 import { UndoManager } from "../../src/core/UndoManager.js";
 import { requisitions } from "../../src/supplement/Requisitions.js";
@@ -26,14 +23,6 @@ class TestScoreBookDataModel extends ScoreBookDataModel {
         return this._arrangement;
     }
 }
-
-vi.mock("../../src/core/edit.js", () => {
-    const edit = vi.fn(() => {
-        return true;
-    });
-
-    return { edit };
-});
 
 vi.mock("../../src/core/UndoRedoStack.js", () => {
     class TestPublisher {
@@ -64,16 +53,10 @@ vi.mock("../../src/core/UndoRedoStack.js", () => {
         public currentState: IArrangementSnapshot = {
             version: 2,
             title: "Snapshot",
-            timeParams: {
-                timeSignature: "4/4",
-                tempo: 120,
-                length: 1,
-                pulse: "1/4",
-                stepResolution: 8,
-            },
+            timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4", stepResolution: 8 },
             tracks: [],
         };
-        public handleEdit = vi.fn((_cmd: EditCommand, _old?: unknown) => {
+        public recordSnapshot = vi.fn(() => {
             this.canUndo = true;
             this.topics.canUndo.publish();
         });
@@ -83,6 +66,10 @@ vi.mock("../../src/core/UndoRedoStack.js", () => {
         });
         public goForward = vi.fn(() => {
             /* no-op */
+        });
+        public reset = vi.fn(() => {
+            this.canUndo = false;
+            this.canRedo = false;
         });
         public constructor(public arrangement: unknown) {
             stackRef.instance = this;
@@ -97,33 +84,21 @@ interface UndoRedoMock {
         instance?: {
             canUndo: boolean;
             canRedo: boolean;
-            handleEdit: ReturnType<typeof vi.fn>;
+            recordSnapshot: ReturnType<typeof vi.fn>;
             goBack: ReturnType<typeof vi.fn>;
             goForward: ReturnType<typeof vi.fn>;
+            reset: ReturnType<typeof vi.fn>;
         };
     };
 }
 
-interface EditModuleMock { edit: ReturnType<typeof vi.fn>; }
+const undoRedo = (await import("../../src/core/UndoRedoStack.js")) as unknown as UndoRedoMock;
 
-const undoRedo = (
-    await import("../../src/core/UndoRedoStack.js")
-) as unknown as UndoRedoMock;
-const editModule = (
-    await import("../../src/core/edit.js")
-) as unknown as EditModuleMock;
-
-describe("AnimadaScoreBook", () => {
+describe("UndoManager", () => {
     const snapshot: IArrangementSnapshot = {
         version: 2,
         title: "Initial",
-        timeParams: {
-            timeSignature: "4/4",
-            tempo: 120,
-            length: 1,
-            pulse: "1/4",
-            stepResolution: 8
-        },
+        timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4", stepResolution: 8 },
         tracks: []
     };
 
@@ -133,15 +108,18 @@ describe("AnimadaScoreBook", () => {
 
     let manager: UndoManager;
     beforeEach(() => {
+        requisitions.unregister("arrangementMutated");
         manager = new UndoManager(dm);
+
         // reset mocks
         vi.clearAllMocks();
         if (undoRedo.stackRef.instance) {
             undoRedo.stackRef.instance.canUndo = false;
             undoRedo.stackRef.instance.canRedo = false;
-            undoRedo.stackRef.instance.handleEdit.mockClear();
+            undoRedo.stackRef.instance.recordSnapshot.mockClear();
             undoRedo.stackRef.instance.goBack.mockClear();
             undoRedo.stackRef.instance.goForward.mockClear();
+            undoRedo.stackRef.instance.reset.mockClear();
         }
     });
 
@@ -154,33 +132,22 @@ describe("AnimadaScoreBook", () => {
 
     it("records edits that cause changes and publishes current state", () => {
         const publishSpy = vi.fn();
-        requisitions.register("undoStateChanged", publishSpy);
-        // Use a note edit to exercise oldValue extraction.
-        const cmd: EditCommand = {
-            type: "EditCommand_Note",
-            note: { audioData: { id: "ns", audioBuffer: null, instrument: {} as ISbDmInstrument } } as ISbDmNoteEvent,
-        };
-        manager.edit(cmd);
-        expect(editModule.edit).toHaveBeenCalledOnce();
+        requisitions.register("arrangementMutated", publishSpy);
+        dm.setTitle("New Title");
         const stack1 = undoRedo.stackRef.instance;
         expect(stack1).toBeDefined();
-        expect(stack1!.handleEdit).toHaveBeenCalledOnce();
+        expect(stack1!.recordSnapshot).toHaveBeenCalledOnce();
         expect(publishSpy).toHaveBeenCalledOnce();
-        requisitions.unregister("undoStateChanged", publishSpy);
+        requisitions.unregister("arrangementMutated", publishSpy);
     });
 
     it("does not record when no changes happen", () => {
-        editModule.edit.mockReturnValueOnce(false);
         const publishSpy = vi.fn();
-        requisitions.register("undoStateChanged", publishSpy);
-        const cmd: EditCommand = {
-            type: "EditCommand_ArrangementTitle",
-            arrangement: dm.arrangement,
-            newTitle: "X"
-        };
-        manager.edit(cmd);
+        requisitions.register("arrangementMutated", publishSpy);
+        // Setting the same title is a no-op — no requisition fires.
+        dm.setTitle("New Title");
         expect(publishSpy).not.toHaveBeenCalled();
-        requisitions.unregister("undoStateChanged", publishSpy);
+        requisitions.unregister("arrangementMutated", publishSpy);
     });
 
     it("undo applies snapshot when available", () => {
@@ -197,6 +164,15 @@ describe("AnimadaScoreBook", () => {
         const stack4 = undoRedo.stackRef.instance;
         expect(stack4).toBeDefined();
         expect(stack4!.goForward).toHaveBeenCalled();
+        // eslint-disable-next-line @typescript-eslint/unbound-method
+        expect(arrangement.applyArrangementSnapshot).toHaveBeenCalled();
+    });
+
+    it("discardChanges resets the stack and applies the baseline snapshot", () => {
+        manager.discardChanges();
+        const stack5 = undoRedo.stackRef.instance;
+        expect(stack5).toBeDefined();
+        expect(stack5!.reset).toHaveBeenCalled();
         // eslint-disable-next-line @typescript-eslint/unbound-method
         expect(arrangement.applyArrangementSnapshot).toHaveBeenCalled();
     });

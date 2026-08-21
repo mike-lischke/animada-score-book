@@ -9,7 +9,6 @@ import type {
     ISbDmTrack,
     ITimeParamsView, ScoreBookDataModel
 } from "../../../../core/ScoreBookDataModel.js";
-import type { UndoManager } from "../../../../core/UndoManager.js";
 import type { ArrangementPlayer } from "../../../../player/ArrangementPlayer.js";
 import type { TrackPlayer } from "../../../../player/TrackPlayer.js";
 import { requisitions } from "../../../../supplement/Requisitions.js";
@@ -23,8 +22,7 @@ export interface IStaffBarTrackRowProps extends ICommonUIProperties {
 
     trackPlayer: TrackPlayer;
     arrangementPlayer: ArrangementPlayer;
-    touchEditingEnabled: boolean;
-    undoManager: UndoManager;
+    inEditMode: boolean;
     dataModel: ScoreBookDataModel;
 }
 

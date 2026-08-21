@@ -229,6 +229,7 @@ const makeArrangement = (trackCount: number): ISbDmArrangement => {
         tracks,
         addTrack: vi.fn(),
         removeTrack: vi.fn(),
+        duplicateTrack: vi.fn(),
         applyArrangementSnapshot: vi.fn(),
         mainVolume: 1,
         loop: false,

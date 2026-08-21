@@ -6,10 +6,9 @@
 import { expect, test } from "@playwright/test";
 
 import {
-    beijaFlorImportPath, ensureGridMode,
-    expectGridModePolyrhythmNotes, expectImportedPolyrhythmSong, expectPlaybackToMove,
-    routeApi,
-} from "./helpers.js";
+    beijaFlorImportPath, ensureGridMode, expectGridModePolyrhythmNotes, expectImportedPolyrhythmSong,
+    expectPlaybackToMove, routeApi,
+} from "./e2e-test-helpers.js";
 
 const bolero3ImportPath = "/?t=Bolero%203&a2=6-8.50.1.3-8.8.319ihbrp-4UX1WbY5oS";
 
@@ -64,7 +63,7 @@ test.describe("BananaDrum polyrhythm import", () => {
 
             const directChildren = Array.from(row.children)
                 .filter((c) => {
-                    return !c.classList.contains("grid-beat-overlay"); 
+                    return !c.classList.contains("grid-beat-overlay");
                 });
 
             return directChildren.map((child) => {
@@ -171,7 +170,7 @@ test.describe("BananaDrum polyrhythm import", () => {
 
             return Array.from(row.children)
                 .filter((c) => {
-                    return !c.classList.contains("grid-beat-overlay"); 
+                    return !c.classList.contains("grid-beat-overlay");
                 })
                 .map((child) => {
                     if (child.classList.contains("subdivision")) {
@@ -209,7 +208,7 @@ test.describe("BananaDrum polyrhythm import", () => {
 
             return Array.from(row.children)
                 .filter((c) => {
-                    return !c.classList.contains("grid-beat-overlay"); 
+                    return !c.classList.contains("grid-beat-overlay");
                 })
                 .map((child) => {
                     if (child.classList.contains("subdivision")) {
@@ -245,7 +244,7 @@ test.describe("BananaDrum polyrhythm import", () => {
 
             return Array.from(row.children)
                 .filter((c) => {
-                    return !c.classList.contains("grid-beat-overlay"); 
+                    return !c.classList.contains("grid-beat-overlay");
                 })
                 .map((child) => {
                     if (child.classList.contains("subdivision")) {

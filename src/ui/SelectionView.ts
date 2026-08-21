@@ -11,6 +11,7 @@ import { SelectionGranularity, SelectionMode } from "./selection-types.js";
 
 const selectionRectClass = "selection-rect";
 const selectionOverlayClass = "selection-overlay";
+const selectionCursorClass = "selection-cursor";
 const noteSelectedClass = "note-selected";
 const staffNoteRunClass = "staff-note-viewer-run";
 const formElementNames = new Set(["BUTTON", "INPUT", "SELECT", "TEXTAREA"]);
@@ -26,11 +27,21 @@ const formElementNames = new Set(["BUTTON", "INPUT", "SELECT", "TEXTAREA"]);
 export class SelectionView {
     private rectElement?: HTMLDivElement;
     private captureElement?: HTMLElement;
+    private horizontalScrollHost?: HTMLElement;
+    private verticalScrollHost?: HTMLElement;
 
     private dragPending = false;
     private isDragging = false;
     private startX = 0;
     private startY = 0;
+    private startScrollLeft = 0;
+    private startScrollTop = 0;
+    private startVerticalScrollTop = 0;
+    private lastPointerX = 0;
+    private lastPointerY = 0;
+    private autoScrollTimer?: ReturnType<typeof setInterval>;
+    private autoScrollDX = 0;
+    private autoScrollDY = 0;
 
     /**
      * Ratio of viewport pixels to CSS pixels inside #trackViewerContainer.
@@ -42,6 +53,7 @@ export class SelectionView {
 
     public constructor(private manager: SelectionManager, private eventContainer: HTMLElement) {
         requisitions.register("selectionChanged", this.handleSelectionChanged);
+        requisitions.register("editModeChanged", this.handleEditModeChanged);
         eventContainer.addEventListener("pointerdown", this.handlePointerDown);
         document.addEventListener("keydown", this.handleKeyDown);
         document.addEventListener("keyup", this.handleKeyUp);
@@ -52,12 +64,28 @@ export class SelectionView {
         this.eventContainer.removeEventListener("pointerdown", this.handlePointerDown);
         document.removeEventListener("keydown", this.handleKeyDown);
         requisitions.unregister("selectionChanged", this.handleSelectionChanged);
+        requisitions.unregister("editModeChanged", this.handleEditModeChanged);
+    }
+
+    /**
+     * Sets the scroll host elements whose scroll positions are tracked during drag selection
+     * so the selection rectangle stays anchored to the content. Also enables edge auto-scroll.
+     *
+     * @param horizontal The horizontally-scrollable container (typically `#trackViewerHost`).
+     * @param vertical The vertically-scrollable container (typically the arrangement viewer parent).
+     */
+    public setScrollHosts(horizontal: HTMLElement, vertical: HTMLElement): void {
+        this.horizontalScrollHost = horizontal;
+        this.verticalScrollHost = vertical;
     }
 
     private handlePointerDown = (event: PointerEvent): void => {
         if (event.defaultPrevented || this.isFormElement(event.target)) {
             return;
         }
+
+        // Clear any lingering text selection so the score's custom selection is the only one.
+        window.getSelection()?.removeAllRanges();
 
         this.captureElement = event.target instanceof HTMLElement ? event.target : document.body;
         this.captureElement.setPointerCapture(event.pointerId);
@@ -69,6 +97,25 @@ export class SelectionView {
         this.dragPending = true;
         this.startX = event.clientX;
         this.startY = event.clientY;
+        this.lastPointerX = event.clientX;
+        this.lastPointerY = event.clientY;
+
+        const half = 2;
+        const clickRect = new DOMRect(event.clientX - half, event.clientY - half,
+            (half * 2) + 1, (half * 2) + 1);
+        this.manager.previewNote(clickRect);
+
+        if (this.horizontalScrollHost) {
+            this.startScrollLeft = this.horizontalScrollHost.scrollLeft;
+            this.startScrollTop = this.horizontalScrollHost.scrollTop;
+            this.horizontalScrollHost.addEventListener("scroll", this.handleScroll, { passive: true });
+        }
+
+        if (this.verticalScrollHost && this.verticalScrollHost !== this.horizontalScrollHost) {
+            this.startVerticalScrollTop = this.verticalScrollHost.scrollTop;
+            this.verticalScrollHost.addEventListener("scroll", this.handleScroll, { passive: true });
+        }
+
         this.createRectElement(event.clientX, event.clientY);
 
         event.preventDefault();
@@ -79,7 +126,11 @@ export class SelectionView {
             return;
         }
 
+        this.lastPointerX = event.clientX;
+        this.lastPointerY = event.clientY;
+
         this.updateRectElement(event.clientX, event.clientY);
+        this.updateAutoScroll(event.clientX, event.clientY);
 
         const rect = this.rectElement.getBoundingClientRect();
         if (rect.width > 2 || rect.height > 2) {
@@ -116,6 +167,54 @@ export class SelectionView {
         this.cancelDrag();
     };
 
+    /**
+     * Adjusts the selection start point when any scroll host scrolls during a drag,
+     * keeping the anchor pinned to the content rather than the viewport.
+     *
+     * @param event The scroll event from one of the registered scroll hosts.
+     */
+    private handleScroll = (event: Event): void => {
+        if (!this.rectElement) {
+            return;
+        }
+
+        const target = event.target;
+        let deltaX = 0;
+        let deltaY = 0;
+        let handled = false;
+
+        const hHost = this.horizontalScrollHost;
+        if (hHost && target === hHost) {
+            deltaX = hHost.scrollLeft - this.startScrollLeft;
+            deltaY = hHost.scrollTop - this.startScrollTop;
+            this.startScrollLeft = hHost.scrollLeft;
+            this.startScrollTop = hHost.scrollTop;
+            handled = true;
+        }
+
+        const vHost = this.verticalScrollHost;
+        if (vHost && target === vHost) {
+            const verticalDelta = vHost.scrollTop - this.startVerticalScrollTop;
+            deltaY += verticalDelta;
+            this.startVerticalScrollTop = vHost.scrollTop;
+            handled = true;
+        }
+
+        if (!handled) {
+            return;
+        }
+
+        this.startX -= deltaX;
+        this.startY -= deltaY;
+
+        this.updateRectElement(this.lastPointerX, this.lastPointerY);
+
+        if (this.isDragging) {
+            const rect = this.rectElement.getBoundingClientRect();
+            void requisitions.execute("selectionRectChanged", { rect });
+        }
+    };
+
     private selectionModeFromEvent(event: KeyboardEvent | MouseEvent): SelectionMode {
         if (event.shiftKey) {
             return SelectionMode.Add;
@@ -127,6 +226,10 @@ export class SelectionView {
     }
 
     private handleKeyDown = (event: KeyboardEvent): void => {
+        if (this.handleArrowKey(event)) {
+            return;
+        }
+
         if (event.key === "Escape" && this.isDragging) {
             this.cancelDrag();
         } else {
@@ -141,16 +244,347 @@ export class SelectionView {
         }
     };
 
+    private handleArrowKey(event: KeyboardEvent): boolean {
+        if (this.isDragging || this.isFormElement(event.target)
+            || !["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) {
+            return false;
+        }
+
+        const entries = [...this.manager.currentSelection.values()];
+        if (entries.length !== 1 || entries[0].granularity !== SelectionGranularity.Note) {
+            return false;
+        }
+
+        const entry = entries[0];
+        const contentHost = this.eventContainer.querySelector<HTMLElement>("#trackViewerContentHost");
+        if (!contentHost) {
+            return false;
+        }
+
+        const noteElement = this.findNoteElements(contentHost, entry).at(0);
+        if (!noteElement) {
+            return false;
+        }
+
+        const isStaffMode = noteElement.classList.contains(staffNoteRunClass);
+        const target = isStaffMode
+            ? this.findStaffArrowTarget(noteElement, event.key)
+            : this.findArrowTarget(noteElement, event.key);
+
+        if (!target) {
+            return false;
+        }
+
+        const row = target.closest<HTMLElement>(
+            isStaffMode ? ".bar-track-row.staff-mode" : ".grid-measure-row",
+        );
+        if (!row) {
+            return false;
+        }
+
+        const bar = row.getAttribute("data-bar");
+        const trackId = row.getAttribute("data-track");
+        const stepIndex = target.getAttribute("data-step-index");
+        if (!bar || !trackId || stepIndex === null) {
+            return false;
+        }
+
+        const noteId = target.getAttribute("data-note-id");
+        this.manager.selectSingleNote({
+            granularity: SelectionGranularity.Note,
+            bar: parseInt(bar, 10),
+            trackId: parseInt(trackId, 10),
+            startStep: parseInt(stepIndex, 10),
+            endStep: parseInt(stepIndex, 10),
+            noteId: noteId === null ? undefined : parseInt(noteId, 10),
+        });
+        event.preventDefault();
+
+        return true;
+    }
+
+    private findStaffArrowTarget(noteElement: HTMLElement, key: string): HTMLElement | undefined {
+        const row = noteElement.closest<HTMLElement>(".bar-track-row.staff-mode");
+        if (!row) {
+            return undefined;
+        }
+
+        const navigableRuns = (rowElement: HTMLElement): HTMLElement[] => {
+            return [...rowElement.querySelectorAll<HTMLElement>(".staff-note-viewer-run[data-step-index]")]
+                .filter((run) => {
+                    return run.querySelector(
+                        ".staff-note-viewer-note-symbol, .staff-note-viewer-rest-symbol",
+                    ) !== null;
+                });
+        };
+
+        if (key === "ArrowLeft" || key === "ArrowRight") {
+            const contentHost = this.eventContainer.querySelector<HTMLElement>("#trackViewerContentHost");
+            const trackId = row.getAttribute("data-track");
+            if (!contentHost || !trackId) {
+                return undefined;
+            }
+
+            const rows = [...contentHost.querySelectorAll<HTMLElement>(
+                `.bar-track-row.staff-mode[data-track="${trackId}"]`,
+            )].sort((left, right) => {
+                return parseInt(left.getAttribute("data-bar") ?? "0", 10)
+                    - parseInt(right.getAttribute("data-bar") ?? "0", 10);
+            });
+
+            const rowIndex = rows.indexOf(row);
+            const rowRuns = navigableRuns(row);
+            const runIndex = rowRuns.indexOf(noteElement);
+            const direction = key === "ArrowLeft" ? -1 : 1;
+
+            if (runIndex + direction >= 0 && runIndex + direction < rowRuns.length) {
+                return rowRuns[runIndex + direction];
+            }
+
+            const adjacentRowIndex = rowIndex + direction;
+            if (adjacentRowIndex < 0 || adjacentRowIndex >= rows.length) {
+                return undefined;
+            }
+
+            const adjacentRuns = navigableRuns(rows[adjacentRowIndex]);
+            if (adjacentRuns.length === 0) {
+                return undefined;
+            }
+
+            return direction < 0 ? adjacentRuns[adjacentRuns.length - 1] : adjacentRuns[0];
+        }
+
+        const contentHost = this.eventContainer.querySelector<HTMLElement>("#trackViewerContentHost");
+        const bar = row.getAttribute("data-bar");
+        if (!contentHost || !bar) {
+            return undefined;
+        }
+
+        const rows = [...contentHost.querySelectorAll<HTMLElement>(
+            `.bar-track-row.staff-mode[data-bar="${bar}"]`,
+        )];
+        const rowIndex = rows.indexOf(row);
+        const direction = key === "ArrowUp" ? -1 : 1;
+        const adjacentRowIndex = rowIndex + direction;
+        if (adjacentRowIndex < 0 || adjacentRowIndex >= rows.length) {
+            return undefined;
+        }
+
+        const adjacentRuns = navigableRuns(rows[adjacentRowIndex]);
+        if (adjacentRuns.length === 0) {
+            return undefined;
+        }
+
+        const cursorX = noteElement.getBoundingClientRect().left;
+        const runAtCursor = adjacentRuns.find((run) => {
+            const runRect = run.getBoundingClientRect();
+
+            return cursorX >= runRect.left && cursorX < runRect.right;
+        });
+        if (runAtCursor) {
+            return runAtCursor;
+        }
+
+        return adjacentRuns.reduce((closest, run) => {
+            const closestDistance = Math.abs(closest.getBoundingClientRect().left - cursorX);
+            const runDistance = Math.abs(run.getBoundingClientRect().left - cursorX);
+
+            return runDistance < closestDistance ? run : closest;
+        });
+    }
+
+    private findArrowTarget(noteElement: HTMLElement, key: string): HTMLElement | undefined {
+        const row = noteElement.closest<HTMLElement>(".grid-measure-row");
+        if (!row) {
+            return undefined;
+        }
+
+        const cells = (): HTMLElement[] => {
+            return [...row.querySelectorAll<HTMLElement>(".note-viewer[data-step-index]")];
+        };
+
+        if (key === "ArrowLeft" || key === "ArrowRight") {
+            const contentHost = this.eventContainer.querySelector<HTMLElement>("#trackViewerContentHost");
+            const trackId = row.getAttribute("data-track");
+            if (!contentHost || !trackId) {
+                return undefined;
+            }
+
+            const rows = [...contentHost.querySelectorAll<HTMLElement>(
+                `.grid-measure-row[data-track="${trackId}"]`,
+            )].sort((left, right) => {
+                return parseInt(left.getAttribute("data-bar") ?? "0", 10)
+                    - parseInt(right.getAttribute("data-bar") ?? "0", 10);
+            });
+            const rowIndex = rows.indexOf(row);
+            const rowCells = cells();
+            const cellIndex = rowCells.indexOf(noteElement);
+            const direction = key === "ArrowLeft" ? -1 : 1;
+
+            if (cellIndex + direction >= 0 && cellIndex + direction < rowCells.length) {
+                return rowCells[cellIndex + direction];
+            }
+
+            const adjacentRowIndex = rowIndex + direction;
+            if (adjacentRowIndex < 0 || adjacentRowIndex >= rows.length) {
+                return undefined;
+            }
+
+            const adjacentRow = rows[adjacentRowIndex];
+
+            const adjacentCells = [...adjacentRow.querySelectorAll<HTMLElement>(
+                ".note-viewer[data-step-index]",
+            )];
+            if (adjacentCells.length === 0) {
+                return undefined;
+            }
+
+            if (direction < 0) {
+                return adjacentCells[adjacentCells.length - 1];
+            }
+
+            return adjacentCells[0];
+        }
+
+        const contentHost = this.eventContainer.querySelector<HTMLElement>("#trackViewerContentHost");
+        const bar = row.getAttribute("data-bar");
+        if (!contentHost || !bar) {
+            return undefined;
+        }
+
+        const rows = [...contentHost.querySelectorAll<HTMLElement>(
+            `.grid-measure-row[data-bar="${bar}"]`,
+        )];
+        const rowIndex = rows.indexOf(row);
+        const direction = key === "ArrowUp" ? -1 : 1;
+        const adjacentRowIndex = rowIndex + direction;
+        if (adjacentRowIndex < 0 || adjacentRowIndex >= rows.length) {
+            return undefined;
+        }
+
+        const adjacentRow = rows[adjacentRowIndex];
+
+        const adjacentCells = [...adjacentRow.querySelectorAll<HTMLElement>(
+            ".note-viewer[data-step-index]",
+        )];
+
+        if (adjacentCells.length === 0) {
+            return undefined;
+        }
+
+        const cursorX = noteElement.getBoundingClientRect().left;
+        const cellAtCursor = adjacentCells.find((cell) => {
+            const cellRect = cell.getBoundingClientRect();
+
+            return cursorX >= cellRect.left && cursorX < cellRect.right;
+        });
+        if (cellAtCursor) {
+            return cellAtCursor;
+        }
+
+        return adjacentCells.reduce((closest, cell) => {
+            const closestDistance = Math.abs(closest.getBoundingClientRect().left - cursorX);
+            const cellDistance = Math.abs(cell.getBoundingClientRect().left - cursorX);
+
+            return cellDistance < closestDistance ? cell : closest;
+        });
+    }
+
     private cancelDrag(): void {
         this.isDragging = false;
         this.dragPending = false;
+        this.stopAutoScroll();
         this.removeRectElement();
+
+        if (this.horizontalScrollHost) {
+            this.horizontalScrollHost.removeEventListener("scroll", this.handleScroll);
+            this.startScrollLeft = 0;
+            this.startScrollTop = 0;
+        }
+
+        if (this.verticalScrollHost && this.verticalScrollHost !== this.horizontalScrollHost) {
+            this.verticalScrollHost.removeEventListener("scroll", this.handleScroll);
+            this.startVerticalScrollTop = 0;
+        }
 
         if (this.captureElement) {
             this.captureElement.removeEventListener("pointermove", this.handlePointerMove);
             this.captureElement.removeEventListener("pointerup", this.handlePointerUp);
             this.captureElement.removeEventListener("lostpointercapture", this.handlePointerUp);
             this.captureElement = undefined;
+        }
+    }
+
+    /**
+     * Starts, updates or stops auto-scroll based on the pointer's distance from the scroll host edges.
+     * The further the pointer is outside the host, the faster the scroll speed.
+     *
+     * @param clientX The current pointer X position in viewport coordinates.
+     * @param clientY The current pointer Y position in viewport coordinates.
+     */
+    private updateAutoScroll(clientX: number, clientY: number): void {
+        if (!this.horizontalScrollHost && !this.verticalScrollHost) {
+            return;
+        }
+
+        const edgeThreshold = 10;
+        let scrollDX = 0;
+        let scrollDY = 0;
+
+        // Horizontal auto-scroll on the horizontal host.
+        if (this.horizontalScrollHost) {
+            const hostRect = this.horizontalScrollHost.getBoundingClientRect();
+            const distLeft = clientX - hostRect.left;
+            const distRight = hostRect.right - clientX;
+
+            if (distLeft < edgeThreshold) {
+                scrollDX = -Math.max(1, Math.ceil((edgeThreshold - distLeft) / 2));
+            } else if (distRight < edgeThreshold) {
+                scrollDX = Math.max(1, Math.ceil((edgeThreshold - distRight) / 2));
+            }
+        }
+
+        // Vertical auto-scroll on the vertical host.
+        const verticalHost = this.verticalScrollHost ?? this.horizontalScrollHost;
+        if (verticalHost) {
+            const hostRect = verticalHost.getBoundingClientRect();
+            const distTop = clientY - hostRect.top;
+            const distBottom = hostRect.bottom - clientY;
+
+            if (distTop < edgeThreshold) {
+                scrollDY = -Math.max(1, Math.ceil((edgeThreshold - distTop) / 2));
+            } else if (distBottom < edgeThreshold) {
+                scrollDY = Math.max(1, Math.ceil((edgeThreshold - distBottom) / 2));
+            }
+        }
+
+        this.autoScrollDX = scrollDX;
+        this.autoScrollDY = scrollDY;
+
+        if (scrollDX !== 0 || scrollDY !== 0) {
+            this.autoScrollTimer ??= setInterval(() => {
+                if (this.autoScrollDX !== 0 && this.horizontalScrollHost) {
+                    this.horizontalScrollHost.scrollBy(this.autoScrollDX, 0);
+                }
+
+                if (this.autoScrollDY !== 0) {
+                    const vh = this.verticalScrollHost ?? this.horizontalScrollHost;
+                    if (vh) {
+                        vh.scrollBy(0, this.autoScrollDY);
+                    }
+                }
+            }, 16);
+        } else {
+            this.stopAutoScroll();
+        }
+    }
+
+    private stopAutoScroll(): void {
+        if (this.autoScrollTimer) {
+            clearInterval(this.autoScrollTimer);
+            this.autoScrollTimer = undefined;
+            this.autoScrollDX = 0;
+            this.autoScrollDY = 0;
         }
     }
 
@@ -197,6 +631,20 @@ export class SelectionView {
         return Promise.resolve(true);
     };
 
+    private handleEditModeChanged = (enabled: boolean): Promise<boolean> => {
+        if (!enabled) {
+            const overlayContainer = this.eventContainer.querySelector<HTMLElement>(
+                "#trackViewerDecorationOverlay",
+            );
+            const cursor = overlayContainer?.querySelector<HTMLElement>(`.${selectionCursorClass}`);
+            if (cursor) {
+                cursor.style.display = "none";
+            }
+        }
+
+        return Promise.resolve(true);
+    };
+
     /**
      * Renders selection decoration as absolutely-positioned overlay divs inside
      * {@link trackViewerDecorationOverlay}. Adjacent selection rects are merged:
@@ -217,6 +665,9 @@ export class SelectionView {
         overlayContainer.querySelectorAll(`.${selectionOverlayClass}`).forEach((el) => {
             el.remove();
         });
+
+        const cursor = this.getSelectionCursor(overlayContainer);
+        cursor.style.display = "none";
 
         // Clear any legacy note CSS highlights.
         const contentHost = this.eventContainer.querySelector<HTMLElement>("#trackViewerContentHost");
@@ -311,6 +762,8 @@ export class SelectionView {
             return;
         }
 
+        const cursor = this.getSelectionCursor(overlayContainer);
+
         // Separate single-note from note-group entries.
         const singleNotes: ISelectionEntry[] = [];
         const noteGroups: ISelectionEntry[] = [];
@@ -329,6 +782,14 @@ export class SelectionView {
             : this.findNoteElements(contentHost, noteGroups[0]);
         const isStaffMode = firstElements.length > 0
             && firstElements[0].classList.contains(staffNoteRunClass);
+
+        // Position the cursor directly before a single selected note in both view modes.
+        if (singleNotes.length === 1) {
+            const rect = this.findNoteCursorRect(contentHost, singleNotes[0], isStaffMode);
+            if (rect) {
+                this.positionSelectionCursor(cursor, containerRect, rect, isStaffMode ? -4 : 0);
+            }
+        }
 
         // Single notes in staff mode: apply CSS class for head/stem colouring.
         if (isStaffMode && singleNotes.length > 0) {
@@ -524,6 +985,85 @@ export class SelectionView {
         return [];
     }
 
+    /**
+     * Computes the rectangle that should anchor the selection cursor for a single note.
+     * In grid mode this is the note cell. In staff mode the horizontal position comes from the
+     * note/rest symbol while the vertical position is corrected to the single-line reference, so
+     * the cursor stays put when notes on different staff lines are selected.
+     *
+     * @param scope The element to query within.
+     * @param entry The selection entry identifying the note or group.
+     * @param isStaffMode Whether the arrangement is rendered in staff mode.
+     *
+     * @returns The cursor anchor rectangle, or undefined if none found.
+     */
+    private findNoteCursorRect(scope: HTMLElement, entry: ISelectionEntry,
+        isStaffMode: boolean): DOMRect | undefined {
+        const elements = this.findNoteElements(scope, entry);
+        if (elements.length === 0) {
+            return undefined;
+        }
+
+        const noteElement = elements[0];
+        if (!isStaffMode) {
+            return noteElement.getBoundingClientRect();
+        }
+
+        const symbol = noteElement.querySelector<HTMLElement>(
+            ".staff-note-viewer-note-symbol, .staff-note-viewer-rest-symbol",
+        );
+        if (!symbol) {
+            return noteElement.getBoundingClientRect();
+        }
+
+        const runRect = noteElement.getBoundingClientRect();
+        const symbolRect = symbol.getBoundingClientRect();
+
+        // Anchor the cursor to the run and move it so the cursor matches the single-line note position.
+        const baseTranslateY = 8;
+        const singleLineTop = runRect.top + ((runRect.height - symbolRect.height) / 2) - baseTranslateY;
+        const glyphLeft = this.staffGlyphLeftEdge(noteElement, symbol);
+
+        return new DOMRect(glyphLeft, singleLineTop, symbolRect.width, symbolRect.height);
+    }
+
+    private staffGlyphLeftEdge(run: HTMLElement, symbol: HTMLElement): number {
+        const symbolRect = symbol.getBoundingClientRect();
+
+        // Rest glyphs are centred in the sprite with a small inset. Use a nominal inset —
+        // the exact value differs by a couple of pixels between rest types.
+        if (symbol.classList.contains("staff-note-viewer-rest-symbol")) {
+            return symbolRect.left + 5;
+        }
+
+        const head = run.querySelector<HTMLElement>(".staff-note-head");
+        const headRect = head?.getBoundingClientRect();
+        const centerX = headRect
+            ? headRect.left + (headRect.width / 2)
+            : symbolRect.left + (symbolRect.width / 2);
+
+        if (head?.classList.contains("cross")) {
+            const cross = head.querySelector<HTMLElement>(".staff-note-head-cross-svg");
+
+            return cross ? cross.getBoundingClientRect().left : centerX - 7;
+        }
+
+        if (head?.classList.contains("square")) {
+            return centerX - 14;
+        }
+
+        if (head?.classList.contains("triangle")) {
+            return centerX - 7;
+        }
+
+        if (head?.classList.contains("diamond")) {
+            return centerX - 5.5;
+        }
+
+        // Oval: the head is drawn at the left edge of the note sprite.
+        return symbolRect.left + 1;
+    }
+
     // ---- Track-piece overlays --------------------------------------------------------
 
     /**
@@ -638,7 +1178,9 @@ export class SelectionView {
 
         merged.push(current);
 
-        // 4. Create overlays.
+        // 4. Create overlays. Track pieces stay within the row (no upward offset), so they
+        //    don't overlap the accent zone of the track above. The bottom edge aligns with
+        //    the row bottom, matching whole-track overlays.
         for (const group of merged) {
             this.createMergedOverlay(overlayContainer, containerRect, group.elements, 0, 0);
         }
@@ -697,13 +1239,10 @@ export class SelectionView {
 
             const rect = this.computeMergedRect(contentHost, selectors.join(","), containerRect);
             if (rect) {
-                rect.y -= 10;
                 this.createOverlay(overlayContainer, rect);
             }
         }
     }
-
-    // ---- Whole-measure overlays ------------------------------------------------------
 
     /**
      * Renders merged overlays for whole-measure selections. Bars that are visually
@@ -906,11 +1445,33 @@ export class SelectionView {
         const overlay = document.createElement("div");
         overlay.className = selectionOverlayClass;
         overlay.style.position = "absolute";
-        overlay.style.left = `${rect.x}px`;
+        overlay.style.left = `${rect.x - 2}px`;
         overlay.style.top = `${rect.y}px`;
-        overlay.style.width = `${rect.width}px`;
+        overlay.style.width = `${rect.width + 4}px`;
         overlay.style.height = `${rect.height}px`;
         container.appendChild(overlay);
+    }
+
+    private getSelectionCursor(container: HTMLElement): HTMLElement {
+        const existingCursor = container.querySelector<HTMLElement>(`.${selectionCursorClass}`);
+        if (existingCursor) {
+            return existingCursor;
+        }
+
+        const cursor = document.createElement("div");
+        cursor.className = selectionCursorClass;
+        cursor.style.position = "absolute";
+        container.appendChild(cursor);
+
+        return cursor;
+    }
+
+    private positionSelectionCursor(cursor: HTMLElement, containerRect: DOMRect,
+        elementRect: DOMRect, offsetX = 0): void {
+        cursor.style.display = "block";
+        cursor.style.left = `${((elementRect.left - containerRect.left) / this.zoomFactor) + offsetX}px`;
+        cursor.style.top = `${((elementRect.top - containerRect.top) / this.zoomFactor) - 4}px`;
+        cursor.style.height = `${(elementRect.height / this.zoomFactor) + 8}px`;
     }
 
     private isFormElement(target: EventTarget | null): boolean {

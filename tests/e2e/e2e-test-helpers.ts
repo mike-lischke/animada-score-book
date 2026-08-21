@@ -139,7 +139,7 @@ export const routeApi = async (page: Page): Promise<void> => {
 export const expectImportedPolyrhythmSong = async (page: Page): Promise<void> => {
     await expect(page.locator("#appRoot")).toBeVisible();
     await expect.poll(async () => {
-        const title = await page.locator("#mainArrangementTitle").first().textContent();
+        const title = await page.locator(".main-arrangement-title").first().textContent();
 
         return normalizeWhitespace(title ?? "");
     }).toBe(beijaFlorDisplayedTitle);
@@ -252,9 +252,10 @@ export const expectGridBarDomSnapshot = async (
 
 export const expectPlaybackToMove = async (page: Page): Promise<void> => {
     const playbackToggle = page.locator("#playbackButton");
+    const playButton = page.locator("#arrangementPlayControls .playStopButton");
     const playBeam = page.locator("#playBeam");
 
-    await expect(playbackToggle).toBeVisible();
+    await expect(playButton).toBeVisible();
     await expect(playBeam).toBeVisible();
 
     const readBeamX = async (): Promise<number> => {
@@ -266,7 +267,7 @@ export const expectPlaybackToMove = async (page: Page): Promise<void> => {
     const initialX = await readBeamX();
     expect(Number.isFinite(initialX)).toBeTruthy();
 
-    await playbackToggle.check({ force: true });
+    await playButton.click();
     await expect(playbackToggle).toBeChecked();
 
     await expect.poll(async () => {
@@ -275,7 +276,7 @@ export const expectPlaybackToMove = async (page: Page): Promise<void> => {
         return Math.abs(currentX - initialX);
     }).toBeGreaterThan(1);
 
-    await playbackToggle.uncheck({ force: true });
+    await playButton.click();
     await expect(playbackToggle).not.toBeChecked();
 };
 

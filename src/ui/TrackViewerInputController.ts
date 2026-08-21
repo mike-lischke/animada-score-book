@@ -1,0 +1,492 @@
+/*
+ * Copyright (c) Mike Lischke. All rights reserved.
+ * Licensed under the MIT License. See License.txt in the project root for license information.
+ */
+
+import { NoteStyleSymbolViewer } from "../components/ui/Note/NoteStyleSymbolViewer.js";
+import { ComponentPlacement } from "../components/ui/framework/UIComponent.js";
+import { RadialMenu, type IRadialMenuItem } from "../components/ui/framework/RadialMenu.js";
+import { AudioBufferPlayer } from "../player/AudioBufferPlayer.js";
+import { getSharedAudioContext } from "../core/audio-context.js";
+import { GridMeasureEditor, type IGridEditorPosition } from "./GridMeasureEditor.js";
+import { SelectionGranularity, type ISelectionDelta } from "./selection-types.js";
+import type { SelectionManager } from "./SelectionManager.js";
+import { requisitions } from "../supplement/Requisitions.js";
+import { h } from "preact";
+
+/** View-specific editor input target. Pointer events cover mouse, touch and pen input. */
+export interface ITrackViewerEditorInput {
+    handlePointerDown?(event: PointerEvent): boolean;
+    handlePointerUp?(event: PointerEvent): boolean;
+    handlePointerCancel?(event: PointerEvent): boolean;
+    handleKeyDown?(event: KeyboardEvent, position?: IGridEditorPosition): boolean;
+}
+
+/** Routes edit input without owning selection or rendering concerns. */
+export class TrackViewerInputController {
+    private static readonly longPressDuration = 500;
+    private static readonly longPressMoveTolerance = 10;
+
+    private editMode = false;
+    private viewMode: "grid" | "staff" = "grid";
+    private editor?: ITrackViewerEditorInput;
+    private longPressTimer?: ReturnType<typeof setTimeout>;
+    private longPressPointerId?: number;
+    private longPressTarget?: HTMLElement;
+    private currentPosition?: IGridEditorPosition;
+
+    public constructor(
+        private readonly eventContainer: HTMLElement,
+        private readonly radialMenu: RadialMenu,
+        private readonly selectionManager: SelectionManager,
+    ) {
+    }
+
+    public attach(): void {
+        this.eventContainer.addEventListener("pointerdown", this.handlePointerDown);
+        this.eventContainer.addEventListener("pointerup", this.handlePointerUp);
+        this.eventContainer.addEventListener("pointercancel", this.handlePointerCancel);
+        this.eventContainer.addEventListener("pointermove", this.handlePointerMove);
+        this.eventContainer.addEventListener("contextmenu", this.handleContextMenu);
+        this.eventContainer.addEventListener("keydown", this.handleKeyDown);
+        requisitions.register("selectionChanged", this.handleSelectionChanged);
+        requisitions.register("noteEntryRequested", this.handleNoteEntryRequested);
+    }
+
+    public dispose(): void {
+        this.eventContainer.removeEventListener("pointerdown", this.handlePointerDown);
+        this.eventContainer.removeEventListener("pointerup", this.handlePointerUp);
+        this.eventContainer.removeEventListener("pointercancel", this.handlePointerCancel);
+        this.eventContainer.removeEventListener("pointermove", this.handlePointerMove);
+        this.eventContainer.removeEventListener("contextmenu", this.handleContextMenu);
+        this.eventContainer.removeEventListener("keydown", this.handleKeyDown);
+        requisitions.unregister("selectionChanged", this.handleSelectionChanged);
+        requisitions.unregister("noteEntryRequested", this.handleNoteEntryRequested);
+        this.clearLongPress();
+        this.editor = undefined;
+    }
+
+    public setEditMode(enabled: boolean): void {
+        this.editMode = enabled;
+    }
+
+    public setViewMode(mode: "grid" | "staff"): void {
+        this.viewMode = mode;
+    }
+
+    public setEditor(editor: ITrackViewerEditorInput | undefined): void {
+        this.editor = editor;
+    }
+
+    public setGridEditor(editor: GridMeasureEditor | undefined): void {
+        this.editor = editor;
+    }
+
+    private handlePointerDown = (event: PointerEvent): void => {
+        if (!this.editMode || this.viewMode !== "grid" || !this.editor?.handlePointerDown) {
+            return;
+        }
+
+        if (this.editor.handlePointerDown(event)) {
+            event.preventDefault();
+        }
+
+        this.eventContainer.focus({ preventScroll: true });
+
+        const position = this.getGridPosition(event.target);
+        if (!position) {
+            return;
+        }
+
+        this.currentPosition = position;
+
+        if (event.pointerType === "mouse" && event.button === 2) {
+            this.openNoteMenu(position, event.target);
+            event.preventDefault();
+
+            return;
+        }
+
+        if (event.pointerType === "touch") {
+            this.startLongPress(event, position);
+        }
+    };
+
+    private handlePointerUp = (event: PointerEvent): void => {
+        this.clearLongPress(event.pointerId);
+
+        if (!this.editMode || this.viewMode !== "grid" || !this.editor?.handlePointerUp) {
+            return;
+        }
+
+        if (this.editor.handlePointerUp(event)) {
+            event.preventDefault();
+        }
+    };
+
+    private handlePointerCancel = (event: PointerEvent): void => {
+        this.clearLongPress(event.pointerId);
+
+        if (!this.editMode || this.viewMode !== "grid" || !this.editor?.handlePointerCancel) {
+            return;
+        }
+
+        if (this.editor.handlePointerCancel(event)) {
+            event.preventDefault();
+        }
+    };
+
+    private handlePointerMove = (event: PointerEvent): void => {
+        const target = this.longPressTarget;
+        if (this.longPressPointerId !== event.pointerId || !target) {
+            return;
+        }
+
+        const startRect = target.getBoundingClientRect();
+        const movedX = Math.abs(event.clientX - (startRect.left + (startRect.width / 2)));
+        const movedY = Math.abs(event.clientY - (startRect.top + (startRect.height / 2)));
+        if (movedX > TrackViewerInputController.longPressMoveTolerance
+            || movedY > TrackViewerInputController.longPressMoveTolerance) {
+            this.clearLongPress(event.pointerId);
+        }
+    };
+
+    private handleContextMenu = (event: MouseEvent): void => {
+        if (this.editMode && this.viewMode === "grid" && this.getGridPosition(event.target)) {
+            event.preventDefault();
+        }
+    };
+
+    private startLongPress(event: PointerEvent, position: IGridEditorPosition): void {
+        this.clearLongPress();
+        this.longPressPointerId = event.pointerId;
+        this.longPressTarget = this.getGridCell(event.target);
+        this.longPressTimer = setTimeout(() => {
+            const target = this.longPressTarget;
+            this.clearLongPress();
+            if (!target) {
+                return;
+            }
+
+            this.openNoteMenu(position, target);
+        }, TrackViewerInputController.longPressDuration);
+    }
+
+    private clearLongPress(pointerId?: number): void {
+        if (pointerId !== undefined && this.longPressPointerId !== pointerId) {
+            return;
+        }
+
+        if (this.longPressTimer) {
+            clearTimeout(this.longPressTimer);
+            this.longPressTimer = undefined;
+        }
+
+        this.longPressPointerId = undefined;
+        this.longPressTarget = undefined;
+    }
+
+    private openNoteMenu(position: IGridEditorPosition, target: EventTarget | null): void {
+        if (!(this.editor instanceof GridMeasureEditor)) {
+            return;
+        }
+
+        const cell = this.getGridCell(target);
+        if (!cell) {
+            return;
+        }
+
+        const items: IRadialMenuItem[] = this.editor.getNoteStyles(position).map((style, index) => {
+            const name = style.symbol?.shortDescription ?? style.id;
+            const tooltip = style.symbol?.description ?? name;
+
+            return {
+                id: style.id,
+                label: name,
+                tooltip: `${tooltip} (${index + 1})`,
+                icon: h(NoteStyleSymbolViewer, { noteStyle: style, "data-tooltip": "inherit" }),
+                onClick: () => {
+                    const selectedStyle = this.editor instanceof GridMeasureEditor
+                        ? this.editor.setNote(position, style.id)
+                        : undefined;
+                    const volume = this.editor instanceof GridMeasureEditor
+                        ? this.editor.getMainVolume()
+                        : 1;
+                    this.playNote(selectedStyle, volume);
+                    this.advanceCursor(cell);
+                    this.eventContainer.focus({ preventScroll: true });
+                },
+            };
+        });
+        if (items.length === 0) {
+            return;
+        }
+
+        this.radialMenu.open(cell.getBoundingClientRect(), ComponentPlacement.TopCenter, items, 90, {
+            startAngle: 180,
+            angleSpan: items.length <= 5 ? 180 : 360,
+            clockwise: true,
+        });
+    }
+
+    private getGridPosition(target: EventTarget | null): IGridEditorPosition | undefined {
+        const cell = this.getGridCell(target);
+        const row = cell?.closest<HTMLElement>(".grid-measure-row");
+        const bar = row?.getAttribute("data-bar");
+        const trackId = row?.getAttribute("data-track");
+        const step = cell?.getAttribute("data-step-index");
+        if (!bar || !trackId || step === null || step === undefined) {
+            return undefined;
+        }
+
+        return { bar: parseInt(bar, 10), trackId: parseInt(trackId, 10), step: parseInt(step, 10) };
+    }
+
+    private getGridCell(target: EventTarget | null): HTMLElement | undefined {
+        if (!(target instanceof HTMLElement)) {
+            return undefined;
+        }
+
+        const cell = target.closest<HTMLElement>(".note-viewer[data-step-index]");
+
+        return cell?.closest(".grid-measure-row") ? cell : undefined;
+    }
+
+    private handleKeyDown = (event: KeyboardEvent): void => {
+        if (!this.editMode || !this.editor?.handleKeyDown) {
+            return;
+        }
+
+        if (event.key === "Delete" || event.key === "Backspace") {
+            this.handleDelete(event);
+
+            return;
+        }
+
+        if (this.viewMode !== "grid") {
+            return;
+        }
+
+        if (this.editor instanceof GridMeasureEditor && this.currentPosition) {
+            const shortcutIndex = Number.parseInt(event.key, 10) - 1;
+            const styles = this.editor.getNoteStyles(this.currentPosition);
+            if (shortcutIndex >= 0 && shortcutIndex < styles.length) {
+                this.enterNote(styles[shortcutIndex].id);
+                event.preventDefault();
+
+                return;
+            }
+        }
+
+        if (this.editor.handleKeyDown(event, this.currentPosition)) {
+            event.preventDefault();
+        }
+    };
+
+    private handleDelete(event: KeyboardEvent): void {
+        if (!(this.editor instanceof GridMeasureEditor)) {
+            return;
+        }
+
+        const entries = [...this.selectionManager.currentSelection.values()];
+        if (entries.length === 0) {
+            return;
+        }
+
+        this.editor.clearSelection(entries);
+
+        if (event.key === "Backspace" && this.viewMode === "grid" && this.currentPosition) {
+            const cell = this.getGridCellForPosition(this.currentPosition);
+            const previousCell = cell ? this.findPreviousGridCell(cell) : undefined;
+            const targetPosition = previousCell ? this.getGridPosition(previousCell) : undefined;
+            if (targetPosition) {
+                this.selectCursorPosition(targetPosition);
+            }
+        }
+
+        event.preventDefault();
+    }
+
+    private handleNoteEntryRequested = (noteStyleId: string): Promise<boolean> => {
+        if (!this.editMode || this.viewMode !== "grid") {
+            return Promise.resolve(false);
+        }
+
+        return Promise.resolve(this.enterNote(noteStyleId));
+    };
+
+    private enterNote(noteStyleId: string): boolean {
+        const position = this.currentPosition;
+        if (!(this.editor instanceof GridMeasureEditor) || !position) {
+            return false;
+        }
+
+        const style = this.editor.getNoteStyles(position)
+            .find((candidate) => {
+                return candidate.id === noteStyleId;
+            });
+        if (!style) {
+            return false;
+        }
+
+        const selectedStyle = this.editor.setNote(position, style.id);
+        this.playNote(selectedStyle, this.editor.getMainVolume());
+        this.advanceCursorForPosition(position);
+        this.eventContainer.focus({ preventScroll: true });
+
+        return true;
+    }
+
+    private handleSelectionChanged = (delta: ISelectionDelta): Promise<boolean> => {
+        if (delta.added.length === 1 && delta.added[0].granularity === SelectionGranularity.Note
+            && delta.added[0].startStep !== undefined) {
+            this.currentPosition = {
+                bar: delta.added[0].bar,
+                trackId: delta.added[0].trackId,
+                step: delta.added[0].startStep,
+            };
+        }
+
+        return Promise.resolve(true);
+    };
+
+    private playNote(style: ReturnType<GridMeasureEditor["setNote"]>, volume: number): void {
+        if (!style?.audioBuffer) {
+            return;
+        }
+
+        new AudioBufferPlayer(style.audioBuffer, getSharedAudioContext(), 0, volume);
+    }
+
+    private advanceCursorForPosition(position: IGridEditorPosition): void {
+        const cell = this.getGridCellForPosition(position);
+        if (cell) {
+            this.advanceCursor(cell);
+        }
+    }
+
+    private advanceCursor(cell: HTMLElement): void {
+        const nextCell = this.findNextGridCell(cell);
+        if (!nextCell) {
+            return;
+        }
+
+        const position = this.getGridPosition(nextCell);
+        if (!position) {
+            return;
+        }
+
+        this.selectCursorCell(nextCell);
+    }
+
+    private selectCursorCell(cell: HTMLElement): void {
+        const position = this.getGridPosition(cell);
+        if (!position) {
+            return;
+        }
+
+        this.selectCursorPosition(position, cell.getAttribute("data-note-id"));
+    }
+
+    private selectCursorPosition(position: IGridEditorPosition, noteId?: string | null): void {
+        this.currentPosition = position;
+        this.selectionManager.selectSingleNote({
+            granularity: SelectionGranularity.Note,
+            bar: position.bar,
+            trackId: position.trackId,
+            startStep: position.step,
+            endStep: position.step,
+            noteId: noteId === null || noteId === undefined ? undefined : Number.parseInt(noteId, 10),
+        });
+    }
+
+    private findNextGridCell(cell: HTMLElement): HTMLElement | undefined {
+        const row = cell.closest<HTMLElement>(".grid-measure-row");
+        if (!row) {
+            return undefined;
+        }
+
+        const cells = [...row.querySelectorAll<HTMLElement>(".note-viewer[data-step-index]")];
+        const cellIndex = cells.indexOf(cell);
+        if (cellIndex + 1 < cells.length) {
+            return cells[cellIndex + 1];
+        }
+
+        const trackId = row.getAttribute("data-track");
+        const contentHost = this.eventContainer;
+        if (!trackId) {
+            return undefined;
+        }
+
+        const rows = this.getTrackRows(contentHost, Number.parseInt(trackId, 10));
+        rows.sort((left, right) => {
+            return Number.parseInt(left.getAttribute("data-bar") ?? "0", 10)
+                - Number.parseInt(right.getAttribute("data-bar") ?? "0", 10);
+        });
+        const rowIndex = rows.indexOf(row);
+        if (rowIndex < 0 || rowIndex + 1 >= rows.length) {
+            return undefined;
+        }
+
+        return rows[rowIndex + 1].querySelector<HTMLElement>(".note-viewer[data-step-index]")
+            ?? undefined;
+    }
+
+    private findPreviousGridCell(cell: HTMLElement): HTMLElement | undefined {
+        const row = cell.closest<HTMLElement>(".grid-measure-row");
+        if (!row) {
+            return undefined;
+        }
+
+        const cells = [...row.querySelectorAll<HTMLElement>(".note-viewer[data-step-index]")];
+        const cellIndex = cells.indexOf(cell);
+        if (cellIndex > 0) {
+            return cells[cellIndex - 1];
+        }
+
+        const trackId = row.getAttribute("data-track");
+        const contentHost = this.eventContainer;
+        if (!trackId) {
+            return undefined;
+        }
+
+        const rows = this.getTrackRows(contentHost, Number.parseInt(trackId, 10));
+        rows.sort((left, right) => {
+            return Number.parseInt(left.getAttribute("data-bar") ?? "0", 10)
+                - Number.parseInt(right.getAttribute("data-bar") ?? "0", 10);
+        });
+        const rowIndex = rows.indexOf(row);
+        if (rowIndex <= 0) {
+            return undefined;
+        }
+
+        const previousRow = rows[rowIndex - 1];
+        const previousCells = [...previousRow.querySelectorAll<HTMLElement>(
+            ".note-viewer[data-step-index]",
+        )];
+
+        return previousCells[previousCells.length - 1];
+    }
+
+    private getGridCellForPosition(position: IGridEditorPosition): HTMLElement | undefined {
+        const contentHost = this.eventContainer;
+
+        const row = [...contentHost.querySelectorAll<HTMLElement>(".grid-measure-row")].find((candidate) => {
+            return candidate.getAttribute("data-bar") === String(position.bar)
+                && candidate.getAttribute("data-track") === String(position.trackId);
+        });
+        if (!row) {
+            return undefined;
+        }
+
+        return row.querySelector<HTMLElement>(`[data-step-index="${position.step}"]`)
+            ?? undefined;
+    }
+
+    private getTrackRows(contentHost: HTMLElement, trackId: number): HTMLElement[] {
+        return [...contentHost.querySelectorAll<HTMLElement>(".grid-measure-row")].filter((row) => {
+            return row.getAttribute("data-track") === String(trackId);
+        });
+    }
+
+}

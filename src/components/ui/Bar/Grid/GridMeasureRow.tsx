@@ -7,6 +7,7 @@ import type { ComponentChild, CSSProperties } from "preact";
 
 import type { ISbDmTrack, ISbDmTrackMeasure, ScoreBookDataModel } from "../../../../core/ScoreBookDataModel.js";
 import type { IMeasureStep, ISubdivision, IAudioData } from "../../../../core/types/general.js";
+import { requisitions } from "../../../../supplement/Requisitions.js";
 import { NoteStyleSymbolViewer } from "../../Note/NoteStyleSymbolViewer.js";
 import { Container } from "../../framework/Container.js";
 import { UIComponent, type ICommonUIProperties } from "../../framework/UIComponent.js";
@@ -37,7 +38,25 @@ interface IRenderGroup {
     length: number;
 }
 
-export class GridMeasureRow extends UIComponent<IGridMeasureRowProperties> {
+interface IGridMeasureRowState {
+    readonly changeCount: number;
+}
+
+export class GridMeasureRow extends UIComponent<IGridMeasureRowProperties, IGridMeasureRowState> {
+    public constructor(props: IGridMeasureRowProperties) {
+        super(props);
+
+        this.state = { changeCount: 0 };
+    }
+
+    public override componentDidMount(): void {
+        requisitions.register("trackChanged", this.handleTrackChanged);
+    }
+
+    public override componentWillUnmount(): void {
+        requisitions.unregister("trackChanged", this.handleTrackChanged);
+    }
+
     public override render(): ComponentChild {
         const { measure, dataModel, track } = this.props;
 
@@ -90,6 +109,19 @@ export class GridMeasureRow extends UIComponent<IGridMeasureRowProperties> {
             </Container>
         );
     }
+
+    private handleTrackChanged = (trackId: number): Promise<boolean> => {
+        const { track } = this.props;
+
+        if (trackId !== track.id) {
+            return Promise.resolve(false);
+        }
+
+        const { changeCount } = this.state;
+        this.setState({ changeCount: changeCount + 1 });
+
+        return Promise.resolve(true);
+    };
 
     private buildLevel(steps: IMeasureStep[], subdivisions: ISubdivision[],
         parentSubdivisionId: number | undefined,

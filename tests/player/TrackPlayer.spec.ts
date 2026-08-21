@@ -94,6 +94,7 @@ const makeTrack = (opts?: {
             return track;
         }),
         removeTrack: vi.fn(),
+        duplicateTrack: vi.fn(),
         applyArrangementSnapshot: vi.fn(),
         measureLabels: {}
     };

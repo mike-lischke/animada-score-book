@@ -27,7 +27,6 @@ export class Swap extends UIComponent<ISwapProperties> {
         const className = this.generateFinalClassName([
             "btn",
             "du-btn",
-            "du-btn-circle",
             "du-swap",
             "du-swap-rotate"
         ]);

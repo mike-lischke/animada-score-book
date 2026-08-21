@@ -147,6 +147,7 @@ const makeArrangement = (barCount: number, trackCount: number): ISbDmArrangement
         countIn: false,
         addTrack: vi.fn(),
         removeTrack: vi.fn(),
+        duplicateTrack: vi.fn(),
         applyArrangementSnapshot: vi.fn(),
         measureLabels: {},
     };

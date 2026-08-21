@@ -141,7 +141,7 @@ const getCurrentBranch = (): string => {
  * For feature branches the pattern is `<baseName>__<branchName>`.
  *
  * @param baseName The database name from backend-config.json.
- * @param branch The current Git branch name.
+ * @param branch The branch name to derive the suffix from.
  *
  * @returns The effective database name.
  */
@@ -162,7 +162,12 @@ export const deriveDbName = (baseName: string, branch: string): string => {
  */
 export const runMigrations = async (config: IDatabaseConfig): Promise<string> => {
     const branch = getCurrentBranch();
-    const effectiveDb = deriveDbName(config.database, branch);
+
+    // When running under Vitest (unit or e2e), use the base database name directly —
+    // no branch-specific suffix.
+    const effectiveDb = process.env.VITEST
+        ? config.database
+        : deriveDbName(config.database, branch);
 
     console.log(`Branch: ${branch}, database: ${effectiveDb}`);
 

@@ -71,7 +71,8 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             file: "Agogo_Low.mp3",
             symbol: {
                 src: arrowDownIcon,
-                string: "low"
+                shortDescription: "Low",
+                description: "Low Agogo Bell"
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
@@ -86,7 +87,8 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             file: "Agogo_High.mp3",
             symbol: {
                 src: arrowUpIcon,
-                string: "high"
+                shortDescription: "High",
+                description: "High Agogo Bell"
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
@@ -110,7 +112,8 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             file: "4_Bell_Agogo_Low_Low.mp3",
             symbol: {
                 src: arrowDownWithLineIcon,
-                string: "low"
+                shortDescription: "Lowest",
+                description: "Lowest 4-Bell Agogo"
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
@@ -125,7 +128,8 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             file: "4_Bell_Agogo_Low.mp3",
             symbol: {
                 src: arrowHalfDownIcon,
-                string: "high"
+                shortDescription: "Lower",
+                description: "Lower 4-Bell Agogo"
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
@@ -140,7 +144,8 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             file: "4_Bell_Agogo_High.mp3",
             symbol: {
                 src: arrowHalfUpIcon,
-                string: "low"
+                shortDescription: "Higher",
+                description: "Higher 4-Bell Agogo"
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
@@ -155,7 +160,8 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             file: "4_Bell_Agogo_High_High.mp3",
             symbol: {
                 src: arrowUpWithLineIcon,
-                string: "high"
+                shortDescription: "Highest",
+                description: "Highest 4-Bell Agogo"
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
@@ -179,7 +185,8 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             file: "Chocalho_Accent.mp3",
             symbol: {
                 src: xBigIcon,
-                string: "accent"
+                shortDescription: "Accent",
+                description: "Chocalho Accent"
             },
             characteristics: {
                 excitationMode: ExcitationMode.Shaken,
@@ -192,7 +199,8 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             file: "Chocalho_Ghost.mp3",
             symbol: {
                 src: xSmallIcon,
-                string: "ghost"
+                shortDescription: "Ghost",
+                description: "Chocalho Ghost Note"
             },
             characteristics: {
                 excitationMode: ExcitationMode.Shaken,
@@ -214,7 +222,8 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             file: "Tamborim_Accent.mp3",
             symbol: {
                 src: xBigIcon,
-                string: "accent"
+                shortDescription: "Accent",
+                description: "Tamborim Accent"
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
@@ -228,12 +237,13 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             file: "Tamborim_Ghost.mp3",
             symbol: {
                 src: xSmallIcon,
-                string: "ghost"
+                shortDescription: "Ghost",
+                description: "Tamborim Ghost Note"
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
                 stickTechnique: StickTechnique.Normal,
-                mainDisplayType: NoteDisplayType.Cross
+                mainDisplayType: NoteDisplayType.Cross,
             },
             sampleProfile: { builtInDamping: Damping.Open, builtInAccent: false, ghost: true },
         }
@@ -251,7 +261,7 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             file: "Repinique_Center.mp3",
             symbol: {
                 src: xBigIcon,
-                string: "center"
+                shortDescription: "Center"
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
@@ -265,7 +275,7 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             file: "Repinique_Edge.mp3",
             symbol: {
                 src: xSmallIcon,
-                string: "edge"
+                shortDescription: "Outer Area"
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
@@ -279,7 +289,7 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             file: "Repinique_Rimshot.mp3",
             symbol: {
                 src: sunriseRaiseIcon,
-                string: "rimshot"
+                shortDescription: "Rimshot"
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
@@ -293,7 +303,7 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             file: "Repinique_Rim.mp3",
             symbol: {
                 src: rimIcon,
-                string: "rim"
+                shortDescription: "Rim"
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
@@ -307,7 +317,7 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             file: "Repinique_Buzz.mp3",
             symbol: {
                 src: tripleSlashIcon,
-                string: "buzz"
+                shortDescription: "Buzz"
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
@@ -321,7 +331,7 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             file: "Repinique_Hand.mp3",
             symbol: {
                 src: oBigIcon,
-                string: "hand"
+                shortDescription: "Open"
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
@@ -335,7 +345,7 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             file: "Repinique_Slap.mp3",
             symbol: {
                 src: sunRaysIcon,
-                string: "slap"
+                shortDescription: "Slap"
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
@@ -358,7 +368,7 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             file: "Repinique_Whippy_Accent.mp3",
             symbol: {
                 src: xBigIcon,
-                string: "accent"
+                shortDescription: "accent"
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
@@ -372,7 +382,7 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             file: "Repinique_Whippy_Ghost.mp3",
             symbol: {
                 src: xSmallIcon,
-                string: "ghost"
+                shortDescription: "ghost"
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
@@ -395,7 +405,7 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             file: "Caixa_Accent.mp3",
             symbol: {
                 src: xBigIcon,
-                string: "accent"
+                shortDescription: "accent"
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
@@ -409,7 +419,7 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             file: "Caixa_Ghost.mp3",
             symbol: {
                 src: xSmallIcon,
-                string: "ghost"
+                shortDescription: "ghost"
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
@@ -423,7 +433,7 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             file: "Caixa_Buzz.mp3",
             symbol: {
                 src: tripleSlashIcon,
-                string: "buzz"
+                shortDescription: "buzz"
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
@@ -437,7 +447,7 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             file: "Caixa_Rimshot.mp3",
             symbol: {
                 src: sunriseRaiseIcon,
-                string: "rimshot"
+                shortDescription: "rimshot"
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
@@ -460,7 +470,7 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             file: "Timbau_Open.mp3",
             symbol: {
                 src: oBigIcon,
-                string: "open"
+                shortDescription: "open"
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
@@ -474,7 +484,7 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             file: "Timbau_Slap.mp3",
             symbol: {
                 src: sunRaysIcon,
-                string: "slap"
+                shortDescription: "slap"
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
@@ -488,7 +498,7 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             file: "Timbau_Bass.mp3",
             symbol: {
                 src: oBigClosedIcon,
-                string: "bass"
+                shortDescription: "bass"
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
@@ -511,7 +521,7 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             file: "High_Surdo_Accent.mp3",
             symbol: {
                 src: oBigIcon,
-                string: "accent"
+                shortDescription: "accent"
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
@@ -525,7 +535,7 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             file: "High_Surdo_Muted.mp3",
             symbol: {
                 src: oBigClosedIcon,
-                string: "muted"
+                shortDescription: "muted"
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
@@ -548,7 +558,7 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             file: "Mid_Surdo_Accent.mp3",
             symbol: {
                 src: oBigIcon,
-                string: "accent"
+                shortDescription: "accent"
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
@@ -562,7 +572,7 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             file: "Mid_Surdo_Muted.mp3",
             symbol: {
                 src: oBigClosedIcon,
-                string: "muted"
+                shortDescription: "muted"
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
@@ -585,7 +595,7 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             file: "Low_Surdo_Accent.mp3",
             symbol: {
                 src: oBigIcon,
-                string: "accent"
+                shortDescription: "accent"
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
@@ -599,7 +609,7 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             file: "Low_Surdo_Muted.mp3",
             symbol: {
                 src: oBigClosedIcon,
-                string: "muted"
+                shortDescription: "muted"
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,

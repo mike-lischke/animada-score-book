@@ -6,7 +6,6 @@
 import type { ComponentChild } from "preact";
 
 import type { ISbDmArrangement, ISbDmTrack, ScoreBookDataModel } from "../../../../core/ScoreBookDataModel.js";
-import type { UndoManager } from "../../../../core/UndoManager.js";
 import type { ArrangementPlayer } from "../../../../player/ArrangementPlayer.js";
 import { requisitions } from "../../../../supplement/Requisitions.js";
 import type { SelectionManager } from "../../../../ui/SelectionManager.js";
@@ -15,15 +14,13 @@ import {
 } from "../../../../ui/selection-types.js";
 import { UIComponent, type ICommonUIProperties } from "../../framework/UIComponent.js";
 import { StaffBarTrackRow } from "./StaffBarTrackRow.js";
-import { StaffMeasureBeam } from "./StaffMeasureBeam.js";
 
 export interface IBarViewerProps extends ICommonUIProperties {
     barNumber: number;
     arrangement: ISbDmArrangement;
     arrangementPlayer: ArrangementPlayer;
-    touchEditingEnabled: boolean;
+    inEditMode: boolean;
     selectionManager: SelectionManager;
-    undoManager: UndoManager;
     dataModel: ScoreBookDataModel;
 
     /** Label explicitly set for this measure. */
@@ -127,22 +124,23 @@ export class StaffBarViewer extends UIComponent<IBarViewerProps, IBarViewerState
         for (const row of rows) {
             const rowRect = row.getBoundingClientRect();
 
-            // Tuplet brackets/numbers extend above the row via absolute
-            // positioning.  With overflow:visible (the default) the row's
-            // bounding rect already includes them, so no expansion is needed.
-            const expandedTop = rowRect.top;
-            const expandedBottom = rowRect.bottom;
-
-            if (!rectsIntersect(rect, rowRect.left, expandedTop, rowRect.right, expandedBottom, 0)) {
-                continue;
-            }
-
             const trackAttribute = row.getAttribute("data-track");
             if (!trackAttribute) {
                 continue;
             }
 
             const trackId = parseInt(trackAttribute, 10);
+
+            // Notes are translated vertically per staff line, so the note symbol can extend below the
+            // row. Expand the coarse row bounds by the maximum line spread so noteheads on the lowest
+            // line stay reachable. The fine-grained checks below do the precise hit-testing.
+            const lineSpread = ((this.maxNoteLineForTrack(trackId) - 1) / 2) * 10;
+            const expandedTop = rowRect.top - lineSpread;
+            const expandedBottom = rowRect.bottom + lineSpread + 4;
+
+            if (!rectsIntersect(rect, rowRect.left, expandedTop, rowRect.right, expandedBottom, 0)) {
+                continue;
+            }
 
             const noteRunElements = row.querySelectorAll<HTMLElement>(
                 ".staff-note-viewer-run[data-step-index]",
@@ -556,17 +554,20 @@ export class StaffBarViewer extends UIComponent<IBarViewerProps, IBarViewerState
     }
 
     public override render(): ComponentChild {
-        const { barNumber, arrangement, arrangementPlayer, touchEditingEnabled, undoManager,
+        const { barNumber, arrangement, arrangementPlayer, inEditMode,
             dataModel, ownLabel, inheritedLabel } = this.props;
         const { tracks } = this.state;
+        const label = ownLabel ?? inheritedLabel;
+        const isInherited = ownLabel === undefined && inheritedLabel !== undefined;
+        let labelContent: ComponentChild = undefined;
+        if (label !== undefined) {
+            labelContent = <div className={`staff-measure-label${isInherited ? " inherited" : ""}`}>{label}</div>;
+        }
 
         return (
             <div className="bar-viewer staff-mode" data-bar={barNumber}>
-                <StaffMeasureBeam
-                    measureNumber={barNumber}
-                    ownLabel={ownLabel}
-                    inheritedLabel={inheritedLabel}
-                />
+                <div className="staff-measure-number">{barNumber}</div>
+                {labelContent}
                 {tracks.map((track) => {
                     const trackPlayer = arrangementPlayer.trackPlayers.get(track);
                     if (!trackPlayer) {
@@ -581,14 +582,27 @@ export class StaffBarViewer extends UIComponent<IBarViewerProps, IBarViewerState
                             timeParams={arrangement.timeParams}
                             trackPlayer={trackPlayer}
                             arrangementPlayer={arrangementPlayer}
-                            touchEditingEnabled={touchEditingEnabled}
-                            undoManager={undoManager}
+                            inEditMode={inEditMode}
                             dataModel={dataModel}
                         />
                     );
                 })}
             </div>
         );
+    }
+
+    private maxNoteLineForTrack(trackId: number): number {
+        const { arrangement } = this.props;
+        const track = arrangement.tracks.find((candidate) => {
+            return candidate.id === trackId;
+        });
+        if (!track) {
+            return 1;
+        }
+
+        return Math.max(1, ...Object.values(track.instrument.noteStyles).map((noteStyle) => {
+            return noteStyle.noteLine ?? 1;
+        }));
     }
 
     private handleArrangementChanged = (arrangementId: number): Promise<boolean> => {

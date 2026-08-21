@@ -150,6 +150,21 @@ export class Router {
 
                         break;
 
+                    case "lockScore":
+                        await this.scoreRoutes.handleLockScore(req, res);
+
+                        break;
+
+                    case "unlockScore":
+                        await this.scoreRoutes.handleUnlockScore(req, res);
+
+                        break;
+
+                    case "forceUnlockScore":
+                        await this.scoreRoutes.handleForceUnlockScore(req, res);
+
+                        break;
+
                     case "login":
                         await this.authRoutes.handleLogin(req, res);
 

@@ -7,7 +7,6 @@ import { type ComponentChild } from "preact";
 
 import type { Arrangement } from "../../../core/Arrangement.js";
 import type { ISbDmTrack, ScoreBookDataModel } from "../../../core/ScoreBookDataModel.js";
-import type { UndoManager } from "../../../core/UndoManager.js";
 import type { ArrangementPlayer } from "../../../player/ArrangementPlayer.js";
 import type { SelectionManager } from "../../../ui/SelectionManager.js";
 import { GridMeasureViewer } from "../Bar/Grid/GridMeasureViewer.js";
@@ -38,7 +37,6 @@ export interface IPrintViewProps extends ICommonUIProperties {
     dataModel: ScoreBookDataModel;
     arrangementPlayer: ArrangementPlayer;
     selectionManager: SelectionManager;
-    undoManager: UndoManager;
 }
 
 /**
@@ -230,7 +228,7 @@ export class PrintView extends UIComponent<IPrintViewProps> {
     }
 
     private renderStaffBar(barNumber: number, tracks: ISbDmTrack[]): ComponentChild {
-        const { arrangement, arrangementPlayer, dataModel, selectionManager, undoManager } = this.props;
+        const { arrangement, arrangementPlayer, dataModel, selectionManager } = this.props;
         const ownLabel = arrangement.measureLabels[barNumber] as string | undefined;
 
         return (
@@ -239,9 +237,8 @@ export class PrintView extends UIComponent<IPrintViewProps> {
                 barNumber={barNumber}
                 arrangement={arrangement}
                 arrangementPlayer={arrangementPlayer}
-                touchEditingEnabled={false}
+                inEditMode={false}
                 selectionManager={selectionManager}
-                undoManager={undoManager}
                 dataModel={dataModel}
                 ownLabel={ownLabel}
                 tracks={tracks}

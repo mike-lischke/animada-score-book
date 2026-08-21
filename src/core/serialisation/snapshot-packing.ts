@@ -35,6 +35,8 @@ export interface IPackedArrangement {
     k: PackedTrack[];
     /** Per-measure section labels, keyed by 1-based measure number (as string after JSON round-trip). */
     l?: Record<number, string>;
+    /** Optional database score ID, carried through round-trips. */
+    s?: number;
 }
 
 export type PackedTimeParams = [
@@ -98,6 +100,10 @@ export const packArrangementSnapshot = (snapshot: IArrangementSnapshot): IPacked
         packed.l = { ...snapshot.measureLabels };
     }
 
+    if (snapshot.scoreId !== undefined) {
+        packed.s = snapshot.scoreId;
+    }
+
     return packed;
 };
 
@@ -130,6 +136,10 @@ export const unpackArrangementSnapshot = (packed: IPackedArrangement): IArrangem
                 return [Number(k), v];
             }),
         );
+    }
+
+    if (packed.s !== undefined) {
+        snapshot.scoreId = packed.s;
     }
 
     return snapshot;

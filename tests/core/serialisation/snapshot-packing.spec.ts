@@ -14,13 +14,7 @@ import type { IArrangementSnapshot } from "../../../src/core/types/general.js";
 const sampleSnapshot: IArrangementSnapshot = {
     version: 3,
     title: "Sample",
-    timeParams: {
-        timeSignature: "4/4",
-        tempo: 120,
-        length: 2,
-        pulse: "4n",
-        stepResolution: 16,
-    },
+    timeParams: { timeSignature: "4/4", tempo: 120, length: 2, pulse: "4n", stepResolution: 16 },
     tracks: [
         {
             id: 1,
@@ -157,5 +151,27 @@ describe("CompactSnapshot", () => {
 
         expect(restored.tracks[0]?.measures[0]?.subdivisions[0]?.parentSubdivisionId).toBe(1);
         expect(restored.tracks[0]?.measures[0]?.subdivisions[0]?.isTuplet).toBe(false);
+    });
+
+    it("preserves scoreId through pack → stringify → parse → unpack round-trip", () => {
+        const withScoreId: IArrangementSnapshot = { ...sampleSnapshot, scoreId: 12345 };
+        const packed = packArrangementSnapshot(withScoreId);
+        const json = JSON.stringify(packed);
+        const restored = tryParsePackedArrangement(json);
+
+        expect(restored).toBeDefined();
+        expect(restored!.scoreId).toBe(12345);
+    });
+
+    it("omits scoreId from packed output when not set", () => {
+        const withoutScoreId: IArrangementSnapshot = { ...sampleSnapshot };
+        delete withoutScoreId.scoreId;
+
+        const packed = packArrangementSnapshot(withoutScoreId);
+        const json = JSON.stringify(packed);
+        const restored = tryParsePackedArrangement(json);
+
+        expect(restored).toBeDefined();
+        expect(restored!.scoreId).toBeUndefined();
     });
 });

@@ -16,6 +16,7 @@ import { ErrorBoundary } from "./components/ui/ErrorBoundary.js";
 import { Button } from "./components/ui/framework/Button.js";
 import { Container } from "./components/ui/framework/Container.js";
 import { Dropdown, type IDropdownItem } from "./components/ui/framework/Dropdown.js";
+import { GooeyGroup } from "./components/ui/framework/GooeyGroup.js";
 import { Label } from "./components/ui/framework/Label.js";
 import { ProgressIndicator } from "./components/ui/framework/ProgressIndicator.js";
 import { ChildAlignment, Orientation } from "./components/ui/framework/ui-types.js";
@@ -24,12 +25,14 @@ import { renderNotificationCenter } from "./components/ui/NotificationCenter/Not
 import { renderStatusBar, Statusbar } from "./components/ui/Statusbar/Statusbar.js";
 import { StatusBarAlignment, type IStatusBarItem } from "./components/ui/Statusbar/StatusBarItem.js";
 
+import { NoteStyleBar } from "./components/ui/Arrangement/NoteStyleBar.js";
 import { ArrangementEditControls } from "./components/ui/Arrangement/ArrangementEditControls.js";
 import { ArrangementPlayControls } from "./components/ui/Arrangement/ArrangementPlayControls.js";
 import { ArrangementTitle } from "./components/ui/Arrangement/ArrangementTitle.js";
 import { ArrangementViewer } from "./components/ui/Arrangement/ArrangementViewer.js";
 import { PlayStopButton } from "./components/ui/Arrangement/PlayStopButton.js";
 import { ConfirmDialog } from "./components/ui/composites/ConfirmDialog.js";
+import { NewScoreDialog } from "./components/ui/composites/NewScoreDialog.js";
 import {
     ValueDialog, ValueEditorEntryType, type IValueEditorValueEntry
 } from "./components/ui/composites/ValueDialog.js";
@@ -39,14 +42,13 @@ import { DialogResponseClosure } from "./components/ui/framework/Dialog.js";
 import { DrawerSidebar } from "./components/ui/framework/DrawerSidebar.js";
 import { Icon } from "./components/ui/framework/Icon.js";
 import { TooltipProvider } from "./components/ui/framework/Tooltip.js";
-import { Overlay } from "./components/ui/Overlay.js";
 import { PrintDialog } from "./components/ui/Print/PrintDialog.js";
 import { PrintView, type IPrintOptions } from "./components/ui/Print/PrintView.js";
 import { AppStorage, type IUISettings } from "./core/AppStorage.js";
-import { Arrangement } from "./core/Arrangement.js";
+import { Arrangement, type IArrangementCreationOptions } from "./core/Arrangement.js";
 import { getSharedAudioContext } from "./core/audio-context.js";
 import {
-    SbDmEntityType, ScoreBookDataModel, type ISbDmScore, type ISbDmScoreFolder
+    SbDmEntityType, ScoreBookDataModel, type ISbDmInstrument, type ISbDmScore, type ISbDmScoreFolder
 } from "./core/ScoreBookDataModel.js";
 import { ArrangementMigrator } from "./core/serialisation/migration/ArrangementMigrator.js";
 import {
@@ -56,6 +58,7 @@ import { mixerStepIndex, tutorialSteps } from "./core/TutorialSteps.js";
 import type { IArrangementSnapshot } from "./core/types/general.js";
 import { UndoManager } from "./core/UndoManager.js";
 import { convertErrorToString } from "./core/utils.js";
+import { PasteResultKind, ScoreClipboard, type IPasteResult } from "./core/ScoreClipboard.js";
 import { ArrangementPlayer } from "./player/ArrangementPlayer.js";
 import { AudioBufferPlayer } from "./player/AudioBufferPlayer.js";
 import { escapeStack } from "./supplement/EscapeStack.js";
@@ -76,11 +79,6 @@ const ScoreLibrary = lazy(() => {
     });
 });
 
-enum DisplayMode {
-    Standard,
-    Editing
-}
-
 enum AppPhase {
     /** Checking backend health. */
     Checking,
@@ -100,11 +98,16 @@ enum AppPhase {
 
 interface IAppState {
     phase: AppPhase;
-    editingTitle: boolean;
-    displayMode: DisplayMode;
+    editMode: boolean;
     sidebarOpen: boolean;
 
     headerPinned: boolean;
+
+    /** Token for the active score lock, if editing. */
+    lockToken?: string;
+
+    /** Conflict info when another user holds the lock. */
+    lockConflict?: { username: string; lockedAt: string; };
 
     /** When true, the print view is rendered into the DOM and `window.print()` will be triggered. */
     printing: boolean;
@@ -132,17 +135,17 @@ export class App extends UIComponent<{}, IAppState> {
     private tutorialWizardRef = createRef<TutorialWizard>();
     private valueDialogRef = createRef<ValueDialog>();
     private confirmDialogRef = createRef<ConfirmDialog>();
+    private newScoreDialogRef = createRef<NewScoreDialog>();
 
     /** Saved theme/title to restore after the print job finishes. */
     private printRestoreState?: { theme: string; documentTitle: string; };
 
     private dataModel = new ScoreBookDataModel();
+    private scoreClipboard = new ScoreClipboard(this.dataModel);
 
     private selectionManager: SelectionManager;
     private arrangementPlayer?: ArrangementPlayer;
     private undoManager?: UndoManager;
-
-    private justFinishedEditingTitle = false;
 
     private currentPlayRange?: { startBar: number; endBar: number; };
     private selectedThemePreference = "Light+";
@@ -158,8 +161,7 @@ export class App extends UIComponent<{}, IAppState> {
 
         this.state = {
             phase: AppPhase.Checking,
-            editingTitle: false,
-            displayMode: DisplayMode.Standard,
+            editMode: false,
             sidebarOpen: false,
             headerPinned: false,
             printing: false,
@@ -185,15 +187,19 @@ export class App extends UIComponent<{}, IAppState> {
         requisitions.register("backendDisconnected", this.handleBackendDisconnected);
         requisitions.register("authChanged", this.handleAuthChanged);
         requisitions.register("notesClicked", this.handleNoteClicked);
+        requisitions.register("editModeChanged", this.handleEditModeChanged);
+        requisitions.register("arrangementMutated", this.handleArrangementMutated);
+        requisitions.register("timeParamsChanged", this.handleTimeParamsChange);
+        requisitions.register("undoStackChanged", this.handleUndoStackChanged);
 
         void this.checkBackendThenInitialize();
     }
 
     public override shouldComponentUpdate(nextProps: {}, nextState: IAppState): boolean {
-        const { displayMode, sidebarOpen, phase, headerPinned, printing, backendUnreachable,
+        const { editMode, sidebarOpen, phase, headerPinned, printing, backendUnreachable,
             startupError } = this.state;
 
-        return displayMode !== nextState.displayMode
+        return editMode !== nextState.editMode
             || sidebarOpen !== nextState.sidebarOpen || phase !== nextState.phase
             || headerPinned !== nextState.headerPinned
             || printing !== nextState.printing
@@ -221,10 +227,13 @@ export class App extends UIComponent<{}, IAppState> {
         requisitions.unregister("backendDisconnected", this.handleBackendDisconnected);
         requisitions.unregister("authChanged", this.handleAuthChanged);
         requisitions.unregister("notesClicked", this.handleNoteClicked);
+        requisitions.unregister("editModeChanged", this.handleEditModeChanged);
+        requisitions.unregister("arrangementMutated", this.handleArrangementMutated);
+        requisitions.unregister("undoStackChanged", this.handleUndoStackChanged);
     }
 
     public render() {
-        const { phase, displayMode, sidebarOpen, headerPinned, instrumentEditorEnabled, printing,
+        const { phase, editMode, sidebarOpen, headerPinned, instrumentEditorEnabled, printing,
             printOptions, backendUnreachable, startupError } = this.state;
         const isRunning = phase === AppPhase.Running;
 
@@ -268,43 +277,70 @@ export class App extends UIComponent<{}, IAppState> {
         }
 
         let titleBlock;
+        let collapsedTitleBlock;
+        let editModeButton;
+        let newSongButton;
         let isAdmin = false;
         if (isRunning) {
-            const arrangementView = this.dataModel.arrangement!;
             isAdmin = this.dataModel.user?.isAdmin ?? false;
 
             if (this.arrangementPlayer) {
-                titleBlock = <Container
-                    orientation={Orientation.LeftToRight}
-                    mainAlignment={ChildAlignment.End}
-                    crossAlignment={ChildAlignment.Center}
-                    style={{ width: "100%" }}
-                >
-                    <ArrangementTitle
-                        id="mainArrangementTitle"
-                        arrangement={arrangementView}
-                        data-tooltip="expand"
-                        undoManager={this.undoManager!}
-                        editMode={displayMode === DisplayMode.Editing}
-                        onEditEnd={this.onEditEnd}
-                    />
-                    <Button
-                        imageOnly
-                        data-role="restore-top"
-                        style={{ margin: "2px 16px 0 0", width: "24px", height: "24px" }}
-                        className="normal-case btn-ghost"
-                        onClick={() => {
-                            this.setState({ headerPinned: !headerPinned });
-                        }}
-                    >
-                        <Icon
-                            src={headerPinned ? UIIcon.Pinned : UIIcon.Pin}
-                            data-tooltip={headerPinned ? "Pinned Header" : "Automatic Header"}
-                        />
-                    </Button>
+                titleBlock = this.renderTitleBlock("arrangement-title");
+                collapsedTitleBlock = this.renderTitleBlock("arrangement-title-collapsed");
 
-                </Container>;
+                newSongButton = <Button
+                    plain
+                    data-role="new-song"
+                    className="editSaveButton large"
+                    disabled={editMode}
+                    data-tooltip="New Song"
+                    onClick={() => {
+                        void this.handleNewSong();
+                    }}
+                >
+                    <Icon
+                        src={UIIcon.Add}
+                        width={24}
+                        height={24}
+                        data-tooltip="inherit"
+                    />
+                </Button>;
+
+                editModeButton = <Button
+                    plain
+                    className="editSaveButton large"
+                    data-tooltip={editMode ? "Exit Edit Mode" : "Enter Edit Mode"}
+                    onClick={this.handleEditModeToggle}
+                >
+                    <Icon
+                        src={UIIcon.Edit}
+                        width={24}
+                        height={24}
+                        data-tooltip="inherit"
+                    />
+                </Button>;
             }
+        }
+
+        let saveButton: ComponentChild;
+        if (isRunning && this.arrangementPlayer) {
+            saveButton = <Button
+                plain
+                data-role="save-score"
+                className="editSaveButton"
+                disabled={!this.undoManager?.canUndo}
+                data-tooltip="Save Score (Ctrl+S)"
+                onClick={() => {
+                    void this.saveScore();
+                }}
+            >
+                <Icon
+                    src={UIIcon.Save}
+                    width={24}
+                    height={24}
+                    data-tooltip="inherit"
+                />
+            </Button>;
         }
 
         let instrumentEditorButton: ComponentChild;
@@ -469,7 +505,7 @@ export class App extends UIComponent<{}, IAppState> {
                                                 <ArrangementPlayControls
                                                     arrangementPlayer={this.arrangementPlayer!}
                                                     dataModel={this.dataModel}
-                                                    undoManager={this.undoManager!}
+                                                    editMode={editMode}
                                                     data-tutorial="playback"
                                                 />
                                                 <Container
@@ -479,11 +515,30 @@ export class App extends UIComponent<{}, IAppState> {
                                                     crossAlignment={ChildAlignment.Stretch}
                                                 >
                                                     {titleBlock}
-                                                    {displayMode === DisplayMode.Editing && <ArrangementEditControls
-                                                        dataModel={this.dataModel}
-                                                        selectionManager={this.selectionManager}
-                                                        undoManager={this.undoManager!}
-                                                    />}
+                                                    <Container
+                                                        id="editControlsHost"
+                                                        orientation={Orientation.LeftToRight}
+                                                        mainAlignment={ChildAlignment.Start}
+                                                        crossAlignment={ChildAlignment.Center}
+                                                        style={{ marginTop: "auto" }}
+                                                    >
+                                                        <GooeyGroup
+                                                            className="editSaveGooey"
+                                                            background="var(--color-base-200)"
+                                                        >
+                                                            {newSongButton}
+                                                            {editModeButton}
+                                                            {saveButton}
+                                                        </GooeyGroup>
+                                                        {editMode && <ArrangementEditControls
+                                                            dataModel={this.dataModel}
+                                                            undoManager={this.undoManager!}
+                                                        />}
+                                                        {editMode && <NoteStyleBar
+                                                            dataModel={this.dataModel}
+                                                            selectionManager={this.selectionManager}
+                                                        />}
+                                                    </Container>
                                                 </Container>
                                             </Container>
                                         </Container>
@@ -498,7 +553,7 @@ export class App extends UIComponent<{}, IAppState> {
                                                 id="standalonePlayButton"
                                                 arrangementPlayer={this.arrangementPlayer!}
                                             />
-                                            {titleBlock}
+                                            {collapsedTitleBlock}
                                         </Container>
                                     }
                                     bottom={
@@ -506,11 +561,10 @@ export class App extends UIComponent<{}, IAppState> {
                                             arrangementPlayer={this.arrangementPlayer}
                                             dataModel={this.dataModel}
                                             selectionManager={this.selectionManager}
-                                            undoManager={this.undoManager!}
-                                            touchEditingEnabled={displayMode === DisplayMode.Editing}
+                                            inEditMode={editMode}
                                         />
                                     }
-                                    forceExpanded={headerPinned}
+                                    forceExpanded={headerPinned || editMode}
                                 />
                             </DrawerSidebar>
                             {renderStatusBar()}
@@ -563,7 +617,6 @@ export class App extends UIComponent<{}, IAppState> {
                                     dataModel={this.dataModel}
                                     arrangementPlayer={this.arrangementPlayer}
                                     selectionManager={this.selectionManager}
-                                    undoManager={this.undoManager}
                                 />
                             )
                         }
@@ -571,6 +624,7 @@ export class App extends UIComponent<{}, IAppState> {
                 )}
 
                 <ConfirmDialog ref={this.confirmDialogRef} />
+                <NewScoreDialog ref={this.newScoreDialogRef} />
 
                 {checkingContent}
 
@@ -596,6 +650,45 @@ export class App extends UIComponent<{}, IAppState> {
             return this.checkBackendThenInitialize();
         });
     };
+
+    private renderTitleBlock(id: string): ComponentChild {
+        const { editMode, headerPinned } = this.state;
+        const arrangementView = this.dataModel.arrangement!;
+
+        return <Container
+            id="titleHost"
+            orientation={Orientation.LeftToRight}
+            mainAlignment={ChildAlignment.End}
+            crossAlignment={ChildAlignment.Center}
+            style={{ width: "100%" }}
+        >
+            <ArrangementTitle
+                id={id}
+                className="main-arrangement-title"
+                style={editMode ? { flex: 1, minWidth: 0 } : undefined}
+                arrangement={arrangementView}
+                dataModel={this.dataModel}
+                editMode={editMode}
+            />
+            {
+                !editMode && <Button
+                    imageOnly
+                    data-role="restore-top"
+                    style={{ margin: "2px 16px 0 0", width: "24px", height: "24px" }}
+                    className="normal-case btn-ghost"
+                    onClick={() => {
+                        this.setState({ headerPinned: !headerPinned });
+                    }}
+                >
+                    <Icon
+                        src={headerPinned ? UIIcon.Pinned : UIIcon.Pin}
+                        data-tooltip={headerPinned ? "Pinned Header" : "Automatic Header"}
+                    />
+                </Button>
+            }
+
+        </Container>;
+    }
 
     private renderBackendUnreachable(): ComponentChild {
         return (
@@ -1065,11 +1158,11 @@ export class App extends UIComponent<{}, IAppState> {
 
         // Dispose player and undo manager so they don't hold stale references.
         if (this.arrangementPlayer) {
-            requisitions.unregister("timeParamsChanged", this.handleTimeParamsChange);
             this.arrangementPlayer.dispose();
             this.arrangementPlayer = undefined;
         }
 
+        this.undoManager?.dispose();
         this.undoManager = undefined;
 
         // Clear status bar item references — they belong to the old (now-unmounted) Statusbar.
@@ -1492,6 +1585,7 @@ export class App extends UIComponent<{}, IAppState> {
     };
 
     private initAppState(): void {
+        this.undoManager?.dispose();
         this.undoManager = new UndoManager(this.dataModel);
         this.arrangementPlayer = new ArrangementPlayer(this.dataModel);
     }
@@ -1517,8 +1611,6 @@ export class App extends UIComponent<{}, IAppState> {
         let arrangement = this.dataModel.arrangement!;
         if (resolvedSource) {
             if (this.arrangementPlayer) {
-                requisitions.unregister("timeParamsChanged", this.handleTimeParamsChange);
-
                 this.arrangementPlayer.dispose();
             }
 
@@ -1533,9 +1625,9 @@ export class App extends UIComponent<{}, IAppState> {
             }
         }
 
+        this.undoManager?.dispose();
         this.undoManager = new UndoManager(this.dataModel);
         this.arrangementPlayer = new ArrangementPlayer(this.dataModel);
-        requisitions.register("timeParamsChanged", this.handleTimeParamsChange);
 
         if (arrangement.title) {
             document.title = arrangement.title + " - Animada Score Book";
@@ -1551,6 +1643,11 @@ export class App extends UIComponent<{}, IAppState> {
         if (phase === AppPhase.Running) {
             this.updateStatsItem();
         }
+
+        const settings = AppStorage.loadUISettings();
+        if (settings?.editMode && !this.state.editMode) {
+            void requisitions.execute("editModeChanged", true);
+        }
     }
 
     private initEventHandlers(): void {
@@ -1558,8 +1655,8 @@ export class App extends UIComponent<{}, IAppState> {
             this.handleKeyDown(event);
         });
 
-        window.addEventListener("keyup", (event) => {
-            this.handleKeyUp(event);
+        window.addEventListener("contextmenu", (event) => {
+            event.preventDefault();
         });
     }
 
@@ -1568,6 +1665,16 @@ export class App extends UIComponent<{}, IAppState> {
     };
 
     private handleKeyDown(event: KeyboardEvent): void {
+        // Ctrl/Cmd+S saves the score in edit mode.
+        if ((event.ctrlKey || event.metaKey) && !event.shiftKey && !event.altKey && event.key === "s") {
+            event.preventDefault();
+            if (this.state.editMode) {
+                void this.saveScore();
+            }
+
+            return;
+        }
+
         // Ctrl/Cmd+P opens the print preview dialog instead of the native print dialog.
         if ((event.ctrlKey || event.metaKey) && !event.shiftKey && !event.altKey && event.key === "p") {
             event.preventDefault();
@@ -1576,9 +1683,37 @@ export class App extends UIComponent<{}, IAppState> {
             return;
         }
 
+        // Clipboard operations. Copy works in every mode; cut/paste require edit mode.
+        if ((event.ctrlKey || event.metaKey) && !event.shiftKey && !event.altKey) {
+            const key = event.key.toLowerCase();
+
+            if (key === "x" || key === "c" || key === "v") {
+                const target = event.target as HTMLElement | null;
+                const editable = target !== null && (target.tagName === "INPUT" || target.tagName === "TEXTAREA"
+                    || target.isContentEditable);
+                const selection = window.getSelection();
+                const hasTextSelection = selection !== null && !selection.isCollapsed;
+
+                if (!editable && !hasTextSelection) {
+                    event.preventDefault();
+
+                    if (key === "x") {
+                        if (this.state.editMode) {
+                            this.cutSelection();
+                        }
+                    } else if (key === "c") {
+                        this.copySelection();
+                    } else if (this.state.editMode) {
+                        void this.pasteSelection();
+                    }
+                }
+
+                return;
+            }
+        }
+
         switch (event.key) {
             case "Escape": {
-                Overlay.closeAllOverlays();
                 this.selectionManager.clearSelection();
 
                 break;
@@ -1586,20 +1721,6 @@ export class App extends UIComponent<{}, IAppState> {
 
             case "Alt": {
                 event.preventDefault();
-
-                break;
-            }
-
-            case "Backspace":
-            case "Delete": {
-                if (!(event.target instanceof HTMLInputElement)) {
-                    this.undoManager?.edit({
-                        type: "EditCommand_ArrangementClearSelection",
-                        arrangement: this.dataModel.arrangement!,
-                        clearSelection: new Map()
-                    });
-                    this.selectionManager.clearSelection();
-                }
 
                 break;
             }
@@ -1633,21 +1754,335 @@ export class App extends UIComponent<{}, IAppState> {
         }
     }
 
-    private handleKeyUp(event: KeyboardEvent): void {
-        // No-op: previously reset deletePolyrhythmMode on Alt key up.
+    private copySelection(): void {
+        this.scoreClipboard.copy([...this.selectionManager.currentSelection.values()]);
     }
 
-    private onEditEnd = () => {
-        this.setState({ editingTitle: false });
-        this.justFinishedEditingTitle = true;
-        setTimeout(() => {
-            return this.justFinishedEditingTitle = false;
-        }, 100);
+    private cutSelection(): void {
+        this.scoreClipboard.cut([...this.selectionManager.currentSelection.values()]);
+    }
+
+    private async pasteSelection(): Promise<void> {
+        const entries = [...this.selectionManager.currentSelection.values()];
+        let result = this.scoreClipboard.paste(entries);
+
+        if (result.kind === PasteResultKind.NeedsTrackCreation) {
+            const confirmed = await this.confirmTrackCreation(result.missingInstrumentTypeIds ?? []);
+            if (confirmed) {
+                result = this.scoreClipboard.paste(entries, true);
+            }
+        }
+
+        this.showPasteResult(result);
+    }
+
+    private async confirmTrackCreation(missingInstrumentTypeIds: string[]): Promise<boolean> {
+        const names = missingInstrumentTypeIds.map((typeId) => {
+            return this.dataModel.instruments.find((instrument) => {
+                return instrument.typeId === typeId;
+            })?.displayName ?? typeId;
+        }).join(", ");
+
+        const closure = await this.confirmDialogRef.current?.show(
+            `The instrument ${names} is not present in this score. ` +
+            "Create a track for it and paste the content there?",
+            { accept: "Create Track", refuse: "Cancel", default: "Create Track" },
+            "Paste Track",
+        );
+
+        return closure === DialogResponseClosure.Accept;
+    }
+
+    private showPasteResult(result: IPasteResult): void {
+        switch (result.kind) {
+            case PasteResultKind.InstrumentMismatch: {
+                void requisitions.execute("showWarning", "Cannot paste: at least one instrument does not match.");
+
+                break;
+            }
+
+            case PasteResultKind.MeterMismatch: {
+                void requisitions.execute("showWarning", "Cannot paste: the meter does not match.");
+
+                break;
+            }
+
+            case PasteResultKind.TrackCountMismatch: {
+                void requisitions.execute("showWarning", "Cannot paste: the track count does not match.");
+
+                break;
+            }
+        }
+    }
+
+    private handleEditModeToggle = (): void => {
+        const { editMode } = this.state;
+
+        if (editMode) {
+            void this.confirmExitEditMode();
+        } else {
+            void requisitions.execute("editModeChanged", true);
+        }
     };
+
+    private confirmExitEditMode = async (): Promise<void> => {
+        if (this.undoManager?.canUndo) {
+            const actions = {
+                accept: "Save Changes",
+                refuse: "Stay in Edit Mode",
+                alternative: "Ignore Changes",
+                default: "Stay in Edit Mode",
+            };
+            const confirmed = await this.confirmDialogRef.current?.show("You have unsaved changes. " +
+                "Do you want to save before exiting?", actions);
+
+            if (confirmed === DialogResponseClosure.Decline) {
+                return;
+            }
+
+            if (confirmed === DialogResponseClosure.Accept) {
+                const saved = await this.saveScore();
+                if (!saved) {
+                    return;
+                }
+            }
+
+            if (confirmed === DialogResponseClosure.Alternative) {
+                this.undoManager.discardChanges();
+            }
+        }
+
+        AppStorage.saveSetting("editMode", false);
+
+        const { lockToken } = this.state;
+
+        if (lockToken) {
+            const arrangement = this.dataModel.arrangement;
+
+            if (arrangement) {
+                await this.dataModel.unlockScore(arrangement.id, lockToken);
+            }
+        }
+
+        this.dataModel.lockToken = undefined;
+        this.setState({ editMode: false, lockToken: undefined, lockConflict: undefined });
+    };
+
+    private handleNewSong = async (): Promise<void> => {
+        const instruments = [...this.dataModel.instruments].sort((left, right) => {
+            return left.displayOrder - right.displayOrder || left.displayName.localeCompare(right.displayName);
+        });
+
+        const settings = AppStorage.loadUISettings()?.scoreCreationSettings;
+
+        const result = await this.newScoreDialogRef.current?.show({
+            items: instruments.map((instrument) => {
+                return {
+                    id: String(instrument.id),
+                    label: instrument.displayName,
+                    icon: instrument.image.filePath,
+                    value: instrument,
+                };
+            }),
+            defaultSettings: settings,
+        });
+
+        if (result?.closure !== DialogResponseClosure.Accept) {
+            return;
+        }
+
+        const selectedInstruments = result.selectedItems
+            .map((item) => {
+                return item.value as ISbDmInstrument | undefined;
+            })
+            .filter((instrument): instrument is ISbDmInstrument => {
+                return instrument !== undefined;
+            });
+
+        if (selectedInstruments.length === 0) {
+            void requisitions.execute("showWarning", "Select at least one instrument.");
+
+            return;
+        }
+
+        AppStorage.saveSetting("scoreCreationSettings", {
+            timeSignature: result.timeSignature,
+            tempo: String(result.tempo),
+            barCount: result.barCount,
+            instruments: selectedInstruments.map((instrument) => {
+                return instrument.id;
+            }),
+        });
+
+        this.startNewSong(selectedInstruments, {
+            title: result.title,
+            timeSignature: result.timeSignature,
+            pulse: result.pulse,
+            stepResolution: result.stepResolution,
+            length: result.barCount,
+            tempo: result.tempo,
+        });
+    };
+
+    private startNewSong(instruments: ISbDmInstrument[], options: IArrangementCreationOptions): void {
+        if (this.arrangementPlayer) {
+            this.arrangementPlayer.dispose();
+        }
+
+        const arrangement = this.dataModel.startNewArrangement(instruments, options);
+
+        this.undoManager?.dispose();
+        this.undoManager = new UndoManager(this.dataModel);
+        this.arrangementPlayer = new ArrangementPlayer(this.dataModel);
+
+        if (arrangement.title) {
+            document.title = arrangement.title + " - Animada Score Book";
+        }
+
+        AppStorage.saveSetting("currentScore",
+            stringifyPackedArrangement((arrangement as Arrangement).toSnapshot()));
+
+        this.forceUpdate();
+
+        const { phase } = this.state;
+        if (phase === AppPhase.Running) {
+            this.updateStatsItem();
+        }
+
+        void requisitions.execute("editModeChanged", true);
+    }
+
+    private handleEditModeChanged = async (enabled: boolean): Promise<boolean> => {
+        AppStorage.saveSetting("editMode", enabled);
+
+        if (enabled) {
+            const arrangement = this.dataModel.arrangement;
+
+            if (!arrangement) {
+                return Promise.resolve(true);
+            }
+
+            if (arrangement.id >= 10000) {
+                const data = await this.dataModel.lockScore(arrangement.id);
+
+                if (data.success && data.token) {
+                    this.dataModel.lockToken = data.token;
+                    this.setState({ editMode: true, lockToken: data.token, lockConflict: undefined });
+
+                    return Promise.resolve(true);
+                }
+
+                if (data.locked) {
+                    this.setState({
+                        editMode: false,
+                        lockConflict: { username: data.username!, lockedAt: data.lockedAt! },
+                    });
+
+                    void requisitions.execute("showWarning",
+                        `Score is being edited by ${data.username}`
+                        + ` (since ${this.formatLockTimestamp(data.lockedAt!)})`);
+
+                    return Promise.resolve(true);
+                }
+            }
+
+            this.setState({ editMode: true });
+        } else {
+            // Save before unlocking. Stay in edit mode if save fails.
+            const saved = await this.saveScore();
+            if (!saved) {
+                return Promise.resolve(true);
+            }
+
+            const { lockToken } = this.state;
+
+            if (lockToken) {
+                const arrangement = this.dataModel.arrangement;
+
+                if (arrangement) {
+                    await this.dataModel.unlockScore(arrangement.id, lockToken);
+                }
+            }
+
+            this.dataModel.lockToken = undefined;
+            this.setState({ editMode: false, lockToken: undefined, lockConflict: undefined });
+        }
+
+        return Promise.resolve(true);
+    };
+
+    /**
+     * Converts a MySQL TIMESTAMP string (e.g. "2026-08-11 12:34:56") to a locale-formatted
+     * date string. Handles undefined/malformed input gracefully.
+     *
+     * @param lockedAt The raw TIMESTAMP value from the database.
+     *
+     * @returns A human-readable date string, or "unknown" if the input is invalid.
+     */
+    private formatLockTimestamp(lockedAt: string): string {
+        if (!lockedAt) {
+            return "unknown";
+        }
+
+        // MySQL TIMESTAMP: "2026-08-11 12:34:56" → "2026-08-11T12:34:56Z"
+        // JS Date ISO: already has "T", keep as-is
+        const normalised = lockedAt.includes("T") ? lockedAt : lockedAt.replace(" ", "T") + "Z";
+        const date = new Date(normalised);
+
+        if (isNaN(date.getTime())) {
+            return "unknown";
+        }
+
+        return date.toLocaleString();
+    }
+
+    private async saveScore(): Promise<boolean> {
+        const arrangement = this.dataModel.arrangement;
+        if (!arrangement) {
+            return true;
+        }
+
+        if (!this.undoManager?.canUndo) {
+            return true;
+        }
+
+        try {
+            const content = await this.dataModel.saveArrangement();
+            if (content) {
+                AppStorage.saveSetting("currentScore", content);
+                this.undoManager.clearHistory();
+
+                void requisitions.execute("showInfo", "Score saved.");
+
+                return true;
+            }
+
+            void requisitions.execute("showError", "Save failed — backend returned no content.");
+
+            return false;
+        } catch (error) {
+            const message = convertErrorToString(error);
+            void requisitions.execute("showError", message);
+
+            return false;
+        }
+    }
 
     private handleTimeParamsChange = (): Promise<boolean> => {
         this.forceUpdate();
         this.updateStatsItem();
+
+        return Promise.resolve(true);
+    };
+
+    private handleArrangementMutated = (): Promise<boolean> => {
+        this.dataModel.persistCurrentScore();
+
+        return Promise.resolve(true);
+    };
+
+    private handleUndoStackChanged = (): Promise<boolean> => {
+        this.forceUpdate();
 
         return Promise.resolve(true);
     };
@@ -1664,11 +2099,12 @@ export class App extends UIComponent<{}, IAppState> {
      * (time signature, bar count, duration) on the right side of the status bar.
      */
     private updateStatsItem(): void {
-        if (!this.arrangementPlayer) {
+        const player = this.arrangementPlayer;
+        if (!player) {
             return;
         }
 
-        const metrics = this.arrangementPlayer.scoreMetrics;
+        const metrics = player.scoreMetrics;
         const bars = metrics.bars === 1 ? "1 bar" : `${metrics.bars} bars`;
         const text = `${metrics.beatsPerBar}/${metrics.beatUnit} • ${bars} • ` +
             `${Math.round(100 * metrics.realTimeLength) / 100} s`;

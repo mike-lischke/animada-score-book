@@ -5,51 +5,11 @@
 
 import { describe, expect, it } from "vitest";
 
-import { Arrangement } from "../../src/core/Arrangement.js";
 import { Track } from "../../src/core/Track.js";
-import { SbDmEntityType, type ISbDmInstrument } from "../../src/core/ScoreBookDataModel.js";
 import { ArrangementMigrator } from "../../src/core/serialisation/migration/ArrangementMigrator.js";
 import type { ILegacyArrangementSnapshot } from "../../src/core/serialisation/migration/legacy-snapshot-types.js";
 import type { IAudioData } from "../../src/core/types/general.js";
-import { TimeCoordinator } from "../../src/player/TimeCoordinator.js";
-import { TrackPlayer } from "../../src/player/TrackPlayer.js";
-
-const createInstrument = (typeId: string, id: number, displayOrder: number): ISbDmInstrument => {
-    return {
-        type: SbDmEntityType.Instrument,
-        id,
-        typeId,
-        displayOrder,
-        displayName: `Instrument ${typeId}`,
-        image: { type: SbDmEntityType.InstrumentImage, id: id + 1000, filePath: "" },
-        color: "",
-        range: [0, 0],
-        state: {
-            initialized: true,
-            isLeaf: true,
-            expanded: false,
-            expandedOnce: false,
-        },
-        noteStyles: {},
-    };
-};
-
-const hydrateMeasureEvents = (arrangement: Arrangement): void => {
-    const timeCoordinator = new TimeCoordinator(arrangement.timeParams, {
-        state: "stopped",
-        get currentTime() {
-            return -1;
-        },
-    });
-
-    const players = arrangement.tracks.map((track) => {
-        return new TrackPlayer(track, timeCoordinator);
-    });
-
-    players.forEach((player) => {
-        player.dispose();
-    });
-};
+import { createInstrument, hydrateMeasureEvents } from "../unit-test-helpers.js";
 
 describe("Track", () => {
     it("derives sparse measures and synthesises rests for empty slots", () => {
@@ -65,13 +25,7 @@ describe("Track", () => {
 
         const snapshot: ILegacyArrangementSnapshot = {
             version: 1,
-            timeParams: {
-                timeSignature: "4/4",
-                tempo: 120,
-                length: 2,
-                pulse: "1/4",
-                stepResolution: 16,
-            },
+            timeParams: { timeSignature: "4/4", tempo: 120, length: 2, pulse: "1/4", stepResolution: 16 },
             tracks: [{
                 id: 100,
                 instrumentId: "0",
@@ -138,9 +92,7 @@ describe("Track", () => {
             id: "accent",
             instrument,
             audioBuffer: null,
-
             sampleProfile: { builtInDamping: 0, builtInAccent: false, ghost: false }
-
         } as IAudioData;
         instrument.noteStyles[noteStyle.id] = noteStyle;
 
@@ -150,31 +102,18 @@ describe("Track", () => {
         notes[0] = noteStyle.id;
         const snapshot: ILegacyArrangementSnapshot = {
             version: 1,
-            timeParams: {
-                timeSignature: "4/4",
-                tempo: 120,
-                length: 1,
-                pulse: "1/4",
-                stepResolution: 16,
-            },
+            timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4", stepResolution: 16 },
             tracks: [{
                 id: 100,
                 instrumentId: "0",
                 notes,
-                polyrhythms: [{
-                    id: 555,
-                    start: 0,
-                    end: 3,
-                    length: 3,
-                }],
+                polyrhythms: [{ id: 555, start: 0, end: 3, length: 3 }],
             }],
         };
 
         // Mark the polyrhythm's three sub-notes as sounding by modifying the result post-migration:
         // the migrator emits one event per polyrhythm note; we then set their noteStyle directly.
-        const arrangement = ArrangementMigrator.migrateToArrangement(
-            snapshot, [instrument],
-        ).arrangement;
+        const arrangement = ArrangementMigrator.migrateToArrangement(snapshot, [instrument]).arrangement;
         hydrateMeasureEvents(arrangement);
         const track = arrangement.tracks[0] as Track;
 
@@ -211,5 +150,45 @@ describe("Track", () => {
             { numerator: 1, denominator: 12 },
             { numerator: 1, denominator: 6 },
         ]);
+    });
+
+    it("clear removes note styles, subdivisions and events", () => {
+        const instrument = createInstrument("0", 0, 0);
+        const noteStyle = {
+            id: "accent",
+            instrument,
+            audioBuffer: null,
+            sampleProfile: { builtInDamping: 0, builtInAccent: false, ghost: false }
+        } as IAudioData;
+        instrument.noteStyles[noteStyle.id] = noteStyle;
+
+        const notes = Array.from<string>({ length: 16 }).fill("0");
+        notes[0] = noteStyle.id;
+        notes[4] = noteStyle.id;
+
+        const snapshot: ILegacyArrangementSnapshot = {
+            version: 1,
+            timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4", stepResolution: 16 },
+            tracks: [{
+                id: 100,
+                instrumentId: "0",
+                notes,
+                polyrhythms: [],
+            }],
+        };
+
+        const arrangement = ArrangementMigrator.migrateToArrangement(snapshot, [instrument]).arrangement;
+        hydrateMeasureEvents(arrangement);
+        const track = arrangement.tracks[0] as Track;
+
+        track.measures[0].subdivisions.push({ id: 9001, startStep: 2, actual: 2, normal: 1, isTuplet: false });
+
+        track.clear();
+
+        expect(track.measures[0].steps.every((step) => {
+            return step.noteStyleId === undefined;
+        })).toBe(true);
+        expect(track.measures[0].subdivisions).toHaveLength(0);
+        expect(track.measures[0].events).toHaveLength(0);
     });
 });

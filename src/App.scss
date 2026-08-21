@@ -4,8 +4,8 @@
  */
 
 @use "grid-shared" as score;
-@use "components/styles" as comp;
-@use "ui/styles" as ui;
+@use "components/component-styles" as comp;
+@use "ui/app-ui" as ui;
 
 @font-face {
     font-family: "Fairytale";
@@ -192,17 +192,29 @@ h6 {
     height: 100%;
 }
 
-#mainArrangementTitle {
+.main-arrangement-title {
     display: block;
     font-size: clamp(12pt, 20pt, 20pt);
-    margin-right: 12px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    min-width: 0;
+
+    text-align: right;
+    padding: 0;
+    margin: 0;
+
+    max-width: 100%;
+    min-width: 1ch;
+    width: fit-content;
 }
 
-.collapsed-header #mainArrangementTitle {
+.main-arrangement-title:focus {
+    outline: 1px solid var(--color-primary);
+    outline-offset: 1px;
+    border-radius: 2px;
+}
+
+.collapsed-header .main-arrangement-title {
     display: block;
     font-size: clamp(10pt, 16pt, 16pt);
     white-space: nowrap;
@@ -214,6 +226,7 @@ h6 {
 #arrangementPalette {
     flex: 1 1 auto;
     min-width: 0;
+    padding: 16px;
 }
 
 #editTitleButton {
@@ -225,29 +238,6 @@ h6 {
 }
 
 #share-button img {
-    display: none;
-}
-
-.overlay {
-    width: 100%;
-    height: 100%;
-    position: relative;
-    z-index: 15;
-    top: 0;
-    left: 0;
-    background: white;
-    transition: opacity 0.2s;
-}
-
-.overlay.visible {
-    opacity: 1;
-}
-
-.overlay.invisible {
-    opacity: 0;
-}
-
-.overlay.hidden {
     display: none;
 }
 

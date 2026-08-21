@@ -7,9 +7,8 @@ import { cleanup, render } from "@testing-library/preact";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { GridMeasureRow } from "../../src/components/ui/Bar/Grid/GridMeasureRow.js";
-import { Overlay } from "../../src/components/ui/Overlay.js";
 import {
-    SbDmEntityType, ScoreBookDataModel, type ISbDmArrangement, type ISbDmInstrument
+    ScoreBookDataModel, type ISbDmArrangement, type ISbDmInstrument
 } from "../../src/core/ScoreBookDataModel.js";
 import { ArrangementMigrator } from "../../src/core/serialisation/migration/ArrangementMigrator.js";
 import type { ILegacyArrangementSnapshot } from "../../src/core/serialisation/migration/legacy-snapshot-types.js";
@@ -18,6 +17,7 @@ import type { IAudioData } from "../../src/core/types/general.js";
 import { TimeCoordinator } from "../../src/player/TimeCoordinator.js";
 import { TrackPlayer } from "../../src/player/TrackPlayer.js";
 import type { IRealtimeProvider } from "../../src/ui/AnimationEngine.js";
+import { createInstrument } from "../unit-test-helpers.js";
 
 class TestScoreBookDataModel extends ScoreBookDataModel {
     private readonly testArrangement: ISbDmArrangement;
@@ -37,28 +37,6 @@ class TestScoreBookDataModel extends ScoreBookDataModel {
         return this.testInstruments;
     }
 }
-
-const createInstrument = (typeId: string, id: number, displayOrder: number): ISbDmInstrument => {
-    const noteStyles = {} as Record<string, IAudioData>;
-
-    return {
-        type: SbDmEntityType.Instrument,
-        id,
-        typeId,
-        displayOrder,
-        displayName: `Instrument ${typeId}`,
-        image: { type: SbDmEntityType.InstrumentImage, id: id + 1000, filePath: "" },
-        color: "#0ea5e9",
-        range: [0, 0],
-        state: {
-            initialized: true,
-            isLeaf: true,
-            expanded: false,
-            expandedOnce: false,
-        },
-        noteStyles,
-    };
-};
 
 const createInstrumentWithNoteStyle = (typeId: string, id: number, displayOrder: number): ISbDmInstrument => {
     const instrument = createInstrument(typeId, id, displayOrder);
@@ -82,7 +60,6 @@ const createRealtimeProvider = (): IRealtimeProvider => {
 
 describe.sequential("Polyrhythm UI Integration", () => {
     afterEach(() => {
-        Overlay.closeAllOverlays();
         cleanup();
     });
 
@@ -92,41 +69,23 @@ describe.sequential("Polyrhythm UI Integration", () => {
         const snapshot: ILegacyArrangementSnapshot = {
             version: 1,
             title: "Display",
-            timeParams: {
-                timeSignature: "4/4",
-                tempo: 120,
-                length: 1,
-                pulse: "1/4",
-                stepResolution: 16,
-            },
+            timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4", stepResolution: 16 },
             tracks: [{
                 id: 100,
                 instrumentId: "1",
                 notes: Array.from({ length: 16 }, () => {
                     return "1";
                 }),
-                polyrhythms: [{
-                    id: 901,
-                    start: 0,
-                    end: 3,
-                    length: 7,
-                }],
+                polyrhythms: [{ id: 901, start: 0, end: 3, length: 7 }],
             }],
         };
 
-        const arrangement = ArrangementMigrator.migrateToArrangement(
-            snapshot, [instrument]).arrangement;
+        const arrangement = ArrangementMigrator.migrateToArrangement(snapshot, [instrument]).arrangement;
         const track = arrangement.tracks[0] as Track;
 
         const dataModel = new TestScoreBookDataModel(arrangement, [instrument]);
 
-        const result = render(
-            <GridMeasureRow
-                measure={track.measures[0]}
-                track={track}
-                dataModel={dataModel}
-            />
-        );
+        const result = render(<GridMeasureRow measure={track.measures[0]} track={track} dataModel={dataModel} />);
 
         const subdivisions = result.container.querySelectorAll(".grid-measure-row .subdivision");
         expect(subdivisions.length).toBe(1);
@@ -138,30 +97,18 @@ describe.sequential("Polyrhythm UI Integration", () => {
         const snapshot: ILegacyArrangementSnapshot = {
             version: 1,
             title: "Playback",
-            timeParams: {
-                timeSignature: "4/4",
-                tempo: 120,
-                length: 1,
-                pulse: "1/4",
-                stepResolution: 16,
-            },
+            timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4", stepResolution: 16 },
             tracks: [{
                 id: 100,
                 instrumentId: "0",
                 notes: Array.from({ length: 16 }, () => {
                     return "0";
                 }),
-                polyrhythms: [{
-                    id: 902,
-                    start: 0,
-                    end: 3,
-                    length: 5,
-                }],
+                polyrhythms: [{ id: 902, start: 0, end: 3, length: 5 }],
             }],
         };
 
-        const arrangement = ArrangementMigrator.migrateToArrangement(
-            snapshot, [instrument]).arrangement;
+        const arrangement = ArrangementMigrator.migrateToArrangement(snapshot, [instrument]).arrangement;
         const track = arrangement.tracks[0] as Track;
 
         const timeCoordinator = new TimeCoordinator(arrangement.timeParams, createRealtimeProvider());

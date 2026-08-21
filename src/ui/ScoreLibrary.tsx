@@ -57,12 +57,14 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
         requisitions.register("settingsChanged", this.handleSettingsChanged);
         requisitions.register("scoreBookLoaded", this.handleScoreBookLoaded);
         requisitions.register("permChanged", this.handlePermChanged);
+        requisitions.register("scoreEntryUpdated", this.handleScoreEntryUpdated);
     }
 
     public override componentWillUnmount(): void {
         requisitions.unregister("settingsChanged", this.handleSettingsChanged);
         requisitions.unregister("scoreBookLoaded", this.handleScoreBookLoaded);
         requisitions.unregister("permChanged", this.handlePermChanged);
+        requisitions.unregister("scoreEntryUpdated", this.handleScoreEntryUpdated);
     }
 
     public render(): ComponentChild {
@@ -443,6 +445,13 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
             const tree = this.scoreTableRef.current;
             void tree?.setData(dataModel.scoreLib, SetDataAction.Replace);
         }
+
+        return Promise.resolve(true);
+    };
+
+    private handleScoreEntryUpdated = async (entry: ISbDmScoreFolder | ISbDmScore): Promise<boolean> => {
+        const tree = this.scoreTableRef.current;
+        void tree?.setData([entry], SetDataAction.Update);
 
         return Promise.resolve(true);
     };

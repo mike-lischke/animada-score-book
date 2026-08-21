@@ -30,6 +30,7 @@ const makeArrangement = (tracks: ISbDmTrack[]): ISbDmArrangement => {
         },
         addTrack: vi.fn(),
         removeTrack: vi.fn(),
+        duplicateTrack: vi.fn(),
         applyArrangementSnapshot: vi.fn(),
         mainVolume: 100,
         loop: false,

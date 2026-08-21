@@ -7,7 +7,7 @@ import { expect, test } from "@playwright/test";
 
 import { stringifyPackedArrangement } from "../../src/core/serialisation/snapshot-packing.js";
 import type { IArrangementSnapshot } from "../../src/core/types/general.js";
-import { routeApi } from "./helpers.js";
+import { routeApi } from "./e2e-test-helpers.js";
 
 test.beforeEach(async ({ page }) => {
     await routeApi(page);
@@ -21,13 +21,7 @@ test.describe("Staff view 1:2 subdivision", () => {
         const snapshot = {
             version: 3,
             title: "E2E 1:2 Subdivision",
-            timeParams: {
-                timeSignature: "4/4",
-                tempo: 120,
-                length: 1,
-                pulse: "1/4",
-                stepResolution: 16,
-            },
+            timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4", stepResolution: 16 },
             tracks: [{
                 id: 200,
                 instrumentId: "0",
@@ -47,13 +41,7 @@ test.describe("Staff view 1:2 subdivision", () => {
                             return { index: offset + 3 };
                         }),
                     ],
-                    subdivisions: [{
-                        id: 1,
-                        startStep: 1,
-                        actual: 1,
-                        normal: 2,
-                        isTuplet: false,
-                    }],
+                    subdivisions: [{ id: 1, startStep: 1, actual: 1, normal: 2, isTuplet: false }],
                 }],
             }],
         };

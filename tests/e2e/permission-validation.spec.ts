@@ -4,7 +4,7 @@
  */
 
 import { expect, test, type Page } from "@playwright/test";
-import { setupAuthenticatedSession } from "./helpers.js";
+import { setupAuthenticatedSession } from "./e2e-test-helpers.js";
 
 const validEntityTypes = ["score", "folder", "feature"] as const;
 

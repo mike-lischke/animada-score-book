@@ -7,7 +7,6 @@ import { type ComponentChild, createRef } from "preact";
 
 import { AppStorage } from "../../../core/AppStorage.js";
 import type { ScoreBookDataModel } from "../../../core/ScoreBookDataModel.js";
-import type { UndoManager } from "../../../core/UndoManager.js";
 import type { ArrangementPlayer } from "../../../player/ArrangementPlayer.js";
 import { requisitions } from "../../../supplement/Requisitions.js";
 import { isMobile } from "../../../ui/index.js";
@@ -16,6 +15,7 @@ import { Checkbox } from "../framework/Checkbox.js";
 import { UIIcon } from "../framework/UIIcon.js";
 import { Container } from "../framework/Container.js";
 import { FieldSet } from "../framework/FieldSet.js";
+import { GooeyGroup } from "../framework/GooeyGroup.js";
 import { Icon } from "../framework/Icon.js";
 import { Image, PredefinedImage } from "../framework/Image.js";
 import { Label } from "../framework/Label.js";
@@ -31,7 +31,7 @@ import { Dialog } from "../framework/Dialog.js";
 export interface IArrangementPlayControlsProperties extends ICommonUIProperties {
     arrangementPlayer: ArrangementPlayer,
     dataModel: ScoreBookDataModel;
-    undoManager: UndoManager;
+    editMode: boolean;
 }
 
 interface IArrangementPlayControlsState {
@@ -40,6 +40,10 @@ interface IArrangementPlayControlsState {
 
     currentVolume: number;
     currentTempo: number;
+
+    /** The tempo as stored in the arrangement (last persisted value). Used to detect playback deviations. */
+    scoreTempo: number;
+
     recordingInProgress: boolean;
 }
 
@@ -51,11 +55,13 @@ export class ArrangementPlayControls
         super(props);
 
         const arrangementView = props.dataModel.arrangement!;
+        const tempo = arrangementView.timeParams.tempo;
         this.state = {
             editingTitle: false,
             title: arrangementView.title,
             currentVolume: arrangementView.mainVolume,
-            currentTempo: arrangementView.timeParams.tempo,
+            currentTempo: tempo,
+            scoreTempo: tempo,
             recordingInProgress: false,
         };
     }
@@ -70,12 +76,41 @@ export class ArrangementPlayControls
 
     public override componentDidUpdate(previousProps: Readonly<IArrangementPlayControlsProperties>,
         previousState: Readonly<IArrangementPlayControlsState>): void {
-        const { dataModel } = this.props;
-        const { recordingInProgress } = this.state;
+        const { arrangementPlayer, dataModel, editMode } = this.props;
+        const { recordingInProgress, scoreTempo } = this.state;
 
         const arrangement = dataModel.arrangement!;
+
+        // A new arrangement (and player) was loaded (e.g., New Song) — re-sync the tempo baseline so the
+        // edit-mode restore below does not overwrite the new score with a stale tempo.
+        if (previousProps.arrangementPlayer !== arrangementPlayer) {
+            this.setState({
+                currentTempo: arrangement.timeParams.tempo,
+                scoreTempo: arrangement.timeParams.tempo,
+            });
+
+            return;
+        }
+
+        // When entering edit mode, restore the arrangement tempo so the user edits from the saved baseline.
+        if (!previousProps.editMode && editMode) {
+            arrangement.timeParams.tempo = scoreTempo;
+            this.setState({ currentTempo: scoreTempo });
+
+            return;
+        }
+
+        // Sync currentTempo when the arrangement tempo changes externally (undo/redo in edit mode,
+        // or arrangement reload). In edit mode also keep scoreTempo in sync.
         if (previousState.currentTempo !== arrangement.timeParams.tempo) {
-            this.setState({ currentTempo: arrangement.timeParams.tempo });
+            if (editMode) {
+                this.setState({
+                    currentTempo: arrangement.timeParams.tempo,
+                    scoreTempo: arrangement.timeParams.tempo,
+                });
+            } else {
+                this.setState({ currentTempo: arrangement.timeParams.tempo });
+            }
         }
 
         if (!previousState.recordingInProgress && recordingInProgress) {
@@ -87,14 +122,18 @@ export class ArrangementPlayControls
 
     public override shouldComponentUpdate(nextProps: Readonly<IArrangementPlayControlsProperties>,
         nextState: Readonly<IArrangementPlayControlsState>): boolean {
-        const { arrangementPlayer, dataModel } = this.props;
-        const { editingTitle, title, currentVolume, currentTempo, recordingInProgress } = this.state;
+        const { arrangementPlayer, dataModel, editMode } = this.props;
+        const { editingTitle, title, currentVolume, currentTempo, scoreTempo, recordingInProgress } = this.state;
 
         if (arrangementPlayer !== nextProps.arrangementPlayer) {
             return true;
         }
 
         if (dataModel !== nextProps.dataModel) {
+            return true;
+        }
+
+        if (editMode !== nextProps.editMode) {
             return true;
         }
 
@@ -114,6 +153,10 @@ export class ArrangementPlayControls
             return true;
         }
 
+        if (scoreTempo !== nextState.scoreTempo) {
+            return true;
+        }
+
         if (recordingInProgress !== nextState.recordingInProgress) {
             return true;
         }
@@ -122,10 +165,30 @@ export class ArrangementPlayControls
     }
 
     public override render(): ComponentChild {
-        const { arrangementPlayer, dataModel, undoManager } = this.props;
-        const { currentVolume, currentTempo, recordingInProgress } = this.state;
+        const { arrangementPlayer, dataModel, editMode } = this.props;
+        const { currentVolume, currentTempo, scoreTempo, recordingInProgress } = this.state;
 
         const arrangementView = dataModel.arrangement!;
+        const tempoDeviates = !editMode && currentTempo !== scoreTempo;
+
+        let tempoLabel: ComponentChild;
+        if (tempoDeviates) {
+            tempoLabel = (
+                <Label
+                    caption={`${currentTempo} bpm *`}
+                    style={{ fontSize: "80%", marginTop: "4px", whiteSpace: "nowrap", fontStyle: "italic" }}
+                    data-tooltip={`Playback tempo (${currentTempo} bpm) differs from the arrangement`
+                        + ` tempo (${scoreTempo} bpm). Enter Edit Mode to persist the change.`}
+                />
+            );
+        } else {
+            tempoLabel = (
+                <Label
+                    caption={`${currentTempo} bpm`}
+                    style={{ fontSize: "80%", marginTop: "4px", whiteSpace: "nowrap" }}
+                />
+            );
+        }
 
         return (
             <Grid id="arrangementPlayControls" columns={[160, "auto"]} {...this.dataAttributes}>
@@ -134,19 +197,21 @@ export class ArrangementPlayControls
                     mainAlignment={ChildAlignment.Start}
                     crossAlignment={ChildAlignment.Start}
                 >
-                    <FieldSet legend="Play / Record" className="grid-cols-2 gap-4">
-                        <PlayStopButton id="playbackButton" arrangementPlayer={arrangementPlayer} />
-                        <Button
-                            round
-                            id="recordButton"
-                            data-tooltip="Record your song and export it as an MP3 file."
-                            disabled={recordingInProgress}
-                            onClick={() => {
-                                void this.startRecording();
-                            }}
-                        >
-                            <Image key="recordButton" src={PredefinedImage.Record} data-tooltip="inherit" />
-                        </Button>
+                    <FieldSet legend="Play / Record" className="flex">
+                        <GooeyGroup className="playControlsGooey" background="var(--color-base-200)">
+                            <PlayStopButton id="playbackButton" arrangementPlayer={arrangementPlayer} />
+                            <Button
+                                plain
+                                id="recordButton"
+                                data-tooltip="Record your song and export it as an MP3 file."
+                                disabled={recordingInProgress}
+                                onClick={() => {
+                                    void this.startRecording();
+                                }}
+                            >
+                                <Image key="recordButton" src={PredefinedImage.Record} data-tooltip="inherit" />
+                            </Button>
+                        </GooeyGroup>
                     </FieldSet>
                 </Container>
                 <Container
@@ -171,19 +236,16 @@ export class ArrangementPlayControls
                             data-tooltip="inherit"
                             className="du-range-xs"
                             onChange={(value) => {
-                                this.setState({ currentTempo: value });
-                                undoManager.edit({
-                                    type: "EditCommand_TimeParamsTempo",
-                                    timeParams: arrangementView.timeParams,
-                                    tempo: value
-                                });
-
+                                if (editMode) {
+                                    dataModel.setTempo(value);
+                                    this.setState({ currentTempo: value, scoreTempo: value });
+                                } else {
+                                    this.setState({ currentTempo: value });
+                                    arrangementView.timeParams.tempo = value;
+                                }
                             }}
                         />
-                        <Label
-                            caption={`${currentTempo} bpm`}
-                            style={{ fontSize: "80%", marginTop: "4px", whiteSpace: "nowrap" }}
-                        />
+                        {tempoLabel}
                     </Container>
                     <Container
                         mainAlignment={ChildAlignment.Start}

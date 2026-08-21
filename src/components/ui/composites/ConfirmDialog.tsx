@@ -149,12 +149,12 @@ export class ConfirmDialog extends UIComponent<{}, IConfirmDialogState> {
             }
         }
 
-        this.dialogRef.current?.close(closure === DialogResponseClosure.Decline);
         this.signal?.notify(closure);
+        this.dialogRef.current?.close(closure === DialogResponseClosure.Decline);
     };
 
     private handleClose = (returnValue: string): void => {
-        if (returnValue === "cancelled") {
+        if (returnValue === "cancel") {
             this.signal?.notify(DialogResponseClosure.Cancel);
         }
     };

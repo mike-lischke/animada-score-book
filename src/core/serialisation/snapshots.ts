@@ -4,9 +4,7 @@
  */
 
 import type { ISbDmArrangement, ISbDmTrack } from "../ScoreBookDataModel.js";
-import type {
-    IArrangementSnapshot, IMeasureStep, ITrackMeasureSnapshot, ITrackSnapshot, ISubdivision
-} from "../types/general.js";
+import type { IArrangementSnapshot, ITrackMeasureSnapshot, ITrackSnapshot } from "../types/general.js";
 
 /** Current internal arrangement snapshot schema version. */
 
@@ -25,6 +23,10 @@ export const getArrangementSnapshot = (arrangementView: Readonly<ISbDmArrangemen
         timeParams: { timeSignature, tempo, length, pulse, stepResolution },
         tracks: arrangementView.tracks.map(getTrackSnapshot),
     };
+
+    if (arrangementView.id >= 10000) {
+        snapshot.scoreId = arrangementView.id;
+    }
 
     if (Object.keys(arrangementView.measureLabels).length > 0) {
         snapshot.measureLabels = { ...arrangementView.measureLabels };
@@ -45,83 +47,13 @@ const getMeasureSnapshots = (track: ISbDmTrack): ITrackMeasureSnapshot[] => {
     return track.measures.map((measure) => {
         return {
             number: measure.number,
-            meter: measure.meter,
-            steps: getVisibleSteps(track, measure.number, measure.meter.stepResolution, measure.subdivisions),
-            subdivisions: measure.subdivisions,
+            meter: { ...measure.meter },
+            steps: measure.steps.map((step) => {
+                return { ...step };
+            }),
+            subdivisions: measure.subdivisions.map((subdivision) => {
+                return { ...subdivision };
+            }),
         };
     });
-};
-
-/**
- * Derives the visible step array for a measure by walking the base grid and
- * resolving noteStyleIds from the track's current events. This ensures that
- * edits made directly to events (e.g. in tests) are reflected in the snapshot.
- *
- * @param track The track the measure belongs to, used for looking up note styles of events.
- * @param measureNumber The measure number to get steps for.
- * @param stepsPerBar The number of grid steps per bar, used for calculating step positions of events.
- * @param subdivisions The measure's subdivisions, used for determining how many visible steps there are and which
- *                     events fall within each step.
- *
- * @returns An array of measure steps with noteStyleIds resolved from the track's events.
- */
-const getVisibleSteps = (track: ISbDmTrack, measureNumber: number, stepsPerBar: number,
-    subdivisions: ISubdivision[]): IMeasureStep[] => {
-    const topLevelSubdivisions = subdivisions.filter((s) => {
-        return s.parentSubdivisionId == null;
-    }).sort((left, right) => {
-        return left.startStep - right.startStep;
-    });
-    const topLevelByStart = new Map(topLevelSubdivisions.map((s) => {
-        return [s.startStep, s] as const;
-    }));
-
-    const measure = track.measures.find((candidate) => {
-        return candidate.number === measureNumber;
-    });
-
-    const steps: IMeasureStep[] = [];
-    let visibleIndex = 0;
-    let baseStep = 1;
-
-    while (baseStep <= stepsPerBar) {
-        const subdivision = topLevelByStart.get(visibleIndex);
-        if (!subdivision) {
-            const note = track.getNoteAt({ bar: measureNumber, step: baseStep });
-            const sourceStep = measure?.steps[visibleIndex];
-            steps.push({
-                index: visibleIndex,
-                noteStyleId: note?.audioData?.id,
-                articulation: sourceStep?.articulation,
-            });
-            visibleIndex += 1;
-            baseStep += 1;
-
-            continue;
-        }
-
-        // Collect events within the subdivision range from the track.
-        const start = (baseStep - 1) / stepsPerBar;
-        const end = (baseStep - 1 + subdivision.normal) / stepsPerBar;
-        const subEvents = measure?.events.filter((event) => {
-            const eventStart = event.start.numerator / event.start.denominator;
-
-            return eventStart >= start && eventStart < end
-                && (event.duration.numerator * stepsPerBar) % event.duration.denominator !== 0;
-        }) ?? [];
-
-        for (const event of subEvents) {
-            const sourceStep = measure?.steps[visibleIndex];
-            steps.push({
-                index: visibleIndex,
-                noteStyleId: event.audioData?.id,
-                articulation: sourceStep?.articulation,
-            });
-            visibleIndex += 1;
-        }
-
-        baseStep += subdivision.normal;
-    }
-
-    return steps;
 };
