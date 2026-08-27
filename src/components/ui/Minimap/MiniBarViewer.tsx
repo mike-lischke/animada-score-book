@@ -80,7 +80,7 @@ export class MiniBarViewer extends UIComponent<IMiniBarViewerProps, IMiniBarView
                 {measureSelected && <div className="mini-bar-selection-overlay" />}
                 {arrangement.tracks.map((track) => {
                     const events = barNumber - 1 < track.measures.length
-                        ? track.measures[barNumber - 1].events
+                        ? track.measures[barNumber - 1].noteEvents
                         : [];
 
                     const activeSteps = new Set<number>();

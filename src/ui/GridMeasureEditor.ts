@@ -6,15 +6,19 @@
 import type {
     ISbDmArrangement, ISbDmNoteEvent, ISbDmTrack, ITiming, ScoreBookDataModel,
 } from "../core/ScoreBookDataModel.js";
-import type { IAudioData } from "../core/types/general.js";
+import { addFractions, compareFractions, reduceFraction } from "../core/serialisation/numeric-functions.js";
+import type { IAudioData, IFraction } from "../core/types/general.js";
 import { selectionToClearRanges } from "./selection-ranges.js";
-import type { ISelectionEntry } from "./selection-types.js";
+import { SelectionGranularity, type ISelectionEntry } from "./selection-types.js";
 
 /** Identifies a cell in the grid view using zero-based step indexing. */
 export interface IGridEditorPosition {
     bar: number;
     trackId: number;
     step: number;
+
+    /** Exact start fraction for subdivision slots, which do not align to grid steps. */
+    start?: IFraction;
 }
 
 /** A resolved grid cell and its current data-model content. */
@@ -51,7 +55,8 @@ export class GridMeasureEditor {
             return undefined;
         }
 
-        this.dataModel.setGridNote(position.trackId, position.bar, position.step, noteStyleId);
+        this.dataModel.setGridNote(position.trackId, position.bar, position.step, noteStyleId,
+            position.start);
 
         return style;
     }
@@ -63,7 +68,8 @@ export class GridMeasureEditor {
      * @returns True when the cell changed.
      */
     public clearNote(position: IGridEditorPosition): boolean {
-        return this.dataModel.setGridNote(position.trackId, position.bar, position.step, undefined);
+        return this.dataModel.setGridNote(position.trackId, position.bar, position.step, undefined,
+            position.start);
     }
 
     /**
@@ -77,6 +83,101 @@ export class GridMeasureEditor {
      */
     public clearSelection(entries: ISelectionEntry[]): boolean {
         return this.dataModel.clearStepRanges(selectionToClearRanges(entries, this.dataModel.arrangement));
+    }
+
+    /**
+     * Applies a note style to all cells described by the given selection entries, honouring their
+     * granularity. The style is applied only when all selected cells belong to the same instrument.
+     * The data model batches the changes into one undo step.
+     *
+     * @param entries The selection entries to fill.
+     * @param noteStyleId The instrument note-style id to apply.
+     *
+     * @returns True when any content changed.
+     */
+    public setSelectionNoteStyle(entries: ISelectionEntry[], noteStyleId: string): boolean {
+        const arrangement = this.dataModel.arrangement;
+        if (!arrangement) {
+            return false;
+        }
+
+        const ranges = selectionToClearRanges(entries, arrangement);
+        if (ranges.length === 0) {
+            return false;
+        }
+
+        const trackIds = new Set(ranges.map((range) => {
+            return range.trackId;
+        }));
+        const instrumentIds = new Set<number>();
+        for (const trackId of trackIds) {
+            const track = arrangement.tracks.find((candidate) => {
+                return candidate.id === trackId;
+            });
+            if (track) {
+                instrumentIds.add(track.instrument.id);
+            }
+        }
+
+        if (instrumentIds.size > 1) {
+            return false;
+        }
+
+        return this.dataModel.setNoteStyleRanges(ranges, noteStyleId);
+    }
+
+    /**
+     * Re-resolves the note ids of the given note entries against the current measure content, so
+     * selections stay accurate after structural edits such as filling a range with a note style.
+     * Only note start cells carry a note id; absorbed cells and rests resolve to undefined.
+     *
+     * @param entries The selection entries to refresh.
+     *
+     * @returns The entries with updated note ids.
+     */
+    public refreshSelection(entries: ISelectionEntry[]): ISelectionEntry[] {
+        const arrangement = this.dataModel.arrangement;
+        if (!arrangement) {
+            return entries;
+        }
+
+        return entries.map((entry) => {
+            if (entry.granularity !== SelectionGranularity.Note) {
+                return entry;
+            }
+
+            const track = arrangement.tracks.find((candidate) => {
+                return candidate.id === entry.trackId;
+            });
+            const measure = track?.measures[entry.bar - 1];
+            if (!measure) {
+                return entry;
+            }
+
+            const cellStart = entry.start ?? (entry.startStep === undefined
+                ? undefined
+                : reduceFraction(entry.startStep, measure.meter.stepResolution));
+            if (cellStart === undefined) {
+                return entry;
+            }
+
+            const noteEvent = measure.noteEvents.find((candidate) => {
+                if (candidate.audioData === undefined) {
+                    return false;
+                }
+
+                const eventEnd = addFractions(candidate.start, candidate.duration);
+
+                return compareFractions(cellStart, candidate.start) >= 0
+                    && compareFractions(cellStart, eventEnd) < 0;
+            });
+
+            const noteId = noteEvent !== undefined && compareFractions(cellStart, noteEvent.start) === 0
+                ? noteEvent.id
+                : undefined;
+
+            return { ...entry, noteId };
+        });
     }
 
     /**
@@ -139,7 +240,7 @@ export class GridMeasureEditor {
 
         for (const track of arrangement.tracks) {
             for (const measure of track.measures) {
-                const event = measure.events.find((candidate) => {
+                const event = measure.noteEvents.find((candidate) => {
                     return candidate.id === noteId;
                 });
                 if (event) {

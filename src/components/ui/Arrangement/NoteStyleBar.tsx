@@ -5,9 +5,11 @@
 
 import type { ComponentChild } from "preact";
 
-import type { ScoreBookDataModel } from "../../../core/ScoreBookDataModel.js";
+import type { ISbDmTrack, ScoreBookDataModel } from "../../../core/ScoreBookDataModel.js";
+import { addFractions, compareFractions, reduceFraction } from "../../../core/serialisation/numeric-functions.js";
 import type { IAudioData } from "../../../core/types/general.js";
 import { requisitions } from "../../../supplement/Requisitions.js";
+import { SelectionGranularity, type ISelectionEntry } from "../../../ui/selection-types.js";
 import type { SelectionManager } from "../../../ui/SelectionManager.js";
 import { NoteStyleSymbolViewer } from "../Note/NoteStyleSymbolViewer.js";
 import { Button } from "../framework/Button.js";
@@ -24,6 +26,7 @@ export interface INoteStyleBarProps extends ICommonUIProperties {
 
 interface INoteStyleBarState {
     noteStyles: IAudioData[];
+    markedStyleId?: string;
 }
 
 /**
@@ -49,7 +52,7 @@ export class NoteStyleBar extends UIComponent<INoteStyleBarProps, INoteStyleBarS
     }
 
     public override render(): ComponentChild {
-        const { noteStyles } = this.state;
+        const { noteStyles, markedStyleId } = this.state;
 
         const buttons = noteStyles.map((style, index) => {
             const tooltip = style.symbol?.description ?? style.symbol?.shortDescription ?? style.id;
@@ -57,8 +60,8 @@ export class NoteStyleBar extends UIComponent<INoteStyleBarProps, INoteStyleBarS
             return (
                 <Button
                     key={style.id}
-                    plain
                     className="noteStyleButton"
+                    isDefault={style.id === markedStyleId}
                     data-tooltip={`${tooltip} (${index + 1})`}
                     onClick={() => {
                         void requisitions.execute("noteEntryRequested", style.id);
@@ -100,17 +103,118 @@ export class NoteStyleBar extends UIComponent<INoteStyleBarProps, INoteStyleBarS
     };
 
     private refreshFromSelection(): void {
-        const { dataModel, selectionManager } = this.props;
+        const { selectionManager } = this.props;
 
         const entries = [...selectionManager.currentSelection.values()];
-        const trackId = entries.length > 0 ? entries[0].trackId : undefined;
-        const track = trackId === undefined
-            ? undefined
-            : dataModel.arrangement?.tracks.find((candidate) => {
+        const tracks = this.resolveSelectedTracks(entries);
+        const noteStyles = this.resolveNoteStyles(tracks);
+        const markedStyleId = this.resolveMarkedStyleId(tracks, entries);
+
+        this.setState({ noteStyles, markedStyleId });
+    }
+
+    /**
+     * Collects the distinct tracks referenced by the current selection.
+     *
+     * @param entries All current selection entries.
+     *
+     * @returns The distinct selected tracks, in order of first appearance.
+     */
+    private resolveSelectedTracks(entries: ISelectionEntry[]): ISbDmTrack[] {
+        const { dataModel } = this.props;
+
+        const trackIds = new Set(entries.map((entry) => {
+            return entry.trackId;
+        }));
+
+        const tracks: ISbDmTrack[] = [];
+        for (const trackId of trackIds) {
+            const track = dataModel.arrangement?.tracks.find((candidate) => {
                 return candidate.id === trackId;
             });
-        const noteStyles = track ? Object.values(track.instrument.noteStyles) : [];
+            if (track) {
+                tracks.push(track);
+            }
+        }
 
-        this.setState({ noteStyles });
+        return tracks;
+    }
+
+    /**
+     * Resolves the note styles to display. Styles are shown only when all selected tracks share the
+     * same instrument, so a single consistent style set applies to the whole selection.
+     *
+     * @param tracks The distinct selected tracks.
+     *
+     * @returns The shared instrument's note styles, or an empty array without a shared instrument.
+     */
+    private resolveNoteStyles(tracks: ISbDmTrack[]): IAudioData[] {
+        if (tracks.length === 0) {
+            return [];
+        }
+
+        const instrumentId = tracks[0].instrument.id;
+        const allShareInstrument = tracks.every((track) => {
+            return track.instrument.id === instrumentId;
+        });
+
+        return allShareInstrument ? Object.values(tracks[0].instrument.noteStyles) : [];
+    }
+
+    /**
+     * Determines the note style shared by all currently selected notes across all selected tracks.
+     *
+     * @param tracks The distinct selected tracks.
+     * @param entries All current selection entries.
+     *
+     * @returns The common note style id, or undefined when no single style is shared.
+     */
+    private resolveMarkedStyleId(tracks: ISbDmTrack[], entries: ISelectionEntry[]): string | undefined {
+        const noteEntries = entries.filter((entry) => {
+            return entry.granularity === SelectionGranularity.Note;
+        });
+
+        if (noteEntries.length === 0) {
+            return undefined;
+        }
+
+        const firstStyleId = this.noteStyleIdOf(tracks, noteEntries[0]);
+        const allMatch = noteEntries.every((entry) => {
+            return this.noteStyleIdOf(tracks, entry) === firstStyleId;
+        });
+
+        return allMatch ? firstStyleId : undefined;
+    }
+
+    private noteStyleIdOf(tracks: ISbDmTrack[], entry: ISelectionEntry): string | undefined {
+        const track = tracks.find((candidate) => {
+            return candidate.id === entry.trackId;
+        });
+        const measure = track?.measures.find((candidate) => {
+            return candidate.number === entry.bar;
+        });
+        if (!measure) {
+            return undefined;
+        }
+
+        const cellStart = entry.start ?? (entry.startStep === undefined
+            ? undefined
+            : reduceFraction(entry.startStep, measure.meter.stepResolution));
+        if (cellStart === undefined) {
+            return undefined;
+        }
+
+        const noteEvent = measure.noteEvents.find((candidate) => {
+            if (candidate.audioData === undefined) {
+                return false;
+            }
+
+            const eventEnd = addFractions(candidate.start, candidate.duration);
+
+            return compareFractions(cellStart, candidate.start) >= 0
+                && compareFractions(cellStart, eventEnd) < 0;
+        });
+
+        return noteEvent?.audioData?.id;
     }
 }

@@ -6,7 +6,6 @@
 import { expect, test } from "@playwright/test";
 
 import { stringifyPackedArrangement } from "../../src/core/serialisation/snapshot-packing.js";
-import type { IArrangementSnapshot } from "../../src/core/types/general.js";
 import { routeApi } from "./e2e-test-helpers.js";
 
 test.beforeEach(async ({ page }) => {
@@ -63,9 +62,9 @@ test.describe("Staff view subdivision rendering", () => {
         })).toBeTruthy();
     });
 
-    test("expands staff slots for clean power-of-two subdivisions", async ({ page }) => {
+    test("renders 32nd notes split from a single grid step", async ({ page }) => {
         const subdivisionSnapshot = {
-            version: 3,
+            version: 4,
             title: "E2E Staff Subdivision",
             timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4", stepResolution: 16 },
             tracks: [{
@@ -76,18 +75,28 @@ test.describe("Staff view subdivision rendering", () => {
                     meter: {
                         beats: 4,
                         beatUnits: 4,
-                        timeSignature: "4/4",
                         stepResolution: 16,
                         beatGroups: [4, 4, 4, 4],
                     },
-                    steps: [
-                        { index: 0, noteStyleId: "1" },
-                        { index: 1, noteStyleId: "1" },
-                        ...Array.from({ length: 15 }, (_, offset) => {
-                            return { index: offset + 2 };
-                        }),
+                    events: [
+                        {
+                            start: { numerator: 0, denominator: 32 },
+                            duration: { numerator: 1, denominator: 32 },
+                            noteStyleId: "1",
+                        },
+                        {
+                            start: { numerator: 1, denominator: 32 },
+                            duration: { numerator: 1, denominator: 32 },
+                            noteStyleId: "1",
+                        },
+                        {
+                            start: { numerator: 2, denominator: 32 },
+                            duration: { numerator: 2, denominator: 32 },
+                            noteStyleId: "1",
+                        },
+                        { start: { numerator: 4, denominator: 32 }, duration: { numerator: 28, denominator: 32 } },
                     ],
-                    subdivisions: [{ id: 1, startStep: 0, actual: 2, normal: 1, isTuplet: false }],
+                    subdivisions: [],
                 }],
             }],
         };
@@ -99,7 +108,7 @@ test.describe("Staff view subdivision rendering", () => {
             window.localStorage.setItem(`asb-ui-settings-session-${sessionId}`, JSON.stringify({
                 currentScore: snapshotPacked,
             }));
-        }, stringifyPackedArrangement(subdivisionSnapshot as IArrangementSnapshot));
+        }, stringifyPackedArrangement(subdivisionSnapshot));
 
         await page.goto("/");
 
@@ -113,23 +122,22 @@ test.describe("Staff view subdivision rendering", () => {
 
         await expect(page.locator(".bar-track-row.staff-mode").first()).toBeVisible();
 
-        // Count the actually rendered slots (notes, rests, empty slots) in the first bar.
-        const slotCount = await page.evaluate(() => {
+        // Two 32nd notes plus one 16th note must render as three note symbols.
+        const noteCount = await page.evaluate(() => {
             const row = document.querySelector(".bar-viewer[data-bar='1'] .bar-track-row.staff-mode");
             if (!row) {
-                return 0;
+                return -1;
             }
 
-            return row.querySelectorAll(".staff-note-viewer-runs > .staff-note-viewer-run").length;
+            return row.querySelectorAll(".staff-note-viewer-note-symbol").length;
         });
 
-        // Adjust expected value if needed: at least 1 slot (test checks rendering, not old minimum)
-        expect(slotCount).toBeGreaterThan(0);
+        expect(noteCount).toBe(3);
     });
 
     test("renders mixed full-bar note lengths down to 32nd correctly", async ({ page }) => {
         const mixedLengthsSnapshot = {
-            version: 3,
+            version: 4,
             title: "E2E Staff Mixed Lengths",
             timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4", stepResolution: 32 },
             tracks: [{
@@ -143,13 +151,39 @@ test.describe("Staff view subdivision rendering", () => {
                         stepResolution: 32,
                         beatGroups: [8, 8, 8, 8],
                     },
-                    // These sounding grid steps derive note lengths via the runtime pulse-boundary extension logic:
-                    // 1->3 (16th), 3->19 (half), 19->20 (32nd), 20->24 (8th), 24->32 (quarter), 32->end (32nd).
-                    steps: Array.from({ length: 32 }, (_, index) => {
-                        const soundingIndices = new Set([0, 2, 18, 19, 23, 31]);
-
-                        return soundingIndices.has(index) ? { index, noteStyleId: "1" } : { index };
-                    }),
+                    // Explicit note durations: 16th, half, 32nd, 8th, quarter, 32nd.
+                    events: [
+                        {
+                            start: { numerator: 0, denominator: 32 },
+                            duration: { numerator: 2, denominator: 32 },
+                            noteStyleId: "1",
+                        },
+                        {
+                            start: { numerator: 2, denominator: 32 },
+                            duration: { numerator: 16, denominator: 32 },
+                            noteStyleId: "1",
+                        },
+                        {
+                            start: { numerator: 18, denominator: 32 },
+                            duration: { numerator: 1, denominator: 32 },
+                            noteStyleId: "1",
+                        },
+                        {
+                            start: { numerator: 19, denominator: 32 },
+                            duration: { numerator: 4, denominator: 32 },
+                            noteStyleId: "1",
+                        },
+                        {
+                            start: { numerator: 23, denominator: 32 },
+                            duration: { numerator: 8, denominator: 32 },
+                            noteStyleId: "1",
+                        },
+                        {
+                            start: { numerator: 31, denominator: 32 },
+                            duration: { numerator: 1, denominator: 32 },
+                            noteStyleId: "1",
+                        },
+                    ],
                     subdivisions: [],
                 }],
             }],
@@ -162,7 +196,7 @@ test.describe("Staff view subdivision rendering", () => {
             window.localStorage.setItem(`asb-ui-settings-session-${sessionId}`, JSON.stringify({
                 currentScore: snapshotPacked,
             }));
-        }, stringifyPackedArrangement(mixedLengthsSnapshot as IArrangementSnapshot));
+        }, stringifyPackedArrangement(mixedLengthsSnapshot));
 
         await page.goto("/");
         await expect(page.locator("#trackViewerHost")).toBeVisible();
@@ -183,43 +217,32 @@ test.describe("Staff view subdivision rendering", () => {
                 ".bar-viewer[data-bar='1'] .bar-track-row.staff-mode .staff-note-viewer-runs > .staff-note-viewer-run"
             ));
 
-            return runs.map((run, index) => {
+            return runs.map((run) => {
                 const noteSymbol = run.querySelector<SVGElement>(".staff-note-viewer-note-symbol");
-                const restSymbol = run.querySelector<HTMLElement>(".staff-note-viewer-rest-symbol");
                 const noteValue = noteSymbol?.getAttribute("data-note-image-value") ?? null;
 
                 return {
-                    step: index + 1,
+                    stepIndex: run.getAttribute("data-step-index"),
                     noteValue,
-                    hasRest: restSymbol !== null,
                     beamSegments: run.querySelectorAll(".staff-note-viewer-beam").length,
                 };
             });
         });
 
-        expect(runData).toHaveLength(32);
+        expect(runData).toHaveLength(6);
+        expect(runData.map((run) => {
+            return run.stepIndex;
+        })).toEqual(["0", "2", "18", "19", "23", "31"]);
 
-        const noteRuns = runData.filter((run) => {
-            return run.noteValue !== null;
-        });
+        // The 32nd + 8th pair in the same pulse is rendered as a beamed group.
+        expect(runData[2].beamSegments).toBeGreaterThan(0);
 
-        expect(noteRuns.map((run) => {
-            return run.step;
-        })).toEqual([1, 3, 19, 20, 24, 32]);
-
-        // 32nd + 8th in the same pulse are rendered as a beamed group.
-        expect(noteRuns[2].beamSegments).toBeGreaterThan(0);
-
-        const noteValues = noteRuns.map((run) => {
+        const noteValues = runData.map((run) => {
             return run.noteValue;
         }).filter((value): value is string => {
             return value !== null;
         });
         const distinctValues = new Set(noteValues);
         expect(distinctValues.size).toBeGreaterThanOrEqual(2);
-
-        expect(runData.some((run) => {
-            return run.hasRest;
-        })).toBeTruthy();
     });
 });

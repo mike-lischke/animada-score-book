@@ -11,6 +11,7 @@ import type { ISbDmInstrument, ISbDmTrack, ScoreBookDataModel } from "../../src/
 import type { IAudioData } from "../../src/core/types/general.js";
 import { requisitions } from "../../src/supplement/Requisitions.js";
 import { SelectionManager } from "../../src/ui/SelectionManager.js";
+import { SelectionGranularity } from "../../src/ui/selection-types.js";
 
 const makeNoteStyle = (id: string, shortDescription: string, description: string): IAudioData => {
     return {
@@ -25,6 +26,33 @@ const makeTrack = (id: number, noteStyles: Record<string, IAudioData>): ISbDmTra
     return {
         id,
         instrument: { noteStyles },
+    } as unknown as ISbDmTrack;
+};
+
+const makeTrackWithNote = (
+    id: number,
+    instrumentId: number,
+    noteStyles: Record<string, IAudioData>,
+    noteEventId: number,
+    styleId: string,
+): ISbDmTrack => {
+    return {
+        id,
+        instrument: { id: instrumentId, noteStyles },
+        measures: [
+            {
+                number: 1,
+                meter: { stepResolution: 16 },
+                noteEvents: [
+                    {
+                        id: noteEventId,
+                        start: { numerator: 0, denominator: 16 },
+                        duration: { numerator: 1, denominator: 16 },
+                        audioData: { id: styleId },
+                    },
+                ],
+            },
+        ],
     } as unknown as ISbDmTrack;
 };
 
@@ -181,5 +209,71 @@ describe.sequential("NoteStyleBar", () => {
         const updatedButtons = renderResult.container.querySelectorAll(".noteStyleButton");
         expect(updatedButtons).toHaveLength(1);
         expect(updatedButtons[0].getAttribute("data-tooltip")).toBe("Timbau Bass (1)");
+    });
+
+    it("marks the shared note style across multiple tracks with the same instrument", () => {
+        const noteStyles = {
+            "1": makeNoteStyle("1", "Accent", "Tamborim Accent"),
+            "2": makeNoteStyle("2", "Ghost", "Tamborim Ghost Note"),
+        };
+        const trackA = makeTrackWithNote(7, 55, noteStyles, 7001, "1");
+        const trackB = makeTrackWithNote(8, 55, noteStyles, 8001, "1");
+        const dataModel = makeDataModel([trackA, trackB]);
+
+        selectionManager.replaceSelection([
+            { granularity: SelectionGranularity.Note, bar: 1, trackId: 7, noteId: 7001, startStep: 0 },
+            { granularity: SelectionGranularity.Note, bar: 1, trackId: 8, noteId: 8001, startStep: 0 },
+        ]);
+
+        renderResult = render(
+            <NoteStyleBar dataModel={dataModel} selectionManager={selectionManager} />,
+        );
+
+        const markedButtons = renderResult.container.querySelectorAll(".noteStyleButton.du-btn-primary");
+        expect(markedButtons).toHaveLength(1);
+        expect(markedButtons[0].getAttribute("data-tooltip")).toBe("Tamborim Accent (1)");
+    });
+
+    it("marks no note style when notes across tracks differ", () => {
+        const noteStyles = {
+            "1": makeNoteStyle("1", "Accent", "Tamborim Accent"),
+            "2": makeNoteStyle("2", "Ghost", "Tamborim Ghost Note"),
+        };
+        const trackA = makeTrackWithNote(7, 55, noteStyles, 7001, "1");
+        const trackB = makeTrackWithNote(8, 55, noteStyles, 8001, "2");
+        const dataModel = makeDataModel([trackA, trackB]);
+
+        selectionManager.replaceSelection([
+            { granularity: SelectionGranularity.Note, bar: 1, trackId: 7, noteId: 7001, startStep: 0 },
+            { granularity: SelectionGranularity.Note, bar: 1, trackId: 8, noteId: 8001, startStep: 0 },
+        ]);
+
+        renderResult = render(
+            <NoteStyleBar dataModel={dataModel} selectionManager={selectionManager} />,
+        );
+
+        expect(renderResult.container.querySelectorAll(".noteStyleButton.du-btn-primary")).toHaveLength(0);
+    });
+
+    it("shows no note styles when selected tracks use different instruments", () => {
+        const trackA = makeTrackWithNote(
+            7, 55, { "1": makeNoteStyle("1", "Accent", "Tamborim Accent") }, 7001, "1",
+        );
+        const trackB = makeTrackWithNote(
+            8, 66, { "1": makeNoteStyle("1", "Bass", "Timbau Bass") }, 8001, "1",
+        );
+        const dataModel = makeDataModel([trackA, trackB]);
+
+        selectionManager.replaceSelection([
+            { granularity: SelectionGranularity.Note, bar: 1, trackId: 7, noteId: 7001, startStep: 0 },
+            { granularity: SelectionGranularity.Note, bar: 1, trackId: 8, noteId: 8001, startStep: 0 },
+        ]);
+
+        renderResult = render(
+            <NoteStyleBar dataModel={dataModel} selectionManager={selectionManager} />,
+        );
+
+        expect(renderResult.container.querySelectorAll(".noteStyleButton")).toHaveLength(0);
+        expect(renderResult.container.querySelectorAll(".noteStyleLabel")).toHaveLength(0);
     });
 });

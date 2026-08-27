@@ -3,7 +3,7 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import type { IMeasureStep, IMeterSnapshot } from "./general.js";
+import type { IMeasureEvent, IMeterSnapshot, ISubdivision } from "./general.js";
 
 /** Describes what kind of score content a clipboard entry represents. */
 export enum ClipboardContentKind {
@@ -16,17 +16,20 @@ export enum ClipboardContentKind {
     /** One measure of a single track. */
     TrackPiece,
 
-    /** A contiguous step range (single note or note group) of a single track. */
-    StepRange,
+    /** A contiguous event range (single note or note group) of a single track. */
+    EventRange,
 }
 
-/** The content of one measure inside the clipboard. Steps cover either the whole measure or a selected subrange. */
+/** The content of one measure inside the clipboard. Events cover either the whole measure or a selected subrange. */
 export interface IClipboardMeasure {
     /** The meter this measure was recorded with, used for target compatibility checks. */
     meter: IMeterSnapshot;
 
-    /** The measure steps, in display order. For step ranges this is only the selected subrange. */
-    steps: IMeasureStep[];
+    /** The measure events, in display order. For event ranges this is only the selected subrange. */
+    events: IMeasureEvent[];
+
+    /** Subdivision groups whose start index lies within the copied event range. */
+    subdivisions: ISubdivision[];
 }
 
 /** The clipboard content of one track, ordered along the measure dimension. */

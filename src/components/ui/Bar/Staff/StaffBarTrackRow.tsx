@@ -52,10 +52,7 @@ export class StaffBarTrackRow extends UIComponent<IStaffBarTrackRowProps, IStaff
         const { arrangementPlayer, barNumber, timeParams, track } = this.props;
 
         const measure = track.measures[barNumber - 1];
-        const baseSteps = measure.steps.length
-            - measure.subdivisions.reduce((sum, s) => {
-                return sum + s.actual - s.normal;
-            }, 0);
+        const baseSteps = measure.meter.stepResolution;
 
         const maxNoteLine = Math.max(1, ...Object.values(track.instrument.noteStyles).map((ns) => {
             return ns.noteLine ?? 1;

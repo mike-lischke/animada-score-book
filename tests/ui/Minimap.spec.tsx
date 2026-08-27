@@ -116,11 +116,16 @@ const makePolyrhythmFixture = (
             stepResolution: 8,
             beatGroups: [2, 2, 2, 2],
         },
-        steps: Array.from({ length: 8 }, (_, index) => {
-            return { index, noteStyleId: index === 0 ? "1" : undefined };
-        }),
+        events: [
+            {
+                start: { numerator: 0, denominator: 8 },
+                duration: { numerator: 1, denominator: 8 },
+                noteStyleId: "1",
+            },
+            { start: { numerator: 1, denominator: 8 }, duration: { numerator: 7, denominator: 8 } },
+        ],
         subdivisions: [],
-        events: [event],
+        noteEvents: [event],
     } as ISbDmTrackMeasure;
 
     return { measure };

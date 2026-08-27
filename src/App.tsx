@@ -25,23 +25,23 @@ import { renderNotificationCenter } from "./components/ui/NotificationCenter/Not
 import { renderStatusBar, Statusbar } from "./components/ui/Statusbar/Statusbar.js";
 import { StatusBarAlignment, type IStatusBarItem } from "./components/ui/Statusbar/StatusBarItem.js";
 
-import { NoteStyleBar } from "./components/ui/Arrangement/NoteStyleBar.js";
-import { ArrangementEditControls } from "./components/ui/Arrangement/ArrangementEditControls.js";
 import { ArrangementPlayControls } from "./components/ui/Arrangement/ArrangementPlayControls.js";
 import { ArrangementTitle } from "./components/ui/Arrangement/ArrangementTitle.js";
 import { ArrangementViewer } from "./components/ui/Arrangement/ArrangementViewer.js";
+import { NoteStyleBar } from "./components/ui/Arrangement/NoteStyleBar.js";
 import { PlayStopButton } from "./components/ui/Arrangement/PlayStopButton.js";
+import { UndoRedoControls } from "./components/ui/Arrangement/UndoRedoControls.js";
 import { ConfirmDialog } from "./components/ui/composites/ConfirmDialog.js";
 import { NewScoreDialog } from "./components/ui/composites/NewScoreDialog.js";
 import {
     ValueDialog, ValueEditorEntryType, type IValueEditorValueEntry
 } from "./components/ui/composites/ValueDialog.js";
-import { UIIcon } from "./components/ui/framework/UIIcon.js";
 import { CollapsingTopContainer } from "./components/ui/framework/CollapsingTopContainer.js";
 import { DialogResponseClosure } from "./components/ui/framework/Dialog.js";
 import { DrawerSidebar } from "./components/ui/framework/DrawerSidebar.js";
 import { Icon } from "./components/ui/framework/Icon.js";
 import { TooltipProvider } from "./components/ui/framework/Tooltip.js";
+import { UIIcon } from "./components/ui/framework/UIIcon.js";
 import { PrintDialog } from "./components/ui/Print/PrintDialog.js";
 import { PrintView, type IPrintOptions } from "./components/ui/Print/PrintView.js";
 import { AppStorage, type IUISettings } from "./core/AppStorage.js";
@@ -50,15 +50,13 @@ import { getSharedAudioContext } from "./core/audio-context.js";
 import {
     SbDmEntityType, ScoreBookDataModel, type ISbDmInstrument, type ISbDmScore, type ISbDmScoreFolder
 } from "./core/ScoreBookDataModel.js";
+import { PasteResultKind, ScoreClipboard, type IPasteResult } from "./core/ScoreClipboard.js";
 import { ArrangementMigrator } from "./core/serialisation/migration/ArrangementMigrator.js";
-import {
-    stringifyPackedArrangement, tryParsePackedArrangement
-} from "./core/serialisation/snapshot-packing.js";
+import { stringifyPackedArrangement, tryParsePackedArrangement } from "./core/serialisation/snapshot-packing.js";
 import { mixerStepIndex, tutorialSteps } from "./core/TutorialSteps.js";
 import type { IArrangementSnapshot } from "./core/types/general.js";
 import { UndoManager } from "./core/UndoManager.js";
 import { convertErrorToString } from "./core/utils.js";
-import { PasteResultKind, ScoreClipboard, type IPasteResult } from "./core/ScoreClipboard.js";
 import { ArrangementPlayer } from "./player/ArrangementPlayer.js";
 import { AudioBufferPlayer } from "./player/AudioBufferPlayer.js";
 import { escapeStack } from "./supplement/EscapeStack.js";
@@ -72,6 +70,7 @@ import { SelectionManager } from "./ui/SelectionManager.js";
 import { SettingsDialog } from "./ui/SettingsDialog.js";
 import { TutorialWizard } from "./ui/TutorialWizard.js";
 import { UserGroupEditor } from "./ui/UserGroupEditor.js";
+import { Separator } from "./components/ui/Separator.js";
 
 const ScoreLibrary = lazy(() => {
     return import("./ui/ScoreLibrary.js").then((m) => {
@@ -276,16 +275,16 @@ export class App extends UIComponent<{}, IAppState> {
                 break;
         }
 
-        let titleBlock;
+        let breadcrumb: ComponentChild;
         let collapsedTitleBlock;
         let editModeButton;
         let newSongButton;
         let isAdmin = false;
         if (isRunning) {
             isAdmin = this.dataModel.user?.isAdmin ?? false;
+            breadcrumb = this.renderHeaderBreadcrumb();
 
             if (this.arrangementPlayer) {
-                titleBlock = this.renderTitleBlock("arrangement-title");
                 collapsedTitleBlock = this.renderTitleBlock("arrangement-title-collapsed");
 
                 newSongButton = <Button
@@ -323,6 +322,7 @@ export class App extends UIComponent<{}, IAppState> {
         }
 
         let saveButton: ComponentChild;
+        let printButton: ComponentChild;
         if (isRunning && this.arrangementPlayer) {
             saveButton = <Button
                 plain
@@ -336,6 +336,22 @@ export class App extends UIComponent<{}, IAppState> {
             >
                 <Icon
                     src={UIIcon.Save}
+                    width={24}
+                    height={24}
+                    data-tooltip="inherit"
+                />
+            </Button>;
+
+            printButton = <Button
+                plain
+                id="printButton"
+                className="editSaveButton"
+                data-tooltip="Print / Export to PDF"
+                data-tutorial="print"
+                onClick={this.handlePrintClick}
+            >
+                <Icon
+                    src={UIIcon.FilePdf}
                     width={24}
                     height={24}
                     data-tooltip="inherit"
@@ -425,6 +441,7 @@ export class App extends UIComponent<{}, IAppState> {
                                                     mainAlignment={ChildAlignment.Center}
                                                     className="bg-base-100/80 p-2"
                                                 >
+                                                    <img id="titleLogo" src="/logo.svg" />
                                                     <Button
                                                         imageOnly
                                                         className="du-btn-ghost"
@@ -451,77 +468,27 @@ export class App extends UIComponent<{}, IAppState> {
                                                         />
                                                     </Button>
                                                     {instrumentEditorButton}
-                                                    <Button
-                                                        id="printButton"
-                                                        imageOnly
-                                                        className="du-btn-ghost"
-                                                        data-tooltip="Print / Export to PDF"
-                                                        data-tutorial="print"
-                                                        onClick={this.handlePrintClick}
-                                                    >
-                                                        <Icon
-                                                            src={UIIcon.FilePdf}
-                                                            data-tooltip="inherit"
-                                                        />
-                                                    </Button>
-                                                    {this.dataModel.authenticated ? (
-                                                        <Dropdown
-                                                            id="userMenu"
-                                                            icon={<Icon src={UIIcon.Account} />}
-                                                            items={this.buildUserMenuItems()}
-                                                            closeOnSelect
-                                                            style={{ backgroundColor: isAdmin ? "tomato" : undefined }}
-                                                        />
-                                                    ) : (
-                                                        <Button
-                                                            id="signInButton"
-                                                            imageOnly
-                                                            className="du-btn-ghost"
-                                                            data-tooltip="Sign In"
-                                                            onClick={this.handleSignInClick}
-                                                        >
-                                                            <Icon
-                                                                src={UIIcon.SignIn}
-                                                                data-tooltip="inherit"
-                                                            />
-                                                        </Button>
-                                                    )}
                                                 </Container>
                                                 <Container
-                                                    id="appTitleContainer"
+                                                    className="header-content-rows"
                                                     orientation={Orientation.TopDown}
                                                     crossAlignment={ChildAlignment.Stretch}
+                                                    gap={8}
                                                 >
-                                                    <Container>
-                                                        <img id="titleLogo" src="/logo.svg" />
-                                                        <Label className="appTitle top faded">ANIMADA</Label>
-                                                    </Container>
-                                                    <Container>
-                                                        <Label className="appTitle bottom faded">Score</Label>
-                                                        <Label className="appTitle bottom accent">Book</Label>
-                                                    </Container>
-
-                                                </Container>
-                                                <ArrangementPlayControls
-                                                    arrangementPlayer={this.arrangementPlayer!}
-                                                    dataModel={this.dataModel}
-                                                    editMode={editMode}
-                                                    data-tutorial="playback"
-                                                />
-                                                <Container
-                                                    id="arrangementPalette"
-                                                    orientation={Orientation.TopDown}
-                                                    mainAlignment={ChildAlignment.Start}
-                                                    crossAlignment={ChildAlignment.Stretch}
-                                                >
-                                                    {titleBlock}
+                                                    {breadcrumb}
+                                                    <ArrangementPlayControls
+                                                        arrangementPlayer={this.arrangementPlayer!}
+                                                        dataModel={this.dataModel}
+                                                        editMode={editMode}
+                                                        data-tutorial="playback"
+                                                    />
                                                     <Container
                                                         id="editControlsHost"
                                                         orientation={Orientation.LeftToRight}
                                                         mainAlignment={ChildAlignment.Start}
                                                         crossAlignment={ChildAlignment.Center}
-                                                        style={{ marginTop: "auto" }}
                                                     >
+                                                        <Label caption="Edit" className="header-row-label" />
                                                         <GooeyGroup
                                                             className="editSaveGooey"
                                                             background="var(--color-base-200)"
@@ -529,15 +496,24 @@ export class App extends UIComponent<{}, IAppState> {
                                                             {newSongButton}
                                                             {editModeButton}
                                                             {saveButton}
+                                                            {printButton}
                                                         </GooeyGroup>
-                                                        {editMode && <ArrangementEditControls
-                                                            dataModel={this.dataModel}
-                                                            undoManager={this.undoManager!}
-                                                        />}
-                                                        {editMode && <NoteStyleBar
-                                                            dataModel={this.dataModel}
-                                                            selectionManager={this.selectionManager}
-                                                        />}
+                                                        {editMode && (
+                                                            <>
+                                                                <Separator
+                                                                    style={{ marginLeft: "16px", height: "50%" }}
+                                                                />
+                                                                <UndoRedoControls
+                                                                    undoManager={this.undoManager!}
+                                                                />
+                                                                <Separator
+                                                                    style={{ marginLeft: "16px", height: "50%" }}
+                                                                />
+                                                                <NoteStyleBar
+                                                                    dataModel={this.dataModel}
+                                                                    selectionManager={this.selectionManager}
+                                                                />
+                                                            </>)}
                                                     </Container>
                                                 </Container>
                                             </Container>
@@ -688,6 +664,82 @@ export class App extends UIComponent<{}, IAppState> {
             }
 
         </Container>;
+    }
+
+    private renderHeaderBreadcrumb(): ComponentChild {
+        const { editMode, headerPinned } = this.state;
+        const arrangement = this.dataModel.arrangement!;
+        const isAdmin = this.dataModel.user?.isAdmin ?? false;
+
+        let pinButton: ComponentChild;
+        if (!editMode) {
+            pinButton = <Button
+                imageOnly
+                data-role="restore-top"
+                style={{ width: "24px", height: "24px" }}
+                className="normal-case btn-ghost"
+                onClick={() => {
+                    this.setState({ headerPinned: !headerPinned });
+                }}
+            >
+                <Icon
+                    src={headerPinned ? UIIcon.Pinned : UIIcon.Pin}
+                    data-tooltip={headerPinned ? "Pinned Header" : "Automatic Header"}
+                />
+            </Button>;
+        }
+
+        let userButton: ComponentChild;
+        if (this.dataModel.authenticated) {
+            userButton = <Dropdown
+                id="userMenu"
+                icon={<Icon src={UIIcon.Account} />}
+                items={this.buildUserMenuItems()}
+                closeOnSelect
+                style={{ backgroundColor: isAdmin ? "tomato" : undefined }}
+            />;
+        } else {
+            userButton = <Button
+                id="signInButton"
+                imageOnly
+                className="du-btn-ghost"
+                data-tooltip="Sign In"
+                onClick={this.handleSignInClick}
+            >
+                <Icon
+                    src={UIIcon.SignIn}
+                    data-tooltip="inherit"
+                />
+            </Button>;
+        }
+
+        return (
+            <Container
+                className="header-breadcrumb"
+                orientation={Orientation.LeftToRight}
+                mainAlignment={ChildAlignment.SpaceBetween}
+                crossAlignment={ChildAlignment.Center}
+            >
+                <Container
+                    orientation={Orientation.LeftToRight}
+                    mainAlignment={ChildAlignment.Start}
+                    crossAlignment={ChildAlignment.Center}
+                    gap={4}
+                    style={{ flex: 1, minWidth: 0 }}
+                >
+                    <Label className="header-breadcrumb-root" caption="Score Library" />
+                    <Icon src={UIIcon.ChevronRight} width={16} height={16} />
+                    <ArrangementTitle
+                        id="header-breadcrumb-title"
+                        arrangement={arrangement}
+                        dataModel={this.dataModel}
+                        editMode={editMode}
+                    />
+                    {pinButton}
+                </Container>
+                {userButton}
+            </Container>
+        );
     }
 
     private renderBackendUnreachable(): ComponentChild {
@@ -921,7 +973,7 @@ export class App extends UIComponent<{}, IAppState> {
 
         for (const track of arrangement.tracks) {
             for (const measure of track.measures) {
-                const event = measure.events.find((e) => {
+                const event = measure.noteEvents.find((e) => {
                     return e.id === noteId;
                 });
 
@@ -1347,6 +1399,7 @@ export class App extends UIComponent<{}, IAppState> {
 
     private handleScoreLibraryAction = async (action: string, data?: ISbDmScoreFolder | ISbDmScore,
         parent?: ISbDmScoreFolder): Promise<boolean> => {
+        const { editMode } = this.state;
 
         // If no data is provided, it can be "addFolder" or "import".
         if (!data || action === "addFolder") {
@@ -1519,6 +1572,14 @@ export class App extends UIComponent<{}, IAppState> {
             }
 
             case "load": {
+                if (editMode && data.type === SbDmEntityType.Score) {
+                    const exited = await this.confirmExitEditMode();
+
+                    if (!exited) {
+                        return false;
+                    }
+                }
+
                 this.setState({ sidebarOpen: false }, () => {
                     escapeStack.remove(this.onSidebarEscape);
                 });
@@ -1639,13 +1700,13 @@ export class App extends UIComponent<{}, IAppState> {
 
         this.forceUpdate();
 
-        const { phase } = this.state;
+        const { phase, editMode } = this.state;
         if (phase === AppPhase.Running) {
             this.updateStatsItem();
         }
 
         const settings = AppStorage.loadUISettings();
-        if (settings?.editMode && !this.state.editMode) {
+        if (settings?.editMode && !editMode) {
             void requisitions.execute("editModeChanged", true);
         }
     }
@@ -1665,10 +1726,12 @@ export class App extends UIComponent<{}, IAppState> {
     };
 
     private handleKeyDown(event: KeyboardEvent): void {
+        const { editMode } = this.state;
+
         // Ctrl/Cmd+S saves the score in edit mode.
         if ((event.ctrlKey || event.metaKey) && !event.shiftKey && !event.altKey && event.key === "s") {
             event.preventDefault();
-            if (this.state.editMode) {
+            if (editMode) {
                 void this.saveScore();
             }
 
@@ -1698,12 +1761,12 @@ export class App extends UIComponent<{}, IAppState> {
                     event.preventDefault();
 
                     if (key === "x") {
-                        if (this.state.editMode) {
+                        if (editMode) {
                             this.cutSelection();
                         }
                     } else if (key === "c") {
                         this.copySelection();
-                    } else if (this.state.editMode) {
+                    } else if (editMode) {
                         void this.pasteSelection();
                     }
                 }
@@ -1825,7 +1888,7 @@ export class App extends UIComponent<{}, IAppState> {
         }
     };
 
-    private confirmExitEditMode = async (): Promise<void> => {
+    private confirmExitEditMode = async (): Promise<boolean> => {
         if (this.undoManager?.canUndo) {
             const actions = {
                 accept: "Save Changes",
@@ -1836,14 +1899,14 @@ export class App extends UIComponent<{}, IAppState> {
             const confirmed = await this.confirmDialogRef.current?.show("You have unsaved changes. " +
                 "Do you want to save before exiting?", actions);
 
-            if (confirmed === DialogResponseClosure.Decline) {
-                return;
+            if (confirmed === DialogResponseClosure.Decline || confirmed === DialogResponseClosure.Cancel) {
+                return false;
             }
 
             if (confirmed === DialogResponseClosure.Accept) {
                 const saved = await this.saveScore();
                 if (!saved) {
-                    return;
+                    return false;
                 }
             }
 
@@ -1866,6 +1929,8 @@ export class App extends UIComponent<{}, IAppState> {
 
         this.dataModel.lockToken = undefined;
         this.setState({ editMode: false, lockToken: undefined, lockConflict: undefined });
+
+        return true;
     };
 
     private handleNewSong = async (): Promise<void> => {

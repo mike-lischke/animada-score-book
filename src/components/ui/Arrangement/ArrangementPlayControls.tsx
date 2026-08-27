@@ -11,10 +11,9 @@ import type { ArrangementPlayer } from "../../../player/ArrangementPlayer.js";
 import { requisitions } from "../../../supplement/Requisitions.js";
 import { isMobile } from "../../../ui/index.js";
 import { Button } from "../framework/Button.js";
-import { Checkbox } from "../framework/Checkbox.js";
+import { CheckState, Toggle } from "../framework/Toggle.js";
 import { UIIcon } from "../framework/UIIcon.js";
 import { Container } from "../framework/Container.js";
-import { FieldSet } from "../framework/FieldSet.js";
 import { GooeyGroup } from "../framework/GooeyGroup.js";
 import { Icon } from "../framework/Icon.js";
 import { Image, PredefinedImage } from "../framework/Image.js";
@@ -24,9 +23,8 @@ import { Slider } from "../framework/Slider.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
 import { ChildAlignment, Orientation } from "../framework/ui-types.js";
 import { PlayStopButton } from "./PlayStopButton.js";
-import { Grid } from "../framework/Grid.js";
-import { GridCell } from "../framework/GridCell.js";
 import { Dialog } from "../framework/Dialog.js";
+import { Separator } from "../Separator.js";
 
 export interface IArrangementPlayControlsProperties extends ICommonUIProperties {
     arrangementPlayer: ArrangementPlayer,
@@ -176,7 +174,7 @@ export class ArrangementPlayControls
             tempoLabel = (
                 <Label
                     caption={`${currentTempo} bpm *`}
-                    style={{ fontSize: "80%", marginTop: "4px", whiteSpace: "nowrap", fontStyle: "italic" }}
+                    style={{ fontSize: "80%", whiteSpace: "nowrap", fontStyle: "italic" }}
                     data-tooltip={`Playback tempo (${currentTempo} bpm) differs from the arrangement`
                         + ` tempo (${scoreTempo} bpm). Enter Edit Mode to persist the change.`}
                 />
@@ -185,137 +183,151 @@ export class ArrangementPlayControls
             tempoLabel = (
                 <Label
                     caption={`${currentTempo} bpm`}
-                    style={{ fontSize: "80%", marginTop: "4px", whiteSpace: "nowrap" }}
+                    style={{ fontSize: "80%", whiteSpace: "nowrap" }}
                 />
             );
         }
 
         return (
-            <Grid id="arrangementPlayControls" columns={[160, "auto"]} {...this.dataAttributes}>
+            <Container
+                id="arrangementPlayControls"
+                orientation={Orientation.LeftToRight}
+                mainAlignment={ChildAlignment.Start}
+                crossAlignment={ChildAlignment.Center}
+                style={{ width: "100%" }}
+                {...this.dataAttributes}
+            >
+                <Label caption="Playback" className="header-row-label" />
+                <GooeyGroup className="playControlsGooey" background="var(--color-base-200)">
+                    <PlayStopButton id="playbackButton" arrangementPlayer={arrangementPlayer} />
+                    <Button
+                        plain
+                        id="recordButton"
+                        data-tooltip="Record your song and export it as an MP3 file."
+                        disabled={recordingInProgress}
+                        onClick={() => {
+                            void this.startRecording();
+                        }}
+                    >
+                        <Image key="recordButton" src={PredefinedImage.Record} data-tooltip="inherit" />
+                    </Button>
+                </GooeyGroup>
+                <Separator style={{ marginLeft: "16px", height: "50%" }} />
                 <Container
-                    orientation={Orientation.TopDown}
+                    orientation={Orientation.LeftToRight}
                     mainAlignment={ChildAlignment.Start}
-                    crossAlignment={ChildAlignment.Start}
+                    crossAlignment={ChildAlignment.Center}
+                    gap={4}
+                    data-tooltip="Tempo for playback (beats per minute)"
                 >
-                    <FieldSet legend="Play / Record" className="flex">
-                        <GooeyGroup className="playControlsGooey" background="var(--color-base-200)">
-                            <PlayStopButton id="playbackButton" arrangementPlayer={arrangementPlayer} />
-                            <Button
-                                plain
-                                id="recordButton"
-                                data-tooltip="Record your song and export it as an MP3 file."
-                                disabled={recordingInProgress}
-                                onClick={() => {
-                                    void this.startRecording();
-                                }}
-                            >
-                                <Image key="recordButton" src={PredefinedImage.Record} data-tooltip="inherit" />
-                            </Button>
-                        </GooeyGroup>
-                    </FieldSet>
+                    <Icon src={UIIcon.Pulse} data-tooltip="inherit" />
+                    <Slider
+                        id="tempoSlider"
+                        value={currentTempo}
+                        min={30}
+                        max={200}
+                        step={5}
+                        data-tooltip="inherit"
+                        className="du-range-xs"
+                        style={{ width: "110px" }}
+                        onChange={(value) => {
+                            if (editMode) {
+                                dataModel.setTempo(value);
+                                this.setState({ currentTempo: value, scoreTempo: value });
+                            } else {
+                                this.setState({ currentTempo: value });
+                                arrangementView.timeParams.tempo = value;
+                            }
+                        }}
+                    />
+                    {tempoLabel}
                 </Container>
                 <Container
-                    orientation={Orientation.TopDown}
-                    mainAlignment={ChildAlignment.SpaceEvenly}
-                    crossAlignment={ChildAlignment.Stretch}
-                    data-tooltip="Tempo for playback (beats per minute)"
-                    style={{ width: "100%" }}
+                    orientation={Orientation.LeftToRight}
+                    mainAlignment={ChildAlignment.Start}
+                    crossAlignment={ChildAlignment.Center}
+                    gap={4}
+                    style={{ marginLeft: "12px" }}
                 >
-                    <Container
-                        mainAlignment={ChildAlignment.Stretch}
-                        crossAlignment={ChildAlignment.Center}
-                        gap={4}
-                    >
-                        <Icon src={UIIcon.Pulse} data-tooltip="inherit" />
-                        <Slider
-                            id="tempoSlider"
-                            value={currentTempo}
-                            min={30}
-                            max={200}
-                            step={5}
-                            data-tooltip="inherit"
-                            className="du-range-xs"
-                            onChange={(value) => {
-                                if (editMode) {
-                                    dataModel.setTempo(value);
-                                    this.setState({ currentTempo: value, scoreTempo: value });
-                                } else {
-                                    this.setState({ currentTempo: value });
-                                    arrangementView.timeParams.tempo = value;
-                                }
-                            }}
-                        />
-                        {tempoLabel}
-                    </Container>
-                    <Container
-                        mainAlignment={ChildAlignment.Start}
-                        crossAlignment={ChildAlignment.Center}
-                        gap={4}
-                    >
-                        <Icon src={UIIcon.Unmute} data-tooltip="inherit" />
-                        <Slider
-                            id="volumeSlider"
-                            value={currentVolume}
-                            min={0}
-                            max={100}
-                            data-tooltip="inherit"
-                            className="du-range-xs"
-                            onChange={(value) => {
-                                arrangementView.mainVolume = value;
-                                this.setState({ currentVolume: arrangementView.mainVolume }, () => {
-                                    AppStorage.saveSetting("masterVolume", arrangementView.mainVolume);
-                                });
-                            }}
-                        />
-                        <Label
-                            caption={`${Math.round(currentVolume)}%`}
-                            style={{ fontSize: "80%", marginTop: "4px", whiteSpace: "nowrap" }}
-                        />
-                    </Container>
+                    <Icon src={UIIcon.Unmute} data-tooltip="inherit" />
+                    <Slider
+                        id="volumeSlider"
+                        value={currentVolume}
+                        min={0}
+                        max={100}
+                        data-tooltip="inherit"
+                        className="du-range-xs"
+                        style={{ width: "90px" }}
+                        onChange={(value) => {
+                            arrangementView.mainVolume = value;
+                            this.setState({ currentVolume: arrangementView.mainVolume }, () => {
+                                AppStorage.saveSetting("masterVolume", arrangementView.mainVolume);
+                            });
+                        }}
+                    />
+                    <Label
+                        caption={`${Math.round(currentVolume)}%`}
+                        style={{ fontSize: "80%", whiteSpace: "nowrap" }}
+                    />
                 </Container>
-                <GridCell columnSpan={2}>
-                    <FieldSet legend="Play Options" style={{ flex: "1 1 auto" }} className="flex">
-                        <Container
-                            gap={16}
-                            style={{ flex: "1 1 auto", padding: "0 24px", whiteSpace: "nowrap" }}
-                            mainAlignment={ChildAlignment.SpaceBetween}
-                        >
-                            <Container gap={4}>
-                                <Checkbox
-                                    data-tooltip="inherit"
-                                    checked={arrangementView.loop}
-                                    onChange={(checked) => {
-                                        arrangementView.loop = checked;
-                                        AppStorage.saveSetting("loop", checked);
-                                    }}
-                                />
-                                <Label caption="Loop" />
-                            </Container>
-                            <Container gap={4}>
-                                <Checkbox
-                                    data-tooltip="inherit"
-                                    checked={arrangementView.countIn}
-                                    onChange={(checked) => {
-                                        arrangementView.countIn = checked;
-                                        AppStorage.saveSetting("countIn", checked);
-                                    }}
-                                />
-                                <Label caption="Count In" />
-                            </Container>
-                            <Container gap={4}>
-                                <Checkbox
-                                    data-tooltip="inherit"
-                                    checked={arrangementView.useMetronome}
-                                    onChange={(checked) => {
-                                        arrangementView.useMetronome = checked;
-                                        AppStorage.saveSetting("metronome", checked);
-                                    }}
-                                />
-                                <Label caption="Metronome" />
-                            </Container>
-                        </Container>
-                    </FieldSet>
-                </GridCell>
+                <Separator style={{ marginLeft: "8px", height: "50%" }} />
+                <Container
+                    className="playControlSetting"
+                    orientation={Orientation.LeftToRight}
+                    mainAlignment={ChildAlignment.Start}
+                    crossAlignment={ChildAlignment.Center}
+                    gap={4}
+                >
+                    <Toggle
+                        data-tooltip="inherit"
+                        checkState={arrangementView.loop ? CheckState.Checked : CheckState.Unchecked}
+                        checkedIcon={<Icon src={UIIcon.Check} />}
+                        uncheckedIcon={<Icon src={UIIcon.Close} />}
+                        onChange={(event, checkState) => {
+                            arrangementView.loop = checkState === CheckState.Checked;
+                            AppStorage.saveSetting("loop", arrangementView.loop);
+                        }}
+                    />
+                    <Label caption="Loop" />
+                </Container>
+                <Container
+                    className="playControlSetting"
+                    orientation={Orientation.LeftToRight}
+                    mainAlignment={ChildAlignment.Start}
+                    crossAlignment={ChildAlignment.Center}
+                    gap={4}
+                >
+                    <Toggle
+                        data-tooltip="inherit"
+                        checkState={arrangementView.countIn ? CheckState.Checked : CheckState.Unchecked}
+                        checkedIcon={<Icon src={UIIcon.Check} />}
+                        uncheckedIcon={<Icon src={UIIcon.Close} />}
+                        onChange={(event, checkState) => {
+                            arrangementView.countIn = checkState === CheckState.Checked;
+                            AppStorage.saveSetting("countIn", arrangementView.countIn);
+                        }}
+                    />
+                    <Label caption="Count In" />
+                </Container>
+                <Container
+                    className="playControlSetting"
+                    orientation={Orientation.LeftToRight}
+                    mainAlignment={ChildAlignment.Start}
+                    crossAlignment={ChildAlignment.Center}
+                    gap={4}
+                >
+                    <Toggle
+                        data-tooltip="inherit"
+                        checkState={arrangementView.useMetronome ? CheckState.Checked : CheckState.Unchecked}
+                        checkedIcon={<Icon src={UIIcon.Check} />}
+                        uncheckedIcon={<Icon src={UIIcon.Close} />}
+                        onChange={(event, checkState) => {
+                            arrangementView.useMetronome = checkState === CheckState.Checked;
+                            AppStorage.saveSetting("metronome", arrangementView.useMetronome);
+                        }}
+                    />
+                    <Label caption="Metronome" />
+                </Container>
                 <Dialog
                     id="recordingDialog"
                     ref={this.recordingDialogRef}
@@ -332,7 +344,7 @@ export class ArrangementPlayControls
                         <ProgressIndicator linear indicatorHeight={8} style={{ flex: "0 0 auto" }} />
                     </Container>
                 </Dialog>
-            </Grid >
+            </Container>
         );
     }
 

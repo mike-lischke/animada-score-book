@@ -48,35 +48,40 @@ describe("Track", () => {
         expect(track.measures).toHaveLength(2);
         const [firstMeasure, secondMeasure] = track.measures;
 
-        // Only sounding notes are stored. Empty grid slots are not persisted.
-        expect(firstMeasure.events).toHaveLength(2);
-        expect(secondMeasure.events).toHaveLength(1);
+        // Persisted events hold notes with absorbed durations plus explicit rests.
+        const firstNotes = firstMeasure.noteEvents.filter((event) => {
+            return event.audioData !== undefined;
+        });
+        expect(firstNotes).toHaveLength(2);
 
-        expect(firstMeasure.events[0]).toMatchObject({
+        expect(firstNotes[0]).toMatchObject({
             measureNumber: 1,
             start: { numerator: 0, denominator: 1 },
             // Note absorbs the rest gap up to the next pulse boundary (1/4) → quarter note.
             duration: { numerator: 1, denominator: 4 },
         });
 
-        expect(firstMeasure.events[1]).toMatchObject({
+        expect(firstNotes[1]).toMatchObject({
             measureNumber: 1,
             start: { numerator: 1, denominator: 2 },
-            // Note on a pulse start with no following event extends to the next pulse boundary.
             duration: { numerator: 1, denominator: 4 },
         });
 
-        expect(secondMeasure.events[0]).toMatchObject({
+        const secondNotes = secondMeasure.noteEvents.filter((event) => {
+            return event.audioData !== undefined;
+        });
+        expect(secondNotes).toHaveLength(1);
+        expect(secondNotes[0]).toMatchObject({
             measureNumber: 2,
             start: { numerator: 1, denominator: 4 },
             duration: { numerator: 1, denominator: 4 },
         });
 
         // getNoteAt synthesises rest events on demand for empty grid slots.
-        const restAtBar1Step2 = track.getNoteAt({ bar: 1, step: 2 });
-        expect(restAtBar1Step2).toMatchObject({
+        const restAtBar1Step5 = track.getNoteAt({ bar: 1, step: 5 });
+        expect(restAtBar1Step5).toMatchObject({
             measureNumber: 1,
-            start: { numerator: 1, denominator: 16 },
+            start: { numerator: 1, denominator: 4 },
             duration: { numerator: 1, denominator: 16 },
             audioData: undefined,
         });
@@ -114,7 +119,6 @@ describe("Track", () => {
         // Mark the polyrhythm's three sub-notes as sounding by modifying the result post-migration:
         // the migrator emits one event per polyrhythm note; we then set their noteStyle directly.
         const arrangement = ArrangementMigrator.migrateToArrangement(snapshot, [instrument]).arrangement;
-        hydrateMeasureEvents(arrangement);
         const track = arrangement.tracks[0] as Track;
 
         const stepsPerBar = 16;
@@ -123,7 +127,7 @@ describe("Track", () => {
                 return { event, index };
             })
             .filter(({ event }) => {
-                return !(event.duration.numerator === 1 && event.duration.denominator === stepsPerBar);
+                return (event.duration.numerator * stepsPerBar) % event.duration.denominator !== 0;
             })
             .map(({ index }) => {
                 return index;
@@ -131,14 +135,13 @@ describe("Track", () => {
 
         expect(polyrhythmEventIndices).toHaveLength(3);
         for (const index of polyrhythmEventIndices) {
-            track.measures[0].events[index] = {
-                ...track.measures[0].events[index],
-                audioData: noteStyle,
-            };
+            track.measures[0].events[index].noteStyleId = noteStyle.id;
         }
 
+        hydrateMeasureEvents(arrangement);
+
         expect(track.measures).toHaveLength(1);
-        const soundingEvents = track.measures[0].events.filter((event) => {
+        const soundingEvents = track.measures[0].noteEvents.filter((event) => {
             return event.audioData?.id === noteStyle.id;
         });
 
@@ -152,7 +155,7 @@ describe("Track", () => {
         ]);
     });
 
-    it("clear removes note styles, subdivisions and events", () => {
+    it("clear removes note styles, subdivisions and note events", () => {
         const instrument = createInstrument("0", 0, 0);
         const noteStyle = {
             id: "accent",
@@ -181,14 +184,14 @@ describe("Track", () => {
         hydrateMeasureEvents(arrangement);
         const track = arrangement.tracks[0] as Track;
 
-        track.measures[0].subdivisions.push({ id: 9001, startStep: 2, actual: 2, normal: 1, isTuplet: false });
+        track.measures[0].subdivisions.push({ startIndex: 0, actual: 3, normal: 2, isTuplet: true });
 
         track.clear();
 
-        expect(track.measures[0].steps.every((step) => {
-            return step.noteStyleId === undefined;
+        expect(track.measures[0].events.every((event) => {
+            return event.noteStyleId === undefined;
         })).toBe(true);
         expect(track.measures[0].subdivisions).toHaveLength(0);
-        expect(track.measures[0].events).toHaveLength(0);
+        expect(track.measures[0].noteEvents).toHaveLength(0);
     });
 });

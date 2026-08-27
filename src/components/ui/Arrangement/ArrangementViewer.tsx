@@ -100,7 +100,7 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
 
     public override componentDidMount(): void {
         const { arrangementPlayer, selectionManager } = this.props;
-        const { autoFollowIsOn, viewerZoom } = this.state;
+        const { autoFollowIsOn, viewerZoom, trackViewMode } = this.state;
 
         selectionManager.setEventContainer(this.arrangementViewerRef.current!);
 
@@ -118,7 +118,7 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         );
         this.trackViewerInputController.setGridEditor(gridEditor);
         this.trackViewerInputController.setEditMode(this.props.inEditMode);
-        this.trackViewerInputController.setViewMode(this.state.trackViewMode);
+        this.trackViewerInputController.setViewMode(trackViewMode);
         this.trackViewerInputController.attach();
 
         requisitions.register("settingsChanged", this.handleSettingsChanged);

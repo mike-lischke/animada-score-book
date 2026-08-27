@@ -70,7 +70,6 @@ All UI components extend `UIComponent<P, S>` (not raw `Component`). Key patterns
 
 ### General
 
-- Prefer classes over standalone methods.
 - Strive for a clean, readable codebase with minimal technical debt. Avoid hacks, workarounds, and "clever" code.
 - Name component files after the component they contain. Keep only one component per file.
 - Solve the actual bug first; only fix tests after the bug is confirmed fixed.
@@ -141,6 +140,22 @@ Always put a blank line after blocks (`if`/`for`/`while`/`switch`/`case`/anonymo
 - Interface names always start with a capital `I` (e.g., `ISoundStyleMeta`, `IMeasureStep`).
 - Inline type casts (`as { ... }`) are acceptable for one-off use. If the same anonymous shape appears more than once, extract it to a named interface.
 - No section-divider comments (e.g. `// ---------- api ----------`). Let method ordering speak for itself.
+
+### Module Boundaries & Static Domain APIs
+
+- Every source file is an ES module; never define true globals.
+- Top-level types form data contracts:
+  - Exported types describe a module's public input and output.
+  - Non-exported types describe internal implementation structures only.
+  - Do not nest types inside classes unless a dotted type API demonstrably improves external call sites.
+- Export related, stateless operations as static methods of a named domain authority when they implement a clearly defined concept, transformation, or rule set.
+- Keep the public API of such an authority small and deliberate. Implement internal steps as:
+  - `#private` static methods for deliberate hard runtime encapsulation,
+  - `private` static methods for TypeScript-level structuring, or
+  - non-exported module functions when they have no domain relation to the public authority.
+- Introduce instance classes only when instance state, identity, configurable dependencies, resources, or a lifecycle are present.
+- Do not use classes as generic containers: names like `Utils`, `Helpers`, `Common`, or `Internals` are not sufficient justification. The class name must express its domain responsibility.
+- Small, clearly local, stateless helper functions may remain at module level when a class would not improve readability.
 
 ### Security
 

@@ -23,7 +23,7 @@ test.beforeEach(async ({ page }) => {
  */
 const buildSnapshot = (instrumentId: string, title: string, noteStyleId = "1") => {
     return {
-        version: 3,
+        version: 4,
         title,
         timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4", stepResolution: 16 },
         tracks: [{
@@ -37,11 +37,13 @@ const buildSnapshot = (instrumentId: string, title: string, noteStyleId = "1") =
                     stepResolution: 16,
                     beatGroups: [4, 4, 4, 4],
                 },
-                steps: [
-                    { index: 0, noteStyleId },
-                    ...Array.from({ length: 15 }, (_, i) => {
-                        return { index: i + 1 };
-                    }),
+                events: [
+                    {
+                        start: { numerator: 0, denominator: 16 },
+                        duration: { numerator: 1, denominator: 16 },
+                        noteStyleId,
+                    },
+                    { start: { numerator: 1, denominator: 16 }, duration: { numerator: 15, denominator: 16 } },
                 ],
                 subdivisions: [],
             }],

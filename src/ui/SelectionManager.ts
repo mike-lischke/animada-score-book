@@ -339,6 +339,24 @@ export class SelectionManager {
     }
 
     /**
+     * Replaces the current selection with the given entries in a single change.
+     *
+     * @param entries The entries that become the new selection.
+     */
+    public replaceSelection(entries: ISelectionEntry[]): void {
+        const removed = [...this.currentSelection.values()];
+        this.currentSelection.clear();
+        for (const entry of entries) {
+            this.currentSelection.set(this.entryKey(entry), entry);
+        }
+
+        this.previousEntries = [];
+
+        void requisitions.execute("selectionChanged", { added: entries, removed });
+        this.schedulePersist();
+    }
+
+    /**
      * Applies a set of selection entries according to the current mode, computes the delta
      * (added/removed), and publishes the change.
      *

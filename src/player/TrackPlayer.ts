@@ -6,20 +6,10 @@
 import {
     SbDmEntityType, type ISbDmNoteEvent, type ISbDmTrack, type ISbDmTrackMeasure, type RealTime
 } from "../core/ScoreBookDataModel.js";
-import {
-    addFractions, compareFractions, reduceFraction, subtractFractions,
-} from "../core/serialisation/numeric-functions.js";
-import type { IFraction, ISubdivision } from "../core/types/general.js";
-import { getNewId } from "../core/utils.js";
+import type { IFraction } from "../core/types/general.js";
 import { requisitions } from "../supplement/Requisitions.js";
 import type { TimeCoordinator } from "./TimeCoordinator.js";
 import { Event, IInterval } from "./types.js";
-
-interface ISerializedMeasureEvent {
-    start: IFraction;
-    duration: IFraction;
-    noteStyleId: string;
-}
 
 /**
  * Coordinates playback for a single track.
@@ -110,227 +100,39 @@ export class TrackPlayer {
         requisitions.unregister("arrangementChanged", this.handleArrangementDestroy);
     }
 
-    /** Rebuilds runtime note events from steps/subdivisions and stores them in measure.events. */
+    /** Rebuilds the resolved runtime note events from the persisted measure events. */
     private rebuildEventCache = (): void => {
         for (const measure of this.track.measures) {
-            const runtimeEvents = this.materializeMeasureEvents(measure);
-            measure.events.splice(0, measure.events.length, ...runtimeEvents);
+            const runtimeEvents = this.resolveMeasureEvents(measure);
+            measure.noteEvents.splice(0, measure.noteEvents.length, ...runtimeEvents);
         }
     };
 
-    private materializeMeasureEvents(measure: ISbDmTrackMeasure): ISbDmNoteEvent[] {
-        const serializedEvents = this.createSerializedEventsFromMeasure(measure);
+    /**
+     * Resolves the persisted events of a measure into runtime note events (style ids → audio data).
+     *
+     * @param measure The measure to resolve.
+     * @returns The resolved note events, one per measure event.
+     */
+    private resolveMeasureEvents(measure: ISbDmTrackMeasure): ISbDmNoteEvent[] {
         const stepsPerBar = measure.meter.stepResolution;
-        const pulseFraction = this.parsePulseFraction();
-        const measureEnd: IFraction = { numerator: 1, denominator: 1 };
 
-        const filteredEvents = serializedEvents.filter((event) => {
-            if (event.noteStyleId !== "0") {
-                return true;
-            }
-
-            return !this.isGridSlotDuration(event.duration, stepsPerBar);
-        });
-
-        return filteredEvents.map((event, index) => {
-            let duration = event.duration;
-            if (event.noteStyleId !== "0" && this.isGridMultipleDuration(duration, stepsPerBar)) {
-                const nextStart = filteredEvents[index + 1]?.start ?? measureEnd;
-                const pulseEnd = this.pulseBoundaryAfter(event.start, pulseFraction);
-                const limit = compareFractions(nextStart, pulseEnd) < 0 ? nextStart : pulseEnd;
-                const extendedDuration = subtractFractions(limit, event.start);
-                if (compareFractions(extendedDuration, duration) > 0) {
-                    duration = extendedDuration;
-                }
-            }
-
+        return measure.events.map((event, eventIndex) => {
             return {
-                id: getNewId(),
+                // Deterministic id, so note references (e.g. selection note ids) stay valid across
+                // cache rebuilds. Encodes track id, measure number and the event index within the measure.
+                id: (this.track.id * 1_000_000) + (measure.number * 1_000) + eventIndex,
                 type: SbDmEntityType.NoteEvent,
                 measureNumber: measure.number,
-                start: event.start,
-                duration,
+                start: { ...event.start },
+                duration: { ...event.duration },
                 track: this.track,
                 timing: this.timingForEventStart(event.start, measure.number, stepsPerBar),
-                audioData: event.noteStyleId === "0"
-                    ? undefined
-                    : this.track.instrument.noteStyles[event.noteStyleId],
+                audioData: event.noteStyleId !== undefined
+                    ? this.track.instrument.noteStyles[event.noteStyleId]
+                    : undefined,
             };
         });
-    };
-
-    private createSerializedEventsFromMeasure(measure: ISbDmTrackMeasure): ISerializedMeasureEvent[] {
-        const stepsPerBar = measure.meter.stepResolution;
-        const steps = [...measure.steps].sort((left, right) => {
-            return left.index - right.index;
-        });
-
-        const stepStyleIds = steps.map((step) => {
-            return step.noteStyleId ?? "0";
-        });
-
-        const subdivisions = measure.subdivisions;
-        const topLevelSubdivisions = [...subdivisions]
-            .filter((s) => {
-                return s.parentSubdivisionId == null;
-            })
-            .sort((left, right) => {
-                return left.startStep - right.startStep;
-            });
-
-        // Group child subdivisions by parent id and slot-relative index.
-        // startStep is absolute, so the slot within the parent is (child.startStep - parent.startStep).
-        const subdivisionsById = new Map(subdivisions.map((s) => {
-            return [s.id, s] as const;
-        }));
-
-        const childrenByParentId = new Map<number, Map<number, ISubdivision>>();
-        for (const sub of subdivisions) {
-            if (sub.parentSubdivisionId != null) {
-                const parent = subdivisionsById.get(sub.parentSubdivisionId);
-                if (parent == null) {
-                    continue;
-                }
-
-                const relativeSlot = sub.startStep - parent.startStep;
-                let slotMap = childrenByParentId.get(sub.parentSubdivisionId);
-                if (!slotMap) {
-                    slotMap = new Map();
-                    childrenByParentId.set(sub.parentSubdivisionId, slotMap);
-                }
-
-                slotMap.set(relativeSlot, sub);
-            }
-        }
-
-        // Returns the total number of entries a subdivision (and all its descendants) occupies
-        // in measure.steps[]. A nested child with actual=N replaces child.normal of the
-        // parent's slots, so we subtract normal and add the child's expanded count.
-        const totalVisibleSteps = (sub: ISubdivision): number => {
-            const children = childrenByParentId.get(sub.id);
-            if (!children || children.size === 0) {
-                return sub.actual;
-            }
-
-            let size = sub.actual;
-            for (const child of children.values()) {
-                size = size - child.normal + totalVisibleSteps(child);
-            }
-
-            return size;
-        };
-
-        // startStep on top-level subdivisions is the absolute steps-array index. Convert to a
-        // base-grid-keyed map by walking both counters in parallel.
-        // We advance absIdx by totalVisibleSteps (not s.actual) so that nested subdivisions
-        // whose sub-notes expand beyond s.actual are correctly skipped.
-        const topLevelByAbsStep = new Map(topLevelSubdivisions.map((s) => {
-            return [s.startStep, s] as const;
-        }));
-
-        const subdivisionsByBaseStep = new Map<number, ISubdivision>();
-        {
-            let absIdx = 0;
-
-            for (let bStep = 0; bStep < stepsPerBar;) {
-                const s = topLevelByAbsStep.get(absIdx);
-
-                if (s) {
-                    subdivisionsByBaseStep.set(bStep, s);
-                    absIdx += totalVisibleSteps(s);
-                    bStep += s.normal;
-                } else {
-                    absIdx++;
-                    bStep++;
-                }
-            }
-        }
-
-        const serializedEvents: ISerializedMeasureEvent[] = [];
-        let visibleStepIndex = 0;
-
-        // Recursively expands a subdivision. parentNoteDuration is the duration of a single
-        // slot in the enclosing context (1/stepsPerBar for top-level subdivisions).
-        const expandSubdivision = (sub: ISubdivision, eventStart: IFraction,
-            parentNoteDuration: IFraction): void => {
-            const noteDuration = reduceFraction(
-                sub.normal * parentNoteDuration.numerator,
-                parentNoteDuration.denominator * sub.actual,
-            );
-
-            const children = childrenByParentId.get(sub.id);
-            let slotStart = eventStart;
-            let noteIndex = 0;
-
-            while (noteIndex < sub.actual) {
-                const child = children?.get(noteIndex);
-                if (child) {
-                    expandSubdivision(child, slotStart, noteDuration);
-                    slotStart = addFractions(
-                        slotStart,
-                        reduceFraction(noteDuration.numerator * child.normal, noteDuration.denominator),
-                    );
-                    noteIndex += child.normal;
-                } else {
-                    serializedEvents.push({
-                        start: slotStart,
-                        duration: noteDuration,
-                        noteStyleId: stepStyleIds[visibleStepIndex] ?? "0",
-                    });
-                    slotStart = addFractions(slotStart, noteDuration);
-                    visibleStepIndex += 1;
-                    noteIndex += 1;
-                }
-            }
-        };
-
-        let baseStep = 0;
-
-        while (baseStep < stepsPerBar) {
-            const sub = subdivisionsByBaseStep.get(baseStep);
-            if (!sub) {
-                serializedEvents.push({
-                    start: reduceFraction(baseStep, stepsPerBar),
-                    duration: reduceFraction(1, stepsPerBar),
-                    noteStyleId: stepStyleIds[visibleStepIndex] ?? "0",
-                });
-                baseStep += 1;
-                visibleStepIndex += 1;
-
-                continue;
-            }
-
-            expandSubdivision(sub, reduceFraction(baseStep, stepsPerBar), reduceFraction(1, stepsPerBar));
-            baseStep += sub.normal;
-        }
-
-        return serializedEvents;
-    }
-
-    private isGridSlotDuration(duration: IFraction, stepsPerBar: number): boolean {
-        return duration.numerator * stepsPerBar === duration.denominator;
-    }
-
-    private isGridMultipleDuration(duration: IFraction, stepsPerBar: number): boolean {
-        return (duration.numerator * stepsPerBar) % duration.denominator === 0;
-    }
-
-    private parsePulseFraction(): IFraction {
-        const [numerator, denominator] = this.track.arrangement.timeParams.pulse.split("/").map(Number);
-        if (!Number.isFinite(numerator) || !Number.isFinite(denominator) || denominator === 0) {
-            return { numerator: 1, denominator: 4 };
-        }
-
-        return reduceFraction(numerator, denominator);
-    }
-
-    private pulseBoundaryAfter(start: IFraction, pulse: IFraction): IFraction {
-        const startInPulses = (start.numerator * pulse.denominator) / (start.denominator * pulse.numerator);
-        const nextK = Math.floor(startInPulses) + 1;
-        const candidate = reduceFraction(nextK * pulse.numerator, pulse.denominator);
-        const measureEnd: IFraction = { numerator: 1, denominator: 1 };
-
-        return compareFractions(candidate, measureEnd) < 0 ? candidate : measureEnd;
     }
 
     private timingForEventStart(start: IFraction, measureNumber: number, stepsPerBar: number): {

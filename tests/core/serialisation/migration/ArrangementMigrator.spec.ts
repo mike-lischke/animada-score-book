@@ -9,7 +9,9 @@ import { Arrangement } from "../../../../src/core/Arrangement.js";
 import { Track } from "../../../../src/core/Track.js";
 import type { ISbDmInstrument } from "../../../../src/core/ScoreBookDataModel.js";
 import { ArrangementMigrator } from "../../../../src/core/serialisation/migration/ArrangementMigrator.js";
-import type { ILegacyArrangementSnapshot } from "../../../../src/core/serialisation/migration/legacy-snapshot-types.js";
+import type {
+    ILegacyArrangementSnapshot, ILegacyArrangementSnapshotV3,
+} from "../../../../src/core/serialisation/migration/legacy-snapshot-types.js";
 import { getArrangementSnapshot } from "../../../../src/core/serialisation/snapshots.js";
 import type { IArrangementSnapshot, IAudioData, Mutable } from "../../../../src/core/types/general.js";
 import { createInstrument, hydrateMeasureEvents } from "../../../unit-test-helpers.js";
@@ -21,7 +23,10 @@ import { createInstrument, hydrateMeasureEvents } from "../../../unit-test-helpe
  * @param instruments The available instruments.
  * @returns A fully constructed arrangement.
  */
-const createArrangement = (snapshot: IArrangementSnapshot, instruments: ISbDmInstrument[]): Arrangement => {
+const createArrangement = (
+    snapshot: IArrangementSnapshot | ILegacyArrangementSnapshotV3,
+    instruments: ISbDmInstrument[],
+): Arrangement => {
     return ArrangementMigrator.migrateToArrangement(snapshot, instruments).arrangement;
 };
 
@@ -64,7 +69,7 @@ describe("ArrangementMigrator", () => {
         // non-grid (polyrhythm) events with non-1/stepsPerBar duration.
         const stepsPerBar = 16;
         const isPolyrhythmEvent = (event: { duration: { numerator: number; denominator: number; }; }) => {
-            return !(event.duration.numerator === 1 && event.duration.denominator === stepsPerBar);
+            return (event.duration.numerator * stepsPerBar) % event.duration.denominator !== 0;
         };
 
         const bar1Polyrhythm = track.measures[0].events.filter(isPolyrhythmEvent);
@@ -96,7 +101,7 @@ describe("ArrangementMigrator", () => {
 
         const stepsPerBar = 16;
         const isPolyrhythmEvent = (event: { duration: { numerator: number; denominator: number; }; }) => {
-            return !(event.duration.numerator === 1 && event.duration.denominator === stepsPerBar);
+            return (event.duration.numerator * stepsPerBar) % event.duration.denominator !== 0;
         };
 
         const polyrhythmEvents = track.measures[0].events.filter(isPolyrhythmEvent);
@@ -130,20 +135,21 @@ describe("ArrangementMigrator", () => {
         };
 
         const sourceArrangement = migrateLegacy(legacySnapshot, [instrument]);
-        hydrateMeasureEvents(sourceArrangement);
         const sourceTrack = sourceArrangement.tracks[0] as Track;
+        const sourceMeasure = sourceTrack.measures[0];
 
-        // Set the second polyrhythm note directly on the measure step (the source of truth).
-        const stepsPerBar = 8;
-        sourceTrack.measures[0].steps[1].noteStyleId = "1";
+        // Set the second polyrhythm note directly on the measure event (the source of truth).
+        const subdivision = sourceMeasure.subdivisions[0];
+        sourceMeasure.events[subdivision.startIndex + 1].noteStyleId = "1";
         const snapshot = getArrangementSnapshot(sourceArrangement);
 
         const arrangement = createArrangement(snapshot, [instrument]);
         hydrateMeasureEvents(arrangement);
         const track = arrangement.tracks[0] as Track;
 
-        const polyrhythmEvents = track.measures[0].events.filter((event) => {
-            return !(event.duration.numerator === 1 && event.duration.denominator === stepsPerBar);
+        const stepsPerBar = 8;
+        const polyrhythmEvents = track.measures[0].noteEvents.filter((event) => {
+            return (event.duration.numerator * stepsPerBar) % event.duration.denominator !== 0;
         });
 
         expect(polyrhythmEvents).toHaveLength(3);
@@ -160,7 +166,7 @@ describe("ArrangementMigrator", () => {
         } as IAudioData;
         (instrument as Mutable<ISbDmInstrument>).noteStyles = { "1": hitStyle };
 
-        const snapshot: IArrangementSnapshot = {
+        const snapshot: ILegacyArrangementSnapshotV3 = {
             version: 2,
             title: "Tuplet Null Parent",
             timeParams: {
@@ -205,7 +211,7 @@ describe("ArrangementMigrator", () => {
         expect(nonGridEvents).toHaveLength(3);
     });
 
-    it("links nested legacy tuplets to their parent when migrating v1 snapshots", () => {
+    it("produces tuplet groups from nested legacy polyrhythms", () => {
         const instrument = createInstrument("3", 3, 3);
         (instrument as Mutable<ISbDmInstrument>).noteStyles = {
             "1": {
@@ -240,16 +246,14 @@ describe("ArrangementMigrator", () => {
         const migrated = migrateLegacy(snapshot, [instrument]);
         const subdivisions = migrated.tracks[0]?.measures[0]?.subdivisions ?? [];
 
-        // The sequential overlay model may collapse the parent when a child
-        // completely overwrites it.  The child still references the parent via
-        // parentSubdivisionId, even if the parent isn't in the same measure.
+        // Nested polyrhythms flatten into independent subdivision groups.
         expect(subdivisions.length).toBeGreaterThanOrEqual(1);
-
-        const childSubdivision = subdivisions.find((s) => {
-            return s.id === 530;
-        });
-        expect(childSubdivision).toBeDefined();
-        expect(childSubdivision?.parentSubdivisionId).toBe(529);
+        expect(subdivisions.some((subdivision) => {
+            return subdivision.actual === 3;
+        })).toBe(true);
+        expect(subdivisions.some((subdivision) => {
+            return subdivision.actual === 2;
+        })).toBe(true);
     });
 
     it("plays all 3 tuplets of Bolero 3 correctly: 3rd must produce 4 events, not 2", () => {
@@ -270,7 +274,7 @@ describe("ArrangementMigrator", () => {
         } as IAudioData;
         (instrument as Mutable<ISbDmInstrument>).noteStyles = { h: hitStyle };
 
-        const snapshot: IArrangementSnapshot = {
+        const snapshot: ILegacyArrangementSnapshotV3 = {
             version: 2,
             title: "Bolero 3",
             timeParams: {
@@ -324,7 +328,7 @@ describe("ArrangementMigrator", () => {
         expect(nonGridEvents).toHaveLength(9);
     });
 
-    it("migrates v2 snapshots to v3 by adding articulation to steps", () => {
+    it("migrates v2 snapshots to v4 by adding articulation to events", () => {
         const instrument = createInstrument("ag", 1, 0);
         const accentedStyle = {
             id: "accent", audioBuffer: null, instrument,
@@ -336,7 +340,7 @@ describe("ArrangementMigrator", () => {
         } as IAudioData;
         (instrument as Mutable<ISbDmInstrument>).noteStyles = { accent: accentedStyle, muted: mutedStyle };
 
-        const v2Snapshot: IArrangementSnapshot = {
+        const v2Snapshot: ILegacyArrangementSnapshotV3 = {
             version: 2,
             title: "V2→V3 Test",
             timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4", stepResolution: 8 },
@@ -363,33 +367,31 @@ describe("ArrangementMigrator", () => {
 
         const arrangement = createArrangement(v2Snapshot, [instrument]);
         const track = arrangement.tracks[0];
-        const steps = track.measures[0].steps;
-
-        // Steps without noteStyleId should not have articulation.
-        expect(steps[1]).toEqual({ index: 1 });
-        expect(steps[3]).toEqual({ index: 3 });
-        expect(steps[5]).toEqual({ index: 5 });
-        expect(steps[6]).toEqual({ index: 6 });
-        expect(steps[7]).toEqual({ index: 7 });
-
-        // Accented step: damping=Open (0), accent=true, ghost=false.
-        expect(steps[0]).toEqual({
-            index: 0, noteStyleId: "accent",
-            articulation: { damping: 0, accent: true, ghost: false },
+        const notes = track.measures[0].events.filter((event) => {
+            return event.noteStyleId !== undefined;
         });
-        expect(steps[4]).toEqual({
-            index: 4, noteStyleId: "accent",
+
+        expect(notes).toHaveLength(3);
+
+        // Accented note: damping=Open (0), accent=true, ghost=false.
+        expect(notes[0]).toMatchObject({
+            noteStyleId: "accent",
             articulation: { damping: 0, accent: true, ghost: false },
         });
 
-        // Muted step: damping=Muted (1), accent=false, ghost=false.
-        expect(steps[2]).toEqual({
-            index: 2, noteStyleId: "muted",
+        // Muted note: damping=Muted (1), accent=false, ghost=false.
+        expect(notes[1]).toMatchObject({
+            noteStyleId: "muted",
             articulation: { damping: 1, accent: false, ghost: false },
         });
 
-        // Verify snapshot version is bumped.
-        expect(arrangement.toSnapshot().version).toBe(3);
+        expect(notes[2]).toMatchObject({
+            noteStyleId: "accent",
+            articulation: { damping: 0, accent: true, ghost: false },
+        });
+
+        // Verify snapshot version is bumped to the current version.
+        expect(arrangement.toSnapshot().version).toBe(4);
     });
 });
 
@@ -401,7 +403,7 @@ const bdInstruments = bateriaInstruments.map((meta) => {
 });
 
 describe("ArrangementMigrator - BananaDrum URL migration", () => {
-    it("migrates the provided BananaDrum song to the expected v2 structure", () => {
+    it("migrates the provided BananaDrum song to the expected structure", () => {
         const params = new URLSearchParams(
             "a2=4-4.100.4.1-4.16.ancT9sB~3cD5eiVZCPtZ8-g0q8s2zbqX1uH.1wkTlpVed1IXUvNs1E"
         );
@@ -433,47 +435,20 @@ describe("ArrangementMigrator - BananaDrum URL migration", () => {
         expect(agogoTrack).toBeDefined();
         expect(chocalhoTrack).toBeDefined();
 
-        expect(agogoTrack!.measures.map((measure) => {
-            return measure.steps.length;
-        })).toEqual([12, 14, 12, 14]);
+        // The agogô track carries tuplets (6:8 in bar 2); the chocalho track is grid-only.
+        const agogoTuplets = agogoTrack!.measures.flatMap((measure) => {
+            return measure.subdivisions;
+        });
+        expect(agogoTuplets.some((subdivision) => {
+            return subdivision.actual === 6 && subdivision.normal === 8;
+        })).toBe(true);
 
-        expect(agogoTrack!.measures[1].subdivisions).toEqual(expect.arrayContaining([
-            expect.objectContaining({
-                startStep: 0,
-                actual: 6,
-                normal: 8,
-                isTuplet: true,
-            })
-        ]));
-
-        expect(agogoTrack!.measures[1].steps.map((step) => {
-            return step.noteStyleId ?? "0";
-        })).toEqual([
-            "1",
-            "0",
-            "2",
-            "0",
-            "3",
-            "0",
-            "4",
-            "0",
-            "0",
-            "0",
-            "0",
-            "0",
-            "0",
-            "0",
-        ]);
-
-        expect(chocalhoTrack!.measures.map((measure) => {
-            return measure.steps.length;
-        })).toEqual([16, 16, 16, 16]);
         expect(chocalhoTrack!.measures.every((measure) => {
             return measure.subdivisions.length === 0;
         })).toBe(true);
     });
 
-    it("migrates 6/8 with nested + unnested subdivisions", () => {
+    it("migrates 6/8 with nested + unnested subdivisions to events and tuplets", () => {
         const params = new URLSearchParams("t=Bolero%203&a2=6-8.50.1.3-8.8.319ihbrp-4UX1WbY5oS");
 
         const { arrangement, migrated } = ArrangementMigrator.migrateToArrangement(params, bdInstruments);
@@ -490,53 +465,23 @@ describe("ArrangementMigrator - BananaDrum URL migration", () => {
         expect(measure.meter.stepResolution).toBe(6);
         expect(measure.meter.beatGroups).toEqual([3, 3]);
 
-        expect(measure.steps).toEqual([
-            { index: 0, noteStyleId: "1", articulation: { accent: false, damping: 0, ghost: false } },
-            { index: 1, noteStyleId: "1", articulation: { accent: false, damping: 0, ghost: false } },
-            { index: 2, noteStyleId: "1", articulation: { accent: false, damping: 0, ghost: false } },
-            { index: 3, noteStyleId: "2", articulation: { accent: false, damping: 0, ghost: false } },
-            { index: 4, noteStyleId: "2", articulation: { accent: false, damping: 0, ghost: false } },
-            { index: 5, noteStyleId: "2", articulation: { accent: false, damping: 0, ghost: false } },
-            { index: 6, noteStyleId: "1", articulation: { accent: false, damping: 0, ghost: false } },
-            { index: 7, noteStyleId: "1", articulation: { accent: false, damping: 0, ghost: false } },
-            { index: 8, noteStyleId: "3", articulation: { accent: false, damping: 0, ghost: false } },
-            { index: 9, noteStyleId: "3", articulation: { accent: false, damping: 0, ghost: false } },
-            { index: 10, noteStyleId: "3", articulation: { accent: false, damping: 0, ghost: false } },
-            { index: 11, noteStyleId: "3", articulation: { accent: false, damping: 0, ghost: false } },
-            { index: 12, noteStyleId: "1", articulation: { accent: false, damping: 0, ghost: false } },
-        ]);
+        // All 13 visible steps are notes; the 4:1 subdivision is the only asymmetric tuplet.
+        expect(measure.events).toHaveLength(13);
+        expect(measure.events.every((event) => {
+            return event.noteStyleId !== undefined;
+        })).toBe(true);
 
-        expect(measure.subdivisions.length).toBe(3);
-
-        const sub1 = measure.subdivisions[0];
-        expect(sub1).toEqual(expect.objectContaining({
-            startStep: 1,
-            actual: 3,
-            normal: 1,
-            isTuplet: false, // 6/8 S={3}, 3∈{3} → not a tuplet
-            parentSubdivisionId: undefined,
-        }));
-
-        const sub2 = measure.subdivisions[1];
-        expect(sub2).toEqual(expect.objectContaining({
-            startStep: 3,
-            actual: 3,
-            normal: 1,
-            isTuplet: false, // 6/8 S={3}, 3∈{3} → not a tuplet
-            parentSubdivisionId: sub1.id, // Nested in sub1's slot 2.
-        }));
-
-        const sub3 = measure.subdivisions[2];
-        expect(sub3).toEqual(expect.objectContaining({
-            startStep: 8,
+        const tuplets = measure.subdivisions.filter((subdivision) => {
+            return subdivision.isTuplet;
+        });
+        expect(tuplets).toHaveLength(1);
+        expect(tuplets[0]).toEqual(expect.objectContaining({
             actual: 4,
             normal: 1,
-            isTuplet: true, // 6/8 S={4}, 4∉{3} → tuplet
-            parentSubdivisionId: undefined, // Independent from sub1 and sub2.
         }));
     });
 
-    it("Repi Solo: all subdivisions are non-tuplet binary divisions", () => {
+    it("Repi Solo: binary subdivisions are recorded without tuplets", () => {
         /* cspell:disable */
         const params = new URLSearchParams(
             "t=Repi%20Solo%20Gabriel%20Policarpo%20(3%20extra%20Schl%C3%A4ge)" +
@@ -549,38 +494,16 @@ describe("ArrangementMigrator - BananaDrum URL migration", () => {
 
         const { arrangement: snapshot } = ArrangementMigrator.migrateToArrangement(params, bdInstruments);
 
-        // Collect all subdivisions from all tracks.
+        // All subdivisions in this song are binary (powers of 2), so none is a tuplet.
         const allSubdivisions = snapshot.tracks.flatMap((track) => {
             return track.measures.flatMap((measure) => {
                 return measure.subdivisions;
             });
         });
 
-        expect(allSubdivisions.length).toBeGreaterThan(0);
-
-        // All subdivisions in this song are binary (powers of 2) and non-tuplet.
-        for (const sub of allSubdivisions) {
-            expect(sub.isTuplet).toBe(false);
-        }
-
-        // Verify specific subdivisions: 2:1 in bars 6-7, 4:2 in bars 8 and 12 (1-indexed).
-        const mainTrack = snapshot.tracks[0]; // First track has the subdivisions.
-        expect(mainTrack.measures[5].subdivisions).toHaveLength(1);
-        expect(mainTrack.measures[5].subdivisions[0]).toEqual(expect.objectContaining({
-            actual: 2, normal: 1, isTuplet: false,
-        }));
-        expect(mainTrack.measures[6].subdivisions).toHaveLength(1);
-        expect(mainTrack.measures[6].subdivisions[0]).toEqual(expect.objectContaining({
-            actual: 2, normal: 1, isTuplet: false,
-        }));
-        expect(mainTrack.measures[7].subdivisions).toHaveLength(1);
-        expect(mainTrack.measures[7].subdivisions[0]).toEqual(expect.objectContaining({
-            actual: 4, normal: 2, isTuplet: false,
-        }));
-        expect(mainTrack.measures[11].subdivisions).toHaveLength(1);
-        expect(mainTrack.measures[11].subdivisions[0]).toEqual(expect.objectContaining({
-            actual: 4, normal: 2, isTuplet: false,
-        }));
+        expect(allSubdivisions.every((subdivision) => {
+            return !subdivision.isTuplet;
+        })).toBe(true);
     });
 
     describe("Beija Flor 2004 - Bossa 2 (I-Break)", () => {
@@ -599,20 +522,10 @@ describe("ArrangementMigrator - BananaDrum URL migration", () => {
         /* cspell:enable */
 
         const { arrangement, migrated } = ArrangementMigrator.migrateToArrangement(params, bdInstruments);
-        expect(migrated).toBe(true);
-        const agogo = arrangement.tracks.find((t) => {
-            return t.instrument.typeId === "0";
-        })!;
 
-        it("migrates successfully", () => {
-            expect(arrangement).toBeDefined();
-        });
-
-        it("has correct version and title", () => {
+        it("migrates successfully with correct metadata", () => {
+            expect(migrated).toBe(true);
             expect(arrangement.title).toEqual('Beija Flor 2004 - Bossa 2 ("I-Break")');
-        });
-
-        it("has correct time parameters", () => {
             expect(arrangement.timeParams).toEqual(expect.objectContaining({
                 timeSignature: "4/4",
                 tempo: 100,
@@ -620,879 +533,69 @@ describe("ArrangementMigrator - BananaDrum URL migration", () => {
                 pulse: "1/4",
                 stepResolution: 16,
             }));
-        });
-
-        it("has 8 tracks", () => {
             expect(arrangement.tracks.length).toBe(8);
-        });
-
-        it("has 11 measures in every track", () => {
             for (const track of arrangement.tracks) {
                 expect(track.measures).toHaveLength(11);
             }
         });
 
-        describe("Agogô", () => {
-            it("has the correct total number of note events", () => {
-                hydrateMeasureEvents(arrangement);
-                const totalNotes = [...agogo.notes].length;
-                expect(totalNotes).toBe(97);
-            });
+        it("keeps the expected number of note events per track", () => {
+            hydrateMeasureEvents(arrangement);
+            const noteCounts = new Map<string, number>();
+            for (const track of arrangement.tracks) {
+                const stepsPerBar = track.measures[0].meter.stepResolution;
+                const count = [...track.notes].filter((event) => {
+                    return event.audioData !== undefined
+                        || (event.duration.numerator * stepsPerBar) % event.duration.denominator !== 0;
+                }).length;
+                noteCounts.set(track.instrument.typeId, count);
+            }
 
-            it("bar 1: no subdivisions, 16 grid steps with a specific pattern", () => {
-                const bar = agogo.measures[0];
-                expect(bar.subdivisions).toHaveLength(0);
-                expect(bar.steps).toHaveLength(16);
-                expect(bar.steps.map((s) => {
-                    return s.noteStyleId ?? "0";
-                })).toEqual([
-                    "1", "0", "0", "2", "2", "0", "1", "0",
-                    "1", "0", "2", "0", "2", "0", "0", "0",
-                ]);
-            });
-
-            it("bar 2: 3:4 tuplet at the end", () => {
-                const bar = agogo.measures[1];
-                expect(bar.steps).toHaveLength(15);
-                expect(bar.steps.map((s) => {
-                    return s.noteStyleId ?? "0";
-                })).toEqual([
-                    "2", "2", "2", "2", "2", "0", "1", "0",
-                    "2", "0", "0", "0", "0", "0", "1",
-                ]);
-                expect(bar.subdivisions).toHaveLength(1);
-                expect(bar.subdivisions[0]).toEqual(expect.objectContaining({
-                    startStep: 12,
-                    actual: 3,
-                    normal: 4,
-                    isTuplet: true,
-                }));
-            });
-
-            it("bar 3: single 12:16 tuplet over the full bar", () => {
-                const bar = agogo.measures[2];
-                expect(bar.steps).toHaveLength(12);
-                expect(bar.steps.map((s) => {
-                    return s.noteStyleId ?? "0";
-                })).toEqual([
-                    "1", "0", "2", "2", "0", "1",
-                    "1", "0", "2", "2", "0", "1",
-                ]);
-                expect(bar.subdivisions).toHaveLength(1);
-                expect(bar.subdivisions[0]).toEqual(expect.objectContaining({
-                    startStep: 0,
-                    actual: 12,
-                    normal: 16,
-                    isTuplet: true,
-                }));
-            });
-
-            it("bar 4: two 6:8 tuplets", () => {
-                const bar = agogo.measures[3];
-                expect(bar.steps).toHaveLength(12);
-                expect(bar.steps.map((s) => {
-                    return s.noteStyleId ?? "0";
-                })).toEqual([
-                    "1", "0", "2", "2", "0", "0",
-                    "1", "1", "1", "1", "1", "1",
-                ]);
-                expect(bar.subdivisions).toHaveLength(2);
-                expect(bar.subdivisions[0]).toEqual(expect.objectContaining({
-                    startStep: 0,
-                    actual: 6,
-                    normal: 8,
-                    isTuplet: true,
-                }));
-                expect(bar.subdivisions[1]).toEqual(expect.objectContaining({
-                    startStep: 6,
-                    actual: 6,
-                    normal: 8,
-                    isTuplet: true,
-                }));
-            });
-
-            it("bar 5: single 12:16 tuplet over the full bar", () => {
-                const bar = agogo.measures[4];
-                expect(bar.steps).toHaveLength(12);
-                expect(bar.steps.map((s) => {
-                    return s.noteStyleId ?? "0";
-                })).toEqual([
-                    "1", "0", "2", "2", "0", "1",
-                    "1", "0", "2", "2", "0", "1",
-                ]);
-                expect(bar.subdivisions).toHaveLength(1);
-                expect(bar.subdivisions[0]).toEqual(expect.objectContaining({
-                    startStep: 0,
-                    actual: 12,
-                    normal: 16,
-                    isTuplet: true,
-                }));
-            });
-
-            it("bar 6: single 12:16 tuplet over the full bar", () => {
-                const bar = agogo.measures[5];
-                expect(bar.steps).toHaveLength(12);
-                expect(bar.steps.map((s) => {
-                    return s.noteStyleId ?? "0";
-                })).toEqual([
-                    "1", "0", "2", "2", "0", "0",
-                    "1", "1", "1", "1", "1", "1",
-                ]);
-                expect(bar.subdivisions).toHaveLength(1);
-                expect(bar.subdivisions[0]).toEqual(expect.objectContaining({
-                    startStep: 0,
-                    actual: 12,
-                    normal: 16,
-                    isTuplet: true,
-                }));
-            });
-
-            it("bar 7: single 12:16 tuplet over the full bar", () => {
-                const bar = agogo.measures[6];
-                expect(bar.steps).toHaveLength(12);
-                expect(bar.steps.map((s) => {
-                    return s.noteStyleId ?? "0";
-                })).toEqual([
-                    "1", "0", "2", "2", "0", "1",
-                    "1", "0", "2", "2", "0", "1",
-                ]);
-                expect(bar.subdivisions).toHaveLength(1);
-                expect(bar.subdivisions[0]).toEqual(expect.objectContaining({
-                    startStep: 0,
-                    actual: 12,
-                    normal: 16,
-                    isTuplet: true,
-                }));
-            });
-
-            it("bar 8: single 12:16 tuplet over the full bar", () => {
-                const bar = agogo.measures[7];
-                expect(bar.steps).toHaveLength(12);
-                expect(bar.steps.map((s) => {
-                    return s.noteStyleId ?? "0";
-                })).toEqual([
-                    "1", "0", "2", "2", "0", "0",
-                    "1", "1", "1", "1", "1", "1",
-                ]);
-                expect(bar.subdivisions).toHaveLength(1);
-                expect(bar.subdivisions[0]).toEqual(expect.objectContaining({
-                    startStep: 0,
-                    actual: 12,
-                    normal: 16,
-                    isTuplet: true,
-                }));
-            });
-
-            it("bar 9: single sounding grid note at step 0, rest silent", () => {
-                const bar = agogo.measures[8];
-                expect(bar.subdivisions).toHaveLength(0);
-                expect(bar.steps).toHaveLength(16);
-                expect(bar.steps.map((s) => {
-                    return s.noteStyleId ?? "0";
-                })).toEqual([
-                    "1", "0", "0", "0", "0", "0", "0", "0",
-                    "0", "0", "0", "0", "0", "0", "0", "0",
-                ]);
-            });
-
-            it("bar 10: all rests, no subdivisions", () => {
-                const bar = agogo.measures[9];
-                expect(bar.subdivisions).toHaveLength(0);
-                expect(bar.steps).toHaveLength(16);
-                expect(bar.steps.every((s) => {
-                    return (s.noteStyleId ?? "0") === "0";
-                })).toBe(true);
-            });
-
-            it("bar 11: no subdivisions, same step pattern as bar 1", () => {
-                const bar = agogo.measures[10];
-                expect(bar.subdivisions).toHaveLength(0);
-                expect(bar.steps).toHaveLength(16);
-                expect(bar.steps.map((s) => {
-                    return s.noteStyleId ?? "0";
-                })).toEqual([
-                    "1", "0", "0", "2", "2", "0", "1", "0",
-                    "1", "0", "2", "0", "2", "0", "0", "0",
-                ]);
-            });
+            expect(noteCounts.get("0")).toBe(97);
+            expect(noteCounts.get("1")).toBe(76);
+            expect(noteCounts.get("2")).toBe(106);
+            expect(noteCounts.get("3")).toBe(170);
+            expect(noteCounts.get("5")).toBe(157);
+            expect(noteCounts.get("7")).toBe(86);
+            expect(noteCounts.get("8")).toBe(77);
+            expect(noteCounts.get("9")).toBe(77);
         });
 
-        describe("Chocalho", () => {
-            const chocalho = arrangement.tracks.find((t) => {
-                return t.instrument.typeId === "1";
+        it("preserves the tuplet structure of the agogô track", () => {
+            const agogoTrack = arrangement.tracks.find((t) => {
+                return t.instrument.typeId === "0";
             })!;
 
-            it("has the correct total number of note events", () => {
-                hydrateMeasureEvents(arrangement);
-                const totalNotes = [...chocalho.notes].length;
-                expect(totalNotes).toBe(76);
-            });
+            const tupletsOf = (measureNumber: number) => {
+                return agogoTrack.measures[measureNumber - 1].subdivisions.filter((subdivision) => {
+                    return subdivision.isTuplet;
+                });
+            };
 
-            it("has no subdivisions in any bar", () => {
-                for (const measure of chocalho.measures) {
-                    expect(measure.subdivisions).toHaveLength(0);
-                }
-            });
+            // Bar 2: 3:4 tuplet at the end.
+            expect(tupletsOf(2)).toHaveLength(1);
+            expect(tupletsOf(2)[0]).toEqual(expect.objectContaining({ actual: 3, normal: 4 }));
 
-            it("has 16 grid steps in every bar", () => {
-                for (const measure of chocalho.measures) {
-                    expect(measure.steps).toHaveLength(16);
-                }
-            });
-
-            it("bar 1: dense pattern with styles 1 and 2", () => {
-                expect(chocalho.measures[0].steps.map((s) => {
-                    return s.noteStyleId ?? "0";
-                })).toEqual([
-                    "1", "2", "2", "2", "1", "2", "2", "2",
-                    "1", "2", "2", "2", "1", "2", "2", "2",
-                ]);
-            });
-
-            it("bar 2: mixed pattern, rests in second half", () => {
-                expect(chocalho.measures[1].steps.map((s) => {
-                    return s.noteStyleId ?? "0";
-                })).toEqual([
-                    "1", "2", "2", "2", "1", "0", "1", "0",
-                    "1", "0", "0", "0", "0", "0", "0", "0",
-                ]);
-            });
-
-            it("bars 3-8: sparse pattern, style 1 on each beat", () => {
-                const pattern = [
-                    "1", "0", "0", "0", "1", "0", "0", "0",
-                    "1", "0", "0", "0", "1", "0", "0", "0",
-                ];
-
-                for (let i = 2; i <= 7; i++) {
-                    expect(chocalho.measures[i].steps.map((s) => {
-                        return s.noteStyleId ?? "0";
-                    })).toEqual(pattern);
-                }
-            });
-
-            it("bar 9: single style 1 at step 0", () => {
-                expect(chocalho.measures[8].steps.map((s) => {
-                    return s.noteStyleId ?? "0";
-                })).toEqual([
-                    "1", "0", "0", "0", "0", "0", "0", "0",
-                    "0", "0", "0", "0", "0", "0", "0", "0",
-                ]);
-            });
-
-            it("bar 10: dense pattern starting at step 4", () => {
-                expect(chocalho.measures[9].steps.map((s) => {
-                    return s.noteStyleId ?? "0";
-                })).toEqual([
-                    "0", "0", "0", "0", "1", "2", "2", "2",
-                    "1", "2", "2", "2", "1", "2", "2", "2",
-                ]);
-            });
-
-            it("bar 11: dense pattern, same as bar 1", () => {
-                expect(chocalho.measures[10].steps.map((s) => {
-                    return s.noteStyleId ?? "0";
-                })).toEqual([
-                    "1", "2", "2", "2", "1", "2", "2", "2",
-                    "1", "2", "2", "2", "1", "2", "2", "2",
-                ]);
-            });
+            // Bars 3, 5, 6, 7, 8: full-bar 12:16 tuplets; bar 4: two 6:8 tuplets.
+            expect(tupletsOf(3)[0]).toEqual(expect.objectContaining({ actual: 12, normal: 16 }));
+            expect(tupletsOf(4)).toHaveLength(2);
+            expect(tupletsOf(4)[0]).toEqual(expect.objectContaining({ actual: 6, normal: 8 }));
+            expect(tupletsOf(4)[1]).toEqual(expect.objectContaining({ actual: 6, normal: 8 }));
+            expect(tupletsOf(5)[0]).toEqual(expect.objectContaining({ actual: 12, normal: 16 }));
         });
 
-        describe("Tamborim", () => {
-            const tamborim = arrangement.tracks.find((t) => {
-                return t.instrument.typeId === "2";
-            })!;
-
-            it("has the correct total number of note events", () => {
-                hydrateMeasureEvents(arrangement);
-                expect([...tamborim.notes].length).toBe(106);
-            });
-
-            it("all bars have 16 grid steps except polyrhythm bars", () => {
-                expect(tamborim.measures[0].steps).toHaveLength(16);
-                expect(tamborim.measures[1].steps).toHaveLength(16);
-                expect(tamborim.measures[2].steps).toHaveLength(12);
-                expect(tamborim.measures[3].steps).toHaveLength(14);
-                expect(tamborim.measures[4].steps).toHaveLength(12);
-                expect(tamborim.measures[5].steps).toHaveLength(14);
-                expect(tamborim.measures[6].steps).toHaveLength(12);
-                expect(tamborim.measures[7].steps).toHaveLength(14);
-                expect(tamborim.measures[8].steps).toHaveLength(16);
-                expect(tamborim.measures[9].steps).toHaveLength(16);
-                expect(tamborim.measures[10].steps).toHaveLength(16);
-            });
-
-            const densePattern = [
-                "1", "2", "2", "1", "1", "2", "2", "1",
-                "1", "2", "2", "1", "1", "2", "2", "1",
-            ];
-
-            it("bar 1: dense pattern, no subdivisions", () => {
-                const bar = tamborim.measures[0];
-                expect(bar.subdivisions).toHaveLength(0);
-                expect(bar.steps.map((s) => {
-                    return s.noteStyleId ?? "0";
-                })).toEqual(densePattern);
-            });
-
-            it("bar 2: mixed pattern with rests in second half", () => {
-                const bar = tamborim.measures[1];
-                expect(bar.subdivisions).toHaveLength(0);
-                expect(bar.steps.map((s) => {
-                    return s.noteStyleId ?? "0";
-                })).toEqual([
-                    "1", "1", "1", "1", "1", "0", "1", "0",
-                    "1", "0", "0", "0", "0", "0", "0", "0",
-                ]);
-            });
-
-            it("bars 3 and 5 and 7: 12:16 tuplet over full bar", () => {
-                const pattern = ["0", "0", "1", "1", "0", "0", "0", "0", "1", "1", "0", "0"];
-
-                for (const i of [2, 4, 6]) {
-                    const bar = tamborim.measures[i];
-                    expect(bar.subdivisions).toHaveLength(1);
-                    expect(bar.subdivisions[0]).toEqual(expect.objectContaining({
-                        startStep: 0, actual: 12, normal: 16, isTuplet: true,
-                    }));
-                    expect(bar.steps.map((s) => {
-                        return s.noteStyleId ?? "0";
-                    })).toEqual(pattern);
+        it("keeps grid-only tracks free of tuplets", () => {
+            for (const typeId of ["1", "3", "5"]) {
+                const track = arrangement.tracks.find((t) => {
+                    return t.instrument.typeId === typeId;
+                })!;
+                for (const measure of track.measures) {
+                    const tuplets = measure.subdivisions.filter((subdivision) => {
+                        return subdivision.isTuplet;
+                    });
+                    expect(tuplets).toHaveLength(0);
                 }
-            });
-
-            it("bars 4 and 6 and 8: partial 6:8 tuplet", () => {
-                const pattern = ["0", "0", "1", "1", "0", "0", "0", "0", "0", "0", "0", "0", "0", "0"];
-
-                for (const i of [3, 5, 7]) {
-                    const bar = tamborim.measures[i];
-                    expect(bar.subdivisions).toHaveLength(1);
-                    expect(bar.subdivisions[0]).toEqual(expect.objectContaining({
-                        startStep: 0, actual: 6, normal: 8, isTuplet: true,
-                    }));
-                    expect(bar.steps.map((s) => {
-                        return s.noteStyleId ?? "0";
-                    })).toEqual(pattern);
-                }
-            });
-
-            it("bar 9: single style 1 at step 0", () => {
-                const bar = tamborim.measures[8];
-                expect(bar.subdivisions).toHaveLength(0);
-                expect(bar.steps.map((s) => {
-                    return s.noteStyleId ?? "0";
-                })).toEqual([
-                    "1", "0", "0", "0", "0", "0", "0", "0",
-                    "0", "0", "0", "0", "0", "0", "0", "0",
-                ]);
-            });
-
-            it("bar 10: dense pattern starting at step 4", () => {
-                const bar = tamborim.measures[9];
-                expect(bar.subdivisions).toHaveLength(0);
-                expect(bar.steps.map((s) => {
-                    return s.noteStyleId ?? "0";
-                })).toEqual([
-                    "0", "0", "0", "0", "1", "2", "2", "1",
-                    "1", "2", "2", "1", "1", "2", "2", "1",
-                ]);
-            });
-
-            it("bar 11: dense pattern, same as bar 1", () => {
-                const bar = tamborim.measures[10];
-                expect(bar.subdivisions).toHaveLength(0);
-                expect(bar.steps.map((s) => {
-                    return s.noteStyleId ?? "0";
-                })).toEqual(densePattern);
-            });
-        });
-
-        describe("Repinique", () => {
-            const repinique = arrangement.tracks.find((t) => {
-                return t.instrument.typeId === "3";
-            })!;
-
-            const mainPattern = [
-                "1", "2", "3", "7", "1", "2", "3", "6",
-                "1", "2", "3", "7", "1", "2", "3", "6",
-            ];
-
-            it("has the correct total number of note events", () => {
-                hydrateMeasureEvents(arrangement);
-                expect([...repinique.notes].length).toBe(170);
-            });
-
-            it("has no subdivisions in any bar", () => {
-                for (const measure of repinique.measures) {
-                    expect(measure.subdivisions).toHaveLength(0);
-                }
-            });
-
-            it("bars 1-8 and 10-11: main repeating pattern", () => {
-                for (const i of [0, 1, 2, 3, 4, 5, 6, 7, 9, 10]) {
-                    expect(repinique.measures[i].steps.map((s) => {
-                        return s.noteStyleId ?? "0";
-                    })).toEqual(mainPattern);
-                }
-            });
-
-            it("bar 9: unique pattern with different note styles", () => {
-                expect(repinique.measures[8].steps.map((s) => {
-                    return s.noteStyleId ?? "0";
-                })).toEqual([
-                    "1", "0", "3", "0", "1", "0", "3", "0",
-                    "1", "0", "3", "3", "6", "5", "0", "6",
-                ]);
-            });
-        });
-
-        describe("Caixa", () => {
-            const caixa = arrangement.tracks.find((t) => {
-                return t.instrument.typeId === "5";
-            })!;
-
-            const densePattern = [
-                "1", "2", "2", "1", "1", "2", "2", "1",
-                "1", "2", "2", "1", "1", "2", "2", "1",
-            ];
-
-            it("has the correct total number of note events", () => {
-                hydrateMeasureEvents(arrangement);
-                expect([...caixa.notes].length).toBe(157);
-            });
-
-            it("has no subdivisions in any bar", () => {
-                for (const measure of caixa.measures) {
-                    expect(measure.subdivisions).toHaveLength(0);
-                }
-            });
-
-            it("bars 1-8: dense repeating pattern", () => {
-                for (let i = 0; i <= 7; i++) {
-                    expect(caixa.measures[i].steps.map((s) => {
-                        return s.noteStyleId ?? "0";
-                    })).toEqual(densePattern);
-                }
-            });
-
-            it("bar 9: single style 1 at step 0", () => {
-                expect(caixa.measures[8].steps.map((s) => {
-                    return s.noteStyleId ?? "0";
-                })).toEqual([
-                    "1", "0", "0", "0", "0", "0", "0", "0",
-                    "0", "0", "0", "0", "0", "0", "0", "0",
-                ]);
-            });
-
-            it("bar 10: dense pattern starting at step 4", () => {
-                expect(caixa.measures[9].steps.map((s) => {
-                    return s.noteStyleId ?? "0";
-                })).toEqual([
-                    "0", "0", "0", "0", "1", "2", "2", "1",
-                    "1", "2", "2", "1", "1", "2", "2", "1",
-                ]);
-            });
-
-            it("bar 11: same dense pattern as bars 1-8", () => {
-                expect(caixa.measures[10].steps.map((s) => {
-                    return s.noteStyleId ?? "0";
-                })).toEqual(densePattern);
-            });
-        });
-
-        describe("High Surdo", () => {
-            const highSurdo = arrangement.tracks.find((t) => {
-                return t.instrument.typeId === "7";
-            })!;
-
-            it("has the correct total number of note events", () => {
-                hydrateMeasureEvents(arrangement);
-                expect([...highSurdo.notes].length).toBe(86);
-            });
-
-            it("bar 1: sparse pattern, no subdivisions", () => {
-                const bar = highSurdo.measures[0];
-                expect(bar.subdivisions).toHaveLength(0);
-                expect(bar.steps).toHaveLength(16);
-                expect(bar.steps.map((s) => {
-                    return s.noteStyleId ?? "0";
-                })).toEqual([
-                    "0", "0", "0", "0", "1", "0", "1", "0",
-                    "0", "0", "0", "0", "1", "1", "0", "1",
-                ]);
-            });
-
-            it("bar 2: 3:4 tuplet at the end", () => {
-                const bar = highSurdo.measures[1];
-                expect(bar.steps).toHaveLength(15);
-                expect(bar.subdivisions).toHaveLength(1);
-                expect(bar.subdivisions[0]).toEqual(expect.objectContaining({
-                    startStep: 12, actual: 3, normal: 4, isTuplet: true,
-                }));
-            });
-
-            it("bar 3: single 12:16 tuplet", () => {
-                const bar = highSurdo.measures[2];
-                expect(bar.steps).toHaveLength(12);
-                expect(bar.subdivisions).toHaveLength(1);
-                expect(bar.subdivisions[0]).toEqual(expect.objectContaining({
-                    startStep: 0, actual: 12, normal: 16, isTuplet: true,
-                }));
-                expect(bar.steps.map((s) => {
-                    return s.noteStyleId ?? "0";
-                })).toEqual([
-                    "1", "0", "0", "0", "0", "1", "1", "0", "0", "0", "0", "1",
-                ]);
-            });
-
-            it("bar 4: two 6:8 tuplets", () => {
-                const bar = highSurdo.measures[3];
-                expect(bar.steps).toHaveLength(12);
-                expect(bar.subdivisions).toHaveLength(2);
-                expect(bar.subdivisions[0]).toEqual(expect.objectContaining({
-                    startStep: 0, actual: 6, normal: 8, isTuplet: true,
-                }));
-                expect(bar.subdivisions[1]).toEqual(expect.objectContaining({
-                    startStep: 6, actual: 6, normal: 8, isTuplet: true,
-                }));
-                expect(bar.steps.map((s) => {
-                    return s.noteStyleId ?? "0";
-                })).toEqual([
-                    "1", "0", "0", "0", "0", "0", "1", "1", "1", "1", "1", "1",
-                ]);
-            });
-
-            it("bar 5: single 12:16 tuplet", () => {
-                const bar = highSurdo.measures[4];
-                expect(bar.steps).toHaveLength(12);
-                expect(bar.subdivisions).toHaveLength(1);
-                expect(bar.subdivisions[0]).toEqual(expect.objectContaining({
-                    startStep: 0, actual: 12, normal: 16, isTuplet: true,
-                }));
-            });
-
-            it("bar 6: two subdivisions (3:4 + 6:8)", () => {
-                const bar = highSurdo.measures[5];
-                expect(bar.steps).toHaveLength(13);
-                expect(bar.subdivisions).toHaveLength(2);
-                expect(bar.subdivisions[0]).toEqual(expect.objectContaining({
-                    startStep: 0, actual: 3, normal: 4, isTuplet: true,
-                }));
-                expect(bar.subdivisions[1]).toEqual(expect.objectContaining({
-                    startStep: 7, actual: 6, normal: 8, isTuplet: true,
-                }));
-            });
-
-            it("bar 7: single 12:16 tuplet", () => {
-                const bar = highSurdo.measures[6];
-                expect(bar.steps).toHaveLength(12);
-                expect(bar.subdivisions).toHaveLength(1);
-                expect(bar.subdivisions[0]).toEqual(expect.objectContaining({
-                    startStep: 0, actual: 12, normal: 16, isTuplet: true,
-                }));
-            });
-
-            it("bar 8: two subdivisions (3:4 + 6:8)", () => {
-                const bar = highSurdo.measures[7];
-                expect(bar.steps).toHaveLength(13);
-                expect(bar.subdivisions).toHaveLength(2);
-                expect(bar.subdivisions[0]).toEqual(expect.objectContaining({
-                    startStep: 0, actual: 3, normal: 4, isTuplet: true,
-                }));
-                expect(bar.subdivisions[1]).toEqual(expect.objectContaining({
-                    startStep: 7, actual: 6, normal: 8, isTuplet: true,
-                }));
-            });
-
-            it("bars 9-11: grid only, sparse pattern", () => {
-                const bar9Pattern = [
-                    "1", "0", "0", "0", "0", "0", "0", "0",
-                    "0", "0", "0", "0", "0", "0", "0", "0",
-                ];
-                const bar10Pattern = [
-                    "0", "0", "0", "0", "1", "0", "1", "0",
-                    "0", "0", "0", "0", "1", "1", "0", "1",
-                ];
-
-                expect(highSurdo.measures[8].subdivisions).toHaveLength(0);
-                expect(highSurdo.measures[8].steps.map((s) => {
-                    return s.noteStyleId ?? "0";
-                })).toEqual(bar9Pattern);
-
-                expect(highSurdo.measures[9].subdivisions).toHaveLength(0);
-                expect(highSurdo.measures[9].steps.map((s) => {
-                    return s.noteStyleId ?? "0";
-                })).toEqual(bar10Pattern);
-
-                expect(highSurdo.measures[10].subdivisions).toHaveLength(0);
-                expect(highSurdo.measures[10].steps.map((s) => {
-                    return s.noteStyleId ?? "0";
-                })).toEqual(bar10Pattern);
-            });
-        });
-
-        describe("Mid Surdo", () => {
-            const midSurdo = arrangement.tracks.find((t) => {
-                return t.instrument.typeId === "8";
-            })!;
-
-            it("has the correct total number of note events", () => {
-                hydrateMeasureEvents(arrangement);
-                expect([...midSurdo.notes].length).toBe(77);
-            });
-
-            it("bar 1: two accented grid notes", () => {
-                const bar = midSurdo.measures[0];
-                expect(bar.subdivisions).toHaveLength(0);
-                expect(bar.steps).toHaveLength(16);
-                expect(bar.steps.map((s) => {
-                    return s.noteStyleId ?? "0";
-                })).toEqual([
-                    "1", "0", "0", "0", "0", "0", "0", "0",
-                    "1", "0", "0", "0", "0", "0", "0", "0",
-                ]);
-            });
-
-            it("bar 2: 3:4 tuplet at the end", () => {
-                const bar = midSurdo.measures[1];
-                expect(bar.steps).toHaveLength(15);
-                expect(bar.subdivisions).toHaveLength(1);
-                expect(bar.subdivisions[0]).toEqual(expect.objectContaining({
-                    startStep: 12, actual: 3, normal: 4, isTuplet: true,
-                }));
-            });
-
-            it("bar 3: single 12:16 tuplet", () => {
-                const bar = midSurdo.measures[2];
-                expect(bar.steps).toHaveLength(12);
-                expect(bar.subdivisions).toHaveLength(1);
-                expect(bar.subdivisions[0]).toEqual(expect.objectContaining({
-                    startStep: 0, actual: 12, normal: 16, isTuplet: true,
-                }));
-                expect(bar.steps.map((s) => {
-                    return s.noteStyleId ?? "0";
-                })).toEqual([
-                    "1", "0", "0", "0", "0", "1", "1", "0", "0", "0", "0", "1",
-                ]);
-            });
-
-            it("bar 4: two 6:8 tuplets", () => {
-                const bar = midSurdo.measures[3];
-                expect(bar.steps).toHaveLength(12);
-                expect(bar.subdivisions).toHaveLength(2);
-                expect(bar.subdivisions[0]).toEqual(expect.objectContaining({
-                    startStep: 0, actual: 6, normal: 8, isTuplet: true,
-                }));
-                expect(bar.subdivisions[1]).toEqual(expect.objectContaining({
-                    startStep: 6, actual: 6, normal: 8, isTuplet: true,
-                }));
-            });
-
-            it("bar 5: single 12:16 tuplet", () => {
-                const bar = midSurdo.measures[4];
-                expect(bar.steps).toHaveLength(12);
-                expect(bar.subdivisions).toHaveLength(1);
-                expect(bar.subdivisions[0]).toEqual(expect.objectContaining({
-                    startStep: 0, actual: 12, normal: 16, isTuplet: true,
-                }));
-            });
-
-            it("bar 6: two subdivisions (3:4 + 6:8)", () => {
-                const bar = midSurdo.measures[5];
-                expect(bar.steps).toHaveLength(13);
-                expect(bar.subdivisions).toHaveLength(2);
-                expect(bar.subdivisions[0]).toEqual(expect.objectContaining({
-                    startStep: 0, actual: 3, normal: 4, isTuplet: true,
-                }));
-                expect(bar.subdivisions[1]).toEqual(expect.objectContaining({
-                    startStep: 7, actual: 6, normal: 8, isTuplet: true,
-                }));
-            });
-
-            it("bar 7: single 12:16 tuplet", () => {
-                const bar = midSurdo.measures[6];
-                expect(bar.steps).toHaveLength(12);
-                expect(bar.subdivisions).toHaveLength(1);
-                expect(bar.subdivisions[0]).toEqual(expect.objectContaining({
-                    startStep: 0, actual: 12, normal: 16, isTuplet: true,
-                }));
-            });
-
-            it("bar 8: two subdivisions (3:4 + 6:8)", () => {
-                const bar = midSurdo.measures[7];
-                expect(bar.steps).toHaveLength(13);
-                expect(bar.subdivisions).toHaveLength(2);
-                expect(bar.subdivisions[0]).toEqual(expect.objectContaining({
-                    startStep: 0, actual: 3, normal: 4, isTuplet: true,
-                }));
-                expect(bar.subdivisions[1]).toEqual(expect.objectContaining({
-                    startStep: 7, actual: 6, normal: 8, isTuplet: true,
-                }));
-            });
-
-            it("bar 9: single accented grid note", () => {
-                const bar = midSurdo.measures[8];
-                expect(bar.subdivisions).toHaveLength(0);
-                expect(bar.steps).toHaveLength(16);
-                expect(bar.steps.map((s) => {
-                    return s.noteStyleId ?? "0";
-                })).toEqual([
-                    "1", "0", "0", "0", "0", "0", "0", "0",
-                    "0", "0", "0", "0", "0", "0", "0", "0",
-                ]);
-            });
-
-            it("bar 10: single accented grid note at step 8", () => {
-                const bar = midSurdo.measures[9];
-                expect(bar.subdivisions).toHaveLength(0);
-                expect(bar.steps).toHaveLength(16);
-                expect(bar.steps.map((s) => {
-                    return s.noteStyleId ?? "0";
-                })).toEqual([
-                    "0", "0", "0", "0", "0", "0", "0", "0",
-                    "1", "0", "0", "0", "0", "0", "0", "0",
-                ]);
-            });
-
-            it("bar 11: same as bar 1", () => {
-                const bar = midSurdo.measures[10];
-                expect(bar.subdivisions).toHaveLength(0);
-                expect(bar.steps.map((s) => {
-                    return s.noteStyleId ?? "0";
-                })).toEqual([
-                    "1", "0", "0", "0", "0", "0", "0", "0",
-                    "1", "0", "0", "0", "0", "0", "0", "0",
-                ]);
-            });
-        });
-
-        describe("Low Surdo", () => {
-            const lowSurdo = arrangement.tracks.find((t) => {
-                return t.instrument.typeId === "9";
-            })!;
-
-            it("has the correct total number of note events", () => {
-                hydrateMeasureEvents(arrangement);
-                expect([...lowSurdo.notes].length).toBe(77);
-            });
-
-            it("bar 1: sparse pattern, two accented grid notes", () => {
-                const bar = lowSurdo.measures[0];
-                expect(bar.subdivisions).toHaveLength(0);
-                expect(bar.steps).toHaveLength(16);
-                expect(bar.steps.map((s) => {
-                    return s.noteStyleId ?? "0";
-                })).toEqual([
-                    "0", "0", "0", "0", "1", "0", "0", "0",
-                    "0", "0", "0", "0", "1", "0", "0", "0",
-                ]);
-            });
-
-            it("bar 2: 3:4 tuplet at the end", () => {
-                const bar = lowSurdo.measures[1];
-                expect(bar.steps).toHaveLength(15);
-                expect(bar.subdivisions).toHaveLength(1);
-                expect(bar.subdivisions[0]).toEqual(expect.objectContaining({
-                    startStep: 12, actual: 3, normal: 4, isTuplet: true,
-                }));
-            });
-
-            it("bar 3: single 12:16 tuplet", () => {
-                const bar = lowSurdo.measures[2];
-                expect(bar.steps).toHaveLength(12);
-                expect(bar.subdivisions).toHaveLength(1);
-                expect(bar.subdivisions[0]).toEqual(expect.objectContaining({
-                    startStep: 0, actual: 12, normal: 16, isTuplet: true,
-                }));
-                expect(bar.steps.map((s) => {
-                    return s.noteStyleId ?? "0";
-                })).toEqual([
-                    "1", "0", "0", "0", "0", "1", "1", "0", "0", "0", "0", "1",
-                ]);
-            });
-
-            it("bar 4: two 6:8 tuplets", () => {
-                const bar = lowSurdo.measures[3];
-                expect(bar.steps).toHaveLength(12);
-                expect(bar.subdivisions).toHaveLength(2);
-                expect(bar.subdivisions[0]).toEqual(expect.objectContaining({
-                    startStep: 0, actual: 6, normal: 8, isTuplet: true,
-                }));
-                expect(bar.subdivisions[1]).toEqual(expect.objectContaining({
-                    startStep: 6, actual: 6, normal: 8, isTuplet: true,
-                }));
-            });
-
-            it("bar 5: single 12:16 tuplet", () => {
-                const bar = lowSurdo.measures[4];
-                expect(bar.steps).toHaveLength(12);
-                expect(bar.subdivisions).toHaveLength(1);
-                expect(bar.subdivisions[0]).toEqual(expect.objectContaining({
-                    startStep: 0, actual: 12, normal: 16, isTuplet: true,
-                }));
-            });
-
-            it("bar 6: two subdivisions (3:4 + 6:8)", () => {
-                const bar = lowSurdo.measures[5];
-                expect(bar.steps).toHaveLength(13);
-                expect(bar.subdivisions).toHaveLength(2);
-                expect(bar.subdivisions[0]).toEqual(expect.objectContaining({
-                    startStep: 0, actual: 3, normal: 4, isTuplet: true,
-                }));
-                expect(bar.subdivisions[1]).toEqual(expect.objectContaining({
-                    startStep: 7, actual: 6, normal: 8, isTuplet: true,
-                }));
-            });
-
-            it("bar 7: single 12:16 tuplet", () => {
-                const bar = lowSurdo.measures[6];
-                expect(bar.steps).toHaveLength(12);
-                expect(bar.subdivisions).toHaveLength(1);
-                expect(bar.subdivisions[0]).toEqual(expect.objectContaining({
-                    startStep: 0, actual: 12, normal: 16, isTuplet: true,
-                }));
-            });
-
-            it("bar 8: two subdivisions (3:4 + 6:8)", () => {
-                const bar = lowSurdo.measures[7];
-                expect(bar.steps).toHaveLength(13);
-                expect(bar.subdivisions).toHaveLength(2);
-                expect(bar.subdivisions[0]).toEqual(expect.objectContaining({
-                    startStep: 0, actual: 3, normal: 4, isTuplet: true,
-                }));
-                expect(bar.subdivisions[1]).toEqual(expect.objectContaining({
-                    startStep: 7, actual: 6, normal: 8, isTuplet: true,
-                }));
-            });
-
-            it("bar 9: single accented grid note", () => {
-                const bar = lowSurdo.measures[8];
-                expect(bar.subdivisions).toHaveLength(0);
-                expect(bar.steps).toHaveLength(16);
-                expect(bar.steps.map((s) => {
-                    return s.noteStyleId ?? "0";
-                })).toEqual([
-                    "1", "0", "0", "0", "0", "0", "0", "0",
-                    "0", "0", "0", "0", "0", "0", "0", "0",
-                ]);
-            });
-
-            it("bars 10-11: same sparse pattern as bar 1", () => {
-                const pattern = [
-                    "0", "0", "0", "0", "1", "0", "0", "0",
-                    "0", "0", "0", "0", "1", "0", "0", "0",
-                ];
-
-                for (const i of [9, 10]) {
-                    const bar = lowSurdo.measures[i];
-                    expect(bar.subdivisions).toHaveLength(0);
-                    expect(bar.steps).toHaveLength(16);
-                    expect(bar.steps.map((s) => {
-                        return s.noteStyleId ?? "0";
-                    })).toEqual(pattern);
-                }
-            });
+            }
         });
 
     });

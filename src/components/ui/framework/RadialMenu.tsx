@@ -245,7 +245,9 @@ export class RadialMenu extends UIComponent<IRadialMenuProps, IRadialMenuState> 
     }
 
     private handleKeyDown = (event: KeyboardEvent): void => {
-        if (event.key === "Escape" && this.state.open) {
+        const { open } = this.state;
+
+        if (event.key === "Escape" && open) {
             this.close();
         }
     };

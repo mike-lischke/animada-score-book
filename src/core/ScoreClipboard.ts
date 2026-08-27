@@ -9,9 +9,12 @@ import type {
     IMeasureReplace, ISbDmArrangement, ISbDmTrack, ISbDmTrackMeasure, ScoreBookDataModel,
 } from "./ScoreBookDataModel.js";
 import {
+    addFractions, compareFractions, reduceFraction, subtractFractions,
+} from "./serialisation/numeric-functions.js";
+import {
     ClipboardContentKind, type IClipboardContent, type IClipboardMeasure, type IClipboardTrack,
 } from "./types/clipboard.js";
-import type { IMeasureStep, IMeterSnapshot } from "./types/general.js";
+import type { IFraction, IMeasureEvent, IMeterSnapshot } from "./types/general.js";
 
 /** The outcome of a paste operation. */
 export enum PasteResultKind {
@@ -157,7 +160,7 @@ export class ScoreClipboard {
                 return this.pasteTrackPiece(content, entries, arrangement);
             }
 
-            case ClipboardContentKind.StepRange: {
+            case ClipboardContentKind.EventRange: {
                 return this.pasteStepRange(content, entries, arrangement);
             }
         }
@@ -284,7 +287,7 @@ export class ScoreClipboard {
             }
         }
 
-        return tracks.length > 0 ? { kind: ClipboardContentKind.StepRange, tracks } : undefined;
+        return tracks.length > 0 ? { kind: ClipboardContentKind.EventRange, tracks } : undefined;
     }
 
     private captureStepRangeMeasures(track: ISbDmTrack, entries: ISelectionEntry[]): IClipboardMeasure[] {
@@ -317,16 +320,13 @@ export class ScoreClipboard {
                 continue;
             }
 
-            const steps = measure.steps
-                .filter((step) => {
-                    return step.index >= minStep && step.index <= maxStep;
-                })
-                .map((step) => {
-                    return this.copyStep(step);
-                });
+            const stepsPerBar = measure.meter.stepResolution;
+            const rangeStart = reduceFraction(minStep, stepsPerBar);
+            const rangeEnd = reduceFraction(maxStep + 1, stepsPerBar);
 
-            if (steps.length > 0) {
-                measures.push({ meter: this.copyMeter(measure.meter), steps });
+            const events = this.captureEventRange(measure.events, rangeStart, rangeEnd);
+            if (events.length > 0) {
+                measures.push({ meter: this.copyMeter(measure.meter), events, subdivisions: [] });
             }
         }
 
@@ -550,14 +550,32 @@ export class ScoreClipboard {
     private buildStepRangeReplacements(sourceTrack: IClipboardTrack, targetTrack: ISbDmTrack,
         slots: IStepTarget[]): IStepRangeBuild {
         const sourceMeter = sourceTrack.measures[0].meter;
-        const sourceSteps = sourceTrack.measures.flatMap((measure) => {
-            return measure.steps;
-        });
+        const zero: IFraction = { numerator: 0, denominator: 1 };
+
+        // Flatten the captured per-measure events into one contiguous stream: each measure's
+        // events start where the previous measure's events ended.
+        const sourceEvents: IMeasureEvent[] = [];
+        let cursor = { ...zero };
+        for (const measure of sourceTrack.measures) {
+            for (const event of measure.events) {
+                sourceEvents.push({ ...event, start: addFractions(cursor, event.start) });
+            }
+
+            cursor = measure.events.reduce((sum, event) => {
+                return addFractions(sum, event.duration);
+            }, cursor);
+        }
+
+        const sourceLength = cursor;
+
+        if (sourceLength.numerator <= 0) {
+            return { kind: PasteResultKind.Success, replacements: [] };
+        }
 
         const isSingleNoteAnchor = slots.length === 1 && slots[0].startStep === slots[0].endStep;
 
         const replacements: IMeasureReplace[] = [];
-        let sourceIndex = 0;
+        let sourcePosition = { ...zero };
 
         for (const slot of slots) {
             const measure = targetTrack.measures.at(slot.bar - 1);
@@ -569,36 +587,84 @@ export class ScoreClipboard {
                 return { kind: PasteResultKind.MeterMismatch, replacements: [] };
             }
 
-            const lastStep = isSingleNoteAnchor
-                ? Math.min(slot.startStep + sourceSteps.length - 1, measure.steps.length - 1)
-                : Math.min(slot.endStep, measure.steps.length - 1);
+            const stepsPerBar = measure.meter.stepResolution;
+            const endStep = isSingleNoteAnchor ? stepsPerBar - 1 : slot.endStep;
+            const limit = reduceFraction(endStep - slot.startStep + 1, stepsPerBar);
 
-            if (lastStep < slot.startStep) {
-                continue;
-            }
+            const tiledEvents: IMeasureEvent[] = [];
 
-            const tiledSteps: IMeasureStep[] = [];
             if (isSingleNoteAnchor) {
-                for (let position = slot.startStep; position <= lastStep; position++) {
-                    tiledSteps.push(this.copyStep(sourceSteps[position - slot.startStep]));
+                for (const event of sourceEvents) {
+                    const placed = this.clipEvent(event, zero, limit);
+                    if (placed.duration.numerator > 0) {
+                        tiledEvents.push(placed);
+                    }
                 }
             } else {
-                for (let position = slot.startStep; position <= lastStep; position++) {
-                    tiledSteps.push(this.copyStep(sourceSteps[sourceIndex % sourceSteps.length]));
-                    sourceIndex++;
+                let filled = { ...zero };
+                while (compareFractions(filled, limit) < 0) {
+                    const event = this.findSourceEvent(sourceEvents, sourcePosition);
+                    const offsetInEvent = subtractFractions(sourcePosition, event.start);
+                    const remainingInEvent = subtractFractions(event.duration, offsetInEvent);
+                    const remainingInSlot = subtractFractions(limit, filled);
+                    const take = compareFractions(remainingInEvent, remainingInSlot) < 0
+                        ? remainingInEvent
+                        : remainingInSlot;
+
+                    if (take.numerator > 0) {
+                        tiledEvents.push({
+                            start: filled,
+                            duration: take,
+                            noteStyleId: event.noteStyleId,
+                            articulation: event.articulation ? { ...event.articulation } : undefined,
+                        });
+                        filled = addFractions(filled, take);
+                        sourcePosition = addFractions(sourcePosition, take);
+                        if (compareFractions(sourcePosition, sourceLength) >= 0) {
+                            sourcePosition = subtractFractions(sourcePosition, sourceLength);
+                        }
+                    }
                 }
             }
 
             replacements.push({
                 trackId: targetTrack.id,
                 bar: slot.bar,
-                steps: tiledSteps,
+                events: tiledEvents,
                 startStep: slot.startStep,
-                endStep: lastStep,
+                endStep,
             });
         }
 
         return { kind: PasteResultKind.Success, replacements };
+    }
+
+    private findSourceEvent(sourceEvents: IMeasureEvent[], position: IFraction): IMeasureEvent {
+        for (const event of sourceEvents) {
+            const eventEnd = addFractions(event.start, event.duration);
+            if (compareFractions(position, event.start) >= 0 && compareFractions(position, eventEnd) < 0) {
+                return event;
+            }
+        }
+
+        return sourceEvents[0];
+    }
+
+    private clipEvent(event: IMeasureEvent, offset: IFraction, limit: IFraction): IMeasureEvent {
+        const start = addFractions(offset, event.start);
+        const eventEnd = addFractions(start, event.duration);
+
+        let duration = event.duration;
+        if (compareFractions(eventEnd, limit) > 0) {
+            duration = subtractFractions(limit, start);
+        }
+
+        return {
+            start,
+            duration: duration.numerator > 0 ? duration : { numerator: 0, denominator: 1 },
+            noteStyleId: event.noteStyleId,
+            articulation: event.articulation ? { ...event.articulation } : undefined,
+        };
     }
 
     private matchSourceTracks(sourceTracks: IClipboardTrack[], targetTracks: ISbDmTrack[],
@@ -641,7 +707,7 @@ export class ScoreClipboard {
             return [{ track, bar: entry.bar, startStep: start, endStep: end }];
         }
 
-        return [{ track, bar: entry.bar, startStep: 0, endStep: measure.steps.length - 1 }];
+        return [{ track, bar: entry.bar, startStep: 0, endStep: measure.meter.stepResolution - 1 }];
     }
 
     private firstSelectionEntry(entries: ISelectionEntry[]): ISelectionEntry {
@@ -692,7 +758,7 @@ export class ScoreClipboard {
                 continue;
             }
 
-            targets.push({ track, bar, startStep: 0, endStep: measure.steps.length - 1 });
+            targets.push({ track, bar, startStep: 0, endStep: measure.meter.stepResolution - 1 });
         }
 
         return targets;
@@ -720,8 +786,8 @@ export class ScoreClipboard {
                 replacements.push({
                     trackId: target.track.id,
                     bar: target.bars[barIndex],
-                    steps: sourceMeasure.steps.map((step) => {
-                        return this.copyStep(step);
+                    events: sourceMeasure.events.map((event) => {
+                        return this.cloneEvent(event);
                     }),
                 });
             }
@@ -756,17 +822,45 @@ export class ScoreClipboard {
     private captureMeasure(measure: ISbDmTrackMeasure): IClipboardMeasure {
         return {
             meter: this.copyMeter(measure.meter),
-            steps: measure.steps.map((step) => {
-                return this.copyStep(step);
+            events: measure.events.map((event) => {
+                return this.cloneEvent(event);
+            }),
+            subdivisions: measure.subdivisions.map((subdivision) => {
+                return { ...subdivision };
             }),
         };
     }
 
-    private copyStep(step: IMeasureStep): IMeasureStep {
+    private captureEventRange(events: IMeasureEvent[], rangeStart: IFraction,
+        rangeEnd: IFraction): IMeasureEvent[] {
+        const captured: IMeasureEvent[] = [];
+
+        for (const event of events) {
+            const eventEnd = addFractions(event.start, event.duration);
+            if (compareFractions(eventEnd, rangeStart) <= 0 || compareFractions(event.start, rangeEnd) >= 0) {
+                continue;
+            }
+
+            const clippedStart = compareFractions(event.start, rangeStart) < 0 ? rangeStart : event.start;
+            const clippedEnd = compareFractions(eventEnd, rangeEnd) > 0 ? rangeEnd : eventEnd;
+
+            captured.push({
+                start: subtractFractions(clippedStart, rangeStart),
+                duration: subtractFractions(clippedEnd, clippedStart),
+                noteStyleId: event.noteStyleId,
+                articulation: event.articulation ? { ...event.articulation } : undefined,
+            });
+        }
+
+        return captured;
+    }
+
+    private cloneEvent(event: IMeasureEvent): IMeasureEvent {
         return {
-            index: step.index,
-            noteStyleId: step.noteStyleId,
-            articulation: step.articulation ? { ...step.articulation } : undefined,
+            start: { ...event.start },
+            duration: { ...event.duration },
+            noteStyleId: event.noteStyleId,
+            articulation: event.articulation ? { ...event.articulation } : undefined,
         };
     }
 

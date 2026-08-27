@@ -8,8 +8,9 @@ import { ComponentPlacement } from "../components/ui/framework/UIComponent.js";
 import { RadialMenu, type IRadialMenuItem } from "../components/ui/framework/RadialMenu.js";
 import { AudioBufferPlayer } from "../player/AudioBufferPlayer.js";
 import { getSharedAudioContext } from "../core/audio-context.js";
+import { formatFraction, parseFraction } from "../core/serialisation/numeric-functions.js";
 import { GridMeasureEditor, type IGridEditorPosition } from "./GridMeasureEditor.js";
-import { SelectionGranularity, type ISelectionDelta } from "./selection-types.js";
+import { SelectionGranularity, type ISelectionDelta, type ISelectionEntry } from "./selection-types.js";
 import type { SelectionManager } from "./SelectionManager.js";
 import { requisitions } from "../supplement/Requisitions.js";
 import { h } from "preact";
@@ -231,15 +232,27 @@ export class TrackViewerInputController {
 
     private getGridPosition(target: EventTarget | null): IGridEditorPosition | undefined {
         const cell = this.getGridCell(target);
-        const row = cell?.closest<HTMLElement>(".grid-measure-row");
-        const bar = row?.getAttribute("data-bar");
-        const trackId = row?.getAttribute("data-track");
-        const step = cell?.getAttribute("data-step-index");
-        if (!bar || !trackId || step === null || step === undefined) {
+        if (!cell) {
             return undefined;
         }
 
-        return { bar: parseInt(bar, 10), trackId: parseInt(trackId, 10), step: parseInt(step, 10) };
+        const row = cell.closest<HTMLElement>(".grid-measure-row");
+        const bar = row?.getAttribute("data-bar");
+        const trackId = row?.getAttribute("data-track");
+        const step = cell.getAttribute("data-step-index");
+        if (!bar || !trackId || step === null) {
+            return undefined;
+        }
+
+        const startValue = cell.getAttribute("data-event-start");
+        const start = startValue === null ? undefined : parseFraction(startValue);
+
+        return {
+            bar: parseInt(bar, 10),
+            trackId: parseInt(trackId, 10),
+            step: parseInt(step, 10),
+            start,
+        };
     }
 
     private getGridCell(target: EventTarget | null): HTMLElement | undefined {
@@ -295,12 +308,21 @@ export class TrackViewerInputController {
 
         this.editor.clearSelection(entries);
 
-        if (event.key === "Backspace" && this.viewMode === "grid" && this.currentPosition) {
-            const cell = this.getGridCellForPosition(this.currentPosition);
-            const previousCell = cell ? this.findPreviousGridCell(cell) : undefined;
-            const targetPosition = previousCell ? this.getGridPosition(previousCell) : undefined;
-            if (targetPosition) {
-                this.selectCursorPosition(targetPosition);
+        if (this.viewMode === "grid" && this.currentPosition) {
+            if (event.key === "Backspace") {
+                const cell = this.getGridCellForPosition(this.currentPosition);
+                const previousCell = cell ? this.findPreviousGridCell(cell) : undefined;
+                const targetPosition = previousCell ? this.getGridPosition(previousCell) : undefined;
+                if (targetPosition) {
+                    this.selectCursorPosition(targetPosition);
+                }
+            } else {
+                // Keep the selection on the now-empty cells so multi-cell selections survive the delete.
+                const clearedEntries = entries.map((entry) => {
+                    return { ...entry, noteId: undefined };
+                });
+
+                this.selectionManager.replaceSelection(clearedEntries);
             }
         }
 
@@ -316,6 +338,11 @@ export class TrackViewerInputController {
     };
 
     private enterNote(noteStyleId: string): boolean {
+        const entries = [...this.selectionManager.currentSelection.values()];
+        if (this.isMultiCellSelection(entries)) {
+            return this.enterNoteForSelection(noteStyleId, entries);
+        }
+
         const position = this.currentPosition;
         if (!(this.editor instanceof GridMeasureEditor) || !position) {
             return false;
@@ -337,13 +364,48 @@ export class TrackViewerInputController {
         return true;
     }
 
+    private enterNoteForSelection(noteStyleId: string, entries: ISelectionEntry[]): boolean {
+        if (!(this.editor instanceof GridMeasureEditor)) {
+            return false;
+        }
+
+        const applied = this.editor.setSelectionNoteStyle(entries, noteStyleId);
+        if (!applied) {
+            // Either the style is already applied to every cell (no-op) or the selection spans
+            // multiple instruments. Keep the selection untouched in both cases.
+            return false;
+        }
+
+        // Keep the selection on the now-filled cells with fresh note ids and refresh the
+        // note-style marking.
+        const refreshedEntries = this.editor.refreshSelection(entries);
+        this.selectionManager.replaceSelection(refreshedEntries);
+        this.eventContainer.focus({ preventScroll: true });
+
+        return true;
+    }
+
+    private isMultiCellSelection(entries: ISelectionEntry[]): boolean {
+        if (entries.length === 0) {
+            return false;
+        }
+
+        if (entries.length > 1) {
+            return true;
+        }
+
+        return entries[0].granularity !== SelectionGranularity.Note;
+    }
+
     private handleSelectionChanged = (delta: ISelectionDelta): Promise<boolean> => {
-        if (delta.added.length === 1 && delta.added[0].granularity === SelectionGranularity.Note
-            && delta.added[0].startStep !== undefined) {
+        const added = delta.added[0];
+        if (delta.added.length === 1 && added.granularity === SelectionGranularity.Note
+            && added.startStep !== undefined) {
             this.currentPosition = {
-                bar: delta.added[0].bar,
-                trackId: delta.added[0].trackId,
-                step: delta.added[0].startStep,
+                bar: added.bar,
+                trackId: added.trackId,
+                step: added.startStep,
+                start: added.start,
             };
         }
 
@@ -397,6 +459,7 @@ export class TrackViewerInputController {
             startStep: position.step,
             endStep: position.step,
             noteId: noteId === null || noteId === undefined ? undefined : Number.parseInt(noteId, 10),
+            start: position.start,
         });
     }
 
@@ -477,6 +540,12 @@ export class TrackViewerInputController {
         });
         if (!row) {
             return undefined;
+        }
+
+        if (position.start !== undefined) {
+            const startSelector = `[data-event-start="${formatFraction(position.start)}"]`;
+
+            return row.querySelector<HTMLElement>(startSelector) ?? undefined;
         }
 
         return row.querySelector<HTMLElement>(`[data-step-index="${position.step}"]`)

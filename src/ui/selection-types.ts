@@ -3,6 +3,8 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
+import type { IFraction } from "../core/types/general.js";
+
 /** Granularity of a selection entry — determines what level of the score hierarchy is selected. */
 export enum SelectionGranularity {
     /** An entire track (all its measures). */
@@ -56,6 +58,9 @@ export interface ISelectionEntry {
 
     /** Defined for Note. */
     noteId?: number;
+
+    /** Defined for Note entries on subdivision slots, which do not align to grid steps. */
+    start?: IFraction;
 }
 
 /**

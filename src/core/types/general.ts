@@ -80,7 +80,7 @@ export interface ITrackSnapshot {
 export interface ITrackMeasureSnapshot {
     number: number;
     meter: IMeterSnapshot;
-    steps: IMeasureStep[];
+    events: IMeasureEvent[];
     subdivisions: ISubdivision[];
 }
 
@@ -91,8 +91,17 @@ export interface IMeterSnapshot {
     beatGroups: number[];
 }
 
-export interface IMeasureStep {
-    index: number;
+/**
+ * A single rhythmic event in a measure — either a note ({@link noteStyleId} set) or a rest
+ * ({@link noteStyleId} undefined). Events are stored in start order and tile the measure
+ * contiguously, so every measure adds up to exactly one whole bar.
+ */
+export interface IMeasureEvent {
+    /** Position within the measure as a fraction in the range 0..1. */
+    start: IFraction;
+
+    /** Length of the event as a fraction. */
+    duration: IFraction;
 
     /** Which sound variant (center, rim, high bell…). References a key in the instrument's noteStyles map. */
     noteStyleId?: string;
@@ -102,29 +111,20 @@ export interface IMeasureStep {
 }
 
 /**
- * A subdivision of one or more grid steps. Subdivisions are the primary mechanism for
- * creating note values shorter than a single grid step.
- *
- * When {@link isTuplet} is true the subdivision represents a genuine tuplet (e.g. 3:2,
- * 5:4) and should be rendered with a bracket and number in staff notation. When false
- * it is a simple rhythmic subdivision (e.g. a step split into 2, 4, or 8 equal parts
- * in a simple meter) and needs no tuplet notation.
+ * Marks a group of consecutive events as a subdivision (tuplet or symmetric split). The
+ * {@link isTuplet} flag distinguishes asymmetric ratios (e.g. 3:2, 5:4), which need tuplet
+ * notation, from plain binary splits that only need visual grouping in the grid.
  */
 export interface ISubdivision {
-    id: number;
+    /** Index of the first event in the group. */
+    startIndex: number;
 
-    /** 0-based index into the measure's visible steps array. */
-    startStep: number;
-
-    /** Number of subdivisions inside this group. */
+    /** Number of notes in the stream. */
     actual: number;
 
-    /** Number of parent steps this subdivision replaces. */
+    /** Number of "original" notes this group replaces. */
     normal: number;
 
-    /** ID of the parent subdivision, if nested. */
-    parentSubdivisionId?: number;
-
-    /** Whether this subdivision is a real tuplet requiring bracket/number notation. */
+    /** Whether this subdivision is a true tuplet (asymmetric ratio). */
     isTuplet: boolean;
 }

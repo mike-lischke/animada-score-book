@@ -41,7 +41,7 @@ describe("Arrangement", () => {
         expect(arrangement.tracks).toHaveLength(0);
     });
 
-    it("applies v2 snapshots to track notes", () => {
+    it("applies snapshots to track notes", () => {
         const instrument = createInstrument("0", 0, 0);
         const hitStyle = {
             id: "1",
@@ -53,7 +53,7 @@ describe("Arrangement", () => {
         (instrument as Mutable<ISbDmInstrument>).noteStyles = { "1": hitStyle };
 
         const snapshot: IArrangementSnapshot = {
-            version: 2,
+            version: 4,
             title: "Measure Events",
             timeParams: { timeSignature: "4/4", tempo: 120, length: 2, pulse: "1/4", stepResolution: 8 },
             tracks: [
@@ -64,30 +64,27 @@ describe("Arrangement", () => {
                         {
                             number: 1,
                             meter: { beats: 4, beatUnits: 4, stepResolution: 8, beatGroups: [2, 2, 2, 2] },
-                            steps: [
-                                { index: 0, noteStyleId: "1" },
-                                { index: 1 },
-                                { index: 2 },
-                                { index: 3 },
-                                { index: 4 },
-                                { index: 5 },
-                                { index: 6 },
-                                { index: 7 },
+                            events: [
+                                {
+                                    start: { numerator: 0, denominator: 8 },
+                                    duration: { numerator: 1, denominator: 8 },
+                                    noteStyleId: "1",
+                                },
+                                { start: { numerator: 1, denominator: 8 }, duration: { numerator: 7, denominator: 8 } },
                             ],
                             subdivisions: [],
                         },
                         {
                             number: 2,
                             meter: { beats: 4, beatUnits: 4, stepResolution: 8, beatGroups: [2, 2, 2, 2] },
-                            steps: [
-                                { index: 0 },
-                                { index: 1 },
-                                { index: 2 },
-                                { index: 3 },
-                                { index: 4, noteStyleId: "1" },
-                                { index: 5 },
-                                { index: 6 },
-                                { index: 7 },
+                            events: [
+                                { start: { numerator: 0, denominator: 8 }, duration: { numerator: 4, denominator: 8 } },
+                                {
+                                    start: { numerator: 4, denominator: 8 },
+                                    duration: { numerator: 1, denominator: 8 },
+                                    noteStyleId: "1",
+                                },
+                                { start: { numerator: 5, denominator: 8 }, duration: { numerator: 3, denominator: 8 } },
                             ],
                             subdivisions: [],
                         },
@@ -130,21 +127,25 @@ describe("Arrangement", () => {
         const source = arrangement.tracks[0] as Track;
         const sourceMeasure = source.measures[0];
 
-        sourceMeasure.steps[0].noteStyleId = "1";
-        sourceMeasure.steps[4].noteStyleId = "1";
-        sourceMeasure.subdivisions.push({ id: 9001, startStep: 2, actual: 2, normal: 1, isTuplet: false });
+        sourceMeasure.events.splice(0, sourceMeasure.events.length,
+            { start: { numerator: 0, denominator: 8 }, duration: { numerator: 1, denominator: 8 }, noteStyleId: "1" },
+            { start: { numerator: 1, denominator: 8 }, duration: { numerator: 3, denominator: 8 } },
+            { start: { numerator: 4, denominator: 8 }, duration: { numerator: 1, denominator: 8 }, noteStyleId: "1" },
+            { start: { numerator: 5, denominator: 8 }, duration: { numerator: 3, denominator: 8 } },
+        );
+        sourceMeasure.subdivisions.push({ startIndex: 0, actual: 3, normal: 2, isTuplet: true });
 
         const duplicate = arrangement.duplicateTrack(source) as Track;
         const duplicateMeasure = duplicate.measures[0];
 
         expect(duplicate).not.toBe(source);
         expect(duplicate.id).not.toBe(source.id);
-        expect(duplicateMeasure.steps[0].noteStyleId).toBe("1");
-        expect(duplicateMeasure.steps[4].noteStyleId).toBe("1");
-        expect(duplicateMeasure.steps[1].noteStyleId).toBeUndefined();
+        expect(duplicateMeasure.events[0].noteStyleId).toBe("1");
+        expect(duplicateMeasure.events[2].noteStyleId).toBe("1");
+        expect(duplicateMeasure.events[1].noteStyleId).toBeUndefined();
         expect(duplicateMeasure.subdivisions).toHaveLength(1);
-        expect(duplicateMeasure.subdivisions[0].startStep).toBe(2);
-        expect(duplicateMeasure.subdivisions[0].actual).toBe(2);
+        expect(duplicateMeasure.subdivisions[0].startIndex).toBe(0);
+        expect(duplicateMeasure.subdivisions[0].actual).toBe(3);
     });
 
     it("starts with a local id below 10000", () => {
@@ -321,7 +322,7 @@ describe("Arrangement", () => {
         const arrangement = Arrangement.emptyArrangementWithInstruments([instrument], { length: 2 });
         const track = arrangement.tracks[0] as Track;
 
-        track.measures[0].steps[0].noteStyleId = "1";
+        track.measures[0].events[0].noteStyleId = "1";
 
         arrangement.insertBars(1, 2, true, false);
 
@@ -329,9 +330,9 @@ describe("Arrangement", () => {
         expect(track.measures.map((measure) => {
             return measure.number;
         })).toEqual([1, 2, 3, 4]);
-        expect(track.measures[0].steps[0].noteStyleId).toBeUndefined();
-        expect(track.measures[1].steps[0].noteStyleId).toBeUndefined();
-        expect(track.measures[2].steps[0].noteStyleId).toBe("1");
+        expect(track.measures[0].events[0].noteStyleId).toBeUndefined();
+        expect(track.measures[1].events[0].noteStyleId).toBeUndefined();
+        expect(track.measures[2].events[0].noteStyleId).toBe("1");
     });
 
     it("insertBars copies the preceding bar content when requested", () => {
@@ -339,7 +340,7 @@ describe("Arrangement", () => {
         const arrangement = Arrangement.emptyArrangementWithInstruments([instrument], { length: 3 });
         const track = arrangement.tracks[0] as Track;
 
-        track.measures[1].steps[0].noteStyleId = "1";
+        track.measures[1].events[0].noteStyleId = "1";
 
         arrangement.insertBars(2, 2, false, true);
 
@@ -347,11 +348,11 @@ describe("Arrangement", () => {
         expect(track.measures.map((measure) => {
             return measure.number;
         })).toEqual([1, 2, 3, 4, 5]);
-        expect(track.measures[0].steps[0].noteStyleId).toBeUndefined();
-        expect(track.measures[1].steps[0].noteStyleId).toBe("1");
-        expect(track.measures[2].steps[0].noteStyleId).toBe("1");
-        expect(track.measures[3].steps[0].noteStyleId).toBe("1");
-        expect(track.measures[4].steps[0].noteStyleId).toBeUndefined();
+        expect(track.measures[0].events[0].noteStyleId).toBeUndefined();
+        expect(track.measures[1].events[0].noteStyleId).toBe("1");
+        expect(track.measures[2].events[0].noteStyleId).toBe("1");
+        expect(track.measures[3].events[0].noteStyleId).toBe("1");
+        expect(track.measures[4].events[0].noteStyleId).toBeUndefined();
     });
 
     it("deleteBar removes the bar and shifts later bars", () => {
@@ -359,7 +360,7 @@ describe("Arrangement", () => {
         const arrangement = Arrangement.emptyArrangementWithInstruments([instrument], { length: 3 });
         const track = arrangement.tracks[0] as Track;
 
-        track.measures[1].steps[0].noteStyleId = "1";
+        track.measures[1].events[0].noteStyleId = "1";
 
         arrangement.deleteBar(1);
 
@@ -367,7 +368,7 @@ describe("Arrangement", () => {
         expect(track.measures.map((measure) => {
             return measure.number;
         })).toEqual([1, 2]);
-        expect(track.measures[0].steps[0].noteStyleId).toBe("1");
+        expect(track.measures[0].events[0].noteStyleId).toBe("1");
     });
 
     it("clearBar clears notes but keeps the bar", () => {
@@ -375,13 +376,13 @@ describe("Arrangement", () => {
         const arrangement = Arrangement.emptyArrangementWithInstruments([instrument], { length: 2 });
         const track = arrangement.tracks[0] as Track;
 
-        track.measures[0].steps[0].noteStyleId = "1";
+        track.measures[0].events[0].noteStyleId = "1";
 
         arrangement.clearBar(1);
 
         expect(arrangement.timeParams.length).toBe(2);
         expect(track.measures).toHaveLength(2);
-        expect(track.measures[0].steps[0].noteStyleId).toBeUndefined();
+        expect(track.measures[0].events[0].noteStyleId).toBeUndefined();
     });
 
     it("duplicateBar inserts a copy of the bar right after it", () => {
@@ -389,7 +390,7 @@ describe("Arrangement", () => {
         const arrangement = Arrangement.emptyArrangementWithInstruments([instrument], { length: 2 });
         const track = arrangement.tracks[0] as Track;
 
-        track.measures[0].steps[0].noteStyleId = "1";
+        track.measures[0].events[0].noteStyleId = "1";
 
         arrangement.duplicateBar(1);
 
@@ -397,9 +398,9 @@ describe("Arrangement", () => {
         expect(track.measures.map((measure) => {
             return measure.number;
         })).toEqual([1, 2, 3]);
-        expect(track.measures[0].steps[0].noteStyleId).toBe("1");
-        expect(track.measures[1].steps[0].noteStyleId).toBe("1");
-        expect(track.measures[2].steps[0].noteStyleId).toBeUndefined();
+        expect(track.measures[0].events[0].noteStyleId).toBe("1");
+        expect(track.measures[1].events[0].noteStyleId).toBe("1");
+        expect(track.measures[2].events[0].noteStyleId).toBeUndefined();
     });
 
     it("insertBars and deleteBar shift measure labels", () => {
@@ -421,12 +422,12 @@ describe("Arrangement", () => {
         const arrangement = Arrangement.emptyArrangementWithInstruments([instrument], { length: 1 });
         const track = arrangement.tracks[0] as Track;
 
-        track.measures[0].steps[0].noteStyleId = "1";
+        track.measures[0].events[0].noteStyleId = "1";
 
         arrangement.deleteBar(1);
 
         expect(arrangement.timeParams.length).toBe(1);
         expect(track.measures).toHaveLength(1);
-        expect(track.measures[0].steps[0].noteStyleId).toBe("1");
+        expect(track.measures[0].events[0].noteStyleId).toBe("1");
     });
 });

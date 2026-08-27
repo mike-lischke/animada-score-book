@@ -83,9 +83,10 @@ export const emptyMeasureTrack = (id: number, instrumentId: string, stepsPerBar 
                     return 1;
                 }),
             },
-            steps: Array.from({ length: stepsPerBar }, (_, i) => {
-                return { index: i };
-            }),
+            events: [{
+                start: { numerator: 0, denominator: 1 },
+                duration: { numerator: 1, denominator: 1 },
+            }],
             subdivisions: [],
         }],
     };

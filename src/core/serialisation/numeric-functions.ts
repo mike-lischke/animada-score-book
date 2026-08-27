@@ -140,6 +140,37 @@ export const areSameFractions = (left: IFraction, right: IFraction): boolean => 
 };
 
 /**
+ * Formats a fraction as a "numerator/denominator" string for use in data attributes.
+ *
+ * @param fraction The fraction to format.
+ * @returns The "n/d" string representation.
+ */
+export const formatFraction = (fraction: IFraction): string => {
+    return `${fraction.numerator}/${fraction.denominator}`;
+};
+
+/**
+ * Parses a "numerator/denominator" string back into a fraction.
+ *
+ * @param value The string to parse.
+ * @returns The parsed fraction, or undefined when the string is malformed.
+ */
+export const parseFraction = (value: string): IFraction | undefined => {
+    const parts = value.split("/");
+    if (parts.length !== 2) {
+        return undefined;
+    }
+
+    const numerator = Number(parts[0]);
+    const denominator = Number(parts[1]);
+    if (!Number.isFinite(numerator) || !Number.isFinite(denominator) || denominator === 0) {
+        return undefined;
+    }
+
+    return { numerator, denominator };
+};
+
+/**
  * Computes the greatest common divisor (GCD) via the Euclidean algorithm.
  *
  * @param left First integer.

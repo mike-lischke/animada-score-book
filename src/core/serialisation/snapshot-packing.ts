@@ -4,9 +4,10 @@
  */
 
 import type {
-    IArrangementSnapshot, IMeterSnapshot, ITimeParamsBase, ITrackMeasureSnapshot, ITrackSnapshot,
-    ISubdivision
+    IArrangementSnapshot, IMeasureEvent, IMeterSnapshot, ISubdivision, ITimeParamsBase, ITrackMeasureSnapshot,
+    ITrackSnapshot
 } from "../types/general.js";
+import { addFractions } from "./numeric-functions.js";
 import { arrangementSnapshotVersion, isNaturalNumber } from "./snapshots.js";
 
 /**
@@ -14,7 +15,7 @@ import { arrangementSnapshotVersion, isNaturalNumber } from "./snapshots.js";
  *
  * The structure is identical in information content to `IArrangementSnapshot`, but uses
  * single-character object keys and tuple arrays for repetitive structures (tracks, measures,
- * steps, tuplets). When JSON-stringified this is significantly smaller than the verbose snapshot,
+ * steps, subdivisions). When JSON-stringified this is significantly smaller than the verbose snapshot,
  * while still being trivially inspectable and forward-/backward-compatible via the `v` field.
  *
  * Layout:
@@ -24,7 +25,7 @@ import { arrangementSnapshotVersion, isNaturalNumber } from "./snapshots.js";
  *   t          optional title
  *   p          packed time params:  [timeSignature, tempo, length, pulse, stepResolution]
  *   k          tracks: [ [id, instrumentId, measures], ... ]
- *     measure: [ number, meter, steps, tuplets ]
+ *     measure: [ number, meter, events, subdivisions ]
  *   l          optional measure labels: { measureNumber: label, ... }
  * ```
  */
@@ -54,19 +55,23 @@ export type PackedMeter = [
     beatGroups: number[],
 ];
 
+export type PackedEvent = [
+    duration: [number, number],
+    noteStyleId: string,
+    articulation?: [number, boolean, boolean],
+];
+
 export type PackedSubdivision = [
-    id: number,
-    startStep: number,
+    startIndex: number,
     actual: number,
     normal: number,
-    parentSubdivisionId?: number,
-    isTuplet?: boolean,
+    isTuplet: boolean,
 ];
 
 export type PackedMeasure = [
     number: number,
     meter: PackedMeter,
-    steps: Array<string | [string, number, boolean, boolean]>,
+    events: PackedEvent[],
     subdivisions: PackedSubdivision[],
 ];
 
@@ -232,37 +237,18 @@ const packMeasure = (measure: ITrackMeasureSnapshot): PackedMeasure => {
     return [
         measure.number,
         packMeter(measure.meter),
-        measure.steps.map((step) => {
-            if (!step.noteStyleId) {
-                return "";
-            }
-
-            const a = step.articulation;
-            if (!a) {
-                return step.noteStyleId;
-            }
-
-            return [step.noteStyleId, a.damping, a.accent, a.ghost];
-        }),
+        measure.events.map(packEvent),
         measure.subdivisions.map(packSubdivision),
     ];
 };
 
 const unpackMeasure = (packed: PackedMeasure): ITrackMeasureSnapshot => {
-    const [number, meter, steps, subdivisions] = packed;
+    const [number, meter, events, subdivisions] = packed;
 
     return {
         number,
         meter: unpackMeter(meter),
-        steps: steps.map((entry, index) => {
-            if (typeof entry === "string") {
-                return { index, noteStyleId: entry || undefined };
-            }
-
-            const [noteStyleId, damping, accent, ghost] = entry;
-
-            return { index, noteStyleId, articulation: { damping, accent, ghost } };
-        }),
+        events: unpackEvents(events),
         subdivisions: subdivisions.map(unpackSubdivision),
     };
 };
@@ -287,37 +273,50 @@ const unpackMeter = (packed: PackedMeter): IMeterSnapshot => {
     };
 };
 
-const packSubdivision = (subdivision: ISubdivision): PackedSubdivision => {
-    const result: PackedSubdivision = [
-        subdivision.id,
-        subdivision.startStep,
-        subdivision.actual,
-        subdivision.normal,
+const packEvent = (event: IMeasureEvent): PackedEvent => {
+    const result: PackedEvent = [
+        [event.duration.numerator, event.duration.denominator],
+        event.noteStyleId ?? "",
     ];
-    if (subdivision.parentSubdivisionId != null) {
-        result.push(subdivision.parentSubdivisionId);
-    } else if (subdivision.isTuplet) {
-        // isTuplet is at index 5; push undefined placeholder for index 4.
-        result.push(undefined);
-    }
 
-    if (subdivision.isTuplet) {
-        result.push(true);
+    const a = event.articulation;
+    if (a) {
+        result.push([a.damping, a.accent, a.ghost]);
     }
 
     return result;
 };
 
-const unpackSubdivision = (packed: PackedSubdivision): ISubdivision => {
-    const [id, startStep, actual, normal, parentSubdivisionId, isTuplet] = packed;
+const unpackEvents = (packed: PackedEvent[]): IMeasureEvent[] => {
+    const events: IMeasureEvent[] = [];
+    let start = { numerator: 0, denominator: 1 };
 
-    return {
-        id,
-        startStep,
-        actual,
-        normal,
-        // Normalize null → undefined: JSON turns undefined array elements into null.
-        parentSubdivisionId: parentSubdivisionId ?? undefined,
-        isTuplet: isTuplet ?? false,
-    };
+    for (const entry of packed) {
+        const [duration, noteStyleId, articulation] = entry;
+        const event: IMeasureEvent = {
+            start: { ...start },
+            duration: { numerator: duration[0], denominator: duration[1] },
+            noteStyleId: noteStyleId || undefined,
+        };
+
+        if (articulation) {
+            const [damping, accent, ghost] = articulation;
+            event.articulation = { damping, accent, ghost };
+        }
+
+        events.push(event);
+        start = addFractions(start, event.duration);
+    }
+
+    return events;
+};
+
+const packSubdivision = (subdivision: ISubdivision): PackedSubdivision => {
+    return [subdivision.startIndex, subdivision.actual, subdivision.normal, subdivision.isTuplet];
+};
+
+const unpackSubdivision = (packed: PackedSubdivision): ISubdivision => {
+    const [startIndex, actual, normal, isTuplet] = packed;
+
+    return { startIndex, actual, normal, isTuplet };
 };

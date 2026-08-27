@@ -205,9 +205,13 @@ const makeArrangement = (trackCount: number): ISbDmArrangement => {
                 stepResolution: 1,
                 beatGroups: [1],
             },
-            steps: [{ index: 0, noteStyleId: sourceNote.audioData?.id }],
-            subdivisions: [],
             events: [{
+                start: { numerator: 0, denominator: 1 },
+                duration: { numerator: 1, denominator: 1 },
+                noteStyleId: sourceNote.audioData?.id,
+            }],
+            subdivisions: [],
+            noteEvents: [{
                 type: SbDmEntityType.NoteEvent,
                 id: sourceNote.id,
                 measureNumber: 1,

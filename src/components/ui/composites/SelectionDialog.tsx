@@ -230,19 +230,19 @@ export class SelectionDialog extends UIComponent<{}, ISelectionDialogState> {
     };
 
     private handleItemClick = (e: MouseEvent | KeyboardEvent): void => {
+        const { multiSelect, selectedIds } = this.state;
         const target = e.currentTarget as HTMLElement;
         const selectedId = target.dataset.selectionId;
 
         if (!selectedId) {
-            if (!this.state.multiSelect) {
+            if (!multiSelect) {
                 this.dialogRef.current?.close(true);
             }
 
             return;
         }
 
-        if (this.state.multiSelect) {
-            const { selectedIds } = this.state;
+        if (multiSelect) {
             const next = selectedIds.includes(selectedId)
                 ? selectedIds.filter((id) => {
                     return id !== selectedId;

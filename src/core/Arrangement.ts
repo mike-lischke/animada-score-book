@@ -122,11 +122,16 @@ export class Arrangement implements ISbDmArrangement {
                         return {
                             number: measure.number,
                             meter: { ...measure.meter },
-                            steps: measure.steps.map((step) => {
-                                return { ...step };
+                            events: measure.events.map((event) => {
+                                return {
+                                    start: { ...event.start },
+                                    duration: { ...event.duration },
+                                    noteStyleId: event.noteStyleId,
+                                    articulation: event.articulation ? { ...event.articulation } : undefined,
+                                };
                             }),
-                            subdivisions: measure.subdivisions.map((sub) => {
-                                return { ...sub };
+                            subdivisions: measure.subdivisions.map((subdivision) => {
+                                return { ...subdivision };
                             }),
                         };
                     }),
@@ -204,9 +209,14 @@ export class Arrangement implements ISbDmArrangement {
             const source = trackToDuplicate.measures[measureIndex];
             const target = copy.measures[measureIndex];
 
-            target.steps.splice(0, target.steps.length,
-                ...source.steps.map((step) => {
-                    return { ...step };
+            target.events.splice(0, target.events.length,
+                ...source.events.map((event) => {
+                    return {
+                        start: { ...event.start },
+                        duration: { ...event.duration },
+                        noteStyleId: event.noteStyleId,
+                        articulation: event.articulation ? { ...event.articulation } : undefined,
+                    };
                 }));
             target.subdivisions.splice(0, target.subdivisions.length,
                 ...source.subdivisions.map((subdivision) => {
@@ -378,13 +388,18 @@ export class Arrangement implements ISbDmArrangement {
                     ...measureSnapshot.meter,
                     beatGroups,
                 },
-                steps: measureSnapshot.steps.map((step) => {
-                    return { ...step };
+                events: measureSnapshot.events.map((event) => {
+                    return {
+                        start: { ...event.start },
+                        duration: { ...event.duration },
+                        noteStyleId: event.noteStyleId,
+                        articulation: event.articulation ? { ...event.articulation } : undefined,
+                    };
                 }),
                 subdivisions: measureSnapshot.subdivisions.map((subdivision) => {
                     return { ...subdivision };
                 }),
-                events: [],
+                noteEvents: [],
             };
         });
 

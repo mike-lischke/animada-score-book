@@ -8,7 +8,7 @@ import type { IArrangementSnapshot, ITrackMeasureSnapshot, ITrackSnapshot } from
 
 /** Current internal arrangement snapshot schema version. */
 
-export const arrangementSnapshotVersion = 3;
+export const arrangementSnapshotVersion = 4;
 
 export const isNaturalNumber = (value: unknown): value is number => {
     return typeof value === "number" && Number.isInteger(value) && value >= 1;
@@ -48,8 +48,13 @@ const getMeasureSnapshots = (track: ISbDmTrack): ITrackMeasureSnapshot[] => {
         return {
             number: measure.number,
             meter: { ...measure.meter },
-            steps: measure.steps.map((step) => {
-                return { ...step };
+            events: measure.events.map((event) => {
+                return {
+                    start: { ...event.start },
+                    duration: { ...event.duration },
+                    noteStyleId: event.noteStyleId,
+                    articulation: event.articulation ? { ...event.articulation } : undefined,
+                };
             }),
             subdivisions: measure.subdivisions.map((subdivision) => {
                 return { ...subdivision };

@@ -4,6 +4,7 @@
  */
 
 import type { IRect } from "../core/types/general.js";
+import { parseFraction } from "../core/serialisation/numeric-functions.js";
 import { requisitions } from "../supplement/Requisitions.js";
 import type { SelectionManager } from "./SelectionManager.js";
 import type { ISelectionDelta, ISelectionEntry } from "./selection-types.js";
@@ -290,6 +291,9 @@ export class SelectionView {
         }
 
         const noteId = target.getAttribute("data-note-id");
+        const startAttr = target.getAttribute("data-event-start");
+        const start = startAttr === null ? undefined : parseFraction(startAttr);
+
         this.manager.selectSingleNote({
             granularity: SelectionGranularity.Note,
             bar: parseInt(bar, 10),
@@ -297,6 +301,7 @@ export class SelectionView {
             startStep: parseInt(stepIndex, 10),
             endStep: parseInt(stepIndex, 10),
             noteId: noteId === null ? undefined : parseInt(noteId, 10),
+            start,
         });
         event.preventDefault();
 

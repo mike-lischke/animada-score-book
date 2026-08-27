@@ -9,7 +9,11 @@ import {
     SbDmEntityType, type ISbDmArrangement, type ISbDmNoteEvent, type ISbDmTrack
 } from "../../src/core/ScoreBookDataModel.js";
 import type { Mutable } from "../../src/core/types/general.js";
+import { requisitions } from "../../src/supplement/Requisitions.js";
 import { SelectionManager } from "../../src/ui/SelectionManager.js";
+import {
+    SelectionGranularity, type ISelectionDelta, type ISelectionEntry
+} from "../../src/ui/selection-types.js";
 
 const makeArrangement = (tracks: ISbDmTrack[]): ISbDmArrangement => {
     const arrangement: ISbDmArrangement = {
@@ -127,5 +131,56 @@ describe.sequential("SelectionManager (class)", () => {
     it("can construct via new", () => {
         const m = new SelectionManager();
         expect(m).toBeInstanceOf(SelectionManager);
+    });
+
+    it("replaceSelection swaps the whole selection and publishes a single delta", () => {
+        const added: ISelectionEntry[] = [];
+        const removed: ISelectionEntry[] = [];
+
+        const spy = (delta: ISelectionDelta): Promise<boolean> => {
+            added.push(...delta.added);
+            removed.push(...delta.removed);
+
+            return Promise.resolve(true);
+        };
+
+        requisitions.register("selectionChanged", spy);
+
+        const note: ISelectionEntry = {
+            granularity: SelectionGranularity.Note,
+            bar: 1,
+            trackId: 1,
+            startStep: 0,
+            endStep: 0,
+            noteId: 1,
+        };
+
+        manager.selectSingleNote(note);
+        added.length = 0;
+        removed.length = 0;
+
+        const clearedA: ISelectionEntry = {
+            granularity: SelectionGranularity.Note,
+            bar: 1,
+            trackId: 1,
+            startStep: 0,
+            endStep: 0,
+        };
+
+        const clearedB: ISelectionEntry = {
+            granularity: SelectionGranularity.Note,
+            bar: 1,
+            trackId: 1,
+            startStep: 2,
+            endStep: 2,
+        };
+
+        manager.replaceSelection([clearedA, clearedB]);
+        requisitions.unregister("selectionChanged", spy);
+
+        expect(manager.currentSelection.size).toBe(2);
+        expect([...manager.currentSelection.values()]).toEqual([clearedA, clearedB]);
+        expect(added).toEqual([clearedA, clearedB]);
+        expect(removed).toEqual([note]);
     });
 });

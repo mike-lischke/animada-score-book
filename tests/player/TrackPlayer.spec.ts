@@ -12,6 +12,7 @@ import {
 import type { IAudioData, ITimeParams, Mutable } from "../../src/core/types/general.js";
 import type { TimeCoordinator } from "../../src/player/TimeCoordinator.js";
 import { TrackPlayer } from "../../src/player/TrackPlayer.js";
+import { requisitions } from "../../src/supplement/Requisitions.js";
 
 /**
  * Minimal stub for the ITimeCoordinator used by TrackPlayer.
@@ -191,11 +192,15 @@ const makeTrack = (opts?: {
             stepResolution: track._notes.length,
             beatGroups: [track._notes.length],
         },
-        steps: track._notes.map((currentNote, index) => {
-            return { index, noteStyleId: currentNote.audioData?.id };
+        events: track._notes.map((currentNote, index) => {
+            return {
+                start: { numerator: index, denominator: track._notes.length },
+                duration: { numerator: 1, denominator: track._notes.length },
+                noteStyleId: currentNote.audioData?.id,
+            };
         }),
         subdivisions: [],
-        events: measureEvents,
+        noteEvents: measureEvents,
     };
     track.measures = [measure];
 
@@ -236,5 +241,25 @@ describe("TrackPlayer", () => {
         player.dispose();
         const events = player.getEvents({ start: 0, end: 1 });
         expect(events.length).toBe(0);
+    });
+
+    it("keeps note event ids stable across cache rebuilds", async () => {
+        const track = makeTrack({ instrumentLoaded: true });
+        const player = new TrackPlayer(track, makeTimeCoordinator());
+
+        const idsBefore = track.measures[0].noteEvents.map((event) => {
+            return event.id;
+        });
+
+        // Trigger a rebuild as it happens after any track edit.
+        await requisitions.execute("trackChanged", track.id);
+
+        const idsAfter = track.measures[0].noteEvents.map((event) => {
+            return event.id;
+        });
+
+        expect(idsAfter).toEqual(idsBefore);
+
+        player.dispose();
     });
 });

@@ -25,7 +25,7 @@ const buildPackedArrangement = (tracks: Array<{
     steps: Array<{ noteStyleId?: string; articulation?: { damping: number; accent: boolean; ghost: boolean; }; }>;
 }>): string => {
     const snapshot: IArrangementSnapshot = {
-        version: 3,
+        version: 4,
         title: "Decoration Test",
         timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4", stepResolution: 16 },
         tracks: tracks.map((track, trackIndex) => {
@@ -40,10 +40,15 @@ const buildPackedArrangement = (tracks: Array<{
                         stepResolution: 16,
                         beatGroups: [4, 4, 4, 4],
                     },
-                    steps: Array.from({ length: 16 }, (_, index) => {
-                        const stepData = track.steps[index];
+                    events: Array.from({ length: 16 }, (_, index) => {
+                        const stepData = track.steps.at(index);
 
-                        return { index, ...stepData };
+                        return {
+                            start: { numerator: index, denominator: 16 },
+                            duration: { numerator: 1, denominator: 16 },
+                            noteStyleId: stepData?.noteStyleId,
+                            articulation: stepData?.articulation ? { ...stepData.articulation } : undefined,
+                        };
                     }),
                     subdivisions: [],
                 }],

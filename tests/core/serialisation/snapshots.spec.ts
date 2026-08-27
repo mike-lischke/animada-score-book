@@ -8,13 +8,14 @@ import { describe, expect, it } from "vitest";
 import { Arrangement } from "../../../src/core/Arrangement.js";
 import type { ISbDmInstrument } from "../../../src/core/ScoreBookDataModel.js";
 import { ArrangementMigrator } from "../../../src/core/serialisation/migration/ArrangementMigrator.js";
+import { stringifyPackedArrangement } from "../../../src/core/serialisation/snapshot-packing.js";
 import { getArrangementSnapshot } from "../../../src/core/serialisation/snapshots.js";
 import type { ILegacyArrangementSnapshot } from "../../../src/core/serialisation/migration/legacy-snapshot-types.js";
 import type { IArrangementSnapshot, IAudioData, Mutable } from "../../../src/core/types/general.js";
-import { createInstrument, hydrateMeasureEvents } from "../../unit-test-helpers.js";
+import { createInstrument } from "../../unit-test-helpers.js";
 
 describe("snapshots", () => {
-    it("writes arrangement snapshots as version 2 without legacy polyrhythm fields", () => {
+    it("writes arrangement snapshots as version 4 with tuplets instead of polyrhythms", () => {
         const instrument = createInstrument("0", 0, 0);
         const noteStyle = {
             id: "1",
@@ -40,31 +41,33 @@ describe("snapshots", () => {
         };
 
         const arrangement = ArrangementMigrator.migrateToArrangement(sourceSnapshot, [instrument]).arrangement;
-        hydrateMeasureEvents(arrangement);
         const firstTrack = arrangement.tracks[0];
+        const measure = firstTrack.measures[0];
 
-        // Set the second polyrhythm note directly on the measure step (the source of truth).
-        firstTrack.measures[0].steps[1].noteStyleId = "1";
+        // The polyrhythm (3 over 1) becomes a 3:2 tuplet.
+        const subdivision = measure.subdivisions.find((candidate) => {
+            return candidate.actual === 3 && candidate.normal === 2;
+        });
+        if (!subdivision) {
+            throw new Error("Expected the polyrhythm to migrate to a 3:2 tuplet");
+        }
+
+        // Set the second note of the tuplet directly on the measure event (the source of truth).
+        measure.events[subdivision.startIndex + 1].noteStyleId = "1";
 
         const snapshot = getArrangementSnapshot(arrangement);
 
-        expect(snapshot.version).toBe(3);
+        expect(snapshot.version).toBe(4);
         const track = snapshot.tracks[0];
         expect("measures" in track).toBe(true);
         if ("measures" in track) {
             expect("polyrhythms" in track).toBe(false);
             expect(track.measures[0]?.subdivisions).toContainEqual(expect.objectContaining({
-                startStep: 0,
                 actual: 3,
                 normal: 2,
-                isTuplet: true,
             }));
 
-            expect(track.measures[0]?.steps.slice(0, 3)).toEqual([
-                { index: 0, noteStyleId: undefined },
-                { index: 1, noteStyleId: "1" },
-                { index: 2, noteStyleId: undefined },
-            ]);
+            expect(track.measures[0]?.events[subdivision.startIndex + 1]?.noteStyleId).toBe("1");
         }
     });
 
@@ -103,17 +106,32 @@ describe("snapshots", () => {
         expect(arrangement.id).toBe(12345);
     });
 
-    it("preserves note styles when runtime events are not yet materialized", () => {
+    it("persists note styles from events, independent of the note-event cache", () => {
         const instrument = createInstrument("0", 0, 0);
         const arrangement = Arrangement.emptyArrangement([instrument]);
         const track = arrangement.tracks[0];
 
-        // Simulate a freshly loaded score: notes live on the steps, events are empty until a TrackPlayer hydrates them.
-        track.measures[0].steps[0].noteStyleId = "1";
-        expect(track.measures[0].events).toHaveLength(0);
+        // The runtime note-event cache is empty until a TrackPlayer hydrates it.
+        expect(track.measures[0].noteEvents).toHaveLength(0);
+
+        track.measures[0].events[0].noteStyleId = "1";
 
         const snapshot = getArrangementSnapshot(arrangement);
 
-        expect(snapshot.tracks[0].measures[0].steps[0].noteStyleId).toBe("1");
+        expect(snapshot.tracks[0].measures[0].events[0].noteStyleId).toBe("1");
+    });
+
+    it("loads a packed v4 string through the migrator entry point", () => {
+        const instrument = createInstrument("0", 0, 0);
+        const arrangement = Arrangement.emptyArrangement([instrument]);
+        arrangement.tracks[0].measures[0].events[0].noteStyleId = "1";
+
+        const snapshot = getArrangementSnapshot(arrangement);
+        const packed = stringifyPackedArrangement(snapshot);
+
+        const { arrangement: restored, migrated } = ArrangementMigrator.migrateToArrangement(packed, [instrument]);
+
+        expect(migrated).toBe(false);
+        expect(getArrangementSnapshot(restored)).toEqual(snapshot);
     });
 });

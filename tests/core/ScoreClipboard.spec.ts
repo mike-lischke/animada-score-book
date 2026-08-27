@@ -5,10 +5,35 @@
 
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { ScoreBookDataModel, type ISbDmInstrument } from "../../src/core/ScoreBookDataModel.js";
+import { ScoreBookDataModel, type ISbDmInstrument, type ISbDmTrackMeasure } from "../../src/core/ScoreBookDataModel.js";
 import { PasteResultKind, ScoreClipboard } from "../../src/core/ScoreClipboard.js";
+import { addFractions, compareFractions } from "../../src/core/serialisation/numeric-functions.js";
 import { SelectionGranularity, type ISelectionEntry } from "../../src/ui/selection-types.js";
 import { createInstrument } from "../unit-test-helpers.js";
+
+/**
+ * Returns the note style id covering the given step of a measure, or undefined for rests.
+ *
+ * @param measure The measure to inspect.
+ * @param step The 0-based grid step to look up.
+ * @returns The note style id covering the step, or undefined.
+ */
+const noteAtStep = (measure: ISbDmTrackMeasure, step: number): string | undefined => {
+    const stepsPerBar = measure.meter.stepResolution;
+    const start = { numerator: step, denominator: stepsPerBar };
+
+    const event = measure.events.find((candidate) => {
+        if (candidate.noteStyleId === undefined) {
+            return false;
+        }
+
+        const end = addFractions(candidate.start, candidate.duration);
+
+        return compareFractions(candidate.start, start) <= 0 && compareFractions(start, end) < 0;
+    });
+
+    return event?.noteStyleId;
+};
 
 describe("ScoreClipboard", () => {
     let model: ScoreBookDataModel;
@@ -49,7 +74,7 @@ describe("ScoreClipboard", () => {
 
         expect(result.kind).toBe(PasteResultKind.Success);
         for (let step = 4; step <= 7; step++) {
-            expect(track.measures[0].steps[step].noteStyleId).toBe("1");
+            expect(noteAtStep(track.measures[0], step)).toBe("1");
         }
     });
 
@@ -70,7 +95,7 @@ describe("ScoreClipboard", () => {
 
         expect(result.kind).toBe(PasteResultKind.Success);
         for (const measure of track.measures) {
-            expect(measure.steps[0].noteStyleId).toBe("1");
+            expect(noteAtStep(measure, 0)).toBe("1");
         }
     });
 
@@ -99,7 +124,7 @@ describe("ScoreClipboard", () => {
 
         const expected = ["1", "2", "3", "4", "1", "2", "3", "4", "1", "2"];
         for (let offset = 0; offset < expected.length; offset++) {
-            expect(track.measures[0].steps[4 + offset].noteStyleId).toBe(expected[offset]);
+            expect(noteAtStep(track.measures[0], 4 + offset)).toBe(expected[offset]);
         }
     });
 
@@ -125,10 +150,10 @@ describe("ScoreClipboard", () => {
         ]);
 
         expect(result.kind).toBe(PasteResultKind.Success);
-        expect(track.measures[0].steps[8].noteStyleId).toBe("1");
-        expect(track.measures[0].steps[9].noteStyleId).toBe("2");
-        expect(track.measures[0].steps[10].noteStyleId).toBe("3");
-        expect(track.measures[0].steps[11].noteStyleId).toBe("4");
+        expect(noteAtStep(track.measures[0], 8)).toBe("1");
+        expect(noteAtStep(track.measures[0], 9)).toBe("2");
+        expect(noteAtStep(track.measures[0], 10)).toBe("3");
+        expect(noteAtStep(track.measures[0], 11)).toBe("4");
     });
 
     it("pastes a multi-track note selection across matching tracks", () => {
@@ -168,12 +193,12 @@ describe("ScoreClipboard", () => {
         ]);
 
         expect(result.kind).toBe(PasteResultKind.Success);
-        expect(trackA.measures[1].steps[0].noteStyleId).toBe("a1");
-        expect(trackA.measures[1].steps[1].noteStyleId).toBe("a2");
-        expect(trackB.measures[1].steps[0].noteStyleId).toBe("b1");
-        expect(trackB.measures[1].steps[1].noteStyleId).toBe("b2");
-        expect(trackC.measures[1].steps[0].noteStyleId).toBe("c1");
-        expect(trackC.measures[1].steps[1].noteStyleId).toBe("c2");
+        expect(noteAtStep(trackA.measures[1], 0)).toBe("a1");
+        expect(noteAtStep(trackA.measures[1], 1)).toBe("a2");
+        expect(noteAtStep(trackB.measures[1], 0)).toBe("b1");
+        expect(noteAtStep(trackB.measures[1], 1)).toBe("b2");
+        expect(noteAtStep(trackC.measures[1], 0)).toBe("c1");
+        expect(noteAtStep(trackC.measures[1], 1)).toBe("c2");
     });
 
     it("skips source tracks whose instrument is missing", () => {
@@ -213,12 +238,12 @@ describe("ScoreClipboard", () => {
         ]);
 
         expect(result.kind).toBe(PasteResultKind.Success);
-        expect(newTrackA.measures[1].steps[0].noteStyleId).toBe("a1");
+        expect(noteAtStep(newTrackA.measures[1], 0)).toBe("a1");
 
         const newTrackC = model.arrangement!.tracks.find((track) => {
             return track.instrument.typeId === "c";
         })!;
-        expect(newTrackC.measures[1].steps[0].noteStyleId).toBe("c1");
+        expect(noteAtStep(newTrackC.measures[1], 0)).toBe("c1");
         expect(model.arrangement!.tracks.some((track) => {
             return track.instrument.typeId === "b";
         })).toBe(false);
@@ -251,11 +276,11 @@ describe("ScoreClipboard", () => {
         expect(result.kind).toBe(PasteResultKind.Success);
 
         for (const track of tracks) {
-            expect(track.measures[0].steps[4].noteStyleId).toBe("1");
-            expect(track.measures[0].steps[5].noteStyleId).toBe("2");
-            expect(track.measures[0].steps[6].noteStyleId).toBe("1");
-            expect(track.measures[0].steps[7].noteStyleId).toBe("2");
-            expect(track.measures[0].steps[8].noteStyleId).toBe("1");
+            expect(noteAtStep(track.measures[0], 4)).toBe("1");
+            expect(noteAtStep(track.measures[0], 5)).toBe("2");
+            expect(noteAtStep(track.measures[0], 6)).toBe("1");
+            expect(noteAtStep(track.measures[0], 7)).toBe("2");
+            expect(noteAtStep(track.measures[0], 8)).toBe("1");
         }
     });
 
@@ -275,9 +300,9 @@ describe("ScoreClipboard", () => {
         }]);
 
         expect(result.kind).toBe(PasteResultKind.Success);
-        expect(track.measures[0].steps[0].noteStyleId).toBe("1");
-        expect(track.measures[0].steps[1].noteStyleId).toBe("1");
-        expect(track.measures[0].steps[5].noteStyleId).toBeUndefined();
+        expect(noteAtStep(track.measures[0], 0)).toBe("1");
+        expect(noteAtStep(track.measures[0], 1)).toBe("1");
+        expect(noteAtStep(track.measures[0], 5)).toBeUndefined();
     });
 
     it("rejects pasting a track piece into a different instrument", () => {
@@ -323,8 +348,8 @@ describe("ScoreClipboard", () => {
         const cut = clipboard.cut([{ granularity: SelectionGranularity.TrackPiece, bar: 1, trackId: track.id }]);
 
         expect(cut).toBe(true);
-        expect(track.measures[0].steps[0].noteStyleId).toBeUndefined();
-        expect(track.measures[0].steps[1].noteStyleId).toBeUndefined();
+        expect(noteAtStep(track.measures[0], 0)).toBeUndefined();
+        expect(noteAtStep(track.measures[0], 1)).toBeUndefined();
         expect(clipboard.isEmpty).toBe(false);
     });
 
@@ -359,7 +384,7 @@ describe("ScoreClipboard", () => {
             return track.instrument.typeId === "a";
         });
         expect(newTrack).toBeDefined();
-        expect(newTrack!.measures[0].steps[0].noteStyleId).toBe("1");
+        expect(noteAtStep(newTrack!.measures[0], 0)).toBe("1");
     });
 
     it("returns no selection for an empty paste target", () => {
