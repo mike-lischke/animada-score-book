@@ -605,7 +605,7 @@ export class TreeGrid<TRow extends object = {}> extends UIComponent<ITreeGridPro
         }
 
         // SVG elements work well as expand/collapse icons. However, Tabulator expects an HTML element.
-        const expander = this.createChevronSvg() as unknown as HTMLElement;
+        const expander = this.createChevronSvg() as Partial<HTMLElement>;
         const result: Options = {
             index: options?.index ?? "id",
             columns,
@@ -616,8 +616,8 @@ export class TreeGrid<TRow extends object = {}> extends UIComponent<ITreeGridPro
             dataTreeChildIndent: options?.treeChildIndent ?? 8,
             dataTreeChildField: options?.childKey ?? "children",
             dataTreeElementColumn: options?.treeColumn,
-            dataTreeExpandElement: expander,
-            dataTreeCollapseElement: expander,
+            dataTreeExpandElement: expander as HTMLElement,
+            dataTreeCollapseElement: expander as HTMLElement,
             dataTreeBranchElement: false,
             dataTreeStartExpanded: options?.expandedLevels ?? false,
 

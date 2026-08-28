@@ -50,7 +50,7 @@ import { getSharedAudioContext } from "./core/audio-context.js";
 import {
     SbDmEntityType, ScoreBookDataModel, type ISbDmInstrument, type ISbDmScore, type ISbDmScoreFolder
 } from "./core/ScoreBookDataModel.js";
-import { PasteResultKind, ScoreClipboard, type IPasteResult } from "./core/ScoreClipboard.js";
+import { PasteResultKind, ScoreClipboard, SubdivisionPasteMode, type IPasteResult } from "./core/ScoreClipboard.js";
 import { ArrangementMigrator } from "./core/serialisation/migration/ArrangementMigrator.js";
 import { stringifyPackedArrangement, tryParsePackedArrangement } from "./core/serialisation/snapshot-packing.js";
 import { mixerStepIndex, tutorialSteps } from "./core/TutorialSteps.js";
@@ -1795,10 +1795,14 @@ export class App extends UIComponent<{}, IAppState> {
             case "z": {
                 if (event.ctrlKey || event.metaKey) {
                     if (event.shiftKey) {
-                        this.undoManager?.redo();
+                        if (this.undoManager?.redo()) {
+                            this.selectionManager.clearSelection();
+                        }
                     } else {
                         // Standard redo on Mac, and no problem to allow it on Windows
-                        this.undoManager?.undo();
+                        if (this.undoManager?.undo()) {
+                            this.selectionManager.clearSelection();
+                        }
                     } // With ctrl, this doesn't even trigger on Mac. Seems harmless to include it anyway.
                 }
 
@@ -1809,7 +1813,9 @@ export class App extends UIComponent<{}, IAppState> {
                 // We do not allow command+y to redo on Mac
                 // On Chrome, Firefox, and Safari, it triggers browser things, and so is very confusing to also redo
                 if (event.ctrlKey) {
-                    this.undoManager?.redo();
+                    if (this.undoManager?.redo()) {
+                        this.selectionManager.clearSelection();
+                    }
                 }
 
                 break;
@@ -1834,9 +1840,50 @@ export class App extends UIComponent<{}, IAppState> {
             if (confirmed) {
                 result = this.scoreClipboard.paste(entries, true);
             }
+        } else if (result.kind === PasteResultKind.NeedsSubdivisionMode) {
+            const mode = await this.confirmSubdivisionMode();
+            if (mode !== undefined) {
+                result = this.scoreClipboard.paste(entries, false, mode);
+            }
+        }
+
+        if (result.kind === PasteResultKind.Success && result.selectionInvalidated) {
+            this.selectionManager.clearSelection();
         }
 
         this.showPasteResult(result);
+    }
+
+    private async confirmSubdivisionMode(): Promise<SubdivisionPasteMode | undefined> {
+        const closure = await this.confirmDialogRef.current?.show(
+            "The copied subdivision covers a different range than the selection. " +
+            "How should it be applied?",
+            {
+                accept: "New Subdivision",
+                alternative: "Tile Subdivision",
+                refuse: "Dissolve Subdivision",
+                default: "New Subdivision",
+            },
+            "Paste Subdivision",
+        );
+
+        switch (closure) {
+            case DialogResponseClosure.Accept: {
+                return SubdivisionPasteMode.NewBase;
+            }
+
+            case DialogResponseClosure.Alternative: {
+                return SubdivisionPasteMode.Tile;
+            }
+
+            case DialogResponseClosure.Decline: {
+                return SubdivisionPasteMode.Dissolve;
+            }
+
+            default: {
+                return undefined;
+            }
+        }
     }
 
     private async confirmTrackCreation(missingInstrumentTypeIds: string[]): Promise<boolean> {
@@ -1872,6 +1919,13 @@ export class App extends UIComponent<{}, IAppState> {
 
             case PasteResultKind.TrackCountMismatch: {
                 void requisitions.execute("showWarning", "Cannot paste: the track count does not match.");
+
+                break;
+            }
+
+            case PasteResultKind.TooComplex: {
+                void requisitions.execute("showWarning", "Cannot paste: the selection mixes subdivided and " +
+                    "plain notes, which is too complex to transfer.");
 
                 break;
             }

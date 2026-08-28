@@ -673,6 +673,15 @@ export interface IMeasureReplace {
 
     /** Last step index (inclusive) into the measure's steps. Omit to replace the whole measure. */
     endStep?: number;
+
+    /** Exact fractional start of the range; takes precedence over {@link startStep}. */
+    start?: IFraction;
+
+    /** Exact fractional end (exclusive) of the range; takes precedence over {@link endStep}. */
+    end?: IFraction;
+
+    /** Subdivisions to create for the replaced range; startIndex is relative to {@link events}. */
+    subdivisions?: ISubdivision[];
 }
 
 export class ScoreBookDataModel {
@@ -1160,9 +1169,13 @@ export class ScoreBookDataModel {
                 continue;
             }
 
-            const rangeChanged = replacement.startStep === undefined || replacement.endStep === undefined
-                ? this.replaceWholeMeasure(measure, replacement.events)
-                : this.replaceStepRange(measure, replacement.startStep, replacement.endStep, replacement.events);
+            const rangeChanged = replacement.start !== undefined && replacement.end !== undefined
+                ? this.replaceFractionRange(measure, replacement.start, replacement.end, replacement.events,
+                    replacement.subdivisions)
+                : replacement.startStep === undefined || replacement.endStep === undefined
+                    ? this.replaceWholeMeasure(measure, replacement.events, replacement.subdivisions)
+                    : this.replaceStepRange(measure, replacement.startStep, replacement.endStep, replacement.events,
+                        replacement.subdivisions);
 
             if (rangeChanged) {
                 changed = true;
@@ -2508,11 +2521,16 @@ export class ScoreBookDataModel {
      *
      * @param measure The measure to replace.
      * @param events The replacement events, in display order.
+     * @param subdivisions Subdivisions to create for the replacement; startIndex is relative to
+     *                      {@link events}.
      *
      * @returns True when the measure changed.
      */
-    private replaceWholeMeasure(measure: ISbDmTrackMeasure, events: IMeasureEvent[]): boolean {
-        return this.setMeasureEvents(measure, events, false);
+    private replaceWholeMeasure(measure: ISbDmTrackMeasure, events: IMeasureEvent[],
+        subdivisions?: ISubdivision[]): boolean {
+        const changed = this.setMeasureEvents(measure, events, false);
+
+        return this.applySubdivisions(measure, subdivisions, 0) || changed;
     }
 
     /**
@@ -2523,35 +2541,106 @@ export class ScoreBookDataModel {
      * @param startStep The first step index to replace (inclusive).
      * @param endStep The last step index to replace (inclusive).
      * @param events The replacement events, relative to the range start.
+     * @param subdivisions Subdivisions to create for the replacement; startIndex is relative to
+     *                      {@link events}.
      *
      * @returns True when the measure changed.
      */
     private replaceStepRange(measure: ISbDmTrackMeasure, startStep: number, endStep: number,
-        events: IMeasureEvent[]): boolean {
+        events: IMeasureEvent[], subdivisions?: ISubdivision[]): boolean {
         const stepsPerBar = measure.meter.stepResolution;
         const start = reduceFraction(startStep, stepsPerBar);
         const end = reduceFraction(endStep + 1, stepsPerBar);
 
+        return this.replaceFractionRange(measure, start, end, events, subdivisions);
+    }
+
+    /**
+     * Replaces the content of an exact fractional range with the given events. The replacement
+     * events are positioned relative to the range start. This is the fraction-based counterpart of
+     * {@link replaceStepRange}, used for subdivision slots whose boundaries do not align to grid
+     * steps.
+     *
+     * @param measure The measure containing the range.
+     * @param start The exact start position of the range (inclusive).
+     * @param end The exact end position of the range (exclusive).
+     * @param events The replacement events, relative to the range start.
+     * @param subdivisions Subdivisions to create for the replacement; startIndex is relative to
+     *                      {@link events}.
+     *
+     * @returns True when the measure changed.
+     */
+    private replaceFractionRange(measure: ISbDmTrackMeasure, start: IFraction, end: IFraction,
+        events: IMeasureEvent[], subdivisions?: ISubdivision[]): boolean {
         const shifted = events.map((event) => {
             return this.cloneEvent({ ...event, start: addFractions(start, event.start) });
         });
 
         const result: IMeasureEvent[] = [];
+
+        // Keep the part of each original event that lies before the replaced range. Events that
+        // straddle the range start are clipped instead of dropped, so whole-measure rests split
+        // into a leading rest and the measure keeps tiling its full length.
         for (const event of measure.events) {
-            if (compareFractions(addFractions(event.start, event.duration), start) <= 0) {
+            const eventEnd = addFractions(event.start, event.duration);
+
+            if (compareFractions(eventEnd, start) <= 0) {
                 result.push(this.cloneEvent(event));
+            } else if (compareFractions(event.start, start) < 0) {
+                result.push(this.cloneEvent({
+                    ...event,
+                    duration: subtractFractions(start, event.start),
+                }));
             }
         }
 
+        const shiftedStartIndex = result.length;
         result.push(...shifted);
 
         for (const event of measure.events) {
-            if (compareFractions(event.start, end) >= 0) {
+            const eventStart = event.start;
+            const eventEnd = addFractions(event.start, event.duration);
+
+            if (compareFractions(eventStart, end) >= 0) {
                 result.push(this.cloneEvent(event));
+            } else if (compareFractions(eventEnd, end) > 0) {
+                result.push(this.cloneEvent({
+                    ...event,
+                    start: end,
+                    duration: subtractFractions(eventEnd, end),
+                }));
             }
         }
 
-        return this.setMeasureEvents(measure, result);
+        const changed = this.setMeasureEvents(measure, result);
+
+        return this.applySubdivisions(measure, subdivisions, shiftedStartIndex) || changed;
+    }
+
+    /**
+     * Applies replacement subdivisions to a measure whose events were just replaced. The
+     * subdivision start indices are shifted by the number of events that precede the replacement
+     * range, so they point at the correct events within the measure. Existing subdivisions are
+     * kept, so pasting a subdivision into an existing subdivision nests it instead of stripping
+     * the surrounding notes of their subdivision character.
+     *
+     * @param measure The measure to update.
+     * @param subdivisions The subdivisions to install; startIndex is relative to the replacement.
+     * @param baseIndex The index within the measure's events where the replacement starts.
+     *
+     * @returns True when subdivisions were installed.
+     */
+    private applySubdivisions(measure: ISbDmTrackMeasure, subdivisions: ISubdivision[] | undefined,
+        baseIndex: number): boolean {
+        if (subdivisions === undefined || subdivisions.length === 0) {
+            return false;
+        }
+
+        measure.subdivisions.push(...subdivisions.map((subdivision) => {
+            return { ...subdivision, startIndex: subdivision.startIndex + baseIndex };
+        }));
+
+        return true;
     }
 
     private sameArticulation(a: INoteArticulation | undefined, b: INoteArticulation | undefined): boolean {

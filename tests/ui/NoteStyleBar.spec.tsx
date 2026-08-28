@@ -276,4 +276,38 @@ describe.sequential("NoteStyleBar", () => {
         expect(renderResult.container.querySelectorAll(".noteStyleButton")).toHaveLength(0);
         expect(renderResult.container.querySelectorAll(".noteStyleLabel")).toHaveLength(0);
     });
+
+    it("marks no note style when the cursor sits inside a note's duration", () => {
+        const noteStyles = { "1": makeNoteStyle("1", "Accent", "Tamborim Accent") };
+        const track = {
+            id: 7,
+            instrument: { id: 55, noteStyles },
+            measures: [
+                {
+                    number: 1,
+                    meter: { stepResolution: 16 },
+                    noteEvents: [
+                        {
+                            id: 7001,
+                            start: { numerator: 0, denominator: 16 },
+                            duration: { numerator: 4, denominator: 16 },
+                            audioData: { id: "1" },
+                        },
+                    ],
+                },
+            ],
+        } as unknown as ISbDmTrack;
+        const dataModel = makeDataModel([track]);
+
+        // Step 1 is inside the note's duration but is not the note's start cell.
+        selectionManager.replaceSelection([
+            { granularity: SelectionGranularity.Note, bar: 1, trackId: 7, startStep: 1 },
+        ]);
+
+        renderResult = render(
+            <NoteStyleBar dataModel={dataModel} selectionManager={selectionManager} />,
+        );
+
+        expect(renderResult.container.querySelectorAll(".noteStyleButton.du-btn-primary")).toHaveLength(0);
+    });
 });

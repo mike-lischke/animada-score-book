@@ -6,7 +6,7 @@
 import type { ComponentChild } from "preact";
 
 import type { ISbDmTrack, ScoreBookDataModel } from "../../../core/ScoreBookDataModel.js";
-import { addFractions, compareFractions, reduceFraction } from "../../../core/serialisation/numeric-functions.js";
+import { compareFractions, reduceFraction } from "../../../core/serialisation/numeric-functions.js";
 import type { IAudioData } from "../../../core/types/general.js";
 import { requisitions } from "../../../supplement/Requisitions.js";
 import { SelectionGranularity, type ISelectionEntry } from "../../../ui/selection-types.js";
@@ -209,10 +209,9 @@ export class NoteStyleBar extends UIComponent<INoteStyleBarProps, INoteStyleBarS
                 return false;
             }
 
-            const eventEnd = addFractions(candidate.start, candidate.duration);
-
-            return compareFractions(cellStart, candidate.start) >= 0
-                && compareFractions(cellStart, eventEnd) < 0;
+            // Only a note's start cell carries its style. Cells inside the note's duration are
+            // absorbed rest steps and must not keep the style marked while navigating across them.
+            return compareFractions(cellStart, candidate.start) === 0;
         });
 
         return noteEvent?.audioData?.id;

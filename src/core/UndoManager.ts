@@ -1,5 +1,6 @@
 import { FaviconDirtyService } from "./FavIconDirtyService.js";
 import type { ScoreBookDataModel } from "./ScoreBookDataModel.js";
+import type { IArrangementSnapshot, ISubdivision } from "./types/general.js";
 import { requisitions } from "../supplement/Requisitions.js";
 import { UndoRedoStack } from "./UndoRedoStack.js";
 
@@ -55,32 +56,46 @@ export class UndoManager {
 
     /**
      * Reverts the most recent change if possible and publishes a current-state change.
+     *
+     * @returns True when the reverted change switched between plain and subdivided notes, so the
+     *          caller should clear the current selection.
      */
-    public undo = (): void => {
+    public undo = (): boolean => {
         if (!this.undoRedoStack.canUndo) {
-            return;
+            return false;
         }
 
+        const before = this.undoRedoStack.currentState;
         this.undoRedoStack.goBack();
-        this.dataModel.arrangement!.applyArrangementSnapshot(this.undoRedoStack.currentState,
-            this.dataModel.instruments);
+        const after = this.undoRedoStack.currentState;
+
+        this.dataModel.arrangement!.applyArrangementSnapshot(after, this.dataModel.instruments);
         this.updateDirtyState();
         this.dataModel.persistCurrentScore();
+
+        return this.subdivisionStructureChanged(before, after);
     };
 
     /**
      * Reapplies the next change if possible and publishes a current-state change.
+     *
+     * @returns True when the reapplied change switched between plain and subdivided notes, so the
+     *          caller should clear the current selection.
      */
-    public redo = (): void => {
+    public redo = (): boolean => {
         if (!this.undoRedoStack.canRedo) {
-            return;
+            return false;
         }
 
+        const before = this.undoRedoStack.currentState;
         this.undoRedoStack.goForward();
-        this.dataModel.arrangement!.applyArrangementSnapshot(this.undoRedoStack.currentState,
-            this.dataModel.instruments);
+        const after = this.undoRedoStack.currentState;
+
+        this.dataModel.arrangement!.applyArrangementSnapshot(after, this.dataModel.instruments);
         this.updateDirtyState();
         this.dataModel.persistCurrentScore();
+
+        return this.subdivisionStructureChanged(before, after);
     };
 
     /**
@@ -118,6 +133,65 @@ export class UndoManager {
 
         return Promise.resolve(true);
     };
+
+    /**
+     * Compares the subdivision structure of two snapshots. A difference means the transition
+     * switched between plain and subdivided notes, which invalidates the current selection.
+     *
+     * @param before The snapshot before the transition.
+     * @param after The snapshot after the transition.
+     *
+     * @returns True when any measure's subdivision structure changed.
+     */
+    private subdivisionStructureChanged(before: IArrangementSnapshot, after: IArrangementSnapshot): boolean {
+        if (before.tracks.length !== after.tracks.length) {
+            return true;
+        }
+
+        for (let trackIndex = 0; trackIndex < before.tracks.length; trackIndex++) {
+            const beforeMeasures = before.tracks[trackIndex].measures;
+            const afterMeasures = after.tracks[trackIndex].measures;
+
+            if (beforeMeasures.length !== afterMeasures.length) {
+                return true;
+            }
+
+            for (let measureIndex = 0; measureIndex < beforeMeasures.length; measureIndex++) {
+                if (!this.sameSubdivisions(beforeMeasures[measureIndex].subdivisions,
+                    afterMeasures[measureIndex].subdivisions)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Compares two subdivision lists for structural equality (order and values).
+     *
+     * @param before The first subdivision list.
+     * @param after The second subdivision list.
+     *
+     * @returns True when both lists describe the same subdivision structure.
+     */
+    private sameSubdivisions(before: ISubdivision[], after: ISubdivision[]): boolean {
+        if (before.length !== after.length) {
+            return false;
+        }
+
+        for (let index = 0; index < before.length; index++) {
+            const left = before[index];
+            const right = after[index];
+
+            if (left.startIndex !== right.startIndex || left.actual !== right.actual
+                || left.normal !== right.normal || left.isTuplet !== right.isTuplet) {
+                return false;
+            }
+        }
+
+        return true;
+    }
 
     private updateDirtyState() {
         void FaviconDirtyService.setDirty(this.canUndo);

@@ -30,6 +30,12 @@ export interface IClipboardMeasure {
 
     /** Subdivision groups whose start index lies within the copied event range. */
     subdivisions: ISubdivision[];
+
+    /**
+     * Set when the copied range mixes subdivided and non-subdivided events. Such content cannot be
+     * pasted unambiguously and is rejected as too complex.
+     */
+    mixed?: boolean;
 }
 
 /** The clipboard content of one track, ordered along the measure dimension. */
