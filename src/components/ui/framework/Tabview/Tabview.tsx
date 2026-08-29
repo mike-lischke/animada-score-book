@@ -7,7 +7,7 @@ import { ComponentChild, createRef } from "preact";
 
 import { convertPropValue } from "../../../../core/utils.js";
 import { Button } from "../Button.js";
-import { Codicon } from "../Codicon.js";
+import { UIIcon } from "../UIIcon.js";
 import { Container } from "../Container.js";
 import { Icon } from "../Icon.js";
 import { Label } from "../Label.js";
@@ -20,7 +20,7 @@ export interface ITabviewPage {
     id: string;
 
     /** An image shown as the first entry on a tab, if assigned. */
-    icon?: string | Codicon;
+    icon?: string | UIIcon;
 
     /** A tab's title. */
     caption: string;
@@ -336,6 +336,7 @@ export class Tabview extends UIComponent<ITabviewProperties, ITabviewState> {
             if (sliderLeft < 0) {
                 sliderLeft = 0;
             }
+
             if (sliderLeft > sliderLeftMax) {
                 sliderLeft = sliderLeftMax;
             }

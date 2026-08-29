@@ -4,7 +4,6 @@
 */
 
 import { AppStorage } from "../core/AppStorage.js";
-import type { ISbDmNoteEvent, ISbDmTrack } from "../core/ScoreBookDataModel.js";
 import { ScoreBookChangeReason } from "../core/ScoreBookDataModel.js";
 import type { PlayerPlayState } from "../player/ArrangementPlayer.js";
 import { requisitions } from "../supplement/Requisitions.js";
@@ -14,23 +13,10 @@ import {
 } from "./selection-types.js";
 import { SelectionView } from "./SelectionView.js";
 
-interface ITrackSelection {
-    selectedNotes: Set<ISbDmNoteEvent>;
-    range: [ISbDmNoteEvent | undefined, ISbDmNoteEvent | undefined];
-}
-
 /**
  * Manages selections across tracks and publishes selection changes.
- *
- * Maintains two parallel data structures during the transition to the new MVC model:
- * - {@link currentTrackSelections} (old): per-track Map used by edit commands and legacy interaction.
- * - {@link currentSelection} (new): granular, model-level entries for the SelectionView and future features
- *   (clipboard, drag-drop, templates).
  */
 export class SelectionManager {
-    /** Current selections per track, including selected notes and range per track. */
-    public readonly currentTrackSelections: Map<ISbDmTrack, ITrackSelection> = new Map<ISbDmTrack, ITrackSelection>();
-
     /**
      * Granular selection entries keyed by a stable string identifier.
      * Keys follow the pattern `"granularity:bar:trackId[:step/noteId]"`.
@@ -76,10 +62,6 @@ export class SelectionManager {
     /** Owned view — handles pointer events, rect drawing, and DOM updates. Created lazily when the container is set. */
     private view?: SelectionView;
 
-    private anchor?: ISbDmNoteEvent;
-    private lastClickedNote?: ISbDmNoteEvent;
-    private lastMouseDownNote?: ISbDmNoteEvent;
-
     public constructor() {
         requisitions.register("selectionRectChanged", this.handleSelectionRectChanged);
         requisitions.register("playerStateChanged", this.handlePlayerStateChanged);
@@ -119,6 +101,17 @@ export class SelectionManager {
         this.view = new SelectionView(this, container);
     }
 
+    /**
+     * Sets the scroll host elements for the selection view.
+     * Must be called after {@link setEventContainer}.
+     *
+     * @param horizontal The horizontally-scrollable container (typically `#trackViewerHost`).
+     * @param vertical The vertically-scrollable container.
+     */
+    public setScrollHosts(horizontal: HTMLElement, vertical: HTMLElement): void {
+        this.view?.setScrollHosts(horizontal, vertical);
+    }
+
     public registerHitTester(tester: ISelectionHitTester): void {
         this.hitTesters.add(tester);
     }
@@ -128,145 +121,12 @@ export class SelectionManager {
     }
 
     /**
-     * Checks if a note is currently selected.
-     *
-     * @param note The note to check.
-     * @returns True if the note is selected.
-     */
-    public isSelected(note: ISbDmNoteEvent): boolean {
-        if (!this.currentTrackSelections.has(note.track)) {
-            return false;
-        }
-
-        return this.currentTrackSelections.get(note.track)!.selectedNotes.has(note);
-    }
-
-    /**
-     * Handles a click on a note, updating selections accordingly.
-     * - Clicking the current anchor again (and it is the only selection) will clear the selection.
-     * - Clicking selects a contiguous range between the anchor and the clicked note.
-     *
-     * @param clickedNote The clicked note.
-     */
-    public handleClick(clickedNote: ISbDmNoteEvent): void {
-        // Special case: deselect when clicking the anchor if it's the only note selected.
-        // This mirrors the legacy behavior where a second click on the anchor toggles it off.
-        if (clickedNote === this.anchor && this.currentTrackSelections.size === 1) {
-            const onlySelection = this.currentTrackSelections.get(this.anchor.track);
-            const isOnlySelected = onlySelection?.selectedNotes.size === 1
-                && onlySelection.selectedNotes.has(clickedNote);
-            if (isOnlySelected) {
-                this.clearSelection();
-
-                return;
-            }
-        }
-
-        // Selecting a single note is simpler than a range selection, so when starting from scratch
-        // or re-anchoring on the same note we restart the selection using the clicked note.
-        if (!this.currentTrackSelections.size || clickedNote === this.anchor) {
-            this.restartSelection(clickedNote);
-
-            return;
-        }
-
-        this.lastClickedNote = clickedNote;
-
-        // Step 1: rejig selection tracks before anything else.
-        this.recalcSelectedTracks(clickedNote);
-
-        if (this.currentTrackSelections.size === 1) {
-            const trackSelection = this.currentTrackSelections.get(this.anchor!.track)!;
-            const noteIterator = this.anchor!.track.notes;
-
-            this.deselectUntilMatch(trackSelection, noteIterator, (note) => {
-                return note === this.anchor || note === clickedNote;
-            });
-            this.selectUntilMatch(trackSelection, noteIterator, (note) => {
-                return note === this.anchor || note === clickedNote;
-            });
-            this.deselectUntilNoMoreSelected(trackSelection, noteIterator);
-        } else {
-            const anchorISbDmNoteEvent = document.getElementById(`note-${this.anchor!.id}`);
-            const clickedISbDmNoteEvent = document.getElementById(`note-${clickedNote.id}`);
-            const { left: anchorLeft, right: anchorRight } = anchorISbDmNoteEvent!.getBoundingClientRect();
-            const { left: clickedNoteLeft, right: clickedNoteRight } = clickedISbDmNoteEvent!.getBoundingClientRect();
-            const leftBound = anchorLeft < clickedNoteLeft ? anchorLeft : clickedNoteLeft;
-            const rightBound = anchorRight > clickedNoteRight ? anchorRight : clickedNoteRight;
-
-            // In this case, we know no track contains both anchor and clickedNote. Some may not include either.
-            for (const track of this.currentTrackSelections.keys()) {
-                const trackSelection = this.currentTrackSelections.get(track)!;
-                const noteIterator = track.notes;
-                const [knownNote, knownNoteIsOnLeftEdge, knownNoteIsOnRightEdge] =
-                    this.anchor!.track === track
-                        ? [this.anchor, anchorLeft === leftBound, anchorRight === rightBound]
-                        : clickedNote.track === track
-                            ? [clickedNote, clickedNoteLeft === leftBound, clickedNoteRight === rightBound]
-                            : [undefined];
-
-                if (knownNote) {
-                    const leftEdgeTest = knownNoteIsOnLeftEdge
-                        ? (note: ISbDmNoteEvent) => {
-                            return note === knownNote;
-                        }
-                        : this.getAboutHalfCoveredTest(leftBound, rightBound);
-                    this.deselectUntilMatch(trackSelection, noteIterator, leftEdgeTest);
-
-                    if (knownNoteIsOnRightEdge) {
-                        if (!knownNoteIsOnLeftEdge) {
-                            this.selectUntilMatch(trackSelection, noteIterator, (note) => {
-                                return note === knownNote;
-                            });
-                        }
-                    } else {
-                        this.selectUntilNoMoreMatches(trackSelection, noteIterator,
-                            this.getAboutHalfCoveredTest(leftBound, rightBound));
-                    }
-
-                    this.deselectUntilNoMoreSelected(trackSelection, noteIterator);
-                } else {
-                    const inclusionTest = this.getAboutHalfCoveredTest(leftBound, rightBound);
-
-                    this.deselectUntilMatch(trackSelection, noteIterator, inclusionTest);
-                    this.selectUntilNoMoreMatches(trackSelection, noteIterator, inclusionTest);
-                    this.deselectUntilNoMoreSelected(trackSelection, noteIterator);
-                }
-            }
-        }
-
-        void requisitions.execute("selectionChanged", { added: [], removed: [] });
-    }
-
-    /**
-     * Records the note where a drag selection begins.
-     *
-     * @param note The note where the mouse was pressed.
-     */
-    public handleMouseDown(note: ISbDmNoteEvent): void {
-        this.lastMouseDownNote = note;
-    }
-
-    /**
-     * Handles a drag selection up to the given note, restarting selection if necessary.
-     *
-     * @param note The note reached by the drag.
-     */
-    public handleDragSelect(note: ISbDmNoteEvent): void {
-        if (this.anchor !== this.lastMouseDownNote) {
-            this.restartSelection(this.lastMouseDownNote);
-        }
-
-        this.handleClick(note);
-    }
-
-    /**
-     * Whether any selection exists (old or new model).
+     * Whether any selection exists.
      *
      * @returns True if at least one selection entry exists.
      */
     public get hasSelection(): boolean {
-        return this.currentTrackSelections.size > 0 || this.currentSelection.size > 0;
+        return this.currentSelection.size > 0;
     }
 
     /**
@@ -311,8 +171,6 @@ export class SelectionManager {
      * @param selectionMode The selection mode to use for the new selection. If omitted, the current mode is used.
      */
     public beginSelection(selectionMode?: SelectionMode): void {
-        this.anchor = undefined;
-        this.lastClickedNote = undefined;
         this.previousEntries = [];
 
         if (selectionMode) {
@@ -367,6 +225,25 @@ export class SelectionManager {
 
         this.applySelection(entries);
         this.publishPlayRange();
+    }
+
+    /**
+     * Previews a note at the pointer position before selection is committed.
+     *
+     * @param clickRect A tiny rect at the pointer position.
+     */
+    public previewNote(clickRect: DOMRect): void {
+        const entries = this.resolveEntries(clickRect);
+        if (entries.length === 0 || entries[0].granularity !== SelectionGranularity.Note) {
+            return;
+        }
+
+        const noteIds = entries.flatMap((entry) => {
+            return entry.noteId === undefined ? [] : [entry.noteId];
+        });
+        if (noteIds.length > 0) {
+            void requisitions.execute("notesClicked", noteIds);
+        }
     }
 
     /**
@@ -438,11 +315,45 @@ export class SelectionManager {
      * Clears all selection state and publishes a change.
      */
     public clearSelection(): void {
-        const wasClear = this.internalClearSelection();
-        if (wasClear) {
-            this.anchor = undefined;
-            this.lastClickedNote = undefined;
+        this.internalClearSelection();
+    }
+
+    /**
+     * Selects exactly one grid cell, replacing the current selection.
+     *
+     * @param entry The grid note or rest cell to select.
+     */
+    public selectSingleNote(entry: ISelectionEntry): void {
+        if (entry.granularity !== SelectionGranularity.Note) {
+            return;
         }
+
+        const removed = [...this.currentSelection.values()];
+        const key = this.entryKey(entry);
+        this.currentSelection.clear();
+        this.currentSelection.set(key, entry);
+        this.previousEntries = [];
+
+        void requisitions.execute("selectionChanged", { added: [entry], removed });
+        this.schedulePersist();
+    }
+
+    /**
+     * Replaces the current selection with the given entries in a single change.
+     *
+     * @param entries The entries that become the new selection.
+     */
+    public replaceSelection(entries: ISelectionEntry[]): void {
+        const removed = [...this.currentSelection.values()];
+        this.currentSelection.clear();
+        for (const entry of entries) {
+            this.currentSelection.set(this.entryKey(entry), entry);
+        }
+
+        this.previousEntries = [];
+
+        void requisitions.execute("selectionChanged", { added: entries, removed });
+        this.schedulePersist();
     }
 
     /**
@@ -508,10 +419,9 @@ export class SelectionManager {
      * @returns True if there was a selection to clear, false otherwise.
      */
     private internalClearSelection(): boolean {
-        const hadSelection = this.currentTrackSelections.size > 0 || this.currentSelection.size > 0;
+        const hadSelection = this.currentSelection.size > 0;
         if (hadSelection) {
             const removed = [...this.currentSelection.values()];
-            this.currentTrackSelections.clear();
             this.currentSelection.clear();
             this.previousEntries = [];
             void requisitions.execute("selectionChanged", { added: [], removed });
@@ -563,170 +473,8 @@ export class SelectionManager {
         }
     }
 
-    private restartSelection(note?: ISbDmNoteEvent): void {
-        this.currentTrackSelections.clear();
-
-        if (note) {
-            this.currentTrackSelections.set(note.track, this.createTrackSelection(note));
-        }
-
-        this.anchor = note;
-        void requisitions.execute("selectionChanged", { added: [], removed: [] });
-    }
-
-    private recalcSelectedTracks(clickedNote: ISbDmNoteEvent): void {
-        const allTracks = this.anchor!.track.arrangement.tracks;
-        const anchorTrackIndex = allTracks.indexOf(this.anchor!.track);
-        const clickedTrackIndex = allTracks.indexOf(clickedNote.track);
-        const [start, end] = anchorTrackIndex < clickedTrackIndex
-            ? [anchorTrackIndex, clickedTrackIndex]
-            : [clickedTrackIndex, anchorTrackIndex];
-
-        let index = 0;
-        for (; index < start; index++) {
-            this.currentTrackSelections.delete(allTracks[index]);
-        }
-        for (; index <= end; index++) {
-            if (!this.currentTrackSelections.has(allTracks[index])) {
-                this.currentTrackSelections.set(allTracks[index], this.createTrackSelection());
-            }
-        }
-        for (; index < allTracks.length; index++) {
-            this.currentTrackSelections.delete(allTracks[index]);
-        }
-    }
-
-    private createTrackSelection(note?: ISbDmNoteEvent): ITrackSelection {
-        if (note) {
-            return {
-                selectedNotes: new Set<ISbDmNoteEvent>().add(note),
-                range: [note, note]
-            };
-        }
-
-        return {
-            selectedNotes: new Set(),
-            range: [undefined, undefined],
-        };
-    }
-
-    private getAboutHalfCoveredTest(leftBound: number, rightBound: number): ((note: ISbDmNoteEvent) => boolean) {
-        const selectionWidth = rightBound - leftBound;
-
-        return (note: ISbDmNoteEvent) => {
-            const testElement = document.getElementById(`note-${note.id}`)!;
-            const { left, right, width } = testElement.getBoundingClientRect();
-
-            if (right > rightBound) {
-                if (left > rightBound) {
-                    // This element is to the right of the selection area, with no overlap.
-                    return false;
-                }
-                if (left > leftBound) {
-                    // This element covers the right edge of the selection area.
-                    return (rightBound - left) / width > 0.4;
-                }
-                // This element is wider than the selection area, and completely covers it.
-
-                return selectionWidth / width > 0.4;
-            } else {
-                if (right < leftBound) {
-                    // This element is to the left of the selection area, with no overlap.
-                    return false;
-                }
-                if (left < leftBound) {
-                    // This element covers the left edge of the selection area.
-                    return (right - leftBound) / width > 0.4;
-                }
-                // This element is completely inside the selection area.
-
-                return true;
-            }
-        };
-    }
-
-    private deselectUntilMatch(trackSelection: ITrackSelection, iterator: IterableIterator<ISbDmNoteEvent>,
-        matches: (note: ISbDmNoteEvent) => boolean): void {
-        while (true) {
-            const next = iterator.next();
-            if (next.done) {
-                return;
-            }
-
-            const note = next.value;
-
-            if (matches(note)) {
-                trackSelection.range[0] = note;
-                // For cases where there's only one selected note in this track.
-                trackSelection.range[1] = note;
-                trackSelection.selectedNotes.add(note);
-
-                return;
-            }
-
-            trackSelection.selectedNotes.delete(note);
-        }
-    }
-
-    private selectUntilMatch(trackSelection: ITrackSelection, iterator: IterableIterator<ISbDmNoteEvent>,
-        matches: (note: ISbDmNoteEvent) => boolean): void {
-        while (true) {
-            const next = iterator.next();
-            if (next.done) {
-                return;
-            }
-
-            const note = next.value;
-            trackSelection.selectedNotes.add(note);
-
-            if (matches(note)) {
-                trackSelection.range[1] = note;
-
-                return;
-            }
-        }
-    }
-
-    private selectUntilNoMoreMatches(trackSelection: ITrackSelection, iterator: IterableIterator<ISbDmNoteEvent>,
-        matches: (note: ISbDmNoteEvent) => boolean): void {
-        while (true) {
-            const next = iterator.next();
-            if (next.done) {
-                return;
-            }
-
-            const note = next.value;
-
-            if (matches(note)) {
-                trackSelection.selectedNotes.add(note);
-                trackSelection.range[1] = note;
-            } else {
-                trackSelection.selectedNotes.delete(note);
-
-                return;
-            }
-        }
-    }
-
-    private deselectUntilNoMoreSelected(trackSelection: ITrackSelection,
-        iterator: IterableIterator<ISbDmNoteEvent>): void {
-        while (true) {
-            const next = iterator.next();
-            if (next.done) {
-                return;
-            }
-
-            const note = next.value;
-
-            if (trackSelection.selectedNotes.has(note)) {
-                trackSelection.selectedNotes.delete(note);
-            } else {
-                return;
-            } // Once we find no more selected notes, we're done.
-        }
-    }
-
     /**
+     * Filters entries to the most specific granularity present, discarding all others.
      * Filters entries to the most specific granularity present, discarding all others.
      * When any Note entries exist only Notes are kept; otherwise NoteGroups; then TrackPieces; etc.
      *
@@ -765,12 +513,11 @@ export class SelectionManager {
             rawEntries.push(...tester.hitTest(rect));
         }
 
-        if (rawEntries.some((e) => {
-            return e.granularity === SelectionGranularity.Track;
-        })) {
-            return rawEntries.filter((e) => {
-                return e.granularity === SelectionGranularity.Track;
-            });
+        const trackEntries = rawEntries.filter((entry) => {
+            return entry.granularity === SelectionGranularity.Track;
+        });
+        if (trackEntries.length > 0) {
+            return trackEntries;
         }
 
         return this.filterToDominantGranularity(rawEntries);

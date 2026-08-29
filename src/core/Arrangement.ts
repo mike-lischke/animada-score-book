@@ -14,6 +14,16 @@ import type { IArrangementSnapshot, ITimeParams, ITrackSnapshot } from "./types/
 import { getNewId } from "./utils.js";
 import { arrangementSnapshotVersion } from "./serialisation/snapshots.js";
 
+/** Initial title and timing options for creating a new arrangement. */
+export interface IArrangementCreationOptions {
+    title?: string;
+    timeSignature?: string;
+    tempo?: number;
+    length?: number;
+    pulse?: string;
+    stepResolution?: number;
+}
+
 export class Arrangement implements ISbDmArrangement {
     public readonly type = SbDmEntityType.Arrangement;
     public id = getNewId();
@@ -43,19 +53,46 @@ export class Arrangement implements ISbDmArrangement {
      * @returns A new arrangement ready for editing.
      */
     public static emptyArrangement(instruments: ISbDmInstrument[]): Arrangement {
-        const arrangement = new Arrangement();
-        arrangement.timeParams = new TimeParams("4/4", 110, 1, "1/4", 16);
-
         // Default instrument type-ids from the legacy emptySongString.
         const typeIds = ["0", "1", "2", "3", "5", "6", "7", "8", "9"];
-        for (const typeId of typeIds) {
-            const instrument = instruments.find((inst) => {
-                return inst.typeId === typeId;
+        const selected = typeIds
+            .map((typeId) => {
+                return instruments.find((inst) => {
+                    return inst.typeId === typeId;
+                });
+            })
+            .filter((instrument): instrument is ISbDmInstrument => {
+                return instrument !== undefined;
             });
 
-            if (instrument) {
-                arrangement.addTrack(instrument);
-            }
+        return Arrangement.emptyArrangementWithInstruments(selected);
+    }
+
+    /**
+     * Creates an empty arrangement with one bar and a track for each given instrument.
+     *
+     * @param instruments The instruments that should each receive a track.
+     * @param options Optional initial title and timing parameters; defaults to 4/4, 110 BPM, one bar.
+     *
+     * @returns A new arrangement ready for editing.
+     */
+    public static emptyArrangementWithInstruments(instruments: ISbDmInstrument[],
+        options?: IArrangementCreationOptions): Arrangement {
+        const arrangement = new Arrangement();
+        arrangement.timeParams = new TimeParams(
+            options?.timeSignature ?? "4/4",
+            options?.tempo ?? 110,
+            options?.length ?? 1,
+            options?.pulse ?? "1/4",
+            options?.stepResolution ?? 16,
+        );
+
+        if (options?.title) {
+            arrangement.title = options.title;
+        }
+
+        for (const instrument of instruments) {
+            arrangement.addTrack(instrument);
         }
 
         return arrangement;
@@ -85,11 +122,16 @@ export class Arrangement implements ISbDmArrangement {
                         return {
                             number: measure.number,
                             meter: { ...measure.meter },
-                            steps: measure.steps.map((step) => {
-                                return { ...step };
+                            events: measure.events.map((event) => {
+                                return {
+                                    start: { ...event.start },
+                                    duration: { ...event.duration },
+                                    noteStyleId: event.noteStyleId,
+                                    articulation: event.articulation ? { ...event.articulation } : undefined,
+                                };
                             }),
-                            subdivisions: measure.subdivisions.map((sub) => {
-                                return { ...sub };
+                            subdivisions: measure.subdivisions.map((subdivision) => {
+                                return { ...subdivision };
                             }),
                         };
                     }),
@@ -98,6 +140,7 @@ export class Arrangement implements ISbDmArrangement {
             measureLabels: Object.keys(this.measureLabels).length > 0
                 ? { ...this.measureLabels }
                 : undefined,
+            scoreId: this.id >= 10000 ? this.id : undefined,
         };
     }
 
@@ -145,6 +188,123 @@ export class Arrangement implements ISbDmArrangement {
     };
 
     /**
+     * Duplicates the given track, inserting the copy right after the original.
+     *
+     * @param trackToDuplicate The track to duplicate.
+     * @returns The newly created duplicate track.
+     */
+    public duplicateTrack(trackToDuplicate: ISbDmTrack): ISbDmTrack {
+        const index = this.tracks.indexOf(trackToDuplicate);
+        if (index === -1) {
+            throw new Error(`Track not found for duplication. id: ${trackToDuplicate.id}`);
+        }
+
+        const copy = new Track(this, trackToDuplicate.instrument);
+        copy.name = trackToDuplicate.name;
+        copy.volume = trackToDuplicate.volume;
+        copy.effectiveVolume = trackToDuplicate.effectiveVolume;
+
+        // Deep-copy the measure contents (note styles and subdivisions) into the new track.
+        for (let measureIndex = 0; measureIndex < copy.measures.length; measureIndex++) {
+            const source = trackToDuplicate.measures[measureIndex];
+            const target = copy.measures[measureIndex];
+
+            target.events.splice(0, target.events.length,
+                ...source.events.map((event) => {
+                    return {
+                        start: { ...event.start },
+                        duration: { ...event.duration },
+                        noteStyleId: event.noteStyleId,
+                        articulation: event.articulation ? { ...event.articulation } : undefined,
+                    };
+                }));
+            target.subdivisions.splice(0, target.subdivisions.length,
+                ...source.subdivisions.map((subdivision) => {
+                    return { ...subdivision };
+                }));
+        }
+
+        this.tracks.splice(index + 1, 0, copy);
+        void requisitions.execute("arrangementChanged", this.id);
+
+        return copy;
+    };
+
+    /**
+     * Inserts a number of bars before or after the given bar. When copyContent is set, the content
+     * of the bar preceding the insertion point is copied into each new bar.
+     *
+     * @param barNumber The 1-based bar the new bars are inserted relative to.
+     * @param count The number of bars to insert.
+     * @param before True to insert before barNumber, false to insert after it.
+     * @param copyContent True to copy the content of the preceding bar into the new bars.
+     */
+    public insertBars(barNumber: number, count: number, before: boolean, copyContent: boolean): void {
+        const atIndex = before ? barNumber - 1 : barNumber;
+        const sourceIndex = before ? barNumber - 2 : barNumber - 1;
+
+        for (const track of this.tracks) {
+            const source = copyContent ? track.measures[sourceIndex] : undefined;
+            const concreteTrack = track as Track;
+            for (let i = 0; i < count; i++) {
+                concreteTrack.insertMeasure(atIndex + i, source);
+            }
+        }
+
+        this.timeParams.length += count;
+        this.shiftMeasureLabels(atIndex + 1, count);
+        void requisitions.execute("arrangementChanged", this.id);
+    }
+
+    /**
+     * Deletes the given bar from all tracks.
+     *
+     * @param barNumber The 1-based bar to delete.
+     */
+    public deleteBar(barNumber: number): void {
+        if (this.timeParams.length <= 1) {
+            return;
+        }
+
+        for (const track of this.tracks) {
+            (track as Track).deleteMeasure(barNumber - 1);
+        }
+
+        this.timeParams.length -= 1;
+        this.removeMeasureLabel(barNumber);
+        void requisitions.execute("arrangementChanged", this.id);
+    }
+
+    /**
+     * Removes all notes and subdivisions from the given bar in every track.
+     *
+     * @param barNumber The 1-based bar to clear.
+     */
+    public clearBar(barNumber: number): void {
+        for (const track of this.tracks) {
+            (track as Track).clearMeasure(barNumber - 1);
+            void requisitions.execute("trackChanged", track.id);
+        }
+
+        void requisitions.execute("arrangementChanged", this.id);
+    }
+
+    /**
+     * Duplicates the given bar, inserting the copy right after it.
+     *
+     * @param barNumber The 1-based bar to duplicate.
+     */
+    public duplicateBar(barNumber: number): void {
+        for (const track of this.tracks) {
+            (track as Track).duplicateMeasure(barNumber - 1);
+        }
+
+        this.timeParams.length += 1;
+        this.shiftMeasureLabels(barNumber + 1, 1);
+        void requisitions.execute("arrangementChanged", this.id);
+    }
+
+    /**
      * Current arrangement title.
      *
      * @returns The title string, defaulting to "Untitled Arrangement" if not set.
@@ -168,33 +328,36 @@ export class Arrangement implements ISbDmArrangement {
         // same TPs. However, applying the full snapshot is required for Undo/Redo.
         this.applyTimeParams(arrangementSnapshot);
         this.title = arrangementSnapshot.title ?? "Untitled Arrangement";
+
+        if (arrangementSnapshot.scoreId !== undefined) {
+            this.id = arrangementSnapshot.scoreId;
+        }
+
         this.measureLabels = arrangementSnapshot.measureLabels
             ? { ...arrangementSnapshot.measureLabels }
             : {};
 
-        // Remove tracks that aren't in the snapshot. Iterate backwards because removeTrack mutates this.tracks.
-        for (let trackIndex = this.tracks.length - 1; trackIndex >= 0; trackIndex--) {
-            const track = this.tracks[trackIndex];
-            if (!arrangementSnapshot.tracks.some((trackSnapshot) => {
-                return trackSnapshot.id === track.id;
-            })) {
-                this.removeTrack(track);
-            }
-        }
+        // Rebuild the track list in snapshot order. Reusing addTrack here would re-sort by instrument
+        // displayOrder, which is unstable when several tracks share the same instrument — a restored
+        // (undone) track would then land at the end instead of its previous position.
+        const restoredTracks: ISbDmTrack[] = [];
 
-        // Add missing tracks
-        arrangementSnapshot.tracks.forEach((trackSnapshot) => {
-            let track = this.tracks.find((track) => {
-                return track.id === trackSnapshot.id;
-            });
-
+        for (const trackSnapshot of arrangementSnapshot.tracks) {
             const instrument = instruments.find((inst) => {
                 return inst.typeId === trackSnapshot.instrumentId;
             })!;
 
-            track ??= this.addTrack(instrument, trackSnapshot.id);
+            const existingTrack = this.tracks.find((track) => {
+                return track.id === trackSnapshot.id;
+            });
+            const track = existingTrack ?? new Track(this, instrument, trackSnapshot.id);
+
             this.applyTrackSnapshot(track as Track, trackSnapshot);
-        });
+            restoredTracks.push(track);
+        }
+
+        this.tracks.splice(0, this.tracks.length, ...restoredTracks);
+        void requisitions.execute("arrangementChanged", this.id);
     };
 
     /**
@@ -225,13 +388,18 @@ export class Arrangement implements ISbDmArrangement {
                     ...measureSnapshot.meter,
                     beatGroups,
                 },
-                steps: measureSnapshot.steps.map((step) => {
-                    return { ...step };
+                events: measureSnapshot.events.map((event) => {
+                    return {
+                        start: { ...event.start },
+                        duration: { ...event.duration },
+                        noteStyleId: event.noteStyleId,
+                        articulation: event.articulation ? { ...event.articulation } : undefined,
+                    };
                 }),
                 subdivisions: measureSnapshot.subdivisions.map((subdivision) => {
                     return { ...subdivision };
                 }),
-                events: [],
+                noteEvents: [],
             };
         });
 
@@ -241,5 +409,46 @@ export class Arrangement implements ISbDmArrangement {
 
     private getTrackMeasureId(track: Track, measureNumber: number): number {
         return (track.id * 100) + measureNumber;
+    }
+
+    /**
+     * Shifts section labels starting at the given bar by the given delta. Labels that would move below
+     * bar 1 are dropped.
+     *
+     * @param fromBar The 1-based bar from which labels are shifted.
+     * @param delta The number of bars to shift by (positive or negative).
+     */
+    private shiftMeasureLabels(fromBar: number, delta: number): void {
+        const shifted: Record<number, string> = {};
+
+        for (const [barString, label] of Object.entries(this.measureLabels)) {
+            const bar = Number(barString);
+            const newBar = bar >= fromBar ? bar + delta : bar;
+            if (newBar >= 1) {
+                shifted[newBar] = label;
+            }
+        }
+
+        this.measureLabels = shifted;
+    }
+
+    /**
+     * Removes the section label of the given bar and shifts later labels down by one.
+     *
+     * @param barNumber The 1-based bar whose label is removed.
+     */
+    private removeMeasureLabel(barNumber: number): void {
+        const shifted: Record<number, string> = {};
+
+        for (const [barString, label] of Object.entries(this.measureLabels)) {
+            const bar = Number(barString);
+            if (bar === barNumber) {
+                continue;
+            }
+
+            shifted[bar > barNumber ? bar - 1 : bar] = label;
+        }
+
+        this.measureLabels = shifted;
     }
 };

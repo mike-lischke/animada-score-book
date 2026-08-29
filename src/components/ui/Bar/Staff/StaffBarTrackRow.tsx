@@ -9,10 +9,8 @@ import type {
     ISbDmTrack,
     ITimeParamsView, ScoreBookDataModel
 } from "../../../../core/ScoreBookDataModel.js";
-import type { UndoManager } from "../../../../core/UndoManager.js";
 import type { ArrangementPlayer } from "../../../../player/ArrangementPlayer.js";
 import type { TrackPlayer } from "../../../../player/TrackPlayer.js";
-import type { ScoreBookUiServices } from "../../../../player/types.js";
 import { requisitions } from "../../../../supplement/Requisitions.js";
 import { UIComponent, type ICommonUIProperties } from "../../framework/UIComponent.js";
 import { StaffNoteViewer } from "../../Note/StaffNoteViewer.js";
@@ -24,9 +22,7 @@ export interface IStaffBarTrackRowProps extends ICommonUIProperties {
 
     trackPlayer: TrackPlayer;
     arrangementPlayer: ArrangementPlayer;
-    touchEditingEnabled: boolean;
-    services: ScoreBookUiServices;
-    undoManager: UndoManager;
+    inEditMode: boolean;
     dataModel: ScoreBookDataModel;
 }
 
@@ -56,10 +52,7 @@ export class StaffBarTrackRow extends UIComponent<IStaffBarTrackRowProps, IStaff
         const { arrangementPlayer, barNumber, timeParams, track } = this.props;
 
         const measure = track.measures[barNumber - 1];
-        const baseSteps = measure.steps.length
-            - measure.subdivisions.reduce((sum, s) => {
-                return sum + s.actual - s.normal;
-            }, 0);
+        const baseSteps = measure.meter.stepResolution;
 
         const maxNoteLine = Math.max(1, ...Object.values(track.instrument.noteStyles).map((ns) => {
             return ns.noteLine ?? 1;

@@ -165,5 +165,17 @@ This opens the app at `http://localhost:5173` and updates automatically as you e
 
 The project is written in **TypeScript** with **Preact** for the UI, **SCSS** and **Tailwind** for styling, and **DaisyUI** for components. The backend is a plain Node.js HTTP server with MySQL/MariaDB/PostgreSQL adapters.
 
+### Database Migrations
+
+Schema changes are managed through timestamped SQL migration files in the `migrations/` directory. The migration runner executes automatically on server startup — no manual steps needed.
+
+**Branch-specific databases:** When working on a feature branch, the server automatically creates and uses a branch-specific copy of the main database (named `<database>__<branch>`). This isolates schema changes during development. The main branch and release branches always use the base database name.
+
+**After rebasing** onto an updated `main` branch, restart the backend server. The migration runner will detect and apply any new migrations from `main`, then re-apply your branch's migrations on the updated schema.
+
+**Cleaning up:** Run `npm run db:cleanup` to scan for orphaned branch databases (branches that have been deleted locally) and get instructions for dropping them.
+
+**Migration files** use `-- @mysql` and `-- @postgres` markers to include engine-specific DDL in the same file. Only DDL statements belong in migrations — no data manipulation.
+
 ### VS Code ###
 This project ist developed in VS Code and already has a launch configuration you can use to start a debugging session.

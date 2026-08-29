@@ -5,7 +5,7 @@
 
 import { expect, test } from "@playwright/test";
 
-import { routeApi } from "./helpers.js";
+import { routeApi } from "./e2e-test-helpers.js";
 
 const bolero3Url = "/?t=Bolero%203&a2=6-8.50.1.3-8.8.319ihbrp-4UX1WbY5oS";
 

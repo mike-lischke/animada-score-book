@@ -9,18 +9,15 @@ import {
     isPackedArrangement, packArrangementSnapshot, stringifyPackedArrangement, tryParsePackedArrangement,
     unpackArrangementSnapshot
 } from "../../../src/core/serialisation/snapshot-packing.js";
+import {
+    unpackLegacyArrangement, type ILegacyPackedArrangement
+} from "../../../src/core/serialisation/migration/legacy-packing.js";
 import type { IArrangementSnapshot } from "../../../src/core/types/general.js";
 
 const sampleSnapshot: IArrangementSnapshot = {
-    version: 3,
+    version: 4,
     title: "Sample",
-    timeParams: {
-        timeSignature: "4/4",
-        tempo: 120,
-        length: 2,
-        pulse: "4n",
-        stepResolution: 16,
-    },
+    timeParams: { timeSignature: "4/4", tempo: 120, length: 2, pulse: "4n", stepResolution: 16 },
     tracks: [
         {
             id: 1,
@@ -34,23 +31,19 @@ const sampleSnapshot: IArrangementSnapshot = {
                         stepResolution: 16,
                         beatGroups: [4, 4, 4, 4],
                     },
-                    steps: [
-                        { index: 0, noteStyleId: "x" },
-                        { index: 1 },
-                        { index: 2 },
-                        { index: 3 },
-                        { index: 4, noteStyleId: "o" },
-                        { index: 5 },
-                        { index: 6 },
-                        { index: 7 },
-                        { index: 8 },
-                        { index: 9 },
-                        { index: 10 },
-                        { index: 11 },
-                        { index: 12 },
-                        { index: 13 },
-                        { index: 14 },
-                        { index: 15 },
+                    events: [
+                        {
+                            start: { numerator: 0, denominator: 1 },
+                            duration: { numerator: 1, denominator: 16 },
+                            noteStyleId: "x",
+                        },
+                        { start: { numerator: 1, denominator: 16 }, duration: { numerator: 3, denominator: 16 } },
+                        {
+                            start: { numerator: 1, denominator: 4 },
+                            duration: { numerator: 1, denominator: 16 },
+                            noteStyleId: "o",
+                        },
+                        { start: { numerator: 5, denominator: 16 }, duration: { numerator: 11, denominator: 16 } },
                     ],
                     subdivisions: [],
                 },
@@ -62,9 +55,7 @@ const sampleSnapshot: IArrangementSnapshot = {
                         stepResolution: 16,
                         beatGroups: [4, 4, 4, 4],
                     },
-                    steps: Array.from({ length: 16 }, (_, index) => {
-                        return { index };
-                    }),
+                    events: [{ start: { numerator: 0, denominator: 1 }, duration: { numerator: 1, denominator: 1 } }],
                     subdivisions: [],
                 },
             ],
@@ -80,9 +71,7 @@ const sampleSnapshot: IArrangementSnapshot = {
                     stepResolution: 16,
                     beatGroups: [4, 4, 4, 4],
                 },
-                steps: Array.from({ length: 16 }, (_, index) => {
-                    return { index };
-                }),
+                events: [{ start: { numerator: 0, denominator: 1 }, duration: { numerator: 1, denominator: 1 } }],
                 subdivisions: [],
             }],
         },
@@ -131,8 +120,8 @@ describe("CompactSnapshot", () => {
         expect(restored).toEqual(sampleSnapshot);
     });
 
-    it("normalizes null parentSubdivisionId from packed JSON", () => {
-        const packedWithNullParent = {
+    it("normalizes null parentSubdivisionId from legacy packed JSON", () => {
+        const packedWithNullParent: ILegacyPackedArrangement = {
             v: 2,
             t: "Tuplet Null Parent",
             p: ["6/8", 50, 1, "3/8", 8],
@@ -148,13 +137,31 @@ describe("CompactSnapshot", () => {
             ]],
         };
 
-        const restored = tryParsePackedArrangement(JSON.stringify(packedWithNullParent));
+        const restored = unpackLegacyArrangement(packedWithNullParent);
 
-        expect(restored).toBeDefined();
-        if (!restored) {
-            throw new Error("Expected packed snapshot to parse");
-        }
         expect(restored.tracks[0]?.measures[0]?.subdivisions[0]?.parentSubdivisionId).toBe(1);
         expect(restored.tracks[0]?.measures[0]?.subdivisions[0]?.isTuplet).toBe(false);
+    });
+
+    it("preserves scoreId through pack → stringify → parse → unpack round-trip", () => {
+        const withScoreId: IArrangementSnapshot = { ...sampleSnapshot, scoreId: 12345 };
+        const packed = packArrangementSnapshot(withScoreId);
+        const json = JSON.stringify(packed);
+        const restored = tryParsePackedArrangement(json);
+
+        expect(restored).toBeDefined();
+        expect(restored!.scoreId).toBe(12345);
+    });
+
+    it("omits scoreId from packed output when not set", () => {
+        const withoutScoreId: IArrangementSnapshot = { ...sampleSnapshot };
+        delete withoutScoreId.scoreId;
+
+        const packed = packArrangementSnapshot(withoutScoreId);
+        const json = JSON.stringify(packed);
+        const restored = tryParsePackedArrangement(json);
+
+        expect(restored).toBeDefined();
+        expect(restored!.scoreId).toBeUndefined();
     });
 });

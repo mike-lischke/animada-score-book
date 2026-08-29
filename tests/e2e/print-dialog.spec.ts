@@ -5,7 +5,7 @@
 
 import { expect, test, type Page } from "@playwright/test";
 
-import { routeApi } from "./helpers.js";
+import { routeApi } from "./e2e-test-helpers.js";
 
 test.beforeEach(async ({ page }) => {
     await routeApi(page);

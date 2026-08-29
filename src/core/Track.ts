@@ -8,7 +8,8 @@ import {
     SbDmEntityType, type ISbDmArrangement, type ISbDmInstrument, type ISbDmNoteEvent, type ISbDmTrack,
     type ISbDmTrackMeasure, type ITiming
 } from "./ScoreBookDataModel.js";
-import { reduceFraction } from "./serialisation/numeric-functions.js";
+import { addFractions, compareFractions, reduceFraction } from "./serialisation/numeric-functions.js";
+import type { Mutable } from "./types/general.js";
 import { createBeatGroups, getNewId } from "./utils.js";
 
 /**
@@ -56,50 +57,22 @@ export class Track implements ISbDmTrack {
             return undefined;
         }
 
-        const expectedStart = reduceFraction(timing.step - 1, stepsPerBar);
+        const slotStart = reduceFraction(timing.step - 1, stepsPerBar);
 
-        // Find an event that starts exactly at this grid slot. Grid-aligned notes may carry an
-        // extended duration (a multiple of 1/stepsPerBar) when they absorb the rest gap that
-        // follows them within their pulse — these are still considered the "note at this slot".
-        // Polyrhythm-shaped events (non-grid durations) are excluded here; they're surfaced via
-        // the overlap branch below as synthesised rests so the grid view doesn't render them.
-        const event = measure.events.find((candidate) => {
-            const sameStart = candidate.start.numerator === expectedStart.numerator
-                && candidate.start.denominator === expectedStart.denominator;
-            if (!sameStart) {
+        // Find a sounding note that covers this grid slot. Grid-aligned notes start exactly on the
+        // slot; a longer note may cover a slot without starting there.
+        const event = measure.noteEvents.find((candidate) => {
+            if (!candidate.audioData) {
                 return false;
             }
 
-            // duration === k / stepsPerBar (integer k ≥ 1)
-            return (candidate.duration.numerator * stepsPerBar) % candidate.duration.denominator === 0;
+            const candidateEnd = addFractions(candidate.start, candidate.duration);
+
+            return compareFractions(candidate.start, slotStart) <= 0 && compareFractions(slotStart, candidateEnd) < 0;
         });
 
         if (event) {
             return event;
-        }
-
-        // The step is either uncovered or covered by a non-grid (polyrhythm-shaped) event.
-        // We can only tell the two apart by checking whether *any* event overlaps the slot.
-        const slotEnd = reduceFraction(timing.step, stepsPerBar);
-        const overlapped = measure.events.some((candidate) => {
-            const candidateEndNumerator = (candidate.start.numerator * candidate.duration.denominator)
-                + (candidate.duration.numerator * candidate.start.denominator);
-            const candidateEndDenominator = candidate.start.denominator * candidate.duration.denominator;
-            // candidate.start < slotEnd && candidateEnd > slot.start
-            const startsBeforeSlotEnd = (candidate.start.numerator * slotEnd.denominator)
-                < (slotEnd.numerator * candidate.start.denominator);
-            const endsAfterSlotStart = (candidateEndNumerator * expectedStart.denominator)
-                > (expectedStart.numerator * candidateEndDenominator);
-
-            return startsBeforeSlotEnd && endsAfterSlotStart;
-        });
-
-        if (overlapped) {
-            // Covered by a polyrhythm-shaped event: don't render a grid slot here.
-            // Return a transient rest placeholder so the UI grid still has 16 slots,
-            // but mark the event in a way that can be detected by editors. The current
-            // UI consumers filter by event presence, so we return a placeholder rest.
-            return this.createSynthesisedRest(measure, timing);
         }
 
         return this.createSynthesisedRest(measure, timing);
@@ -116,7 +89,7 @@ export class Track implements ISbDmTrack {
 
         return (function* () {
             for (const measure of measures) {
-                for (const event of measure.events) {
+                for (const event of measure.noteEvents) {
                     yield event;
                 }
             }
@@ -124,17 +97,89 @@ export class Track implements ISbDmTrack {
     }
 
     /**
-     * Clears every measure event by setting its `noteStyle` to undefined. Publishes once.
+     * Removes all notes and subdivisions from every measure.
      */
     public clear(): void {
         for (const measure of this.measures) {
-            for (const event of measure.events) {
-                if (event.audioData !== undefined) {
-                    event.audioData = undefined;
-                }
-            }
+            measure.events.splice(0, measure.events.length, {
+                start: { numerator: 0, denominator: 1 },
+                duration: { numerator: 1, denominator: 1 },
+            });
+            measure.subdivisions.splice(0, measure.subdivisions.length);
+            measure.noteEvents.splice(0, measure.noteEvents.length);
         }
+
         void requisitions.execute("trackChanged", this.id);
+    }
+
+    /**
+     * Inserts a new measure at the given 0-based index. When a source measure is given, its steps and
+     * subdivisions are copied into the new measure; otherwise the measure is empty.
+     *
+     * @param atIndex The 0-based index at which to insert.
+     * @param source The measure to copy content from, or undefined for an empty measure.
+     */
+    public insertMeasure(atIndex: number, source?: ISbDmTrackMeasure): void {
+        const measure = this.createEmptyMeasure(atIndex + 1);
+        if (source) {
+            measure.events.splice(0, measure.events.length, ...source.events.map((event) => {
+                return {
+                    start: { ...event.start },
+                    duration: { ...event.duration },
+                    noteStyleId: event.noteStyleId,
+                    articulation: event.articulation ? { ...event.articulation } : undefined,
+                };
+            }));
+
+            measure.subdivisions.splice(0, measure.subdivisions.length, ...source.subdivisions.map((subdivision) => {
+                return { ...subdivision };
+            }));
+        }
+
+        this.measures.splice(atIndex, 0, measure);
+        this.renumberMeasures();
+    }
+
+    /**
+     * Deletes the measure at the given 0-based index.
+     *
+     * @param atIndex The 0-based index of the measure to delete.
+     */
+    public deleteMeasure(atIndex: number): void {
+        this.measures.splice(atIndex, 1);
+        this.renumberMeasures();
+    }
+
+    /**
+     * Removes all notes and subdivisions from the measure at the given 0-based index.
+     *
+     * @param atIndex The 0-based index of the measure to clear.
+     */
+    public clearMeasure(atIndex: number): void {
+        const measure = this.measures[atIndex];
+        measure.events.splice(0, measure.events.length, {
+            start: { numerator: 0, denominator: 1 },
+            duration: { numerator: 1, denominator: 1 },
+        });
+        measure.subdivisions.splice(0, measure.subdivisions.length);
+        measure.noteEvents.splice(0, measure.noteEvents.length);
+    }
+
+    /**
+     * Duplicates the measure at the given 0-based index, inserting the copy right after it.
+     *
+     * @param atIndex The 0-based index of the measure to duplicate.
+     */
+    public duplicateMeasure(atIndex: number): void {
+        this.insertMeasure(atIndex + 1, this.measures[atIndex]);
+    }
+
+    private renumberMeasures(): void {
+        for (let index = 0; index < this.measures.length; index++) {
+            const measure = this.measures[index] as Mutable<ISbDmTrackMeasure>;
+            measure.number = index + 1;
+            measure.id = this.getMeasureId(index + 1);
+        }
     }
 
     private createEmptyMeasure(measureNumber: number): ISbDmTrackMeasure {
@@ -152,11 +197,12 @@ export class Track implements ISbDmTrack {
                 stepResolution: stepsPerBar,
                 beatGroups: createBeatGroups(beats, beatUnits, stepsPerBar),
             },
-            steps: Array.from({ length: stepsPerBar }, (_, index) => {
-                return { index };
-            }),
+            events: [{
+                start: { numerator: 0, denominator: 1 },
+                duration: { numerator: 1, denominator: 1 },
+            }],
             subdivisions: [],
-            events: [],
+            noteEvents: [],
         };
     }
 

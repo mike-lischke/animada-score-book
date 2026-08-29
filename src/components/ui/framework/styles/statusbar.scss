@@ -38,6 +38,11 @@
         border-radius: 0;
         font-size: inherit;
 
+        // Icons default to --color-base-content; override to match the statusbar's own foreground.
+        .icon {
+            color: var(--color-primary-content);
+        }
+
         &.statusbar-item-clickable {
             cursor: pointer;
 

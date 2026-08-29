@@ -1,0 +1,1728 @@
+/*
+ * Copyright (c) Mike Lischke. All rights reserved.
+ * Licensed under the MIT License. See License.txt in the project root for license information.
+ */
+
+@use "../grid-shared" as score;
+
+.separator {
+    flex-shrink: 0;
+    width: 8px;
+    height: 60%;
+    margin-left: 8px;
+    display: inline-block;
+    border-left: var(--color-base-content) dotted 1px;
+}
+
+#undoRedoControls .button {
+    padding: 4px;
+}
+
+#popover-slider-popover::after {
+    content: "";
+    position: absolute;
+    top: -5px;
+    left: 50%;
+    transform: translateX(-50%) rotate(45deg);
+
+    width: 10px;
+    height: 10px;
+    border-top: 1px solid var(--color-base-300);
+    border-left: 1px solid var(--color-base-300);
+    background-color: var(--color-base-100);
+}
+
+.playStopButton,
+.undoRedoButton,
+.editSaveButton,
+#recordButton,
+#pauseButton {
+    height: 36px;
+    width: 36px;
+    padding: 0;
+    border-radius: 50%;
+    background-color: var(--color-base-100);
+
+    &:not(:disabled):hover {
+        border-color: var(--color-primary);
+        background: color-mix(in srgb, var(--color-primary) 10%, var(--color-base-100));
+    }
+}
+
+.editSaveButton.large {
+    height: 44px;
+    width: 44px;
+}
+
+.editSaveButton,
+.undoRedoButton,
+.noteStyleButton {
+    border: 1px solid color-mix(in srgb, var(--color-base-content) 30%, transparent);
+}
+
+.playStopButton svg,
+#recordButton svg,
+#pauseButton svg {
+    height: 36px;
+    width: 36px;
+}
+
+.playControlsGooey,
+.undoRedoGooey,
+.editSaveGooey {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.noteStyleBarHost {
+    margin-left: 4px;
+}
+
+.noteStyleLabel {
+    margin: 0 12px 0 0;
+    color: var(--color-base-content);
+    white-space: nowrap;
+}
+
+.noteStyleBar {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.noteStyleButton {
+    height: 40px;
+    width: 40px;
+    min-width: 40px;
+    padding: 0;
+    border-radius: 50%;
+    background-color: var(--color-base-100);
+    flex-shrink: 0;
+    box-shadow: none;
+
+    &:not(:disabled):hover {
+        border-color: var(--color-primary);
+        background: color-mix(in srgb, var(--color-primary) 10%, var(--color-base-100));
+    }
+
+    &.du-btn-primary {
+        background-color: var(--color-primary);
+        border-color: var(--color-primary);
+
+        .icon.note-style-symbol {
+            background-color: var(--color-primary-content);
+        }
+    }
+}
+
+.noteStyleBar .icon.note-style-symbol {
+    width: 24px;
+    height: 24px;
+}
+
+#volumeSlider,
+#tempoSlider {
+    margin: 0;
+    flex: 0 0 auto;
+}
+
+.softButton {
+    border: 1px solid var(--color-base-100);
+    background-image: linear-gradient(145deg, var(--color-base-200), var(--color-base-100));
+}
+
+.note-width {
+    flex-basis: var(--note-height);
+    flex-grow: 1;
+    flex-shrink: 0;
+}
+
+#trackViewerContainer {
+    --bar-action-strip-height: 52px;
+
+    &.edit-mode {
+
+        .trackControlsPanel,
+        .trackEditSidebarPanel {
+            padding-top: var(--bar-action-strip-height);
+        }
+    }
+
+    #trackViewerHost {
+        margin-bottom: 35px;
+        overflow-x: auto;
+        flex: 1 1 auto;
+        min-width: 600px;
+        scrollbar-width: none;
+        -ms-overflow-style: none;
+        touch-action: pan-x;
+
+        &::-webkit-scrollbar {
+            display: none;
+        }
+
+        #trackViewerContentHost {
+            padding-top: 0;
+            min-width: 100%;
+
+            #trackViewerDecorations,
+            #trackViewerDecorationOverlay {
+                position: absolute;
+                flex-grow: 1;
+                overflow: hidden;
+
+                left: 0;
+                top: 0;
+                right: 0;
+                bottom: 0;
+
+                pointer-events: none;
+            }
+
+            #playBeam {
+                width: 4px;
+                border: none;
+                background-color: var(--color-primary);
+                border-radius: 4px;
+                position: absolute;
+                top: 0;
+                bottom: 0;
+                left: -500px;
+            }
+
+            #playRange {
+                width: 0;
+                background-color: oklch(95% 0.20043 108 / 0.15);
+                border: 1px solid oklch(91% 0.2 107);
+                border-radius: 12px;
+
+                position: absolute;
+                top: 0;
+                bottom: 0;
+                left: -500px;
+
+                transition: left 0.050s linear;
+            }
+
+            @include score.score-grid-rules($useThemeColors: true, $renderBeam: true, $beatNumberTop: 10px);
+        }
+    }
+
+    .trackControlsList {
+        --track-controls-collapsed-width: 90px;
+        --track-controls-expanded-width: clamp(200px, 24vw, 300px);
+
+        overflow: hidden;
+        gap: 16px;
+
+        flex: 0 0 var(--track-controls-collapsed-width);
+        width: var(--track-controls-expanded-width);
+        min-width: 0;
+        min-height: 0;
+        padding: 7px 10px;
+        margin-bottom: 20px;
+        z-index: 1;
+
+        background: var(--color-base-100);
+
+        transition: width 0.2s ease, flex-basis 0.2s ease;
+
+        &.expanded {
+            flex-basis: var(--track-controls-expanded-width);
+            width: var(--track-controls-expanded-width);
+
+            .trackControlsPanel {
+                transform: translateX(0);
+            }
+        }
+    }
+
+    .trackControlsPanel {
+        min-width: 0;
+
+        .trackControls {
+            align-self: flex-end;
+            width: calc(var(--track-controls-expanded-width) - 20px);
+            height: var(--note-height);
+            margin-bottom: 20px;
+
+            flex-shrink: 0;
+
+            &:last-child {
+                margin-bottom: 0;
+            }
+        }
+
+        .track-controls-selection-overlay {
+            position: absolute;
+            inset: 0;
+            background-color: color-mix(in srgb, var(--color-primary) 25%, transparent);
+            border: 1px solid color-mix(in srgb, var(--color-primary) 60%, transparent);
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 2;
+        }
+
+        .trackControls .trackInstrumentShell {
+            position: relative;
+            width: 70px;
+            height: 70px;
+            border-radius: 50%;
+            border: 4px solid white;
+        }
+
+        .trackControls .trackInstrumentIcon {
+            width: 40px;
+            mask-size: contain;
+            background-color: var(--color-base-content);
+            flex: 0 0 auto;
+        }
+
+        .trackControls .trackSliderArea {
+            flex: 1 1 auto;
+            min-width: 0;
+            margin-right: 10px;
+        }
+
+        .trackControls .trackInstrumentName {
+            font-size: 0.9rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            width: 100%;
+            margin-bottom: 2px;
+        }
+
+        .trackControls .trackVolumeSlider {
+            width: calc(100% - 16px);
+            margin: 0 8px;
+        }
+
+        .trackControls .trackVolumeLegend {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            width: calc(100% - 16px);
+            margin: 3px 8px 0;
+            font-size: 0.75rem;
+            color: var(--color-base-content);
+            user-select: none;
+        }
+
+        .trackControls .trackVolumeLegendLeft {
+            text-align: left;
+        }
+
+        .trackControls .trackVolumeLegendRight {
+            text-align: right;
+        }
+    }
+
+    .trackControlsHeader {
+        height: 30px;
+        min-width: 0;
+    }
+
+    .trackControlsToggle {
+        height: 24px;
+        min-height: 24px;
+        justify-content: flex-start;
+    }
+
+    .trackViewModeToggleGroup {
+        margin-left: 8px;
+    }
+
+    .trackViewModeIcons {
+        height: 32px;
+        margin-top: 3px;
+    }
+
+    .trackViewModeGridIcon {
+        width: 8px;
+        height: 8px;
+        flex: 0 0 auto;
+        border: 1px dashed currentColor;
+    }
+
+    .trackViewModeToggle {
+        margin: 0;
+    }
+
+    .trackViewModeToggle input[type="checkbox"] {
+        width: 32px;
+        height: 18px;
+    }
+
+    .trackViewModeToggle.toggle-vertical {
+        // daisyUI's toggle is horizontal. Rotate it 90° clockwise so the handle
+        // moves vertically. With this rotation, the unchecked handle sits at the
+        // top and the checked handle at the bottom.
+        transform: rotate(90deg);
+        margin-right: -2px;
+    }
+}
+
+.trackEditSidebar {
+    gap: 16px;
+
+    flex: 0 0 auto;
+    width: fit-content;
+    min-width: 0;
+    min-height: 0;
+    padding: 7px 10px;
+    margin-bottom: 20px;
+    z-index: 1;
+    pointer-events: auto;
+
+    background: var(--color-base-100);
+
+    .trackEditSidebarHeader {
+        height: 30px;
+        min-height: 30px;
+        min-width: 0;
+        display: flex;
+        align-items: center;
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--color-base-content);
+        opacity: 0.7;
+        user-select: none;
+        white-space: nowrap;
+    }
+
+    .trackEditSidebarPanel {
+        min-width: 0;
+
+        .trackEditEmpty {
+            padding: 24px 12px;
+            font-size: 0.8rem;
+            color: var(--color-base-content);
+            opacity: 0.5;
+            text-align: center;
+            user-select: none;
+        }
+    }
+}
+
+.trackEditRow {
+    align-self: stretch;
+    height: var(--note-height);
+    margin-bottom: 20px;
+    padding: 0 8px;
+    cursor: default;
+    flex-shrink: 0;
+
+    &:last-child {
+        margin-bottom: 0;
+    }
+}
+
+.trackEditTrigger {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 48px;
+    height: 48px;
+    padding: 0;
+    border: 1px solid color-mix(in srgb, var(--color-base-content) 30%, transparent);
+    border-radius: 50%;
+    background: var(--color-base-200);
+    cursor: pointer;
+    color: var(--color-base-content);
+    transition: opacity 0.15s ease, background 0.15s ease, transform 0.15s ease,
+        border-color 0.15s ease;
+
+    &:hover {
+        border-color: var(--color-primary);
+        background: color-mix(in srgb, var(--color-primary) 10%, var(--color-base-200));
+        transform: scale(1.08);
+    }
+
+    .icon {
+        pointer-events: none;
+    }
+}
+
+.bar-action-strip {
+    flex-shrink: 0;
+    pointer-events: none;
+    margin: 5px 0 4px 0;
+}
+
+.bar-action-group {
+    position: absolute;
+    top: 0;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    pointer-events: none;
+}
+
+.bar-action-button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 48px;
+    height: 48px;
+    padding: 0;
+    border: 1px solid color-mix(in srgb, var(--color-base-content) 30%, transparent);
+    border-radius: 50%;
+    background: var(--color-base-100);
+    cursor: pointer;
+    color: var(--color-base-content);
+    pointer-events: auto;
+    transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+
+    &:hover {
+        border-color: var(--color-primary);
+        background: color-mix(in srgb, var(--color-primary) 10%, var(--color-base-100));
+        transform: scale(1.08);
+    }
+
+    &:disabled {
+        opacity: 0.3;
+        cursor: not-allowed;
+        pointer-events: none;
+    }
+
+    .icon {
+        pointer-events: none;
+    }
+}
+
+.selectionDialogList {
+    margin-top: 10px;
+    margin-bottom: 10px;
+    gap: 6px;
+}
+
+.selectionDialogItem {
+    justify-content: flex-start;
+
+    .selectionDialogItemIcon {
+        mask-size: contain;
+        background-color: var(--color-base-content);
+        flex: 0 0 auto;
+    }
+
+    &:hover {
+        background-color: color-mix(in srgb, var(--color-base-content) 5%, transparent);
+    }
+
+    &.is-selected {
+        border-color: var(--color-primary);
+        background-color: color-mix(in srgb, var(--color-primary) 10%, transparent);
+    }
+}
+
+.guiderail {
+    height: 20pt;
+    margin-left: 2px;
+}
+
+.bar-viewer.staff-mode .guiderail {
+    visibility: hidden;
+}
+
+.guiderail-timing {
+    flex-basis: calc(var(--note-height) + 4px);
+    border-color: var(--color-neutral-content);
+
+    &.odd-beat {
+        background-color: var(--color-neutral);
+    }
+}
+
+.guiderail-timing-content {
+    padding: 2px 0 0 12px;
+    color: var(--color-neutral-content);
+}
+
+@media only screen and (min-width: 1000px) {
+
+    /* We label the bar numbers always. On smaller screens only, we show the sub-bar labels too */
+    .guiderail-timing:not(.startOfBar) .guiderail-timing-content {
+        display: none;
+    }
+}
+
+.polyrhythm-viewer .polyrhythm-decoration {
+    position: absolute;
+    width: calc(100% - 2 * 1.5pt);
+    height: var(--note-height);
+    pointer-events: none;
+    box-shadow: inset 0 0 10pt 1pt var(--color-warning);
+}
+
+.polyrhythm-viewer .polyrhythm-notes-wrapper {
+    display: flex;
+    width: 100%;
+}
+
+/* BarViewer: one column per bar, laid out horizontally */
+.bar-viewer {
+    --bar-step-width: calc(var(--note-height) + 5px);
+
+    /* Will be updated when rendering the bar viewer. */
+    --steps-per-bar: 16;
+
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-width: calc(var(--steps-per-bar) * var(--note-height));
+    border-right: 2px solid var(--color-base-300);
+    padding: 0 8px;
+}
+
+/* Staff-mode bars use the same per-bar min-width as grid-mode bars so the
+   horizontal positions stay aligned across both modes; this is required for
+   the auto-follow play head to track measures correctly. */
+
+.staff-prefix-viewer {
+    flex-shrink: 0;
+    width: 48px;
+    margin: 0 -8px 0 8px;
+    padding-top: 27.5px;
+}
+
+.staff-measure-number {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    z-index: 0;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    flex-shrink: 0;
+    font-size: 192px;
+    font-weight: 700;
+    line-height: 1;
+    color: var(--color-base-content);
+    opacity: 0.1;
+}
+
+.staff-measure-label {
+    position: absolute;
+    top: 3px;
+    left: 50%;
+    z-index: 1;
+    max-width: calc(100% - 16px);
+    transform: translateX(-50%);
+    font-size: 11px;
+    color: var(--color-base-content);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+
+    &.inherited {
+        opacity: 0.35;
+    }
+}
+
+.staff-prefix-row {
+    min-height: var(--note-height);
+    margin: 0;
+    padding-top: 24px;
+    margin-bottom: 20px;
+}
+
+.bar-viewer.staff-mode {
+    position: relative;
+    padding-top: 6pt;
+}
+
+.staff-prefix-middle-line {
+    position: absolute;
+    top: 50%;
+    left: 0;
+    right: 0;
+    border-top: 1px solid var(--color-base-300);
+    transform: translateY(-50%);
+    z-index: -1;
+}
+
+.staff-prefix-clef {
+    margin: 0 8px;
+    width: 8px;
+    height: calc(var(--note-height) * 0.25);
+    border-left: 3px solid var(--color-base-content);
+    border-right: 3px solid var(--color-base-content);
+    flex-shrink: 0;
+}
+
+.staff-prefix-time-signature {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    font-family: "Petaluma Script", "Fairytale", serif;
+    font-size: 16px;
+    font-weight: 400;
+    line-height: 1;
+
+    flex-shrink: 0;
+}
+
+.staff-prefix-time-signature .top,
+.staff-prefix-time-signature .bottom {
+    display: block;
+    background: var(--color-base-100);
+    padding: 0 1px;
+}
+
+.staff-prefix-common-time {
+    display: block;
+    width: 20px;
+    height: 36px;
+}
+
+/* BarTrackRow: one track's note row within a bar column */
+.bar-track-row {
+    position: relative;
+    display: flex;
+    flex-direction: row;
+    width: 100%;
+    margin: 0;
+}
+
+.staff-note-viewer {
+    --staff-note-prefix-width: 58px;
+    --staff-barline-height: calc(var(--note-height) * 0.2);
+
+    position: relative;
+    width: 100%;
+    min-height: var(--note-height);
+    margin-bottom: 20px;
+}
+
+.staff-note-viewer-line {
+    position: absolute;
+    left: 0;
+    right: 0;
+    border-top: 1px solid var(--color-base-300);
+    z-index: -1;
+}
+
+.staff-note-viewer-custom-stem {
+    position: absolute;
+    pointer-events: none;
+    z-index: 1;
+    left: calc(50% - 1px);
+    top: calc(50% - 38px);
+    width: 2px;
+    background: var(--color-base-content);
+}
+
+/* Per-head-type adjustments for beamed custom stems. */
+.staff-note-viewer-custom-stem--square {
+    /* Square heads (Timbau, Repinique slap) sit lower; pull stem down and left. */
+    top: calc(50% - 38px) !important;
+    left: calc(50% - 2px) !important;
+}
+
+.staff-note-viewer-custom-stem--cross {
+    /* Cross heads (Tamborim) are small; pull stem down slightly. */
+    top: calc(50% - 38px) !important;
+}
+
+.staff-note-viewer-prefix {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: var(--staff-note-prefix-width);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    color: var(--color-base-300);
+    pointer-events: none;
+}
+
+.staff-note-viewer-time-signature {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    font-family: "Petaluma Script", "Fairytale", serif;
+    font-size: 16px;
+    font-weight: 400;
+    padding-top: 2px;
+}
+
+.staff-note-viewer-time-signature .top,
+.staff-note-viewer-time-signature .bottom {
+    display: block;
+    background: var(--color-base-100);
+    padding: 0 1px;
+}
+
+.staff-note-viewer-final-barline {
+    position: absolute;
+    top: calc(50% + 32px);
+    right: 0;
+    width: 6px;
+    height: var(--staff-barline-height);
+    pointer-events: none;
+    transform: translateY(-50%);
+}
+
+.staff-note-viewer-final-barline::before,
+.staff-note-viewer-final-barline::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    background: var(--color-base-content);
+}
+
+.staff-note-viewer-final-barline::before {
+    right: 4px;
+    width: 2px;
+}
+
+.staff-note-viewer-final-barline::after {
+    right: 0;
+    width: 3px;
+}
+
+/* Runs: flex row of proportional-width note / rest segments */
+.staff-note-viewer-runs {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    margin-top: 64px;
+}
+
+.staff-note-viewer-run {
+    flex: 1 0 auto;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+}
+
+/* Beam stroke attached to a beamed note. Position (top, left/right, width) is set inline by
+   StaffNoteViewer.renderBeamSegments per beam segment (shared vs partial, level 1..3). */
+.staff-note-viewer-beam {
+    position: absolute;
+    height: 4px;
+    background: var(--color-base-content);
+    pointer-events: none;
+    z-index: 2;
+}
+
+.staff-note-viewer-accent {
+    position: absolute;
+    left: calc(50% - 5px);
+    top: calc(50% + 9px);
+    transform: translateX(-50%);
+    font-size: 18px;
+    line-height: 1;
+    pointer-events: none;
+    color: var(--color-base-content);
+    z-index: 2;
+}
+
+.staff-note-viewer-tuplets {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+}
+
+.staff-note-viewer-tuplet-number {
+    position: absolute;
+    transform: translateX(-50%);
+    display: inline-block;
+    min-width: 11px;
+    text-align: center;
+    font-size: 16px;
+    font-weight: 700;
+    line-height: 1;
+    color: var(--color-base-content);
+    background: var(--color-base-100);
+    padding: 0 2px;
+    z-index: 2;
+}
+
+.staff-note-viewer-tuplet-number.staff-note-viewer-tuplet-above {
+    top: calc(50% - 34px);
+}
+
+.staff-note-viewer-tuplet-number.staff-note-viewer-tuplet-below {
+    top: calc(50% + 24px);
+}
+
+/*
+ * Tuplet bracket: used in addition to the number when the tuplet is visually embedded
+ * in surrounding material. Spans from first to last tuplet child center.
+ */
+.staff-note-viewer-tuplet-bracket {
+    position: absolute;
+    height: 9px;
+    border-left: 1.5px solid var(--color-base-content);
+    border-right: 1.5px solid var(--color-base-content);
+    box-sizing: border-box;
+    color: var(--color-base-content);
+    z-index: 2;
+    pointer-events: none;
+}
+
+.staff-note-viewer-tuplet-bracket.staff-note-viewer-tuplet-above {
+    top: calc(50% - 24px);
+    border-top: 1.5px solid var(--color-base-content);
+    border-bottom: 0;
+}
+
+.staff-note-viewer-tuplet-bracket.staff-note-viewer-tuplet-below {
+    top: calc(50% + 9px);
+    border-top: 0;
+    border-bottom: 1.5px solid var(--color-base-content);
+}
+
+.staff-note-viewer-tuplet-bracket > .staff-note-viewer-tuplet-text {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 16px;
+    font-weight: 700;
+    line-height: 1;
+    background: var(--color-base-100);
+    padding: 0 3px;
+}
+
+.staff-note-viewer-tuplet-bracket.staff-note-viewer-tuplet-above > .staff-note-viewer-tuplet-text {
+    top: -10px;
+}
+
+.staff-note-viewer-tuplet-bracket.staff-note-viewer-tuplet-below > .staff-note-viewer-tuplet-text {
+    bottom: -10px;
+}
+
+/* Note symbol from the combined note sprite. */
+.staff-note-viewer-note-symbol {
+    display: block;
+    width: 25px;
+    height: 60px;
+
+    /* The note head is in the lower part of this SVG; lift it so the head center sits on the middle line. */
+    transform: translateY(-16px);
+}
+
+/* ---------------------------------------------------------------------------
+ * Staff note heads drawn with CSS (Square, Triangle, Cross, Diamond).
+ * Oval heads come from the SVG sprite.
+ * --------------------------------------------------------------------------- */
+
+.staff-note-head {
+    position: relative;
+    display: inline-block;
+    flex-shrink: 0;
+
+    /* Shared head shape via ::after.  Centre ~27 px above the bottom of the 60 px span. */
+    &::after {
+        content: "";
+        position: absolute;
+        left: 50%;
+        bottom: 20px;
+        color: var(--color-base-content);
+    }
+
+    /* ---- Square (filled, 14×14 px) ---- */
+    &.square::after {
+        width: 14px;
+        height: 14px;
+        background: currentColor;
+        bottom: 22px;
+        transform: translate(-100%, -5%);
+    }
+
+    /* ---- Triangle (hollow, equilateral, point up) ---- */
+    &.triangle::after {
+        width: 0;
+        height: 0;
+        border-left: 7px solid transparent;
+        border-right: 7px solid transparent;
+        border-bottom: 14px solid currentColor;
+        background: transparent;
+        transform: translate(-50%, -5%);
+    }
+
+    /* ---- Cross (×, 45°-rotated, 14×14 px, rendered as cached SVG) ---- */
+
+    .staff-note-head-cross-svg {
+        position: absolute;
+        left: calc(50% - 12.5px);
+        bottom: 22px;
+        pointer-events: none;
+    }
+
+    /* ---- Diamond (◆, filled, 11×11 px rotated) ---- */
+    &.diamond::after {
+        width: 11px;
+        height: 11px;
+        background: currentColor;
+        transform: translate(-50%, -5%) rotate(45deg);
+    }
+
+    /* ---- CSS stem for non-oval, non-beamed notes ---- */
+    .staff-note-head-stem {
+        position: absolute;
+        left: 50%;
+        width: 2px;
+        background: var(--color-base-content);
+        transform: translateX(-50%);
+        top: -6px;
+        pointer-events: none;
+        z-index: 1;
+    }
+
+    /* Per-head-type stem adjustments (non-beamed CSS stem). */
+    &.square .staff-note-head-stem {
+        top: -6px;
+        left: calc(50% - 1px);
+    }
+
+    &.cross .staff-note-head-stem {
+        top: -8px;
+    }
+
+    /* ---- Thumb: empty circle inside square ---- */
+    .staff-note-head-thumb-circle {
+        position: absolute;
+        left: calc(50% - 7px);
+        bottom: 20px;
+        width: 6px;
+        height: 6px;
+        border: 1px solid var(--color-base-100);
+        border-radius: 50%;
+        transform: translate(-50%, -30%);
+        pointer-events: none;
+    }
+
+    /* ---- Tap / TapWithPalm: triangle inside square (pointing up) ---- */
+    .staff-note-head-tap-triangle {
+        position: absolute;
+        left: calc(50% - 7px);
+        bottom: 20px;
+        width: 0;
+        height: 0;
+        border-left: 4px solid transparent;
+        border-right: 4px solid transparent;
+        border-bottom: 5px solid var(--color-base-100);
+        transform: translate(-50%, -30%);
+        pointer-events: none;
+    }
+
+    /* ---- Press roll: 3 diagonal slashes on the stem ---- */
+    &.press-roll::before {
+        content: "";
+        position: absolute;
+        left: calc(50% - 4px);
+        top: 5px;
+        width: 14px;
+        height: 35px;
+        pointer-events: none;
+    }
+
+    .staff-note-head-press-roll-svg {
+        position: absolute;
+        left: calc(50% - 7px);
+        top: -2px;
+        pointer-events: none;
+        overflow: visible;
+    }
+
+    /* ---- Blown: wavy line above the note head ---- */
+    &.blown::before {
+        content: "~";
+        position: absolute;
+        left: 50%;
+        bottom: 28px;
+        transform: translate(-50%, -5%);
+        font-size: 16px;
+        line-height: 1;
+        pointer-events: none;
+        color: var(--color-base-content);
+    }
+
+    /* ---- Slap: white cross SVG drawn on top of the filled square head ---- */
+    .staff-note-head-slap-svg {
+        position: absolute;
+        left: calc(50% - 7px);
+        bottom: 22px;
+        width: 10px;
+        height: 10px;
+        transform: translate(-50%, -30%);
+        pointer-events: none;
+        z-index: 1;
+        overflow: visible;
+    }
+
+    /* ---- Hand + Cross → hollow square around the cross (body) ---- */
+    &.body-hand::before {
+        content: "";
+        position: absolute;
+        left: calc(50% - 7px);
+        bottom: 19px;
+        width: 18px;
+        height: 18px;
+        border: 1.5px solid var(--color-base-content);
+        background: transparent;
+        transform: translate(-50%, -5%);
+        pointer-events: none;
+    }
+
+    /* ---- Rim: horizontal line below the cross ---- */
+    &.rim::before {
+        content: "";
+        position: absolute;
+        left: calc(50% - 12px);
+        bottom: 17px;
+        width: 13px;
+        height: 1.5px;
+        background: var(--color-base-content);
+        pointer-events: none;
+    }
+
+    /* ---- RimShot: small cross on the right of the stem, oval on the left ---- */
+    .staff-note-head-rimshot-cross-svg {
+        position: absolute;
+        left: calc(50% + 2px);
+        bottom: 34px;
+        transform: translate(0, -5%);
+        pointer-events: none;
+    }
+
+    /* ---- Stick.Body: vertical line left of the cross ---- */
+    &.body-stick::before {
+        content: "";
+        position: absolute;
+        left: calc(50% - 17px);
+        bottom: 12px;
+        width: 2px;
+        height: 16px;
+        background: var(--color-base-content);
+        pointer-events: none;
+    }
+
+    /* ---- CrossClick: horizontal line above the cross ---- */
+    &.cross-click::before {
+        content: "";
+        position: absolute;
+        left: calc(50% - 7px);
+        bottom: 29px;
+        width: 16px;
+        height: 1.5px;
+        background: var(--color-base-content);
+        transform: translateX(-50%);
+        pointer-events: none;
+    }
+
+    /* ---- Scraped: zigzag on the stem ---- */
+    &.scraped::before {
+        content: "";
+        position: absolute;
+        left: calc(50% - 4px);
+        top: 8px;
+        width: 14px;
+        height: 22px;
+        pointer-events: none;
+        background:
+            linear-gradient(135deg, transparent 48%, var(--color-base-content) 48%, var(--color-base-content) 52%, transparent 52%) 0 2px / 6px 6px,
+            linear-gradient(45deg, transparent 48%, var(--color-base-content) 48%, var(--color-base-content) 52%, transparent 52%) 6px 2px / 6px 6px;
+        background-repeat: repeat-y;
+    }
+
+    /* ---- Ghost notes: parentheses around the note ---- */
+    &.ghost-note::before {
+        content: "(";
+        position: absolute;
+        left: -8px;
+        bottom: 24px;
+        font-size: 16px;
+        line-height: 1;
+        pointer-events: none;
+        color: var(--color-base-content);
+    }
+
+    .staff-note-head-ghost-paren {
+        position: absolute;
+        bottom: 24px;
+        left: 18px;
+        font-size: 16px;
+        line-height: 1;
+        pointer-events: none;
+        color: var(--color-base-content);
+    }
+
+    /* Non-oval heads sit higher; pull parentheses down to match. */
+    &.ghost-note.triangle::before,
+    &.ghost-note.square::before,
+    &.ghost-note.diamond::before {
+        left: -2px;
+        bottom: 18px;
+    }
+
+    &.ghost-note.triangle .staff-note-head-ghost-paren,
+    &.ghost-note.square .staff-note-head-ghost-paren,
+    &.ghost-note.diamond .staff-note-head-ghost-paren {
+        left: 20px;
+        bottom: 18px;
+    }
+
+    &.ghost-note.cross .staff-note-head-ghost-paren {
+        left: 15px;
+        bottom: 22px;
+    }
+
+    &.ghost-note.cross::before {
+        left: -7px;
+        bottom: 22px;
+    }
+
+    /* ---- Accent: > above the note head ---- */
+    /* ---- Damped (muted) notes: plus sign above the note head ---- */
+    .staff-note-head-damped-plus {
+        position: absolute;
+        left: calc(50% - 10px);
+        bottom: 35px;
+        font-size: 14px;
+        line-height: 1;
+        pointer-events: none;
+        color: var(--color-base-content);
+    }
+}
+
+/* Rest symbol: 16th-rest SVG icon */
+.staff-note-viewer-rest-symbol {
+    display: block;
+    width: 22px;
+    height: 40px;
+}
+
+/* Polyrhythm fragment: an absolutely-positioned slice of a polyrhythm within a bar */
+.polyrhythm-fragment {
+    position: absolute;
+    padding-left: calc(1.5pt + 4px);
+}
+
+.polyrhythm-fragment .polyrhythm-decoration {
+    position: absolute;
+    width: calc(100% - 2 * 1.5pt);
+    height: var(--note-height);
+    pointer-events: none;
+}
+
+.polyrhythm-fragment.frag-full .polyrhythm-decoration {
+    box-shadow: inset 0 0 10pt 1pt var(--color-warning);
+}
+
+.polyrhythm-fragment .polyrhythm-notes-wrapper {
+    display: flex;
+    width: 100%;
+}
+
+.polyrhythm-fragment .note-viewer {
+    flex-shrink: 1;
+}
+
+.note-viewer {
+    height: var(--note-height);
+    text-align: center;
+    line-height: var(--note-height);
+    cursor: pointer;
+
+    user-select: none;
+    overflow-x: hidden;
+
+    margin: 2px;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    border-radius: 8px;
+}
+
+.selected {
+    outline: 2px solid var(--color-primary);
+    outline-offset: -1px;
+    background-color: color-mix(in srgb, var(--color-primary) 20%, transparent) !important;
+}
+
+.note-selected {
+
+    .staff-note-viewer-note-symbol,
+    .staff-note-viewer-rest-symbol {
+        color: var(--color-primary) !important;
+        fill: var(--color-primary) !important;
+        stroke: var(--color-primary) !important;
+    }
+
+    .staff-note-head {
+
+        &,
+        &::after,
+        &::before {
+            color: var(--color-primary) !important;
+        }
+
+        .staff-note-head-cross-svg,
+        .staff-note-head-press-roll-svg,
+        .staff-note-head-slap-svg,
+        .staff-note-head-rimshot-cross-svg {
+            stroke: var(--color-primary) !important;
+        }
+
+        .staff-note-head-stem {
+            background: var(--color-primary) !important;
+        }
+
+        .staff-note-head-thumb-circle {
+            border-color: var(--color-primary) !important;
+        }
+
+        .staff-note-head-tap-triangle {
+            border-bottom-color: var(--color-primary) !important;
+        }
+
+        &.body-hand::before {
+            border-color: var(--color-primary) !important;
+        }
+
+        &.rim::before {
+            background: var(--color-primary) !important;
+        }
+
+        &.blown::before {
+            color: var(--color-primary) !important;
+        }
+    }
+
+    .staff-note-viewer-custom-stem {
+        background: var(--color-primary) !important;
+    }
+
+    .staff-note-viewer-accent {
+        color: var(--color-primary) !important;
+    }
+}
+
+.selection-rect {
+    position: fixed;
+    border: 1px dashed var(--color-primary);
+    background: color-mix(in srgb, var(--color-primary) 15%, transparent);
+    pointer-events: none;
+    z-index: 0;
+}
+
+.selection-cursor {
+    width: 2px;
+    background-color: var(--color-primary);
+    pointer-events: none;
+}
+
+#trackViewerContainer:not(.edit-mode) .selection-cursor {
+    display: none;
+}
+
+.selection-overlay {
+    position: absolute;
+    background-color: color-mix(in srgb, var(--color-primary) 25%, transparent);
+    border: 1px solid color-mix(in srgb, var(--color-primary) 60%, transparent);
+    border-radius: 8px;
+    pointer-events: none;
+}
+
+/*
+ * In the grid view, the row is a CSS grid with `baseSteps` columns of `1fr`,
+ * and tuplet subdivisions span `subdivision.normal` columns while internally
+ * being grids of `subdivision.actual` columns. This makes a tuplet's outer
+ * width exactly equal to `normal` base cells regardless of margin, padding,
+ * border or grid `gap`, since `gap` is included in the spanned width.
+ */
+
+.note-viewer:active .hold-detector {
+    opacity: 30%;
+}
+
+.note-viewer * {
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+.polyrhythm-viewer .note-viewer {
+    flex-shrink: 1;
+}
+
+.note-details-viewer {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+/* Polyrhythm notes: anchor symbols to the left edge of their flex cell so the i-th note's
+   on-screen position matches its actual time position (i/N of the pulse), rather than the
+   cell's center. With centered symbols the first note appeared delayed relative to playback
+   — most visible at low BPMs — because each note sat in the middle of its 1/N subdivision. */
+.polyrhythm-fragment .note-details-viewer,
+.polyrhythm-viewer .note-details-viewer {
+    justify-content: flex-start;
+}
+
+.note-details-viewer .note-style-symbol {
+    width: 70%;
+    height: 70%;
+}
+
+.note-details-viewer .icon.note-style-symbol {
+    background-color: var(--color-neutral);
+}
+
+.note-details-viewer .small {
+    mask-size: contain;
+}
+
+.button.trackEditButton {
+    margin: 8px;
+    padding: 8px;
+    flex-direction: column;
+    align-items: center;
+    width: 80px;
+    height: 80px;
+    border-radius: 16px;
+    border: 1px solid var(--color-base-200);
+}
+
+.trackEditButton.inner {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    border: 1px dashed var(--color-base-200);
+    color: var(--color-base-200);
+    position: relative;
+}
+
+.trackEditButton.inner > .icon {
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    position: absolute;
+}
+
+.drawer .du-drawer-content #expanded-top {
+    z-index: 3;
+}
+
+.drawer .du-drawer-sidebar-content {
+    background-color: var(--color-base-100);
+    padding: 20px;
+    height: 100%;
+}
+
+/*
+ * macOS-style form card. A rounded container with horizontal hairline
+ * dividers between rows. Each row has its label on the left and its control
+ * on the right.
+ */
+.form-card {
+    flex: 1 1 auto;
+    margin: 16px 0;
+    background-color: color-mix(in srgb, var(--color-base-content) 4%, var(--color-base-100));
+    border: 1px solid var(--color-base-300);
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.form-row {
+    padding: 10px 16px;
+    min-height: 36px;
+    border-bottom: 1px solid var(--color-base-300);
+
+    &:last-child {
+        border-bottom: 0;
+    }
+}
+
+.form-row-stacked {
+    gap: 6px;
+}
+
+.form-row-stacked > .form-row-label {
+    margin-right: 0;
+}
+
+.form-row-values {
+    margin-left: 4px;
+}
+
+.form-row-label {
+    font-size: 13px;
+    color: var(--color-base-content);
+    margin-right: 16px;
+    min-width: 100px;
+}
+
+.form-row-actions {
+    gap: 8px;
+}
+
+.form-row-heading {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--color-base-content);
+    margin-right: 16px;
+}
+
+.form-row-add-button {
+    min-height: 24px;
+    height: 24px;
+    width: 24px;
+    padding: 0;
+}
+
+/* Dropdown popup — macOS-style with transparency and blur. */
+.dropdown-popup {
+    width: 13rem;
+    border-radius: var(--rounded-box, 0.5rem);
+    border: 1px solid var(--color-base-300);
+    background-color: color-mix(in srgb, var(--color-base-100) 70%, transparent);
+    backdrop-filter: blur(10px);
+    box-shadow: var(--shadow-lg, 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1));
+}
+
+/* Keyboard navigation highlight for dropdown menus and completion lists. */
+.du-dropdown li.active > a,
+.du-dropdown li.du-active > a {
+    background-color: color-mix(in srgb, var(--color-base-content) 10%, transparent);
+}
+
+/* Non-interactive caption items in dropdown menus. */
+.du-dropdown li.dropdown-caption {
+    pointer-events: none;
+
+    & > a {
+        color: var(--color-primary);
+        opacity: 1;
+    }
+}
+
+/* Focused inputs inside form rows get the main background so they don't look disabled. */
+.form-row input:focus,
+.form-row textarea:focus,
+.form-row select:focus {
+    background-color: var(--color-base-100);
+}
+
+/* User & group list item layout. */
+.user-group-item-content {
+    flex: 1;
+    min-width: 0;
+    gap: 6px;
+}
+
+.user-group-lock-icon {
+    font-size: 12px;
+    color: var(--color-warning);
+}
+
+.user-group-admin-badge .icon {
+    font-size: 10px;
+}
+
+.user-group-admin-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin-left: auto;
+    padding: 2px 10px;
+    border-radius: 9999px;
+    border: 1px solid;
+    font-size: 12px;
+    line-height: 1.25rem;
+    background-color: var(--badge-bg);
+    border-color: var(--badge-color);
+    color: var(--badge-text);
+    opacity: var(--badge-opacity);
+}
+
+.user-group-admin-label {
+    margin-right: 8px;
+}
+
+.settings-section-title {
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: color-mix(in srgb, var(--color-base-content) 60%, transparent);
+    margin: 12px 4px 4px 4px;
+}
+
+.arrangementViewer {
+    padding: 15px;
+    overflow-x: hidden;
+    user-select: none;
+    min-height: 100%;
+
+    .minimap {
+        --minimap-marker-top: -4px;
+        --minimap-marker-height: 68px;
+
+        height: 80px;
+        margin: 0 20px 0 0;
+        touch-action: none;
+
+        background-color: var(--color-base-100);
+
+        #minimapScrollHost {
+            height: 60px;
+            overflow: hidden;
+            flex: 1 1 auto;
+            min-width: 0;
+
+            touch-action: none;
+            scrollbar-width: none;
+
+            &::-webkit-scrollbar {
+                display: none;
+            }
+        }
+
+        .mini-bar-viewer {
+            position: relative;
+            padding-right: 8px;
+            margin-right: 8px;
+            border-right: 1px solid var(--color-neutral);
+            pointer-events: none;
+        }
+
+        .mini-bar-track-row {
+            position: relative;
+            pointer-events: none;
+        }
+
+        .mini-bar-selection-overlay {
+            position: absolute;
+            inset: 0;
+            background-color: color-mix(in srgb, var(--color-primary) 15%, transparent);
+            pointer-events: none;
+            z-index: 2;
+            border-radius: 4px;
+        }
+
+        .mini-note-viewer {
+            width: var(--note-height);
+            height: var(--note-height);
+            margin: 4px;
+            border-radius: 8px;
+            pointer-events: none;
+        }
+
+        #minimapViewportMarker {
+            position: absolute;
+            display: none;
+            pointer-events: auto;
+            touch-action: none;
+            user-select: none;
+
+            height: var(--minimap-marker-height);
+            top: var(--minimap-marker-top);
+
+            border: 1px solid color-mix(in srgb, var(--color-base-300) 10%, var(--color-neutral-content));
+            border-radius: 6px;
+            background-color: color-mix(in srgb, var(--color-base-300) 50%, transparent);
+            z-index: 4;
+
+            cursor: grab;
+        }
+
+        #minimapViewportLabel {
+            position: absolute;
+            display: none;
+            top: calc(var(--minimap-marker-top) + (var(--minimap-marker-height) / 2));
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            user-select: none;
+            z-index: 6;
+
+            #barNumber {
+                display: inline-block;
+                font-size: 24px;
+                font-weight: bold;
+                line-height: 1;
+                color: var(--color-neutral-content);
+                text-shadow: 0 1px 2px color-mix(in srgb, var(--color-base-100) 50%, black);
+                white-space: nowrap;
+                user-select: none;
+                pointer-events: none;
+            }
+        }
+
+        #minimapBarSelector {
+            position: absolute;
+            display: none;
+            pointer-events: auto;
+            touch-action: none;
+            user-select: none;
+
+            height: var(--minimap-marker-height);
+            top: var(--minimap-marker-top);
+
+            border: 2px solid color-mix(in srgb, var(--color-info) 25%, white);
+            border-radius: 4px;
+            background-color: color-mix(in srgb, var(--color-neutral) 20%, transparent);
+            z-index: 3;
+            cursor: grab;
+        }
+
+        #minimapBarSelectorLabel {
+            position: absolute;
+            display: none;
+            top: calc(var(--minimap-marker-top) - 14px);
+            transform: translate(-50%, -100%);
+            pointer-events: none;
+            user-select: none;
+            z-index: 6;
+
+            font-size: 12px;
+            font-weight: 700;
+            line-height: 1;
+            color: var(--color-info-content);
+            background-color: color-mix(in srgb, var(--color-info) 75%, black 10%);
+            border: 1px solid color-mix(in srgb, var(--color-info-content) 25%, transparent);
+            border-radius: 999px;
+            padding: 4px 8px;
+            white-space: nowrap;
+        }
+
+        .minimap-bar-selector-handle {
+            position: absolute;
+            display: none;
+            top: -6px;
+            width: 12px;
+            height: 72px;
+            margin-left: -6px;
+
+            pointer-events: auto;
+            touch-action: none;
+            user-select: none;
+            cursor: ew-resize;
+
+            border-radius: 999px;
+            background-color: color-mix(in srgb, var(--color-neutral) 50%, white);
+            box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-base-100) 65%, transparent);
+            z-index: 5;
+        }
+
+        .minimap-viewport-marker:active {
+            cursor: grabbing;
+        }
+    }
+}

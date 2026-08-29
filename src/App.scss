@@ -4,8 +4,8 @@
  */
 
 @use "grid-shared" as score;
-@use "components/styles" as comp;
-@use "ui/styles" as ui;
+@use "components/component-styles" as comp;
+@use "ui/app-ui" as ui;
 
 @font-face {
     font-family: "Fairytale";
@@ -135,37 +135,91 @@ h6 {
     display: flex;
     justify-content: center;
     align-items: center;
-    width: 180px;
-    height: 180px;
     background: var(--color-base-100);
-    border-radius: 12px;
+    border-radius: 1rem;
+}
+
+.backend-unreachable-card {
+    background: var(--color-base-200);
+    z-index: 9999;
+}
+
+.backend-unreachable-content {
+    text-align: center;
+    max-width: 420px;
+    padding: 2rem;
+    background: var(--color-base-100);
+    border-radius: 1rem;
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
+
+    h2 {
+        margin: 0 0 0.75rem 0;
+        font-size: 1.5rem;
+        color: var(--color-error);
+    }
+
+    p {
+        margin: 0 0 1.5rem 0;
+        line-height: 1.6;
+        color: var(--color-base-content);
+    }
+
+    .startup-error-message {
+        margin: 0 0 1.5rem 0;
+        padding: 0.75rem 1rem;
+        background: var(--color-base-200);
+        border-radius: 0.5rem;
+        font-family: monospace;
+        font-size: 0.875rem;
+        line-height: 1.5;
+        white-space: pre-wrap;
+        word-break: break-word;
+        color: var(--color-error);
+        text-align: left;
+    }
+
+    button {
+        min-width: 120px;
+    }
+}
+
+.backend-unreachable-icon {
+    font-size: 3rem;
+    margin-bottom: 0.75rem;
 }
 
 #wrapper {
     height: 100%;
 }
 
-#mainArrangementTitle {
+.main-arrangement-title {
     display: block;
     font-size: clamp(12pt, 20pt, 20pt);
-    margin-right: 12px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    min-width: 0;
+
+    text-align: right;
+    padding: 0;
+    margin: 0;
+
+    max-width: 100%;
+    min-width: 1ch;
+    width: fit-content;
 }
 
-.collapsed-header #mainArrangementTitle {
+.main-arrangement-title:focus {
+    outline: 1px solid var(--color-primary);
+    outline-offset: 1px;
+    border-radius: 2px;
+}
+
+.collapsed-header .main-arrangement-title {
     display: block;
     font-size: clamp(10pt, 16pt, 16pt);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    min-width: 0;
-}
-
-#arrangementPalette {
-    flex: 1 1 auto;
     min-width: 0;
 }
 
@@ -178,29 +232,6 @@ h6 {
 }
 
 #share-button img {
-    display: none;
-}
-
-.overlay {
-    width: 100%;
-    height: 100%;
-    position: relative;
-    z-index: 15;
-    top: 0;
-    left: 0;
-    background: white;
-    transition: opacity 0.2s;
-}
-
-.overlay.visible {
-    opacity: 1;
-}
-
-.overlay.invisible {
-    opacity: 0;
-}
-
-.overlay.hidden {
     display: none;
 }
 
@@ -222,48 +253,11 @@ h6 {
     user-select: none;
 }
 
-.appTitle {
-    margin-left: 4px;
-    margin-top: auto;
-
-    font-size: 14pt;
-    font-weight: 600;
-
-    @media (max-width: 1024px) {
-        font-size: 10pt;
-    }
-}
-
-.label.accent {
-    color: #F57031;
-    margin: 0 2px;
-}
-
-.appTitle.bottom {
-    font-family: "Fairytale", serif;
-    font-size: 36pt;
-    margin: -8px 0 0 10px;
-
-    @media (max-width: 1024px) {
-        font-size: 22pt;
-        height: 22pt;
-        margin-top: -4px;
-    }
-
-    @media (max-width: 600px) {
-        font-size: 18pt;
-        height: 18pt;
-    }
-}
-
 #titleLogo {
-    height: 24px;
-    margin: 7px 4px 0 16px;
-
-    @media (max-width: 1024px) {
-        height: 18px;
-        margin-left: 8px;
-    }
+    width: 40px;
+    height: 40px;
+    padding: 8px;
+    box-sizing: border-box;
 }
 
 #arrangementStats {
@@ -285,6 +279,70 @@ h6 {
     height: 40px;
 }
 
-#toolbarButtons .codicon {
+#toolbarButtons svg.icon {
+    font-size: 24px;
+}
+
+.header-content-rows {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: 8px 12px;
+}
+
+.header-breadcrumb {
+    min-width: 0;
+}
+
+.header-breadcrumb,
+#arrangementPlayControls,
+#editControlsHost {
+    height: 56px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    white-space: nowrap;
+
+    .playControlSetting {
+        flex-shrink: 0;
+        margin-right: 8px;
+    }
+}
+
+.undoRedoGooey {
+    margin-left: 8px;
+}
+
+.header-breadcrumb-root {
+    font-size: 16px;
+    font-weight: 500;
+    color: var(--color-base-content);
+    opacity: 0.7;
+}
+
+#header-breadcrumb-title {
+    display: inline-block;
+    font-size: 16px;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+    color: var(--color-base-content);
+}
+
+.header-row-label {
+    flex-shrink: 0;
+    margin-right: 16px;
+    color: var(--color-base-content);
+    white-space: nowrap;
+}
+
+#signInButton,
+#userMenu .btn {
+    width: 40px;
+    height: 40px;
+}
+
+#signInButton svg.icon,
+#userMenu svg.icon {
     font-size: 24px;
 }

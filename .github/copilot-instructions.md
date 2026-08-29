@@ -4,8 +4,56 @@ description: Project-wide coding guidelines and conventions for the Animada Scor
 
 # Animada Score Book — Project Instructions
 
-Score management and arrangement app.
+Score management and arrangement app for Samba/Bateria groups.
 Stack: TypeScript + Preact (Vite) frontend, Node.js backend (MySQL/PostgreSQL), Vitest + Playwright tests.
+
+---
+
+## Architecture
+
+### Entry Point & App Lifecycle
+
+`src/main.tsx` mounts `<App />` into `#app`. There is **no client-side router** — the app uses an `AppPhase` state machine:
+
+```
+Checking → Setup → AdminSetup → Login → Running
+```
+
+`App.render()` switches on `phase` to show the appropriate splash dialog or the full app layout. `App` owns the top-level singletons: `ScoreBookDataModel`, `ArrangementPlayer`, `UndoManager`, and `services` (SelectionManager + ModeManager).
+
+### Key Directories
+
+| Directory | Purpose |
+|-----------|---------|
+| `src/core/` | Domain model: `ScoreBookDataModel` (central data), `Arrangement`, `Track`, `Instrument`, `TimeParams`, `edit.ts` (single edit dispatcher with discriminated unions), `UndoManager`/`UndoRedoStack` |
+| `src/core/serialisation/` | Snapshot serialization, packing for URL/localStorage, `ArrangementMigrator` (legacy v1/v2 + BananaDrum import) |
+| `src/core/types/` | Core domain types: `general.ts` (IAudioData, IArrangementSnapshot, IFraction, etc.), `edit_commands.ts` (discriminated union of all edit commands) |
+| `src/player/` | Audio playback engine (Web Audio API): `ArrangementPlayer` orchestrates `TrackPlayer`s + `Metronome` via `TimeCoordinator` (score-time ↔ real-time math) |
+| `src/supplement/` | Utilities: `Requisitions` (typed pub/sub event bus — all cross-component communication), `EscapeStack`, `Stack`, `Semaphore`, `MP3Export` |
+| `src/components/ui/` | Feature components: `Arrangement/`, `Bar/` (Grid + Staff views), `Note/`, `Track/`, `Minimap/`, `GuideRail/`, `InstrumentBrowser/`, `NotificationCenter/`, `Statusbar/`, `Print/`, `composites/` |
+| `src/components/ui/framework/` | Custom UI component library: `UIComponent` (base class), `Container` (flex layout), `Dialog`, `Button`, `Menu/`, `TreeGrid`, `Tabview/`, `Popup`, `Tooltip`, etc. |
+| `src/ui/` | Top-level UI modules: `ScoreLibrary` (lazy-loaded tree-grid), `SettingsDialog`, `LoginDialog`, `SelectionManager`, `ModeManager`, `MouseHandler`, `AnimationEngine`, admin editors |
+| `src/server/` | Node.js backend: `backend.ts` (entry), `Router.ts` (flat `?action=` dispatch), `Auth.ts` + `AuthRoutes.ts` (JWT, scrypt, refresh tokens), `ScoreRoutes.ts`, `AdminRoutes.ts`, `StaticRoutes.ts`, `mysql-adapter.ts`/`postgres-adapter.ts` (canonical schema in `createTablesSQL`), `config.ts` |
+| `tests/` | `tests/core/` (domain unit tests), `tests/ui/` (component tests via `@testing-library/preact`), `tests/player/` (audio engine), `tests/server/` (auth unit tests), `tests/integration/` (cross-layer), `tests/e2e/` (Playwright), `tests/temp/` (throwaway debug tests) |
+
+### Data Flow
+
+- **Single source of truth:** `ScoreBookDataModel` holds `arrangement`, `instruments`, `user`, and `scoreBookTree`.
+- **All mutations** go through `edit.ts` → `UndoManager.edit(command)` — every edit is a discriminated union `EditCommand`.
+- **Cross-component communication** uses `Requisitions` (typed pub/sub): components `register`/`unregister` for topics like `settingsChanged`, `playbackStateChanged`, `selectionChanged`, `authChanged`, `backendDisconnected`.
+- **Persistence:** `AppStorage` (localStorage/sessionStorage) for UI settings; backend API for scores/users/groups.
+
+### Dual View System
+
+The score renders in **grid mode** (matrix-style, each bar a column) or **staff mode** (vertical notation, each bar a column of track rows). Toggled via `trackViewMode` in `ArrangementViewer`. Both modes implement `ISelectionHitTester` for hit-testing. `SelectionManager` maintains two parallel selection structures: legacy per-track `currentTrackSelections` and new granular `currentSelection` (Map with `SelectionGranularity` from Track down to Note).
+
+### Custom UI Framework
+
+All UI components extend `UIComponent<P, S>` (not raw `Component`). Key patterns:
+- `Container` for all flex layouts — never raw `<div>` with `display: flex`.
+- `generateFinalClassName(["base-class", this.props.className])` merges classes.
+- `data-*` props are auto-forwarded to DOM via `ICommonUIProperties`.
+- Styles are per-component SCSS files under `src/components/ui/framework/styles/`, imported centrally via `styles/index.scss`.
 
 ---
 
@@ -22,7 +70,6 @@ Stack: TypeScript + Preact (Vite) frontend, Node.js backend (MySQL/PostgreSQL), 
 
 ### General
 
-- Prefer classes over standalone methods.
 - Strive for a clean, readable codebase with minimal technical debt. Avoid hacks, workarounds, and "clever" code.
 - Name component files after the component they contain. Keep only one component per file.
 - Solve the actual bug first; only fix tests after the bug is confirmed fixed.
@@ -38,6 +85,7 @@ Stack: TypeScript + Preact (Vite) frontend, Node.js backend (MySQL/PostgreSQL), 
 - During active feature development (explicitly stated), do not constantly run the test suite — failures are expected. Wait for explicit instruction to run tests again. However, always run TS/linter checks after any code change.
 - Follow the coding guidelines laid out in the eslint.json and tsconfig.json files, as well as the conventions in this instructions file. If you notice any inconsistencies or missing rules, ask the user before making changes.
 - Place static blocks at the end of the class, after all methods. Static blocks are for static initialization only, not for general code execution.
+- Never add a suppression comment (`// @ts-ignore` or `// eslint-disable-next-line` or `// spell-checker: disable`) without first asking the user. If a suppression is necessary, add a comment explaining why it is safe and what the alternative would be.
 
 ### Git Commit Messages
 - Use present tense, imperative mood: "Fix bug" not "Fixed bug" or "Fixes bug".
@@ -87,10 +135,27 @@ Always put a blank line after blocks (`if`/`for`/`while`/`switch`/`case`/anonymo
 
 - Use enums for discriminated union type literals (e.g., `enum SelectionGranularity { ... }` instead of `type X = "a" | "b"`).
 - Enum members do not carry string values unless the value is consumed directly as a string (e.g., CSS values).
-- Use `undefined` instead of `null` everywhere.
+- Use `undefined` instead of `null` everywhere in project-owned code. `null` from external APIs (database, libraries) is acceptable at the boundary — convert to `undefined` at the first opportunity.
 - Use `field?: Type` syntax instead of `field: Type | undefined` for optional fields.
 - Interface names always start with a capital `I` (e.g., `ISoundStyleMeta`, `IMeasureStep`).
+- Inline type casts (`as { ... }`) are acceptable for one-off use. If the same anonymous shape appears more than once, extract it to a named interface.
 - No section-divider comments (e.g. `// ---------- api ----------`). Let method ordering speak for itself.
+
+### Module Boundaries & Static Domain APIs
+
+- Every source file is an ES module; never define true globals.
+- Top-level types form data contracts:
+  - Exported types describe a module's public input and output.
+  - Non-exported types describe internal implementation structures only.
+  - Do not nest types inside classes unless a dotted type API demonstrably improves external call sites.
+- Export related, stateless operations as static methods of a named domain authority when they implement a clearly defined concept, transformation, or rule set.
+- Keep the public API of such an authority small and deliberate. Implement internal steps as:
+  - `#private` static methods for deliberate hard runtime encapsulation,
+  - `private` static methods for TypeScript-level structuring, or
+  - non-exported module functions when they have no domain relation to the public authority.
+- Introduce instance classes only when instance state, identity, configurable dependencies, resources, or a lifecycle are present.
+- Do not use classes as generic containers: names like `Utils`, `Helpers`, `Common`, or `Internals` are not sufficient justification. The class name must express its domain responsibility.
+- Small, clearly local, stateless helper functions may remain at module level when a class would not improve readability.
 
 ### Security
 
@@ -127,7 +192,7 @@ The backend server does NOT auto-reload. Whenever files in `src/server/` change,
 
 ### CSS Styles
 
-- CSS styles for UI framework components go into `src/components/ui/framework/<component-name>.scss`.
+- CSS styles for UI framework components go into `src/components/ui/framework/styles/<component-name>.scss`.
 - Component CSS files are imported in `src/components/ui/framework/styles/index.scss` only.
 
 ---

@@ -13,9 +13,7 @@ import {
 } from "../../src/core/ScoreBookDataModel.js";
 import type { IScoreMetrics } from "../../src/player/TimeCoordinator.js";
 import { requisitions } from "../../src/supplement/Requisitions.js";
-import type { ScoreBookUiServices } from "../../src/player/types.js";
 import type { SelectionManager } from "../../src/ui/SelectionManager.js";
-import { ModeManager } from "../../src/ui/ModeManager.js";
 
 /**
  * Creates a minimal mock ISbDmTimeParams for testing.
@@ -118,11 +116,16 @@ const makePolyrhythmFixture = (
             stepResolution: 8,
             beatGroups: [2, 2, 2, 2],
         },
-        steps: Array.from({ length: 8 }, (_, index) => {
-            return { index, noteStyleId: index === 0 ? "1" : undefined };
-        }),
+        events: [
+            {
+                start: { numerator: 0, denominator: 8 },
+                duration: { numerator: 1, denominator: 8 },
+                noteStyleId: "1",
+            },
+            { start: { numerator: 1, denominator: 8 }, duration: { numerator: 7, denominator: 8 } },
+        ],
         subdivisions: [],
-        events: [event],
+        noteEvents: [event],
     } as ISbDmTrackMeasure;
 
     return { measure };
@@ -149,6 +152,7 @@ const makeArrangement = (barCount: number, trackCount: number): ISbDmArrangement
         countIn: false,
         addTrack: vi.fn(),
         removeTrack: vi.fn(),
+        duplicateTrack: vi.fn(),
         applyArrangementSnapshot: vi.fn(),
         measureLabels: {},
     };
@@ -232,11 +236,6 @@ describe.sequential("Minimap (component)", () => {
         unregisterHitTester: vi.fn(),
     } as unknown as SelectionManager;
 
-    const services: ScoreBookUiServices = {
-        selectionManager: selectionManagerMock,
-        modeManager: new ModeManager(selectionManagerMock),
-    } as ScoreBookUiServices;
-
     const renderMinimap = (
         props: { arrangement?: ISbDmArrangement; onViewportMoved?: (position: number) => void; } = {}): void => {
         minimapRef = null;
@@ -249,7 +248,7 @@ describe.sequential("Minimap (component)", () => {
                 arrangement={props.arrangement ?? arrangement}
                 scoreMetrics={scoreMetrics}
                 onViewportMoved={props.onViewportMoved}
-                services={services}
+                selectionManager={selectionManagerMock}
             />
         );
 
@@ -444,7 +443,7 @@ describe.sequential("Minimap (component)", () => {
                     }}
                     arrangement={newArrangement}
                     scoreMetrics={scoreMetrics}
-                    services={services}
+                    selectionManager={selectionManagerMock}
                 />
             );
 
@@ -463,7 +462,7 @@ describe.sequential("Minimap (component)", () => {
                     }}
                     arrangement={newArrangement}
                     scoreMetrics={scoreMetrics}
-                    services={services}
+                    selectionManager={selectionManagerMock}
                 />
             );
 

@@ -5,7 +5,7 @@
 
 import { expect, test } from "@playwright/test";
 
-import { beijaFlorImportPath, expectImportedPolyrhythmSong, routeApi } from "./helpers.js";
+import { beijaFlorImportPath, expectImportedPolyrhythmSong, routeApi } from "./e2e-test-helpers.js";
 
 /**
  * Calls requisitions.execute("showInfo", text) inside the browser page.
@@ -67,7 +67,7 @@ test.describe("NotificationCenter", () => {
         const toast = page.locator(".toast.info");
         await expect(toast).toBeVisible();
         await expect(toast).toContainText("E2E test notification");
-        await expect(toast.locator(".codicon-info")).toBeVisible();
+        await expect(toast.locator("svg.icon[data-icon='Info']")).toBeVisible();
     });
 
     test("closes a toast when the close button is clicked", async ({ page }) => {
@@ -111,12 +111,12 @@ test.describe("NotificationCenter", () => {
         const warningToast = page.locator(".toast.warning");
         await expect(warningToast).toBeVisible();
         await expect(warningToast).toContainText("E2E warning");
-        await expect(warningToast.locator(".codicon-warning")).toBeVisible();
+        await expect(warningToast.locator("svg.icon[data-icon='Warning']")).toBeVisible();
 
         const errorToast = page.locator(".toast.error");
         await expect(errorToast).toBeVisible();
         await expect(errorToast).toContainText("E2E error");
-        await expect(errorToast.locator(".codicon-error")).toBeVisible();
+        await expect(errorToast.locator("svg.icon[data-icon='Error']")).toBeVisible();
     });
 
     test("toggles history view via the status bar bell icon", async ({ page }) => {
@@ -179,9 +179,9 @@ test.describe("NotificationCenter", () => {
         // Close history.
         await page.locator("#showNotificationHistory").click();
 
-        // The status bar bell item should now show a slash icon (codicon class).
+        // The status bar bell item should now show a slash icon.
         const bellItem = page.locator("#showNotificationHistory");
-        await expect(bellItem.locator(".codicon-bell-slash, .codicon-bell-slash-dot")).toBeVisible();
+        await expect(bellItem.locator("svg.icon[data-icon^='BellSlash']")).toBeVisible();
 
         // Info notifications should be suppressed in silent mode.
         await showInfo(page, "Should not appear");

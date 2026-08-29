@@ -6,7 +6,7 @@
 import { ComponentChild } from "preact";
 
 import { convertPropValue } from "../../../core/utils.js";
-import { type Codicon, iconNameMap } from "./Codicon.js";
+import { UIIcon, uiIconToMdiMap } from "./UIIcon.js";
 import { UIComponent, type ICommonUIProperties } from "./UIComponent.js";
 
 export interface IIconOverlay {
@@ -22,8 +22,8 @@ export interface IIconOverlay {
 
 /** Icons are images whose color can be set. Colors in the image itself are ignored. */
 export interface IIconProperties extends ICommonUIProperties {
-    /** The URL of the main image. Can also be a codicon name. */
-    src?: string | Codicon;
+    /** The URL of the main image. Can also be a `UIIcon` enum value. */
+    src?: string | UIIcon;
 
     overlays?: IIconOverlay[];
 
@@ -89,9 +89,54 @@ export class Icon extends UIComponent<IIconProperties> {
                 backgroundColor: color,
             };
         } else if (src) {
-            // Otherwise it's a codicon.
-            newStyle = style;
-            className += " codicon codicon-" + iconNameMap.get(src)!;
+            // Otherwise it's a UIIcon — render as inline SVG via its MDI path.
+            const mdiPath = uiIconToMdiMap.get(src);
+            if (mdiPath) {
+                newStyle = style;
+
+                if (overlays) {
+                    return (
+                        <div
+                            id={id}
+                            className="iconHost"
+                            aria-label={alt}
+                        >
+                            <svg
+                                class={className}
+                                xmlns="http://www.w3.org/2000/svg"
+                                viewBox="0 0 24 24"
+                                width={convertPropValue(width) ?? "1em"}
+                                height={convertPropValue(height) ?? "1em"}
+                                fill={color ?? "currentColor"}
+                                data-icon={UIIcon[src]}
+                                style={newStyle}
+                                {...this.dataAttributes}
+                            >
+                                <path d={mdiPath} />
+                            </svg>
+                            {olLayers}
+                        </div>
+                    );
+                }
+
+                return (
+                    <svg
+                        id={id}
+                        class={className}
+                        xmlns="http://www.w3.org/2000/svg"
+                        viewBox="0 0 24 24"
+                        width={convertPropValue(width) ?? "1em"}
+                        height={convertPropValue(height) ?? "1em"}
+                        fill={color ?? "currentColor"}
+                        data-icon={UIIcon[src]}
+                        aria-label={alt}
+                        style={newStyle}
+                        {...this.dataAttributes}
+                    >
+                        <path d={mdiPath} />
+                    </svg>
+                );
+            }
         }
 
         if (overlays) {

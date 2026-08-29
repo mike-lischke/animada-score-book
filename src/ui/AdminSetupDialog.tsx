@@ -6,7 +6,7 @@
 import { createRef, type ComponentChild } from "preact";
 
 import { Button } from "../components/ui/framework/Button.js";
-import { Codicon } from "../components/ui/framework/Codicon.js";
+import { UIIcon } from "../components/ui/framework/UIIcon.js";
 import { Container } from "../components/ui/framework/Container.js";
 import { Dialog } from "../components/ui/framework/Dialog.js";
 import { Icon } from "../components/ui/framework/Icon.js";
@@ -101,7 +101,7 @@ export class AdminSetupDialog extends UIComponent<IAdminSetupDialogProperties, I
                     style={{ marginBottom: "12px" }}
                 >
                     <Icon
-                        src={Codicon.Rocket}
+                        src={UIIcon.Rocket}
                         style={{ fontSize: "24px", marginRight: "8px", color: "var(--color-primary)" }}
                     />
                     Finish Installation

@@ -4,7 +4,7 @@
  */
 
 import type { IUISettings } from "../core/AppStorage.js";
-import type { ISbDmScore, ISbDmScoreFolder, ScoreBookChangeReason } from "../core/ScoreBookDataModel.js";
+import type { ISbDmScore, ISbDmScoreFolder, ISbDmTrack, ScoreBookChangeReason } from "../core/ScoreBookDataModel.js";
 import type { PlayerPlayState } from "../player/ArrangementPlayer.js";
 import type { ISelectionDelta, ISelectionRectChange } from "../ui/selection-types.js";
 
@@ -15,39 +15,29 @@ export type IRequisitionCallbackValues<K extends keyof IRequestTypeMap> = Parame
 
 /** A map of request types to their corresponding callback signatures. A callback must only have a single parameter. */
 export interface IRequestTypeMap {
-    // --- UI / settings topics ---
     "settingsChanged": (settings: IUISettings) => Promise<boolean>;
     "trackViewModeToggled": (mode: "grid" | "staff") => Promise<boolean>;
 
-    // --- Playback topics ---
     "playRangeChanged": (range?: { from: number; to: number; }) => Promise<boolean>;
     "animationStateChanged": (state: PlayerPlayState) => Promise<boolean>;
     "playerStateChanged": (state: PlayerPlayState) => Promise<boolean>;
 
-    // --- Core model topics ---
     "instrumentLoaded": (instrumentId: number) => Promise<boolean>;
     "trackChanged": (trackId: number) => Promise<boolean>;
     "arrangementChanged": (arrangementId: number) => Promise<boolean>;
     "timeParamsChanged": SimpleCallback;
     "scoreBookLoaded": (reason: ScoreBookChangeReason) => Promise<boolean>;
+    "scoreEntryUpdated": (entry: ISbDmScoreFolder | ISbDmScore) => Promise<boolean>;
     "permChanged": (entry: ISbDmScoreFolder | ISbDmScore) => Promise<boolean>;
 
-    // --- Undo/redo topics ---
-    "undoStateChanged": SimpleCallback;
-    "canUndoChanged": SimpleCallback;
-    "canRedoChanged": SimpleCallback;
+    "undoStackChanged": SimpleCallback;
 
-    // --- UI state topics ---
-    "modeChanged": SimpleCallback;
     "selectionChanged": (delta: ISelectionDelta) => Promise<boolean>;
     "selectionRectChanged": (data: ISelectionRectChange) => Promise<boolean>;
     "errorLogChanged": SimpleCallback;
-    "overlayVisibilityChanged": (data: { name: string; visible: boolean; }) => Promise<boolean>;
 
-    // --- Status bar topics ---
     "statusBarItemClicked": (data: { command: string; event: MouseEvent | KeyboardEvent; }) => Promise<boolean>;
 
-    // --- Notification center topics ---
     "showInfo": (text: string) => Promise<boolean>;
     "showWarning": (text: string) => Promise<boolean>;
     "showError": (text: string) => Promise<boolean>;
@@ -55,11 +45,24 @@ export interface IRequestTypeMap {
         newCount: number; totalCount: number; silent: boolean; showHistory: boolean;
     }) => Promise<boolean>;
 
-    // --- Backend connectivity ---
     "backendDisconnected": SimpleCallback;
 
-    // --- Authentication ---
     "authChanged": SimpleCallback;
+
+    "notesClicked": (noteIds: number[]) => Promise<boolean>;
+
+    "editModeChanged": (enabled: boolean) => Promise<boolean>;
+
+    "insertTrackRequested": (track: ISbDmTrack) => Promise<boolean>;
+
+    /** Fired by the articulation bar to enter a note of the given style at the current cursor position. */
+    "noteEntryRequested": (noteStyleId: string) => Promise<boolean>;
+
+    /**
+     * Fired by ScoreBookDataModel after any mutation to the arrangement.
+     * The UndoManager listens to this to record undo/redo snapshots.
+     */
+    "arrangementMutated": SimpleCallback;
 }
 
 type CallbackType = IRequestTypeMap[keyof IRequestTypeMap];

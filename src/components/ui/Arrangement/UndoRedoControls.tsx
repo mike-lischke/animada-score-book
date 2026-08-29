@@ -8,8 +8,8 @@ import type { ComponentChild } from "preact";
 import type { UndoManager } from "../../../core/UndoManager.js";
 import { requisitions } from "../../../supplement/Requisitions.js";
 import { Button } from "../framework/Button.js";
-import { Codicon } from "../framework/Codicon.js";
-import { Container } from "../framework/Container.js";
+import { UIIcon } from "../framework/UIIcon.js";
+import { GooeyGroup } from "../framework/GooeyGroup.js";
 import { Icon } from "../framework/Icon.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
 
@@ -45,12 +45,12 @@ export class UndoRedoControls extends UIComponent<IUndoRedoProps, IUndoRedoState
                 canRedo: undoManager.canRedo
             });
         }
+
         this.prepareSubscriptions();
     }
 
     public override componentWillUnmount(): void {
-        requisitions.unregister("canUndoChanged", this.handleCanUndoChanged);
-        requisitions.unregister("canRedoChanged", this.handleCanRedoChanged);
+        requisitions.unregister("undoStackChanged", this.handleUndoStackChanged);
     }
 
     public render(): ComponentChild {
@@ -61,42 +61,36 @@ export class UndoRedoControls extends UIComponent<IUndoRedoProps, IUndoRedoState
         // const state = undoManager.currentState;
 
         return (
-            <Container id='undoRedoControls'>
+            <GooeyGroup className="undoRedoGooey" background="var(--color-base-200)">
                 <Button
+                    plain
+                    className="undoRedoButton"
                     disabled={!canUndo}
                     onClick={undoManager.undo}
-                    imageOnly
                     data-tooltip="Revert your last change"
                 >
-                    <Icon src={Codicon.Discard} data-tooltip="inherit" />
+                    <Icon src={UIIcon.Discard} width={20} height={20} data-tooltip="inherit" />
                 </Button>
                 <Button
+                    plain
+                    className="undoRedoButton"
                     disabled={!canRedo}
                     onClick={undoManager.redo}
-                    imageOnly
                     data-tooltip="Redo the last change you reverted"
                 >
-                    <Icon src={Codicon.Redo} data-tooltip="inherit" />
+                    <Icon src={UIIcon.Redo} width={20} height={20} data-tooltip="inherit" />
                 </Button>
-            </Container>
+            </GooeyGroup>
         );
     }
 
     private prepareSubscriptions(): void {
-        requisitions.register("canUndoChanged", this.handleCanUndoChanged);
-        requisitions.register("canRedoChanged", this.handleCanRedoChanged);
+        requisitions.register("undoStackChanged", this.handleUndoStackChanged);
     }
 
-    private handleCanUndoChanged = (): Promise<boolean> => {
+    private handleUndoStackChanged = (): Promise<boolean> => {
         const { undoManager } = this.props;
-        this.setState({ canUndo: undoManager.canUndo });
-
-        return Promise.resolve(true);
-    };
-
-    private handleCanRedoChanged = (): Promise<boolean> => {
-        const { undoManager } = this.props;
-        this.setState({ canRedo: undoManager.canRedo });
+        this.setState({ canUndo: undoManager.canUndo, canRedo: undoManager.canRedo });
 
         return Promise.resolve(true);
     };

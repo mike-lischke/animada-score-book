@@ -8,7 +8,7 @@ import { createRef, render, type ComponentChild } from "preact";
 import type { CellComponent, ColumnDefinition, RowComponent } from "tabulator-tables";
 
 import { Button } from "../components/ui/framework/Button.js";
-import { Codicon } from "../components/ui/framework/Codicon.js";
+import { UIIcon } from "../components/ui/framework/UIIcon.js";
 import { Container } from "../components/ui/framework/Container.js";
 import { Icon } from "../components/ui/framework/Icon.js";
 import { Label } from "../components/ui/framework/Label.js";
@@ -57,12 +57,14 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
         requisitions.register("settingsChanged", this.handleSettingsChanged);
         requisitions.register("scoreBookLoaded", this.handleScoreBookLoaded);
         requisitions.register("permChanged", this.handlePermChanged);
+        requisitions.register("scoreEntryUpdated", this.handleScoreEntryUpdated);
     }
 
     public override componentWillUnmount(): void {
         requisitions.unregister("settingsChanged", this.handleSettingsChanged);
         requisitions.unregister("scoreBookLoaded", this.handleScoreBookLoaded);
         requisitions.unregister("permChanged", this.handlePermChanged);
+        requisitions.unregister("scoreEntryUpdated", this.handleScoreEntryUpdated);
     }
 
     public render(): ComponentChild {
@@ -100,7 +102,7 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
                     crossAlignment={ChildAlignment.Center}
                     style={{ marginBottom: "8px" }}
                 >
-                    <Icon src={Codicon.Library} style={{ fontSize: "40px", color: "var(--color-primary)" }} />
+                    <Icon src={UIIcon.Library} style={{ fontSize: "40px", color: "var(--color-primary)" }} />
                     <Label heading={true} style={{ marginLeft: "16px" }}>Score Library</Label>
                     <Button
                         style={{ marginLeft: "auto" }}
@@ -109,7 +111,7 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
                             this.handleActionClick(e, "addFolder");
                         }}
                     >
-                        <Icon src={Codicon.NewFolder} />
+                        <Icon src={UIIcon.NewFolder} />
                     </Button>
                 </Container>
                 <Container
@@ -156,32 +158,34 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
             />;
         } else {
             let iconClass = "";
-            let iconSrc: Codicon;
+            let iconSrc: UIIcon;
             if (data.type === SbDmEntityType.ScoreFolder) {
                 // Use the row's expanded state to determine the icon. Our internal state is not updated yet.
-                iconSrc = row.isTreeExpanded() ? Codicon.FolderOpened : Codicon.Folder;
+                iconSrc = row.isTreeExpanded() ? UIIcon.FolderOpened : UIIcon.Folder;
 
                 menuItems.push(
-                    { id: "import", label: "Import Score", icon: Codicon.CloudDownload },
-                    { id: "addFolder", label: "Add New Sub Folder", icon: Codicon.NewFolder },
-                    { id: "edit", label: "Rename Folder", icon: Codicon.Edit },
+                    { id: "import", label: "Import Score", icon: UIIcon.CloudDownload },
+                    { id: "addFolder", label: "Add New Sub Folder", icon: UIIcon.NewFolder },
+                    { id: "edit", label: "Rename Folder", icon: UIIcon.Edit },
                     { id: "separator1", label: "-" },
-                    { id: "remove", label: "Remove Folder", icon: Codicon.Trash },
+                    { id: "remove", label: "Remove Folder", icon: UIIcon.Trash },
                 );
             } else {
-                iconSrc = Codicon.Music;
+                iconSrc = UIIcon.Music;
                 iconClass = "score";
 
                 menuItems.push(
                     { id: "load", label: "Load Score" },
-                    { id: "copyUrl", label: "Copy Score URL", icon: Codicon.Link },
+                    { id: "copyUrl", label: "Copy Score URL", icon: UIIcon.Link },
                     { id: "separator2", label: "-" },
-                    { id: "remove", label: "Remove Score", icon: Codicon.Trash },
+                    { id: "remove", label: "Remove Score", icon: UIIcon.Trash },
                 );
             }
 
             icon = <Icon src={iconSrc} className={iconClass + " scoreTreeIcon"} />;
-        };
+        }
+
+        ;
 
         const isAdmin = dataModel.user?.isAdmin ?? false;
         const { perm } = data;
@@ -195,7 +199,7 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
                 { id: "separator3", label: "-" },
             );
             menuItems.push(
-                { id: "managePerm", label: "Group Access", icon: Codicon.Key },
+                { id: "managePerm", label: "Group Access", icon: UIIcon.Key },
             );
         }
 
@@ -214,7 +218,7 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
             )}
             <Container className="actionBox" orientation={Orientation.LeftToRight}>
                 <Menu
-                    icon={Codicon.KebabVertical}
+                    icon={UIIcon.KebabVertical}
                     items={menuItems}
                     onItemClick={(id) => {
                         // Capture data in a closure so each cell's menu uses the correct entry.
@@ -441,6 +445,13 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
             const tree = this.scoreTableRef.current;
             void tree?.setData(dataModel.scoreLib, SetDataAction.Replace);
         }
+
+        return Promise.resolve(true);
+    };
+
+    private handleScoreEntryUpdated = async (entry: ISbDmScoreFolder | ISbDmScore): Promise<boolean> => {
+        const tree = this.scoreTableRef.current;
+        void tree?.setData([entry], SetDataAction.Update);
 
         return Promise.resolve(true);
     };

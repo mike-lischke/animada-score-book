@@ -6,15 +6,15 @@
 import { cleanup, render, type RenderResult } from "@testing-library/preact";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { Codicon } from "../../src/components/ui/framework/Codicon.js";
+import { UIIcon } from "../../src/components/ui/framework/UIIcon.js";
 import { Menu } from "../../src/components/ui/framework/Menu/Menu.js";
 import { type IMenuItem } from "../../src/components/ui/framework/Menu/MenuItem.js";
 import * as utils from "../../src/core/utils.js";
 
 const items: IMenuItem[] = [
-    { id: "new", label: "New", icon: Codicon.NewFile },
+    { id: "new", label: "New", icon: UIIcon.NewFile },
     { id: "sep", label: "-", disabled: true },
-    { id: "del", label: "Delete", icon: Codicon.Trash },
+    { id: "del", label: "Delete", icon: UIIcon.Trash },
 ];
 
 describe("Menu", () => {
@@ -41,7 +41,7 @@ describe("Menu", () => {
     });
 
     it("renders a trigger button with icon when only icon is given", () => {
-        renderResult = render(<Menu items={items} icon={Codicon.KebabVertical} />);
+        renderResult = render(<Menu items={items} icon={UIIcon.KebabVertical} />);
         const button = renderResult.container.querySelector("button");
 
         expect(button).toBeTruthy();

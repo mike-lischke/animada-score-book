@@ -56,7 +56,7 @@ describe.sequential("Statusbar", () => {
         expect(leftContainer.textContent).toContain("Hello");
 
         await act(() => {
-            item.dispose(); 
+            item.dispose();
         });
         expect(container.textContent).not.toContain("Hello");
     });
@@ -75,7 +75,7 @@ describe.sequential("Statusbar", () => {
         expect(rightContainer.textContent).toContain("Right");
 
         await act(() => {
-            item.dispose(); 
+            item.dispose();
         });
         expect(container.textContent).not.toContain("Right");
     });
@@ -91,17 +91,17 @@ describe.sequential("Statusbar", () => {
         expect(container.textContent).toContain("Toggle");
 
         await act(() => {
-            item.hide(); 
+            item.hide();
         });
         expect(container.textContent).not.toContain("Toggle");
 
         await act(() => {
-            item.show(); 
+            item.show();
         });
         expect(container.textContent).toContain("Toggle");
 
         await act(() => {
-            item.dispose(); 
+            item.dispose();
         });
         expect(container.textContent).not.toContain("Toggle");
     });
@@ -117,7 +117,7 @@ describe.sequential("Statusbar", () => {
         expect(container.textContent).toContain("Gone");
 
         await act(() => {
-            item.dispose(); 
+            item.dispose();
         });
         expect(container.textContent).not.toContain("Gone");
     });
@@ -175,7 +175,7 @@ describe.sequential("Statusbar", () => {
         expect(messageItems).toHaveLength(1);
 
         await act(() => {
-            disposable.dispose(); 
+            disposable.dispose();
         });
         expect(container.textContent).not.toContain("Second");
     });
@@ -191,7 +191,7 @@ describe.sequential("Statusbar", () => {
         expect(container.textContent).toContain("Disposable");
 
         await act(() => {
-            disposable.dispose(); 
+            disposable.dispose();
         });
         expect(container.textContent).not.toContain("Disposable");
     });
@@ -238,14 +238,14 @@ describe.sequential("Statusbar", () => {
         expect(texts).toEqual(["High", "Mid", "Low"]);
 
         await act(() => {
-            low.dispose(); high.dispose(); mid.dispose(); 
+            low.dispose(); high.dispose(); mid.dispose();
         });
 
         const remaining = container.querySelectorAll(".statusbar-left .statusbar-item");
         expect(remaining).toHaveLength(0);
     });
 
-    it("renders codicon icons from $(name) syntax", async () => {
+    it("renders icons from $(name) syntax", async () => {
         const { container } = render(renderStatusBar());
 
         let item: { dispose: () => void; };
@@ -253,11 +253,11 @@ describe.sequential("Statusbar", () => {
             item = Statusbar.createStatusBarItem({ id: "icon.item", text: "$(check) Done" });
         });
 
-        expect(container.querySelector(".codicon-check")).not.toBeNull();
+        expect(container.querySelector("svg.icon[data-icon='Check']")).not.toBeNull();
         expect(container.textContent).toContain("Done");
 
         await act(() => {
-            item.dispose(); 
+            item.dispose();
         });
         expect(container.textContent).not.toContain("Done");
     });
@@ -270,15 +270,15 @@ describe.sequential("Statusbar", () => {
             item = Statusbar.createStatusBarItem({ id: "spin.item", text: "$(sync~spin) Loading" });
         });
 
-        const icon = container.querySelector(".codicon-sync");
+        const icon = container.querySelector("svg.icon[data-icon='Sync']");
 
         expect(icon).not.toBeNull();
-        expect(icon!.classList.contains("codicon-modifier-spin")).toBe(true);
+        expect(icon!.classList.contains("spin")).toBe(true);
 
         await act(() => {
-            item.dispose(); 
+            item.dispose();
         });
-        expect(container.querySelector(".codicon-sync")).toBeNull();
+        expect(container.querySelector("svg.icon[data-icon='Sync']")).toBeNull();
     });
 
     it("clickable items have button role, non-clickable do not", async () => {
@@ -301,7 +301,7 @@ describe.sequential("Statusbar", () => {
         expect(plain.getAttribute("role")).toBeNull();
 
         await act(() => {
-            clickableItem.dispose(); plainItem.dispose(); 
+            clickableItem.dispose(); plainItem.dispose();
         });
         expect(container.querySelector("#clickable")).toBeNull();
         expect(container.querySelector("#plain")).toBeNull();
@@ -331,7 +331,7 @@ describe.sequential("Statusbar", () => {
         );
 
         await act(() => {
-            item.dispose(); 
+            item.dispose();
         });
     });
 
@@ -358,7 +358,7 @@ describe.sequential("Statusbar", () => {
         );
 
         await act(() => {
-            item.dispose(); 
+            item.dispose();
         });
     });
 
@@ -383,7 +383,7 @@ describe.sequential("Statusbar", () => {
         expect(callback).not.toHaveBeenCalled();
 
         await act(() => {
-            item.dispose(); 
+            item.dispose();
         });
     });
 });

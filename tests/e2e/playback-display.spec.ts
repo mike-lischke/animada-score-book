@@ -5,7 +5,7 @@
 
 import { expect, test } from "@playwright/test";
 
-import { expectPlaybackToMove, routeApi } from "./helpers.js";
+import { expectPlaybackToMove, routeApi } from "./e2e-test-helpers.js";
 
 test.beforeEach(async ({ page }) => {
     await routeApi(page);
@@ -23,12 +23,13 @@ test("playback button starts and stops playback", async ({ page }) => {
     await page.goto("/");
 
     const playbackToggle = page.locator("#playbackButton");
-    await expect(playbackToggle).toBeVisible();
+    const playButton = page.locator("#arrangementPlayControls .playStopButton");
+    await expect(playButton).toBeVisible();
 
-    await playbackToggle.check({ force: true });
+    await playButton.click();
     await expect(playbackToggle).toBeChecked();
 
-    await playbackToggle.uncheck({ force: true });
+    await playButton.click();
     await expect(playbackToggle).not.toBeChecked();
 });
 

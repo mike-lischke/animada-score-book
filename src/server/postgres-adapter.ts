@@ -6,104 +6,6 @@
 import pg from "pg";
 
 import type { DbRow, IDatabaseAdapter, IDatabaseConfig, IDbExecuteResult, ITestConnectionResult } from "./database.js";
-import { schemaVersion } from "./database.js";
-
-// KEEP IN SYNC with createTablesSQL in mysql-adapter.ts — same tables, same columns, same nullability.
-const createTablesSQL = [
-    `CREATE TABLE IF NOT EXISTS folders (
-        id       SERIAL PRIMARY KEY,
-        parentid INT NULL REFERENCES folders(id) ON UPDATE CASCADE ON DELETE SET NULL,
-        name     VARCHAR(255) NOT NULL
-    )`,
-
-    `CREATE TABLE IF NOT EXISTS scores (
-        id       SERIAL PRIMARY KEY,
-        folderid INT NULL REFERENCES folders(id) ON UPDATE CASCADE ON DELETE CASCADE,
-        name     VARCHAR(255) NOT NULL,
-        content  TEXT NOT NULL,
-        notes    TEXT
-    )`,
-
-    `CREATE TABLE IF NOT EXISTS instruments (
-        id            SERIAL PRIMARY KEY,
-        name          VARCHAR(255) NOT NULL,
-        description   TEXT,
-        imageurl      VARCHAR(512),
-        articulations JSONB NOT NULL
-    )`,
-
-    `CREATE TABLE IF NOT EXISTS instrument_images (
-        id           SERIAL PRIMARY KEY,
-        instrumentid INT NOT NULL REFERENCES instruments(id) ON DELETE CASCADE,
-        filepath     VARCHAR(255) NOT NULL,
-        alttext      VARCHAR(255),
-        mimetype     VARCHAR(100) NOT NULL,
-        width        INT,
-        height       INT,
-        filesize     INT
-    )`,
-
-    `CREATE TABLE IF NOT EXISTS users (
-        id                 SERIAL PRIMARY KEY,
-        username           VARCHAR(255) NOT NULL UNIQUE,
-        password_hash      VARCHAR(512) NOT NULL,
-        refresh_token_hash VARCHAR(256),
-        auth_type          VARCHAR(16),
-        group_id           INT,
-        display_name       VARCHAR(255) NOT NULL,
-        last_login         TIMESTAMP,
-        created_at         TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        updated_at         TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP
-    )`,
-
-    `CREATE TABLE IF NOT EXISTS login_audit (
-        id         SERIAL PRIMARY KEY,
-        user_id    INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-        event      VARCHAR(16) NOT NULL CHECK (event IN ('login', 'group_login', 'refresh', 'logout')),
-        group_id   INT,
-        ip_address VARCHAR(45),
-        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-    )`,
-    `CREATE INDEX IF NOT EXISTS idx_audit_user_time ON login_audit (user_id, created_at)`,
-
-    `CREATE TABLE IF NOT EXISTS groups (
-        id            SERIAL PRIMARY KEY,
-        name          VARCHAR(255) NOT NULL UNIQUE,
-        description   TEXT,
-        color         VARCHAR(7)   NOT NULL DEFAULT '#808080',
-        password_hash VARCHAR(512),
-        admin_id      INT REFERENCES users(id) ON DELETE SET NULL,
-        last_login    TIMESTAMP,
-        created_at    TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP
-    )`,
-
-    `CREATE TABLE IF NOT EXISTS user_groups (
-        user_id  INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-        group_id INT NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
-        PRIMARY KEY (user_id, group_id)
-    )`,
-
-    `CREATE TABLE IF NOT EXISTS permissions (
-        id          SERIAL PRIMARY KEY,
-        entity_type VARCHAR(32)  NOT NULL,
-        entity_id   INT NULL,
-        owner_id    INT NULL REFERENCES users(id) ON DELETE SET NULL,
-        UNIQUE (entity_type, entity_id)
-    )`,
-
-    `CREATE TABLE IF NOT EXISTS entity_groups (
-        entity_type VARCHAR(32)  NOT NULL,
-        entity_id   INT NOT NULL,
-        group_id    INT NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
-        writable    BOOLEAN NOT NULL DEFAULT FALSE,
-        PRIMARY KEY (entity_type, entity_id, group_id)
-    )`,
-
-    `CREATE TABLE IF NOT EXISTS features (
-        key   VARCHAR(255) NOT NULL PRIMARY KEY,
-        value TEXT         NOT NULL
-    )`,
-];
 
 /**
  * PostgreSQL uses $1, $2, ... placeholders. Convert ? placeholders to $n.
@@ -167,37 +69,17 @@ export class PostgresAdapter implements IDatabaseAdapter {
             max: 10,
             connectionTimeoutMillis: 10000,
         });
-
-        const client = await this.pool.connect();
-
-        try {
-            // Never modify an existing database — only create tables on a fresh install.
-            let exists = false;
-
-            try {
-                await client.query("SELECT 1 FROM folders LIMIT 1");
-                exists = true;
-            } catch {
-                // Table doesn't exist — fresh install.
-            }
-
-            if (!exists) {
-                for (const stmt of createTablesSQL) {
-                    await client.query(stmt);
-                }
-
-                await client.query(
-                    "INSERT INTO features (key, value) VALUES ('schema_version', $1)",
-                    [String(schemaVersion)],
-                );
-            }
-        } finally {
-            client.release();
-        }
     }
 
     public isInitialized(): boolean {
         return this.pool !== undefined;
+    }
+
+    public async ping(): Promise<boolean> {
+        const pool = this.getPoolOrThrow();
+        const result = await pool.query("SELECT 1 AS result");
+
+        return result.rows.length > 0 && (result.rows[0] as { result: number; }).result === 1;
     }
 
     public async query<T extends DbRow = DbRow>(sql: string, params?: unknown[]): Promise<T[]> {
@@ -256,18 +138,6 @@ export class PostgresAdapter implements IDatabaseAdapter {
             }
         } finally {
             client.release();
-        }
-    }
-
-    public async getSchemaVersion(): Promise<number> {
-        try {
-            const rows = await this.query<{ value: string; }>(
-                "SELECT value FROM features WHERE key = 'schema_version'",
-            );
-
-            return rows[0] ? Number(rows[0].value) : 0;
-        } catch {
-            return 0;
         }
     }
 

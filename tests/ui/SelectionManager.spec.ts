@@ -11,6 +11,9 @@ import {
 import type { Mutable } from "../../src/core/types/general.js";
 import { requisitions } from "../../src/supplement/Requisitions.js";
 import { SelectionManager } from "../../src/ui/SelectionManager.js";
+import {
+    SelectionGranularity, type ISelectionDelta, type ISelectionEntry
+} from "../../src/ui/selection-types.js";
 
 const makeArrangement = (tracks: ISbDmTrack[]): ISbDmArrangement => {
     const arrangement: ISbDmArrangement = {
@@ -31,6 +34,7 @@ const makeArrangement = (tracks: ISbDmTrack[]): ISbDmArrangement => {
         },
         addTrack: vi.fn(),
         removeTrack: vi.fn(),
+        duplicateTrack: vi.fn(),
         applyArrangementSnapshot: vi.fn(),
         mainVolume: 100,
         loop: false,
@@ -120,48 +124,63 @@ describe.sequential("SelectionManager (class)", () => {
     });
 
     it("starts with nothing selected", () => {
-        expect(manager.currentTrackSelections.size).toBe(0);
-        expect(manager.isSelected(noteA)).toBe(false);
-    });
-
-    it("selects a single note on click and publishes", () => {
-        const publishSpy = vi.fn();
-        requisitions.register("selectionChanged", publishSpy);
-        manager.handleClick(noteA);
-        expect(manager.isSelected(noteA)).toBe(true);
-        expect(manager.currentTrackSelections.get(track)!.range).toEqual([noteA, noteA]);
-        expect(publishSpy).toHaveBeenCalled();
-        requisitions.unregister("selectionChanged", publishSpy);
-    });
-
-    it("clicking the same anchor again clears selection", () => {
-        manager.handleClick(noteA);
-        manager.handleClick(noteA);
-        expect(manager.isSelected(noteA)).toBe(false);
-    });
-
-    it("drag selects a range on the same track", () => {
-        manager.handleClick(noteA);
-        manager.handleMouseDown(noteA);
-        manager.handleDragSelect(noteB);
-        const selection = manager.currentTrackSelections.get(track)!;
-        expect(selection.selectedNotes.has(noteA)).toBe(true);
-        expect(selection.selectedNotes.has(noteB)).toBe(true);
-        expect(selection.range).toEqual([noteA, noteB]);
-    });
-
-    it("deselectAll clears selection and publishes", () => {
-        const publishSpy = vi.fn();
-        requisitions.register("selectionChanged", publishSpy);
-        manager.handleClick(noteA);
-        manager.clearSelection();
-        expect(manager.currentTrackSelections.size).toBe(0);
-        expect(publishSpy).toHaveBeenCalled();
-        requisitions.unregister("selectionChanged", publishSpy);
+        expect(manager.currentSelection.size).toBe(0);
+        expect(manager.isNoteSelected(1, 1, 1)).toBe(false);
     });
 
     it("can construct via new", () => {
         const m = new SelectionManager();
         expect(m).toBeInstanceOf(SelectionManager);
+    });
+
+    it("replaceSelection swaps the whole selection and publishes a single delta", () => {
+        const added: ISelectionEntry[] = [];
+        const removed: ISelectionEntry[] = [];
+
+        const spy = (delta: ISelectionDelta): Promise<boolean> => {
+            added.push(...delta.added);
+            removed.push(...delta.removed);
+
+            return Promise.resolve(true);
+        };
+
+        requisitions.register("selectionChanged", spy);
+
+        const note: ISelectionEntry = {
+            granularity: SelectionGranularity.Note,
+            bar: 1,
+            trackId: 1,
+            startStep: 0,
+            endStep: 0,
+            noteId: 1,
+        };
+
+        manager.selectSingleNote(note);
+        added.length = 0;
+        removed.length = 0;
+
+        const clearedA: ISelectionEntry = {
+            granularity: SelectionGranularity.Note,
+            bar: 1,
+            trackId: 1,
+            startStep: 0,
+            endStep: 0,
+        };
+
+        const clearedB: ISelectionEntry = {
+            granularity: SelectionGranularity.Note,
+            bar: 1,
+            trackId: 1,
+            startStep: 2,
+            endStep: 2,
+        };
+
+        manager.replaceSelection([clearedA, clearedB]);
+        requisitions.unregister("selectionChanged", spy);
+
+        expect(manager.currentSelection.size).toBe(2);
+        expect([...manager.currentSelection.values()]).toEqual([clearedA, clearedB]);
+        expect(added).toEqual([clearedA, clearedB]);
+        expect(removed).toEqual([note]);
     });
 });

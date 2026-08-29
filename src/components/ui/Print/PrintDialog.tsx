@@ -7,7 +7,7 @@ import { createRef, type ComponentChild } from "preact";
 
 import { Button } from "../framework/Button.js";
 import { CheckState, Toggle } from "../framework/Toggle.js";
-import { Codicon } from "../framework/Codicon.js";
+import { UIIcon } from "../framework/UIIcon.js";
 import { Container } from "../framework/Container.js";
 import { Dialog } from "../framework/Dialog.js";
 import { Dropdown, type IDropdownItem } from "../framework/Dropdown.js";
@@ -88,7 +88,7 @@ export class PrintDialog extends UIComponent<IPrintDialogProps, IPrintDialogStat
                     orientation={Orientation.LeftToRight}
                     crossAlignment={ChildAlignment.Center}
                 >
-                    <Icon src={Codicon.FilePdf} style={{ fontSize: "24px", marginRight: "8px" }} />
+                    <Icon src={UIIcon.FilePdf} style={{ fontSize: "24px", marginRight: "8px" }} />
                     Print / Export to PDF
                 </Container>
 

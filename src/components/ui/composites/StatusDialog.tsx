@@ -5,7 +5,7 @@
 
 import { ComponentChild, createRef } from "preact";
 
-import { Codicon } from "../framework/Codicon.js";
+import { UIIcon } from "../framework/UIIcon.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
 import {
     ValueDialog, ValueEditorEntryType, type IValueEditorEntry,
@@ -16,7 +16,7 @@ import {
  */
 export interface IStatusContent {
     /** Icon to show next to the title. */
-    icon: Codicon;
+    icon: UIIcon;
 
     /** Bold title line. */
     title: string;
@@ -55,14 +55,14 @@ interface IStatusDialogProperties extends ICommonUIProperties {
  * ## Usage
  *
  * ```
- * dialog.show({ icon: Codicon.Error, title: "Error", message: "Something went wrong." });
+ * dialog.show({ icon: UIIcon.Error, title: "Error", message: "Something went wrong." });
  * dialog.update({ message: "Retrying…", showSpinner: true });
  * dialog.dismiss();
  * ```
  */
 export class StatusDialog extends UIComponent<IStatusDialogProperties> {
     private valueDialogRef = createRef<ValueDialog>();
-    private content: IStatusContent = { icon: Codicon.Info, title: "", message: "" };
+    private content: IStatusContent = { icon: UIIcon.Info, title: "", message: "" };
     private closingIntentionally = false;
 
     public constructor(props: IStatusDialogProperties) {

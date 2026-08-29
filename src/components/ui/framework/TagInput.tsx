@@ -8,7 +8,7 @@ import { ComponentChild, createRef } from "preact";
 import { Button } from "./Button.js";
 import { Icon } from "./Icon.js";
 import { UIComponent, type ICommonUIProperties } from "./UIComponent.js";
-import { Codicon } from "./Codicon.js";
+import { UIIcon } from "./UIIcon.js";
 import { Container } from "./Container.js";
 import { ChildAlignment, ChildWrap } from "./ui-types.js";
 
@@ -135,7 +135,7 @@ export class TagInput extends UIComponent<ITagInputProperties, ITagInputState> {
                                         onRemove?.(tag.id);
                                     }}
                                 >
-                                    <Icon src={Codicon.Close} style={textColor ? { color: textColor } : undefined} />
+                                    <Icon src={UIIcon.Close} style={textColor ? { color: textColor } : undefined} />
                                 </Button>
                             )}
                         </span>

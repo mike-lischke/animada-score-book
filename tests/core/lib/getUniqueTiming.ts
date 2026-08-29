@@ -20,6 +20,7 @@ const getNewTiming = (lastTiming: ITiming | null): ITiming => {
     if (lastTiming === null) {
         return { bar: 1, step: 1 };
     }
+
     const { bar, step } = lastTiming;
     if (step === 16) {
         return { bar: bar + 1, step: 1 };

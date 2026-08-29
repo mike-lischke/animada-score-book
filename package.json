@@ -8,7 +8,7 @@
     },
     "license": "MIT",
     "type": "module",
-    "version": "1.0.0",
+    "version": "1.3.0",
     "scripts": {
         "dev": "vite --host",
         "build": "npm run fix-svgs && npm run generate-themes && vite build",
@@ -25,14 +25,16 @@
         "generate-themes": "tsx build/generate-daisyui-themes.ts",
         "fix-svgs": "tsx build/fix-svg-attributes.ts",
         "start": "tsx src/server/backend.ts",
-        "start-with-dummy-secret": "JWT_SECRET=\"for-debugging\" tsx src/server/backend.ts"
+        "start-debug": "JWT_SECRET=\"for-debugging\" tsx src/server/backend.ts",
+        "db:cleanup": "tsx build/db-cleanup.ts",
+        "db:migrate": "tsx build/migration.ts"
     },
     "dependencies": {
+        "@mdi/js": "7.4.47",
         "@mediabunny/mp3-encoder": "1.39.1",
-        "@vscode/codicons": "0.0.44",
         "classnames": "2.5.1",
         "daisyui": "5.5.19",
-        "jsonwebtoken": "^9.0.3",
+        "jsonwebtoken": "9.0.3",
         "mediabunny": "1.39.1",
         "mime-types": "3.0.2",
         "mysql2": "3.16.0",

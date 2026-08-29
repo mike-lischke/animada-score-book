@@ -82,9 +82,11 @@ vi.mock("../../src/player/TrackPlayer.js", () => {
                 firstEvent = event;
                 break;
             }
+
             if (firstEvent) {
                 events.push({ realTime: t, audioBuffer: {} as AudioBuffer, event: firstEvent });
             }
+
             events.push({
                 realTime: t,
                 callback: () => {
@@ -203,9 +205,13 @@ const makeArrangement = (trackCount: number): ISbDmArrangement => {
                 stepResolution: 1,
                 beatGroups: [1],
             },
-            steps: [{ index: 0, noteStyleId: sourceNote.audioData?.id }],
-            subdivisions: [],
             events: [{
+                start: { numerator: 0, denominator: 1 },
+                duration: { numerator: 1, denominator: 1 },
+                noteStyleId: sourceNote.audioData?.id,
+            }],
+            subdivisions: [],
+            noteEvents: [{
                 type: SbDmEntityType.NoteEvent,
                 id: sourceNote.id,
                 measureNumber: 1,
@@ -227,6 +233,7 @@ const makeArrangement = (trackCount: number): ISbDmArrangement => {
         tracks,
         addTrack: vi.fn(),
         removeTrack: vi.fn(),
+        duplicateTrack: vi.fn(),
         applyArrangementSnapshot: vi.fn(),
         mainVolume: 1,
         loop: false,

@@ -7,7 +7,8 @@ import type { ComponentChild } from "preact";
 
 import type { ISbDmTrack, ScoreBookDataModel } from "../../../../core/ScoreBookDataModel.js";
 import type { IScoreMetrics } from "../../../../player/TimeCoordinator.js";
-import type { ScoreBookUiServices } from "../../../../player/types.js";
+import { parseFraction } from "../../../../core/serialisation/numeric-functions.js";
+import type { SelectionManager } from "../../../../ui/SelectionManager.js";
 import {
     SelectionGranularity, type ISelectionEntry, type ISelectionHitTester,
 } from "../../../../ui/selection-types.js";
@@ -23,7 +24,7 @@ export interface IGridMeasureViewerProperties extends ICommonUIProperties {
 
     dataModel: ScoreBookDataModel;
     scoreMetrics: IScoreMetrics;
-    services: ScoreBookUiServices;
+    selectionManager: SelectionManager;
 
     /**
      * If given, render only these tracks (in this order) instead of all tracks of the arrangement.
@@ -44,8 +45,8 @@ export class GridMeasureViewer extends UIComponent<IGridMeasureViewerProperties,
     private resizeObserver?: ResizeObserver;
 
     public override componentDidMount(): void {
-        const { services } = this.props;
-        services.selectionManager.registerHitTester(this);
+        const { selectionManager } = this.props;
+        selectionManager.registerHitTester(this);
 
         const viewer = this.base as HTMLElement | null;
         if (!viewer) {
@@ -67,8 +68,8 @@ export class GridMeasureViewer extends UIComponent<IGridMeasureViewerProperties,
     }
 
     public override componentWillUnmount(): void {
-        const { services } = this.props;
-        services.selectionManager.unregisterHitTester(this);
+        const { selectionManager } = this.props;
+        selectionManager.unregisterHitTester(this);
 
         this.resizeObserver?.disconnect();
         this.resizeObserver = undefined;
@@ -123,6 +124,8 @@ export class GridMeasureViewer extends UIComponent<IGridMeasureViewerProperties,
                     );
                     const noteIdAttr = noteElement.getAttribute("data-note-id");
                     const noteId = noteIdAttr ? parseInt(noteIdAttr, 10) : undefined;
+                    const startAttr = noteElement.getAttribute("data-event-start");
+                    const start = startAttr === null ? undefined : parseFraction(startAttr);
 
                     noteEntries.push({
                         granularity: SelectionGranularity.Note,
@@ -131,6 +134,7 @@ export class GridMeasureViewer extends UIComponent<IGridMeasureViewerProperties,
                         startStep: stepIndex,
                         endStep: stepIndex,
                         noteId,
+                        start,
                     });
                     rowHasNotes = true;
                 }
@@ -176,10 +180,7 @@ export class GridMeasureViewer extends UIComponent<IGridMeasureViewerProperties,
         for (const track of tracks) {
             const measure = track.measures[measureNumber - 1];
             if (baseSteps === 0) {
-                baseSteps = measure.steps.length
-                    - measure.subdivisions.reduce((sum, s) => {
-                        return sum + s.actual - s.normal;
-                    }, 0);
+                baseSteps = measure.meter.stepResolution;
             }
 
             rows.push(<GridMeasureRow

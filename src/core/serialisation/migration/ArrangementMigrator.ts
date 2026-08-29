@@ -9,17 +9,18 @@ import type { IRealtimeProvider } from "../../../ui/AnimationEngine.js";
 import { Arrangement } from "../../Arrangement.js";
 import { type ISbDmInstrument } from "../../ScoreBookDataModel.js";
 import { TimeParams } from "../../TimeParams.js";
-import type {
-    IArrangementSnapshot, IMeasureStep, ISubdivision, ITrackMeasureSnapshot, ITrackSnapshot
-} from "../../types/general.js";
-import { greatestCommonDivisor } from "../numeric-functions.js";
+import type { IArrangementSnapshot } from "../../types/general.js";
 import { primeFactors } from "../../utils.js";
-import { tryParsePackedArrangement } from "../snapshot-packing.js";
-import { arrangementSnapshotVersion } from "../snapshots.js";
+import { greatestCommonDivisor } from "../numeric-functions.js";
+import { unpackArrangementSnapshot, type IPackedArrangement } from "../snapshot-packing.js";
+import { arrangementSnapshotVersion, isNaturalNumber } from "../snapshots.js";
 import { BananaDrumUrlImporter, LegacyArrangement, LegacyNote, LegacyTrack } from "./BananaDrumUrlImporter.js";
+import { unpackLegacyArrangement, type ILegacyPackedArrangement } from "./legacy-packing.js";
 import type {
-    ILegacyArrangementSnapshot, ILegacyTrackSnapshot
+    ILegacyArrangementSnapshot, ILegacyArrangementSnapshotV3, ILegacyMeasureSnapshot, ILegacyMeasureStep,
+    ILegacySubdivision, ILegacyTrackSnapshot, ILegacyTrackSnapshotV3
 } from "./legacy-snapshot-types.js";
+import { migrateV3ToV4 } from "./v3-to-v4.js";
 
 /** Returned by {@link ArrangementMigrator.migrateToArrangement}. */
 export interface IMigrationResult {
@@ -45,12 +46,23 @@ export class ArrangementMigrator {
      *          a schema migration was performed.
      */
     public static migrateToArrangement(
-        source: IArrangementSnapshot | ILegacyArrangementSnapshot | URLSearchParams | string,
+        source: IArrangementSnapshot | ILegacyArrangementSnapshot | ILegacyArrangementSnapshotV3
+            | URLSearchParams | string,
         instruments: ISbDmInstrument[]): IMigrationResult {
         if (typeof source === "string") {
-            const compact = tryParsePackedArrangement(source);
-            if (compact) {
-                return { arrangement: this.migrate(compact, instruments), migrated: false };
+            const packed = ArrangementMigrator.tryParsePackedSource(source);
+            if (packed) {
+                if (packed.v === arrangementSnapshotVersion) {
+                    return {
+                        arrangement: this.migrate(unpackArrangementSnapshot(packed as IPackedArrangement), instruments),
+                        migrated: false,
+                    };
+                }
+
+                return {
+                    arrangement: this.migrate(unpackLegacyArrangement(packed as ILegacyPackedArrangement), instruments),
+                    migrated: true,
+                };
             }
 
             // If the source is a full URL, extract just the query string.
@@ -82,7 +94,30 @@ export class ArrangementMigrator {
         return { arrangement: this.migrate(source, instruments), migrated };
     }
 
-    private static migrate(snapshot: IArrangementSnapshot | ILegacyArrangementSnapshot,
+    private static tryParsePackedSource(content: string): IPackedArrangement | ILegacyPackedArrangement | undefined {
+        const trimmed = content.trimStart();
+        if (!trimmed.startsWith("{")) {
+            return undefined;
+        }
+
+        try {
+            const parsed = JSON.parse(trimmed) as unknown;
+            if (typeof parsed !== "object" || parsed === null) {
+                return undefined;
+            }
+
+            const candidate = parsed as { v?: unknown; p?: unknown; k?: unknown; };
+            if (!isNaturalNumber(candidate.v) || !Array.isArray(candidate.p) || !Array.isArray(candidate.k)) {
+                return undefined;
+            }
+
+            return parsed as IPackedArrangement | ILegacyPackedArrangement;
+        } catch {
+            return undefined;
+        }
+    }
+
+    private static migrate(snapshot: IArrangementSnapshot | ILegacyArrangementSnapshot | ILegacyArrangementSnapshotV3,
         instruments: ISbDmInstrument[]): Arrangement {
         if (snapshot.version < 2) {
             const legacyArrangement = new LegacyArrangement(snapshot as ILegacyArrangementSnapshot);
@@ -94,12 +129,16 @@ export class ArrangementMigrator {
             throw new Error(`Unsupported snapshot schema version: ${snapshot.version}`);
         }
 
-        let current = snapshot as IArrangementSnapshot;
-        if (current.version < arrangementSnapshotVersion) {
+        if (snapshot.version === arrangementSnapshotVersion) {
+            return this.createArrangementFromSnapshot(snapshot as IArrangementSnapshot, instruments);
+        }
+
+        let current = snapshot as ILegacyArrangementSnapshotV3;
+        if (current.version === 2) {
             current = this.migrateV2ToV3(current, instruments);
         }
 
-        return this.createArrangementFromSnapshot(current, instruments);
+        return this.createArrangementFromSnapshot(migrateV3ToV4(current), instruments);
     }
 
     /**
@@ -112,8 +151,8 @@ export class ArrangementMigrator {
      *
      * @returns A v3 arrangement snapshot with articulation on every note step.
      */
-    private static migrateV2ToV3(snapshot: IArrangementSnapshot,
-        instruments: ISbDmInstrument[]): IArrangementSnapshot {
+    private static migrateV2ToV3(snapshot: ILegacyArrangementSnapshotV3,
+        instruments: ISbDmInstrument[]): ILegacyArrangementSnapshotV3 {
         const instrumentMap = new Map(instruments.map((inst) => {
             return [inst.typeId, inst] as const;
         }));
@@ -142,7 +181,7 @@ export class ArrangementMigrator {
             return { ...track, measures: migratedMeasures };
         });
 
-        return { ...snapshot, version: arrangementSnapshotVersion, tracks: migratedTracks };
+        return { ...snapshot, version: 3, tracks: migratedTracks };
     }
 
     /**
@@ -166,20 +205,17 @@ export class ArrangementMigrator {
             },
         };
 
-        const timeCoordinator = new TimeCoordinator(
-            {
-                timeSignature: legacyArrangement.timeParams.timeSignature,
-                tempo: legacyArrangement.timeParams.tempo,
-                length: legacyArrangement.timeParams.length,
-                pulse: legacyArrangement.timeParams.pulse,
-                stepResolution: legacyArrangement.timeParams.stepResolution,
-            },
-            realtimeProvider,
-        );
+        const timeCoordinator = new TimeCoordinator({
+            timeSignature: legacyArrangement.timeParams.timeSignature,
+            tempo: legacyArrangement.timeParams.tempo,
+            length: legacyArrangement.timeParams.length,
+            pulse: legacyArrangement.timeParams.pulse,
+            stepResolution: legacyArrangement.timeParams.stepResolution,
+        }, realtimeProvider);
         const metrics = timeCoordinator.metrics;
         const meterBase = ArrangementMigrator.getMeterBase(metrics.beatsPerBar, metrics.beatUnit);
 
-        const snapshot: IArrangementSnapshot = {
+        const snapshot: ILegacyArrangementSnapshotV3 = {
             version: 2,
             title: legacyArrangement.title,
             timeParams: {
@@ -199,9 +235,9 @@ export class ArrangementMigrator {
             }),
         };
 
-        const migrated = this.migrateV2ToV3(snapshot, instruments);
+        const v3 = this.migrateV2ToV3(snapshot, instruments);
 
-        return this.createArrangementFromSnapshot(migrated, instruments);
+        return this.createArrangementFromSnapshot(migrateV3ToV4(v3), instruments);
     }
 
     private static createArrangementFromSnapshot(snapshot: IArrangementSnapshot,
@@ -219,8 +255,8 @@ export class ArrangementMigrator {
     }
 
     private static migrateLegacyTrack(legacyTrack: LegacyTrack, source: ILegacyTrackSnapshot,
-        metrics: IScoreMetrics, meterBase: Set<number>): ITrackSnapshot {
-        const measures: ITrackMeasureSnapshot[] = [];
+        metrics: IScoreMetrics, meterBase: Set<number>): ILegacyTrackSnapshotV3 {
+        const measures: ILegacyMeasureSnapshot[] = [];
         const stepsPerBar = metrics.stepsPerBar;
 
         const visibleNotes: LegacyNote[] = [];
@@ -236,7 +272,7 @@ export class ArrangementMigrator {
 
             ArrangementMigrator.computeIsTupletWithNesting(subdivisions, meterBase);
 
-            const steps: IMeasureStep[] = [];
+            const steps: ILegacyMeasureStep[] = [];
             for (let j = 0; j < visibleCount; j++) {
                 const note = visibleNotes[noteCursor + j];
                 steps.push({
@@ -283,10 +319,8 @@ export class ArrangementMigrator {
      *
      * @returns The number of notes belonging to the measure, and whether any notes remain for later measures.
      */
-    private static splitPolyrhythmNotes(
-        prStartStep: number, prEndStep: number, totalActual: number,
-        measureBaseStart: number, measureBaseEnd: number,
-    ): { notesInMeasure: number; hasMore: boolean; } {
+    private static splitPolyrhythmNotes(prStartStep: number, prEndStep: number, totalActual: number,
+        measureBaseStart: number, measureBaseEnd: number): { notesInMeasure: number; hasMore: boolean; } {
         const totalNormal = prEndStep - prStartStep + 1; // inclusive → count
 
         const previousNormal = Math.max(0, measureBaseStart - prStartStep);
@@ -303,10 +337,9 @@ export class ArrangementMigrator {
         };
     }
 
-    private static collectMeasureSubdivisions(visibleNotes: LegacyNote[], noteCursor: number,
-        measureNumber: number,
-        stepsPerBar: number): ISubdivision[] {
-        const subdivisions: ISubdivision[] = [];
+    private static collectMeasureSubdivisions(visibleNotes: LegacyNote[], noteCursor: number, measureNumber: number,
+        stepsPerBar: number): ILegacySubdivision[] {
+        const subdivisions: ILegacySubdivision[] = [];
         const measureBaseStart = measureNumber * stepsPerBar;
         const measureBaseEnd = measureBaseStart + stepsPerBar - 1;
         const seenPolyrhythmIds = new Set<number>();
@@ -321,6 +354,7 @@ export class ArrangementMigrator {
                 if (globalStep >= measureBaseStart + stepsPerBar) {
                     break;
                 }
+
                 i++;
                 continue;
             }
@@ -355,6 +389,7 @@ export class ArrangementMigrator {
                     if (prStartStep >= measureBaseStart + stepsPerBar) {
                         break;
                     }
+
                     i++;
                     continue;
                 }
@@ -402,7 +437,7 @@ export class ArrangementMigrator {
      *
      * @param subdivisions The subdivisions of a single measure to update in-place.
      */
-    private static deriveLocalParents(subdivisions: ISubdivision[]): void {
+    private static deriveLocalParents(subdivisions: ILegacySubdivision[]): void {
         if (subdivisions.length < 2) {
             return;
         }
@@ -413,7 +448,7 @@ export class ArrangementMigrator {
         });
 
         for (const sub of subdivisions) {
-            let parent: ISubdivision | undefined;
+            let parent: ILegacySubdivision | undefined;
 
             for (const candidate of sorted) {
                 if (candidate.id === sub.id) {
@@ -468,6 +503,7 @@ export class ArrangementMigrator {
                     break;
                 }
             }
+
             count++;
         }
 
@@ -486,13 +522,13 @@ export class ArrangementMigrator {
         return new Set([2]);
     }
 
-    private static computeIsTupletWithNesting(subdivisions: ISubdivision[],
+    private static computeIsTupletWithNesting(subdivisions: ILegacySubdivision[],
         meterBase: Set<number>): void {
         const sorted = [...subdivisions].sort((a, b) => {
             return (b.parentSubdivisionId != null ? 1 : 0) - (a.parentSubdivisionId != null ? 1 : 0);
         });
 
-        const childrenByParent = new Map<number, ISubdivision[]>();
+        const childrenByParent = new Map<number, ILegacySubdivision[]>();
         for (const sub of subdivisions) {
             if (sub.parentSubdivisionId != null) {
                 const list = childrenByParent.get(sub.parentSubdivisionId) ?? [];

@@ -12,9 +12,11 @@
 @use "drawer";
 @use "dropdown";
 @use "fieldset-legend";
+@use "gooey-group";
 @use "grid";
 @use "icon";
 @use "label";
+@use "mdi-icon";
 @use "message";
 @use "notification-center";
 @use "portal";
@@ -26,5 +28,6 @@
 @use "statusbar";
 @use "tab-view";
 @use "tag-input";
+@use "toggle";
 @use "tooltip";
 @use "up-down";

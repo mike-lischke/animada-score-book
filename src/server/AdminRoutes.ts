@@ -5,7 +5,7 @@
 
 import { type IncomingMessage, type ServerResponse } from "node:http";
 
-import { Auth } from "./Auth.js";
+import { Auth, EntityType, isValidEntityType } from "./Auth.js";
 import { type RequestContext } from "./RequestContext.js";
 
 export class AdminRoutes {
@@ -616,6 +616,12 @@ export class AdminRoutes {
             return;
         }
 
+        if (!isValidEntityType(entityType)) {
+            this.ctx.sendError(res, `Invalid entityType: ${entityType}`);
+
+            return;
+        }
+
         const resolvedOwner = await this.ctx.auth.getExplicitOwner(entityType, entityId);
 
         if (!user || (!(await this.ctx.auth.isUserInAdminGroup(user.userId))
@@ -660,7 +666,7 @@ export class AdminRoutes {
         }
 
         const isAdmin = await this.ctx.auth.isUserInAdminGroup(user.userId);
-        const resolvedOwner = await this.ctx.auth.getExplicitOwner(entityType, entityId);
+        const resolvedOwner = await this.ctx.auth.getExplicitOwner(entityType as EntityType, entityId);
 
         if (!isAdmin && resolvedOwner !== user.userId) {
             this.ctx.sendError(res, "Forbidden", 403);
@@ -671,18 +677,18 @@ export class AdminRoutes {
         if (body.ownerId !== undefined) {
             const newOwnerId = body.ownerId !== null ? Number(body.ownerId) : null;
 
-            await this.ctx.auth.setOwner(entityType, entityId, newOwnerId);
+            await this.ctx.auth.setOwner(entityType as EntityType, entityId, newOwnerId);
         }
 
         if (Array.isArray(body.addGroups)) {
             for (const g of body.addGroups as Array<{ groupId: number; writable: boolean; }>) {
-                await this.ctx.auth.addEntityGroup(entityType, entityId, g.groupId, g.writable);
+                await this.ctx.auth.addEntityGroup(entityType as EntityType, entityId, g.groupId, g.writable);
             }
         }
 
         if (Array.isArray(body.removeGroups)) {
             for (const g of body.removeGroups as Array<{ groupId: number; }>) {
-                await this.ctx.auth.removeEntityGroup(entityType, entityId, g.groupId);
+                await this.ctx.auth.removeEntityGroup(entityType as EntityType, entityId, g.groupId);
             }
         }
 

@@ -102,6 +102,7 @@ export class MP3Export {
                 interleaved[(i * channelCount) + ch] = sample;
             });
         }
+
         let idx = 0;
         while (offset < length) {
             const s = Math.max(-1, Math.min(1, interleaved[idx++]));

@@ -6,7 +6,7 @@
 import { cleanup, render, type RenderResult } from "@testing-library/preact";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { Codicon } from "../../src/components/ui/framework/Codicon.js";
+import { UIIcon } from "../../src/components/ui/framework/UIIcon.js";
 import { MenuBar } from "../../src/components/ui/framework/Menu/MenuBar.js";
 import { type IMenuItem } from "../../src/components/ui/framework/Menu/MenuItem.js";
 
@@ -48,11 +48,11 @@ describe("MenuBar", () => {
 
     it("renders icons when provided", () => {
         const iconItems: IMenuBarItem[] = [
-            { id: "file", label: "File", icon: Codicon.File, children: [] },
+            { id: "file", label: "File", icon: UIIcon.File, children: [] },
         ];
 
         renderResult = render(<MenuBar items={iconItems} />);
-        const icon = renderResult.container.querySelector(".codicon-file");
+        const icon = renderResult.container.querySelector("svg.icon[data-icon='File']");
 
         expect(icon).toBeTruthy();
     });

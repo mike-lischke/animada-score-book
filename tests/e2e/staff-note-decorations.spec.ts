@@ -7,7 +7,7 @@ import { expect, test } from "@playwright/test";
 
 import { stringifyPackedArrangement } from "../../src/core/serialisation/snapshot-packing.js";
 import type { IArrangementSnapshot } from "../../src/core/types/general.js";
-import { routeApi } from "./helpers.js";
+import { routeApi } from "./e2e-test-helpers.js";
 
 test.beforeEach(async ({ page }) => {
     await routeApi(page);
@@ -25,15 +25,9 @@ const buildPackedArrangement = (tracks: Array<{
     steps: Array<{ noteStyleId?: string; articulation?: { damping: number; accent: boolean; ghost: boolean; }; }>;
 }>): string => {
     const snapshot: IArrangementSnapshot = {
-        version: 3,
+        version: 4,
         title: "Decoration Test",
-        timeParams: {
-            timeSignature: "4/4",
-            tempo: 120,
-            length: 1,
-            pulse: "1/4",
-            stepResolution: 16,
-        },
+        timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4", stepResolution: 16 },
         tracks: tracks.map((track, trackIndex) => {
             return {
                 id: trackIndex + 1,
@@ -46,10 +40,15 @@ const buildPackedArrangement = (tracks: Array<{
                         stepResolution: 16,
                         beatGroups: [4, 4, 4, 4],
                     },
-                    steps: Array.from({ length: 16 }, (_, index) => {
-                        const stepData = track.steps[index];
+                    events: Array.from({ length: 16 }, (_, index) => {
+                        const stepData = track.steps.at(index);
 
-                        return { index, ...stepData };
+                        return {
+                            start: { numerator: index, denominator: 16 },
+                            duration: { numerator: 1, denominator: 16 },
+                            noteStyleId: stepData?.noteStyleId,
+                            articulation: stepData?.articulation ? { ...stepData.articulation } : undefined,
+                        };
                     }),
                     subdivisions: [],
                 }],
