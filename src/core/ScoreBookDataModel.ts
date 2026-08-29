@@ -2604,11 +2604,12 @@ export class ScoreBookDataModel {
             if (compareFractions(eventStart, end) >= 0) {
                 result.push(this.cloneEvent(event));
             } else if (compareFractions(eventEnd, end) > 0) {
-                result.push(this.cloneEvent({
-                    ...event,
+                // The note's start lies inside the replaced range, so its remaining tail is cut
+                // off and becomes a rest instead of sliding one cell to the right.
+                result.push({
                     start: end,
                     duration: subtractFractions(eventEnd, end),
-                }));
+                });
             }
         }
 

@@ -10,6 +10,10 @@ import preact from "@preact/preset-vite";
 import tailwindcss from "@tailwindcss/vite";
 import { defineConfig, Plugin } from "vite";
 
+const packageJson = JSON.parse(
+    readFileSync(new URL("./package.json", import.meta.url), "utf-8"),
+) as { version: string; };
+
 /**
  * Helper plugin to serve index.html for non-asset requests, enabling SPA-like routing in development mode.
  *
@@ -93,5 +97,8 @@ export default defineConfig(({ command }) => {
             assetsInlineLimit: 0, // Don't inline any assets.
         },
         appType: "mpa",
+        define: {
+            appVersion: JSON.stringify(packageJson.version),
+        },
     };
 });

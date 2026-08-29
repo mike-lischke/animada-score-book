@@ -73,6 +73,42 @@ describe("ScoreClipboard", () => {
         clipboard = new ScoreClipboard(model);
     });
 
+    it("tiles a rest and a note pair without expanding the note's absorbed rests", () => {
+        const instruments = [createInstrument("surdo", 0, 0), createInstrument("surdo", 1, 1)];
+        model.startNewArrangement(instruments);
+        const tracks = model.arrangement!.tracks;
+        const source = tracks[0];
+        const target = tracks[1];
+
+        // A rest at the first cell followed by a note that absorbs the rest of the pulse.
+        model.setGridNote(source.id, 1, 1, "note");
+
+        hydrateMeasureEvents(model.arrangement! as Arrangement);
+
+        clipboard.copy([
+            { granularity: SelectionGranularity.Note, bar: 1, trackId: source.id, startStep: 0, endStep: 0 },
+            {
+                granularity: SelectionGranularity.Note, bar: 1, trackId: source.id, startStep: 1, endStep: 1,
+                noteId: source.measures[0].noteEvents[1].id,
+            },
+        ]);
+
+        const result = clipboard.paste([
+            { granularity: SelectionGranularity.TrackPiece, bar: 1, trackId: target.id },
+        ]);
+
+        expect(result.kind).toBe(PasteResultKind.Success);
+
+        // The two copied cells tile to eight alternating rest/note pairs.
+        for (let step = 0; step < 16; step++) {
+            if (step % 2 === 0) {
+                expect(noteAtStep(target.measures[0], step)).toBeUndefined();
+            } else {
+                expect(noteAtStep(target.measures[0], step)).toBe("note");
+            }
+        }
+    });
+
     it("tiles a copied note across a selected note group", () => {
         const instruments = [instrumentA()];
         model.startNewArrangement(instruments);
@@ -509,6 +545,39 @@ describe("ScoreClipboard", () => {
         expect(noteAtStep(track.measures[0], 5)).toBe("A");
         expect(noteAtStep(track.measures[0], 6)).toBe("A");
         expect(noteAtStep(track.measures[0], 7)).toBe("A");
+    });
+
+    it("replaces a note without shifting its tail when pasting over its start cell", () => {
+        const instruments = [createInstrument("caixa", 0, 0), createInstrument("caixa", 1, 1)];
+        model.startNewArrangement(instruments);
+        const tracks = model.arrangement!.tracks;
+
+        // Source: a single-cell note, followed by another note so it does not absorb the pulse.
+        model.setGridNote(tracks[0].id, 1, 0, "src");
+        model.setGridNote(tracks[0].id, 1, 1, "src-next");
+
+        // Target: a pulse-length note at the second cell, as if the user typed "1" there.
+        model.setGridNote(tracks[1].id, 1, 1, "typed");
+
+        hydrateMeasureEvents(model.arrangement! as Arrangement);
+
+        clipboard.copy([{
+            granularity: SelectionGranularity.Note, bar: 1, trackId: tracks[0].id, startStep: 0, endStep: 0,
+            noteId: tracks[0].measures[0].noteEvents[0].id,
+        }]);
+
+        const result = clipboard.paste([{
+            granularity: SelectionGranularity.Note, bar: 1, trackId: tracks[1].id, startStep: 1, endStep: 1,
+            noteId: tracks[1].measures[0].noteEvents[0].id,
+        }]);
+
+        expect(result.kind).toBe(PasteResultKind.Success);
+
+        // The pasted note replaces the start cell; the remaining tail of the old note must become
+        // a rest instead of sliding one cell to the right.
+        expect(noteAtStep(tracks[1].measures[0], 1)).toBe("src");
+        expect(noteAtStep(tracks[1].measures[0], 2)).toBeUndefined();
+        expect(noteAtStep(tracks[1].measures[0], 3)).toBeUndefined();
     });
 
     it("pastes a multi-track cell selection across a whole track", () => {

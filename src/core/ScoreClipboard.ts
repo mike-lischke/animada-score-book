@@ -5,6 +5,7 @@
 
 import { selectionToClearRanges } from "../ui/selection-ranges.js";
 import { SelectionGranularity, type ISelectionEntry } from "../ui/selection-types.js";
+import { expandMeasureToGridEvents } from "./grid-events.js";
 import { MeasureProjection, ProjectedItemKind } from "./MeasureProjection.js";
 import type {
     IMeasureReplace, ISbDmArrangement, ISbDmTrack, ISbDmTrackMeasure, ScoreBookDataModel,
@@ -353,14 +354,19 @@ export class ScoreClipboard {
             }
 
             const stepsPerBar = measure.meter.stepResolution;
+            const barEntries = entries.filter((entry) => {
+                return entry.bar === bar;
+            });
+
+            // A lone note selection expands to the whole note, so copy matches the cut behaviour.
+            // In a multi-cell selection every cell is copied as-is: a note's start cell counts as a
+            // single cell instead of dragging the note's absorbed rests into the clipboard.
+            const expandWholeNote = barEntries.length === 1 && barEntries[0].noteId !== undefined;
+
             let rangeStart: IFraction | undefined;
             let rangeEnd: IFraction | undefined;
 
-            for (const entry of entries) {
-                if (entry.bar !== bar) {
-                    continue;
-                }
-
+            for (const entry of barEntries) {
                 const start = entry.startStep ?? entry.endStep;
                 const end = entry.endStep ?? entry.startStep;
                 if (start === undefined || end === undefined) {
@@ -370,17 +376,15 @@ export class ScoreClipboard {
                 let entryStart = entry.start ?? reduceFraction(start, stepsPerBar);
                 let entryEnd = reduceFraction(end + 1, stepsPerBar);
 
-                // A note entry covers the whole note, not just its start cell. Expand to the note's
-                // full range so copy matches the cut behaviour, which already clears the whole note.
-                if (entry.noteId !== undefined) {
+                if (expandWholeNote && entry.noteId !== undefined) {
                     const noteRange = this.noteRangeFor(measure, entry.noteId);
                     if (noteRange) {
                         entryStart = noteRange.start;
                         entryEnd = noteRange.end;
                     }
                 } else if (entry.start !== undefined) {
-                    // A subdivision rest slot has an exact start but no note id. Derive its end
-                    // from the event that begins at that exact position.
+                    // A subdivision slot has an exact start but no note id. Derive its end from the
+                    // event that begins at that exact position.
                     entryEnd = this.eventEndAt(measure, entryStart) ?? entryEnd;
                 }
 
@@ -397,7 +401,11 @@ export class ScoreClipboard {
                 continue;
             }
 
-            const events = this.captureEventRange(measure.events, rangeStart, rangeEnd);
+            // A lone note is captured with its full duration; a multi-cell selection is captured
+            // cell by cell so a note's absorbed rests do not leak into the clipboard.
+            const events = expandWholeNote
+                ? this.captureEventRange(measure.events, rangeStart, rangeEnd)
+                : this.captureCells(measure, rangeStart, rangeEnd);
             if (events.length === 0) {
                 continue;
             }
@@ -1768,6 +1776,23 @@ export class ScoreClipboard {
         }
 
         return captured;
+    }
+
+    /**
+     * Captures a measure's cells within the given range, cell by cell. Notes are expanded to their
+     * per-step pieces (one note cell plus empty rest cells), so a multi-cell copy carries exactly
+     * the selected cells instead of dragging a note's absorbed rests along.
+     *
+     * @param measure The measure to capture from.
+     * @param rangeStart The range start (inclusive).
+     * @param rangeEnd The range end (exclusive).
+     *
+     * @returns The captured per-cell events, relative to the range start.
+     */
+    private captureCells(measure: ISbDmTrackMeasure, rangeStart: IFraction, rangeEnd: IFraction): IMeasureEvent[] {
+        const expanded = expandMeasureToGridEvents(measure).events;
+
+        return this.captureEventRange(expanded, rangeStart, rangeEnd);
     }
 
     private cloneEvent(event: IMeasureEvent): IMeasureEvent {

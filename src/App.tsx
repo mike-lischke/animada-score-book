@@ -152,6 +152,7 @@ export class App extends UIComponent<{}, IAppState> {
     private signInFromRunning = false;
     private statsItem?: IStatusBarItem;
     private notificationItem?: IStatusBarItem;
+    private versionItem?: IStatusBarItem;
 
     private currentTutorialStep = 0;
 
@@ -211,6 +212,7 @@ export class App extends UIComponent<{}, IAppState> {
 
         if (prevState.phase !== AppPhase.Running && phase === AppPhase.Running) {
             this.updateStatsItem();
+            this.updateVersionItem();
         }
     }
 
@@ -1115,10 +1117,7 @@ export class App extends UIComponent<{}, IAppState> {
                     const [score, status] = await this.dataModel.fetchScoreById(scoreId);
                     if (score) {
                         this.loadScorebook(score);
-
-                        this.setState({ phase: AppPhase.Running }, () => {
-                            Statusbar.setStatusBarMessage("App loaded", 3000);
-                        });
+                        this.setState({ phase: AppPhase.Running });
 
                         return;
                     }
@@ -1138,7 +1137,6 @@ export class App extends UIComponent<{}, IAppState> {
         }
 
         this.setState({ phase: AppPhase.Running }, () => {
-            Statusbar.setStatusBarMessage("App loaded", 3000);
             if (pendingWarning) {
                 void requisitions.execute("showWarning", pendingWarning);
             }
@@ -1220,6 +1218,7 @@ export class App extends UIComponent<{}, IAppState> {
         // Clear status bar item references — they belong to the old (now-unmounted) Statusbar.
         this.statsItem = undefined;
         this.notificationItem = undefined;
+        this.versionItem = undefined;
 
         this.setState({ phase: AppPhase.Login }, () => {
             void this.loginDialogRef.current?.show().then(this.handleLoginDialogResult);
@@ -2243,6 +2242,28 @@ export class App extends UIComponent<{}, IAppState> {
             }
         } else {
             this.statsItem.text = text;
+        }
+    }
+
+    /**
+     * Creates the fixed status bar item that shows the app version. The item is created once per
+     * Statusbar mount and survives because it never expires.
+     */
+    private updateVersionItem(): void {
+        if (this.versionItem) {
+            return;
+        }
+
+        try {
+            this.versionItem = Statusbar.createStatusBarItem({
+                id: "appVersion",
+                text: `v${appVersion}`,
+                tooltip: "Animada Score Book version",
+                alignment: StatusBarAlignment.Right,
+                priority: -10,
+            });
+        } catch {
+            // Statusbar is not mounted yet — it will be created on the next transition to Running.
         }
     }
 

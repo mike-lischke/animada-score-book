@@ -5,6 +5,9 @@
 
 /// <reference types="vite/client" />
 
+/** Injected by Vite at build time; holds the app version from package.json. */
+declare const appVersion: string;
+
 interface ImportMetaEnv {
     readonly VITE_BASE_URL: string;
 }
