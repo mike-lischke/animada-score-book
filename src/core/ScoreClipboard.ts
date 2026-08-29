@@ -225,7 +225,7 @@ export class ScoreClipboard {
             return undefined;
         }
 
-        const granularity = this.dominantGranularity(entries);
+        const granularity = this.finestGranularity(entries);
         switch (granularity) {
             case SelectionGranularity.Track: {
                 return this.buildTrackContent(entries, arrangement);
@@ -633,7 +633,7 @@ export class ScoreClipboard {
     private pasteTrackPiece(content: IClipboardContent, entries: ISelectionEntry[],
         arrangement: ISbDmArrangement): IPasteResult {
         const source = content.tracks[0];
-        const granularity = this.dominantGranularity(entries);
+        const granularity = this.finestGranularity(entries);
 
         if (granularity === SelectionGranularity.Measure) {
             return { kind: PasteResultKind.TrackCountMismatch };
@@ -676,7 +676,7 @@ export class ScoreClipboard {
 
     private pasteStepRange(content: IClipboardContent, entries: ISelectionEntry[],
         arrangement: ISbDmArrangement, subdivisionMode?: SubdivisionPasteMode): IPasteResult {
-        const granularity = this.dominantGranularity(entries);
+        const granularity = this.finestGranularity(entries);
 
         if (granularity === SelectionGranularity.Measure) {
             return { kind: PasteResultKind.TrackCountMismatch };
@@ -1792,32 +1792,29 @@ export class ScoreClipboard {
             && source.beatUnits === target.beatUnits;
     }
 
-    private dominantGranularity(entries: ISelectionEntry[]): SelectionGranularity {
-        if (entries.some((entry) => {
-            return entry.granularity === SelectionGranularity.Note;
-        })) {
-            return SelectionGranularity.Note;
+    /**
+     * Resolves a selection to its finest granularity in a single pass. SelectionGranularity is
+     * declared from coarse (Track) to fine (Note), so the highest numeric member is the finest.
+     *
+     * @param entries The selection entries.
+     *
+     * @returns The finest granularity present, or Track for an empty selection.
+     */
+    private finestGranularity(entries: ISelectionEntry[]): SelectionGranularity {
+        let granularity = SelectionGranularity.Track;
+
+        for (const entry of entries) {
+            if (entry.granularity > granularity) {
+                granularity = entry.granularity;
+
+                // Note is already the finest possible granularity, so no further scan is needed.
+                if (granularity === SelectionGranularity.Note) {
+                    break;
+                }
+            }
         }
 
-        if (entries.some((entry) => {
-            return entry.granularity === SelectionGranularity.NoteGroup;
-        })) {
-            return SelectionGranularity.NoteGroup;
-        }
-
-        if (entries.some((entry) => {
-            return entry.granularity === SelectionGranularity.TrackPiece;
-        })) {
-            return SelectionGranularity.TrackPiece;
-        }
-
-        if (entries.some((entry) => {
-            return entry.granularity === SelectionGranularity.Measure;
-        })) {
-            return SelectionGranularity.Measure;
-        }
-
-        return SelectionGranularity.Track;
+        return granularity;
     }
 
     private sortedUniqueBars(entries: ISelectionEntry[]): number[] {
