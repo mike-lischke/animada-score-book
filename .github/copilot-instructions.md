@@ -256,22 +256,6 @@ Always active — 7 failed attempts → 15 min block for `login` and `groupLogin
 
 ---
 
-## Known Security Issues (Audit 2025-06-30)
-
-### Critical (unfixed)
-1. **`handleRefresh` header injection** — `x-auth-type` and `x-group-id` headers are client-controlled.
-2. **`handleTestConnection` no auth** — unauthenticated SSRF oracle.
-3. **`handleListUsers` weak auth** — any authenticated user can list all users.
-4. **`handleUpdateGroup` adminId reassignment** — group admin can change `adminId` to any user.
-
-### High
-5. **No request body size limits** — `readJsonBody`/`readRawBody` accept unlimited data.
-
-### Medium
-6. **`handleSetup` first-time path** — no auth check when `!usersExist`.
-
----
-
 ## Tuplet Definition
 
 A subdivision is a **tuplet** if its division ratio `n` contains at least one prime factor not in the natural subdivision basis S of the meter.
@@ -279,3 +263,17 @@ A subdivision is a **tuplet** if its division ratio `n` contains at least one pr
 - Binary meters (4/4, 2/4, 3/4): S = {2}
 - Ternary meters (6/8, 9/8, 12/8): S = {3}
 - Irregular meters (5/4, 7/8): S = ∅
+
+## Architecture Decision Records
+
+- ADRs are optional, not default documentation.
+- Propose an ADR only when explicitly asked, or when a change establishes a durable cross-module decision, boundary, or invariant that is costly to reverse.
+- Never create ADRs for ordinary bug fixes, local refactorings, or temporary implementation details.
+- Read `docs/adr/readme.md` before creating or modifying an ADR.
+- Use `docs/adr/template.md`.
+- Keep an ADR focused on one decision and normally within 400 words.
+- Do not silently revise an accepted ADR. Create a new ADR that supersedes it.
+- Before proposing a plan or code for a non-trivial task, read `docs/adr/readme.md`.
+- Identify only the accepted ADRs whose `Relevant when` field matches the task, then read those ADR files.
+- Treat their decisions and invariants as constraints.
+- If the requested change conflicts with an accepted ADR, explain the conflict before proposing code.
