@@ -44,11 +44,13 @@ export class NoteStyleBar extends UIComponent<INoteStyleBarProps, INoteStyleBarS
 
     public override componentDidMount(): void {
         requisitions.register("selectionChanged", this.handleSelectionChanged);
+        requisitions.register("arrangementReverted", this.handleArrangementReverted);
         this.refreshFromSelection();
     }
 
     public override componentWillUnmount(): void {
         requisitions.unregister("selectionChanged", this.handleSelectionChanged);
+        requisitions.unregister("arrangementReverted", this.handleArrangementReverted);
     }
 
     public override render(): ComponentChild {
@@ -97,6 +99,12 @@ export class NoteStyleBar extends UIComponent<INoteStyleBarProps, INoteStyleBarS
     }
 
     private handleSelectionChanged = (): Promise<boolean> => {
+        this.refreshFromSelection();
+
+        return Promise.resolve(true);
+    };
+
+    private handleArrangementReverted = (): Promise<boolean> => {
         this.refreshFromSelection();
 
         return Promise.resolve(true);

@@ -139,7 +139,7 @@ export const routeApi = async (page: Page): Promise<void> => {
 export const expectImportedPolyrhythmSong = async (page: Page): Promise<void> => {
     await expect(page.locator("#appRoot")).toBeVisible();
     await expect.poll(async () => {
-        const title = await page.locator(".main-arrangement-title").first().textContent();
+        const title = await page.locator("#header-breadcrumb-title").first().textContent();
 
         return normalizeWhitespace(title ?? "");
     }).toBe(beijaFlorDisplayedTitle);

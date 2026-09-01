@@ -29,14 +29,12 @@ import { ArrangementPlayControls } from "./components/ui/Arrangement/Arrangement
 import { ArrangementTitle } from "./components/ui/Arrangement/ArrangementTitle.js";
 import { ArrangementViewer } from "./components/ui/Arrangement/ArrangementViewer.js";
 import { NoteStyleBar } from "./components/ui/Arrangement/NoteStyleBar.js";
-import { PlayStopButton } from "./components/ui/Arrangement/PlayStopButton.js";
 import { UndoRedoControls } from "./components/ui/Arrangement/UndoRedoControls.js";
 import { ConfirmDialog } from "./components/ui/composites/ConfirmDialog.js";
 import { NewScoreDialog } from "./components/ui/composites/NewScoreDialog.js";
 import {
     ValueDialog, ValueEditorEntryType, type IValueEditorValueEntry
 } from "./components/ui/composites/ValueDialog.js";
-import { CollapsingTopContainer } from "./components/ui/framework/CollapsingTopContainer.js";
 import { DialogResponseClosure } from "./components/ui/framework/Dialog.js";
 import { DrawerSidebar } from "./components/ui/framework/DrawerSidebar.js";
 import { Icon } from "./components/ui/framework/Icon.js";
@@ -99,8 +97,7 @@ interface IAppState {
     phase: AppPhase;
     editMode: boolean;
     sidebarOpen: boolean;
-
-    headerPinned: boolean;
+    headerCollapsed: boolean;
 
     /** Token for the active score lock, if editing. */
     lockToken?: string;
@@ -156,6 +153,9 @@ export class App extends UIComponent<{}, IAppState> {
 
     private currentTutorialStep = 0;
 
+    /** Scroll offset (px) at which the header starts collapsing. */
+    private readonly headerCollapseThreshold = 16;
+
     public constructor(props: {}) {
         super(props);
 
@@ -163,13 +163,13 @@ export class App extends UIComponent<{}, IAppState> {
             phase: AppPhase.Checking,
             editMode: false,
             sidebarOpen: false,
-            headerPinned: false,
+            headerCollapsed: false,
             printing: false,
             instrumentEditorEnabled: false,
             backendUnreachable: false,
         };
 
-        this.selectionManager = new SelectionManager();
+        this.selectionManager = new SelectionManager(this.dataModel);
 
         this.initEventHandlers();
     }
@@ -196,12 +196,12 @@ export class App extends UIComponent<{}, IAppState> {
     }
 
     public override shouldComponentUpdate(nextProps: {}, nextState: IAppState): boolean {
-        const { editMode, sidebarOpen, phase, headerPinned, printing, backendUnreachable,
+        const { editMode, sidebarOpen, phase, headerCollapsed, printing, backendUnreachable,
             startupError } = this.state;
 
         return editMode !== nextState.editMode
             || sidebarOpen !== nextState.sidebarOpen || phase !== nextState.phase
-            || headerPinned !== nextState.headerPinned
+            || headerCollapsed !== nextState.headerCollapsed
             || printing !== nextState.printing
             || backendUnreachable !== nextState.backendUnreachable
             || startupError !== nextState.startupError;
@@ -234,9 +234,11 @@ export class App extends UIComponent<{}, IAppState> {
     }
 
     public render() {
-        const { phase, editMode, sidebarOpen, headerPinned, instrumentEditorEnabled, printing,
+        const { phase, editMode, sidebarOpen, headerCollapsed, instrumentEditorEnabled, printing,
             printOptions, backendUnreachable, startupError } = this.state;
         const isRunning = phase === AppPhase.Running;
+        const headerClassName = `rounded-3xl shadow-md border border-base-200/70 gap-4`
+            + (headerCollapsed ? " collapsed" : "");
 
         let splashContent: ComponentChild;
         switch (phase) {
@@ -278,17 +280,16 @@ export class App extends UIComponent<{}, IAppState> {
         }
 
         let breadcrumb: ComponentChild;
-        let collapsedTitleBlock;
+        let userButton: ComponentChild;
         let editModeButton;
         let newSongButton;
         let isAdmin = false;
         if (isRunning) {
             isAdmin = this.dataModel.user?.isAdmin ?? false;
             breadcrumb = this.renderHeaderBreadcrumb();
+            userButton = this.renderUserButton();
 
             if (this.arrangementPlayer) {
-                collapsedTitleBlock = this.renderTitleBlock("arrangement-title-collapsed");
-
                 newSongButton = <Button
                     plain
                     data-role="new-song"
@@ -427,123 +428,124 @@ export class App extends UIComponent<{}, IAppState> {
                                     });
                                 }}
                             >
-                                <CollapsingTopContainer
-                                    top={
+                                <Container
+                                    id="appContent"
+                                    orientation={Orientation.TopDown}
+                                    crossAlignment={ChildAlignment.Stretch}
+                                    style={{ height: "100dvh", minHeight: 0, overflow: "hidden" }}
+                                >
+                                    <Container
+                                        id="headerContent"
+                                        orientation={Orientation.LeftToRight}
+                                        className={headerClassName}
+                                    >
                                         <Container
-                                            orientation={Orientation.LeftToRight}
-                                            crossAlignment={ChildAlignment.Center}
+                                            id="mainToolbarButtons"
+                                            orientation={Orientation.TopDown}
+                                            mainAlignment={ChildAlignment.Start}
+                                            className="bg-base-100/80 p-2"
                                         >
+                                            <img id="titleLogo" src="/logo.svg" />
                                             <Container
-                                                id="headerContent"
-                                                className="rounded-3xl shadow-md border border-base-200/70 gap-4"
+                                                className="header-toolbar-extra"
+                                                orientation={Orientation.TopDown}
+                                                mainAlignment={ChildAlignment.Center}
+                                                crossAlignment={ChildAlignment.Stretch}
                                             >
-                                                <Container
-                                                    id="toolbarButtons"
-                                                    orientation={Orientation.TopDown}
-                                                    mainAlignment={ChildAlignment.Center}
-                                                    className="bg-base-100/80 p-2"
+                                                <Button
+                                                    imageOnly
+                                                    className="du-btn-ghost"
+                                                    data-tooltip="Display Options"
+                                                    data-tutorial="display-options"
+                                                    onClick={this.handleDisplayOptionsClick}
                                                 >
-                                                    <img id="titleLogo" src="/logo.svg" />
-                                                    <Button
-                                                        imageOnly
-                                                        className="du-btn-ghost"
-                                                        data-tooltip="Display Options"
-                                                        data-tutorial="display-options"
-                                                        onClick={this.handleDisplayOptionsClick}
-                                                    >
-                                                        <Icon
-                                                            src={UIIcon.Gear}
-                                                            data-tooltip="inherit"
-                                                        />
-                                                    </Button>
-                                                    <Button
-                                                        id="scoreLibraryButton"
-                                                        imageOnly
-                                                        className="du-btn-ghost"
-                                                        data-tooltip="Score Library"
-                                                        data-tutorial="score-library"
-                                                        onClick={this.handleScoreLibraryClick}
-                                                    >
-                                                        <Icon
-                                                            src={UIIcon.Library}
-                                                            data-tooltip="inherit"
-                                                        />
-                                                    </Button>
-                                                    {instrumentEditorButton}
-                                                </Container>
-                                                <Container
-                                                    className="header-content-rows"
-                                                    orientation={Orientation.TopDown}
-                                                    crossAlignment={ChildAlignment.Stretch}
-                                                    gap={8}
-                                                >
-                                                    {breadcrumb}
-                                                    <ArrangementPlayControls
-                                                        arrangementPlayer={this.arrangementPlayer!}
-                                                        dataModel={this.dataModel}
-                                                        editMode={editMode}
-                                                        data-tutorial="playback"
+                                                    <Icon
+                                                        src={UIIcon.Gear}
+                                                        data-tooltip="inherit"
                                                     />
-                                                    <Container
-                                                        id="editControlsHost"
-                                                        orientation={Orientation.LeftToRight}
-                                                        mainAlignment={ChildAlignment.Start}
-                                                        crossAlignment={ChildAlignment.Center}
-                                                    >
-                                                        <Label caption="Edit" className="header-row-label" />
-                                                        <GooeyGroup
-                                                            className="editSaveGooey"
-                                                            background="var(--color-base-200)"
-                                                        >
-                                                            {newSongButton}
-                                                            {editModeButton}
-                                                            {saveButton}
-                                                            {printButton}
-                                                        </GooeyGroup>
-                                                        {editMode && (
-                                                            <>
-                                                                <Separator
-                                                                    style={{ marginLeft: "16px", height: "50%" }}
-                                                                />
-                                                                <UndoRedoControls
-                                                                    undoManager={this.undoManager!}
-                                                                />
-                                                                <Separator
-                                                                    style={{ marginLeft: "16px", height: "50%" }}
-                                                                />
-                                                                <NoteStyleBar
-                                                                    dataModel={this.dataModel}
-                                                                    selectionManager={this.selectionManager}
-                                                                />
-                                                            </>)}
-                                                    </Container>
-                                                </Container>
+                                                </Button>
+                                                <Button
+                                                    id="scoreLibraryButton"
+                                                    imageOnly
+                                                    className="du-btn-ghost"
+                                                    data-tooltip="Score Library"
+                                                    data-tutorial="score-library"
+                                                    onClick={this.handleScoreLibraryClick}
+                                                >
+                                                    <Icon
+                                                        src={UIIcon.Library}
+                                                        data-tooltip="inherit"
+                                                    />
+                                                </Button>
+                                                {instrumentEditorButton}
+                                                {userButton}
                                             </Container>
                                         </Container>
-                                    }
-                                    collapsedTop={
                                         <Container
-                                            className="collapsed-header"
-                                            orientation={Orientation.LeftToRight}
-                                            crossAlignment={ChildAlignment.Center}
+                                            className="header-content-rows"
+                                            orientation={Orientation.TopDown}
+                                            crossAlignment={ChildAlignment.Stretch}
                                         >
-                                            <PlayStopButton
-                                                id="standalonePlayButton"
+                                            {breadcrumb}
+                                            <ArrangementPlayControls
                                                 arrangementPlayer={this.arrangementPlayer!}
+                                                dataModel={this.dataModel}
+                                                editMode={editMode}
+                                                data-tutorial="playback"
                                             />
-                                            {collapsedTitleBlock}
+                                            <Container
+                                                id="editControlsHost"
+                                                orientation={Orientation.LeftToRight}
+                                                mainAlignment={ChildAlignment.Start}
+                                                crossAlignment={ChildAlignment.Center}
+                                            >
+                                                <Label caption="Edit" className="header-row-label" />
+                                                <GooeyGroup
+                                                    className="editSaveGooey"
+                                                    background="var(--color-base-200)"
+                                                >
+                                                    {newSongButton}
+                                                    {editModeButton}
+                                                    {saveButton}
+                                                    {printButton}
+                                                </GooeyGroup>
+                                                {editMode && (
+                                                    <>
+                                                        <Separator
+                                                            style={{ marginLeft: "16px", height: "50%" }}
+                                                        />
+                                                        <UndoRedoControls
+                                                            undoManager={this.undoManager!}
+                                                        />
+                                                        <Separator
+                                                            style={{ marginLeft: "16px", height: "50%" }}
+                                                        />
+                                                        <NoteStyleBar
+                                                            dataModel={this.dataModel}
+                                                            selectionManager={this.selectionManager}
+                                                        />
+                                                    </>)}
+                                            </Container>
                                         </Container>
-                                    }
-                                    bottom={
-                                        this.arrangementPlayer && <ArrangementViewer
+                                    </Container>
+                                    <div
+                                        id="viewerScrollHost"
+                                        onScroll={this.handleViewerScroll}
+                                        style={{
+                                            flex: "1 1 auto",
+                                            minHeight: 0,
+                                            overflow: "auto",
+                                            overscrollBehaviorX: "none",
+                                        }}
+                                    >
+                                        {this.arrangementPlayer && <ArrangementViewer
                                             arrangementPlayer={this.arrangementPlayer}
                                             dataModel={this.dataModel}
                                             selectionManager={this.selectionManager}
                                             inEditMode={editMode}
-                                        />
-                                    }
-                                    forceExpanded={headerPinned || editMode}
-                                />
+                                        />}
+                                    </div>
+                                </Container>
                             </DrawerSidebar>
                             {renderStatusBar()}
                             {renderNotificationCenter()}
@@ -629,120 +631,65 @@ export class App extends UIComponent<{}, IAppState> {
         });
     };
 
-    private renderTitleBlock(id: string): ComponentChild {
-        const { editMode, headerPinned } = this.state;
-        const arrangementView = this.dataModel.arrangement!;
+    private renderHeaderBreadcrumb(): ComponentChild {
+        const { editMode } = this.state;
+        const arrangement = this.dataModel.arrangement!;
 
-        return <Container
-            id="titleHost"
-            orientation={Orientation.LeftToRight}
-            mainAlignment={ChildAlignment.End}
-            crossAlignment={ChildAlignment.Center}
-            style={{ width: "100%" }}
-        >
-            <ArrangementTitle
-                id={id}
-                className="main-arrangement-title"
-                style={editMode ? { flex: 1, minWidth: 0 } : undefined}
-                arrangement={arrangementView}
-                dataModel={this.dataModel}
-                editMode={editMode}
-            />
-            {
-                !editMode && <Button
-                    imageOnly
-                    data-role="restore-top"
-                    style={{ margin: "2px 16px 0 0", width: "24px", height: "24px" }}
-                    className="normal-case btn-ghost"
-                    onClick={() => {
-                        this.setState({ headerPinned: !headerPinned });
-                    }}
-                >
-                    <Icon
-                        src={headerPinned ? UIIcon.Pinned : UIIcon.Pin}
-                        data-tooltip={headerPinned ? "Pinned Header" : "Automatic Header"}
-                    />
-                </Button>
-            }
-
-        </Container>;
+        return (
+            <Container
+                className="header-breadcrumb"
+                orientation={Orientation.LeftToRight}
+                mainAlignment={ChildAlignment.Start}
+                crossAlignment={ChildAlignment.Center}
+                gap={4}
+            >
+                <Label className="header-breadcrumb-root" caption="Score Library" />
+                <Icon src={UIIcon.ChevronRight} width={16} height={16} />
+                <ArrangementTitle
+                    id="header-breadcrumb-title"
+                    arrangement={arrangement}
+                    dataModel={this.dataModel}
+                    editMode={editMode}
+                />
+            </Container>
+        );
     }
 
-    private renderHeaderBreadcrumb(): ComponentChild {
-        const { editMode, headerPinned } = this.state;
-        const arrangement = this.dataModel.arrangement!;
+    private renderUserButton(): ComponentChild {
         const isAdmin = this.dataModel.user?.isAdmin ?? false;
 
-        let pinButton: ComponentChild;
-        if (!editMode) {
-            pinButton = <Button
-                imageOnly
-                data-role="restore-top"
-                style={{ width: "24px", height: "24px" }}
-                className="normal-case btn-ghost"
-                onClick={() => {
-                    this.setState({ headerPinned: !headerPinned });
-                }}
-            >
-                <Icon
-                    src={headerPinned ? UIIcon.Pinned : UIIcon.Pin}
-                    data-tooltip={headerPinned ? "Pinned Header" : "Automatic Header"}
-                />
-            </Button>;
-        }
-
-        let userButton: ComponentChild;
         if (this.dataModel.authenticated) {
-            userButton = <Dropdown
+            return <Dropdown
                 id="userMenu"
                 icon={<Icon src={UIIcon.Account} />}
                 items={this.buildUserMenuItems()}
                 closeOnSelect
                 style={{ backgroundColor: isAdmin ? "tomato" : undefined }}
             />;
-        } else {
-            userButton = <Button
-                id="signInButton"
-                imageOnly
-                className="du-btn-ghost"
-                data-tooltip="Sign In"
-                onClick={this.handleSignInClick}
-            >
-                <Icon
-                    src={UIIcon.SignIn}
-                    data-tooltip="inherit"
-                />
-            </Button>;
         }
 
-        return (
-            <Container
-                className="header-breadcrumb"
-                orientation={Orientation.LeftToRight}
-                mainAlignment={ChildAlignment.SpaceBetween}
-                crossAlignment={ChildAlignment.Center}
-            >
-                <Container
-                    orientation={Orientation.LeftToRight}
-                    mainAlignment={ChildAlignment.Start}
-                    crossAlignment={ChildAlignment.Center}
-                    gap={4}
-                    style={{ flex: 1, minWidth: 0 }}
-                >
-                    <Label className="header-breadcrumb-root" caption="Score Library" />
-                    <Icon src={UIIcon.ChevronRight} width={16} height={16} />
-                    <ArrangementTitle
-                        id="header-breadcrumb-title"
-                        arrangement={arrangement}
-                        dataModel={this.dataModel}
-                        editMode={editMode}
-                    />
-                    {pinButton}
-                </Container>
-                {userButton}
-            </Container>
-        );
+        return <Button
+            id="signInButton"
+            imageOnly
+            className="du-btn-ghost"
+            data-tooltip="Sign In"
+            onClick={this.handleSignInClick}
+        >
+            <Icon
+                src={UIIcon.SignIn}
+                data-tooltip="inherit"
+            />
+        </Button>;
     }
+
+    private handleViewerScroll = (event: Event): void => {
+        const host = event.currentTarget as HTMLElement;
+        const shouldCollapse = host.scrollTop > this.headerCollapseThreshold;
+
+        if (shouldCollapse !== this.state.headerCollapsed) {
+            this.setState({ headerCollapsed: shouldCollapse });
+        }
+    };
 
     private renderBackendUnreachable(): ComponentChild {
         return (
@@ -1794,14 +1741,10 @@ export class App extends UIComponent<{}, IAppState> {
             case "z": {
                 if (event.ctrlKey || event.metaKey) {
                     if (event.shiftKey) {
-                        if (this.undoManager?.redo()) {
-                            this.selectionManager.clearSelection();
-                        }
+                        this.undoManager?.redo();
                     } else {
                         // Standard redo on Mac, and no problem to allow it on Windows
-                        if (this.undoManager?.undo()) {
-                            this.selectionManager.clearSelection();
-                        }
+                        this.undoManager?.undo();
                     } // With ctrl, this doesn't even trigger on Mac. Seems harmless to include it anyway.
                 }
 
@@ -1812,9 +1755,7 @@ export class App extends UIComponent<{}, IAppState> {
                 // We do not allow command+y to redo on Mac
                 // On Chrome, Firefox, and Safari, it triggers browser things, and so is very confusing to also redo
                 if (event.ctrlKey) {
-                    if (this.undoManager?.redo()) {
-                        this.selectionManager.clearSelection();
-                    }
+                    this.undoManager?.redo();
                 }
 
                 break;

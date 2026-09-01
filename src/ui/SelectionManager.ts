@@ -4,7 +4,7 @@
 */
 
 import { AppStorage } from "../core/AppStorage.js";
-import { ScoreBookChangeReason } from "../core/ScoreBookDataModel.js";
+import { ScoreBookChangeReason, type ISbDmArrangement, type ScoreBookDataModel } from "../core/ScoreBookDataModel.js";
 import type { PlayerPlayState } from "../player/ArrangementPlayer.js";
 import { requisitions } from "../supplement/Requisitions.js";
 import {
@@ -62,10 +62,11 @@ export class SelectionManager {
     /** Owned view — handles pointer events, rect drawing, and DOM updates. Created lazily when the container is set. */
     private view?: SelectionView;
 
-    public constructor() {
+    public constructor(private readonly dataModel?: ScoreBookDataModel) {
         requisitions.register("selectionRectChanged", this.handleSelectionRectChanged);
         requisitions.register("playerStateChanged", this.handlePlayerStateChanged);
         requisitions.register("scoreBookLoaded", this.handleScoreBookLoaded);
+        requisitions.register("arrangementReverted", this.handleArrangementReverted);
     }
 
     public get selectionMode(): SelectionMode {
@@ -798,4 +799,101 @@ export class SelectionManager {
 
         return Promise.resolve(true);
     };
+
+    /**
+     * Reacts to an undo/redo by pruning selection entries that no longer reference existing content.
+     * Only the currently selected elements are validated — the rest of the arrangement is ignored.
+     *
+     * @returns A resolved promise to satisfy the requisition handler signature.
+     */
+    private handleArrangementReverted = (): Promise<boolean> => {
+        this.pruneInvalidSelection();
+
+        return Promise.resolve(true);
+    };
+
+    /**
+     * Removes selection entries that reference notes, measures or tracks which no longer exist after an
+     * undo/redo. Publishes a selection change only when at least one entry was removed.
+     */
+    private pruneInvalidSelection(): void {
+        const arrangement = this.dataModel?.arrangement;
+        if (!arrangement) {
+            this.internalClearSelection();
+
+            return;
+        }
+
+        const removed: ISelectionEntry[] = [];
+        for (const [key, entry] of this.currentSelection) {
+            if (!this.isEntryValid(arrangement, entry)) {
+                removed.push(entry);
+                this.currentSelection.delete(key);
+            }
+        }
+
+        if (removed.length === 0) {
+            return;
+        }
+
+        void requisitions.execute("selectionChanged", { added: [], removed });
+        this.publishPlayRange();
+        this.schedulePersist();
+    }
+
+    /**
+     * Checks whether a selection entry still refers to existing arrangement content.
+     *
+     * @param arrangement The current arrangement.
+     * @param entry The selection entry to validate.
+     *
+     * @returns True when the referenced note, measure or track still exists.
+     */
+    private isEntryValid(arrangement: ISbDmArrangement, entry: ISelectionEntry): boolean {
+        const track = arrangement.tracks.find((candidate) => {
+            return candidate.id === entry.trackId;
+        });
+
+        switch (entry.granularity) {
+            case SelectionGranularity.Track: {
+                return track !== undefined;
+            }
+
+            case SelectionGranularity.Measure: {
+                if (entry.trackId !== 0 && track === undefined) {
+                    return false;
+                }
+
+                return entry.bar >= 1 && entry.bar <= arrangement.timeParams.length;
+            }
+
+            case SelectionGranularity.TrackPiece:
+            case SelectionGranularity.NoteGroup: {
+                return track !== undefined && entry.bar >= 1 && entry.bar <= arrangement.timeParams.length;
+            }
+
+            case SelectionGranularity.Note: {
+                if (track === undefined) {
+                    return false;
+                }
+
+                const measure = entry.bar >= 1 ? track.measures.at(entry.bar - 1) : undefined;
+                if (!measure) {
+                    return false;
+                }
+
+                if (entry.noteId === undefined) {
+                    return true;
+                }
+
+                return measure.noteEvents.some((noteEvent) => {
+                    return noteEvent.id === entry.noteId;
+                });
+            }
+
+            default: {
+                return false;
+            }
+        }
+    }
 }

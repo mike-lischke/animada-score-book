@@ -192,37 +192,6 @@ h6 {
     height: 100%;
 }
 
-.main-arrangement-title {
-    display: block;
-    font-size: clamp(12pt, 20pt, 20pt);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-
-    text-align: right;
-    padding: 0;
-    margin: 0;
-
-    max-width: 100%;
-    min-width: 1ch;
-    width: fit-content;
-}
-
-.main-arrangement-title:focus {
-    outline: 1px solid var(--color-primary);
-    outline-offset: 1px;
-    border-radius: 2px;
-}
-
-.collapsed-header .main-arrangement-title {
-    display: block;
-    font-size: clamp(10pt, 16pt, 16pt);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    min-width: 0;
-}
-
 #editTitleButton {
     flex: 0 0 20px;
 }
@@ -247,15 +216,34 @@ h6 {
 
 #headerContent {
     margin: 12px;
-    width: 100%;
+    flex-shrink: 0;
     overflow: hidden;
     background: var(--color-base-100);
     user-select: none;
+    height: 200px;
+    transition: height 250ms ease;
+}
+
+#headerContent.collapsed {
+    height: 74px;
+}
+
+.header-toolbar-extra {
+    flex: 1 1 auto;
+    max-height: 200px;
+    transition: opacity 250ms ease, max-height 250ms ease;
+    overflow: hidden;
+}
+
+#headerContent.collapsed .header-toolbar-extra {
+    opacity: 0;
+    max-height: 0;
 }
 
 #titleLogo {
     width: 40px;
     height: 40px;
+    margin-top: 8px;
     padding: 8px;
     box-sizing: border-box;
 }
@@ -270,16 +258,16 @@ h6 {
     }
 }
 
-#toolbarButtons {
+#mainToolbarButtons {
     box-shadow: 4px 0 12px rgba(15, 23, 42, 0.08);
 }
 
-#toolbarButtons .btn {
+#mainToolbarButtons .btn {
     width: 40px;
     height: 40px;
 }
 
-#toolbarButtons svg.icon {
+#mainToolbarButtons svg.icon {
     font-size: 24px;
 }
 
@@ -291,6 +279,27 @@ h6 {
 
 .header-breadcrumb {
     min-width: 0;
+    margin-bottom: 8px;
+}
+
+#arrangementPlayControls {
+    margin-bottom: 8px;
+}
+
+.header-breadcrumb,
+#editControlsHost {
+    transition: opacity 250ms ease, height 250ms ease, margin-bottom 250ms ease;
+}
+
+#headerContent.collapsed .header-breadcrumb,
+#headerContent.collapsed #editControlsHost {
+    opacity: 0;
+    height: 0;
+    margin-bottom: 0;
+}
+
+#headerContent.collapsed #arrangementPlayControls {
+    margin-bottom: 0;
 }
 
 .header-breadcrumb,
@@ -319,7 +328,7 @@ h6 {
 }
 
 #header-breadcrumb-title {
-    display: inline-block;
+    flex: 1 1 auto;
     font-size: 16px;
     font-weight: 600;
     white-space: nowrap;

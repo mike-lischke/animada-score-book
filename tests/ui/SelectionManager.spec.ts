@@ -6,7 +6,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
-    SbDmEntityType, type ISbDmArrangement, type ISbDmNoteEvent, type ISbDmTrack
+    SbDmEntityType, type ISbDmArrangement, type ISbDmNoteEvent, type ISbDmTrack,
+    type ISbDmTrackMeasure, type ScoreBookDataModel,
 } from "../../src/core/ScoreBookDataModel.js";
 import type { Mutable } from "../../src/core/types/general.js";
 import { requisitions } from "../../src/supplement/Requisitions.js";
@@ -182,5 +183,52 @@ describe.sequential("SelectionManager (class)", () => {
         expect([...manager.currentSelection.values()]).toEqual([clearedA, clearedB]);
         expect(added).toEqual([clearedA, clearedB]);
         expect(removed).toEqual([note]);
+    });
+});
+
+describe.sequential("SelectionManager re-validation after undo/redo", () => {
+    it("keeps selections in unchanged measures and drops those in changed ones", () => {
+        const arrangement = makeArrangement([] as ISbDmTrack[]);
+
+        const measure1 = {
+            id: 11,
+            type: SbDmEntityType.TrackMeasure,
+            number: 1,
+            meter: { beats: 4, beatUnits: 4, stepResolution: 8, beatGroups: [8] },
+            events: [],
+            subdivisions: [],
+            noteEvents: [makeNote(1_001_001)],
+        } as unknown as ISbDmTrackMeasure;
+
+        const measure2Events: ISbDmNoteEvent[] = [makeNote(1_002_001)];
+        const measure2 = {
+            id: 12,
+            type: SbDmEntityType.TrackMeasure,
+            number: 2,
+            meter: { beats: 4, beatUnits: 4, stepResolution: 8, beatGroups: [8] },
+            events: [],
+            subdivisions: [],
+            noteEvents: measure2Events,
+        } as unknown as ISbDmTrackMeasure;
+
+        const track = makeTrack([], arrangement);
+        (track as Mutable<ISbDmTrack>).measures = [measure1, measure2];
+        arrangement.tracks.push(track);
+
+        const manager = new SelectionManager({ arrangement } as unknown as ScoreBookDataModel);
+        const trackId = track.id;
+
+        manager.selectNotes([
+            { granularity: SelectionGranularity.Note, bar: 1, trackId, noteId: 1_001_001 },
+            { granularity: SelectionGranularity.Note, bar: 2, trackId, noteId: 1_002_001 },
+        ]);
+
+        // Simulate an undo that reorganized measure 2, so its selected note no longer exists.
+        measure2Events.splice(0, 1);
+
+        void requisitions.execute("arrangementReverted", undefined);
+
+        expect(manager.isNoteSelected(1, trackId, 1_001_001)).toBe(true);
+        expect(manager.isNoteSelected(2, trackId, 1_002_001)).toBe(false);
     });
 });

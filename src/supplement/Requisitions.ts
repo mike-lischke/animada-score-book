@@ -63,6 +63,9 @@ export interface IRequestTypeMap {
      * The UndoManager listens to this to record undo/redo snapshots.
      */
     "arrangementMutated": SimpleCallback;
+
+    /** Fired by UndoManager after an undo/redo navigation, so the selection can be re-validated. */
+    "arrangementReverted": SimpleCallback;
 }
 
 type CallbackType = IRequestTypeMap[keyof IRequestTypeMap];

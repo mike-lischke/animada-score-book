@@ -7,22 +7,3 @@
 .du-drawer-content {
     min-height: 0;
 }
-
-#collapsedHeaderContent {
-    margin: 8px 12px;
-    padding: 4px;
-
-    overflow: visible;
-    background: var(--color-base-100);
-    z-index: 3;
-
-    &::before {
-        content: "";
-        position: absolute;
-        top: -9px;
-        left: 0;
-        width: 100%;
-        height: 8px;
-        background-color: var(--color-base-100);
-    }
-}
