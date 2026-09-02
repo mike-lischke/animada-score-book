@@ -42,7 +42,7 @@
     @if $renderBeam {
         .grid-measure-beam {
             height: 20pt;
-            margin-top: 8px;
+            margin: 8px 0 8px 0;
             position: relative;
             overflow: hidden;
 

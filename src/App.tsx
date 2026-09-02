@@ -531,6 +531,7 @@ export class App extends UIComponent<{}, IAppState> {
                                     <div
                                         id="viewerScrollHost"
                                         onScroll={this.handleViewerScroll}
+                                        onWheel={this.handleViewerWheel}
                                         style={{
                                             flex: "1 1 auto",
                                             minHeight: 0,
@@ -684,10 +685,30 @@ export class App extends UIComponent<{}, IAppState> {
 
     private handleViewerScroll = (event: Event): void => {
         const host = event.currentTarget as HTMLElement;
-        const shouldCollapse = host.scrollTop > this.headerCollapseThreshold;
+        const { headerCollapsed } = this.state;
 
-        if (shouldCollapse !== this.state.headerCollapsed) {
-            this.setState({ headerCollapsed: shouldCollapse });
+        const hasOverflow = host.scrollHeight > host.clientHeight;
+
+        if (headerCollapsed) {
+            // Expand on a real scroll back to the top of a still-overflowing host. When the
+            // content fits after collapsing, the browser clamps scrollTop to 0; that event must
+            // not re-expand the header (the wheel handler covers that case).
+            if (host.scrollTop === 0 && hasOverflow) {
+                this.setState({ headerCollapsed: false });
+            }
+        } else if (host.scrollTop > this.headerCollapseThreshold) {
+            this.setState({ headerCollapsed: true });
+        }
+    };
+
+    private handleViewerWheel = (event: WheelEvent): void => {
+        const host = event.currentTarget as HTMLElement;
+        const { headerCollapsed } = this.state;
+
+        // With no scrollbar (content fits when collapsed) scroll events never fire, so a
+        // wheel-up gesture is the only way to re-expand the header.
+        if (headerCollapsed && event.deltaY < 0 && host.scrollHeight <= host.clientHeight) {
+            this.setState({ headerCollapsed: false });
         }
     };
 

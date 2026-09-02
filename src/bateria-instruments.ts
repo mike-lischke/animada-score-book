@@ -55,9 +55,33 @@ export const pastelColors: string[] = [
     "hsl(306, 100%, 75%)",
     "hsl(324, 100%, 75%)",
     "hsl(342, 100%, 75%)",
-];
+] as const;
+
+const summerColors = [
+    "hsl(193 82% 41%)",
+    "hsl(12 95% 64%)",
+    "hsl(257 30% 50%)",
+    "hsl(42 95% 82%)",
+    "hsl(333 62% 46%)",
+    "hsl(40 96% 57%)",
+    "hsl(207 48% 20%)",
+    "hsl(24 90% 48%)",
+    "hsl(179 88% 24%)",
+    "hsl(350 82% 54%)",
+    "hsl(229 34% 27%)",
+    "hsl(45 96% 68%)",
+    "hsl(5 90% 56%)",
+    "hsl(152 52% 39%)",
+    "hsl(320 44% 34%)",
+    "hsl(35 96% 51%)",
+    "hsl(182 84% 23%)",
+    "hsl(27 96% 72%)",
+    "hsl(354 70% 52%)",
+    "hsl(205 52% 28%)",
+] as const;
 
 const colorOffset = 0;
+const colors = summerColors;
 
 export const bateriaInstruments: IInstrumentMeta[] = [{
     id: 0,
@@ -99,7 +123,7 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             sampleProfile: { builtInDamping: Damping.Open, builtInAccent: false, ghost: false },
         }
     ],
-    color: pastelColors[(colorOffset + 0) % pastelColors.length],
+    color: colors[(colorOffset + 0) % colors.length],
 }, {
     id: 10,
     typeId: "a",
@@ -172,7 +196,7 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             sampleProfile: { builtInDamping: Damping.Open, builtInAccent: false, ghost: false },
         }
     ],
-    color: pastelColors[(colorOffset + 1) % pastelColors.length],
+    color: colors[(colorOffset + 1) % colors.length],
 }, {
     id: 1,
     typeId: "1",
@@ -209,7 +233,7 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             sampleProfile: { builtInDamping: Damping.Open, builtInAccent: false, ghost: true },
         }
     ],
-    color: pastelColors[(colorOffset + 2) % pastelColors.length]
+    color: colors[(colorOffset + 2) % colors.length]
 }, {
     id: 2,
     typeId: "2",
@@ -248,7 +272,7 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             sampleProfile: { builtInDamping: Damping.Open, builtInAccent: false, ghost: true },
         }
     ],
-    color: pastelColors[(colorOffset + 3) % pastelColors.length]
+    color: colors[(colorOffset + 3) % colors.length]
 }, {
     id: 3,
     typeId: "3",
@@ -355,7 +379,7 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             sampleProfile: { builtInDamping: Damping.Open, builtInAccent: true, ghost: false },
         }
     ],
-    color: pastelColors[(colorOffset + 4) % pastelColors.length]
+    color: colors[(colorOffset + 4) % colors.length]
 }, {
     id: 4,
     typeId: "4",
@@ -392,7 +416,7 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             sampleProfile: { builtInDamping: Damping.Open, builtInAccent: false, ghost: true },
         }
     ],
-    color: pastelColors[(colorOffset + 5) % pastelColors.length]
+    color: colors[(colorOffset + 5) % colors.length]
 }, {
     id: 5,
     typeId: "5",
@@ -457,7 +481,7 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             sampleProfile: { builtInDamping: Damping.Open, builtInAccent: false, ghost: false },
         },
     ],
-    color: pastelColors[(colorOffset + 6) % pastelColors.length]
+    color: colors[(colorOffset + 6) % colors.length]
 }, {
     id: 6,
     typeId: "6",
@@ -508,7 +532,7 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             sampleProfile: { builtInDamping: Damping.Open, builtInAccent: false, ghost: false },
         }
     ],
-    color: pastelColors[(colorOffset + 7) % pastelColors.length]
+    color: colors[(colorOffset + 7) % colors.length]
 }, {
     id: 7,
     typeId: "7",
@@ -545,7 +569,7 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             sampleProfile: { builtInDamping: Damping.Muted, builtInAccent: false, ghost: false },
         }
     ],
-    color: pastelColors[(colorOffset + 8) % pastelColors.length]
+    color: colors[(colorOffset + 8) % colors.length]
 }, {
     id: 8,
     typeId: "8",
@@ -582,7 +606,7 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             sampleProfile: { builtInDamping: Damping.Muted, builtInAccent: false, ghost: false },
         }
     ],
-    color: pastelColors[(colorOffset + 9) % pastelColors.length]
+    color: colors[(colorOffset + 9) % colors.length]
 }, {
     id: 9,
     typeId: "9",
@@ -619,5 +643,5 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             sampleProfile: { builtInDamping: Damping.Muted, builtInAccent: false, ghost: false },
         }
     ],
-    color: pastelColors[(colorOffset + 10) % pastelColors.length]
+    color: colors[(colorOffset + 10) % colors.length]
 }];
