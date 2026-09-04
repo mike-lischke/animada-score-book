@@ -12,6 +12,7 @@ import {
     type ISelectionRectChange,
 } from "./selection-types.js";
 import { SelectionView } from "./SelectionView.js";
+import type { ScoreElementRegistry } from "./ScoreElementRegistry.js";
 
 /**
  * Manages selections across tracks and publishes selection changes.
@@ -93,13 +94,14 @@ export class SelectionManager {
      * Must be called before any selection interaction can occur.
      *
      * @param container The DOM element to listen for pointer events on.
+     * @param scoreElementRegistry The optional registry of rendered score elements.
      */
-    public setEventContainer(container: HTMLElement): void {
+    public setEventContainer(container: HTMLElement, scoreElementRegistry?: ScoreElementRegistry): void {
         if (this.view) {
             this.view.dispose();
         }
 
-        this.view = new SelectionView(this, container);
+        this.view = new SelectionView(this, container, scoreElementRegistry);
     }
 
     /**

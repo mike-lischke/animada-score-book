@@ -8,8 +8,8 @@ import { ComponentPlacement } from "../components/ui/framework/UIComponent.js";
 import { RadialMenu, type IRadialMenuItem } from "../components/ui/framework/RadialMenu.js";
 import { AudioBufferPlayer } from "../player/AudioBufferPlayer.js";
 import { getSharedAudioContext } from "../core/audio-context.js";
-import { formatFraction, parseFraction } from "../core/serialisation/numeric-functions.js";
 import { GridMeasureEditor, type IGridEditorPosition } from "./GridMeasureEditor.js";
+import { ScoreElementKind, type ScoreElementRegistry } from "./ScoreElementRegistry.js";
 import { SelectionGranularity, type ISelectionDelta, type ISelectionEntry } from "./selection-types.js";
 import type { SelectionManager } from "./SelectionManager.js";
 import { requisitions, type ISubdivisionCreationRequest } from "../supplement/Requisitions.js";
@@ -40,6 +40,7 @@ export class TrackViewerInputController {
         private readonly eventContainer: HTMLElement,
         private readonly radialMenu: RadialMenu,
         private readonly selectionManager: SelectionManager,
+        private readonly scoreElementRegistry: ScoreElementRegistry,
     ) {
     }
 
@@ -240,22 +241,16 @@ export class TrackViewerInputController {
             return undefined;
         }
 
-        const row = cell.closest<HTMLElement>(".grid-measure-row");
-        const bar = row?.getAttribute("data-bar");
-        const trackId = row?.getAttribute("data-track");
-        const step = cell.getAttribute("data-step-index");
-        if (!bar || !trackId || step === null) {
+        const location = this.scoreElementRegistry.getLocation(cell);
+        if (location?.kind !== ScoreElementKind.GridCell || location.step === undefined) {
             return undefined;
         }
 
-        const startValue = cell.getAttribute("data-event-start");
-        const start = startValue === null ? undefined : parseFraction(startValue);
-
         return {
-            bar: parseInt(bar, 10),
-            trackId: parseInt(trackId, 10),
-            step: parseInt(step, 10),
-            start,
+            bar: location.bar,
+            trackId: location.trackId,
+            step: location.step,
+            start: location.start,
         };
     }
 
@@ -529,10 +524,11 @@ export class TrackViewerInputController {
             return;
         }
 
-        this.selectCursorPosition(position, cell.getAttribute("data-note-id"));
+        const noteId = this.scoreElementRegistry.getLocation(cell)?.noteId;
+        this.selectCursorPosition(position, noteId);
     }
 
-    private selectCursorPosition(position: IGridEditorPosition, noteId?: string | null): void {
+    private selectCursorPosition(position: IGridEditorPosition, noteId?: number): void {
         this.currentPosition = position;
         this.selectionManager.selectSingleNote({
             granularity: SelectionGranularity.Note,
@@ -540,7 +536,7 @@ export class TrackViewerInputController {
             trackId: position.trackId,
             startStep: position.step,
             endStep: position.step,
-            noteId: noteId === null || noteId === undefined ? undefined : Number.parseInt(noteId, 10),
+            noteId,
             start: position.start,
         });
     }
@@ -614,24 +610,16 @@ export class TrackViewerInputController {
     }
 
     private getGridCellForPosition(position: IGridEditorPosition): HTMLElement | undefined {
-        const contentHost = this.eventContainer;
+        const elements = this.scoreElementRegistry.findSelectionElements({
+            granularity: SelectionGranularity.Note,
+            bar: position.bar,
+            trackId: position.trackId,
+            startStep: position.step,
+            endStep: position.step,
+            start: position.start,
+        }, ScoreElementKind.GridCell);
 
-        const row = [...contentHost.querySelectorAll<HTMLElement>(".grid-measure-row")].find((candidate) => {
-            return candidate.getAttribute("data-bar") === String(position.bar)
-                && candidate.getAttribute("data-track") === String(position.trackId);
-        });
-        if (!row) {
-            return undefined;
-        }
-
-        if (position.start !== undefined) {
-            const startSelector = `[data-event-start="${formatFraction(position.start)}"]`;
-
-            return row.querySelector<HTMLElement>(startSelector) ?? undefined;
-        }
-
-        return row.querySelector<HTMLElement>(`[data-step-index="${position.step}"]`)
-            ?? undefined;
+        return elements.at(0);
     }
 
     private getTrackRows(contentHost: HTMLElement, trackId: number): HTMLElement[] {

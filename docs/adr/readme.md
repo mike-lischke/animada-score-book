@@ -19,3 +19,4 @@ hard to infer from code alone.
 | ADR | Status | Decision | Relevant when |
 |---|---|---|---|
 | ADR-0001 | accepted | Schedule audio against the AudioContext clock and drive playback with a look-ahead scheduler | playback, transport, scheduling, timing |
+| ADR-0002 | accepted | Resolve rendered score elements through a viewer-local typed registry | score rendering, selection, keyboard navigation, DOM integration |

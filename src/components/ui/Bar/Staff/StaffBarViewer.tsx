@@ -9,6 +9,7 @@ import type { ISbDmArrangement, ISbDmTrack, ScoreBookDataModel } from "../../../
 import type { ArrangementPlayer } from "../../../../player/ArrangementPlayer.js";
 import { requisitions } from "../../../../supplement/Requisitions.js";
 import type { SelectionManager } from "../../../../ui/SelectionManager.js";
+import type { ScoreElementRegistry } from "../../../../ui/ScoreElementRegistry.js";
 import {
     SelectionGranularity, type ISelectionEntry, type ISelectionHitTester,
 } from "../../../../ui/selection-types.js";
@@ -22,6 +23,7 @@ export interface IBarViewerProps extends ICommonUIProperties {
     inEditMode: boolean;
     selectionManager: SelectionManager;
     dataModel: ScoreBookDataModel;
+    scoreElementRegistry?: ScoreElementRegistry;
 
     /** Label explicitly set for this measure. */
     ownLabel?: string;
@@ -555,7 +557,7 @@ export class StaffBarViewer extends UIComponent<IBarViewerProps, IBarViewerState
 
     public override render(): ComponentChild {
         const { barNumber, arrangement, arrangementPlayer, inEditMode,
-            dataModel, ownLabel, inheritedLabel } = this.props;
+            dataModel, ownLabel, inheritedLabel, scoreElementRegistry } = this.props;
         const { tracks } = this.state;
         const label = ownLabel ?? inheritedLabel;
         const isInherited = ownLabel === undefined && inheritedLabel !== undefined;
@@ -584,6 +586,7 @@ export class StaffBarViewer extends UIComponent<IBarViewerProps, IBarViewerState
                             arrangementPlayer={arrangementPlayer}
                             inEditMode={inEditMode}
                             dataModel={dataModel}
+                            scoreElementRegistry={scoreElementRegistry}
                         />
                     );
                 })}

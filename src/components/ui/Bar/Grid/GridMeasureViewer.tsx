@@ -9,6 +9,7 @@ import type { ISbDmTrack, ScoreBookDataModel } from "../../../../core/ScoreBookD
 import type { IScoreMetrics } from "../../../../player/TimeCoordinator.js";
 import { parseFraction } from "../../../../core/serialisation/numeric-functions.js";
 import type { SelectionManager } from "../../../../ui/SelectionManager.js";
+import type { ScoreElementRegistry } from "../../../../ui/ScoreElementRegistry.js";
 import {
     SelectionGranularity, type ISelectionEntry, type ISelectionHitTester,
 } from "../../../../ui/selection-types.js";
@@ -25,6 +26,7 @@ export interface IGridMeasureViewerProperties extends ICommonUIProperties {
     dataModel: ScoreBookDataModel;
     scoreMetrics: IScoreMetrics;
     selectionManager: SelectionManager;
+    scoreElementRegistry?: ScoreElementRegistry;
 
     /**
      * If given, render only these tracks (in this order) instead of all tracks of the arrangement.
@@ -166,7 +168,7 @@ export class GridMeasureViewer extends UIComponent<IGridMeasureViewerProperties,
     }
 
     public override render(): ComponentChild {
-        const { measureNumber, dataModel, scoreMetrics, tracks: tracksOverride } = this.props;
+        const { measureNumber, dataModel, scoreMetrics, scoreElementRegistry, tracks: tracksOverride } = this.props;
         const { beatPositions } = this.state;
 
         if (!dataModel.arrangement) {
@@ -187,7 +189,8 @@ export class GridMeasureViewer extends UIComponent<IGridMeasureViewerProperties,
                 measure={measure}
                 track={track}
                 dataModel={dataModel}
-                data-bar={measureNumber}
+                barNumber={measureNumber}
+                scoreElementRegistry={scoreElementRegistry}
             />);
         }
 

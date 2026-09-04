@@ -12,6 +12,7 @@ import type {
 import type { ArrangementPlayer } from "../../../../player/ArrangementPlayer.js";
 import type { TrackPlayer } from "../../../../player/TrackPlayer.js";
 import { requisitions } from "../../../../supplement/Requisitions.js";
+import type { ScoreElementRegistry } from "../../../../ui/ScoreElementRegistry.js";
 import { UIComponent, type ICommonUIProperties } from "../../framework/UIComponent.js";
 import { StaffNoteViewer } from "../../Note/StaffNoteViewer.js";
 
@@ -24,6 +25,7 @@ export interface IStaffBarTrackRowProps extends ICommonUIProperties {
     arrangementPlayer: ArrangementPlayer;
     inEditMode: boolean;
     dataModel: ScoreBookDataModel;
+    scoreElementRegistry?: ScoreElementRegistry;
 }
 
 interface IStaffBarTrackRowState {
@@ -49,7 +51,7 @@ export class StaffBarTrackRow extends UIComponent<IStaffBarTrackRowProps, IStaff
     }
 
     public override render(): ComponentChild {
-        const { arrangementPlayer, barNumber, timeParams, track } = this.props;
+        const { arrangementPlayer, barNumber, timeParams, track, scoreElementRegistry } = this.props;
 
         const measure = track.measures[barNumber - 1];
         const baseSteps = measure.meter.stepResolution;
@@ -73,7 +75,10 @@ export class StaffBarTrackRow extends UIComponent<IStaffBarTrackRowProps, IStaff
                 scoreMetrics={arrangementPlayer.scoreMetrics}
                 baseSteps={baseSteps}
                 measure={measure}
+                barNumber={barNumber}
+                trackId={track.id}
                 maxNoteLine={maxNoteLine}
+                scoreElementRegistry={scoreElementRegistry}
             />
         );
     }

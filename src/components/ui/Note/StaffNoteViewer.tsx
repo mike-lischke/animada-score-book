@@ -15,6 +15,7 @@ import {
 } from "../../../core/MeasureProjection.js";
 import type { IFraction, IAudioData } from "../../../core/types/general.js";
 import type { IScoreMetrics } from "../../../player/TimeCoordinator.js";
+import { ScoreElementKind, type ScoreElementRegistry } from "../../../ui/ScoreElementRegistry.js";
 import { NoteImage, NoteImageHeadType, NoteKind, NoteLength } from "../framework/NoteImage.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
 
@@ -25,6 +26,9 @@ export interface IStaffNoteViewerProperties extends ICommonUIProperties {
     baseSteps: number;
 
     measure: ISbDmTrackMeasure;
+    barNumber: number;
+    trackId: number;
+    scoreElementRegistry?: ScoreElementRegistry;
 
     /** Maximum noteLine value across all variants of the instrument (default 1 = single line). */
     maxNoteLine?: number;
@@ -445,7 +449,7 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
      */
     private renderItems(nodes: IStaffTreeNode[], beamSpans: Map<number, IBeamInfo>,
         keyPrefix: string, centerLine: number, restLineOffset: number): ComponentChild[] {
-        const { scoreMetrics, measure } = this.props;
+        const { scoreMetrics, measure, barNumber, trackId, scoreElementRegistry } = this.props;
 
         return nodes.map((node, index) => {
             if (node.kind === StaffNodeKind.Subdivision) {
@@ -502,6 +506,14 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                     className: "staff-note-viewer-run",
                     style: slotStyle,
                     "data-step-index": stepIndex,
+                    ref: scoreElementRegistry?.createRef({
+                        kind: ScoreElementKind.StaffRun,
+                        bar: barNumber,
+                        trackId,
+                        step: stepIndex,
+                        noteId: measure.noteEvents.at(node.eventIndex)?.id,
+                        start: node.start,
+                    }),
                 };
 
                 const noteId = measure.noteEvents.at(node.eventIndex)?.id;
@@ -555,7 +567,14 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
 
             return (
                 <div key={`${keyPrefix}rest-${index}`} className="staff-note-viewer-run" style={slotStyle}
-                    data-step-index={stepIndex}>
+                    data-step-index={stepIndex}
+                    ref={scoreElementRegistry?.createRef({
+                        kind: ScoreElementKind.StaffRun,
+                        bar: barNumber,
+                        trackId,
+                        step: stepIndex,
+                        start: node.start,
+                    })}>
                     <NoteImage
                         className="staff-note-viewer-rest-symbol"
                         kind={NoteKind.Rest}

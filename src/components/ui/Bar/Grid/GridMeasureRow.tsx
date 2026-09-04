@@ -12,14 +12,17 @@ import {
 import { formatFraction } from "../../../../core/serialisation/numeric-functions.js";
 import type { IAudioData } from "../../../../core/types/general.js";
 import { requisitions } from "../../../../supplement/Requisitions.js";
+import { ScoreElementKind, type ScoreElementRegistry } from "../../../../ui/ScoreElementRegistry.js";
 import { NoteStyleSymbolViewer } from "../../Note/NoteStyleSymbolViewer.js";
 import { Container } from "../../framework/Container.js";
 import { UIComponent, type ICommonUIProperties } from "../../framework/UIComponent.js";
 
 export interface IGridMeasureRowProperties extends ICommonUIProperties {
+    barNumber?: number;
     measure: ISbDmTrackMeasure;
     track: ISbDmTrack;
     dataModel: ScoreBookDataModel;
+    scoreElementRegistry?: ScoreElementRegistry;
 }
 
 interface IGridMeasureRowState {
@@ -42,7 +45,7 @@ export class GridMeasureRow extends UIComponent<IGridMeasureRowProperties, IGrid
     }
 
     public override render(): ComponentChild {
-        const { measure, dataModel, track } = this.props;
+        const { measure, dataModel, track, barNumber } = this.props;
 
         if (!dataModel.arrangement) {
             return null;
@@ -79,7 +82,7 @@ export class GridMeasureRow extends UIComponent<IGridMeasureRowProperties, IGrid
 
         return (
             <Container className={className} style={rowStyle}
-                data-track={track.id} {...this.dataAttributes}>
+                data-track={track.id} data-bar={barNumber} {...this.dataAttributes}>
                 <div className="grid-beat-overlay" aria-hidden="true">
                     {beatMarkers}
                 </div>
@@ -130,7 +133,7 @@ export class GridMeasureRow extends UIComponent<IGridMeasureRowProperties, IGrid
 
     private renderEventCells(item: IProjectedEvent, keyPrefix: number, level = 1,
         subdivisionStartStep = 0): ComponentChild[] {
-        const { measure, track } = this.props;
+        const { measure, track, barNumber, scoreElementRegistry } = this.props;
 
         const stepsPerBar = measure.meter.stepResolution;
         const noteStyle: IAudioData | undefined = item.event.noteStyleId !== undefined
@@ -169,6 +172,13 @@ export class GridMeasureRow extends UIComponent<IGridMeasureRowProperties, IGrid
                 key: `${keyPrefix}-${col}`,
                 className: "note-viewer",
                 "data-step-index": col,
+                ref: barNumber === undefined ? undefined : scoreElementRegistry?.createRef({
+                    kind: ScoreElementKind.GridCell,
+                    bar: barNumber,
+                    trackId: track.id,
+                    step: col,
+                    start: item.start,
+                }),
                 style: { minWidth: 0, backgroundColor: isNoteCell ? noteBackground : "transparent" },
             };
 

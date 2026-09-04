@@ -13,6 +13,7 @@ import type { PlayerPlayState } from "../../../player/ArrangementPlayer.js";
 import { requisitions } from "../../../supplement/Requisitions.js";
 import type { SelectionManager } from "../../../ui/SelectionManager.js";
 import { GridMeasureEditor } from "../../../ui/GridMeasureEditor.js";
+import { ScoreElementRegistry } from "../../../ui/ScoreElementRegistry.js";
 import { TrackViewerInputController } from "../../../ui/TrackViewerInputController.js";
 import { GridMeasureViewer } from "../Bar/Grid/GridMeasureViewer.js";
 import { StaffBarViewer } from "../Bar/Staff/StaffBarViewer.js";
@@ -59,6 +60,7 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
     private barActionStripRef = createRef<BarActionStrip>();
     private gridRadialMenuRef = createRef<RadialMenu>();
     private trackViewerInputController?: TrackViewerInputController;
+    private readonly scoreElementRegistry = new ScoreElementRegistry();
 
     //private animationEngine?: AnimationEngine;
     private resizeObserver: ResizeObserver;
@@ -102,7 +104,7 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         const { arrangementPlayer, selectionManager } = this.props;
         const { autoFollowIsOn, viewerZoom, trackViewMode } = this.state;
 
-        selectionManager.setEventContainer(this.arrangementViewerRef.current!);
+        selectionManager.setEventContainer(this.arrangementViewerRef.current!, this.scoreElementRegistry);
 
         const verticalHost = this.arrangementViewerRef.current?.parentElement;
         if (verticalHost) {
@@ -114,7 +116,7 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         contentHost.style.outline = "none";
         const gridEditor = new GridMeasureEditor(this.props.dataModel);
         this.trackViewerInputController = new TrackViewerInputController(
-            contentHost, this.gridRadialMenuRef.current!, selectionManager,
+            contentHost, this.gridRadialMenuRef.current!, selectionManager, this.scoreElementRegistry,
         );
         this.trackViewerInputController.setGridEditor(gridEditor);
         this.trackViewerInputController.setEditMode(this.props.inEditMode);
@@ -231,6 +233,7 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
                                 <StaffBarViewer
                                     key={barNumber}
                                     {...barViewerProps}
+                                    scoreElementRegistry={this.scoreElementRegistry}
                                     ownLabel={ownLabel}
                                     inheritedLabel={inheritedLabel}
                                 />
@@ -243,6 +246,7 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
                                 measureNumber={barNumber}
                                 scoreMetrics={metrics}
                                 {...barViewerProps}
+                                scoreElementRegistry={this.scoreElementRegistry}
                             />
                         );
                     })}

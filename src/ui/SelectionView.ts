@@ -4,9 +4,10 @@
  */
 
 import type { IRect } from "../core/types/general.js";
-import { formatFraction, parseFraction } from "../core/serialisation/numeric-functions.js";
+import { formatFraction } from "../core/serialisation/numeric-functions.js";
 import { requisitions } from "../supplement/Requisitions.js";
 import type { SelectionManager } from "./SelectionManager.js";
+import type { ScoreElementRegistry } from "./ScoreElementRegistry.js";
 import type { ISelectionDelta, ISelectionEntry } from "./selection-types.js";
 import { SelectionGranularity, SelectionMode } from "./selection-types.js";
 
@@ -53,7 +54,8 @@ export class SelectionView {
      */
     private zoomFactor = 1;
 
-    public constructor(private manager: SelectionManager, private eventContainer: HTMLElement) {
+    public constructor(private manager: SelectionManager, private eventContainer: HTMLElement,
+        private readonly scoreElementRegistry?: ScoreElementRegistry) {
         requisitions.register("selectionChanged", this.handleSelectionChanged);
         requisitions.register("editModeChanged", this.handleEditModeChanged);
         eventContainer.addEventListener("pointerdown", this.handlePointerDown);
@@ -277,32 +279,19 @@ export class SelectionView {
             return false;
         }
 
-        const row = target.closest<HTMLElement>(
-            isStaffMode ? ".bar-track-row.staff-mode" : ".grid-measure-row",
-        );
-        if (!row) {
+        const location = this.scoreElementRegistry?.getLocation(target);
+        if (location?.step === undefined) {
             return false;
         }
-
-        const bar = row.getAttribute("data-bar");
-        const trackId = row.getAttribute("data-track");
-        const stepIndex = target.getAttribute("data-step-index");
-        if (!bar || !trackId || stepIndex === null) {
-            return false;
-        }
-
-        const noteId = target.getAttribute("data-note-id");
-        const startAttr = target.getAttribute("data-event-start");
-        const start = startAttr === null ? undefined : parseFraction(startAttr);
 
         this.manager.selectSingleNote({
             granularity: SelectionGranularity.Note,
-            bar: parseInt(bar, 10),
-            trackId: parseInt(trackId, 10),
-            startStep: parseInt(stepIndex, 10),
-            endStep: parseInt(stepIndex, 10),
-            noteId: noteId === null ? undefined : parseInt(noteId, 10),
-            start,
+            bar: location.bar,
+            trackId: location.trackId,
+            startStep: location.step,
+            endStep: location.step,
+            noteId: location.noteId,
+            start: location.start,
         });
         event.preventDefault();
 
@@ -1113,6 +1102,10 @@ export class SelectionView {
      * @returns The matching elements, or an empty array if none found.
      */
     private findNoteElements(scope: HTMLElement, entry: ISelectionEntry): HTMLElement[] {
+        if (this.scoreElementRegistry) {
+            return this.scoreElementRegistry.findSelectionElements(entry);
+        }
+
         if (entry.noteId !== undefined) {
             const el = scope.querySelector<HTMLElement>(`[data-note-id="${entry.noteId}"]`);
 
