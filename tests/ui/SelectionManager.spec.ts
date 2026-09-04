@@ -184,6 +184,24 @@ describe.sequential("SelectionManager (class)", () => {
         expect(added).toEqual([clearedA, clearedB]);
         expect(removed).toEqual([note]);
     });
+
+    it("keeps note selections for subdivision slots after note ids are cleared", () => {
+        const entries: ISelectionEntry[] = [0, 1, 2].map((slot) => {
+            return {
+                granularity: SelectionGranularity.Note,
+                bar: 1,
+                trackId: 1,
+                startStep: 0,
+                endStep: 0,
+                start: { numerator: slot, denominator: 3 },
+            };
+        });
+
+        manager.replaceSelection(entries);
+
+        expect(manager.currentSelection.size).toBe(3);
+        expect([...manager.currentSelection.values()]).toEqual(entries);
+    });
 });
 
 describe.sequential("SelectionManager re-validation after undo/redo", () => {

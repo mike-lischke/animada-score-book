@@ -9,13 +9,12 @@ import type { ISbDmTrack, ScoreBookDataModel } from "../../../core/ScoreBookData
 import { compareFractions, reduceFraction } from "../../../core/serialisation/numeric-functions.js";
 import type { IAudioData } from "../../../core/types/general.js";
 import { requisitions } from "../../../supplement/Requisitions.js";
-import { SelectionGranularity, type ISelectionEntry } from "../../../ui/selection-types.js";
 import type { SelectionManager } from "../../../ui/SelectionManager.js";
+import { SelectionGranularity, type ISelectionEntry } from "../../../ui/selection-types.js";
 import { NoteStyleSymbolViewer } from "../Note/NoteStyleSymbolViewer.js";
 import { Button } from "../framework/Button.js";
 import { Container } from "../framework/Container.js";
 import { GooeyGroup } from "../framework/GooeyGroup.js";
-import { Label } from "../framework/Label.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
 import { ChildAlignment, Orientation } from "../framework/ui-types.js";
 
@@ -74,11 +73,6 @@ export class NoteStyleBar extends UIComponent<INoteStyleBarProps, INoteStyleBarS
             );
         });
 
-        let label: ComponentChild;
-        if (noteStyles.length > 0) {
-            label = <Label caption="Note Styles" className="noteStyleLabel" />;
-        }
-
         return (
             <Container
                 className="noteStyleBarHost"
@@ -86,7 +80,6 @@ export class NoteStyleBar extends UIComponent<INoteStyleBarProps, INoteStyleBarS
                 crossAlignment={ChildAlignment.Center}
                 style={{ flex: 1, minWidth: 0 }}
             >
-                {label}
                 <GooeyGroup
                     className="noteStyleBar"
                     background="var(--color-base-200)"

@@ -476,4 +476,95 @@ describe.sequential("ScoreBookDataModel track actions", () => {
         expect(measure.events[0].duration).toEqual({ numerator: 1, denominator: 8 });
         expect(measure.events[1].noteStyleId).toBe("1");
     });
+
+    it("createSubdivision creates a triplet of rest slots and fires arrangementMutated", () => {
+        const instruments = [createInstrument("0", 0, 0)];
+        model.startNewArrangement(instruments);
+        const track = model.arrangement!.tracks[0];
+        const measure = track.measures[0];
+
+        const created = model.createSubdivision(track.id, 1,
+            { numerator: 0, denominator: 1 }, { numerator: 1, denominator: 8 }, 3, 2);
+
+        expect(created).toBe(true);
+        expect(mutatedCalls).toBe(1);
+        expect(measure.subdivisions).toEqual([{ startIndex: 0, actual: 3, normal: 2, isTuplet: true }]);
+        expect(measure.events).toHaveLength(4);
+        expect(measure.events[0]).toMatchObject({ start: { numerator: 0, denominator: 1 } });
+        expect(measure.events[0].duration).toEqual({ numerator: 1, denominator: 24 });
+        expect(measure.events[1].duration).toEqual({ numerator: 1, denominator: 24 });
+        expect(measure.events[2].duration).toEqual({ numerator: 1, denominator: 24 });
+        expect(measure.events[3]).toMatchObject({ start: { numerator: 1, denominator: 8 } });
+    });
+
+    it("createSubdivision rejects invalid note or step counts", () => {
+        const instruments = [createInstrument("0", 0, 0)];
+        model.startNewArrangement(instruments);
+        const track = model.arrangement!.tracks[0];
+
+        const created = model.createSubdivision(track.id, 1,
+            { numerator: 0, denominator: 1 }, { numerator: 1, denominator: 8 }, 0, 2);
+
+        expect(created).toBe(false);
+        expect(mutatedCalls).toBe(0);
+    });
+
+    it("deleteSubdivisionAt removes the subdivision and restores grid rests", () => {
+        const instruments = [createInstrument("0", 0, 0)];
+        model.startNewArrangement(instruments);
+        const track = model.arrangement!.tracks[0];
+        const measure = track.measures[0];
+
+        model.createSubdivision(track.id, 1,
+            { numerator: 0, denominator: 1 }, { numerator: 1, denominator: 8 }, 3, 2);
+        mutatedCalls = 0;
+
+        const deleted = model.deleteSubdivisionAt(track.id, 1, { numerator: 0, denominator: 1 });
+
+        expect(deleted).toBe(true);
+        expect(mutatedCalls).toBe(1);
+        expect(measure.subdivisions).toHaveLength(0);
+        expect(measure.events).toHaveLength(3);
+        expect(measure.events[0]).toMatchObject({
+            start: { numerator: 0, denominator: 1 },
+            duration: { numerator: 1, denominator: 16 },
+        });
+        expect(measure.events[1]).toMatchObject({
+            start: { numerator: 1, denominator: 16 },
+            duration: { numerator: 1, denominator: 16 },
+        });
+        expect(measure.events[2]).toMatchObject({ start: { numerator: 1, denominator: 8 } });
+    });
+
+    it("deleteSubdivisionAt returns false when no subdivision starts at the position", () => {
+        const instruments = [createInstrument("0", 0, 0)];
+        model.startNewArrangement(instruments);
+        const track = model.arrangement!.tracks[0];
+
+        const deleted = model.deleteSubdivisionAt(track.id, 1, { numerator: 0, denominator: 1 });
+
+        expect(deleted).toBe(false);
+        expect(mutatedCalls).toBe(0);
+    });
+
+    it("deleteSubdivisionAt fires even when only the annotation changes", () => {
+        const instruments = [createInstrument("0", 0, 0)];
+        model.startNewArrangement(instruments);
+        const track = model.arrangement!.tracks[0];
+        const measure = track.measures[0];
+
+        measure.events.splice(0, measure.events.length,
+            { start: { numerator: 0, denominator: 16 }, duration: { numerator: 1, denominator: 16 } },
+            { start: { numerator: 1, denominator: 16 }, duration: { numerator: 1, denominator: 16 } },
+            { start: { numerator: 1, denominator: 8 }, duration: { numerator: 7, denominator: 8 } },
+        );
+        measure.subdivisions.push({ startIndex: 0, actual: 2, normal: 2, isTuplet: false });
+
+        const deleted = model.deleteSubdivisionAt(track.id, 1, { numerator: 0, denominator: 1 });
+
+        expect(deleted).toBe(true);
+        expect(mutatedCalls).toBe(1);
+        expect(measure.subdivisions).toHaveLength(0);
+        expect(measure.events).toHaveLength(3);
+    });
 });

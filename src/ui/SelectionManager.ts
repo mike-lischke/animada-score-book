@@ -465,7 +465,9 @@ export class SelectionManager {
             case SelectionGranularity.Note: {
                 return noteId !== undefined
                     ? `note:${bar}:${trackId}:${noteId}`
-                    : `note:${bar}:${trackId}:step${startStep}`;
+                    : entry.start !== undefined
+                        ? `note:${bar}:${trackId}:start${entry.start.numerator}/${entry.start.denominator}`
+                        : `note:${bar}:${trackId}:step${startStep}`;
             }
 
             default: {

@@ -10,6 +10,15 @@ import type { ISelectionDelta, ISelectionRectChange } from "../ui/selection-type
 
 export type SimpleCallback = () => Promise<boolean>;
 
+/** Payload for a toolbar requesting the creation of a subdivision. */
+export interface ISubdivisionCreationRequest {
+    /** Number of equal slots the subdivision should contain. */
+    actual: number;
+
+    /** Number of grid steps the subdivision should replace. */
+    normal: number;
+}
+
 /** A generic type to extract the (single) callback parameter type from the callback map. */
 export type IRequisitionCallbackValues<K extends keyof IRequestTypeMap> = Parameters<IRequestTypeMap[K]>[0];
 
@@ -33,6 +42,7 @@ export interface IRequestTypeMap {
     "undoStackChanged": SimpleCallback;
 
     "selectionChanged": (delta: ISelectionDelta) => Promise<boolean>;
+    "selectionDeleteRequested": SimpleCallback;
     "selectionRectChanged": (data: ISelectionRectChange) => Promise<boolean>;
     "errorLogChanged": SimpleCallback;
 
@@ -57,6 +67,9 @@ export interface IRequestTypeMap {
 
     /** Fired by the articulation bar to enter a note of the given style at the current cursor position. */
     "noteEntryRequested": (noteStyleId: string) => Promise<boolean>;
+
+    /** Fired by the subdivision toolbar to create a subdivision at the cursor or selection. */
+    "subdivisionCreationRequested": (request: ISubdivisionCreationRequest) => Promise<boolean>;
 
     /**
      * Fired by ScoreBookDataModel after any mutation to the arrangement.

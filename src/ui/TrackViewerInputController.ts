@@ -12,7 +12,7 @@ import { formatFraction, parseFraction } from "../core/serialisation/numeric-fun
 import { GridMeasureEditor, type IGridEditorPosition } from "./GridMeasureEditor.js";
 import { SelectionGranularity, type ISelectionDelta, type ISelectionEntry } from "./selection-types.js";
 import type { SelectionManager } from "./SelectionManager.js";
-import { requisitions } from "../supplement/Requisitions.js";
+import { requisitions, type ISubdivisionCreationRequest } from "../supplement/Requisitions.js";
 import { h } from "preact";
 
 /** View-specific editor input target. Pointer events cover mouse, touch and pen input. */
@@ -51,7 +51,9 @@ export class TrackViewerInputController {
         this.eventContainer.addEventListener("contextmenu", this.handleContextMenu);
         this.eventContainer.addEventListener("keydown", this.handleKeyDown);
         requisitions.register("selectionChanged", this.handleSelectionChanged);
+        requisitions.register("selectionDeleteRequested", this.handleSelectionDeleteRequested);
         requisitions.register("noteEntryRequested", this.handleNoteEntryRequested);
+        requisitions.register("subdivisionCreationRequested", this.handleSubdivisionCreationRequested);
     }
 
     public dispose(): void {
@@ -62,7 +64,9 @@ export class TrackViewerInputController {
         this.eventContainer.removeEventListener("contextmenu", this.handleContextMenu);
         this.eventContainer.removeEventListener("keydown", this.handleKeyDown);
         requisitions.unregister("selectionChanged", this.handleSelectionChanged);
+        requisitions.unregister("selectionDeleteRequested", this.handleSelectionDeleteRequested);
         requisitions.unregister("noteEntryRequested", this.handleNoteEntryRequested);
+        requisitions.unregister("subdivisionCreationRequested", this.handleSubdivisionCreationRequested);
         this.clearLongPress();
         this.editor = undefined;
     }
@@ -301,32 +305,93 @@ export class TrackViewerInputController {
             return;
         }
 
+        const handled = event.key === "Backspace"
+            ? this.deleteBeforeCursor(this.editor)
+            : this.deleteAtCursor(this.editor);
+
+        if (handled) {
+            event.preventDefault();
+        }
+    }
+
+    private handleSelectionDeleteRequested = (): Promise<boolean> => {
+        if (!(this.editor instanceof GridMeasureEditor)) {
+            return Promise.resolve(false);
+        }
+
         const entries = [...this.selectionManager.currentSelection.values()];
         if (entries.length === 0) {
-            return;
+            return Promise.resolve(false);
         }
 
-        this.editor.clearSelection(entries);
+        if (this.editor.deleteEmptySubdivisionsForSelection(entries)) {
+            this.selectionManager.clearSelection();
+
+            return Promise.resolve(true);
+        }
+
+        return Promise.resolve(this.deleteAtCursor(this.editor));
+    };
+
+    /**
+     * Deletes the note content at the cursor position (the current selection).
+     *
+     * @param editor The grid editor performing the edit.
+     *
+     * @returns True when content was deleted.
+     */
+    private deleteAtCursor(editor: GridMeasureEditor): boolean {
+        const entries = [...this.selectionManager.currentSelection.values()];
+        if (entries.length === 0) {
+            return false;
+        }
+
+        editor.clearSelection(entries);
 
         if (this.viewMode === "grid" && this.currentPosition) {
-            if (event.key === "Backspace") {
-                const cell = this.getGridCellForPosition(this.currentPosition);
-                const previousCell = cell ? this.findPreviousGridCell(cell) : undefined;
-                const targetPosition = previousCell ? this.getGridPosition(previousCell) : undefined;
-                if (targetPosition) {
-                    this.selectCursorPosition(targetPosition);
-                }
-            } else {
-                // Keep the selection on the now-empty cells so multi-cell selections survive the delete.
-                const clearedEntries = entries.map((entry) => {
-                    return { ...entry, noteId: undefined };
-                });
+            // Keep the selection on the now-empty cells so multi-cell selections survive the delete.
+            const clearedEntries = entries.map((entry) => {
+                return { ...entry, noteId: undefined };
+            });
 
-                this.selectionManager.replaceSelection(clearedEntries);
-            }
+            this.selectionManager.replaceSelection(clearedEntries);
         }
 
-        event.preventDefault();
+        return true;
+    }
+
+    /**
+     * Deletes the content immediately before the cursor. A subdivision containing the previous
+     * slot is removed as a whole; otherwise the note of the previous cell is cleared.
+     *
+     * @param editor The grid editor performing the edit.
+     *
+     * @returns True when content was deleted.
+     */
+    private deleteBeforeCursor(editor: GridMeasureEditor): boolean {
+        const position = this.currentPosition;
+        if (!position) {
+            return false;
+        }
+
+        const cell = this.getGridCellForPosition(position);
+        const previousCell = cell ? this.findPreviousGridCell(cell) : undefined;
+        const previousPosition = previousCell ? this.getGridPosition(previousCell) : undefined;
+        if (!previousPosition) {
+            return false;
+        }
+
+        if (editor.hasEmptySubdivisionAt(position)) {
+            editor.deleteSubdivisionAt(position);
+            this.selectCursorPosition(previousPosition);
+
+            return true;
+        }
+
+        editor.clearNote(previousPosition);
+        this.selectCursorPosition(previousPosition);
+
+        return true;
     }
 
     private handleNoteEntryRequested = (noteStyleId: string): Promise<boolean> => {
@@ -335,6 +400,23 @@ export class TrackViewerInputController {
         }
 
         return Promise.resolve(this.enterNote(noteStyleId));
+    };
+
+    private handleSubdivisionCreationRequested = (request: ISubdivisionCreationRequest): Promise<boolean> => {
+        if (!this.editMode || this.viewMode !== "grid" || !(this.editor instanceof GridMeasureEditor)) {
+            return Promise.resolve(false);
+        }
+
+        const entries = [...this.selectionManager.currentSelection.values()];
+
+        if (this.isMultiCellSelection(entries)) {
+            return Promise.resolve(this.editor.createSubdivisionForSelection(entries, request.actual));
+        }
+
+        const position = this.currentPosition;
+
+        return Promise.resolve(position !== undefined
+            && this.editor.createSubdivisionAtCursor(position, request.actual, request.normal));
     };
 
     private enterNote(noteStyleId: string): boolean {

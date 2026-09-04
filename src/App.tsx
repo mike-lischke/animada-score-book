@@ -29,6 +29,7 @@ import { ArrangementPlayControls } from "./components/ui/Arrangement/Arrangement
 import { ArrangementTitle } from "./components/ui/Arrangement/ArrangementTitle.js";
 import { ArrangementViewer } from "./components/ui/Arrangement/ArrangementViewer.js";
 import { NoteStyleBar } from "./components/ui/Arrangement/NoteStyleBar.js";
+import { SubdivisionToolbar } from "./components/ui/Arrangement/SubdivisionToolbar.js";
 import { UndoRedoControls } from "./components/ui/Arrangement/UndoRedoControls.js";
 import { ConfirmDialog } from "./components/ui/composites/ConfirmDialog.js";
 import { NewScoreDialog } from "./components/ui/composites/NewScoreDialog.js";
@@ -499,7 +500,6 @@ export class App extends UIComponent<{}, IAppState> {
                                                 mainAlignment={ChildAlignment.Start}
                                                 crossAlignment={ChildAlignment.Center}
                                             >
-                                                <Label caption="Edit" className="header-row-label" />
                                                 <GooeyGroup
                                                     className="editSaveGooey"
                                                     background="var(--color-base-200)"
@@ -516,6 +516,12 @@ export class App extends UIComponent<{}, IAppState> {
                                                         />
                                                         <UndoRedoControls
                                                             undoManager={this.undoManager!}
+                                                        />
+                                                        <Separator
+                                                            style={{ marginLeft: "16px", height: "50%" }}
+                                                        />
+                                                        <SubdivisionToolbar
+                                                            selectionManager={this.selectionManager}
                                                         />
                                                         <Separator
                                                             style={{ marginLeft: "16px", height: "50%" }}

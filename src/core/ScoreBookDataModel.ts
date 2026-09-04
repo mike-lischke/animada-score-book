@@ -6,11 +6,15 @@
 import { AppStorage } from "./AppStorage.js";
 import { Arrangement, type IArrangementCreationOptions } from "./Arrangement.js";
 import { expandMeasureToGridEvents, synthesizeGridEventsToMeasure } from "./grid-events.js";
+import {
+    MeasureProjection, ProjectedItemKind, type IProjectedItem, type IProjectedSubdivision,
+} from "./MeasureProjection.js";
 import { ArrangementMigrator } from "./serialisation/migration/ArrangementMigrator.js";
 import {
-    addFractions, compareFractions, reduceFraction, subtractFractions,
+    addFractions, compareFractions, divideFraction, multiplyFraction, reduceFraction, subtractFractions,
 } from "./serialisation/numeric-functions.js";
 import { stringifyPackedArrangement } from "./serialisation/snapshot-packing.js";
+import { computeIsTuplet } from "./tuplets.js";
 
 import { requisitions } from "../supplement/Requisitions.js";
 import type { IScoreDBEntry, ISoundLibFsNode } from "./DatabaseTypes.js";
@@ -29,6 +33,11 @@ export interface ITiming {
     readonly bar: number,
     readonly step: number;
 };
+
+export interface ISubdivisionSlotContent {
+    noteStyleId?: string;
+    articulation?: INoteArticulation;
+}
 
 export type RealTime = number;
 
@@ -684,6 +693,15 @@ export interface IMeasureReplace {
     subdivisions?: ISubdivision[];
 }
 
+/** The replacement events for a fractional range plus the index where they begin. */
+export interface IFractionRangeReplacement {
+    /** The full measure event list after the range was replaced. */
+    result: IMeasureEvent[];
+
+    /** Index into {@link result} where the replacement events begin. */
+    shiftedStartIndex: number;
+}
+
 export class ScoreBookDataModel {
     /**
      * Indicates whether the current session is allowed to mutate scores on the backend.
@@ -1192,6 +1210,175 @@ export class ScoreBookDataModel {
         }
 
         return changed;
+    }
+
+    /**
+     * Creates a subdivision (tuplet or symmetric split) over an exact fractional range of one
+     * track, replacing the range with `actual` equal rest slots. Fires one arrangementMutated
+     * event (a single undo step) and one trackChanged event.
+     *
+     * @param trackId The track containing the measure.
+     * @param bar The one-based measure number.
+     * @param start The exact start position of the subdivision (inclusive).
+     * @param end The exact end position of the subdivision (exclusive).
+     * @param actual The number of equal slots the subdivision contains.
+     * @param normal The number of grid steps the subdivision replaces.
+     * @param initialEvents Optional content copied into the first subdivision slots.
+     *
+     * @returns True when the subdivision was created.
+     */
+    public createSubdivision(trackId: number, bar: number, start: IFraction, end: IFraction,
+        actual: number, normal: number,
+        initialEvents?: Array<ISubdivisionSlotContent | undefined>): boolean {
+        const arrangement = this.arrangement;
+        const track = arrangement?.tracks.find((candidate) => {
+            return candidate.id === trackId;
+        });
+
+        const measure = track?.measures[bar - 1];
+        if (!track || !measure || actual < 1 || normal < 1) {
+            return false;
+        }
+
+        const span = subtractFractions(end, start);
+        if (span.numerator <= 0) {
+            return false;
+        }
+
+        const slotDuration = divideFraction(span, actual);
+        const events: IMeasureEvent[] = [];
+        for (let index = 0; index < actual; index++) {
+            const initialEvent = initialEvents?.[index];
+            const event: IMeasureEvent = {
+                start: multiplyFraction(slotDuration, index),
+                duration: { ...slotDuration },
+            };
+
+            if (initialEvent?.noteStyleId !== undefined) {
+                event.noteStyleId = initialEvent.noteStyleId;
+            }
+
+            if (initialEvent?.articulation !== undefined) {
+                event.articulation = initialEvent.articulation;
+            }
+
+            events.push(event);
+        }
+
+        const subdivision: ISubdivision = {
+            startIndex: 0,
+            actual,
+            normal,
+            isTuplet: computeIsTuplet(actual, normal, measure.meter),
+        };
+
+        const { result, shiftedStartIndex } = this.buildFractionRangeReplacement(measure, start, end, events);
+        const remappedSubdivisions = this.remapSubdivisions(measure, result, true);
+
+        measure.events.splice(0, measure.events.length, ...result.map((event) => {
+            return this.cloneEvent(event);
+        }));
+        measure.subdivisions.splice(0, measure.subdivisions.length, ...remappedSubdivisions);
+        measure.subdivisions.push({ ...subdivision, startIndex: shiftedStartIndex });
+
+        void requisitions.execute("trackChanged", trackId);
+        void requisitions.execute("arrangementMutated", undefined);
+
+        return true;
+    }
+
+    /**
+     * Deletes the subdivision whose first event starts at the given position, replacing its span
+     * with plain rest slots while preserving all other subdivisions. The span is resolved through
+     * the measure projection so nested subdivisions are handled correctly. Fires one
+     * arrangementMutated event (a single undo step) and one trackChanged event.
+     *
+     * @param trackId The track containing the measure.
+     * @param bar The one-based measure number.
+     * @param start The exact start position of the subdivision's first event.
+     *
+     * @returns True when a subdivision was deleted.
+     */
+    public deleteSubdivisionAt(trackId: number, bar: number, start: IFraction): boolean {
+        const arrangement = this.arrangement;
+        const track = arrangement?.tracks.find((candidate) => {
+            return candidate.id === trackId;
+        });
+
+        const measure = track?.measures[bar - 1];
+        if (!track || !measure) {
+            return false;
+        }
+
+        const subdivisionIndex = measure.subdivisions.findIndex((subdivision) => {
+            const event = measure.events[subdivision.startIndex];
+
+            return compareFractions(event.start, start) === 0;
+        });
+        if (subdivisionIndex < 0) {
+            return false;
+        }
+
+        const subdivision = measure.subdivisions[subdivisionIndex];
+        const projectedSubdivision = this.findInnermostSubdivision(MeasureProjection.project(measure), start);
+        if (!projectedSubdivision) {
+            return false;
+        }
+
+        const span = projectedSubdivision.span;
+        const end = addFractions(start, span);
+        const slotDuration = divideFraction(span, subdivision.normal);
+
+        const restSlots: IMeasureEvent[] = [];
+        for (let index = 0; index < subdivision.normal; index++) {
+            restSlots.push({
+                start: multiplyFraction(slotDuration, index),
+                duration: { ...slotDuration },
+            });
+        }
+
+        // Remove the target subdivision before remapping so it is not carried over onto the new
+        // rest slots (its first event start coincides with the replacement start).
+        measure.subdivisions.splice(subdivisionIndex, 1);
+
+        const { result } = this.buildFractionRangeReplacement(measure, start, end, restSlots);
+        const remappedSubdivisions = this.remapSubdivisions(measure, result, true);
+
+        measure.events.splice(0, measure.events.length, ...result.map((event) => {
+            return this.cloneEvent(event);
+        }));
+        measure.subdivisions.splice(0, measure.subdivisions.length, ...remappedSubdivisions);
+
+        void requisitions.execute("trackChanged", trackId);
+        void requisitions.execute("arrangementMutated", undefined);
+
+        return true;
+    }
+
+    /**
+     * Checks whether the subdivision whose first event starts at the given position exists and
+     * contains only rest slots.
+     *
+     * @param trackId The track containing the measure.
+     * @param bar The one-based measure number.
+     * @param start The exact start position of the subdivision's first event.
+     *
+     * @returns True when an empty subdivision starts at the given position.
+     */
+    public hasEmptySubdivisionAt(trackId: number, bar: number, start: IFraction): boolean {
+        const arrangement = this.arrangement;
+        const track = arrangement?.tracks.find((candidate) => {
+            return candidate.id === trackId;
+        });
+
+        const measure = track?.measures[bar - 1];
+        if (!track || !measure) {
+            return false;
+        }
+
+        const subdivision = this.findInnermostSubdivision(MeasureProjection.project(measure), start);
+
+        return subdivision !== undefined && this.subdivisionIsEmpty(subdivision);
     }
 
     /**
@@ -2572,15 +2759,33 @@ export class ScoreBookDataModel {
      */
     private replaceFractionRange(measure: ISbDmTrackMeasure, start: IFraction, end: IFraction,
         events: IMeasureEvent[], subdivisions?: ISubdivision[]): boolean {
+        const { result, shiftedStartIndex } = this.buildFractionRangeReplacement(measure, start, end, events);
+
+        const changed = this.setMeasureEvents(measure, result);
+
+        return this.applySubdivisions(measure, subdivisions, shiftedStartIndex) || changed;
+    }
+
+    /**
+     * Builds the full measure event list that results from replacing the given fractional range
+     * with the given events. Events before the range are kept (clipped at the range start) and
+     * events after the range are kept (clipped at the range end).
+     *
+     * @param measure The measure containing the range.
+     * @param start The exact start position of the range (inclusive).
+     * @param end The exact end position of the range (exclusive).
+     * @param events The replacement events, relative to the range start.
+     *
+     * @returns The resulting events and the index where the replacement events begin.
+     */
+    private buildFractionRangeReplacement(measure: ISbDmTrackMeasure, start: IFraction, end: IFraction,
+        events: IMeasureEvent[]): IFractionRangeReplacement {
         const shifted = events.map((event) => {
             return this.cloneEvent({ ...event, start: addFractions(start, event.start) });
         });
 
         const result: IMeasureEvent[] = [];
 
-        // Keep the part of each original event that lies before the replaced range. Events that
-        // straddle the range start are clipped instead of dropped, so whole-measure rests split
-        // into a leading rest and the measure keeps tiling its full length.
         for (const event of measure.events) {
             const eventEnd = addFractions(event.start, event.duration);
 
@@ -2604,7 +2809,7 @@ export class ScoreBookDataModel {
             if (compareFractions(eventStart, end) >= 0) {
                 result.push(this.cloneEvent(event));
             } else if (compareFractions(eventEnd, end) > 0) {
-                // The note's start lies inside the replaced range, so its remaining tail is cut
+                // The event's start lies inside the replaced range, so its remaining tail is cut
                 // off and becomes a rest instead of sliding one cell to the right.
                 result.push({
                     start: end,
@@ -2613,9 +2818,7 @@ export class ScoreBookDataModel {
             }
         }
 
-        const changed = this.setMeasureEvents(measure, result);
-
-        return this.applySubdivisions(measure, subdivisions, shiftedStartIndex) || changed;
+        return { result, shiftedStartIndex };
     }
 
     /**
@@ -2666,27 +2869,7 @@ export class ScoreBookDataModel {
             return false;
         }
 
-        // Subdivisions reference their first event by index. Replacing events can shift those
-        // indices, so remap each subdivision to the new index of its first event's start time.
-        // Subdivisions whose first event no longer exists are dropped.
-        const remappedSubdivisions: ISubdivision[] = [];
-
-        if (preserveSubdivisions) {
-            for (const subdivision of measure.subdivisions) {
-                if (subdivision.startIndex < 0 || subdivision.startIndex >= measure.events.length) {
-                    continue;
-                }
-
-                const startEvent = measure.events[subdivision.startIndex];
-                const startIndex = events.findIndex((event) => {
-                    return compareFractions(event.start, startEvent.start) === 0;
-                });
-
-                if (startIndex >= 0) {
-                    remappedSubdivisions.push({ ...subdivision, startIndex });
-                }
-            }
-        }
+        const remappedSubdivisions = this.remapSubdivisions(measure, events, preserveSubdivisions);
 
         measure.events.splice(0, measure.events.length, ...events.map((event) => {
             return this.cloneEvent(event);
@@ -2694,6 +2877,89 @@ export class ScoreBookDataModel {
         measure.subdivisions.splice(0, measure.subdivisions.length, ...remappedSubdivisions);
 
         return true;
+    }
+
+    /**
+     * Remaps the measure's subdivisions onto the given event list. Subdivisions reference their
+     * first event by index; after a replacement those indices shift, so each subdivision is moved
+     * to the new index of its first event's start time. Subdivisions whose first event no longer
+     * exists are dropped.
+     *
+     * @param measure The measure whose subdivisions should be remapped.
+     * @param events The replacement events.
+     * @param preserveSubdivisions When false, no subdivisions are carried over.
+     *
+     * @returns The remapped subdivisions.
+     */
+    private remapSubdivisions(measure: ISbDmTrackMeasure, events: IMeasureEvent[],
+        preserveSubdivisions: boolean): ISubdivision[] {
+        if (!preserveSubdivisions) {
+            return [];
+        }
+
+        const remapped: ISubdivision[] = [];
+
+        for (const subdivision of measure.subdivisions) {
+            if (subdivision.startIndex < 0 || subdivision.startIndex >= measure.events.length) {
+                continue;
+            }
+
+            const startEvent = measure.events[subdivision.startIndex];
+            const startIndex = events.findIndex((event) => {
+                return compareFractions(event.start, startEvent.start) === 0;
+            });
+
+            if (startIndex >= 0) {
+                remapped.push({ ...subdivision, startIndex });
+            }
+        }
+
+        return remapped;
+    }
+
+    /**
+     * Finds the innermost projected subdivision whose start matches the given fraction.
+     *
+     * @param items The projected items to search.
+     * @param start The exact start fraction to match.
+     *
+     * @returns The matching subdivision, or undefined when none starts at the fraction.
+     */
+    private findInnermostSubdivision(items: IProjectedItem[], start: IFraction): IProjectedSubdivision | undefined {
+        for (const item of items) {
+            if (item.kind !== ProjectedItemKind.Subdivision) {
+                continue;
+            }
+
+            const nested = this.findInnermostSubdivision(item.items, start);
+            if (nested) {
+                return nested;
+            }
+
+            if (compareFractions(item.start, start) === 0) {
+                return item;
+            }
+        }
+
+        return undefined;
+    }
+
+    /**
+     * Checks whether a projected subdivision contains only rest slots, recursing into nested
+     * subdivisions.
+     *
+     * @param subdivision The projected subdivision to inspect.
+     *
+     * @returns True when every leaf slot of the subdivision is a rest.
+     */
+    private subdivisionIsEmpty(subdivision: IProjectedSubdivision): boolean {
+        return subdivision.items.every((item) => {
+            if (item.kind === ProjectedItemKind.Event) {
+                return item.event.noteStyleId === undefined;
+            }
+
+            return this.subdivisionIsEmpty(item);
+        });
     }
 
     private cloneEvent(event: IMeasureEvent): IMeasureEvent {

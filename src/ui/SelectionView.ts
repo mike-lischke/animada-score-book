@@ -4,7 +4,7 @@
  */
 
 import type { IRect } from "../core/types/general.js";
-import { parseFraction } from "../core/serialisation/numeric-functions.js";
+import { formatFraction, parseFraction } from "../core/serialisation/numeric-functions.js";
 import { requisitions } from "../supplement/Requisitions.js";
 import type { SelectionManager } from "./SelectionManager.js";
 import type { ISelectionDelta, ISelectionEntry } from "./selection-types.js";
@@ -43,6 +43,7 @@ export class SelectionView {
     private autoScrollTimer?: ReturnType<typeof setInterval>;
     private autoScrollDX = 0;
     private autoScrollDY = 0;
+    private selectionDeleteButtonCreated = false;
 
     /**
      * Ratio of viewport pixels to CSS pixels inside #trackViewerContainer.
@@ -670,6 +671,7 @@ export class SelectionView {
         overlayContainer.querySelectorAll(`.${selectionOverlayClass}`).forEach((el) => {
             el.remove();
         });
+        this.selectionDeleteButtonCreated = false;
 
         const cursor = this.getSelectionCursor(overlayContainer);
         cursor.style.display = "none";
@@ -909,26 +911,30 @@ export class SelectionView {
             return;
         }
 
-        // Grid mode: group by bar+track, then sort by startStep and merge contiguous steps.
-        const byBarTrack = new Map<string, ISelectionEntry[]>();
+        // Grid mode: group by track, then sort by bar and startStep so adjacent bars can merge.
+        const byTrack = new Map<number, ISelectionEntry[]>();
         for (const entry of entries) {
-            const key = `${entry.bar}:${entry.trackId}`;
-            let list = byBarTrack.get(key);
+            let list = byTrack.get(entry.trackId);
             if (!list) {
                 list = [];
-                byBarTrack.set(key, list);
+                byTrack.set(entry.trackId, list);
             }
 
             list.push(entry);
         }
 
-        for (const [, groupEntries] of byBarTrack) {
+        const noteOverlayGroups: Array<{ elements: HTMLElement[]; bars: Set<number>; }> = [];
+
+        for (const [, groupEntries] of byTrack) {
             groupEntries.sort((a, b) => {
-                return (a.startStep ?? 0) - (b.startStep ?? 0);
+                return a.bar - b.bar || (a.startStep ?? 0) - (b.startStep ?? 0);
             });
 
             let groupElements: HTMLElement[] = [];
             let lastEndStep: number | undefined;
+            let lastBar: number | undefined;
+            let groupBars = new Set<number>();
+            let groupSubdivision: HTMLElement | undefined;
 
             for (const entry of groupEntries) {
                 const elements = this.findNoteElements(contentHost, entry);
@@ -938,20 +944,162 @@ export class SelectionView {
 
                 const startStep = entry.startStep ?? 0;
                 const endStep = entry.endStep ?? startStep;
+                const subdivision = entry.start === undefined
+                    ? undefined
+                    : elements[0].closest<HTMLElement>(".subdivision") ?? undefined;
+                const isSameSubdivision = subdivision !== undefined && subdivision === groupSubdivision;
+                const isContiguous = lastEndStep !== undefined && startStep === lastEndStep + 1;
+                const isAdjacentBar = lastBar !== undefined && entry.bar === lastBar + 1;
+                const isAdjacentSubdivision = (groupSubdivision !== undefined || subdivision !== undefined)
+                    && this.areSelectionBlocksAdjacent(groupElements, elements);
 
-                if (lastEndStep !== undefined && startStep !== lastEndStep + 1) {
-                    this.createMergedOverlay(overlayContainer, containerRect, groupElements);
+                if (groupElements.length > 0 && !isSameSubdivision && !isContiguous
+                    && !isAdjacentBar && !isAdjacentSubdivision) {
+                    noteOverlayGroups.push({ elements: groupElements, bars: groupBars });
                     groupElements = [];
+                    lastEndStep = undefined;
+                    lastBar = undefined;
+                    groupBars = new Set<number>();
+                    groupSubdivision = undefined;
                 }
 
                 groupElements.push(...elements);
                 lastEndStep = endStep;
+                lastBar = entry.bar;
+                groupBars.add(entry.bar);
+                groupSubdivision = subdivision;
             }
 
             if (groupElements.length > 0) {
-                this.createMergedOverlay(overlayContainer, containerRect, groupElements);
+                noteOverlayGroups.push({ elements: groupElements, bars: groupBars });
             }
         }
+
+        // Merge groups that cover the same horizontal selection range in adjacent tracks.
+        // This keeps partial track-piece selections as one rectangular overlay.
+        noteOverlayGroups.sort((first, second) => {
+            const firstRect = first.elements[0].getBoundingClientRect();
+            const secondRect = second.elements[0].getBoundingClientRect();
+
+            return firstRect.top - secondRect.top || firstRect.left - secondRect.left;
+        });
+
+        const mergedGroups: Array<{ elements: HTMLElement[]; bars: Set<number>; }> = [];
+        for (const group of noteOverlayGroups) {
+            const previous = mergedGroups.at(-1);
+            const sharesBar = [...group.bars].some((bar) => {
+                return previous?.bars.has(bar) ?? false;
+            });
+
+            if (previous && sharesBar
+                && this.areSelectionGroupsVerticallyAdjacent(previous.elements, group.elements)) {
+                previous.elements.push(...group.elements);
+                for (const bar of group.bars) {
+                    previous.bars.add(bar);
+                }
+            } else {
+                mergedGroups.push({ elements: [...group.elements], bars: new Set(group.bars) });
+            }
+        }
+
+        for (const group of mergedGroups) {
+            this.createMergedOverlay(overlayContainer, containerRect, group.elements);
+        }
+    }
+
+    private areSelectionGroupsVerticallyAdjacent(first: HTMLElement[], second: HTMLElement[]): boolean {
+        if (first.length === 0 || second.length === 0) {
+            return false;
+        }
+
+        let firstLeft = Infinity;
+        let firstRight = -Infinity;
+        let secondLeft = Infinity;
+        let secondRight = -Infinity;
+        const firstRows = new Set<HTMLElement>();
+        const secondRows = new Set<HTMLElement>();
+
+        for (const element of first) {
+            const raw = element.getBoundingClientRect();
+            firstLeft = Math.min(firstLeft, raw.left);
+            firstRight = Math.max(firstRight, raw.right);
+            const row = element.closest<HTMLElement>(".grid-measure-row");
+            if (row) {
+                firstRows.add(row);
+            }
+        }
+
+        for (const element of second) {
+            const raw = element.getBoundingClientRect();
+            secondLeft = Math.min(secondLeft, raw.left);
+            secondRight = Math.max(secondRight, raw.right);
+            const row = element.closest<HTMLElement>(".grid-measure-row");
+            if (row) {
+                secondRows.add(row);
+            }
+        }
+
+        const horizontalOverlap = secondRight >= firstLeft && secondLeft <= firstRight;
+        if (!horizontalOverlap) {
+            return false;
+        }
+
+        for (const firstRow of firstRows) {
+            const firstBar = firstRow.getAttribute("data-bar");
+            if (firstBar === null) {
+                continue;
+            }
+
+            const rows = firstRow.parentElement?.querySelectorAll<HTMLElement>(
+                `.grid-measure-row[data-bar="${firstBar}"]`,
+            );
+            if (!rows) {
+                continue;
+            }
+
+            const firstIndex = [...rows].indexOf(firstRow);
+            for (const secondRow of secondRows) {
+                if (secondRow.getAttribute("data-bar") === firstBar
+                    && Math.abs(firstIndex - [...rows].indexOf(secondRow)) === 1) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private areSelectionBlocksAdjacent(groupElements: HTMLElement[], nextElements: HTMLElement[]): boolean {
+        if (groupElements.length === 0 || nextElements.length === 0) {
+            return false;
+        }
+
+        const groupRight = Math.max(...groupElements.map((element) => {
+            return this.getSelectionBlockRect(element).right;
+        }));
+        const nextLeft = Math.min(...nextElements.map((element) => {
+            return this.getSelectionBlockRect(element).left;
+        }));
+
+        return nextLeft <= groupRight + 2;
+    }
+
+    private getSelectionBlockRect(element: HTMLElement): DOMRect {
+        const row = element.closest<HTMLElement>(".grid-measure-row");
+        const ancestors: HTMLElement[] = [];
+        let current = element.parentElement;
+
+        while (current && current !== row) {
+            if (current.classList.contains("subdivision")) {
+                ancestors.push(current);
+            }
+
+            current = current.parentElement;
+        }
+
+        const outerSubdivision = ancestors.at(-1);
+
+        return outerSubdivision?.getBoundingClientRect() ?? element.getBoundingClientRect();
     }
 
     /**
@@ -971,14 +1119,29 @@ export class SelectionView {
             return el ? [el] : [];
         }
 
+        // Subdivision slots share their grid step index, so a rest slot without a note id is
+        // resolved by its exact fractional start instead.
+        if (entry.start !== undefined) {
+            const el = scope.querySelector<HTMLElement>(
+                `[data-bar="${entry.bar}"][data-track="${entry.trackId}"]`
+                + ` [data-event-start="${formatFraction(entry.start)}"]`,
+            );
+
+            return el ? [el] : [];
+        }
+
         if (entry.startStep !== undefined) {
             const endStep = entry.endStep ?? entry.startStep;
             const elements: HTMLElement[] = [];
 
             for (let step = entry.startStep; step <= endStep; step++) {
-                const el = scope.querySelector<HTMLElement>(
+                const candidates = scope.querySelectorAll<HTMLElement>(
                     `[data-bar="${entry.bar}"][data-track="${entry.trackId}"] [data-step-index="${step}"]`,
                 );
+                const el = [...candidates].find((candidate) => {
+                    return candidate.closest<HTMLElement>(".subdivision") === null;
+                });
+
                 if (el) {
                     elements.push(el);
                 }
@@ -1454,6 +1617,21 @@ export class SelectionView {
         overlay.style.top = `${rect.y}px`;
         overlay.style.width = `${rect.width + 4}px`;
         overlay.style.height = `${rect.height}px`;
+
+        if (!this.selectionDeleteButtonCreated) {
+            const deleteButton = document.createElement("button");
+            deleteButton.type = "button";
+            deleteButton.className = "selection-delete-button";
+            deleteButton.setAttribute("aria-label", "Clear selection");
+            deleteButton.setAttribute("data-tooltip", "Clear selection");
+            deleteButton.addEventListener("click", (event) => {
+                event.stopPropagation();
+                void requisitions.execute("selectionDeleteRequested", undefined);
+            });
+            overlay.appendChild(deleteButton);
+            this.selectionDeleteButtonCreated = true;
+        }
+
         container.appendChild(overlay);
     }
 

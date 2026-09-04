@@ -306,3 +306,133 @@ describe.sequential("GridMeasureEditor setSelectionNoteStyle", () => {
         expect(refreshed[2].noteId).toBeUndefined();
     });
 });
+
+describe.sequential("GridMeasureEditor subdivision editing", () => {
+    let model: ScoreBookDataModel;
+    let editor: GridMeasureEditor;
+    let mutatedCalls: number;
+
+    const mutationSpy = (): Promise<boolean> => {
+        mutatedCalls++;
+
+        return Promise.resolve(true);
+    };
+
+    beforeEach(() => {
+        vi.restoreAllMocks();
+        model = new ScoreBookDataModel();
+        model.startNewArrangement([createInstrument("0", 0, 0)]);
+        editor = new GridMeasureEditor(model);
+        mutatedCalls = 0;
+        requisitions.register("arrangementMutated", mutationSpy);
+    });
+
+    afterEach(() => {
+        requisitions.unregister("arrangementMutated", mutationSpy);
+    });
+
+    it("createSubdivision creates a triplet over the given range", () => {
+        const track = model.arrangement!.tracks[0];
+
+        const created = editor.createSubdivision(track.id, 1,
+            { numerator: 0, denominator: 1 }, { numerator: 1, denominator: 8 }, 3, 2);
+
+        expect(created).toBe(true);
+        expect(track.measures[0].subdivisions).toEqual([{ startIndex: 0, actual: 3, normal: 2, isTuplet: true }]);
+        expect(mutatedCalls).toBe(1);
+    });
+
+    it("deletes a fully selected empty subdivision", () => {
+        const track = model.arrangement!.tracks[0];
+        const measure = track.measures[0];
+        editor.createSubdivision(track.id, 1,
+            { numerator: 0, denominator: 1 }, { numerator: 1, denominator: 8 }, 3, 2);
+
+        const entries: ISelectionEntry[] = [0, 1, 2].map((index) => {
+            return {
+                granularity: SelectionGranularity.Note,
+                bar: 1,
+                trackId: track.id,
+                startStep: 0,
+                endStep: 0,
+                start: { numerator: index, denominator: 24 },
+            };
+        });
+
+        const deleted = editor.deleteEmptySubdivisionsForSelection(entries);
+
+        expect(deleted).toBe(true);
+        expect(measure.subdivisions).toHaveLength(0);
+    });
+
+    it("does not delete an empty subdivision when only part is selected", () => {
+        const track = model.arrangement!.tracks[0];
+        const measure = track.measures[0];
+        editor.createSubdivision(track.id, 1,
+            { numerator: 0, denominator: 1 }, { numerator: 1, denominator: 8 }, 3, 2);
+
+        const deleted = editor.deleteEmptySubdivisionsForSelection([{
+            granularity: SelectionGranularity.Note,
+            bar: 1,
+            trackId: track.id,
+            startStep: 0,
+            endStep: 0,
+            start: { numerator: 0, denominator: 24 },
+        }]);
+
+        expect(deleted).toBe(false);
+        expect(measure.subdivisions).toHaveLength(1);
+    });
+
+    it("copies selected note values into the first subdivision slots", () => {
+        const track = model.arrangement!.tracks[0];
+        const measure = track.measures[0];
+        model.setGridNote(track.id, 1, 0, "low");
+        model.setGridNote(track.id, 1, 1, "mid");
+        model.setGridNote(track.id, 1, 2, "high");
+
+        const entries: ISelectionEntry[] = [0, 1, 2].map((step) => {
+            return {
+                granularity: SelectionGranularity.Note,
+                bar: 1,
+                trackId: track.id,
+                startStep: step,
+                endStep: step,
+            };
+        });
+
+        const created = editor.createSubdivisionForSelection(entries, 5);
+
+        expect(created).toBe(true);
+        expect(measure.events.slice(0, 5).map((event) => {
+            return event.noteStyleId;
+        })).toEqual(["low", "mid", "high", undefined, undefined]);
+    });
+
+    it("deleteSubdivisionAt removes the subdivision at a step position", () => {
+        const track = model.arrangement!.tracks[0];
+        editor.createSubdivision(track.id, 1,
+            { numerator: 0, denominator: 1 }, { numerator: 1, denominator: 8 }, 3, 2);
+        mutatedCalls = 0;
+
+        const deleted = editor.deleteSubdivisionAt({ bar: 1, trackId: track.id, step: 0 });
+
+        expect(deleted).toBe(true);
+        expect(track.measures[0].subdivisions).toHaveLength(0);
+        expect(mutatedCalls).toBe(1);
+    });
+
+    it("deleteSubdivisionAt honours an exact subdivision-slot start", () => {
+        const track = model.arrangement!.tracks[0];
+        editor.createSubdivision(track.id, 1,
+            { numerator: 0, denominator: 1 }, { numerator: 1, denominator: 8 }, 3, 2);
+        mutatedCalls = 0;
+
+        const deleted = editor.deleteSubdivisionAt({
+            bar: 1, trackId: track.id, step: 0, start: { numerator: 0, denominator: 1 },
+        });
+
+        expect(deleted).toBe(true);
+        expect(track.measures[0].subdivisions).toHaveLength(0);
+    });
+});

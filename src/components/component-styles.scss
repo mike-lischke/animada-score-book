@@ -80,12 +80,6 @@
     margin-left: 4px;
 }
 
-.noteStyleLabel {
-    margin: 0 12px 0 0;
-    color: var(--color-base-content);
-    white-space: nowrap;
-}
-
 .noteStyleBar {
     display: flex;
     align-items: center;
@@ -118,6 +112,34 @@
 }
 
 .noteStyleBar .icon.note-style-symbol {
+    width: 24px;
+    height: 24px;
+}
+
+.subdivisionToolbar {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.subdivisionToolbar .btn {
+    height: 40px;
+    width: 40px;
+    min-width: 40px;
+    padding: 0;
+    border-radius: 50%;
+    background-color: var(--color-base-100);
+    flex-shrink: 0;
+    box-shadow: none;
+    border: 1px solid color-mix(in srgb, var(--color-base-content) 30%, transparent);
+
+    &:not(:disabled):hover {
+        border-color: var(--color-primary);
+        background: color-mix(in srgb, var(--color-primary) 10%, var(--color-base-100));
+    }
+}
+
+.tuplet-icon {
     width: 24px;
     height: 24px;
 }
@@ -1336,6 +1358,43 @@
     border: 1px solid color-mix(in srgb, var(--color-primary) 60%, transparent);
     border-radius: 8px;
     pointer-events: none;
+
+    .selection-delete-button {
+        position: absolute;
+        top: -9px;
+        right: -9px;
+        width: 18px;
+        height: 18px;
+        padding: 0;
+        border: 1px solid var(--color-base-100);
+        border-radius: 50%;
+        background-color: var(--color-primary);
+        color: var(--color-primary-content);
+        cursor: pointer;
+        pointer-events: auto;
+        line-height: 15px;
+        font-size: 0;
+        z-index: 1;
+
+        &::before,
+        &::after {
+            position: absolute;
+            top: 4px;
+            left: 7px;
+            width: 1px;
+            height: 8px;
+            background-color: currentColor;
+            content: "";
+        }
+
+        &::before {
+            transform: rotate(45deg);
+        }
+
+        &::after {
+            transform: rotate(-45deg);
+        }
+    }
 }
 
 /*
@@ -1506,6 +1565,15 @@
     & > a {
         color: var(--color-primary);
         opacity: 1;
+    }
+}
+
+.du-dropdown li.disabled {
+    pointer-events: none;
+
+    & > a {
+        cursor: not-allowed;
+        opacity: 0.45;
     }
 }
 
