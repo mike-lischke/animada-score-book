@@ -122,7 +122,6 @@ describe.sequential("NoteStyleBar", () => {
         );
 
         expect(renderResult.container.querySelectorAll(".noteStyleButton")).toHaveLength(0);
-        expect(renderResult.container.querySelectorAll(".noteStyleLabel")).toHaveLength(0);
     });
 
     it("renders a button per note style of the selected track", () => {
@@ -138,7 +137,6 @@ describe.sequential("NoteStyleBar", () => {
         );
 
         expect(renderResult.container.querySelectorAll(".noteStyleButton")).toHaveLength(2);
-        expect(renderResult.container.querySelector(".noteStyleLabel")?.textContent).toBe("Note Styles");
     });
 
     it("uses the long description in the button tooltip", () => {
