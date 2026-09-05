@@ -68,8 +68,6 @@ export class StaffBarTrackRow extends UIComponent<IStaffBarTrackRowProps, IStaff
         return (
             <StaffNoteViewer
                 className={rowClassName}
-                data-bar={barNumber}
-                data-track={track.id}
                 isLastBar={barNumber === timeParams.length}
                 timeSignature={timeParams.timeSignature}
                 scoreMetrics={arrangementPlayer.scoreMetrics}

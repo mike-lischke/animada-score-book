@@ -76,7 +76,7 @@ export class MiniBarViewer extends UIComponent<IMiniBarViewerProps, IMiniBarView
         const className = this.generateFinalClassName(["mini-bar-viewer"]);
 
         return (
-            <div className={className} data-bar={barNumber}>
+            <div className={className}>
                 {measureSelected && <div className="mini-bar-selection-overlay" />}
                 {arrangement.tracks.map((track) => {
                     const events = barNumber - 1 < track.measures.length
@@ -99,8 +99,7 @@ export class MiniBarViewer extends UIComponent<IMiniBarViewerProps, IMiniBarView
                     const trackSelected = selectedTrackIds.has(track.id);
 
                     return (
-                        <div key={track.id} className="bar-track-row mini-bar-track-row"
-                            data-bar={barNumber} data-track={track.id}>
+                        <div key={track.id} className="bar-track-row mini-bar-track-row">
                             {trackSelected && <div className="mini-bar-selection-overlay" />}
                             {Array.from({ length: stepsPerBar }, (_, index) => {
                                 const step = index + 1;

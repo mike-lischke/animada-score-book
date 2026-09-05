@@ -32,9 +32,8 @@ test.describe("Staff view selection", () => {
 
     test("clicking a single note selects it with the note-selected CSS class", async ({ page }) => {
         // Find the first note symbol in the first bar of the first track.
-        const firstNote = page.locator(
-            ".bar-track-row.staff-mode[data-bar='1'][data-track] .staff-note-viewer-note-symbol",
-        ).first();
+        const firstNote = page.locator(".bar-viewer.staff-mode").first()
+            .locator(".bar-track-row.staff-mode .staff-note-viewer-note-symbol").first();
 
         await expect(firstNote).toBeVisible();
         await firstNote.click();
@@ -147,7 +146,9 @@ test.describe("Staff view selection", () => {
 
     test("dragging a selection rect across notes selects them individually", async ({ page }) => {
         // Find two adjacent note runs.
-        const runs = page.locator(".bar-track-row.staff-mode .staff-note-viewer-run[data-note-id]");
+        const runs = page.locator(
+            ".bar-track-row.staff-mode .staff-note-viewer-run:has(.staff-note-viewer-note-symbol)",
+        );
         const count = await runs.count();
         if (count < 2) {
             test.skip(true, "Not enough note runs for drag test");

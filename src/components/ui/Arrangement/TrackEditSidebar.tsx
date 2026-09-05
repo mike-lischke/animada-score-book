@@ -42,7 +42,6 @@ export class TrackEditSidebar extends UIComponent<ITrackEditSidebarProps> {
                 <Container
                     key={track.id}
                     className="trackEditRow"
-                    data-track={track.id}
                     orientation={Orientation.LeftToRight}
                     crossAlignment={ChildAlignment.Center}
                 >

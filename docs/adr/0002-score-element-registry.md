@@ -22,7 +22,7 @@ and their locations through the registry instead of using `data-*` attributes as
 - A registered element is removed when Preact clears or replaces its callback ref.
 - Tuplet slots remain individually addressable by their exact fractional start, even when they share a grid step.
 - CSS selectors may be used for local visual structure and geometry, but not to serialize or recover score identity.
-- `data-*` attributes may remain as test or debug hooks and must not be required by interactive production paths.
+- Score identity is not serialized into `data-*` attributes. Tests identify rendered score structure without them.
 
 ## Alternatives considered
 

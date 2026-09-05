@@ -41,12 +41,16 @@ describe("computeIsTuplet", () => {
         expect(computeIsTuplet(2, 1, meter(4, 4))).toBe(false);
     });
 
+    it("flags a quadruplet as a tuplet in a binary meter", () => {
+        expect(computeIsTuplet(4, 3, meter(4, 4))).toBe(true);
+    });
+
     it("flags a duplet as a tuplet in a compound ternary meter", () => {
         expect(computeIsTuplet(2, 3, meter(6, 8))).toBe(true);
     });
 
-    it("keeps ternary splits non-tuplets in a compound ternary meter", () => {
-        expect(computeIsTuplet(6, 4, meter(6, 8))).toBe(false);
+    it("flags a ratio with a binary normal side in a compound ternary meter", () => {
+        expect(computeIsTuplet(6, 4, meter(6, 8))).toBe(true);
     });
 
     it("flags every non-trivial ratio as a tuplet in an irregular meter", () => {

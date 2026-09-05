@@ -16,7 +16,7 @@ export interface IContainerProperties extends ICommonUIProperties {
     scrollPosition?: number;
     gap?: number | string;
 
-    innerRef?: preact.RefObject<HTMLDivElement>;
+    innerRef?: preact.Ref<HTMLDivElement>;
 }
 
 /** A grouping element with flex layout. */
@@ -31,7 +31,8 @@ export class Container extends UIComponent<IContainerProperties> {
         const { innerRef, scrollPosition } = this.props;
 
         if (scrollPosition !== undefined) {
-            innerRef?.current?.scrollTo({ left: 0, top: scrollPosition });
+            const element = typeof innerRef === "function" ? undefined : innerRef?.current;
+            element?.scrollTo({ left: 0, top: scrollPosition });
         }
     }
 

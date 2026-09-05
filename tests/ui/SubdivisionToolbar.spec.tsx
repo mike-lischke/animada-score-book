@@ -64,6 +64,28 @@ describe.sequential("SubdivisionToolbar", () => {
         expect(triplet?.getAttribute("aria-disabled")).toBe("true");
     });
 
+    it("allows tuplets that fit inside a selected subdivision slot", () => {
+        selectionManager.selectSingleNote({
+            granularity: SelectionGranularity.Note,
+            bar: 1,
+            trackId: 7,
+            startStep: 0,
+            endStep: 0,
+            start: { numerator: 1, denominator: 24 },
+        });
+
+        renderResult = render(
+            <SubdivisionToolbar selectionManager={selectionManager} />,
+        );
+
+        const dropdownItems = [...renderResult.container.querySelectorAll<HTMLAnchorElement>("a")];
+        const triplet = dropdownItems.find((item) => {
+            return item.textContent === "Triplet";
+        });
+
+        expect(triplet?.getAttribute("aria-disabled")).toBeNull();
+    });
+
     it("enables the dropdown for a contiguous selection within one track", () => {
         const entries: ISelectionEntry[] = [0, 1].map((step) => {
             return {

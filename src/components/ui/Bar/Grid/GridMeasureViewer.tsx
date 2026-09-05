@@ -7,9 +7,8 @@ import type { ComponentChild } from "preact";
 
 import type { ISbDmTrack, ScoreBookDataModel } from "../../../../core/ScoreBookDataModel.js";
 import type { IScoreMetrics } from "../../../../player/TimeCoordinator.js";
-import { parseFraction } from "../../../../core/serialisation/numeric-functions.js";
 import type { SelectionManager } from "../../../../ui/SelectionManager.js";
-import type { ScoreElementRegistry } from "../../../../ui/ScoreElementRegistry.js";
+import { ScoreElementKind, type ScoreElementRegistry } from "../../../../ui/ScoreElementRegistry.js";
 import {
     SelectionGranularity, type ISelectionEntry, type ISelectionHitTester,
 } from "../../../../ui/selection-types.js";
@@ -85,7 +84,7 @@ export class GridMeasureViewer extends UIComponent<IGridMeasureViewerProperties,
      * @returns A single-element array with this measure's entry if intersected, or an empty array.
      */
     public hitTest(rect: DOMRect): ISelectionEntry[] {
-        const { measureNumber, dataModel, tracks: tracksOverride } = this.props;
+        const { measureNumber, dataModel, scoreElementRegistry, tracks: tracksOverride } = this.props;
         const element = this.base as HTMLElement | null;
         if (!element) {
             return [];
@@ -112,31 +111,28 @@ export class GridMeasureViewer extends UIComponent<IGridMeasureViewerProperties,
             const track = tracks[i];
 
             // Check individual note/rest elements.
-            const noteElements = rows[i].querySelectorAll<HTMLElement>(
-                ".note-viewer[data-step-index]",
-            );
+            const noteElements = scoreElementRegistry?.findElements(
+                ScoreElementKind.GridCell, measureNumber, track.id,
+            ) ?? [];
 
             let rowHasNotes = false;
             for (const noteElement of noteElements) {
+                const location = scoreElementRegistry?.getLocation(noteElement);
+                if (location?.step === undefined) {
+                    continue;
+                }
+
                 const noteRect = noteElement.getBoundingClientRect();
                 if (rect.right >= noteRect.left && rect.left <= noteRect.right
                     && rect.bottom >= noteRect.top && rect.top <= noteRect.bottom) {
-                    const stepIndex = parseInt(
-                        noteElement.getAttribute("data-step-index") ?? "", 10,
-                    );
-                    const noteIdAttr = noteElement.getAttribute("data-note-id");
-                    const noteId = noteIdAttr ? parseInt(noteIdAttr, 10) : undefined;
-                    const startAttr = noteElement.getAttribute("data-event-start");
-                    const start = startAttr === null ? undefined : parseFraction(startAttr);
-
                     noteEntries.push({
                         granularity: SelectionGranularity.Note,
-                        bar: measureNumber,
-                        trackId: track.id,
-                        startStep: stepIndex,
-                        endStep: stepIndex,
-                        noteId,
-                        start,
+                        bar: location.bar,
+                        trackId: location.trackId,
+                        startStep: location.step,
+                        endStep: location.step,
+                        noteId: location.noteId,
+                        start: location.start,
                     });
                     rowHasNotes = true;
                 }
@@ -206,7 +202,11 @@ export class GridMeasureViewer extends UIComponent<IGridMeasureViewerProperties,
                 className={className}
                 orientation={Orientation.TopDown}
                 crossAlignment={ChildAlignment.Stretch}
-                data-bar={measureNumber}
+                innerRef={scoreElementRegistry?.createRef({
+                    kind: ScoreElementKind.BarContainer,
+                    bar: measureNumber,
+                    trackId: 0,
+                })}
                 style={viewerStyle}
             >
                 <GridMeasureBeam

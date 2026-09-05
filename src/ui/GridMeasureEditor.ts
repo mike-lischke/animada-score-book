@@ -162,7 +162,8 @@ export class GridMeasureEditor {
     }
 
     /**
-     * Creates a subdivision starting at the given cursor position, spanning `normal` grid steps.
+     * Creates a subdivision starting at the given cursor position. A subdivision-slot cursor
+     * always creates a child that replaces exactly one parent slot.
      *
      * @param position The cursor position marking the subdivision start.
      * @param actual The number of equal slots the subdivision contains.
@@ -178,16 +179,22 @@ export class GridMeasureEditor {
 
         const stepsPerBar = measure.meter.stepResolution;
         const start = position.start ?? reduceFraction(position.step, stepsPerBar);
+        const selectedEvent = position.start === undefined
+            ? undefined
+            : measure.events.find((event) => {
+                return compareFractions(event.start, position.start!) === 0;
+            });
         const endStep = position.step + normal;
-        if (endStep > stepsPerBar) {
+        if (!selectedEvent && endStep > stepsPerBar) {
             void requisitions.execute("showWarning", "Not enough space for this subdivision at the cursor.");
 
             return false;
         }
 
-        const end = reduceFraction(endStep, stepsPerBar);
+        const resolvedNormal = selectedEvent ? 1 : normal;
+        const end = selectedEvent ? addFractions(start, selectedEvent.duration) : reduceFraction(endStep, stepsPerBar);
 
-        return this.dataModel.createSubdivision(position.trackId, position.bar, start, end, actual, normal);
+        return this.dataModel.createSubdivision(position.trackId, position.bar, start, end, actual, resolvedNormal);
     }
 
     /**

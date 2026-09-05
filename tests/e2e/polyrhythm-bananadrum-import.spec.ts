@@ -51,7 +51,7 @@ test.describe("BananaDrum polyrhythm import", () => {
         // (S={3}), so they become plain subdivision groups; only the asymmetric 4:1
         // subdivision is a true tuplet.
         const barDom = await page.evaluate(() => {
-            const row = document.querySelector(".grid-measure-viewer[data-bar='1'] .grid-measure-row");
+            const row = document.querySelector(".grid-measure-viewer .grid-measure-row");
             if (!row) {
                 return null;
             }
@@ -115,10 +115,8 @@ test.describe("BananaDrum polyrhythm import", () => {
         const gridSubdivisionCounts = await page.evaluate(() => {
             const result: Record<string, number> = {};
             for (const bar of ["6", "7", "8"]) {
-                const row = document.querySelector(
-                    `.grid-measure-viewer[data-bar='${bar}'] .grid-measure-row`,
-                );
-                result[bar] = row ? row.querySelectorAll(".subdivision").length : -1;
+                const viewer = document.querySelectorAll(".grid-measure-viewer")[Number(bar) - 1];
+                result[bar] = viewer.querySelectorAll(".grid-measure-row .subdivision").length;
             }
 
             return result;
@@ -138,8 +136,8 @@ test.describe("BananaDrum polyrhythm import", () => {
         await expect(page.locator(".bar-viewer.staff-mode").first()).toBeVisible();
 
         const staffTupletLabelCount = await page.evaluate(() => {
-            const viewer = document.querySelector(".bar-viewer.staff-mode[data-bar='6']");
-            const container = viewer?.querySelector(".staff-note-viewer-tuplets");
+            const viewer = document.querySelectorAll(".bar-viewer.staff-mode")[5];
+            const container = viewer.querySelector(".staff-note-viewer-tuplets");
 
             return container ? container.children.length : 0;
         });

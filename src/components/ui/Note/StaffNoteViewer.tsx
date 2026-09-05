@@ -105,7 +105,8 @@ interface ITupletLabel {
 
 export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
     public override render(): ComponentChild {
-        const { isLastBar, scoreMetrics, measure, maxNoteLine = 1 } = this.props;
+        const { isLastBar, scoreMetrics, measure, barNumber, trackId, maxNoteLine = 1,
+            scoreElementRegistry } = this.props;
         const className = this.generateFinalClassName([
             "staff-note-viewer",
             this.classFromProperty(isLastBar, "last-bar"),
@@ -149,7 +150,16 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
         }
 
         return (
-            <div className={className} aria-hidden {...this.dataAttributes}>
+            <div
+                className={className}
+                ref={scoreElementRegistry?.createRef({
+                    kind: ScoreElementKind.TrackRow,
+                    bar: barNumber,
+                    trackId,
+                })}
+                aria-hidden
+                {...this.dataAttributes}
+            >
                 {staffLines}
                 <div className="staff-note-viewer-runs">
                     {runs}
@@ -505,7 +515,6 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                     key: `${keyPrefix}note-${index}`,
                     className: "staff-note-viewer-run",
                     style: slotStyle,
-                    "data-step-index": stepIndex,
                     ref: scoreElementRegistry?.createRef({
                         kind: ScoreElementKind.StaffRun,
                         bar: barNumber,
@@ -515,11 +524,6 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                         start: node.start,
                     }),
                 };
-
-                const noteId = measure.noteEvents.at(node.eventIndex)?.id;
-                if (noteId !== undefined) {
-                    runDivProps["data-note-id"] = noteId;
-                }
 
                 return (
                     <div {...runDivProps}>
@@ -567,7 +571,6 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
 
             return (
                 <div key={`${keyPrefix}rest-${index}`} className="staff-note-viewer-run" style={slotStyle}
-                    data-step-index={stepIndex}
                     ref={scoreElementRegistry?.createRef({
                         kind: ScoreElementKind.StaffRun,
                         bar: barNumber,

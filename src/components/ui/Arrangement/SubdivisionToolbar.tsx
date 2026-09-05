@@ -103,12 +103,16 @@ export class SubdivisionToolbar extends UIComponent<ISubdivisionToolbarProps, IS
 
     private buildDropdownItems(): IDropdownItem[] {
         const { selectionSpan } = this.state;
+        const entries = [...this.props.selectionManager.currentSelection.values()];
+        const selectedSubdivisionSlot = entries.length === 1 && entries[0].start !== undefined;
 
         return subdivisionOptions.map((option) => {
+            const enabled = selectedSubdivisionSlot || option.actual <= selectionSpan * 2;
+
             return {
                 label: option.label,
-                disabled: option.actual > selectionSpan * 2,
-                onClick: option.actual <= selectionSpan * 2
+                disabled: !enabled,
+                onClick: enabled
                     ? () => {
                         this.handleCreate(option);
                     }

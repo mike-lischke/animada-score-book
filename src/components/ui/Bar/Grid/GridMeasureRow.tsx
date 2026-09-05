@@ -9,7 +9,6 @@ import type { ISbDmTrack, ISbDmTrackMeasure, ScoreBookDataModel } from "../../..
 import {
     MeasureProjection, ProjectedItemKind, type IProjectedEvent, type IProjectedItem,
 } from "../../../../core/MeasureProjection.js";
-import { formatFraction } from "../../../../core/serialisation/numeric-functions.js";
 import type { IAudioData } from "../../../../core/types/general.js";
 import { requisitions } from "../../../../supplement/Requisitions.js";
 import { ScoreElementKind, type ScoreElementRegistry } from "../../../../ui/ScoreElementRegistry.js";
@@ -45,7 +44,7 @@ export class GridMeasureRow extends UIComponent<IGridMeasureRowProperties, IGrid
     }
 
     public override render(): ComponentChild {
-        const { measure, dataModel, track, barNumber } = this.props;
+        const { measure, dataModel, track, barNumber, scoreElementRegistry } = this.props;
 
         if (!dataModel.arrangement) {
             return null;
@@ -82,7 +81,11 @@ export class GridMeasureRow extends UIComponent<IGridMeasureRowProperties, IGrid
 
         return (
             <Container className={className} style={rowStyle}
-                data-track={track.id} data-bar={barNumber} {...this.dataAttributes}>
+                innerRef={barNumber === undefined ? undefined : scoreElementRegistry?.createRef({
+                    kind: ScoreElementKind.TrackRow,
+                    bar: barNumber,
+                    trackId: track.id,
+                })}>
                 <div className="grid-beat-overlay" aria-hidden="true">
                     {beatMarkers}
                 </div>
@@ -171,24 +174,16 @@ export class GridMeasureRow extends UIComponent<IGridMeasureRowProperties, IGrid
             const noteDivProps: Record<string, unknown> = {
                 key: `${keyPrefix}-${col}`,
                 className: "note-viewer",
-                "data-step-index": col,
                 ref: barNumber === undefined ? undefined : scoreElementRegistry?.createRef({
                     kind: ScoreElementKind.GridCell,
                     bar: barNumber,
                     trackId: track.id,
                     step: col,
-                    start: item.start,
+                    noteId: col === startCol ? cellId : undefined,
+                    start: level > 1 ? item.start : undefined,
                 }),
                 style: { minWidth: 0, backgroundColor: isNoteCell ? noteBackground : "transparent" },
             };
-
-            if (col === startCol && cellId !== undefined) {
-                noteDivProps["data-note-id"] = cellId;
-            }
-
-            if (level > 1) {
-                noteDivProps["data-event-start"] = formatFraction(item.start);
-            }
 
             cells.push(
                 <div {...noteDivProps}>

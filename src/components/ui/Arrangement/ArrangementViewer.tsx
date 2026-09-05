@@ -13,7 +13,7 @@ import type { PlayerPlayState } from "../../../player/ArrangementPlayer.js";
 import { requisitions } from "../../../supplement/Requisitions.js";
 import type { SelectionManager } from "../../../ui/SelectionManager.js";
 import { GridMeasureEditor } from "../../../ui/GridMeasureEditor.js";
-import { ScoreElementRegistry } from "../../../ui/ScoreElementRegistry.js";
+import { ScoreElementKind, ScoreElementRegistry } from "../../../ui/ScoreElementRegistry.js";
 import { TrackViewerInputController } from "../../../ui/TrackViewerInputController.js";
 import { GridMeasureViewer } from "../Bar/Grid/GridMeasureViewer.js";
 import { StaffBarViewer } from "../Bar/Staff/StaffBarViewer.js";
@@ -278,6 +278,7 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
                 barCount={barCount}
                 canDelete={barCount > 1}
                 scrollHostRef={this.viewerRef}
+                scoreElementRegistry={this.scoreElementRegistry}
                 onBarAction={this.handleBarAction}
             />
         ) : undefined;
@@ -581,8 +582,14 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         const viewportLeft = hostRect.left + (leftPadding * zoom);
         const viewportRight = hostRect.right;
 
-        const selector = ".bar-viewer[data-bar], .grid-measure-viewer[data-bar]";
-        const barElements = Array.from(scrollHost.querySelectorAll<HTMLElement>(selector));
+        const barElements = this.scoreElementRegistry.findElements(ScoreElementKind.BarContainer).sort(
+            (first, second) => {
+                const firstBar = this.scoreElementRegistry.getLocation(first)?.bar ?? 0;
+                const secondBar = this.scoreElementRegistry.getLocation(second)?.bar ?? 0;
+
+                return firstBar - secondBar;
+            },
+        );
 
         const visibleBars = barElements.filter((barEl) => {
             const rect = barEl.getBoundingClientRect();
@@ -595,8 +602,11 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
             return null;
         }
 
-        const startBar = Number(visibleBars[0].dataset.bar);
-        const endBar = Number(visibleBars[visibleBars.length - 1].dataset.bar);
+        const startBar = this.scoreElementRegistry.getLocation(visibleBars[0])?.bar;
+        const endBar = this.scoreElementRegistry.getLocation(visibleBars[visibleBars.length - 1])?.bar;
+        if (startBar === undefined || endBar === undefined) {
+            return null;
+        }
 
         return {
             startBar,

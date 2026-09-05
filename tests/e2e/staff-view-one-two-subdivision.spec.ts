@@ -78,7 +78,7 @@ test.describe("Staff view two-step note", () => {
 
         // The two-step note must render as a single note symbol, giving three notes in total.
         const noteSymbolCount = await page.evaluate(() => {
-            const row = document.querySelector(".bar-viewer[data-bar='1'] .bar-track-row.staff-mode");
+            const row = document.querySelector(".bar-viewer.staff-mode .bar-track-row.staff-mode");
             if (!row) {
                 return -1;
             }

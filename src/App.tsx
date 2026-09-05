@@ -1950,6 +1950,7 @@ export class App extends UIComponent<{}, IAppState> {
 
         this.dataModel.lockToken = undefined;
         this.setState({ editMode: false, lockToken: undefined, lockConflict: undefined });
+        void requisitions.execute("editModeChanged", false);
 
         return true;
     };

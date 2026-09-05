@@ -33,9 +33,8 @@ test.describe("Beija Flor I-Break: Agogô DOM structure", () => {
         await expect(page.locator(".grid-measure-row").first()).toBeVisible();
 
         const bar4Dom = await page.evaluate(() => {
-            const row = document.querySelector(
-                ".grid-measure-viewer[data-bar='4'] .grid-measure-row",
-            );
+            const row = document.querySelectorAll(".grid-measure-viewer")[3]
+                .querySelector(".grid-measure-row");
             if (!row) {
                 return null;
             }

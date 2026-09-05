@@ -4,10 +4,9 @@
  */
 
 import type { IRect } from "../core/types/general.js";
-import { formatFraction } from "../core/serialisation/numeric-functions.js";
 import { requisitions } from "../supplement/Requisitions.js";
 import type { SelectionManager } from "./SelectionManager.js";
-import type { ScoreElementRegistry } from "./ScoreElementRegistry.js";
+import { ScoreElementKind, type ScoreElementRegistry } from "./ScoreElementRegistry.js";
 import type { ISelectionDelta, ISelectionEntry } from "./selection-types.js";
 import { SelectionGranularity, SelectionMode } from "./selection-types.js";
 
@@ -44,6 +43,7 @@ export class SelectionView {
     private autoScrollTimer?: ReturnType<typeof setInterval>;
     private autoScrollDX = 0;
     private autoScrollDY = 0;
+    private editMode = false;
     private selectionDeleteButtonCreated = false;
 
     /**
@@ -265,7 +265,7 @@ export class SelectionView {
             return false;
         }
 
-        const noteElement = this.findNoteElements(contentHost, entry).at(0);
+        const noteElement = this.findNoteElements(entry).at(0);
         if (!noteElement) {
             return false;
         }
@@ -305,7 +305,7 @@ export class SelectionView {
         }
 
         const navigableRuns = (rowElement: HTMLElement): HTMLElement[] => {
-            return [...rowElement.querySelectorAll<HTMLElement>(".staff-note-viewer-run[data-step-index]")]
+            return [...rowElement.querySelectorAll<HTMLElement>(".staff-note-viewer-run")]
                 .filter((run) => {
                     return run.querySelector(
                         ".staff-note-viewer-note-symbol, .staff-note-viewer-rest-symbol",
@@ -315,17 +315,21 @@ export class SelectionView {
 
         if (key === "ArrowLeft" || key === "ArrowRight") {
             const contentHost = this.eventContainer.querySelector<HTMLElement>("#trackViewerContentHost");
-            const trackId = row.getAttribute("data-track");
-            if (!contentHost || !trackId) {
+            const scoreElementRegistry = this.scoreElementRegistry;
+            const rowLocation = scoreElementRegistry?.getLocation(row);
+            if (!contentHost || !scoreElementRegistry || !rowLocation) {
                 return undefined;
             }
 
-            const rows = [...contentHost.querySelectorAll<HTMLElement>(
-                `.bar-track-row.staff-mode[data-track="${trackId}"]`,
-            )].sort((left, right) => {
-                return parseInt(left.getAttribute("data-bar") ?? "0", 10)
-                    - parseInt(right.getAttribute("data-bar") ?? "0", 10);
-            });
+            const rows = scoreElementRegistry.findElements(ScoreElementKind.TrackRow, undefined, rowLocation.trackId)
+                .filter((candidate) => {
+                    return contentHost.contains(candidate) && candidate.classList.contains("staff-mode");
+                }).sort((left, right) => {
+                    const leftBar = this.scoreElementRegistry?.getLocation(left)?.bar ?? 0;
+                    const rightBar = this.scoreElementRegistry?.getLocation(right)?.bar ?? 0;
+
+                    return leftBar - rightBar;
+                });
 
             const rowIndex = rows.indexOf(row);
             const rowRuns = navigableRuns(row);
@@ -350,14 +354,16 @@ export class SelectionView {
         }
 
         const contentHost = this.eventContainer.querySelector<HTMLElement>("#trackViewerContentHost");
-        const bar = row.getAttribute("data-bar");
-        if (!contentHost || !bar) {
+        const scoreElementRegistry = this.scoreElementRegistry;
+        const rowLocation = scoreElementRegistry?.getLocation(row);
+        if (!contentHost || !scoreElementRegistry || !rowLocation) {
             return undefined;
         }
 
-        const rows = [...contentHost.querySelectorAll<HTMLElement>(
-            `.bar-track-row.staff-mode[data-bar="${bar}"]`,
-        )];
+        const rows = scoreElementRegistry.findElements(ScoreElementKind.TrackRow, rowLocation.bar)
+            .filter((candidate) => {
+                return contentHost.contains(candidate) && candidate.classList.contains("staff-mode");
+            });
         const rowIndex = rows.indexOf(row);
         const direction = key === "ArrowUp" ? -1 : 1;
         const adjacentRowIndex = rowIndex + direction;
@@ -395,22 +401,26 @@ export class SelectionView {
         }
 
         const cells = (): HTMLElement[] => {
-            return [...row.querySelectorAll<HTMLElement>(".note-viewer[data-step-index]")];
+            return [...row.querySelectorAll<HTMLElement>(".note-viewer")];
         };
 
         if (key === "ArrowLeft" || key === "ArrowRight") {
             const contentHost = this.eventContainer.querySelector<HTMLElement>("#trackViewerContentHost");
-            const trackId = row.getAttribute("data-track");
-            if (!contentHost || !trackId) {
+            const scoreElementRegistry = this.scoreElementRegistry;
+            const rowLocation = scoreElementRegistry?.getLocation(row);
+            if (!contentHost || !scoreElementRegistry || !rowLocation) {
                 return undefined;
             }
 
-            const rows = [...contentHost.querySelectorAll<HTMLElement>(
-                `.grid-measure-row[data-track="${trackId}"]`,
-            )].sort((left, right) => {
-                return parseInt(left.getAttribute("data-bar") ?? "0", 10)
-                    - parseInt(right.getAttribute("data-bar") ?? "0", 10);
-            });
+            const rows = scoreElementRegistry.findElements(ScoreElementKind.TrackRow, undefined, rowLocation.trackId)
+                .filter((candidate) => {
+                    return contentHost.contains(candidate) && candidate.classList.contains("grid-measure-row");
+                }).sort((left, right) => {
+                    const leftBar = this.scoreElementRegistry?.getLocation(left)?.bar ?? 0;
+                    const rightBar = this.scoreElementRegistry?.getLocation(right)?.bar ?? 0;
+
+                    return leftBar - rightBar;
+                });
             const rowIndex = rows.indexOf(row);
             const rowCells = cells();
             const cellIndex = rowCells.indexOf(noteElement);
@@ -427,9 +437,7 @@ export class SelectionView {
 
             const adjacentRow = rows[adjacentRowIndex];
 
-            const adjacentCells = [...adjacentRow.querySelectorAll<HTMLElement>(
-                ".note-viewer[data-step-index]",
-            )];
+            const adjacentCells = [...adjacentRow.querySelectorAll<HTMLElement>(".note-viewer")];
             if (adjacentCells.length === 0) {
                 return undefined;
             }
@@ -442,14 +450,16 @@ export class SelectionView {
         }
 
         const contentHost = this.eventContainer.querySelector<HTMLElement>("#trackViewerContentHost");
-        const bar = row.getAttribute("data-bar");
-        if (!contentHost || !bar) {
+        const scoreElementRegistry = this.scoreElementRegistry;
+        const rowLocation = scoreElementRegistry?.getLocation(row);
+        if (!contentHost || !scoreElementRegistry || !rowLocation) {
             return undefined;
         }
 
-        const rows = [...contentHost.querySelectorAll<HTMLElement>(
-            `.grid-measure-row[data-bar="${bar}"]`,
-        )];
+        const rows = scoreElementRegistry.findElements(ScoreElementKind.TrackRow, rowLocation.bar)
+            .filter((candidate) => {
+                return contentHost.contains(candidate) && candidate.classList.contains("grid-measure-row");
+            });
         const rowIndex = rows.indexOf(row);
         const direction = key === "ArrowUp" ? -1 : 1;
         const adjacentRowIndex = rowIndex + direction;
@@ -459,9 +469,7 @@ export class SelectionView {
 
         const adjacentRow = rows[adjacentRowIndex];
 
-        const adjacentCells = [...adjacentRow.querySelectorAll<HTMLElement>(
-            ".note-viewer[data-step-index]",
-        )];
+        const adjacentCells = [...adjacentRow.querySelectorAll<HTMLElement>(".note-viewer")];
 
         if (adjacentCells.length === 0) {
             return undefined;
@@ -627,6 +635,7 @@ export class SelectionView {
     };
 
     private handleEditModeChanged = (enabled: boolean): Promise<boolean> => {
+        this.editMode = enabled;
         if (!enabled) {
             const overlayContainer = this.eventContainer.querySelector<HTMLElement>(
                 "#trackViewerDecorationOverlay",
@@ -635,7 +644,14 @@ export class SelectionView {
             if (cursor) {
                 cursor.style.display = "none";
             }
+
+            overlayContainer?.querySelectorAll<HTMLElement>(".selection-delete-button").forEach((button) => {
+                button.remove();
+            });
+            this.selectionDeleteButtonCreated = false;
         }
+
+        this.updateTrackViewerOverlays();
 
         return Promise.resolve(true);
     };
@@ -774,14 +790,14 @@ export class SelectionView {
 
         // Detect view mode from the first element.
         const firstElements = singleNotes.length > 0
-            ? this.findNoteElements(contentHost, singleNotes[0])
-            : this.findNoteElements(contentHost, noteGroups[0]);
+            ? this.findNoteElements(singleNotes[0])
+            : this.findNoteElements(noteGroups[0]);
         const isStaffMode = firstElements.length > 0
             && firstElements[0].classList.contains(staffNoteRunClass);
 
         // Position the cursor directly before a single selected note in both view modes.
         if (singleNotes.length === 1) {
-            const rect = this.findNoteCursorRect(contentHost, singleNotes[0], isStaffMode);
+            const rect = this.findNoteCursorRect(singleNotes[0], isStaffMode);
             if (rect) {
                 this.positionSelectionCursor(cursor, containerRect, rect, isStaffMode ? -4 : 0);
             }
@@ -790,7 +806,7 @@ export class SelectionView {
         // Single notes in staff mode: apply CSS class for head/stem colouring.
         if (isStaffMode && singleNotes.length > 0) {
             for (const entry of singleNotes) {
-                const elements = this.findNoteElements(contentHost, entry);
+                const elements = this.findNoteElements(entry);
                 for (const el of elements) {
                     el.classList.add(noteSelectedClass);
                 }
@@ -813,23 +829,7 @@ export class SelectionView {
             ].join(", ");
 
             for (const entry of noteGroups) {
-                const row = contentHost.querySelector<HTMLElement>(
-                    `[data-bar="${entry.bar}"][data-track="${entry.trackId}"]`,
-                );
-                if (!row) {
-                    continue;
-                }
-
-                const startStep = entry.startStep ?? 0;
-                const endStep = entry.endStep ?? startStep;
-                const runs: HTMLElement[] = [];
-
-                for (let step = startStep; step <= endStep; step++) {
-                    const el = row.querySelector<HTMLElement>(`[data-step-index="${step}"]`);
-                    if (el) {
-                        runs.push(el);
-                    }
-                }
+                const runs = this.scoreElementRegistry?.findSelectionElements(entry, ScoreElementKind.StaffRun) ?? [];
 
                 if (runs.length === 0) {
                     continue;
@@ -926,7 +926,7 @@ export class SelectionView {
             let groupSubdivision: HTMLElement | undefined;
 
             for (const entry of groupEntries) {
-                const elements = this.findNoteElements(contentHost, entry);
+                const elements = this.findNoteElements(entry);
                 if (elements.length === 0) {
                     continue;
                 }
@@ -1034,22 +1034,20 @@ export class SelectionView {
         }
 
         for (const firstRow of firstRows) {
-            const firstBar = firstRow.getAttribute("data-bar");
-            if (firstBar === null) {
+            const firstLocation = this.scoreElementRegistry?.getLocation(firstRow);
+            if (!firstLocation) {
                 continue;
             }
 
-            const rows = firstRow.parentElement?.querySelectorAll<HTMLElement>(
-                `.grid-measure-row[data-bar="${firstBar}"]`,
-            );
-            if (!rows) {
-                continue;
-            }
+            const rows = this.scoreElementRegistry?.findElements(ScoreElementKind.TrackRow, firstLocation.bar)
+                .filter((candidate) => {
+                    return candidate.classList.contains("grid-measure-row");
+                }) ?? [];
 
-            const firstIndex = [...rows].indexOf(firstRow);
+            const firstIndex = rows.indexOf(firstRow);
             for (const secondRow of secondRows) {
-                if (secondRow.getAttribute("data-bar") === firstBar
-                    && Math.abs(firstIndex - [...rows].indexOf(secondRow)) === 1) {
+                const secondLocation = this.scoreElementRegistry?.getLocation(secondRow);
+                if (secondLocation?.bar === firstLocation.bar && Math.abs(firstIndex - rows.indexOf(secondRow)) === 1) {
                     return true;
                 }
             }
@@ -1096,54 +1094,12 @@ export class SelectionView {
      * For note groups that span a step range all elements in the range are returned
      * so the overlay covers the full width of the group.
      *
-     * @param scope The element to query within.
      * @param entry The selection entry identifying the note or group.
      *
      * @returns The matching elements, or an empty array if none found.
      */
-    private findNoteElements(scope: HTMLElement, entry: ISelectionEntry): HTMLElement[] {
-        if (this.scoreElementRegistry) {
-            return this.scoreElementRegistry.findSelectionElements(entry);
-        }
-
-        if (entry.noteId !== undefined) {
-            const el = scope.querySelector<HTMLElement>(`[data-note-id="${entry.noteId}"]`);
-
-            return el ? [el] : [];
-        }
-
-        // Subdivision slots share their grid step index, so a rest slot without a note id is
-        // resolved by its exact fractional start instead.
-        if (entry.start !== undefined) {
-            const el = scope.querySelector<HTMLElement>(
-                `[data-bar="${entry.bar}"][data-track="${entry.trackId}"]`
-                + ` [data-event-start="${formatFraction(entry.start)}"]`,
-            );
-
-            return el ? [el] : [];
-        }
-
-        if (entry.startStep !== undefined) {
-            const endStep = entry.endStep ?? entry.startStep;
-            const elements: HTMLElement[] = [];
-
-            for (let step = entry.startStep; step <= endStep; step++) {
-                const candidates = scope.querySelectorAll<HTMLElement>(
-                    `[data-bar="${entry.bar}"][data-track="${entry.trackId}"] [data-step-index="${step}"]`,
-                );
-                const el = [...candidates].find((candidate) => {
-                    return candidate.closest<HTMLElement>(".subdivision") === null;
-                });
-
-                if (el) {
-                    elements.push(el);
-                }
-            }
-
-            return elements;
-        }
-
-        return [];
+    private findNoteElements(entry: ISelectionEntry): HTMLElement[] {
+        return this.scoreElementRegistry?.findSelectionElements(entry) ?? [];
     }
 
     /**
@@ -1152,15 +1108,14 @@ export class SelectionView {
      * note/rest symbol while the vertical position is corrected to the single-line reference, so
      * the cursor stays put when notes on different staff lines are selected.
      *
-     * @param scope The element to query within.
      * @param entry The selection entry identifying the note or group.
      * @param isStaffMode Whether the arrangement is rendered in staff mode.
      *
      * @returns The cursor anchor rectangle, or undefined if none found.
      */
-    private findNoteCursorRect(scope: HTMLElement, entry: ISelectionEntry,
+    private findNoteCursorRect(entry: ISelectionEntry,
         isStaffMode: boolean): DOMRect | undefined {
-        const elements = this.findNoteElements(scope, entry);
+        const elements = this.findNoteElements(entry);
         if (elements.length === 0) {
             return undefined;
         }
@@ -1267,18 +1222,16 @@ export class SelectionView {
         const barGroups: IBarGroup[] = [];
 
         for (const [bar, selectedTrackIds] of byBar) {
-            const rows = contentHost.querySelectorAll<HTMLElement>(`[data-bar="${bar}"][data-track]`);
+            const rows = this.scoreElementRegistry?.findElements(ScoreElementKind.TrackRow, bar) ?? [];
             const rowData: Array<{ trackId: number; el: HTMLElement; }> = [];
 
             for (const row of rows) {
-                if (!(row instanceof HTMLElement)) {
+                const location = this.scoreElementRegistry?.getLocation(row);
+                if (!contentHost.contains(row) || !location) {
                     continue;
                 }
 
-                const trackId = parseInt(row.getAttribute("data-track") ?? "", 10);
-                if (!isNaN(trackId)) {
-                    rowData.push({ trackId, el: row });
-                }
+                rowData.push({ trackId: location.trackId, el: row });
             }
 
             // Group consecutive selected tracks within this bar.
@@ -1369,20 +1322,20 @@ export class SelectionView {
             return e.trackId;
         }));
 
-        // Iterate through all rows of bar 1 in DOM order. Consecutive rows whose
+        // Iterate through registered rows of bar 1 in DOM order. Consecutive rows whose
         // track ID is selected form a group; unselected rows break the group.
-        const firstBarRows = contentHost.querySelectorAll<HTMLElement>("[data-bar=\"1\"][data-track]");
+        const firstBarRows = this.scoreElementRegistry?.findElements(ScoreElementKind.TrackRow, 1) ?? [];
         const groups: number[][] = [];
         let group: number[] = [];
 
         for (const row of firstBarRows) {
-            if (!(row instanceof HTMLElement)) {
+            const location = this.scoreElementRegistry?.getLocation(row);
+            if (!contentHost.contains(row) || !location) {
                 continue;
             }
 
-            const trackId = parseInt(row.getAttribute("data-track") ?? "", 10);
-            if (!isNaN(trackId) && selectedTrackIds.has(trackId)) {
-                group.push(trackId);
+            if (selectedTrackIds.has(location.trackId)) {
+                group.push(location.trackId);
             } else if (group.length > 0) {
                 groups.push(group);
                 group = [];
@@ -1394,13 +1347,17 @@ export class SelectionView {
         }
 
         for (const trackIds of groups) {
-            const selectors = trackIds.map((id) => {
-                return `[data-track="${id}"]`;
-            });
+            const elements: HTMLElement[] = [];
+            for (const trackId of trackIds) {
+                elements.push(...(this.scoreElementRegistry?.findElements(
+                    ScoreElementKind.TrackRow, undefined, trackId,
+                ).filter((element) => {
+                    return contentHost.contains(element);
+                }) ?? []));
+            }
 
-            const rect = this.computeMergedRect(contentHost, selectors.join(","), containerRect);
-            if (rect) {
-                this.createOverlay(overlayContainer, rect);
+            if (elements.length > 0) {
+                this.createMergedOverlay(overlayContainer, containerRect, elements);
             }
         }
     }
@@ -1425,24 +1382,21 @@ export class SelectionView {
             return e.bar;
         }));
 
-        // Iterate through all bar elements in DOM order, deduplicating by bar number
-        // so each bar is only considered the first time it appears.
-        const barElements = contentHost.querySelectorAll<HTMLElement>("[data-bar]");
+        // Iterate through registered bar containers in DOM order.
+        const barElements = this.scoreElementRegistry?.findElements(ScoreElementKind.BarContainer)
+            .filter((element) => {
+                return contentHost.contains(element);
+            }) ?? [];
         const groups: number[][] = [];
         let group: number[] = [];
-        const seen = new Set<number>();
 
         for (const el of barElements) {
-            if (!(el instanceof HTMLElement)) {
+            const location = this.scoreElementRegistry?.getLocation(el);
+            if (!location) {
                 continue;
             }
 
-            const bar = parseInt(el.getAttribute("data-bar") ?? "", 10);
-            if (isNaN(bar) || seen.has(bar)) {
-                continue;
-            }
-
-            seen.add(bar);
+            const { bar } = location;
 
             if (selectedBars.has(bar)) {
                 group.push(bar);
@@ -1457,12 +1411,16 @@ export class SelectionView {
         }
 
         for (const barNumbers of groups) {
-            const selectors = barNumbers.map((bar) => {
-                return `[data-bar="${bar}"]`;
-            });
+            const elements: HTMLElement[] = [];
+            for (const bar of barNumbers) {
+                elements.push(...(this.scoreElementRegistry?.findElements(ScoreElementKind.BarContainer, bar)
+                    .filter((element) => {
+                        return contentHost.contains(element);
+                    }) ?? []));
+            }
 
-            const rect = this.computeMergedRect(contentHost, selectors.join(","), containerRect);
-            if (rect) {
+            if (elements.length > 0) {
+                const rect = this.computeElementsRect(elements, containerRect);
                 rect.x += 4;
                 rect.width -= 8;
                 this.createOverlay(overlayContainer, rect);
@@ -1541,35 +1499,13 @@ export class SelectionView {
         };
     }
 
-    /**
-     * Computes a bounding rectangle that covers all elements matching the selector,
-     * relative to the overlay container.
-     *
-     * Horizontal bounds use raw element rects to avoid margin-induced over-extension;
-     * vertical bounds use margin-expanded rects so adjacent track rows touch without gaps.
-     *
-     * @param scope The element to query within.
-     * @param selector The CSS selector for target elements.
-     * @param containerRect The overlay container's bounding rect in viewport coordinates.
-     *
-     * @returns The merged rect relative to the container, or undefined if no elements match.
-     */
-    private computeMergedRect(scope: HTMLElement, selector: string, containerRect: DOMRect): IRect | undefined {
-        const elements = scope.querySelectorAll(selector);
-        if (elements.length === 0) {
-            return undefined;
-        }
-
+    private computeElementsRect(elements: HTMLElement[], containerRect: DOMRect): IRect {
         let minLeft = Infinity;
         let minTop = Infinity;
         let maxRight = -Infinity;
         let maxBottom = -Infinity;
 
         for (const el of elements) {
-            if (!(el instanceof HTMLElement)) {
-                continue;
-            }
-
             const r = this.computeElementRect(el, containerRect);
             const absTop = r.y + containerRect.top;
             const absBottom = absTop + r.height;
@@ -1611,7 +1547,7 @@ export class SelectionView {
         overlay.style.width = `${rect.width + 4}px`;
         overlay.style.height = `${rect.height}px`;
 
-        if (!this.selectionDeleteButtonCreated) {
+        if (this.editMode && !this.selectionDeleteButtonCreated) {
             const deleteButton = document.createElement("button");
             deleteButton.type = "button";
             deleteButton.className = "selection-delete-button";

@@ -538,13 +538,13 @@ export class ArrangementMigrator {
         }
 
         for (const sub of sorted) {
-            // Reduce the ratio to simplest terms.  A subdivision is a tuplet iff
-            // the reduced numerator has at least one prime factor not in the
-            // meter's natural basis S.  E.g. 9:12 → gcd=3 → 3, 3∉{2} → tuplet.
+            // Reduce the ratio to simplest terms. A subdivision is a tuplet iff either
+            // reduced side has a prime factor outside the meter's natural basis S.
             const divisor = greatestCommonDivisor(sub.actual, sub.normal);
             const reducedActual = divisor > 0 ? sub.actual / divisor : sub.actual;
-            const selfIsTuplet = [...primeFactors(reducedActual)].some((f) => {
-                return !meterBase.has(f);
+            const reducedNormal = divisor > 0 ? sub.normal / divisor : sub.normal;
+            const selfIsTuplet = [...primeFactors(reducedActual), ...primeFactors(reducedNormal)].some((factor) => {
+                return !meterBase.has(factor);
             });
 
             const children = childrenByParent.get(sub.id) ?? [];

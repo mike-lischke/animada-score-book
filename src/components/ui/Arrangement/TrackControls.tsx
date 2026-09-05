@@ -117,7 +117,6 @@ export class TrackControls extends UIComponent<ITrackControlsProperties, ITrackC
                 <Container
                     key={track.id}
                     className="trackControls"
-                    data-track={track.id}
                     orientation={Orientation.LeftToRight}
                     crossAlignment={ChildAlignment.Center}
                 >

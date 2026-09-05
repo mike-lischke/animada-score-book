@@ -11,6 +11,8 @@ import type { ISelectionEntry } from "./selection-types.js";
 export enum ScoreElementKind {
     GridCell,
     StaffRun,
+    BarContainer,
+    TrackRow,
 }
 
 /** Domain identity and rendered kind of a score element. */

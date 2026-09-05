@@ -30,8 +30,8 @@ export const meterBasis = (meter: IMeterSnapshot): Set<number> => {
 };
 
 /**
- * Computes whether an actual:normal ratio is a tuplet. A subdivision is a tuplet when the
- * reduced numerator has a prime factor that is not part of the meter's natural basis.
+ * Computes whether an actual:normal ratio is a tuplet. A subdivision is a tuplet when either
+ * side of the reduced ratio has a prime factor that is not part of the meter's natural basis.
  *
  * @param actual The number of notes in the stream.
  * @param normal The number of original steps the subdivision replaces.
@@ -43,8 +43,9 @@ export const computeIsTuplet = (actual: number, normal: number, meter: IMeterSna
     const basis = meterBasis(meter);
     const divisor = greatestCommonDivisor(actual, normal);
     const reducedActual = divisor > 0 ? actual / divisor : actual;
+    const reducedNormal = divisor > 0 ? normal / divisor : normal;
 
-    return [...primeFactors(reducedActual)].some((factor) => {
+    return [...primeFactors(reducedActual), ...primeFactors(reducedNormal)].some((factor) => {
         return !basis.has(factor);
     });
 };

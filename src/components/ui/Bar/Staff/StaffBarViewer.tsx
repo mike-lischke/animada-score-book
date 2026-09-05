@@ -9,7 +9,7 @@ import type { ISbDmArrangement, ISbDmTrack, ScoreBookDataModel } from "../../../
 import type { ArrangementPlayer } from "../../../../player/ArrangementPlayer.js";
 import { requisitions } from "../../../../supplement/Requisitions.js";
 import type { SelectionManager } from "../../../../ui/SelectionManager.js";
-import type { ScoreElementRegistry } from "../../../../ui/ScoreElementRegistry.js";
+import { ScoreElementKind, type ScoreElementRegistry } from "../../../../ui/ScoreElementRegistry.js";
 import {
     SelectionGranularity, type ISelectionEntry, type ISelectionHitTester,
 } from "../../../../ui/selection-types.js";
@@ -85,7 +85,7 @@ export class StaffBarViewer extends UIComponent<IBarViewerProps, IBarViewerState
      * @returns Entries for any intersected elements, or a fallback measure entry.
      */
     public hitTest(rect: DOMRect): ISelectionEntry[] {
-        const { barNumber } = this.props;
+        const { barNumber, scoreElementRegistry } = this.props;
         const element = this.base as HTMLElement | null;
         if (!element) {
             return [];
@@ -125,13 +125,12 @@ export class StaffBarViewer extends UIComponent<IBarViewerProps, IBarViewerState
 
         for (const row of rows) {
             const rowRect = row.getBoundingClientRect();
-
-            const trackAttribute = row.getAttribute("data-track");
-            if (!trackAttribute) {
+            const rowLocation = scoreElementRegistry?.getLocation(row);
+            if (!rowLocation) {
                 continue;
             }
 
-            const trackId = parseInt(trackAttribute, 10);
+            const trackId = rowLocation.trackId;
 
             // Notes are translated vertically per staff line, so the note symbol can extend below the
             // row. Expand the coarse row bounds by the maximum line spread so noteheads on the lowest
@@ -144,16 +143,20 @@ export class StaffBarViewer extends UIComponent<IBarViewerProps, IBarViewerState
                 continue;
             }
 
-            const noteRunElements = row.querySelectorAll<HTMLElement>(
-                ".staff-note-viewer-run[data-step-index]",
-            );
+            const noteRunElements = scoreElementRegistry?.findElements(
+                ScoreElementKind.StaffRun, barNumber, trackId,
+            ) ?? [];
 
             let rowHasSoundingNotes = false;
 
             for (const runEl of noteRunElements) {
+                const runLocation = scoreElementRegistry?.getLocation(runEl);
+                if (runLocation?.step === undefined) {
+                    continue;
+                }
+
                 let noteHit = false;
-                const noteIdAttr = runEl.getAttribute("data-note-id");
-                const isSoundingNote = noteIdAttr !== null;
+                const isSoundingNote = runLocation.noteId !== undefined;
 
                 // 1. Check the .note-image SVG for notehead and stem.
                 const noteImage = runEl.querySelector<HTMLElement>(".note-image");
@@ -238,20 +241,16 @@ export class StaffBarViewer extends UIComponent<IBarViewerProps, IBarViewerState
                 }
 
                 if (noteHit) {
-                    const stepIndex = parseInt(runEl.getAttribute("data-step-index") ?? "", 10);
-                    const noteIdAttr = runEl.getAttribute("data-note-id");
-                    const noteId = noteIdAttr ? parseInt(noteIdAttr, 10) : undefined;
-
                     noteEntries.push({
                         granularity: SelectionGranularity.Note,
-                        bar: barNumber,
-                        trackId: trackId,
-                        startStep: stepIndex,
-                        endStep: stepIndex,
-                        noteId,
+                        bar: runLocation.bar,
+                        trackId: runLocation.trackId,
+                        startStep: runLocation.step,
+                        endStep: runLocation.step,
+                        noteId: runLocation.noteId,
                     });
 
-                    if (noteId !== undefined) {
+                    if (runLocation.noteId !== undefined) {
                         rowHasSoundingNotes = true;
                     }
                 }
@@ -273,7 +272,7 @@ export class StaffBarViewer extends UIComponent<IBarViewerProps, IBarViewerState
                 const beamRect = beam.getBoundingClientRect();
                 if (rectsIntersect(rect, beamRect.left, beamRect.top, beamRect.right, beamRect.bottom, TOLERANCE)) {
                     let runParent = beam.closest<HTMLElement>(
-                        ".staff-note-viewer-run[data-step-index]",
+                        ".staff-note-viewer-run",
                     );
 
                     // Subdivision container beams are rendered inside the subdivision
@@ -282,7 +281,7 @@ export class StaffBarViewer extends UIComponent<IBarViewerProps, IBarViewerState
                     if (!runParent) {
                         let sibling: Element | null = beam.previousElementSibling;
                         while (sibling) {
-                            if (sibling.matches(".staff-note-viewer-run[data-step-index]")) {
+                            if (sibling.matches(".staff-note-viewer-run")) {
                                 runParent = sibling as HTMLElement;
 
                                 break;
@@ -291,7 +290,7 @@ export class StaffBarViewer extends UIComponent<IBarViewerProps, IBarViewerState
                             // The sibling may be a nested subdivision container;
                             // look inside it for the last run.
                             const innerRun = sibling.querySelector<HTMLElement>(
-                                ".staff-note-viewer-run[data-step-index]:last-of-type",
+                                ".staff-note-viewer-run:last-of-type",
                             );
                             if (innerRun) {
                                 runParent = innerRun;
@@ -304,18 +303,16 @@ export class StaffBarViewer extends UIComponent<IBarViewerProps, IBarViewerState
                     }
 
                     if (runParent) {
-                        const step = parseInt(runParent.getAttribute("data-step-index") ?? "", 10);
-                        if (!isNaN(step)) {
-                            hitBeamSteps.add(step);
+                        const location = scoreElementRegistry?.getLocation(runParent);
+                        if (location?.step !== undefined) {
+                            hitBeamSteps.add(location.step);
                         }
                     }
                 }
             }
 
             if (hitBeamSteps.size > 0) {
-                const allRuns = row.querySelectorAll<HTMLElement>(
-                    ".staff-note-viewer-run[data-step-index]",
-                );
+                const allRuns = noteRunElements;
 
                 // Build connections from shared-right beams: step → step + extent.
                 // The beam width is `${extent * 100}%`, so parsing the percentage
@@ -326,10 +323,12 @@ export class StaffBarViewer extends UIComponent<IBarViewerProps, IBarViewerState
                 const beamConnections = new Map<number, number>();
 
                 for (const run of allRuns) {
-                    const step = parseInt(run.getAttribute("data-step-index") ?? "", 10);
-                    if (isNaN(step)) {
+                    const location = scoreElementRegistry?.getLocation(run);
+                    if (location?.step === undefined) {
                         continue;
                     }
+
+                    const step = location.step;
 
                     const beams = run.querySelectorAll<HTMLElement>(".staff-note-viewer-beam");
                     for (const beam of beams) {
@@ -349,7 +348,7 @@ export class StaffBarViewer extends UIComponent<IBarViewerProps, IBarViewerState
                 // (not steps), so we find the connection target by locating the
                 // first run after the subdivision container.
                 for (const beam of beamElements) {
-                    if (beam.closest(".staff-note-viewer-run[data-step-index]")) {
+                    if (beam.closest(".staff-note-viewer-run")) {
                         continue; // already handled above
                     }
 
@@ -363,19 +362,17 @@ export class StaffBarViewer extends UIComponent<IBarViewerProps, IBarViewerState
                     let sibling: Element | null = beam.previousElementSibling;
                     let fromStep: number | undefined;
                     while (sibling) {
-                        if (sibling.matches(".staff-note-viewer-run[data-step-index]")) {
-                            fromStep = parseInt(
-                                (sibling as HTMLElement).getAttribute("data-step-index") ?? "", 10,
-                            );
+                        if (sibling.matches(".staff-note-viewer-run")) {
+                            fromStep = scoreElementRegistry?.getLocation(sibling as HTMLElement)?.step;
 
                             break;
                         }
 
                         const innerRun = sibling.querySelector<HTMLElement>(
-                            ".staff-note-viewer-run[data-step-index]:last-of-type",
+                            ".staff-note-viewer-run:last-of-type",
                         );
                         if (innerRun) {
-                            fromStep = parseInt(innerRun.getAttribute("data-step-index") ?? "", 10);
+                            fromStep = scoreElementRegistry?.getLocation(innerRun)?.step;
 
                             break;
                         }
@@ -383,7 +380,7 @@ export class StaffBarViewer extends UIComponent<IBarViewerProps, IBarViewerState
                         sibling = sibling.previousElementSibling;
                     }
 
-                    if (fromStep === undefined || isNaN(fromStep)) {
+                    if (fromStep === undefined) {
                         continue;
                     }
 
@@ -392,11 +389,11 @@ export class StaffBarViewer extends UIComponent<IBarViewerProps, IBarViewerState
                     let nextSibling: Element | null = container?.nextElementSibling ?? null;
                     let toStep: number | undefined;
                     while (nextSibling) {
-                        const nextRun = nextSibling.matches(".staff-note-viewer-run[data-step-index]")
+                        const nextRun = nextSibling.matches(".staff-note-viewer-run")
                             ? nextSibling as HTMLElement
-                            : nextSibling.querySelector<HTMLElement>(".staff-note-viewer-run[data-step-index]");
+                            : nextSibling.querySelector<HTMLElement>(".staff-note-viewer-run");
                         if (nextRun) {
-                            toStep = parseInt(nextRun.getAttribute("data-step-index") ?? "", 10);
+                            toStep = scoreElementRegistry?.getLocation(nextRun)?.step;
 
                             break;
                         }
@@ -404,7 +401,7 @@ export class StaffBarViewer extends UIComponent<IBarViewerProps, IBarViewerState
                         nextSibling = nextSibling.nextElementSibling;
                     }
 
-                    if (toStep !== undefined && !isNaN(toStep)) {
+                    if (toStep !== undefined) {
                         beamConnections.set(fromStep, toStep);
                     }
                 }
@@ -492,17 +489,15 @@ export class StaffBarViewer extends UIComponent<IBarViewerProps, IBarViewerState
                         const tRect = tupletEl.getBoundingClientRect();
                         if (rectsIntersect(rect, tRect.left, tRect.top, tRect.right, tRect.bottom, TOLERANCE)) {
                             // Find all run elements whose horizontal range overlaps the tuplet.
-                            const runs = row.querySelectorAll<HTMLElement>(
-                                ".staff-note-viewer-run[data-step-index]",
-                            );
+                            const runs = noteRunElements;
                             let minStep = Infinity;
                             let maxStep = -Infinity;
 
                             for (const run of runs) {
                                 const rRect = run.getBoundingClientRect();
                                 if (rRect.right > tRect.left && rRect.left < tRect.right) {
-                                    const step = parseInt(run.getAttribute("data-step-index") ?? "", 10);
-                                    if (!isNaN(step)) {
+                                    const step = scoreElementRegistry?.getLocation(run)?.step;
+                                    if (step !== undefined) {
                                         if (step < minStep) {
                                             minStep = step;
                                         }
@@ -567,7 +562,14 @@ export class StaffBarViewer extends UIComponent<IBarViewerProps, IBarViewerState
         }
 
         return (
-            <div className="bar-viewer staff-mode" data-bar={barNumber}>
+            <div
+                className="bar-viewer staff-mode"
+                ref={scoreElementRegistry?.createRef({
+                    kind: ScoreElementKind.BarContainer,
+                    bar: barNumber,
+                    trackId: 0,
+                })}
+            >
                 <div className="staff-measure-number">{barNumber}</div>
                 {labelContent}
                 {tracks.map((track) => {

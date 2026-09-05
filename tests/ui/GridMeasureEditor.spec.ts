@@ -6,6 +6,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { Arrangement } from "../../src/core/Arrangement.js";
+import { MeasureProjection, ProjectedItemKind } from "../../src/core/MeasureProjection.js";
 import { ScoreBookDataModel, type ISbDmTrackMeasure } from "../../src/core/ScoreBookDataModel.js";
 import { addFractions, compareFractions } from "../../src/core/serialisation/numeric-functions.js";
 import type { IAudioData } from "../../src/core/types/general.js";
@@ -340,6 +341,84 @@ describe.sequential("GridMeasureEditor subdivision editing", () => {
         expect(created).toBe(true);
         expect(track.measures[0].subdivisions).toEqual([{ startIndex: 0, actual: 3, normal: 2, isTuplet: true }]);
         expect(mutatedCalls).toBe(1);
+    });
+
+    it("creates a nested subdivision within the selected parent slot", () => {
+        const track = model.arrangement!.tracks[0];
+        const measure = track.measures[0];
+        editor.createSubdivision(track.id, 1,
+            { numerator: 0, denominator: 1 }, { numerator: 3, denominator: 16 }, 4, 3);
+
+        const parentSlotStart = { ...measure.events[1].start };
+        const parentSlotDuration = { ...measure.events[1].duration };
+
+        const created = editor.createSubdivisionAtCursor({
+            bar: 1,
+            trackId: track.id,
+            step: 0,
+            start: parentSlotStart,
+        }, 2, 3);
+
+        expect(created).toBe(true);
+        expect(measure.subdivisions).toHaveLength(2);
+        expect(measure.subdivisions).toContainEqual({ startIndex: 0, actual: 4, normal: 3, isTuplet: true });
+        expect(measure.subdivisions).toContainEqual({ startIndex: 1, actual: 2, normal: 1, isTuplet: false });
+        expect(measure.events[1].start).toEqual(parentSlotStart);
+        expect(measure.events[1].duration).toEqual({
+            numerator: parentSlotDuration.numerator,
+            denominator: parentSlotDuration.denominator * 2,
+        });
+    });
+
+    it("preserves nested subdivision rendering when an inner slot changes", () => {
+        const track = model.arrangement!.tracks[0];
+        const measure = track.measures[0];
+        editor.createSubdivision(track.id, 1,
+            { numerator: 0, denominator: 1 }, { numerator: 1, denominator: 2 }, 3, 8);
+        const parentSlotStart = { ...measure.events[1].start };
+        editor.createSubdivisionAtCursor({
+            bar: 1,
+            trackId: track.id,
+            step: 0,
+            start: parentSlotStart,
+        }, 2, 3);
+
+        const childSlotStart = { ...measure.events[2].start };
+        const childSlotEnd = addFractions(childSlotStart, measure.events[2].duration);
+        expect(model.setGridNote(track.id, 1, 0, "test", childSlotStart)).toBe(true);
+
+        const projected = MeasureProjection.project(measure);
+        const parent = projected[0];
+        expect(parent.kind).toBe(ProjectedItemKind.Subdivision);
+        if (parent.kind !== ProjectedItemKind.Subdivision) {
+            return;
+        }
+
+        expect(parent.actual).toBe(3);
+        expect(parent.normal).toBe(8);
+        expect(parent.items[1].kind).toBe(ProjectedItemKind.Subdivision);
+        if (parent.items[1].kind === ProjectedItemKind.Subdivision) {
+            expect(parent.items[1]).toMatchObject({ actual: 2, normal: 1 });
+        }
+
+        expect(model.clearStepRanges([{
+            trackId: track.id,
+            bar: 1,
+            start: childSlotStart,
+            end: childSlotEnd,
+        }])).toBe(true);
+
+        const projectedAfterClear = MeasureProjection.project(measure);
+        const parentAfterClear = projectedAfterClear[0];
+        expect(parentAfterClear.kind).toBe(ProjectedItemKind.Subdivision);
+        if (parentAfterClear.kind === ProjectedItemKind.Subdivision) {
+            expect(parentAfterClear).toMatchObject({ actual: 3, normal: 8 });
+            expect(parentAfterClear.items[1]).toMatchObject({
+                kind: ProjectedItemKind.Subdivision,
+                actual: 2,
+                normal: 1,
+            });
+        }
     });
 
     it("deletes a fully selected empty subdivision", () => {

@@ -259,9 +259,10 @@ export class TrackViewerInputController {
             return undefined;
         }
 
-        const cell = target.closest<HTMLElement>(".note-viewer[data-step-index]");
+        const cell = target.closest<HTMLElement>(".note-viewer");
+        const location = cell ? this.scoreElementRegistry.getLocation(cell) : undefined;
 
-        return cell?.closest(".grid-measure-row") ? cell : undefined;
+        return location?.kind === ScoreElementKind.GridCell ? cell ?? undefined : undefined;
     }
 
     private handleKeyDown = (event: KeyboardEvent): void => {
@@ -547,30 +548,32 @@ export class TrackViewerInputController {
             return undefined;
         }
 
-        const cells = [...row.querySelectorAll<HTMLElement>(".note-viewer[data-step-index]")];
+        const rowLocation = this.scoreElementRegistry.getLocation(row);
+        if (!rowLocation) {
+            return undefined;
+        }
+
+        const cells = this.getGridCells(rowLocation.bar, rowLocation.trackId);
         const cellIndex = cells.indexOf(cell);
         if (cellIndex + 1 < cells.length) {
             return cells[cellIndex + 1];
         }
 
-        const trackId = row.getAttribute("data-track");
-        const contentHost = this.eventContainer;
-        if (!trackId) {
-            return undefined;
-        }
-
-        const rows = this.getTrackRows(contentHost, Number.parseInt(trackId, 10));
+        const rows = this.getTrackRows(rowLocation.trackId);
         rows.sort((left, right) => {
-            return Number.parseInt(left.getAttribute("data-bar") ?? "0", 10)
-                - Number.parseInt(right.getAttribute("data-bar") ?? "0", 10);
+            return (this.scoreElementRegistry.getLocation(left)?.bar ?? 0)
+                - (this.scoreElementRegistry.getLocation(right)?.bar ?? 0);
         });
         const rowIndex = rows.indexOf(row);
         if (rowIndex < 0 || rowIndex + 1 >= rows.length) {
             return undefined;
         }
 
-        return rows[rowIndex + 1].querySelector<HTMLElement>(".note-viewer[data-step-index]")
-            ?? undefined;
+        const nextRowLocation = this.scoreElementRegistry.getLocation(rows[rowIndex + 1]);
+
+        return nextRowLocation
+            ? this.getGridCells(nextRowLocation.bar, nextRowLocation.trackId).at(0)
+            : undefined;
     }
 
     private findPreviousGridCell(cell: HTMLElement): HTMLElement | undefined {
@@ -579,22 +582,21 @@ export class TrackViewerInputController {
             return undefined;
         }
 
-        const cells = [...row.querySelectorAll<HTMLElement>(".note-viewer[data-step-index]")];
+        const rowLocation = this.scoreElementRegistry.getLocation(row);
+        if (!rowLocation) {
+            return undefined;
+        }
+
+        const cells = this.getGridCells(rowLocation.bar, rowLocation.trackId);
         const cellIndex = cells.indexOf(cell);
         if (cellIndex > 0) {
             return cells[cellIndex - 1];
         }
 
-        const trackId = row.getAttribute("data-track");
-        const contentHost = this.eventContainer;
-        if (!trackId) {
-            return undefined;
-        }
-
-        const rows = this.getTrackRows(contentHost, Number.parseInt(trackId, 10));
+        const rows = this.getTrackRows(rowLocation.trackId);
         rows.sort((left, right) => {
-            return Number.parseInt(left.getAttribute("data-bar") ?? "0", 10)
-                - Number.parseInt(right.getAttribute("data-bar") ?? "0", 10);
+            return (this.scoreElementRegistry.getLocation(left)?.bar ?? 0)
+                - (this.scoreElementRegistry.getLocation(right)?.bar ?? 0);
         });
         const rowIndex = rows.indexOf(row);
         if (rowIndex <= 0) {
@@ -602,9 +604,10 @@ export class TrackViewerInputController {
         }
 
         const previousRow = rows[rowIndex - 1];
-        const previousCells = [...previousRow.querySelectorAll<HTMLElement>(
-            ".note-viewer[data-step-index]",
-        )];
+        const previousRowLocation = this.scoreElementRegistry.getLocation(previousRow);
+        const previousCells = previousRowLocation
+            ? this.getGridCells(previousRowLocation.bar, previousRowLocation.trackId)
+            : [];
 
         return previousCells[previousCells.length - 1];
     }
@@ -622,10 +625,16 @@ export class TrackViewerInputController {
         return elements.at(0);
     }
 
-    private getTrackRows(contentHost: HTMLElement, trackId: number): HTMLElement[] {
-        return [...contentHost.querySelectorAll<HTMLElement>(".grid-measure-row")].filter((row) => {
-            return row.getAttribute("data-track") === String(trackId);
-        });
+    private getTrackRows(trackId: number): HTMLElement[] {
+        return this.scoreElementRegistry.findElements(ScoreElementKind.TrackRow)
+            .filter((row) => {
+                return row.classList.contains("grid-measure-row")
+                    && this.scoreElementRegistry.getLocation(row)?.trackId === trackId;
+            });
+    }
+
+    private getGridCells(bar: number, trackId: number): HTMLElement[] {
+        return this.scoreElementRegistry.findElements(ScoreElementKind.GridCell, bar, trackId);
     }
 
 }

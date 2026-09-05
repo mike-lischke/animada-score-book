@@ -173,11 +173,7 @@ export interface IBarTrackGridSignature {
 export const expectGridBarSignature = async (page: Page, barNumber: number,
     expectedSignature: IBarTrackGridSignature[]): Promise<void> => {
     const actualSignature = await page.evaluate((currentBarNumber) => {
-        const bar = document.querySelector(`.grid-measure-viewer[data-bar="${currentBarNumber}"]`);
-        if (!bar) {
-            return null;
-        }
-
+        const bar = document.querySelectorAll(".grid-measure-viewer")[currentBarNumber - 1];
         const rows = Array.from(bar.querySelectorAll(".grid-measure-row"));
 
         return rows.map((row) => {
@@ -218,11 +214,7 @@ export const expectGridBarDomSnapshot = async (
     barNumber: number
 ): Promise<void> => {
     const barDomSnapshot = await page.evaluate((currentBarNumber) => {
-        const bar = document.querySelector(`.grid-measure-viewer[data-bar="${currentBarNumber}"]`);
-        if (!bar) {
-            return null;
-        }
-
+        const bar = document.querySelectorAll(".grid-measure-viewer")[currentBarNumber - 1];
         const barClone = bar.cloneNode(true) as HTMLElement;
 
         // IDs and inline styles are runtime-specific and make snapshots flaky.
@@ -246,8 +238,7 @@ export const expectGridBarDomSnapshot = async (
         }).join("\n");
     }, barNumber);
 
-    expect(barDomSnapshot).not.toBeNull();
-    expect(barDomSnapshot!.trimEnd()).toMatchSnapshot();
+    expect(barDomSnapshot.trimEnd()).toMatchSnapshot();
 };
 
 export const expectPlaybackToMove = async (page: Page): Promise<void> => {

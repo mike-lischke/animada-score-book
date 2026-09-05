@@ -22,6 +22,7 @@ import type { IAudioData } from "../../src/core/types/general.js";
 import { TimeCoordinator } from "../../src/player/TimeCoordinator.js";
 import { TrackPlayer } from "../../src/player/TrackPlayer.js";
 import type { IRealtimeProvider } from "../../src/ui/AnimationEngine.js";
+import { ScoreElementKind, ScoreElementRegistry } from "../../src/ui/ScoreElementRegistry.js";
 import { selectionToClearRanges } from "../../src/ui/selection-ranges.js";
 import { SelectionGranularity } from "../../src/ui/selection-types.js";
 import { createInstrument, hydrateMeasureEvents } from "../unit-test-helpers.js";
@@ -213,8 +214,15 @@ describe.sequential("Polyrhythm UI Integration", () => {
 
         const track = arrangement.tracks[0] as Track;
         const dataModel = new TestScoreBookDataModel(arrangement, [instrument]);
+        const scoreElementRegistry = new ScoreElementRegistry();
 
-        const result = render(<GridMeasureRow measure={track.measures[0]} track={track} dataModel={dataModel} />);
+        const result = render(<GridMeasureRow
+            measure={track.measures[0]}
+            track={track}
+            dataModel={dataModel}
+            barNumber={1}
+            scoreElementRegistry={scoreElementRegistry}
+        />);
 
         const row = result.container.querySelector(".grid-measure-row");
         const subdivision = row?.querySelector(".subdivision");
@@ -258,8 +266,15 @@ describe.sequential("Polyrhythm UI Integration", () => {
 
         const track = arrangement.tracks[0] as Track;
         const dataModel = new TestScoreBookDataModel(arrangement, [instrument]);
+        const scoreElementRegistry = new ScoreElementRegistry();
 
-        const result = render(<GridMeasureRow measure={track.measures[0]} track={track} dataModel={dataModel} />);
+        const result = render(<GridMeasureRow
+            measure={track.measures[0]}
+            track={track}
+            dataModel={dataModel}
+            barNumber={1}
+            scoreElementRegistry={scoreElementRegistry}
+        />);
 
         const row = result.container.querySelector(".grid-measure-row");
         const subdivision = row?.querySelector(".subdivision");
@@ -268,13 +283,16 @@ describe.sequential("Polyrhythm UI Integration", () => {
 
         // Both slots map to the subdivision's grid start step (3), never to the following cell (4),
         // so they cannot collide with the grid note right after the subdivision.
-        const slotSteps = [...subdivision!.querySelectorAll(":scope > .note-viewer")].map((cell) => {
-            return cell.getAttribute("data-step-index");
+        const slotSteps = [...subdivision!.querySelectorAll<HTMLElement>(":scope > .note-viewer")].map((cell) => {
+            return scoreElementRegistry.getLocation(cell)?.step;
         });
-        expect(slotSteps).toEqual(["3", "3"]);
+        expect(slotSteps).toEqual([3, 3]);
 
         // The grid note after the subdivision is the only element at step 4.
-        expect(row!.querySelectorAll('.note-viewer[data-step-index="4"]')).toHaveLength(1);
+        expect(scoreElementRegistry.findElements(ScoreElementKind.GridCell, 1, track.id)
+            .filter((cell) => {
+                return scoreElementRegistry.getLocation(cell)?.step === 4;
+            })).toHaveLength(1);
     });
 
     it("keeps a cleared subdivision slot individually selectable", () => {
@@ -310,6 +328,7 @@ describe.sequential("Polyrhythm UI Integration", () => {
 
         const track = arrangement.tracks[0] as Track;
         const dataModel = new TestScoreBookDataModel(arrangement, [instrument]);
+        const scoreElementRegistry = new ScoreElementRegistry();
 
         hydrateMeasureEvents(arrangement);
         const secondNoteId = track.measures[0].noteEvents[2].id;
@@ -323,23 +342,29 @@ describe.sequential("Polyrhythm UI Integration", () => {
             noteId: secondNoteId,
         }], dataModel.arrangement));
 
-        const result = render(<GridMeasureRow measure={track.measures[0]} track={track} dataModel={dataModel} />);
+        const result = render(<GridMeasureRow
+            measure={track.measures[0]}
+            track={track}
+            dataModel={dataModel}
+            barNumber={1}
+            scoreElementRegistry={scoreElementRegistry}
+        />);
 
         const row = result.container.querySelector(".grid-measure-row");
         const subdivision = row?.querySelector(".subdivision");
         const slots = subdivision
-            ? [...subdivision.querySelectorAll(":scope > .note-viewer")]
+            ? [...subdivision.querySelectorAll<HTMLElement>(":scope > .note-viewer")]
             : [];
 
         expect(slots).toHaveLength(2);
 
         // The cleared slot is now a rest, but it still carries a unique id so it can be
         // selected independently from the first slot.
-        const firstSlotId = slots[0].getAttribute("data-note-id");
-        const secondSlotId = slots[1].getAttribute("data-note-id");
+        const firstSlotId = scoreElementRegistry.getLocation(slots[0])?.noteId;
+        const secondSlotId = scoreElementRegistry.getLocation(slots[1])?.noteId;
 
-        expect(secondSlotId).not.toBeNull();
+        expect(secondSlotId).toBeDefined();
         expect(secondSlotId).not.toBe(firstSlotId);
-        expect(Number(secondSlotId)).toBeLessThan(0);
+        expect(secondSlotId).toBeLessThan(0);
     });
 });

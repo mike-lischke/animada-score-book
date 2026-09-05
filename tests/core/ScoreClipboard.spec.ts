@@ -1188,7 +1188,7 @@ describe("ScoreClipboard", () => {
 
         expect(result.kind).toBe(PasteResultKind.Success);
         expect(targetTrack.measures[0].subdivisions).toEqual([{
-            startIndex: 0, actual: 3, normal: 9, isTuplet: false,
+            startIndex: 0, actual: 3, normal: 9, isTuplet: true,
         }]);
 
         expect(noteAtFraction(targetTrack.measures[0], 0, 16)).toBe(`${sourceTrack.id}-0`);
