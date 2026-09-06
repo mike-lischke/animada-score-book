@@ -14,9 +14,9 @@ import {
     SelectionGranularity, type ISelectionEntry, type ISelectionHitTester,
 } from "../../../../ui/selection-types.js";
 import { UIComponent, type ICommonUIProperties } from "../../framework/UIComponent.js";
-import { StaffBarTrackRow } from "./StaffBarTrackRow.js";
+import { StaffMeasureTrackRow } from "./StaffMeasureTrackRow.js";
 
-export interface IBarViewerProps extends ICommonUIProperties {
+export interface IStaffMeasureViewerProps extends ICommonUIProperties {
     barNumber: number;
     arrangement: ISbDmArrangement;
     arrangementPlayer: ArrangementPlayer;
@@ -38,14 +38,14 @@ export interface IBarViewerProps extends ICommonUIProperties {
     tracks?: ISbDmTrack[];
 }
 
-interface IBarViewerState {
+interface IStaffMeasureViewerState {
     tracks: ISbDmTrack[];
 }
 
-/** Renders the staff-mode bar column with track rows only. */
-export class StaffBarViewer extends UIComponent<IBarViewerProps, IBarViewerState>
+/** Renders the staff-mode measure column with track rows only. */
+export class StaffMeasureViewer extends UIComponent<IStaffMeasureViewerProps, IStaffMeasureViewerState>
     implements ISelectionHitTester {
-    public constructor(props: IBarViewerProps) {
+    public constructor(props: IStaffMeasureViewerProps) {
         super(props);
 
         const { arrangement, tracks } = props;
@@ -61,7 +61,7 @@ export class StaffBarViewer extends UIComponent<IBarViewerProps, IBarViewerState
         requisitions.register("arrangementChanged", this.handleArrangementChanged);
     }
 
-    public override componentDidUpdate(previousProps: Readonly<IBarViewerProps>): void {
+    public override componentDidUpdate(previousProps: Readonly<IStaffMeasureViewerProps>): void {
         const { arrangement, tracks } = this.props;
         if (arrangement !== previousProps.arrangement || tracks !== previousProps.tracks) {
             this.setState({
@@ -119,7 +119,7 @@ export class StaffBarViewer extends UIComponent<IBarViewerProps, IBarViewerState
                 && tBottom + tolerance >= sel.top && tTop - tolerance <= sel.bottom;
         };
 
-        const rows = element.querySelectorAll<HTMLElement>(".bar-track-row.staff-mode");
+        const rows = element.querySelectorAll<HTMLElement>(".staff-measure-track-row");
         const noteEntries: ISelectionEntry[] = [];
         const trackPieceEntries: ISelectionEntry[] = [];
 
@@ -563,7 +563,7 @@ export class StaffBarViewer extends UIComponent<IBarViewerProps, IBarViewerState
 
         return (
             <div
-                className="bar-viewer staff-mode"
+                className="staff-measure-viewer"
                 ref={scoreElementRegistry?.createRef({
                     kind: ScoreElementKind.BarContainer,
                     bar: barNumber,
@@ -579,7 +579,7 @@ export class StaffBarViewer extends UIComponent<IBarViewerProps, IBarViewerState
                     }
 
                     return (
-                        <StaffBarTrackRow
+                        <StaffMeasureTrackRow
                             key={track.id}
                             track={track}
                             barNumber={barNumber}

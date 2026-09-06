@@ -10,7 +10,7 @@ import type { ISbDmTrack, ScoreBookDataModel } from "../../../core/ScoreBookData
 import type { ArrangementPlayer } from "../../../player/ArrangementPlayer.js";
 import type { SelectionManager } from "../../../ui/SelectionManager.js";
 import { GridMeasureViewer } from "../Bar/Grid/GridMeasureViewer.js";
-import { StaffBarViewer } from "../Bar/Staff/StaffBarViewer.js";
+import { StaffMeasureViewer } from "../Bar/Staff/StaffMeasureViewer.js";
 import { StaffPrefixViewer } from "../Bar/Staff/StaffPrefixViewer.js";
 import { Container } from "../framework/Container.js";
 import { Icon } from "../framework/Icon.js";
@@ -95,7 +95,7 @@ export class PrintView extends UIComponent<IPrintViewProps> {
                                     )}
                                     {block.map((barNumber) => {
                                         return options.viewMode === "staff"
-                                            ? this.renderStaffBar(barNumber, tracks)
+                                            ? this.renderStaffMeasure(barNumber, tracks)
                                             : this.renderGridBar(barNumber, tracks);
                                     })}
                                 </Container>
@@ -227,12 +227,12 @@ export class PrintView extends UIComponent<IPrintViewProps> {
         );
     }
 
-    private renderStaffBar(barNumber: number, tracks: ISbDmTrack[]): ComponentChild {
+    private renderStaffMeasure(barNumber: number, tracks: ISbDmTrack[]): ComponentChild {
         const { arrangement, arrangementPlayer, dataModel, selectionManager } = this.props;
         const ownLabel = arrangement.measureLabels[barNumber] as string | undefined;
 
         return (
-            <StaffBarViewer
+            <StaffMeasureViewer
                 key={`bar-${barNumber}`}
                 barNumber={barNumber}
                 arrangement={arrangement}

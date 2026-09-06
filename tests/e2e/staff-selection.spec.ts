@@ -27,13 +27,13 @@ test.describe("Staff view selection", () => {
             await trackViewToggle.check({ force: true });
         }
 
-        await expect(page.locator(".bar-track-row.staff-mode").first()).toBeVisible();
+        await expect(page.locator(".staff-measure-track-row").first()).toBeVisible();
     });
 
     test("clicking a single note selects it with the note-selected CSS class", async ({ page }) => {
         // Find the first note symbol in the first bar of the first track.
-        const firstNote = page.locator(".bar-viewer.staff-mode").first()
-            .locator(".bar-track-row.staff-mode .staff-note-viewer-note-symbol").first();
+        const firstNote = page.locator(".staff-measure-viewer").first()
+            .locator(".staff-measure-track-row .staff-note-viewer-note-symbol").first();
 
         await expect(firstNote).toBeVisible();
         await firstNote.click();
@@ -76,7 +76,7 @@ test.describe("Staff view selection", () => {
             await trackViewToggle.check({ force: true });
         }
 
-        await expect(page.locator(".bar-track-row.staff-mode").first()).toBeVisible();
+        await expect(page.locator(".staff-measure-track-row").first()).toBeVisible();
 
         // Find a shared beam whose run sits inside a subdivision container (not a direct child of
         // the top-level runs container), i.e. a beam that crosses a subdivision boundary.
@@ -142,7 +142,7 @@ test.describe("Staff view selection", () => {
     test("dragging a selection rect across notes selects them individually", async ({ page }) => {
         // Find two adjacent note runs.
         const runs = page.locator(
-            ".bar-track-row.staff-mode .staff-note-viewer-run:has(.staff-note-viewer-note-symbol)",
+            ".staff-measure-track-row .staff-note-viewer-run:has(.staff-note-viewer-note-symbol)",
         );
         const count = await runs.count();
         if (count < 2) {
@@ -174,7 +174,7 @@ test.describe("Staff view selection", () => {
     test("deselecting by clicking empty space clears all selections", async ({ page }) => {
         // First select a note.
         const firstNote = page.locator(
-            ".bar-track-row.staff-mode .staff-note-viewer-note-symbol",
+            ".staff-measure-track-row .staff-note-viewer-note-symbol",
         ).first();
         await expect(firstNote).toBeVisible();
         await firstNote.click();

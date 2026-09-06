@@ -24,13 +24,13 @@ test.describe("Staff view subdivision rendering", () => {
             await trackViewToggle.check({ force: true });
         }
 
-        await expect(page.locator(".bar-track-row.staff-mode").first()).toBeVisible();
+        await expect(page.locator(".staff-measure-track-row").first()).toBeVisible();
 
         const barResults = await page.evaluate(() => {
             const inspectBar = (barNumber: number) => {
-                const viewer = document.querySelectorAll(".bar-viewer.staff-mode")[barNumber - 1];
+                const viewer = document.querySelectorAll(".staff-measure-viewer")[barNumber - 1];
                 const runs = Array.from(viewer.querySelectorAll(
-                    ".bar-track-row.staff-mode .staff-note-viewer-runs > .staff-note-viewer-run",
+                    ".staff-measure-track-row .staff-note-viewer-runs > .staff-note-viewer-run",
                 ));
 
                 return runs.map((run, index) => {
@@ -120,11 +120,11 @@ test.describe("Staff view subdivision rendering", () => {
             await trackViewToggle.check({ force: true });
         }
 
-        await expect(page.locator(".bar-track-row.staff-mode").first()).toBeVisible();
+        await expect(page.locator(".staff-measure-track-row").first()).toBeVisible();
 
         // Two 32nd notes plus one 16th note must render as three note symbols.
         const noteCount = await page.evaluate(() => {
-            const row = document.querySelector(".bar-viewer.staff-mode .bar-track-row.staff-mode");
+            const row = document.querySelector(".staff-measure-viewer .staff-measure-track-row");
             if (!row) {
                 return -1;
             }
@@ -207,16 +207,16 @@ test.describe("Staff view subdivision rendering", () => {
             await trackViewToggle.check({ force: true });
         }
 
-        await expect(page.locator(".bar-track-row.staff-mode").first()).toBeVisible();
+        await expect(page.locator(".staff-measure-track-row").first()).toBeVisible();
         await expect(
-            page.locator(".bar-viewer.staff-mode").first()
-                .locator(".bar-track-row.staff-mode .staff-note-viewer-note-symbol"),
+            page.locator(".staff-measure-viewer").first()
+                .locator(".staff-measure-track-row .staff-note-viewer-note-symbol"),
         ).toHaveCount(6);
 
         const runData = await page.evaluate(() => {
-            const viewer = document.querySelectorAll(".bar-viewer.staff-mode")[0];
+            const viewer = document.querySelectorAll(".staff-measure-viewer")[0];
             const runs = Array.from(viewer.querySelectorAll(
-                ".bar-track-row.staff-mode .staff-note-viewer-runs > .staff-note-viewer-run",
+                ".staff-measure-track-row .staff-note-viewer-runs > .staff-note-viewer-run",
             ));
 
             return runs.map((run) => {

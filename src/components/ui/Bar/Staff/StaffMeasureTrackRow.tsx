@@ -16,7 +16,7 @@ import type { ScoreElementRegistry } from "../../../../ui/ScoreElementRegistry.j
 import { UIComponent, type ICommonUIProperties } from "../../framework/UIComponent.js";
 import { StaffNoteViewer } from "../../Note/StaffNoteViewer.js";
 
-export interface IStaffBarTrackRowProps extends ICommonUIProperties {
+export interface IStaffMeasureTrackRowProps extends ICommonUIProperties {
     track: ISbDmTrack;
     barNumber: number;
     timeParams: ITimeParamsView;
@@ -28,15 +28,15 @@ export interface IStaffBarTrackRowProps extends ICommonUIProperties {
     scoreElementRegistry?: ScoreElementRegistry;
 }
 
-interface IStaffBarTrackRowState {
+interface IStaffMeasureTrackRowState {
     readonly changeCount: number;
 }
 
 /**
- * Renders one track's notes for a single bar in staff mode.
+ * Renders one track's notes for a single measure in staff mode.
  */
-export class StaffBarTrackRow extends UIComponent<IStaffBarTrackRowProps, IStaffBarTrackRowState> {
-    public constructor(props: IStaffBarTrackRowProps) {
+export class StaffMeasureTrackRow extends UIComponent<IStaffMeasureTrackRowProps, IStaffMeasureTrackRowState> {
+    public constructor(props: IStaffMeasureTrackRowProps) {
         super(props);
 
         this.state = { changeCount: 0 };
@@ -60,10 +60,7 @@ export class StaffBarTrackRow extends UIComponent<IStaffBarTrackRowProps, IStaff
             return ns.noteLine ?? 1;
         }));
 
-        const rowClassName = this.generateFinalClassName([
-            "bar-track-row",
-            "staff-mode",
-        ]);
+        const rowClassName = this.generateFinalClassName(["staff-measure-track-row"]);
 
         return (
             <StaffNoteViewer

@@ -229,27 +229,34 @@ export class NoteImage extends UIComponent<INoteImageProperties, INoteImageState
 
         NoteImage.registeredSymbols.add(symbolId);
 
-        const res = await fetch(source);
-        const text = await res.text();
+        try {
+            const res = await fetch(source);
+            const text = await res.text();
 
-        const tpl = document.createElement("template");
-        tpl.innerHTML = text.trim();
-        const svg = tpl.content.firstElementChild as SVGSVGElement | null;
-        if (!svg) {
-            return;
+            const tpl = document.createElement("template");
+            tpl.innerHTML = text.trim();
+            const svg = tpl.content.firstElementChild as SVGSVGElement | null;
+            if (!svg) {
+                return;
+            }
+
+            const viewBox = svg.getAttribute("viewBox") ?? "0 0 24 24";
+
+            const symbol = document.createElementNS("http://www.w3.org/2000/svg", "symbol");
+            symbol.setAttribute("id", symbolId);
+            symbol.setAttribute("viewBox", viewBox);
+
+            while (svg.firstChild) {
+                symbol.appendChild(svg.firstChild);
+            }
+
+            NoteImage.svgHolder.appendChild(symbol);
+        } catch {
+            // The sprite load is best-effort. A failed fetch (e.g. offline or in jsdom tests)
+            // must not surface as an unhandled rejection; drop the registration so a later
+            // render can retry.
+            NoteImage.registeredSymbols.delete(symbolId);
         }
-
-        const viewBox = svg.getAttribute("viewBox") ?? "0 0 24 24";
-
-        const symbol = document.createElementNS("http://www.w3.org/2000/svg", "symbol");
-        symbol.setAttribute("id", symbolId);
-        symbol.setAttribute("viewBox", viewBox);
-
-        while (svg.firstChild) {
-            symbol.appendChild(svg.firstChild);
-        }
-
-        NoteImage.svgHolder.appendChild(symbol);
     }
 
     /**

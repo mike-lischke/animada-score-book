@@ -16,7 +16,7 @@ import { GridMeasureEditor } from "../../../ui/GridMeasureEditor.js";
 import { ScoreElementKind, ScoreElementRegistry } from "../../../ui/ScoreElementRegistry.js";
 import { TrackViewerInputController } from "../../../ui/TrackViewerInputController.js";
 import { GridMeasureViewer } from "../Bar/Grid/GridMeasureViewer.js";
-import { StaffBarViewer } from "../Bar/Staff/StaffBarViewer.js";
+import { StaffMeasureViewer } from "../Bar/Staff/StaffMeasureViewer.js";
 import { StaffPrefixViewer } from "../Bar/Staff/StaffPrefixViewer.js";
 import { Container } from "../framework/Container.js";
 import { DialogResponseClosure } from "../framework/Dialog.js";
@@ -230,7 +230,7 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
                             }
 
                             return (
-                                <StaffBarViewer
+                                <StaffMeasureViewer
                                     key={barNumber}
                                     {...barViewerProps}
                                     scoreElementRegistry={this.scoreElementRegistry}

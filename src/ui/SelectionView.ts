@@ -299,7 +299,7 @@ export class SelectionView {
     }
 
     private findStaffArrowTarget(noteElement: HTMLElement, key: string): HTMLElement | undefined {
-        const row = noteElement.closest<HTMLElement>(".bar-track-row.staff-mode");
+        const row = noteElement.closest<HTMLElement>(".staff-measure-track-row");
         if (!row) {
             return undefined;
         }
@@ -323,7 +323,7 @@ export class SelectionView {
 
             const rows = scoreElementRegistry.findElements(ScoreElementKind.TrackRow, undefined, rowLocation.trackId)
                 .filter((candidate) => {
-                    return contentHost.contains(candidate) && candidate.classList.contains("staff-mode");
+                    return contentHost.contains(candidate) && candidate.classList.contains("staff-measure-track-row");
                 }).sort((left, right) => {
                     const leftBar = this.scoreElementRegistry?.getLocation(left)?.bar ?? 0;
                     const rightBar = this.scoreElementRegistry?.getLocation(right)?.bar ?? 0;
@@ -362,7 +362,7 @@ export class SelectionView {
 
         const rows = scoreElementRegistry.findElements(ScoreElementKind.TrackRow, rowLocation.bar)
             .filter((candidate) => {
-                return contentHost.contains(candidate) && candidate.classList.contains("staff-mode");
+                return contentHost.contains(candidate) && candidate.classList.contains("staff-measure-track-row");
             });
         const rowIndex = rows.indexOf(row);
         const direction = key === "ArrowUp" ? -1 : 1;

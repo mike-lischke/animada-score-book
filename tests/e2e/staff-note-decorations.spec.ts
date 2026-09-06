@@ -85,7 +85,7 @@ test.describe("Note head types", () => {
             await trackViewToggle.check({ force: true });
         }
 
-        await expect(page.locator(".bar-track-row.staff-mode").first()).toBeVisible();
+        await expect(page.locator(".staff-measure-track-row").first()).toBeVisible();
 
         // Oval heads use the SVG note symbol.
         const noteSymbol = page.locator(".staff-note-viewer-note-symbol").first();
@@ -117,7 +117,7 @@ test.describe("Note head types", () => {
             await trackViewToggle.check({ force: true });
         }
 
-        await expect(page.locator(".bar-track-row.staff-mode").first()).toBeVisible();
+        await expect(page.locator(".staff-measure-track-row").first()).toBeVisible();
 
         // Cross heads are rendered via SVG.
         const crossSvg = page.locator(".staff-note-head-cross-svg").first();
@@ -149,7 +149,7 @@ test.describe("Note head types", () => {
             await trackViewToggle.check({ force: true });
         }
 
-        await expect(page.locator(".bar-track-row.staff-mode").first()).toBeVisible();
+        await expect(page.locator(".staff-measure-track-row").first()).toBeVisible();
 
         // Triangle heads use the CSS class.
         const triangle = page.locator(".staff-note-head.triangle").first();
@@ -181,7 +181,7 @@ test.describe("Note head types", () => {
             await trackViewToggle.check({ force: true });
         }
 
-        await expect(page.locator(".bar-track-row.staff-mode").first()).toBeVisible();
+        await expect(page.locator(".staff-measure-track-row").first()).toBeVisible();
 
         const square = page.locator(".staff-note-head.square").first();
         await expect(square).toBeVisible();
@@ -214,7 +214,7 @@ test.describe("Note decorations", () => {
             await trackViewToggle.check({ force: true });
         }
 
-        await expect(page.locator(".bar-track-row.staff-mode").first()).toBeVisible();
+        await expect(page.locator(".staff-measure-track-row").first()).toBeVisible();
 
         // Ghost notes have the ghost-note class for opening paren + a span for closing paren.
         const ghostNote = page.locator(".staff-note-head.ghost-note").first();
@@ -248,7 +248,7 @@ test.describe("Note decorations", () => {
             await trackViewToggle.check({ force: true });
         }
 
-        await expect(page.locator(".bar-track-row.staff-mode").first()).toBeVisible();
+        await expect(page.locator(".staff-measure-track-row").first()).toBeVisible();
 
         const dampedPlus = page.locator(".staff-note-head-damped-plus").first();
         await expect(dampedPlus).toBeVisible();
@@ -280,7 +280,7 @@ test.describe("Note decorations", () => {
             await trackViewToggle.check({ force: true });
         }
 
-        await expect(page.locator(".bar-track-row.staff-mode").first()).toBeVisible();
+        await expect(page.locator(".staff-measure-track-row").first()).toBeVisible();
 
         const accentMark = page.locator(".staff-note-viewer-accent").first();
         await expect(accentMark).toBeVisible();
@@ -312,7 +312,7 @@ test.describe("Note decorations", () => {
             await trackViewToggle.check({ force: true });
         }
 
-        await expect(page.locator(".bar-track-row.staff-mode").first()).toBeVisible();
+        await expect(page.locator(".staff-measure-track-row").first()).toBeVisible();
 
         const rimshotCross = page.locator(".staff-note-head-rimshot-cross-svg").first();
         await expect(rimshotCross).toBeVisible();
@@ -343,7 +343,7 @@ test.describe("Note decorations", () => {
             await trackViewToggle.check({ force: true });
         }
 
-        await expect(page.locator(".bar-track-row.staff-mode").first()).toBeVisible();
+        await expect(page.locator(".staff-measure-track-row").first()).toBeVisible();
 
         const pressRoll = page.locator(".staff-note-head-press-roll-svg").first();
         await expect(pressRoll).toBeVisible();
@@ -380,7 +380,7 @@ test.describe("Note decorations", () => {
             await trackViewToggle.check({ force: true });
         }
 
-        await expect(page.locator(".bar-track-row.staff-mode").first()).toBeVisible();
+        await expect(page.locator(".staff-measure-track-row").first()).toBeVisible();
 
         // Slap shows a square note head.
         const square = page.locator(".staff-note-head.square").first();
@@ -415,7 +415,7 @@ test.describe("Note decorations", () => {
             await trackViewToggle.check({ force: true });
         }
 
-        await expect(page.locator(".bar-track-row.staff-mode").first()).toBeVisible();
+        await expect(page.locator(".staff-measure-track-row").first()).toBeVisible();
 
         // Ghost parentheses should NOT be present.
         const ghostParen = page.locator(".staff-note-head-ghost-paren");

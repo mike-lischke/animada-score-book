@@ -133,10 +133,10 @@ test.describe("BananaDrum polyrhythm import", () => {
             await trackViewToggle.check({ force: true });
         }
 
-        await expect(page.locator(".bar-viewer.staff-mode").first()).toBeVisible();
+        await expect(page.locator(".staff-measure-viewer").first()).toBeVisible();
 
         const staffTupletLabelCount = await page.evaluate(() => {
-            const viewer = document.querySelectorAll(".bar-viewer.staff-mode")[5];
+            const viewer = document.querySelectorAll(".staff-measure-viewer")[5];
             const container = viewer.querySelector(".staff-note-viewer-tuplets");
 
             return container ? container.children.length : 0;

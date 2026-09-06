@@ -67,7 +67,7 @@ test.describe("Staff view multi-line rendering", () => {
 
         await page.goto("/");
         await expect(page.locator("#trackViewerHost")).toBeVisible();
-        await expect(page.locator(".bar-track-row.staff-mode").first()).toBeVisible();
+        await expect(page.locator(".staff-measure-track-row").first()).toBeVisible();
 
         const lineCount = await page.evaluate(() => {
             const viewer = document.querySelector(".staff-note-viewer");
@@ -93,7 +93,7 @@ test.describe("Staff view multi-line rendering", () => {
 
         await page.goto("/");
         await expect(page.locator("#trackViewerHost")).toBeVisible();
-        await expect(page.locator(".bar-track-row.staff-mode").first()).toBeVisible();
+        await expect(page.locator(".staff-measure-track-row").first()).toBeVisible();
 
         const { lineCount, positions } = await page.evaluate(() => {
             const viewer = document.querySelector(".staff-note-viewer");
@@ -129,7 +129,7 @@ test.describe("Staff view multi-line rendering", () => {
 
         await page.goto("/");
         await expect(page.locator("#trackViewerHost")).toBeVisible();
-        await expect(page.locator(".bar-track-row.staff-mode").first()).toBeVisible();
+        await expect(page.locator(".staff-measure-track-row").first()).toBeVisible();
 
         const { lineCount, positions } = await page.evaluate(() => {
             const viewer = document.querySelector(".staff-note-viewer");

@@ -74,11 +74,11 @@ test.describe("Staff view two-step note", () => {
             await trackViewToggle.check({ force: true });
         }
 
-        await expect(page.locator(".bar-track-row.staff-mode").first()).toBeVisible();
+        await expect(page.locator(".staff-measure-track-row").first()).toBeVisible();
 
         // The two-step note must render as a single note symbol, giving three notes in total.
         const noteSymbolCount = await page.evaluate(() => {
-            const row = document.querySelector(".bar-viewer.staff-mode .bar-track-row.staff-mode");
+            const row = document.querySelector(".staff-measure-viewer .staff-measure-track-row");
             if (!row) {
                 return -1;
             }

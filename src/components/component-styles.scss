@@ -548,7 +548,7 @@
     margin-left: 2px;
 }
 
-.bar-viewer.staff-mode .guiderail {
+.staff-measure-viewer .guiderail {
     visibility: hidden;
 }
 
@@ -587,11 +587,11 @@
     width: 100%;
 }
 
-/* BarViewer: one column per bar, laid out horizontally */
-.bar-viewer {
+/* StaffMeasureViewer: one column per measure, laid out horizontally */
+.staff-measure-viewer {
     --bar-step-width: calc(var(--note-height) + 5px);
 
-    /* Will be updated when rendering the bar viewer. */
+    /* Will be updated when rendering the measure viewer. */
     --steps-per-bar: 16;
 
     display: flex;
@@ -599,10 +599,11 @@
     flex: 1;
     min-width: calc(var(--steps-per-bar) * var(--note-height));
     border-right: 2px solid var(--color-base-300);
-    padding: 0 8px;
+    padding: 24px 8px 0 8px;
+    position: relative;
 }
 
-/* Staff-mode bars use the same per-bar min-width as grid-mode bars so the
+/* Staff-mode measures use the same per-measure min-width as grid-mode measures so the
    horizontal positions stay aligned across both modes; this is required for
    the auto-follow play head to track measures correctly. */
 
@@ -653,11 +654,6 @@
     margin-bottom: 20px;
 }
 
-.bar-viewer.staff-mode {
-    position: relative;
-    padding-top: 24px;
-}
-
 .staff-prefix-middle-line {
     position: absolute;
     top: 50%;
@@ -704,7 +700,16 @@
     height: 36px;
 }
 
-/* BarTrackRow: one track's note row within a bar column */
+/* StaffMeasureTrackRow: one track's note row within a staff measure column. */
+.staff-measure-track-row {
+    position: relative;
+    display: flex;
+    flex-direction: row;
+    width: 100%;
+    margin: 0;
+}
+
+/* MiniBarViewer: one track's note row within a mini bar column. */
 .bar-track-row {
     position: relative;
     display: flex;
