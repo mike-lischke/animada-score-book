@@ -146,7 +146,7 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
         const runs =
             hasAnyNote
                 ? this.renderItems(nodes, beamSpans, "", centerLine, restLineOffset)
-                : [this.renderWholeBarRestSlot(restLineOffset)];
+                : [this.renderWholeBarRestSlot(restLineOffset, barNumber, trackId, scoreElementRegistry)];
 
         // Render staff lines. For a single line, render the centred middle line as before.
         // For multiple lines, render N lines symmetrically around the vertical centre.
@@ -845,9 +845,31 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
         );
     }
 
-    private renderWholeBarRestSlot(restLineOffset: number): VNode {
+    /**
+     * Renders the whole-measure rest shown when a measure contains no sounding notes.
+     *
+     * @param restLineOffset Vertical offset in px so the rest sits on the centre line.
+     * @param barNumber The one-based measure number of this viewer.
+     * @param trackId The track identity of this viewer.
+     * @param scoreElementRegistry The registry to register the rest run in.
+     *
+     * @returns The whole-measure rest run.
+     */
+    private renderWholeBarRestSlot(restLineOffset: number, barNumber: number, trackId: number,
+        scoreElementRegistry?: ScoreElementRegistry): VNode {
         return (
-            <div key="rest-whole-bar" className="staff-note-viewer-run" style={{ width: "100%" }}>
+            <div
+                key="rest-whole-bar"
+                className="staff-note-viewer-run"
+                style={{ width: "100%" }}
+                ref={scoreElementRegistry?.createRef({
+                    kind: ScoreElementKind.StaffRun,
+                    bar: barNumber,
+                    trackId,
+                    step: 0,
+                    start: { numerator: 0, denominator: 1 },
+                })}
+            >
                 <NoteImage
                     className="staff-note-viewer-rest-symbol"
                     kind={NoteKind.Rest}

@@ -88,6 +88,11 @@ export class SelectionView {
             return;
         }
 
+        // Take keyboard focus on the score content so subsequent arrow-key navigation is not
+        // swallowed by a previously focused form control (slider, toggle, button).
+        this.eventContainer.querySelector<HTMLElement>("#trackViewerContentHost")
+            ?.focus({ preventScroll: true });
+
         // Clear any lingering text selection so the score's custom selection is the only one.
         window.getSelection()?.removeAllRanges();
 
@@ -293,6 +298,11 @@ export class SelectionView {
             noteId: location.noteId,
             start: location.start,
         });
+
+        // Keep the cursor visible: scroll the nearest scroll hosts so the newly selected
+        // element stays inside the viewport (horizontally across measures, vertically across tracks).
+        target.scrollIntoView({ block: "nearest", inline: "nearest" });
+
         event.preventDefault();
 
         return true;
@@ -376,19 +386,14 @@ export class SelectionView {
             return undefined;
         }
 
-        const cursorX = noteElement.getBoundingClientRect().left;
-        const runAtCursor = adjacentRuns.find((run) => {
-            const runRect = run.getBoundingClientRect();
-
-            return cursorX >= runRect.left && cursorX < runRect.right;
-        });
-        if (runAtCursor) {
-            return runAtCursor;
-        }
+        // Match the glyph whose actual horizontal position is closest to the source glyph, not
+        // the run whose slot starts closest. Note glyphs sit at their onset + half a step while
+        // rest glyphs are centred in their slot, so the run's left edge is a poor proxy.
+        const cursorX = this.staffRunGlyphCenterX(noteElement);
 
         return adjacentRuns.reduce((closest, run) => {
-            const closestDistance = Math.abs(closest.getBoundingClientRect().left - cursorX);
-            const runDistance = Math.abs(run.getBoundingClientRect().left - cursorX);
+            const closestDistance = Math.abs(this.staffRunGlyphCenterX(closest) - cursorX);
+            const runDistance = Math.abs(this.staffRunGlyphCenterX(run) - cursorX);
 
             return runDistance < closestDistance ? run : closest;
         });
@@ -1141,6 +1146,23 @@ export class SelectionView {
         const glyphLeft = this.staffGlyphLeftEdge(noteElement, symbol);
 
         return new DOMRect(glyphLeft, singleLineTop, symbolRect.width, symbolRect.height);
+    }
+
+    /**
+     * Returns the horizontal centre of a staff run's glyph. Notes sit at their onset + half a step
+     * while rests are centred in their slot, so the run's own left edge is not a reliable anchor.
+     *
+     * @param run The staff note or rest run element.
+     *
+     * @returns The glyph centre in viewport pixels.
+     */
+    private staffRunGlyphCenterX(run: HTMLElement): number {
+        const symbol = run.querySelector<HTMLElement>(
+            ".staff-note-viewer-note-symbol, .staff-note-viewer-rest-symbol",
+        );
+        const rect = (symbol ?? run).getBoundingClientRect();
+
+        return rect.left + (rect.width / 2);
     }
 
     private staffGlyphLeftEdge(run: HTMLElement, symbol: HTMLElement): number {

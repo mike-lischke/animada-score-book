@@ -13,6 +13,7 @@ import {
 } from "../../src/core/ScoreBookDataModel.js";
 import type { IAudioData, IFraction, IMeasureEvent, ISubdivision } from "../../src/core/types/general.js";
 import type { IScoreMetrics } from "../../src/player/TimeCoordinator.js";
+import { ScoreElementKind, ScoreElementRegistry } from "../../src/ui/ScoreElementRegistry.js";
 
 const fraction = (numerator: number, denominator: number): IFraction => {
     return { numerator, denominator };
@@ -285,5 +286,35 @@ describe.sequential("StaffNoteViewer beams", () => {
 
         // The merged rest spans one pulse, so its slot anchor halves from an eighth's 25% to 12.5%.
         expect(restRuns[0].getAttribute("style")).toContain("--note-anchor: 12.5%");
+    });
+
+    it("registers the whole-measure rest as a staff run", () => {
+        const measure = buildMeasure([
+            event(fraction(0, 1), fraction(1, 1)),
+        ], []);
+
+        const registry = new ScoreElementRegistry();
+        renderResult = render(
+            <StaffNoteViewer
+                isLastBar={true}
+                timeSignature="4/4"
+                scoreMetrics={scoreMetrics}
+                baseSteps={16}
+                measure={measure}
+                barNumber={1}
+                trackId={100}
+                scoreElementRegistry={registry}
+            />,
+        );
+
+        const runs = registry.findElements(ScoreElementKind.StaffRun, 1, 100);
+        expect(runs).toHaveLength(1);
+        expect(registry.getLocation(runs[0])).toEqual({
+            kind: ScoreElementKind.StaffRun,
+            bar: 1,
+            trackId: 100,
+            step: 0,
+            start: { numerator: 0, denominator: 1 },
+        });
     });
 });
