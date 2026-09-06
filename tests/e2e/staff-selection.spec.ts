@@ -65,9 +65,9 @@ test.describe("Staff view selection", () => {
     });
 
     test("clicking a subdivision-crossing beam selects the beamed note group", async ({ page }) => {
-        // Bolero 3 has a nested subdivision. A beam connecting the subdivision's last inner
-        // note to the next note outside is rendered as a shared-right segment with a
-        // percentage width above 100% (extent > 1 slot), attached to that inner note's run.
+        // Bolero 3 has a nested subdivision. Beams are anchored at each note's onset, so a beam
+        // connecting a subdivision's last inner note to the next note outside spans the boundary
+        // without exceeding its own run's width.
         await page.goto(bolero3Url);
         await expect(page.locator("#trackViewerHost")).toBeVisible();
 
@@ -78,38 +78,33 @@ test.describe("Staff view selection", () => {
 
         await expect(page.locator(".bar-track-row.staff-mode").first()).toBeVisible();
 
-        const beams = page.locator(".staff-note-viewer-beam");
-        const beamCount = await beams.count();
+        // Find a shared beam whose run sits inside a subdivision container (not a direct child of
+        // the top-level runs container), i.e. a beam that crosses a subdivision boundary.
+        const crossingBeamBox = await page.evaluate(() => {
+            const nestedRun = Array.from(document.querySelectorAll<HTMLElement>(".staff-note-viewer-run"))
+                .find((run) => {
+                    return run.parentElement !== null
+                        && !run.parentElement.classList.contains("staff-note-viewer-runs");
+                });
 
-        let crossingBeamBox: { x: number; y: number; width: number; height: number; } | null = null;
+            const beam = nestedRun?.querySelector<HTMLElement>(".staff-note-viewer-beam");
 
-        for (let i = 0; i < beamCount; i++) {
-            const beam = beams.nth(i);
-            const widthStyle = await beam.evaluate((el) => {
-                return (el as HTMLElement).style.width;
-            });
-            if (!widthStyle.endsWith("%")) {
-                continue;
+            if (!beam) {
+                return null;
             }
 
-            const percent = parseFloat(widthStyle);
-            if (percent <= 100) {
-                continue;
-            }
+            const rect = beam.getBoundingClientRect();
 
-            const box = await beam.boundingBox();
-            if (box && (!crossingBeamBox || box.width > crossingBeamBox.width)) {
-                crossingBeamBox = box;
-            }
-        }
+            return { x: rect.left, y: rect.top, width: rect.width, height: rect.height };
+        });
 
         if (!crossingBeamBox) {
-            test.skip(true, "No subdivision-crossing beam found in this arrangement");
+            test.skip(true, "No nested-subdivision beam found in this arrangement");
 
             return;
         }
 
-        // Click at the center of the widest crossing beam for a stable hit.
+        // Click at the center of the beam for a stable hit.
         await page.mouse.click(
             crossingBeamBox.x + (crossingBeamBox.width / 2),
             crossingBeamBox.y + (crossingBeamBox.height / 2),

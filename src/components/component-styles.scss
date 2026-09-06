@@ -168,7 +168,8 @@
 
         .trackControlsPanel,
         .trackEditSidebarPanel {
-            padding-top: var(--bar-action-strip-height);
+            /* 8px is the top margin of the action strip. */
+            padding-top: calc(var(--bar-action-strip-height) + 8px);
         }
     }
 
@@ -609,7 +610,7 @@
     flex-shrink: 0;
     width: 48px;
     margin: 0 -8px 0 8px;
-    padding-top: 27.5px;
+    padding-top: 43.5px;
 }
 
 .staff-measure-number {
@@ -648,13 +649,13 @@
 .staff-prefix-row {
     min-height: var(--note-height);
     margin: 0;
-    padding-top: 24px;
+    padding-top: 22px;
     margin-bottom: 20px;
 }
 
 .bar-viewer.staff-mode {
     position: relative;
-    padding-top: 6pt;
+    padding-top: 24px;
 }
 
 .staff-prefix-middle-line {
@@ -714,6 +715,7 @@
 
 .staff-note-viewer {
     --staff-note-prefix-width: 58px;
+    --staff-note-symbol-width: 25px;
     --staff-barline-height: calc(var(--note-height) * 0.2);
 
     position: relative;
@@ -734,7 +736,7 @@
     position: absolute;
     pointer-events: none;
     z-index: 1;
-    left: calc(50% - 1px);
+    left: calc(var(--note-anchor) - 1px);
     top: calc(50% - 38px);
     width: 2px;
     background: var(--color-base-content);
@@ -744,7 +746,7 @@
 .staff-note-viewer-custom-stem--square {
     /* Square heads (Timbau, Repinique slap) sit lower; pull stem down and left. */
     top: calc(50% - 38px) !important;
-    left: calc(50% - 2px) !important;
+    left: calc(var(--note-anchor) - 2px) !important;
 }
 
 .staff-note-viewer-custom-stem--cross {
@@ -831,6 +833,12 @@
     height: 100%;
 }
 
+/* Note runs anchor their notehead at the note's onset (event start + half a step); rests stay
+   centred in their slot. */
+.staff-note-viewer-note-run {
+    justify-content: flex-start;
+}
+
 /* Beam stroke attached to a beamed note. Position (top, left/right, width) is set inline by
    StaffNoteViewer.renderBeamSegments per beam segment (shared vs partial, level 1..3). */
 .staff-note-viewer-beam {
@@ -843,7 +851,7 @@
 
 .staff-note-viewer-accent {
     position: absolute;
-    left: calc(50% - 5px);
+    left: calc(var(--note-anchor) - 5px);
     top: calc(50% + 9px);
     transform: translateX(-50%);
     font-size: 18px;
@@ -879,7 +887,7 @@
 }
 
 .staff-note-viewer-tuplet-number.staff-note-viewer-tuplet-below {
-    top: calc(50% + 24px);
+    top: calc(50% + 59px);
 }
 
 /*
@@ -904,7 +912,7 @@
 }
 
 .staff-note-viewer-tuplet-bracket.staff-note-viewer-tuplet-below {
-    top: calc(50% + 9px);
+    top: calc(50% + 45px);
     border-top: 0;
     border-bottom: 1.5px solid var(--color-base-content);
 }
@@ -931,7 +939,7 @@
 /* Note symbol from the combined note sprite. */
 .staff-note-viewer-note-symbol {
     display: block;
-    width: 25px;
+    width: var(--staff-note-symbol-width);
     height: 60px;
 
     /* The note head is in the lower part of this SVG; lift it so the head center sits on the middle line. */
@@ -947,6 +955,7 @@
     position: relative;
     display: inline-block;
     flex-shrink: 0;
+    margin-left: calc(var(--note-anchor) - var(--staff-note-symbol-width) / 2);
 
     /* Shared head shape via ::after.  Centre ~27 px above the bottom of the 60 px span. */
     &::after {

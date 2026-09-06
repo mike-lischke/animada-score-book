@@ -314,9 +314,9 @@ export class StaffBarViewer extends UIComponent<IBarViewerProps, IBarViewerState
             if (hitBeamSteps.size > 0) {
                 const allRuns = noteRunElements;
 
-                // Build connections from shared-right beams: step → step + extent.
-                // The beam width is `${extent * 100}%`, so parsing the percentage
-                // gives us the extent in step units.
+                // Build connections from shared-right beams: step → step + 1.
+                // Shared beams always bridge to the next note (width 100 %), so
+                // parsing the percentage yields the extent in slot units (1).
                 // A run may contain multiple beam segments (one per beam level).
                 // Partial stubs (12px) are skipped; only percentage-width shared
                 // beams indicate a connection to the next note.

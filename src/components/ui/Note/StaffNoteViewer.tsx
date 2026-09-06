@@ -3,7 +3,7 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import { type ComponentChild, type VNode } from "preact";
+import { type ComponentChild, type CSSProperties, type VNode } from "preact";
 
 import type { ISbDmTrackMeasure } from "../../../core/ScoreBookDataModel.js";
 import {
@@ -15,6 +15,7 @@ import {
 } from "../../../core/MeasureProjection.js";
 import type { IFraction, IAudioData } from "../../../core/types/general.js";
 import type { IScoreMetrics } from "../../../player/TimeCoordinator.js";
+import { addFractions, compareFractions, subtractFractions } from "../../../core/serialisation/numeric-functions.js";
 import { ScoreElementKind, type ScoreElementRegistry } from "../../../ui/ScoreElementRegistry.js";
 import { NoteImage, NoteImageHeadType, NoteKind, NoteLength } from "../framework/NoteImage.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
@@ -54,6 +55,9 @@ interface IStaffNoteNode {
     /** Tuplet nesting depth (0 at the top level). */
     depth: number;
 
+    /** Identity of the innermost enclosing tuplet, or undefined for notes outside any tuplet. */
+    tupletId?: number;
+
     glyph: INoteGlyph;
     beamCount: number;
     displayType: NoteDisplayType;
@@ -90,9 +94,6 @@ interface IBeamSegment {
     level: number;
 
     kind: "shared-right" | "partial-left" | "partial-right";
-
-    /** Slot widths from this notehead to the next beam member (shared beams only). */
-    extentSteps?: number;
 }
 
 interface ITupletLabel {
@@ -103,7 +104,14 @@ interface ITupletLabel {
     placement: "above" | "below";
 }
 
+interface ITupletNoteBounds {
+    firstStart?: IFraction;
+    lastStart?: IFraction;
+}
+
 export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
+    private tupletIdSequence = 0;
+
     public override render(): ComponentChild {
         const { isLastBar, scoreMetrics, measure, barNumber, trackId, maxNoteLine = 1,
             scoreElementRegistry } = this.props;
@@ -115,10 +123,15 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
         const { stepsPerBar, stepsPerPulse } = scoreMetrics;
 
         const items = MeasureProjection.project(measure);
-        const nodes = this.buildNodes(items, stepsPerBar, stepsPerPulse);
+        this.tupletIdSequence = 0;
+        const nodes = this.mergeRestsWithinPulses(
+            this.buildNodes(items, stepsPerBar, stepsPerPulse),
+            stepsPerBar,
+            stepsPerPulse,
+        );
 
         const beamSpans = this.computeBeamSpans(nodes, scoreMetrics);
-        const tupletLabels = this.computeTupletLabels(nodes);
+        const tupletLabels = this.computeTupletLabels(nodes, stepsPerBar);
 
         const hasAnyNote = nodes.some((node) => {
             return this.nodeHasAnyNote(node);
@@ -204,13 +217,16 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
      * @param stepsPerBar The number of base-grid steps in a bar.
      * @param stepsPerPulse The number of base-grid steps in a pulse.
      * @param depth The tuplet nesting depth (0 at the top level).
+     * @param tupletId The identity of the innermost enclosing tuplet, or undefined.
      *
      * @returns The staff tree nodes.
      */
     private buildNodes(items: IProjectedItem[], stepsPerBar: number, stepsPerPulse: number,
-        depth = 0): IStaffTreeNode[] {
+        depth = 0, tupletId?: number): IStaffTreeNode[] {
         return items.map((item) => {
             if (item.kind === ProjectedItemKind.Subdivision) {
+                const childTupletId = item.isTuplet ? this.tupletIdSequence++ : tupletId;
+
                 return {
                     kind: StaffNodeKind.Subdivision,
                     start: { ...item.start },
@@ -219,16 +235,17 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                     normal: item.normal,
                     isTuplet: item.isTuplet,
                     depth,
-                    children: this.buildNodes(item.items, stepsPerBar, stepsPerPulse, depth + 1),
+                    children: this.buildNodes(item.items, stepsPerBar, stepsPerPulse, depth + 1,
+                        childTupletId),
                 };
             }
 
-            return this.buildNoteNode(item, stepsPerBar, stepsPerPulse, depth);
+            return this.buildNoteNode(item, stepsPerBar, stepsPerPulse, depth, tupletId);
         });
     }
 
     private buildNoteNode(item: IProjectedEvent, stepsPerBar: number, stepsPerPulse: number,
-        depth: number): IStaffNoteNode {
+        depth: number, tupletId?: number): IStaffNoteNode {
         const { measure } = this.props;
 
         const event = item.event;
@@ -236,18 +253,22 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
             ? measure.noteEvents[item.eventIndex]?.audioData
             : undefined;
 
-        const lengthSteps = event.duration.denominator > 0
-            ? (event.duration.numerator * stepsPerBar) / event.duration.denominator
-            : 0;
+        let glyph: INoteGlyph = { icon: NoteLength.Sixteenth, dotted: false };
+        let beamCount = 0;
 
-        const glyph = audioData
-            ? (this.getStandaloneNoteGlyph(lengthSteps, stepsPerBar, stepsPerPulse, event.duration)
-                ?? { icon: NoteLength.Sixteenth, dotted: false })
-            : { icon: NoteLength.Sixteenth, dotted: false };
+        if (audioData) {
+            if (depth > 0) {
+                glyph = this.subdivisionGlyph(depth);
+            } else {
+                const lengthSteps = event.duration.denominator > 0
+                    ? (event.duration.numerator * stepsPerBar) / event.duration.denominator
+                    : 0;
 
-        let beamCount = this.glyphBeamCount(glyph.icon);
-        if (audioData && beamCount > 0) {
-            beamCount = Math.max(beamCount, 1 + depth);
+                glyph = this.getStandaloneNoteGlyph(lengthSteps, stepsPerBar, stepsPerPulse, event.duration)
+                    ?? { icon: NoteLength.Sixteenth, dotted: false };
+            }
+
+            beamCount = this.glyphBeamCount(glyph.icon);
         }
 
         let displayType = NoteDisplayType.Oval;
@@ -266,6 +287,7 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
             start: { ...event.start },
             duration: { ...event.duration },
             depth,
+            tupletId,
             glyph,
             beamCount,
             displayType,
@@ -277,8 +299,92 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
     }
 
     /**
-     * Recursively assigns beam spans. At the top level, beam runs are broken at pulse boundaries;
-     * inside tuplets, the entire tuplet is treated as one beam group (no internal pulse breaks).
+     * Merges consecutive rests that share a pulse into a single rest when their combined duration
+     * is a plain (non-dotted) note value. Two eighth rests in one pulse become a quarter rest, for
+     * example. Rest groups never cross a pulse boundary or a subdivision boundary.
+     *
+     * @param nodes The staff tree to merge rests in.
+     * @param stepsPerBar The number of base-grid steps in a bar.
+     * @param stepsPerPulse The number of base-grid steps in a pulse.
+     *
+     * @returns The staff tree with adjacent same-pulse rests merged.
+     */
+    private mergeRestsWithinPulses(nodes: IStaffTreeNode[], stepsPerBar: number,
+        stepsPerPulse: number): IStaffTreeNode[] {
+        const result: IStaffTreeNode[] = [];
+        let restGroup: IStaffNoteNode[] = [];
+
+        const flush = (): void => {
+            if (restGroup.length > 1 && this.isPlainRestGroup(restGroup, stepsPerBar, stepsPerPulse)) {
+                let total: IFraction = { numerator: 0, denominator: 1 };
+
+                for (const node of restGroup) {
+                    total = addFractions(total, node.duration);
+                }
+
+                result.push({ ...restGroup[0], duration: total });
+                restGroup = [];
+
+                return;
+            }
+
+            result.push(...restGroup);
+            restGroup = [];
+        };
+
+        for (const node of nodes) {
+            if (node.kind === StaffNodeKind.Note && node.noteStyle === undefined) {
+                const previousRest = restGroup.at(-1);
+
+                if (previousRest !== undefined
+                    && this.pulseIndex(previousRest, stepsPerBar, stepsPerPulse)
+                    !== this.pulseIndex(node, stepsPerBar, stepsPerPulse)) {
+                    flush();
+                }
+
+                restGroup.push(node);
+
+                continue;
+            }
+
+            flush();
+            result.push(node);
+        }
+
+        flush();
+
+        return result;
+    }
+
+    /**
+     * Checks whether a group of rests sums to a plain (non-dotted) rest value.
+     *
+     * @param group The rest nodes to evaluate.
+     * @param stepsPerBar The number of base-grid steps in a bar.
+     * @param stepsPerPulse The number of base-grid steps in a pulse.
+     *
+     * @returns True when the combined duration maps to a non-dotted rest glyph.
+     */
+    private isPlainRestGroup(group: IStaffNoteNode[], stepsPerBar: number, stepsPerPulse: number): boolean {
+        let total: IFraction = { numerator: 0, denominator: 1 };
+
+        for (const node of group) {
+            total = addFractions(total, node.duration);
+        }
+
+        const lengthSteps = total.denominator > 0
+            ? (total.numerator * stepsPerBar) / total.denominator
+            : 0;
+        const glyph = this.getStandaloneNoteGlyph(lengthSteps, stepsPerBar, stepsPerPulse, total);
+
+        return glyph !== undefined && !glyph.dotted;
+    }
+
+    /**
+     * Assigns beam spans. Beam runs are broken at unbeamed notes (rests and notes of a quarter or
+     * longer), at top-level pulse boundaries, and when leaving one tuplet for another. Inside a
+     * tuplet the entire tuplet is treated as one beam group (no internal pulse breaks), and plain
+     * (non-tuplet) subdivisions stay connected so their outer beams span nested splits.
      *
      * @param nodes The nodes to process.
      * @param scoreMetrics Timing metrics for pulse-boundary detection.
@@ -309,12 +415,12 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
 
             if (run.length > 0) {
                 const previous = run[run.length - 1];
-                const separatedByRest = note.eventIndex - previous.eventIndex > 1;
                 const crossedPulse = note.depth === 0 && previous.depth === 0
                     && this.pulseIndex(note, stepsPerBar, stepsPerPulse)
                     !== this.pulseIndex(previous, stepsPerBar, stepsPerPulse);
+                const leftTuplet = note.tupletId !== previous.tupletId;
 
-                if (separatedByRest || crossedPulse) {
+                if (crossedPulse || leftTuplet) {
                     flush();
                 }
             }
@@ -357,16 +463,13 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                 const hasLeft = i > 0 && run[i - 1].beamCount >= level;
 
                 if (hasRight) {
-                    const next = run[i + 1];
-                    const extent = ((note.duration.numerator * next.duration.denominator)
-                        + (next.duration.numerator * note.duration.denominator))
-                        / (2 * note.duration.numerator * next.duration.denominator);
-
-                    segments.push({ level, kind: "shared-right", extentSteps: extent });
+                    segments.push({ level, kind: "shared-right" });
                 } else if (hasLeft) {
                     segments.push({ level, kind: "partial-left" });
-                } else {
+                } else if (i === 0) {
                     segments.push({ level, kind: "partial-right" });
+                } else {
+                    segments.push({ level, kind: "partial-left" });
                 }
             }
 
@@ -375,26 +478,35 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
     }
 
     /**
-     * Computes bracket/number labels for tuplet groups, positioned by their absolute fraction span.
+     * Computes bracket/number labels for tuplet groups. Markers span from the first to the last
+     * sounding notehead, so they sit exactly over the notes they group.
      *
      * @param nodes The nodes to process.
+     * @param stepsPerBar The number of base-grid steps in a bar (for the half-step notehead offset).
      *
      * @returns List of tuplet labels with position and text info.
      */
-    private computeTupletLabels(nodes: IStaffTreeNode[]): ITupletLabel[] {
+    private computeTupletLabels(nodes: IStaffTreeNode[], stepsPerBar: number): ITupletLabel[] {
         const labels: ITupletLabel[] = [];
+        const halfStep = { numerator: 1, denominator: 2 * stepsPerBar };
 
         const walk = (items: IStaffTreeNode[], depth: number): void => {
             for (const item of items) {
                 if (item.kind === StaffNodeKind.Subdivision) {
                     if (item.isTuplet) {
-                        labels.push({
-                            leftPercent: (item.start.numerator / item.start.denominator) * 100,
-                            widthPercent: (item.span.numerator / item.span.denominator) * 100,
-                            text: item.actual.toString(),
-                            bracket: this.tupletNeedsBracket(item, items),
-                            placement: depth % 2 === 0 ? "above" : "below",
-                        });
+                        const bounds = this.tupletNoteBounds(item);
+                        if (bounds.firstStart !== undefined && bounds.lastStart !== undefined) {
+                            const left = addFractions(bounds.firstStart, halfStep);
+                            const width = subtractFractions(bounds.lastStart, bounds.firstStart);
+
+                            labels.push({
+                                leftPercent: (left.numerator / left.denominator) * 100,
+                                widthPercent: (width.numerator / width.denominator) * 100,
+                                text: item.actual.toString(),
+                                bracket: this.tupletNeedsBracket(item, items),
+                                placement: depth % 2 === 0 ? "above" : "below",
+                            });
+                        }
 
                         walk(item.children, depth + 1);
                     } else {
@@ -407,6 +519,42 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
         walk(nodes, 0);
 
         return labels;
+    }
+
+    /**
+     * Finds the first and last sounding note starts within a subdivision's subtree.
+     *
+     * @param node The subdivision to inspect.
+     *
+     * @returns The first and last note start fractions, or undefined when the subtree has no notes.
+     */
+    private tupletNoteBounds(node: IStaffSubdivisionNode): ITupletNoteBounds {
+        let firstStart: IFraction | undefined;
+        let lastStart: IFraction | undefined;
+
+        const walk = (items: IStaffTreeNode[]): void => {
+            for (const item of items) {
+                if (item.kind === StaffNodeKind.Note) {
+                    if (item.noteStyle === undefined) {
+                        continue;
+                    }
+
+                    if (firstStart === undefined || compareFractions(item.start, firstStart) < 0) {
+                        firstStart = item.start;
+                    }
+
+                    if (lastStart === undefined || compareFractions(item.start, lastStart) > 0) {
+                        lastStart = item.start;
+                    }
+                } else {
+                    walk(item.children);
+                }
+            }
+        };
+
+        walk(node.children);
+
+        return { firstStart, lastStart };
     }
 
     private tupletNeedsBracket(node: IStaffSubdivisionNode, siblings: IStaffTreeNode[]): boolean {
@@ -446,28 +594,33 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
     }
 
     /**
-     * Renders the hierarchical flex tree. Each note/rest cell grows proportionally to its duration,
-     * and each tuplet container grows proportionally to its span.
+     * Renders the hierarchical flex tree. Each note/rest cell grows proportionally to its duration
+     * relative to the current container's span, and each tuplet container grows proportionally to
+     * its span. Relative values keep every flex level's grow factors summing to 1, so all children
+     * fill their container.
      *
      * @param nodes The tree nodes to render at this level.
      * @param beamSpans Map of note event indices to beam info (these render with attached beam segments).
      * @param keyPrefix A prefix for React keys to ensure uniqueness across recursive calls.
      * @param centerLine The centre line index ((maxNoteLine + 1) / 2), used to compute per-note vertical offsets.
      * @param restLineOffset Vertical offset in px for whole/half rests so they sit on the centre line.
+     * @param containerSpan The total span of the current flex container as a fraction of the whole bar.
      *
      * @returns List of VNodes representing the rendered items at this level.
      */
     private renderItems(nodes: IStaffTreeNode[], beamSpans: Map<number, IBeamInfo>,
-        keyPrefix: string, centerLine: number, restLineOffset: number): ComponentChild[] {
+        keyPrefix: string, centerLine: number, restLineOffset: number, containerSpan = 1): ComponentChild[] {
         const { scoreMetrics, measure, barNumber, trackId, scoreElementRegistry } = this.props;
 
         return nodes.map((node, index) => {
             if (node.kind === StaffNodeKind.Subdivision) {
+                const spanFraction = node.span.numerator / node.span.denominator;
+
                 return (
                     <div
                         key={`${keyPrefix}tuplet-${index}`}
                         style={{
-                            flex: `${node.span.numerator / node.span.denominator} 1 0`,
+                            flex: `${spanFraction / containerSpan} 1 0`,
                             minWidth: 0,
                             display: "flex",
                             alignItems: "center",
@@ -476,15 +629,27 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                         }}
                     >
                         {this.renderItems(node.children, beamSpans, `${keyPrefix}${index}-`, centerLine,
-                            restLineOffset)}
+                            restLineOffset, spanFraction)}
                     </div>
                 );
             }
 
             const grow = node.duration.denominator > 0
-                ? node.duration.numerator / node.duration.denominator
+                ? (node.duration.numerator / node.duration.denominator) / containerSpan
                 : 1;
-            const slotStyle = { flex: `${grow} 1 0`, minWidth: 0 };
+
+            // Noteheads are anchored at the note's onset plus half a grid step. As a fraction of
+            // this run's width that is 1 / (2 * durationInSteps), so a top-level step note sits at
+            // 50 % and a subdivision slot sits where the replaced note's notehead was.
+            const anchorPercent = node.duration.denominator > 0 && node.duration.numerator > 0
+                ? (node.duration.denominator / (2 * node.duration.numerator * scoreMetrics.stepsPerBar)) * 100
+                : 50;
+
+            const slotStyle = {
+                flex: `${grow} 1 0`,
+                minWidth: 0,
+                "--note-anchor": `${anchorPercent}%`,
+            } as CSSProperties;
             const stepIndex = Math.floor(
                 (node.start.numerator * scoreMetrics.stepsPerBar) / node.start.denominator,
             );
@@ -513,7 +678,7 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
 
                 const runDivProps: Record<string, unknown> = {
                     key: `${keyPrefix}note-${index}`,
-                    className: "staff-note-viewer-run",
+                    className: "staff-note-viewer-run staff-note-viewer-note-run",
                     style: slotStyle,
                     ref: scoreElementRegistry?.createRef({
                         kind: ScoreElementKind.StaffRun,
@@ -595,10 +760,11 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
     }
 
     /**
-     * Renders the beam strokes attached to a single note inside a beam group. Shared strokes bridge
-     * to the next beam member (extent in slot widths); partial stubs occupy a fixed pixel width.
+     * Renders the beam strokes attached to a single note inside a beam group. All notes share the
+     * same onset anchor (event start + half a step), so a shared stroke bridges the full slot width
+     * to the next notehead and partial stubs occupy a fixed pixel width on the stem side.
      *
-     * @param stepIndex The step index of the note to render beams for (used for keying and positioning).
+     * @param stepIndex The note event index to render beams for (used for keying).
      * @param info The beam info for this note, including the segments to render.
      *
      * @returns List of VNodes representing the beam segments attached to this note.
@@ -606,7 +772,6 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
     private renderBeamSegments(stepIndex: number, info: IBeamInfo): VNode[] {
         const beamGap = 6;
         const primaryTopOffset = 38;
-        const stemAnchorOffset = 0;
         const partialPixels = 12;
 
         return info.segments.map((segment) => {
@@ -614,16 +779,14 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
             const key = `beam-${stepIndex}-${segment.level}-${segment.kind}`;
 
             if (segment.kind === "shared-right") {
-                const extent = segment.extentSteps ?? 1;
-
                 return (
                     <span
                         key={key}
                         className="staff-note-viewer-beam"
                         style={{
                             top,
-                            left: `calc(50% + ${stemAnchorOffset}px)`,
-                            width: `${extent * 100}%`,
+                            left: "var(--note-anchor)",
+                            width: "100%",
                         }}
                     />
                 );
@@ -636,21 +799,21 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                         className="staff-note-viewer-beam"
                         style={{
                             top,
-                            left: `calc(50% + ${stemAnchorOffset}px)`,
+                            left: "var(--note-anchor)",
                             width: `${partialPixels}px`,
                         }}
                     />
                 );
             }
 
-            // partial-left: beam goes from a note to the left.
+            // partial-left: stub pointing from the notehead towards the previous note.
             return (
                 <span
                     key={key}
                     className="staff-note-viewer-beam"
                     style={{
                         top,
-                        right: `calc(50% - ${stemAnchorOffset}px)`,
+                        left: `calc(var(--note-anchor) - ${partialPixels}px)`,
                         width: `${partialPixels}px`,
                     }}
                 />
@@ -720,6 +883,27 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
         }
 
         return 0;
+    }
+
+    /**
+     * Resolves the glyph for a note inside a subdivision. Without real note lengths the first
+     * nesting level uses an eighth note, and each further level halves the value (sixteenth,
+     * thirty-second), so subdivision notes are always beamed.
+     *
+     * @param depth The subdivision nesting depth (1 for notes in a top-level subdivision).
+     *
+     * @returns The glyph for the note.
+     */
+    private subdivisionGlyph(depth: number): INoteGlyph {
+        if (depth <= 1) {
+            return { icon: NoteLength.Eighth, dotted: false };
+        }
+
+        if (depth === 2) {
+            return { icon: NoteLength.Sixteenth, dotted: false };
+        }
+
+        return { icon: NoteLength.ThirtySecond, dotted: false };
     }
 
     private getStandaloneNoteGlyph(lengthSteps: number, stepsPerBar: number, stepsPerPulse: number,
