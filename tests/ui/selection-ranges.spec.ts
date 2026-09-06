@@ -17,7 +17,7 @@ describe("selectionToClearRanges", () => {
         model.startNewArrangement([createInstrument("0", 0, 0)]);
         const track = model.arrangement!.tracks[0];
 
-        // A note placed at cell 0 fills the whole first pulse (4 steps).
+        // A note placed at cell 0 occupies a single cell (1/16).
         model.setGridNote(track.id, 1, 0, "1");
         hydrateMeasureEvents(model.arrangement! as Arrangement);
 
@@ -36,7 +36,7 @@ describe("selectionToClearRanges", () => {
             trackId: track.id,
             bar: 1,
             start: { numerator: 0, denominator: 1 },
-            end: { numerator: 1, denominator: 4 },
+            end: { numerator: 1, denominator: 16 },
         }]);
     });
 
@@ -63,16 +63,16 @@ describe("selectionToClearRanges", () => {
         })).toBe(true);
     });
 
-    it("clearing an absorbed rest cell is a no-op", () => {
+    it("clearing a rest cell is a no-op", () => {
         const model = new ScoreBookDataModel();
         model.startNewArrangement([createInstrument("0", 0, 0)]);
         const track = model.arrangement!.tracks[0];
         const measure = track.measures[0];
 
-        // A note at cell 0 fills the first pulse (4 cells); cells 1-3 are absorbed rests.
+        // A note at cell 0 occupies one cell; the rest of the bar is a single combined rest.
         model.setGridNote(track.id, 1, 0, "1");
 
-        // Delete the second cell (an absorbed rest, no note id) — this must change nothing.
+        // Delete the second cell (a rest, no note id) — this must change nothing.
         const cleared = model.clearStepRanges(selectionToClearRanges([{
             granularity: SelectionGranularity.Note,
             bar: 1,
@@ -82,9 +82,9 @@ describe("selectionToClearRanges", () => {
         }], model.arrangement));
 
         expect(cleared).toBe(false);
-        expect(measure.events).toHaveLength(2);
+        expect(measure.events).toHaveLength(3);
         expect(measure.events[0].noteStyleId).toBe("1");
-        expect(measure.events[0].duration).toEqual({ numerator: 1, denominator: 4 });
+        expect(measure.events[0].duration).toEqual({ numerator: 1, denominator: 16 });
     });
 
     it("clearing the first subdivision note clears only that note", () => {
@@ -136,7 +136,7 @@ describe("selectionToClearRanges", () => {
         }], model.arrangement));
 
         expect(measure.subdivisions).toEqual([{ startIndex: 3, actual: 2, normal: 1, isTuplet: false }]);
-        expect(measure.events).toHaveLength(12);
+        expect(measure.events).toHaveLength(13);
         expect(measure.events[3].noteStyleId).toBe("1");
         expect(measure.events[3].duration).toEqual({ numerator: 1, denominator: 32 });
         expect(measure.events[4].noteStyleId).toBeUndefined();

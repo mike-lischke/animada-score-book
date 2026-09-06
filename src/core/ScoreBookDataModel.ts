@@ -5,7 +5,6 @@
 
 import { AppStorage } from "./AppStorage.js";
 import { Arrangement, type IArrangementCreationOptions } from "./Arrangement.js";
-import { expandMeasureToGridEvents, synthesizeGridEventsToMeasure } from "./grid-events.js";
 import {
     MeasureProjection, ProjectedItemKind, type IProjectedItem, type IProjectedSubdivision,
 } from "./MeasureProjection.js";
@@ -14,6 +13,7 @@ import {
     addFractions, compareFractions, divideFraction, multiplyFraction, reduceFraction, subtractFractions,
 } from "./serialisation/numeric-functions.js";
 import { stringifyPackedArrangement } from "./serialisation/snapshot-packing.js";
+import { decomposeRestSteps, pulseStepCount, standardRestSteps } from "./rest-notation.js";
 import { computeIsTuplet } from "./tuplets.js";
 
 import { requisitions } from "../supplement/Requisitions.js";
@@ -1027,24 +1027,48 @@ export class ScoreBookDataModel {
             return false;
         }
 
+        const stepsPerBar = measure.meter.stepResolution;
         const pulse = this.parsePulse(track.arrangement.timeParams.pulse);
+        const changed = start !== undefined
+            ? this.setEventNoteStyle(measure, start, noteStyleId)
+            : this.insertNoteAt(measure, reduceFraction(step, stepsPerBar),
+                reduceFraction(1, stepsPerBar), noteStyleId, pulse);
 
-        const changed = this.applyGridEdit(measure, pulse, (events, stepsPerBar) => {
-            const stepFraction = reduceFraction(step, stepsPerBar);
-            const index = events.findIndex((event) => {
-                if (start !== undefined) {
-                    return compareFractions(event.start, start) === 0;
-                }
+        if (changed) {
+            void requisitions.execute("trackChanged", track.id);
+            void requisitions.execute("arrangementMutated", undefined);
+        }
 
-                return compareFractions(event.start, stepFraction) === 0
-                    && event.duration.numerator * stepsPerBar === event.duration.denominator;
-            });
+        return changed;
+    }
 
-            if (index >= 0) {
-                events[index].noteStyleId = noteStyleId;
-                events[index].articulation = undefined;
-            }
+    /**
+     * Inserts a single note of the given duration at an exact position, replacing a same-length
+     * note, cutting into a longer note, or consuming following rests when the note at the position
+     * is shorter. Rests are combined and decomposed into standard note values afterwards.
+     *
+     * @param trackId The track containing the insertion point.
+     * @param bar The one-based measure number.
+     * @param start The exact start position as a fraction.
+     * @param duration The note's duration as a fraction.
+     * @param noteStyleId The instrument note-style id to apply.
+     *
+     * @returns True when the measure changed. False when a following note blocks the span
+     *          (cross-measure shifting is not implemented yet).
+     */
+    public insertNote(trackId: number, bar: number, start: IFraction, duration: IFraction,
+        noteStyleId: string): boolean {
+        const arrangement = this.arrangement;
+        const track = arrangement?.tracks.find((candidate) => {
+            return candidate.id === trackId;
         });
+        const measure = track?.measures[bar - 1];
+        if (!track || !measure || duration.numerator <= 0) {
+            return false;
+        }
+
+        const pulse = this.parsePulse(track.arrangement.timeParams.pulse);
+        const changed = this.insertNoteAt(measure, start, duration, noteStyleId, pulse);
 
         if (changed) {
             void requisitions.execute("trackChanged", track.id);
@@ -1086,10 +1110,10 @@ export class ScoreBookDataModel {
             const pulse = this.parsePulse(track.arrangement.timeParams.pulse);
 
             const rangeChanged = range.start !== undefined && range.end !== undefined
-                ? this.clearFractionRangeContent(measure, pulse, range.start, range.end)
+                ? this.clearFractionRangeContent(measure, range.start, range.end, pulse)
                 : range.startStep === undefined || range.endStep === undefined
                     ? this.clearMeasureContent(measure)
-                    : this.clearStepRangeContent(measure, pulse, range.startStep, range.endStep);
+                    : this.clearStepRangeContent(measure, range.startStep, range.endStep, pulse);
             if (rangeChanged) {
                 changed = true;
                 affectedTracks.add(range.trackId);
@@ -1139,10 +1163,10 @@ export class ScoreBookDataModel {
             const pulse = this.parsePulse(track.arrangement.timeParams.pulse);
 
             const rangeChanged = range.start !== undefined && range.end !== undefined
-                ? this.setFractionRangeNoteStyle(measure, pulse, range.start, range.end, noteStyleId)
+                ? this.setFractionRangeNoteStyle(measure, range.start, range.end, noteStyleId)
                 : range.startStep === undefined || range.endStep === undefined
-                    ? this.setMeasureNoteStyle(measure, pulse, noteStyleId)
-                    : this.setStepRangeNoteStyle(measure, pulse, range.startStep, range.endStep, noteStyleId);
+                    ? this.setMeasureNoteStyle(measure, noteStyleId)
+                    : this.setStepRangeNoteStyle(measure, range.startStep, range.endStep, noteStyleId, pulse);
             if (rangeChanged) {
                 changed = true;
                 affectedTracks.add(range.trackId);
@@ -2539,33 +2563,31 @@ export class ScoreBookDataModel {
     }
 
     /**
-     * Clears the note content of a contiguous step range, turning it into a rest. Works on the
-     * per-step grid representation, so each step is cleared independently and the note-based score
-     * is synthesised afterwards.
+     * Clears the note content of a contiguous step range, turning each affected step into a rest.
+     * Adjacent rests are combined and decomposed into standard note values afterwards.
      *
      * @param measure The measure containing the steps.
-     * @param pulse The parsed pulse fraction.
      * @param startStep The first step index to clear (inclusive).
      * @param endStep The last step index to clear (inclusive).
+     * @param pulse The rhythmic pulse as a fraction.
      *
      * @returns True when any event changed.
      */
-    private clearStepRangeContent(measure: ISbDmTrackMeasure, pulse: IFraction, startStep: number,
-        endStep: number): boolean {
-        return this.applyGridEdit(measure, pulse, (events, stepsPerBar) => {
-            for (let step = startStep; step <= endStep; step++) {
-                const stepFraction = reduceFraction(step, stepsPerBar);
-                const index = events.findIndex((event) => {
-                    return compareFractions(event.start, stepFraction) === 0
-                        && event.duration.numerator * stepsPerBar === event.duration.denominator;
-                });
-
-                if (index >= 0) {
-                    events[index].noteStyleId = undefined;
-                    events[index].articulation = undefined;
-                }
-            }
+    private clearStepRangeContent(measure: ISbDmTrackMeasure, startStep: number, endStep: number,
+        pulse: IFraction): boolean {
+        const stepsPerBar = measure.meter.stepResolution;
+        const protectedStarts = this.subdivisionSlotStarts(measure);
+        let events = measure.events.map((event) => {
+            return this.cloneEvent(event);
         });
+
+        for (let step = startStep; step <= endStep; step++) {
+            const stepStart = reduceFraction(step, stepsPerBar);
+            events = this.replaceSpanEvents(events, protectedStarts, stepsPerBar, pulse,
+                stepStart, reduceFraction(step + 1, stepsPerBar), undefined);
+        }
+
+        return this.setMeasureEvents(measure, events);
     }
 
     /**
@@ -2573,134 +2595,411 @@ export class ScoreBookDataModel {
      * range this can target a single subdivision slot, whose boundaries do not align to grid steps.
      *
      * @param measure The measure containing the range.
-     * @param pulse The parsed pulse fraction.
      * @param start The exact start position as a fraction.
      * @param end The exact end position (exclusive) as a fraction.
+     * @param pulse The rhythmic pulse as a fraction.
      *
      * @returns True when any event changed.
      */
-    private clearFractionRangeContent(measure: ISbDmTrackMeasure, pulse: IFraction, start: IFraction,
-        end: IFraction): boolean {
-        return this.applyGridEdit(measure, pulse, (events) => {
-            for (const event of events) {
-                const eventEnd = addFractions(event.start, event.duration);
-
-                if (compareFractions(event.start, start) >= 0 && compareFractions(eventEnd, end) <= 0) {
-                    event.noteStyleId = undefined;
-                    event.articulation = undefined;
-                }
-            }
-        });
+    private clearFractionRangeContent(measure: ISbDmTrackMeasure, start: IFraction, end: IFraction,
+        pulse: IFraction): boolean {
+        return this.replaceSpan(measure, start, end, undefined, pulse);
     }
 
     /**
-     * Applies a note style to every step of a measure.
+     * Applies a note style to every event of a measure, preserving each event's duration.
      *
      * @param measure The measure to fill.
-     * @param pulse The parsed pulse fraction.
      * @param noteStyleId The instrument note-style id to apply.
      *
      * @returns True when any event changed.
      */
-    private setMeasureNoteStyle(measure: ISbDmTrackMeasure, pulse: IFraction, noteStyleId: string): boolean {
-        return this.applyGridEdit(measure, pulse, (events) => {
-            for (const event of events) {
+    private setMeasureNoteStyle(measure: ISbDmTrackMeasure, noteStyleId: string): boolean {
+        const events = measure.events.map((event) => {
+            return this.cloneEvent(event);
+        });
+
+        let changed = false;
+
+        for (const event of events) {
+            if (event.noteStyleId !== noteStyleId || event.articulation !== undefined) {
                 event.noteStyleId = noteStyleId;
                 event.articulation = undefined;
+                changed = true;
             }
-        });
-    }
+        }
 
-    /**
-     * Applies a note style to a contiguous step range.
-     *
-     * @param measure The measure containing the steps.
-     * @param pulse The parsed pulse fraction.
-     * @param startStep The first step index to set (inclusive).
-     * @param endStep The last step index to set (inclusive).
-     * @param noteStyleId The instrument note-style id to apply.
-     *
-     * @returns True when any event changed.
-     */
-    private setStepRangeNoteStyle(measure: ISbDmTrackMeasure, pulse: IFraction, startStep: number,
-        endStep: number, noteStyleId: string): boolean {
-        return this.applyGridEdit(measure, pulse, (events, stepsPerBar) => {
-            for (let step = startStep; step <= endStep; step++) {
-                const stepFraction = reduceFraction(step, stepsPerBar);
-                const index = events.findIndex((event) => {
-                    return compareFractions(event.start, stepFraction) === 0
-                        && event.duration.numerator * stepsPerBar === event.duration.denominator;
-                });
-
-                if (index >= 0) {
-                    events[index].noteStyleId = noteStyleId;
-                    events[index].articulation = undefined;
-                }
-            }
-        });
-    }
-
-    /**
-     * Applies a note style to an exact fractional range.
-     *
-     * @param measure The measure containing the range.
-     * @param pulse The parsed pulse fraction.
-     * @param start The exact start position as a fraction.
-     * @param end The exact end position (exclusive) as a fraction.
-     * @param noteStyleId The instrument note-style id to apply.
-     *
-     * @returns True when any event changed.
-     */
-    private setFractionRangeNoteStyle(measure: ISbDmTrackMeasure, pulse: IFraction, start: IFraction,
-        end: IFraction, noteStyleId: string): boolean {
-        return this.applyGridEdit(measure, pulse, (events) => {
-            for (const event of events) {
-                const eventEnd = addFractions(event.start, event.duration);
-
-                if (compareFractions(event.start, start) >= 0 && compareFractions(eventEnd, end) <= 0) {
-                    event.noteStyleId = noteStyleId;
-                    event.articulation = undefined;
-                }
-            }
-        });
-    }
-
-    /**
-     * Applies a mutation to the measure's per-step grid representation and synthesises the result
-     * back into the note-based score. This is the single entry point for grid editing: notes are
-     * split into one note step plus empty rest steps, edited independently, and then re-merged so
-     * that actions which change nothing leave the measure untouched.
-     *
-     * @param measure The measure to edit.
-     * @param pulse The parsed pulse fraction.
-     * @param mutate Callback receiving the per-step events and the step resolution.
-     *
-     * @returns True when the measure changed.
-     */
-    private applyGridEdit(measure: ISbDmTrackMeasure, pulse: IFraction,
-        mutate: (events: IMeasureEvent[], stepsPerBar: number) => void): boolean {
-        const stepsPerBar = measure.meter.stepResolution;
-        const { events: expanded, subdivisions, slotIndices } = expandMeasureToGridEvents(measure);
-
-        mutate(expanded, stepsPerBar);
-
-        const { events: synthesised, subdivisions: synthesisedSubdivisions } = synthesizeGridEventsToMeasure(
-            expanded, subdivisions, slotIndices, pulse, stepsPerBar,
-        );
-
-        if (this.eventsEqual(measure.events, synthesised)) {
+        if (!changed) {
             return false;
         }
 
-        measure.events.splice(0, measure.events.length, ...synthesised.map((event) => {
-            return this.cloneEvent(event);
-        }));
-        measure.subdivisions.splice(0, measure.subdivisions.length,
-            ...synthesisedSubdivisions.map((subdivision) => {
-                return { ...subdivision };
-            }));
+        return this.setMeasureEvents(measure, events);
+    }
 
-        return true;
+    /**
+     * Applies a note style to a contiguous step range, turning each affected step into a note.
+     *
+     * @param measure The measure containing the steps.
+     * @param startStep The first step index to set (inclusive).
+     * @param endStep The last step index to set (inclusive).
+     * @param noteStyleId The instrument note-style id to apply.
+     * @param pulse The rhythmic pulse as a fraction.
+     *
+     * @returns True when any event changed.
+     */
+    private setStepRangeNoteStyle(measure: ISbDmTrackMeasure, startStep: number,
+        endStep: number, noteStyleId: string, pulse: IFraction): boolean {
+        const stepsPerBar = measure.meter.stepResolution;
+        const protectedStarts = this.subdivisionSlotStarts(measure);
+        let events = measure.events.map((event) => {
+            return this.cloneEvent(event);
+        });
+
+        for (let step = startStep; step <= endStep; step++) {
+            const stepStart = reduceFraction(step, stepsPerBar);
+            events = this.replaceSpanEvents(events, protectedStarts, stepsPerBar, pulse,
+                stepStart, reduceFraction(step + 1, stepsPerBar), noteStyleId);
+        }
+
+        return this.setMeasureEvents(measure, events);
+    }
+
+    /**
+     * Applies a note style to the events fully contained in an exact fractional range, preserving
+     * each event's duration.
+     *
+     * @param measure The measure containing the range.
+     * @param start The exact start position as a fraction.
+     * @param end The exact end position (exclusive) as a fraction.
+     * @param noteStyleId The instrument note-style id to apply.
+     *
+     * @returns True when any event changed.
+     */
+    private setFractionRangeNoteStyle(measure: ISbDmTrackMeasure, start: IFraction,
+        end: IFraction, noteStyleId: string): boolean {
+        const events = measure.events.map((event) => {
+            return this.cloneEvent(event);
+        });
+
+        let changed = false;
+
+        for (const event of events) {
+            const eventEnd = addFractions(event.start, event.duration);
+
+            if (compareFractions(event.start, start) >= 0 && compareFractions(eventEnd, end) <= 0
+                && (event.noteStyleId !== noteStyleId || event.articulation !== undefined)) {
+                event.noteStyleId = noteStyleId;
+                event.articulation = undefined;
+                changed = true;
+            }
+        }
+
+        if (!changed) {
+            return false;
+        }
+
+        return this.setMeasureEvents(measure, events);
+    }
+
+    /**
+     * Returns the start fractions of all events that sit inside a subdivision. These positions
+     * must never merge with neighbouring rests, so subdivision slots keep their exact boundaries.
+     *
+     * @param measure The measure whose subdivision slot starts should be collected.
+     *
+     * @returns The protected start fractions as string keys.
+     */
+    private subdivisionSlotStarts(measure: ISbDmTrackMeasure): Set<string> {
+        const starts = new Set<string>();
+        const projected = MeasureProjection.project(measure);
+
+        const walk = (items: IProjectedItem[], insideSubdivision: boolean): void => {
+            for (const item of items) {
+                if (item.kind === ProjectedItemKind.Event) {
+                    if (insideSubdivision) {
+                        starts.add(this.fractionKey(item.event.start));
+                    }
+                } else {
+                    walk(item.items, true);
+                }
+            }
+        };
+
+        walk(projected, false);
+
+        return starts;
+    }
+
+    /**
+     * Produces a stable string key for a fraction, used to compare start positions regardless of
+     * their unreduced representation.
+     *
+     * @param fraction The fraction to key.
+     *
+     * @returns The reduced numerator/denominator pair as a string.
+     */
+    private fractionKey(fraction: IFraction): string {
+        const reduced = reduceFraction(fraction.numerator, fraction.denominator);
+
+        return `${reduced.numerator}/${reduced.denominator}`;
+    }
+
+    /**
+     * Combines adjacent rest events into single events. Events whose start position belongs to a
+     * subdivision slot are never merged, so subdivision boundaries stay intact.
+     *
+     * @param events The events to normalise.
+     * @param protectedStarts Start fractions that must not participate in a merge.
+     *
+     * @returns A copy of the events with adjacent rests merged.
+     */
+    private mergeRests(events: IMeasureEvent[], protectedStarts: Set<string>): IMeasureEvent[] {
+        const result: IMeasureEvent[] = [];
+
+        for (const event of events) {
+            const last = result.at(-1);
+            const mergeable = last !== undefined
+                && last.noteStyleId === undefined
+                && event.noteStyleId === undefined
+                && !protectedStarts.has(this.fractionKey(last.start))
+                && !protectedStarts.has(this.fractionKey(event.start));
+
+            if (mergeable) {
+                last.duration = subtractFractions(addFractions(event.start, event.duration), last.start);
+            } else {
+                result.push(this.cloneEvent(event));
+            }
+        }
+
+        return result;
+    }
+
+    /**
+     * Splits every event spanning the given position into two events, so the position becomes an
+     * event boundary.
+     *
+     * @param events The events to split.
+     * @param position The exact position at which to insert a boundary.
+     *
+     * @returns A copy of the events with the boundary inserted.
+     */
+    private splitEventsAt(events: IMeasureEvent[], position: IFraction): IMeasureEvent[] {
+        const result: IMeasureEvent[] = [];
+
+        for (const event of events) {
+            const eventEnd = addFractions(event.start, event.duration);
+
+            if (compareFractions(event.start, position) < 0 && compareFractions(eventEnd, position) > 0) {
+                result.push(this.cloneEvent({
+                    ...event,
+                    duration: subtractFractions(position, event.start),
+                }));
+                result.push(this.cloneEvent({
+                    ...event,
+                    start: { ...position },
+                    duration: subtractFractions(eventEnd, position),
+                }));
+            } else {
+                result.push(this.cloneEvent(event));
+            }
+        }
+
+        return result;
+    }
+
+    /**
+     * Inserts a note of the given duration at an exact position. The note replaces a same-length
+     * note, cuts into a longer note, or consumes following rests when the event at the position is
+     * shorter. When a following note blocks the span before enough room is reached the insertion is
+     * rejected; cross-measure shifting will handle that case in a later step.
+     *
+     * @param measure The measure to edit.
+     * @param start The exact start position as a fraction.
+     * @param duration The note's duration as a fraction.
+     * @param noteStyleId The style to apply, or undefined to clear the span.
+     * @param pulse The rhythmic pulse as a fraction.
+     *
+     * @returns True when the measure changed.
+     */
+    private insertNoteAt(measure: ISbDmTrackMeasure, start: IFraction, duration: IFraction,
+        noteStyleId: string | undefined, pulse: IFraction): boolean {
+        const end = addFractions(start, duration);
+
+        if (noteStyleId !== undefined && this.spanOverlapsFollowingNote(measure, start, end)) {
+            return false;
+        }
+
+        return this.replaceSpan(measure, start, end, noteStyleId, pulse);
+    }
+
+    /**
+     * Checks whether the span [start, end) contains the start of a note other than the one at the
+     * span's beginning. Such a note would be overwritten by the insertion.
+     *
+     * @param measure The measure to inspect.
+     * @param start The span start (inclusive).
+     * @param end The span end (exclusive).
+     *
+     * @returns True when a following note starts inside the span.
+     */
+    private spanOverlapsFollowingNote(measure: ISbDmTrackMeasure, start: IFraction,
+        end: IFraction): boolean {
+        return measure.events.some((event) => {
+            return event.noteStyleId !== undefined
+                && compareFractions(event.start, start) > 0
+                && compareFractions(event.start, end) < 0;
+        });
+    }
+
+    /**
+     * Replaces the span [start, end) with a single event of the given style (or a rest when the
+     * style is omitted). Overlapping events are clipped at the span boundaries, adjacent rests are
+     * combined and decomposed into standard note values. Subdivision slot boundaries are preserved.
+     *
+     * @param measure The measure to edit.
+     * @param start The exact start position of the span (inclusive).
+     * @param end The exact end position of the span (exclusive).
+     * @param noteStyleId The style of the replacement event, or undefined for a rest.
+     * @param pulse The rhythmic pulse as a fraction.
+     *
+     * @returns True when the measure changed.
+     */
+    private replaceSpan(measure: ISbDmTrackMeasure, start: IFraction, end: IFraction,
+        noteStyleId: string | undefined, pulse: IFraction): boolean {
+        const stepsPerBar = measure.meter.stepResolution;
+        const protectedStarts = this.subdivisionSlotStarts(measure);
+        const events = this.replaceSpanEvents(measure.events, protectedStarts, stepsPerBar, pulse,
+            start, end, noteStyleId);
+
+        return this.setMeasureEvents(measure, events);
+    }
+
+    /**
+     * Builds the event list that results from replacing the span [start, end) with a single event
+     * of the given style (or a rest when the style is omitted), without writing it back. Used by
+     * step-range edits to apply several span replacements in one go.
+     *
+     * @param events The events to edit.
+     * @param protectedStarts Start fractions that must not participate in a rest merge.
+     * @param stepsPerBar The measure's step resolution.
+     * @param pulse The rhythmic pulse as a fraction.
+     * @param start The exact start position of the span (inclusive).
+     * @param end The exact end position of the span (exclusive).
+     * @param noteStyleId The style of the replacement event, or undefined for a rest.
+     *
+     * @returns The edited events with rests combined and decomposed.
+     */
+    private replaceSpanEvents(events: IMeasureEvent[], protectedStarts: Set<string>, stepsPerBar: number,
+        pulse: IFraction, start: IFraction, end: IFraction, noteStyleId?: string): IMeasureEvent[] {
+        const withStart = this.splitEventsAt(events, start);
+        const withEnd = this.splitEventsAt(withStart, end);
+
+        const spanEvent: IMeasureEvent = {
+            start: { ...start },
+            duration: subtractFractions(end, start),
+            noteStyleId,
+        };
+
+        const result: IMeasureEvent[] = [];
+
+        for (const event of withEnd) {
+            const eventEnd = addFractions(event.start, event.duration);
+
+            if (compareFractions(eventEnd, start) <= 0) {
+                result.push(event);
+            }
+        }
+
+        result.push(spanEvent);
+
+        for (const event of withEnd) {
+            if (compareFractions(event.start, end) >= 0) {
+                result.push(event);
+            }
+        }
+
+        return this.normalizeRests(result, protectedStarts, stepsPerBar, pulse);
+    }
+
+    /**
+     * Combines adjacent rest events and decomposes every non-subdivision rest into standard note
+     * values aligned to the pulse, so the staff view can render each rest with a single glyph.
+     *
+     * @param events The events to normalise.
+     * @param protectedStarts Start fractions of subdivision slots, which must stay untouched.
+     * @param stepsPerBar The measure's step resolution.
+     * @param pulse The rhythmic pulse as a fraction.
+     *
+     * @returns The normalised events.
+     */
+    private normalizeRests(events: IMeasureEvent[], protectedStarts: Set<string>, stepsPerBar: number,
+        pulse: IFraction): IMeasureEvent[] {
+        const merged = this.mergeRests(events, protectedStarts);
+        const values = standardRestSteps(stepsPerBar);
+        const pulseSteps = pulseStepCount(pulse, stepsPerBar);
+        const result: IMeasureEvent[] = [];
+
+        for (const event of merged) {
+            if (event.noteStyleId !== undefined || protectedStarts.has(this.fractionKey(event.start))) {
+                result.push(event);
+
+                continue;
+            }
+
+            const startStep = (event.start.numerator * stepsPerBar) / event.start.denominator;
+            const durationSteps = (event.duration.numerator * stepsPerBar) / event.duration.denominator;
+
+            if (!Number.isInteger(startStep) || !Number.isInteger(durationSteps) || durationSteps <= 0) {
+                result.push(event);
+
+                continue;
+            }
+
+            const parts = decomposeRestSteps(startStep, startStep + durationSteps, pulseSteps, values);
+            let step = startStep;
+
+            for (const part of parts) {
+                result.push({
+                    start: reduceFraction(step, stepsPerBar),
+                    duration: reduceFraction(part, stepsPerBar),
+                });
+                step += part;
+            }
+        }
+
+        return result;
+    }
+
+    /**
+     * Sets or clears the note style of the event starting exactly at the given position, keeping
+     * its duration. Used for subdivision slots, which must not be split or merged.
+     *
+     * @param measure The measure to edit.
+     * @param start The exact start position of the event.
+     * @param noteStyleId The style to set, or undefined to clear.
+     *
+     * @returns True when the measure changed.
+     */
+    private setEventNoteStyle(measure: ISbDmTrackMeasure, start: IFraction, noteStyleId?: string): boolean {
+        const index = measure.events.findIndex((event) => {
+            return compareFractions(event.start, start) === 0;
+        });
+        if (index < 0) {
+            return false;
+        }
+
+        const event = measure.events[index];
+        if (event.noteStyleId === noteStyleId && this.sameArticulation(event.articulation, undefined)) {
+            return false;
+        }
+
+        const events = measure.events.map((candidate) => {
+            return this.cloneEvent(candidate);
+        });
+        events[index].noteStyleId = noteStyleId;
+        events[index].articulation = undefined;
+
+        return this.setMeasureEvents(measure, events);
     }
 
     /**
@@ -2972,16 +3271,13 @@ export class ScoreBookDataModel {
     }
 
     private eventsEqual(a: IMeasureEvent[], b: IMeasureEvent[]): boolean {
-        const mergedA = this.mergeAdjacentRests(a);
-        const mergedB = this.mergeAdjacentRests(b);
-
-        if (mergedA.length !== mergedB.length) {
+        if (a.length !== b.length) {
             return false;
         }
 
-        for (let index = 0; index < mergedA.length; index++) {
-            const left = mergedA[index];
-            const right = mergedB[index];
+        for (let index = 0; index < a.length; index++) {
+            const left = a[index];
+            const right = b[index];
             if (left.noteStyleId !== right.noteStyleId
                 || !this.fractionsEqual(left.start, right.start)
                 || !this.fractionsEqual(left.duration, right.duration)
@@ -2991,30 +3287,6 @@ export class ScoreBookDataModel {
         }
 
         return true;
-    }
-
-    /**
-     * Merges adjacent rest events into a single event. Two event lists that differ only in how
-     * their rests are fragmented represent the same musical content and must compare as equal.
-     *
-     * @param events The events to normalise.
-     *
-     * @returns A copy of the events with adjacent rests merged.
-     */
-    private mergeAdjacentRests(events: IMeasureEvent[]): IMeasureEvent[] {
-        const result: IMeasureEvent[] = [];
-
-        for (const event of events) {
-            const last = result.at(-1);
-
-            if (last !== undefined && last.noteStyleId === undefined && event.noteStyleId === undefined) {
-                last.duration = subtractFractions(addFractions(event.start, event.duration), last.start);
-            } else {
-                result.push(this.cloneEvent(event));
-            }
-        }
-
-        return result;
     }
 
     private fractionsEqual(a: IFraction, b: IFraction): boolean {

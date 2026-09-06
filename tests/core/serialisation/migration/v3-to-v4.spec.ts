@@ -156,11 +156,13 @@ describe("migrateV3ToV4", () => {
         expect(measure.subdivisions).toEqual([{ startIndex: 0, actual: 3, normal: 2, isTuplet: true }]);
 
         const events = measure.events;
-        expect(events).toHaveLength(4);
+        expect(events).toHaveLength(5);
         expect(events[2].noteStyleId).toBe("a");
         expect(events[2].duration).toEqual({ numerator: 1, denominator: 24 });
         expect(events[3].noteStyleId).toBeUndefined();
-        expect(events[3].duration).toEqual({ numerator: 7, denominator: 8 });
+        expect(events[3].duration).toEqual({ numerator: 1, denominator: 8 });
+        expect(events[4].noteStyleId).toBeUndefined();
+        expect(events[4].duration).toEqual({ numerator: 3, denominator: 4 });
     });
 
     it("carries articulation onto migrated events", () => {

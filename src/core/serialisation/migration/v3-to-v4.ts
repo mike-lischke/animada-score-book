@@ -8,6 +8,7 @@ import type {
     IArrangementSnapshot, IFraction, IMeasureEvent, ITrackMeasureSnapshot, ISubdivision
 } from "../../types/general.js";
 import { addFractions, compareFractions, reduceFraction } from "../numeric-functions.js";
+import { decomposeRestSteps, pulseStepCount, standardRestSteps } from "../../rest-notation.js";
 import { arrangementSnapshotVersion } from "../snapshots.js";
 import type {
     ILegacyArrangementSnapshotV3, ILegacyMeasureSnapshot, ILegacySubdivision
@@ -173,9 +174,26 @@ const convertMeasureToV4 = (measure: ILegacyMeasureSnapshot, pulse: string): ITr
         i = j;
     }
 
+    const subdivisionFinalIndices = new Set<number>();
+    for (const record of subdivisionRecords) {
+        for (let leaf = 0; leaf < record.leafCount; leaf++) {
+            const finalIndex = serializedToFinal.get(record.firstSerializedIndex + leaf);
+            if (finalIndex !== undefined) {
+                subdivisionFinalIndices.add(finalIndex);
+            }
+        }
+    }
+
+    const events = decomposeFinalRests(final, subdivisionFinalIndices, stepResolution, pulseFraction);
+
     const subdivisions: ISubdivision[] = subdivisionRecords.map((record) => {
+        const start = serialized[record.firstSerializedIndex].start;
+        const startIndex = events.findIndex((event) => {
+            return compareFractions(event.start, start) === 0;
+        });
+
         return {
-            startIndex: serializedToFinal.get(record.firstSerializedIndex) ?? 0,
+            startIndex: startIndex >= 0 ? startIndex : 0,
             actual: record.actual,
             normal: record.normal,
             isTuplet: record.isTuplet,
@@ -185,9 +203,59 @@ const convertMeasureToV4 = (measure: ILegacyMeasureSnapshot, pulse: string): ITr
     return {
         number: measure.number,
         meter: { ...measure.meter },
-        events: final,
+        events,
         subdivisions,
     };
+};
+
+/**
+ * Decomposes every non-subdivision rest into standard note values aligned to the pulse, so the
+ * staff view can render each rest with a single glyph. Subdivision slot events stay untouched.
+ *
+ * @param events The synthesised measure events.
+ * @param subdivisionIndices Indices into {@link events} that are subdivision slot events.
+ * @param stepResolution The measure's step resolution.
+ * @param pulseFraction The rhythmic pulse as a fraction.
+ *
+ * @returns The events with standard-value rests.
+ */
+const decomposeFinalRests = (events: IMeasureEvent[], subdivisionIndices: Set<number>,
+    stepResolution: number, pulseFraction: IFraction): IMeasureEvent[] => {
+    const values = standardRestSteps(stepResolution);
+    const pulseSteps = pulseStepCount(pulseFraction, stepResolution);
+    const result: IMeasureEvent[] = [];
+
+    for (let index = 0; index < events.length; index++) {
+        const event = events[index];
+
+        if (event.noteStyleId !== undefined || subdivisionIndices.has(index)) {
+            result.push(event);
+
+            continue;
+        }
+
+        const startStep = (event.start.numerator * stepResolution) / event.start.denominator;
+        const durationSteps = (event.duration.numerator * stepResolution) / event.duration.denominator;
+
+        if (!Number.isInteger(startStep) || !Number.isInteger(durationSteps) || durationSteps <= 0) {
+            result.push(event);
+
+            continue;
+        }
+
+        const parts = decomposeRestSteps(startStep, startStep + durationSteps, pulseSteps, values);
+        let step = startStep;
+
+        for (const part of parts) {
+            result.push({
+                start: reduceFraction(step, stepResolution),
+                duration: reduceFraction(part, stepResolution),
+            });
+            step += part;
+        }
+    }
+
+    return result;
 };
 
 /**

@@ -322,6 +322,144 @@ describe.sequential("ScoreBookDataModel track actions", () => {
         expect(mutatedCalls).toBe(1);
     });
 
+    it("setGridNote places a single-step note and notates the remaining rest", () => {
+        const instrument = createInstrument("0", 0, 0);
+        model.startNewArrangement([instrument]);
+        const track = model.arrangement!.tracks[0];
+        const measure = track.measures[0];
+
+        model.setGridNote(track.id, 1, 0, "1");
+
+        expect(measure.events).toHaveLength(3);
+        expect(measure.events[0].noteStyleId).toBe("1");
+        expect(measure.events[0].start).toEqual({ numerator: 0, denominator: 1 });
+        expect(measure.events[0].duration).toEqual({ numerator: 1, denominator: 16 });
+        expect(measure.events[1].noteStyleId).toBeUndefined();
+        expect(measure.events[1].start).toEqual({ numerator: 1, denominator: 16 });
+        expect(measure.events[1].duration).toEqual({ numerator: 3, denominator: 16 });
+        expect(measure.events[2].noteStyleId).toBeUndefined();
+        expect(measure.events[2].start).toEqual({ numerator: 1, denominator: 4 });
+        expect(measure.events[2].duration).toEqual({ numerator: 3, denominator: 4 });
+    });
+
+    it("grid edits preserve a note that spans a pulse boundary", () => {
+        const instrument = createInstrument("0", 0, 0);
+        model.startNewArrangement([instrument]);
+        const track = model.arrangement!.tracks[0];
+        const measure = track.measures[0];
+
+        measure.events.splice(0, measure.events.length,
+            { start: { numerator: 0, denominator: 1 }, duration: { numerator: 1, denominator: 8 } },
+            { start: { numerator: 1, denominator: 8 }, duration: { numerator: 1, denominator: 4 }, noteStyleId: "1" },
+            { start: { numerator: 3, denominator: 8 }, duration: { numerator: 5, denominator: 8 } },
+        );
+
+        model.setGridNote(track.id, 1, 15, "2");
+
+        const note = measure.events.find((event) => {
+            return event.noteStyleId === "1";
+        });
+
+        expect(note?.start).toEqual({ numerator: 1, denominator: 8 });
+        expect(note?.duration).toEqual({ numerator: 1, denominator: 4 });
+        expect(mutatedCalls).toBe(1);
+    });
+
+    it("insertNote inserts a note of the given duration into a rest", () => {
+        const instrument = createInstrument("0", 0, 0);
+        model.startNewArrangement([instrument]);
+        const track = model.arrangement!.tracks[0];
+        const measure = track.measures[0];
+
+        expect(model.insertNote(track.id, 1, { numerator: 0, denominator: 1 },
+            { numerator: 1, denominator: 4 }, "1")).toBe(true);
+
+        expect(measure.events).toHaveLength(2);
+        expect(measure.events[0].noteStyleId).toBe("1");
+        expect(measure.events[0].duration).toEqual({ numerator: 1, denominator: 4 });
+        expect(measure.events[1].noteStyleId).toBeUndefined();
+        expect(measure.events[1].duration).toEqual({ numerator: 3, denominator: 4 });
+    });
+
+    it("insertNote replaces a same-length note", () => {
+        const instrument = createInstrument("0", 0, 0);
+        model.startNewArrangement([instrument]);
+        const track = model.arrangement!.tracks[0];
+        const measure = track.measures[0];
+
+        model.insertNote(track.id, 1, { numerator: 0, denominator: 1 },
+            { numerator: 1, denominator: 16 }, "1");
+        expect(measure.events).toHaveLength(3);
+
+        expect(model.insertNote(track.id, 1, { numerator: 0, denominator: 1 },
+            { numerator: 1, denominator: 16 }, "2")).toBe(true);
+        expect(measure.events).toHaveLength(3);
+        expect(measure.events[0].noteStyleId).toBe("2");
+        expect(measure.events[0].duration).toEqual({ numerator: 1, denominator: 16 });
+    });
+
+    it("insertNote cuts into a longer note", () => {
+        const instrument = createInstrument("0", 0, 0);
+        model.startNewArrangement([instrument]);
+        const track = model.arrangement!.tracks[0];
+        const measure = track.measures[0];
+
+        model.insertNote(track.id, 1, { numerator: 0, denominator: 1 },
+            { numerator: 1, denominator: 4 }, "1");
+
+        expect(model.insertNote(track.id, 1, { numerator: 1, denominator: 16 },
+            { numerator: 1, denominator: 16 }, "2")).toBe(true);
+
+        expect(measure.events[0]).toMatchObject({
+            noteStyleId: "1", start: { numerator: 0, denominator: 1 }, duration: { numerator: 1, denominator: 16 },
+        });
+        expect(measure.events[1]).toMatchObject({
+            noteStyleId: "2", start: { numerator: 1, denominator: 16 }, duration: { numerator: 1, denominator: 16 },
+        });
+        expect(measure.events[2]).toMatchObject({
+            noteStyleId: "1", start: { numerator: 1, denominator: 8 }, duration: { numerator: 1, denominator: 8 },
+        });
+    });
+
+    it("insertNote consumes following rests when the note at the position is shorter", () => {
+        const instrument = createInstrument("0", 0, 0);
+        model.startNewArrangement([instrument]);
+        const track = model.arrangement!.tracks[0];
+        const measure = track.measures[0];
+
+        model.insertNote(track.id, 1, { numerator: 0, denominator: 1 },
+            { numerator: 1, denominator: 16 }, "1");
+
+        expect(model.insertNote(track.id, 1, { numerator: 0, denominator: 1 },
+            { numerator: 1, denominator: 4 }, "2")).toBe(true);
+
+        expect(measure.events).toHaveLength(2);
+        expect(measure.events[0].noteStyleId).toBe("2");
+        expect(measure.events[0].duration).toEqual({ numerator: 1, denominator: 4 });
+        expect(measure.events[1].noteStyleId).toBeUndefined();
+        expect(measure.events[1].duration).toEqual({ numerator: 3, denominator: 4 });
+    });
+
+    it("insertNote rejects when a following note blocks the span", () => {
+        const instrument = createInstrument("0", 0, 0);
+        model.startNewArrangement([instrument]);
+        const track = model.arrangement!.tracks[0];
+        const measure = track.measures[0];
+
+        model.insertNote(track.id, 1, { numerator: 0, denominator: 1 },
+            { numerator: 1, denominator: 16 }, "1");
+        model.insertNote(track.id, 1, { numerator: 1, denominator: 16 },
+            { numerator: 1, denominator: 16 }, "1");
+        const before = measure.events.map((event) => {
+            return { ...event, start: { ...event.start }, duration: { ...event.duration } };
+        });
+
+        expect(model.insertNote(track.id, 1, { numerator: 0, denominator: 1 },
+            { numerator: 1, denominator: 4 }, "2")).toBe(false);
+        expect(measure.events).toEqual(before);
+        expect(mutatedCalls).toBe(2);
+    });
+
     it("clearAllTracks clears every track and fires arrangementMutated once", () => {
         const instruments = [createInstrument("0", 0, 0), createInstrument("1", 1, 1)];
         model.startNewArrangement(instruments);
@@ -356,12 +494,15 @@ describe.sequential("ScoreBookDataModel track actions", () => {
         const cleared = model.clearStepRanges([{ trackId: track.id, bar: 1, startStep: 1, endStep: 2 }]);
 
         expect(cleared).toBe(true);
-        // Clearing the middle notes lets the first note absorb the gap up to the next note.
-        expect(track.measures[0].events).toHaveLength(3);
+        // The cleared steps become a combined rest; the surrounding notes keep their durations.
+        expect(track.measures[0].events).toHaveLength(4);
         expect(track.measures[0].events[0].noteStyleId).toBe("1");
-        expect(track.measures[0].events[0].duration).toEqual({ numerator: 3, denominator: 16 });
-        expect(track.measures[0].events[1].noteStyleId).toBe("1");
-        expect(track.measures[0].events[2].noteStyleId).toBeUndefined();
+        expect(track.measures[0].events[0].duration).toEqual({ numerator: 1, denominator: 16 });
+        expect(track.measures[0].events[1].noteStyleId).toBeUndefined();
+        expect(track.measures[0].events[1].duration).toEqual({ numerator: 1, denominator: 8 });
+        expect(track.measures[0].events[2].noteStyleId).toBe("1");
+        expect(track.measures[0].events[2].duration).toEqual({ numerator: 1, denominator: 16 });
+        expect(track.measures[0].events[3].noteStyleId).toBeUndefined();
         expect(mutatedCalls).toBe(1);
     });
 
@@ -441,7 +582,7 @@ describe.sequential("ScoreBookDataModel track actions", () => {
         model.startNewArrangement(instruments);
         const track = model.arrangement!.tracks[0];
 
-        // A quarter note fills the first pulse; steps 1-3 are its empty rest steps.
+        // A note occupies the first cell; the following cells are an empty rest.
         model.setGridNote(track.id, 1, 0, "1");
         mutatedCalls = 0;
 
@@ -470,11 +611,12 @@ describe.sequential("ScoreBookDataModel track actions", () => {
         const cleared = model.clearStepRanges([{ trackId: track.id, bar: 1, startStep: 1, endStep: 1 }]);
 
         expect(cleared).toBe(true);
-        expect(measure.subdivisions).toEqual([{ startIndex: 1, actual: 3, normal: 2, isTuplet: true }]);
-        expect(measure.events).toHaveLength(5);
+        expect(measure.subdivisions).toEqual([{ startIndex: 2, actual: 3, normal: 2, isTuplet: true }]);
+        expect(measure.events).toHaveLength(6);
         expect(measure.events[0].noteStyleId).toBe("1");
-        expect(measure.events[0].duration).toEqual({ numerator: 1, denominator: 8 });
-        expect(measure.events[1].noteStyleId).toBe("1");
+        expect(measure.events[0].duration).toEqual({ numerator: 1, denominator: 16 });
+        expect(measure.events[1].noteStyleId).toBeUndefined();
+        expect(measure.events[1].duration).toEqual({ numerator: 1, denominator: 16 });
     });
 
     it("createSubdivision creates a triplet of rest slots and fires arrangementMutated", () => {

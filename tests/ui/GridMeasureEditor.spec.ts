@@ -124,13 +124,13 @@ describe.sequential("GridMeasureEditor clearSelection", () => {
 
         expect(editor.clearSelection([entry])).toBe(true);
 
-        // The cleared middle notes are absorbed by the first note, which now spans three steps.
+        // The cleared middle cells become a combined rest; the surrounding notes keep their durations.
         const notes = track.measures[0].events.filter((event) => {
             return event.noteStyleId !== undefined;
         });
         expect(notes).toHaveLength(2);
         expect(notes[0].start).toEqual({ numerator: 0, denominator: 1 });
-        expect(notes[0].duration).toEqual({ numerator: 3, denominator: 16 });
+        expect(notes[0].duration).toEqual({ numerator: 1, denominator: 16 });
         expect(notes[1].start).toEqual({ numerator: 3, denominator: 16 });
     });
 
@@ -286,8 +286,7 @@ describe.sequential("GridMeasureEditor setSelectionNoteStyle", () => {
         const track = model.arrangement!.tracks[0];
         track.instrument.noteStyles["1"] = { id: "1" } as IAudioData;
 
-        // A note placed at step 0 fills the first pulse (4 steps), so step 0 is a note start while
-        // steps 1 and 2 are absorbed grid rests within the note's span.
+        // A note placed at step 0 occupies a single cell, so only step 0 is a note start.
         model.setGridNote(track.id, 1, 0, "1");
         hydrateMeasureEvents(model.arrangement! as Arrangement);
 

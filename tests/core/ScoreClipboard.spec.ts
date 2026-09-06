@@ -507,7 +507,10 @@ describe("ScoreClipboard", () => {
     it("copies the whole note, not just its start cell", () => {
         model.startNewArrangement([instrumentA()]);
         const track = model.arrangement!.tracks[0];
-        model.setGridNote(track.id, 1, 0, "1");
+        track.measures[0].events.splice(0, track.measures[0].events.length,
+            { start: { numerator: 0, denominator: 1 }, duration: { numerator: 1, denominator: 4 }, noteStyleId: "1" },
+            { start: { numerator: 1, denominator: 4 }, duration: { numerator: 3, denominator: 4 } },
+        );
         hydrateMeasureEvents(model.arrangement! as Arrangement);
 
         const noteId = track.measures[0].noteEvents[0].id;
