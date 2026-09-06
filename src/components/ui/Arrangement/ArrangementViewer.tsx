@@ -119,8 +119,8 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
             contentHost, this.gridRadialMenuRef.current!, selectionManager, this.scoreElementRegistry,
         );
         this.trackViewerInputController.setGridEditor(gridEditor);
-        this.trackViewerInputController.setEditMode(this.props.inEditMode);
-        this.trackViewerInputController.setViewMode(trackViewMode);
+        this.trackViewerInputController.editMode = this.props.inEditMode;
+        this.trackViewerInputController.viewMode = trackViewMode;
         this.trackViewerInputController.attach();
 
         requisitions.register("settingsChanged", this.handleSettingsChanged);
@@ -159,11 +159,11 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         if (prevState.trackViewMode !== trackViewMode) {
             // View mode switched — newly mounted components need the current selection state.
             selectionManager.republishSelection();
-            this.trackViewerInputController?.setViewMode(trackViewMode);
+            this.trackViewerInputController!.viewMode = trackViewMode;
         }
 
         if (prevProps.inEditMode !== this.props.inEditMode) {
-            this.trackViewerInputController?.setEditMode(this.props.inEditMode);
+            this.trackViewerInputController!.editMode = this.props.inEditMode;
         }
 
         this.trackViewerContainerRef.current!.style.zoom = `${viewerZoom}%`;

@@ -25,11 +25,12 @@ export interface ITrackViewerEditorInput {
 
 /** Routes edit input without owning selection or rendering concerns. */
 export class TrackViewerInputController {
+    public editMode = false;
+    public viewMode: "grid" | "staff" = "grid";
+
     private static readonly longPressDuration = 500;
     private static readonly longPressMoveTolerance = 10;
 
-    private editMode = false;
-    private viewMode: "grid" | "staff" = "grid";
     private editor?: ITrackViewerEditorInput;
     private longPressTimer?: ReturnType<typeof setTimeout>;
     private longPressPointerId?: number;
@@ -70,14 +71,6 @@ export class TrackViewerInputController {
         requisitions.unregister("subdivisionCreationRequested", this.handleSubdivisionCreationRequested);
         this.clearLongPress();
         this.editor = undefined;
-    }
-
-    public setEditMode(enabled: boolean): void {
-        this.editMode = enabled;
-    }
-
-    public setViewMode(mode: "grid" | "staff"): void {
-        this.viewMode = mode;
     }
 
     public setEditor(editor: ITrackViewerEditorInput | undefined): void {

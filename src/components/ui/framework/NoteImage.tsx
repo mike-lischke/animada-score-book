@@ -63,23 +63,15 @@ export interface INoteImageProperties extends IImageBaseProps {
     innerRef?: RefObject<SVGSVGElement>;
 }
 
-interface INoteImageState {
-    loaded: boolean;
-}
-
 /**
  * Renders notes from one composable SVG sprite (`note.svg`) and rests from predefined rest symbols.
  * Individual note parts are selected via CSS custom properties.
  */
-export class NoteImage extends UIComponent<INoteImageProperties, INoteImageState> {
+export class NoteImage extends UIComponent<INoteImageProperties> {
     public static override defaultProps = {
         disabled: false,
         kind: NoteKind.Note,
         headType: NoteImageHeadType.Oval,
-    };
-
-    public override state: INoteImageState = {
-        loaded: false,
     };
 
     private static readonly noteSpriteSource = new URL("../../../assets/images/notes/note.svg", import.meta.url).href;
@@ -114,6 +106,15 @@ export class NoteImage extends UIComponent<INoteImageProperties, INoteImageState
         return symbolId;
     }
 
+    public override componentDidMount(): void {
+        const { kind = NoteKind.Note } = this.props;
+        const source = kind === NoteKind.Note ? NoteImage.noteSpriteSource : NoteImage.restSpriteSource;
+
+        // Fire-and-forget. The <use> element resolves automatically once the symbol lands in the
+        // holder, while the SVG keeps its fixed CSS size from the first render onwards.
+        void this.cacheSprite(source);
+    }
+
     public override render(): ComponentChild {
         const {
             id, title, alt, style, disabled, width, height, innerRef, kind = NoteKind.Note, value,
@@ -122,14 +123,6 @@ export class NoteImage extends UIComponent<INoteImageProperties, INoteImageState
 
         const source = kind === NoteKind.Note ? NoteImage.noteSpriteSource : NoteImage.restSpriteSource;
         const symbolId = this.symbolIdFromPath(source);
-        const { loaded } = this.state;
-        if (!loaded) {
-            void this.cacheSprite(source).then(() => {
-                this.setState({ loaded: true });
-            });
-
-            return null;
-        }
 
         const mergedClassName = this.generateFinalClassName([
             "note-image",
