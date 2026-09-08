@@ -5,6 +5,7 @@
 
 import { type ComponentChild, type CSSProperties, type VNode } from "preact";
 
+import { articulationFromSampleProfile } from "../../../core/articulation.js";
 import type { ISbDmTrackMeasure } from "../../../core/ScoreBookDataModel.js";
 import {
     Damping, ExcitationMode, HandTechnique, NoteDisplayType, StickTechnique,
@@ -17,7 +18,7 @@ import type { IFraction, IAudioData } from "../../../core/types/general.js";
 import type { IScoreMetrics } from "../../../player/TimeCoordinator.js";
 import { addFractions, compareFractions, subtractFractions } from "../../../core/serialisation/numeric-functions.js";
 import { ScoreElementKind, type ScoreElementRegistry } from "../../../ui/ScoreElementRegistry.js";
-import { NoteImage, NoteImageHeadType, NoteKind, NoteLength } from "../framework/NoteImage.js";
+import { NoteImage, NoteKind, NoteLength } from "../framework/NoteImage.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
 
 export interface IStaffNoteViewerProperties extends ICommonUIProperties {
@@ -294,7 +295,9 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
             diamondOpen,
             noteLine,
             noteStyle: audioData,
-            articulation: event.articulation ? { ...event.articulation } : undefined,
+            articulation: event.articulation ?? (audioData
+                ? articulationFromSampleProfile(audioData.sampleProfile)
+                : undefined),
         };
     }
 
@@ -663,8 +666,8 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                 const translateY = `translateY(calc(-18px + ${lineOffset}px))`;
 
                 const hasBeam = beamInfo !== undefined;
-                const headType = this.resolveHeadType(node.displayType);
-                const isNonOval = headType !== NoteImageHeadType.Oval;
+                const headType = node.displayType;
+                const isNonOval = headType !== NoteDisplayType.Oval;
 
                 const headWrapperClasses = ["staff-note-head"];
                 if (isNonOval) {
@@ -715,7 +718,7 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                                 />
                             ) : null}
                             {this.renderNoteDecorations(node.noteStyle, node.articulation)}
-                            {headType === NoteImageHeadType.Cross ? this.renderCrossHead() : null}
+                            {headType === NoteDisplayType.Cross ? this.renderCrossHead() : null}
                         </span>
                         {node.articulation?.accent ? (
                             <span className="staff-note-viewer-accent">&gt;</span>
@@ -830,8 +833,8 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
      *
      * @returns A VNode representing the custom stem.
      */
-    private renderCustomStem(lineOffset: number, headType: NoteImageHeadType): VNode {
-        const headClass = headType !== NoteImageHeadType.Oval
+    private renderCustomStem(lineOffset: number, headType: NoteDisplayType): VNode {
+        const headClass = headType !== NoteDisplayType.Oval
             ? `staff-note-viewer-custom-stem--${this.headTypeClassName(headType)}`
             : "";
 
@@ -983,30 +986,6 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
         return NoteDisplayType.Oval;
     }
 
-    private resolveHeadType(displayType: NoteDisplayType): NoteImageHeadType {
-        switch (displayType) {
-            case NoteDisplayType.Cross: {
-                return NoteImageHeadType.Cross;
-            }
-
-            case NoteDisplayType.Diamond: {
-                return NoteImageHeadType.Diamond;
-            }
-
-            case NoteDisplayType.Square: {
-                return NoteImageHeadType.Square;
-            }
-
-            case NoteDisplayType.Triangle: {
-                return NoteImageHeadType.Triangle;
-            }
-
-            case NoteDisplayType.Oval: {
-                return NoteImageHeadType.Oval;
-            }
-        }
-    }
-
     private resolveDiamondOpen(noteStyle: IAudioData): boolean | undefined {
         const characteristics = noteStyle.characteristics;
         if (!("mainDisplayType" in characteristics) || characteristics.mainDisplayType !== NoteDisplayType.Diamond) {
@@ -1017,27 +996,27 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
     }
 
     /**
-     * Maps a NoteImageHeadType to a CSS class name suffix.
+     * Maps a note display type to a CSS class name suffix.
      *
      * @param headType The head type to map.
      *
      * @returns The CSS class name suffix (e.g. "square", "cross").
      */
-    private headTypeClassName(headType: NoteImageHeadType): string {
+    private headTypeClassName(headType: NoteDisplayType): string {
         switch (headType) {
-            case NoteImageHeadType.Square: {
+            case NoteDisplayType.Square: {
                 return "square";
             }
 
-            case NoteImageHeadType.Triangle: {
+            case NoteDisplayType.Triangle: {
                 return "triangle";
             }
 
-            case NoteImageHeadType.Cross: {
+            case NoteDisplayType.Cross: {
                 return "cross";
             }
 
-            case NoteImageHeadType.Diamond: {
+            case NoteDisplayType.Diamond: {
                 return "diamond";
             }
 

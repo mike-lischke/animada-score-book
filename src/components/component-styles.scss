@@ -95,31 +95,270 @@
     background-color: var(--color-base-100);
     flex-shrink: 0;
     box-shadow: none;
+    --note-style-icon-hole: var(--color-base-100);
 
     &:not(:disabled):hover {
         border-color: var(--color-primary);
         background: color-mix(in srgb, var(--color-primary) 10%, var(--color-base-100));
     }
 
-    &.du-btn-primary {
-        background-color: var(--color-primary);
-        border-color: var(--color-primary);
+    .icon.note-style-symbol {
+        color: inherit;
+        background-color: currentColor;
+    }
 
-        .icon.note-style-symbol {
-            background-color: var(--color-primary-content);
+    &.du-btn-primary {
+        border-color: var(--color-primary);
+        background-color: color-mix(in srgb, var(--color-primary) 25%, var(--color-base-100));
+        color: var(--color-base-content);
+        --note-style-icon-hole: color-mix(in srgb, var(--color-primary) 25%, var(--color-base-100));
+    }
+}
+
+.note-style-icon {
+    position: relative;
+    display: inline-block;
+    flex-shrink: 0;
+    line-height: 0;
+}
+
+.note-style-icon-head {
+    display: block;
+    background: currentColor;
+    pointer-events: none;
+
+    &.oval {
+        width: 16px;
+        height: 13px;
+        background: transparent;
+        position: relative;
+        overflow: hidden;
+
+        .note-style-icon-note-image {
+            position: absolute;
+            left: 0;
+            top: -41px;
+        }
+    }
+
+    &.square {
+        width: 12px;
+        height: 12px;
+    }
+
+    &.diamond {
+        width: 11px;
+        height: 11px;
+        transform: rotate(45deg);
+
+        &.hollow {
+            background: transparent;
+            border: 2px solid currentColor;
+        }
+    }
+
+    &.triangle {
+        width: 0;
+        height: 0;
+        background: transparent;
+        border-left: 7px solid transparent;
+        border-right: 7px solid transparent;
+        border-bottom: 12px solid currentColor;
+    }
+
+    &.cross {
+        position: relative;
+        width: 12px;
+        height: 12px;
+        background: transparent;
+
+        &::before,
+        &::after {
+            content: "";
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            width: 2px;
+            height: 12px;
+            background: currentColor;
+            border-radius: 1px;
+        }
+
+        &::before {
+            transform: translate(-50%, -50%) rotate(45deg);
+        }
+
+        &::after {
+            transform: translate(-50%, -50%) rotate(-45deg);
         }
     }
 }
 
-.noteStyleBar .icon.note-style-symbol {
+/* Technique decorations overlaid on or next to the head. */
+.note-style-icon-slap-cross,
+.note-style-icon-rimshot-cross,
+.note-style-icon-press-roll {
+    position: absolute;
+    pointer-events: none;
+}
+
+.note-style-icon-slap-cross {
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+}
+
+.note-style-icon-rimshot-cross {
+    left: calc(100% + 3px);
+    top: -2px;
+}
+
+.note-style-icon-press-roll {
+    left: calc(100% + 3px);
+    top: -2px;
+}
+
+.note-style-icon-rim-line,
+.note-style-icon-body-stick,
+.note-style-icon-crossclick-line,
+.note-style-icon-thumb-circle,
+.note-style-icon-tap-triangle,
+.note-style-icon-body-hand,
+.note-style-icon-scraped,
+.note-style-icon-blown {
+    position: absolute;
+    pointer-events: none;
+}
+
+.note-style-icon-rim-line {
+    left: 50%;
+    bottom: -4px;
+    transform: translateX(-50%);
+    width: 15px;
+    height: 2px;
+    background: currentColor;
+}
+
+.note-style-icon-body-stick {
+    left: -4px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 2px;
+    height: 14px;
+    background: currentColor;
+}
+
+.note-style-icon-crossclick-line {
+    left: 50%;
+    top: -4px;
+    transform: translateX(-50%);
+    width: 16px;
+    height: 2px;
+    background: currentColor;
+}
+
+.note-style-icon-thumb-circle {
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: 5px;
+    height: 5px;
+    border: 1px solid var(--note-style-icon-hole);
+    border-radius: 50%;
+}
+
+.note-style-icon-tap-triangle {
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: 0;
+    height: 0;
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    border-bottom: 6px solid var(--note-style-icon-hole);
+}
+
+.note-style-icon-body-hand {
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: 16px;
+    height: 16px;
+    border: 1.5px solid currentColor;
+}
+
+.note-style-icon-scraped {
+    left: calc(100% + 2px);
+    top: 0;
+    width: 6px;
+    height: 14px;
+    background:
+        linear-gradient(135deg, transparent 48%, currentColor 48%, currentColor 52%, transparent 52%) 0 2px / 4px 4px,
+        linear-gradient(45deg, transparent 48%, currentColor 48%, currentColor 52%, transparent 52%) 2px 2px / 4px 4px;
+    background-repeat: repeat-y;
+}
+
+.note-style-icon-blown {
+    left: 50%;
+    top: -10px;
+    transform: translateX(-50%);
+    font-size: 12px;
+    line-height: 1;
+    color: currentColor;
+}
+
+/* Compact staff snippet showing note styles on their note lines. */
+.note-style-line-icon {
+    position: relative;
+    display: block;
     width: 24px;
     height: 24px;
+}
+
+.note-style-line-icon-line {
+    position: absolute;
+    left: 0;
+    right: 0;
+    border-top: 1px solid var(--color-base-300);
+    transform: translateY(-50%);
+    pointer-events: none;
+}
+
+.note-style-line-icon-head {
+    position: absolute;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(0.5);
+    transform-origin: center;
+    pointer-events: none;
+}
+
+/* Dropdown button in the note style bar matches the regular note style buttons. */
+.noteStyleBar .noteStyleDropdown .du-btn-ghost {
+    height: 40px;
+    width: 40px;
+    min-width: 40px;
+    padding: 0;
+    border-radius: 50%;
+    background-color: var(--color-base-100);
+    flex-shrink: 0;
+    box-shadow: none;
+    border: 1px solid color-mix(in srgb, var(--color-base-content) 30%, transparent);
+    --note-style-icon-hole: var(--color-base-100);
+
+    &:not(:disabled):hover {
+        border-color: var(--color-primary);
+        background: color-mix(in srgb, var(--color-primary) 10%, var(--color-base-100));
+    }
 }
 
 .subdivisionToolbar {
     display: flex;
     align-items: center;
     gap: 4px;
+}
+
+.subdivisionToolbarHost {
+    margin-left: 4px;
 }
 
 .subdivisionToolbar .btn {
@@ -136,6 +375,91 @@
     &:not(:disabled):hover {
         border-color: var(--color-primary);
         background: color-mix(in srgb, var(--color-primary) 10%, var(--color-base-100));
+    }
+}
+
+.noteLengthToolbarHost {
+    margin-left: 4px;
+}
+
+.noteLengthToolbar {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.noteLengthButton {
+    height: 40px;
+    width: 40px;
+    min-width: 40px;
+    padding: 0;
+    border-radius: 50%;
+    background-color: var(--color-base-100);
+    flex-shrink: 0;
+    box-shadow: none;
+    border: 1px solid color-mix(in srgb, var(--color-base-content) 30%, transparent);
+
+    &:not(:disabled):hover {
+        border-color: var(--color-primary);
+        background: color-mix(in srgb, var(--color-primary) 10%, var(--color-base-100));
+    }
+
+    .noteLengthIcon {
+        color: var(--color-base-content);
+        display: block;
+
+        .noteLengthIconHead {
+            fill: color-mix(in srgb, currentColor 35%, transparent);
+            stroke: none;
+
+            &.hollow {
+                fill: none;
+                stroke: color-mix(in srgb, currentColor 35%, transparent);
+            }
+        }
+    }
+
+    &.du-btn-primary {
+        border-color: var(--color-primary);
+        background-color: color-mix(in srgb, var(--color-primary) 25%, var(--color-base-100));
+        color: var(--color-base-content);
+    }
+}
+
+.articulationToolbarHost {
+    margin-left: 4px;
+}
+
+.articulationToolbar {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.articulationButton {
+    height: 40px;
+    width: 40px;
+    min-width: 40px;
+    padding: 0;
+    border-radius: 50%;
+    background-color: var(--color-base-100);
+    flex-shrink: 0;
+    box-shadow: none;
+    border: 1px solid color-mix(in srgb, var(--color-base-content) 30%, transparent);
+
+    &:not(:disabled):hover {
+        border-color: var(--color-primary);
+        background: color-mix(in srgb, var(--color-primary) 10%, var(--color-base-100));
+    }
+
+    .articulation-icon {
+        display: block;
+    }
+
+    &.du-btn-primary {
+        border-color: var(--color-primary);
+        background-color: color-mix(in srgb, var(--color-primary) 25%, var(--color-base-100));
+        color: var(--color-base-content);
     }
 }
 
@@ -1309,21 +1633,12 @@
 
         .staff-note-head-cross-svg,
         .staff-note-head-press-roll-svg,
-        .staff-note-head-slap-svg,
         .staff-note-head-rimshot-cross-svg {
             stroke: var(--color-primary) !important;
         }
 
         .staff-note-head-stem {
             background: var(--color-primary) !important;
-        }
-
-        .staff-note-head-thumb-circle {
-            border-color: var(--color-primary) !important;
-        }
-
-        .staff-note-head-tap-triangle {
-            border-bottom-color: var(--color-primary) !important;
         }
 
         &.body-hand::before {

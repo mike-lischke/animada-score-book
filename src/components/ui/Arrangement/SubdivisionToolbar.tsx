@@ -11,6 +11,7 @@ import { SelectionGranularity, type ISelectionEntry } from "../../../ui/selectio
 import { TupletIcon } from "../Note/TupletIcon.js";
 import { Container } from "../framework/Container.js";
 import { Dropdown, type IDropdownItem } from "../framework/Dropdown.js";
+import { GooeyGroup } from "../framework/GooeyGroup.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
 import { ChildAlignment, Orientation } from "../framework/ui-types.js";
 
@@ -73,18 +74,22 @@ export class SubdivisionToolbar extends UIComponent<ISubdivisionToolbarProps, IS
 
         return (
             <Container
-                className="subdivisionToolbar"
+                className="subdivisionToolbarHost"
                 orientation={Orientation.LeftToRight}
                 crossAlignment={ChildAlignment.Center}
-                gap={4}
             >
-                <Dropdown
-                    icon={<TupletIcon />}
-                    disabled={!canCreate}
-                    closeOnSelect
-                    items={dropdownItems}
-                    data-tooltip="Add subdivision"
-                />
+                <GooeyGroup
+                    className="subdivisionToolbar"
+                    background="var(--color-base-200)"
+                >
+                    <Dropdown
+                        icon={<TupletIcon />}
+                        disabled={!canCreate}
+                        closeOnSelect
+                        items={dropdownItems}
+                        data-tooltip="Add subdivision"
+                    />
+                </GooeyGroup>
             </Container>
         );
     }

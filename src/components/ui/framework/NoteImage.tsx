@@ -5,31 +5,16 @@
 
 import { type ComponentChild, type CSSProperties, type RefObject } from "preact";
 
+import { NoteLength } from "../../../core/rest-notation.js";
+import { NoteDisplayType } from "../../../core/ScoreBookDataModel.js";
 import { UIComponent } from "./UIComponent.js";
 import { type IImageBaseProps } from "./Image.js";
+
+export { NoteLength };
 
 export enum NoteKind {
     Note,
     Rest
-}
-
-export enum NoteLength {
-    Whole,
-    Half,
-    Quarter,
-    Eighth,
-    Sixteenth,
-    ThirtySecond
-}
-
-export enum NoteImageHeadType {
-    Oval,
-    Cross,
-    Diamond,
-    /** Filled square for hand-struck notes (e.g. Repinique de mão, Conga). */
-    Square,
-    /** Hollow equilateral triangle for shaken instruments (e.g. Chocalho, Ganzá). */
-    Triangle
 }
 
 export interface INoteImageProperties extends IImageBaseProps {
@@ -40,7 +25,7 @@ export interface INoteImageProperties extends IImageBaseProps {
     value: NoteLength;
 
     /** Note head variant (used only when kind="note"). */
-    headType?: NoteImageHeadType;
+    headType?: NoteDisplayType;
 
     /** Optional override for stem visibility (used only for notes). */
     hasStem?: boolean;
@@ -71,7 +56,7 @@ export class NoteImage extends UIComponent<INoteImageProperties> {
     public static override defaultProps = {
         disabled: false,
         kind: NoteKind.Note,
-        headType: NoteImageHeadType.Oval,
+        headType: NoteDisplayType.Oval,
     };
 
     private static readonly noteSpriteSource = new URL("../../../assets/images/notes/note.svg", import.meta.url).href;
@@ -118,7 +103,7 @@ export class NoteImage extends UIComponent<INoteImageProperties> {
     public override render(): ComponentChild {
         const {
             id, title, alt, style, disabled, width, height, innerRef, kind = NoteKind.Note, value,
-            headType = NoteImageHeadType.Oval, dotted = false, hideStem = false,
+            headType = NoteDisplayType.Oval, dotted = false, hideStem = false,
         } = this.props;
 
         const source = kind === NoteKind.Note ? NoteImage.noteSpriteSource : NoteImage.restSpriteSource;
@@ -153,14 +138,14 @@ export class NoteImage extends UIComponent<INoteImageProperties> {
     }
 
     private computeNoteStyle(baseStyle: CSSProperties, value: NoteLength,
-        headType: NoteImageHeadType, dotted: boolean, hideStem = false): CSSProperties {
+        headType: NoteDisplayType, dotted: boolean, hideStem = false): CSSProperties {
         const { flagCount, hasStem: hasStemOverride } = this.props;
         const style = { ...baseStyle } as CSSProperties & Record<string, string>;
 
         const flags = flagCount ?? this.defaultFlagCount(value);
         const stemDefault = value !== NoteLength.Whole;
         const hasStem = hideStem ? false : (hasStemOverride ?? stemDefault);
-        const isOval = headType === NoteImageHeadType.Oval;
+        const isOval = headType === NoteDisplayType.Oval;
 
         style["--note-show-oval-body"] = isOval && value !== NoteLength.Whole ? "inline" : "none";
         style["--note-show-oval-stem"] = hasStem ? "inline" : "none";

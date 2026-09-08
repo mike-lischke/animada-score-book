@@ -8,6 +8,7 @@ import { ComponentPlacement } from "../components/ui/framework/UIComponent.js";
 import { RadialMenu, type IRadialMenuItem } from "../components/ui/framework/RadialMenu.js";
 import { AudioBufferPlayer } from "../player/AudioBufferPlayer.js";
 import { getSharedAudioContext } from "../core/audio-context.js";
+import { NoteLength } from "../core/rest-notation.js";
 import { GridMeasureEditor, type IGridEditorPosition } from "./GridMeasureEditor.js";
 import { ScoreElementKind, type ScoreElementRegistry } from "./ScoreElementRegistry.js";
 import { SelectionGranularity, type ISelectionDelta, type ISelectionEntry } from "./selection-types.js";
@@ -36,6 +37,7 @@ export class TrackViewerInputController {
     private longPressPointerId?: number;
     private longPressTarget?: HTMLElement;
     private currentPosition?: IGridEditorPosition;
+    private noteLength = NoteLength.Quarter;
 
     public constructor(
         private readonly eventContainer: HTMLElement,
@@ -56,6 +58,7 @@ export class TrackViewerInputController {
         requisitions.register("selectionDeleteRequested", this.handleSelectionDeleteRequested);
         requisitions.register("noteEntryRequested", this.handleNoteEntryRequested);
         requisitions.register("subdivisionCreationRequested", this.handleSubdivisionCreationRequested);
+        requisitions.register("noteLengthChanged", this.handleNoteLengthChanged);
     }
 
     public dispose(): void {
@@ -69,6 +72,7 @@ export class TrackViewerInputController {
         requisitions.unregister("selectionDeleteRequested", this.handleSelectionDeleteRequested);
         requisitions.unregister("noteEntryRequested", this.handleNoteEntryRequested);
         requisitions.unregister("subdivisionCreationRequested", this.handleSubdivisionCreationRequested);
+        requisitions.unregister("noteLengthChanged", this.handleNoteLengthChanged);
         this.clearLongPress();
         this.editor = undefined;
     }
@@ -391,6 +395,12 @@ export class TrackViewerInputController {
         return Promise.resolve(this.enterNote(noteStyleId));
     };
 
+    private handleNoteLengthChanged = (length: NoteLength): Promise<boolean> => {
+        this.noteLength = length;
+
+        return Promise.resolve(true);
+    };
+
     private handleSubdivisionCreationRequested = (request: ISubdivisionCreationRequest): Promise<boolean> => {
         if (!this.editMode || this.viewMode !== "grid" || !(this.editor instanceof GridMeasureEditor)) {
             return Promise.resolve(false);
@@ -427,7 +437,17 @@ export class TrackViewerInputController {
             return false;
         }
 
-        const selectedStyle = this.editor.setNote(position, style.id);
+        let selectedStyle: ReturnType<GridMeasureEditor["setNote"]>;
+        if (position.start !== undefined) {
+            // Subdivision slots keep their exact duration; the note length only applies to grid cells.
+            selectedStyle = this.editor.setNote(position, style.id);
+        } else {
+            const duration = this.editor.noteLengthDuration(this.noteLength, position);
+            selectedStyle = duration === undefined
+                ? undefined
+                : this.editor.insertNote(position, duration, style.id);
+        }
+
         this.playNote(selectedStyle, this.editor.getMainVolume());
         this.advanceCursorForPosition(position);
         this.eventContainer.focus({ preventScroll: true });

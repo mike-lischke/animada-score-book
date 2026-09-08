@@ -7,7 +7,10 @@ import { act, cleanup, fireEvent, render, type RenderResult } from "@testing-lib
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { NoteStyleBar } from "../../src/components/ui/Arrangement/NoteStyleBar.js";
-import type { ISbDmInstrument, ISbDmTrack, ScoreBookDataModel } from "../../src/core/ScoreBookDataModel.js";
+import {
+    Damping, ExcitationMode, NoteDisplayType, StickTechnique,
+    type ISbDmInstrument, type ISbDmTrack, type ScoreBookDataModel,
+} from "../../src/core/ScoreBookDataModel.js";
 import type { IAudioData } from "../../src/core/types/general.js";
 import { requisitions } from "../../src/supplement/Requisitions.js";
 import { SelectionManager } from "../../src/ui/SelectionManager.js";
@@ -19,6 +22,34 @@ const makeNoteStyle = (id: string, shortDescription: string, description: string
         symbol: { shortDescription, description },
         audioBuffer: null,
         instrument: {} as ISbDmInstrument,
+        characteristics: {
+            excitationMode: ExcitationMode.Struck,
+            stickTechnique: StickTechnique.Normal,
+            mainDisplayType: NoteDisplayType.Oval,
+        },
+        sampleProfile: { builtInDamping: Damping.Open, builtInAccent: false, ghost: false },
+    } as unknown as IAudioData;
+};
+
+const makeNoteStyleWithHead = (
+    id: string,
+    shortDescription: string,
+    description: string,
+    displayType: NoteDisplayType,
+    noteLine?: number,
+): IAudioData => {
+    return {
+        id,
+        symbol: { shortDescription, description },
+        audioBuffer: null,
+        instrument: {} as ISbDmInstrument,
+        characteristics: {
+            excitationMode: ExcitationMode.Struck,
+            stickTechnique: StickTechnique.Normal,
+            mainDisplayType: displayType,
+        },
+        noteLine,
+        sampleProfile: { builtInDamping: Damping.Open, builtInAccent: false, ghost: false },
     } as unknown as IAudioData;
 };
 
@@ -113,7 +144,7 @@ describe.sequential("NoteStyleBar", () => {
         expect(html).toMatchSnapshot();
     });
 
-    it("renders no buttons when no track is selected", () => {
+    it("disables the note style buttons when no track is selected", () => {
         const track = makeTrack(7, { "1": makeNoteStyle("1", "Accent", "Tamborim Accent") });
         const dataModel = makeDataModel([track]);
 
@@ -121,7 +152,9 @@ describe.sequential("NoteStyleBar", () => {
             <NoteStyleBar dataModel={dataModel} selectionManager={selectionManager} />,
         );
 
-        expect(renderResult.container.querySelectorAll(".noteStyleButton")).toHaveLength(0);
+        const buttons = [...renderResult.container.querySelectorAll<HTMLButtonElement>(".noteStyleButton")];
+        expect(buttons).toHaveLength(1);
+        expect(buttons[0].disabled).toBe(true);
     });
 
     it("renders a button per note style of the selected track", () => {
@@ -137,6 +170,26 @@ describe.sequential("NoteStyleBar", () => {
         );
 
         expect(renderResult.container.querySelectorAll(".noteStyleButton")).toHaveLength(2);
+    });
+
+    it("uses grid symbols in grid mode and note heads in staff mode", () => {
+        const track = makeTrack(7, { "1": makeNoteStyle("1", "Accent", "Tamborim Accent") });
+        const dataModel = makeDataModel([track]);
+        selectionManager.selectTracks([7]);
+
+        renderResult = render(
+            <NoteStyleBar dataModel={dataModel} selectionManager={selectionManager} trackViewMode="grid" />,
+        );
+
+        expect(renderResult.container.querySelectorAll(".noteStyleButton .note-style-symbol")).toHaveLength(1);
+        expect(renderResult.container.querySelectorAll(".noteStyleButton .note-style-icon")).toHaveLength(0);
+
+        renderResult.rerender(
+            <NoteStyleBar dataModel={dataModel} selectionManager={selectionManager} trackViewMode="staff" />,
+        );
+
+        expect(renderResult.container.querySelectorAll(".noteStyleButton .note-style-symbol")).toHaveLength(0);
+        expect(renderResult.container.querySelectorAll(".noteStyleButton .note-style-icon")).toHaveLength(1);
     });
 
     it("uses the long description in the button tooltip", () => {
@@ -253,7 +306,7 @@ describe.sequential("NoteStyleBar", () => {
         expect(renderResult.container.querySelectorAll(".noteStyleButton.du-btn-primary")).toHaveLength(0);
     });
 
-    it("shows no note styles when selected tracks use different instruments", () => {
+    it("disables the note style buttons when selected tracks use different instruments", () => {
         const trackA = makeTrackWithNote(
             7, 55, { "1": makeNoteStyle("1", "Accent", "Tamborim Accent") }, 7001, "1",
         );
@@ -271,8 +324,9 @@ describe.sequential("NoteStyleBar", () => {
             <NoteStyleBar dataModel={dataModel} selectionManager={selectionManager} />,
         );
 
-        expect(renderResult.container.querySelectorAll(".noteStyleButton")).toHaveLength(0);
-        expect(renderResult.container.querySelectorAll(".noteStyleLabel")).toHaveLength(0);
+        const buttons = [...renderResult.container.querySelectorAll<HTMLButtonElement>(".noteStyleButton")];
+        expect(buttons).toHaveLength(1);
+        expect(buttons[0].disabled).toBe(true);
     });
 
     it("marks no note style when the cursor sits inside a note's duration", () => {
@@ -307,5 +361,57 @@ describe.sequential("NoteStyleBar", () => {
         );
 
         expect(renderResult.container.querySelectorAll(".noteStyleButton.du-btn-primary")).toHaveLength(0);
+    });
+
+    it("groups styles with the same note head into a dropdown in staff mode", () => {
+        const track = makeTrack(7, {
+            "1": makeNoteStyleWithHead("1", "Low", "Low Agogo Bell", NoteDisplayType.Oval, 2),
+            "2": makeNoteStyleWithHead("2", "High", "High Agogo Bell", NoteDisplayType.Oval, 1),
+        });
+        const dataModel = makeDataModel([track]);
+        selectionManager.selectTracks([7]);
+
+        renderResult = render(
+            <NoteStyleBar dataModel={dataModel} selectionManager={selectionManager} trackViewMode="staff" />,
+        );
+
+        expect(renderResult.container.querySelectorAll(".noteStyleDropdown")).toHaveLength(1);
+        expect(renderResult.container.querySelectorAll(".noteStyleButton")).toHaveLength(0);
+    });
+
+    it("keeps distinct note heads as separate buttons in staff mode", () => {
+        const track = makeTrack(7, {
+            "1": makeNoteStyleWithHead("1", "Center", "Repinique Center", NoteDisplayType.Oval),
+            "2": makeNoteStyleWithHead("2", "Rim", "Repinique Rim", NoteDisplayType.Cross),
+        });
+        const dataModel = makeDataModel([track]);
+        selectionManager.selectTracks([7]);
+
+        renderResult = render(
+            <NoteStyleBar dataModel={dataModel} selectionManager={selectionManager} trackViewMode="staff" />,
+        );
+
+        expect(renderResult.container.querySelectorAll(".noteStyleDropdown")).toHaveLength(0);
+        expect(renderResult.container.querySelectorAll(".noteStyleButton")).toHaveLength(2);
+    });
+
+    it("renders one dropdown entry per grouped style", () => {
+        const track = makeTrack(7, {
+            "1": makeNoteStyleWithHead("1", "Low", "Low Agogo Bell", NoteDisplayType.Oval, 2),
+            "2": makeNoteStyleWithHead("2", "High", "High Agogo Bell", NoteDisplayType.Oval, 1),
+        });
+        const dataModel = makeDataModel([track]);
+        selectionManager.selectTracks([7]);
+
+        renderResult = render(
+            <NoteStyleBar dataModel={dataModel} selectionManager={selectionManager} trackViewMode="staff" />,
+        );
+
+        const items = [
+            ...renderResult.container.querySelectorAll(".noteStyleDropdown .dropdown-popup li"),
+        ];
+        expect(items).toHaveLength(2);
+        expect(items[0].textContent).toContain("Low Agogo Bell (1)");
+        expect(items[1].textContent).toContain("High Agogo Bell (2)");
     });
 });

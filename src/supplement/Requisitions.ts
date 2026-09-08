@@ -4,6 +4,7 @@
  */
 
 import type { IUISettings } from "../core/AppStorage.js";
+import type { NoteLength } from "../core/rest-notation.js";
 import type { ISbDmScore, ISbDmScoreFolder, ISbDmTrack, ScoreBookChangeReason } from "../core/ScoreBookDataModel.js";
 import type { PlayerPlayState } from "../player/ArrangementPlayer.js";
 import type { ISelectionDelta, ISelectionRectChange } from "../ui/selection-types.js";
@@ -70,6 +71,9 @@ export interface IRequestTypeMap {
 
     /** Fired by the subdivision toolbar to create a subdivision at the cursor or selection. */
     "subdivisionCreationRequested": (request: ISubdivisionCreationRequest) => Promise<boolean>;
+
+    /** Fired by the note length toolbar to change the duration of subsequently entered notes. */
+    "noteLengthChanged": (length: NoteLength) => Promise<boolean>;
 
     /**
      * Fired by ScoreBookDataModel after any mutation to the arrangement.

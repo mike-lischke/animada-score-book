@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { Arrangement } from "../../src/core/Arrangement.js";
 import { MeasureProjection, ProjectedItemKind } from "../../src/core/MeasureProjection.js";
+import { NoteLength } from "../../src/core/rest-notation.js";
 import { ScoreBookDataModel, type ISbDmTrackMeasure } from "../../src/core/ScoreBookDataModel.js";
 import { addFractions, compareFractions } from "../../src/core/serialisation/numeric-functions.js";
 import type { IAudioData } from "../../src/core/types/general.js";
@@ -304,6 +305,52 @@ describe.sequential("GridMeasureEditor setSelectionNoteStyle", () => {
         expect(refreshed[0].noteId).toBeDefined();
         expect(refreshed[1].noteId).toBeUndefined();
         expect(refreshed[2].noteId).toBeUndefined();
+    });
+});
+
+describe.sequential("GridMeasureEditor note length entry", () => {
+    let model: ScoreBookDataModel;
+    let editor: GridMeasureEditor;
+
+    beforeEach(() => {
+        vi.restoreAllMocks();
+        model = new ScoreBookDataModel();
+        model.startNewArrangement([createInstrument("0", 0, 0)]);
+        editor = new GridMeasureEditor(model);
+    });
+
+    it("resolves the duration of every note length on the current meter", () => {
+        const track = model.arrangement!.tracks[0];
+        const position = { bar: 1, trackId: track.id, step: 0 };
+
+        expect(editor.noteLengthDuration(NoteLength.Whole, position)).toEqual({ numerator: 1, denominator: 1 });
+        expect(editor.noteLengthDuration(NoteLength.Half, position)).toEqual({ numerator: 1, denominator: 2 });
+        expect(editor.noteLengthDuration(NoteLength.Quarter, position)).toEqual({ numerator: 1, denominator: 4 });
+        expect(editor.noteLengthDuration(NoteLength.Eighth, position)).toEqual({ numerator: 1, denominator: 8 });
+        expect(editor.noteLengthDuration(NoteLength.Sixteenth, position)).toEqual({ numerator: 1, denominator: 16 });
+        expect(editor.noteLengthDuration(NoteLength.ThirtySecond, position)).toBeUndefined();
+    });
+
+    it("inserts a note spanning the selected duration", () => {
+        const track = model.arrangement!.tracks[0];
+        track.instrument.noteStyles["1"] = { id: "1" } as IAudioData;
+        const position = { bar: 1, trackId: track.id, step: 0 };
+        const duration = editor.noteLengthDuration(NoteLength.Quarter, position)!;
+
+        const style = editor.insertNote(position, duration, "1");
+
+        expect(style?.id).toBe("1");
+        expect(noteAtStep(track.measures[0], 0)).toBe("1");
+        expect(noteAtStep(track.measures[0], 3)).toBe("1");
+        expect(noteAtStep(track.measures[0], 4)).toBeUndefined();
+    });
+
+    it("rejects a note that would extend past the bar", () => {
+        const track = model.arrangement!.tracks[0];
+        track.instrument.noteStyles["1"] = { id: "1" } as IAudioData;
+        const position = { bar: 1, trackId: track.id, step: 13 };
+
+        expect(editor.insertNote(position, { numerator: 1, denominator: 4 }, "1")).toBeUndefined();
     });
 });
 

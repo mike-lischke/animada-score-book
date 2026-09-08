@@ -6,6 +6,96 @@
 import type { IFraction } from "./types/general.js";
 
 /**
+ * Standard rhythmic note values as powers of two. The enum order encodes the note value:
+ * Whole = 1, Half = 2, Quarter = 4, Eighth = 8 and so on.
+ */
+export enum NoteLength {
+    Whole,
+    Half,
+    Quarter,
+    Eighth,
+    Sixteenth,
+    ThirtySecond,
+}
+
+/**
+ * Returns the note value denominator of a note length (whole = 1, half = 2, ...).
+ *
+ * @param length The note length to resolve.
+ *
+ * @returns The denominator of the note value as a fraction of a whole note.
+ */
+export const noteLengthDenominator = (length: NoteLength): number => {
+    switch (length) {
+        case NoteLength.Whole: {
+            return 1;
+        }
+
+        case NoteLength.Half: {
+            return 2;
+        }
+
+        case NoteLength.Quarter: {
+            return 4;
+        }
+
+        case NoteLength.Eighth: {
+            return 8;
+        }
+
+        case NoteLength.Sixteenth: {
+            return 16;
+        }
+
+        case NoteLength.ThirtySecond: {
+            return 32;
+        }
+    }
+};
+
+/**
+ * Resolves the plain note length for a duration expressed in grid steps.
+ *
+ * @param steps The note duration in grid steps.
+ * @param stepsPerWholeNote The number of grid steps in a whole note.
+ *
+ * @returns The matching note length, or undefined for dotted or tuplet durations.
+ */
+export const noteLengthForSteps = (steps: number, stepsPerWholeNote: number): NoteLength | undefined => {
+    const units = (steps * 32) / stepsPerWholeNote;
+
+    switch (units) {
+        case 32: {
+            return NoteLength.Whole;
+        }
+
+        case 16: {
+            return NoteLength.Half;
+        }
+
+        case 8: {
+            return NoteLength.Quarter;
+        }
+
+        case 4: {
+            return NoteLength.Eighth;
+        }
+
+        case 2: {
+            return NoteLength.Sixteenth;
+        }
+
+        case 1: {
+            return NoteLength.ThirtySecond;
+        }
+
+        default: {
+            return undefined;
+        }
+    }
+};
+
+/**
  * Standard note values as fractions of a whole note, in descending order. A rest in the score
  * data must always be one of these values (or a subdivision slot duration), so the staff view can
  * render it with a single glyph.

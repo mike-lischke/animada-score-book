@@ -28,6 +28,8 @@ import { StatusBarAlignment, type IStatusBarItem } from "./components/ui/Statusb
 import { ArrangementPlayControls } from "./components/ui/Arrangement/ArrangementPlayControls.js";
 import { ArrangementTitle } from "./components/ui/Arrangement/ArrangementTitle.js";
 import { ArrangementViewer } from "./components/ui/Arrangement/ArrangementViewer.js";
+import { ArticulationToolbar } from "./components/ui/Arrangement/ArticulationToolbar.js";
+import { NoteLengthToolbar } from "./components/ui/Arrangement/NoteLengthToolbar.js";
 import { NoteStyleBar } from "./components/ui/Arrangement/NoteStyleBar.js";
 import { SubdivisionToolbar } from "./components/ui/Arrangement/SubdivisionToolbar.js";
 import { UndoRedoControls } from "./components/ui/Arrangement/UndoRedoControls.js";
@@ -100,6 +102,9 @@ interface IAppState {
     sidebarOpen: boolean;
     headerCollapsed: boolean;
 
+    /** The active arrangement view mode (grid or staff notation). */
+    trackViewMode: "grid" | "staff";
+
     /** Token for the active score lock, if editing. */
     lockToken?: string;
 
@@ -165,6 +170,7 @@ export class App extends UIComponent<{}, IAppState> {
             editMode: false,
             sidebarOpen: false,
             headerCollapsed: false,
+            trackViewMode: AppStorage.loadUISettings()?.viewSettings?.arrangementViewSettings?.displayMode ?? "grid",
             printing: false,
             instrumentEditorEnabled: false,
             backendUnreachable: false,
@@ -192,17 +198,19 @@ export class App extends UIComponent<{}, IAppState> {
         requisitions.register("arrangementMutated", this.handleArrangementMutated);
         requisitions.register("timeParamsChanged", this.handleTimeParamsChange);
         requisitions.register("undoStackChanged", this.handleUndoStackChanged);
+        requisitions.register("trackViewModeToggled", this.handleTrackViewModeToggled);
 
         void this.checkBackendThenInitialize();
     }
 
     public override shouldComponentUpdate(nextProps: {}, nextState: IAppState): boolean {
-        const { editMode, sidebarOpen, phase, headerCollapsed, printing, backendUnreachable,
+        const { editMode, sidebarOpen, phase, headerCollapsed, trackViewMode, printing, backendUnreachable,
             startupError } = this.state;
 
         return editMode !== nextState.editMode
             || sidebarOpen !== nextState.sidebarOpen || phase !== nextState.phase
             || headerCollapsed !== nextState.headerCollapsed
+            || trackViewMode !== nextState.trackViewMode
             || printing !== nextState.printing
             || backendUnreachable !== nextState.backendUnreachable
             || startupError !== nextState.startupError;
@@ -232,11 +240,12 @@ export class App extends UIComponent<{}, IAppState> {
         requisitions.unregister("editModeChanged", this.handleEditModeChanged);
         requisitions.unregister("arrangementMutated", this.handleArrangementMutated);
         requisitions.unregister("undoStackChanged", this.handleUndoStackChanged);
+        requisitions.unregister("trackViewModeToggled", this.handleTrackViewModeToggled);
     }
 
     public render() {
-        const { phase, editMode, sidebarOpen, headerCollapsed, instrumentEditorEnabled, printing,
-            printOptions, backendUnreachable, startupError } = this.state;
+        const { phase, editMode, sidebarOpen, headerCollapsed, trackViewMode, instrumentEditorEnabled,
+            printing, printOptions, backendUnreachable, startupError } = this.state;
         const isRunning = phase === AppPhase.Running;
         const headerClassName = `rounded-3xl shadow-md border border-base-200/70 gap-4`
             + (headerCollapsed ? " collapsed" : "");
@@ -523,12 +532,31 @@ export class App extends UIComponent<{}, IAppState> {
                                                         <SubdivisionToolbar
                                                             selectionManager={this.selectionManager}
                                                         />
+                                                        {trackViewMode === "staff" && (
+                                                            <>
+                                                                <Separator
+                                                                    style={{ marginLeft: "16px", height: "50%" }}
+                                                                />
+                                                                <NoteLengthToolbar
+                                                                    dataModel={this.dataModel}
+                                                                    selectionManager={this.selectionManager}
+                                                                />
+                                                            </>
+                                                        )}
+                                                        <Separator
+                                                            style={{ marginLeft: "16px", height: "50%" }}
+                                                        />
+                                                        <ArticulationToolbar
+                                                            dataModel={this.dataModel}
+                                                            selectionManager={this.selectionManager}
+                                                        />
                                                         <Separator
                                                             style={{ marginLeft: "16px", height: "50%" }}
                                                         />
                                                         <NoteStyleBar
                                                             dataModel={this.dataModel}
                                                             selectionManager={this.selectionManager}
+                                                            trackViewMode={trackViewMode}
                                                         />
                                                     </>)}
                                             </Container>
@@ -1352,6 +1380,12 @@ export class App extends UIComponent<{}, IAppState> {
 
     private handleSettingsChanged = (settings: IUISettings): Promise<boolean> => {
         this.applyThemePreference(settings.theme);
+
+        return Promise.resolve(true);
+    };
+
+    private handleTrackViewModeToggled = (mode: "grid" | "staff"): Promise<boolean> => {
+        this.setState({ trackViewMode: mode });
 
         return Promise.resolve(true);
     };

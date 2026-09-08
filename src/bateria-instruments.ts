@@ -360,7 +360,7 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
                 handTechnique: HandTechnique.Open,
-                mainDisplayType: NoteDisplayType.Oval
+                mainDisplayType: NoteDisplayType.Square
             },
             sampleProfile: { builtInDamping: Damping.Open, builtInAccent: false, ghost: false },
         },

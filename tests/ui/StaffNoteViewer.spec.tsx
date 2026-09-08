@@ -8,8 +8,8 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { StaffNoteViewer } from "../../src/components/ui/Note/StaffNoteViewer.js";
 import {
-    ExcitationMode, NoteDisplayType, SbDmEntityType, type ISbDmNoteEvent, type ISbDmTrack,
-    type ISbDmTrackMeasure,
+    Damping, ExcitationMode, NoteDisplayType, SbDmEntityType, type ISbDmNoteEvent, type ISbDmTrack,
+    type ISbDmTrackMeasure, type ISampleProfile,
 } from "../../src/core/ScoreBookDataModel.js";
 import type { IAudioData, IFraction, IMeasureEvent, ISubdivision } from "../../src/core/types/general.js";
 import type { IScoreMetrics } from "../../src/player/TimeCoordinator.js";
@@ -30,10 +30,13 @@ const event = (start: IFraction, duration: IFraction, noteStyleId?: string) => {
  *
  * @param events The measure content (notes and rests).
  * @param subdivisions Subdivision groups annotating the event stream.
+ * @param sampleProfile Optional articulation profile for the resolved note style.
  *
  * @returns The measure with resolved note events.
  */
-const buildMeasure = (events: IMeasureEvent[], subdivisions: ISubdivision[]): ISbDmTrackMeasure => {
+const buildMeasure = (events: IMeasureEvent[], subdivisions: ISubdivision[],
+    sampleProfile: ISampleProfile = { builtInDamping: Damping.Open, builtInAccent: false, ghost: false },
+): ISbDmTrackMeasure => {
     const instrument = {
         type: SbDmEntityType.Instrument,
         id: 1,
@@ -49,11 +52,7 @@ const buildMeasure = (events: IMeasureEvent[], subdivisions: ISubdivision[]): IS
             mainDisplayType: NoteDisplayType.Oval,
             stickTechnique: undefined,
         },
-        sampleProfile: {
-            builtInDamping: 0,
-            builtInAccent: false,
-            ghost: false,
-        },
+        sampleProfile,
     } as unknown as IAudioData;
 
     const track = { id: 100 } as ISbDmTrack;
@@ -316,5 +315,47 @@ describe.sequential("StaffNoteViewer beams", () => {
             step: 0,
             start: { numerator: 0, denominator: 1 },
         });
+    });
+
+    it("shows ghost parentheses from the note style's sample profile", () => {
+        const measure = buildMeasure([
+            event(fraction(0, 16), fraction(1, 16), "1"),
+        ], [], { builtInDamping: Damping.Open, builtInAccent: false, ghost: true });
+
+        renderResult = render(
+            <StaffNoteViewer
+                isLastBar={true}
+                timeSignature="4/4"
+                scoreMetrics={scoreMetrics}
+                baseSteps={16}
+                measure={measure}
+                barNumber={1}
+                trackId={100}
+            />,
+        );
+
+        const head = renderResult.container.querySelector(".staff-note-head");
+        expect(head?.classList.contains("ghost-note")).toBe(true);
+        expect(renderResult.container.querySelector(".staff-note-head-ghost-paren")).not.toBeNull();
+    });
+
+    it("shows the accent mark from the note style's sample profile", () => {
+        const measure = buildMeasure([
+            event(fraction(0, 16), fraction(1, 16), "1"),
+        ], [], { builtInDamping: Damping.Open, builtInAccent: true, ghost: false });
+
+        renderResult = render(
+            <StaffNoteViewer
+                isLastBar={true}
+                timeSignature="4/4"
+                scoreMetrics={scoreMetrics}
+                baseSteps={16}
+                measure={measure}
+                barNumber={1}
+                trackId={100}
+            />,
+        );
+
+        expect(renderResult.container.querySelector(".staff-note-viewer-accent")).not.toBeNull();
     });
 });

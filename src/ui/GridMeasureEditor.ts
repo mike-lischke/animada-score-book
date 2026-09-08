@@ -6,6 +6,7 @@
 import type {
     ISbDmArrangement, ISbDmNoteEvent, ISbDmTrack, ISbDmTrackMeasure, ITiming, ScoreBookDataModel,
 } from "../core/ScoreBookDataModel.js";
+import { NoteLength, noteLengthDenominator } from "../core/rest-notation.js";
 import { addFractions, compareFractions, reduceFraction } from "../core/serialisation/numeric-functions.js";
 import type { IAudioData, IFraction } from "../core/types/general.js";
 import { requisitions } from "../supplement/Requisitions.js";
@@ -77,6 +78,61 @@ export class GridMeasureEditor {
             position.start);
 
         return style;
+    }
+
+    /**
+     * Resolves the bar fraction covered by a note of the given length at the given position.
+     *
+     * @param length The selected note length.
+     * @param position The grid position whose measure supplies the meter.
+     *
+     * @returns The duration as a fraction of the bar, or undefined when the value is invalid.
+     */
+    public noteLengthDuration(length: NoteLength, position: IGridEditorPosition): IFraction | undefined {
+        const cell = this.resolveCell(position);
+        if (!cell) {
+            return undefined;
+        }
+
+        const measure = cell.track.measures[position.bar - 1];
+        const steps = cell.arrangement.timeParams.stepResolution / noteLengthDenominator(length);
+
+        if (!Number.isInteger(steps) || steps < 1) {
+            return undefined;
+        }
+
+        return reduceFraction(steps, measure.meter.stepResolution);
+    }
+
+    /**
+     * Inserts a note of the given duration at the given position, replacing existing content.
+     *
+     * @param position The grid position marking the note start.
+     * @param duration The note duration as a fraction of the bar.
+     * @param noteStyleId The selected instrument note-style id.
+     *
+     * @returns The selected audio data, or undefined when the edit was invalid.
+     */
+    public insertNote(position: IGridEditorPosition, duration: IFraction, noteStyleId: string): IAudioData | undefined {
+        const cell = this.resolveCell(position);
+        const style = cell?.track.instrument.noteStyles[noteStyleId];
+        if (!cell || !style) {
+            return undefined;
+        }
+
+        const start = this.resolveStartFraction(position);
+        if (start === undefined) {
+            return undefined;
+        }
+
+        const end = addFractions(start, duration);
+        if (compareFractions(end, { numerator: 1, denominator: 1 }) > 0) {
+            return undefined;
+        }
+
+        return this.dataModel.insertNote(position.trackId, position.bar, start, duration, noteStyleId)
+            ? style
+            : undefined;
     }
 
     /**
