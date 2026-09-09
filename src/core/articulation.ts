@@ -65,7 +65,7 @@ export const articulationOf = (noteStyle: IAudioData): Articulation | undefined 
  *
  * @returns A string key unique to the style's voice.
  */
-const voiceKey = (noteStyle: IAudioData): string => {
+export const voiceKey = (noteStyle: IAudioData): string => {
     const { characteristics } = noteStyle;
     const technique = "handTechnique" in characteristics && characteristics.handTechnique !== undefined
         ? `hand:${characteristics.handTechnique}`

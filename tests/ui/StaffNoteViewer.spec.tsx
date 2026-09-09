@@ -8,7 +8,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { StaffNoteViewer } from "../../src/components/ui/Note/StaffNoteViewer.js";
 import {
-    Damping, ExcitationMode, NoteDisplayType, SbDmEntityType, type ISbDmNoteEvent, type ISbDmTrack,
+    Damping, ExcitationMode, HandTechnique, NoteDisplayType, SbDmEntityType, type ISbDmNoteEvent, type ISbDmTrack,
     type ISbDmTrackMeasure, type ISampleProfile,
 } from "../../src/core/ScoreBookDataModel.js";
 import type { IAudioData, IFraction, IMeasureEvent, ISubdivision } from "../../src/core/types/general.js";
@@ -31,11 +31,13 @@ const event = (start: IFraction, duration: IFraction, noteStyleId?: string) => {
  * @param events The measure content (notes and rests).
  * @param subdivisions Subdivision groups annotating the event stream.
  * @param sampleProfile Optional articulation profile for the resolved note style.
+ * @param handTechnique Optional hand technique for the resolved note style.
  *
  * @returns The measure with resolved note events.
  */
 const buildMeasure = (events: IMeasureEvent[], subdivisions: ISubdivision[],
     sampleProfile: ISampleProfile = { builtInDamping: Damping.Open, builtInAccent: false, ghost: false },
+    handTechnique?: HandTechnique,
 ): ISbDmTrackMeasure => {
     const instrument = {
         type: SbDmEntityType.Instrument,
@@ -50,7 +52,7 @@ const buildMeasure = (events: IMeasureEvent[], subdivisions: ISubdivision[],
         characteristics: {
             excitationMode: ExcitationMode.Struck,
             mainDisplayType: NoteDisplayType.Oval,
-            stickTechnique: undefined,
+            handTechnique,
         },
         sampleProfile,
     } as unknown as IAudioData;
@@ -357,5 +359,35 @@ describe.sequential("StaffNoteViewer beams", () => {
         );
 
         expect(renderResult.container.querySelector(".staff-note-viewer-accent")).not.toBeNull();
+    });
+
+    it("renders icons for every additional hand technique", () => {
+        const techniques = [
+            { technique: HandTechnique.Thumb, className: "staff-note-head-thumb-svg" },
+            { technique: HandTechnique.Fingers, className: "staff-note-head-fingers-svg" },
+            { technique: HandTechnique.Heel, className: "staff-note-head-heel-circle" },
+            { technique: HandTechnique.Open, className: "staff-note-head-open-circle" },
+            { technique: HandTechnique.Friction, className: "staff-note-head-friction-svg" },
+        ];
+
+        techniques.forEach(({ technique, className }) => {
+            const measure = buildMeasure([
+                event(fraction(0, 16), fraction(1, 16), "1"),
+            ], [], undefined, technique);
+            const result = render(
+                <StaffNoteViewer
+                    isLastBar={true}
+                    timeSignature="4/4"
+                    scoreMetrics={scoreMetrics}
+                    baseSteps={16}
+                    measure={measure}
+                    barNumber={1}
+                    trackId={100}
+                />,
+            );
+
+            expect(result.container.querySelector(`.${className}`)).not.toBeNull();
+            result.unmount();
+        });
     });
 });

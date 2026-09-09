@@ -5,6 +5,7 @@
 
 import type { ComponentChild } from "preact";
 
+import { Articulation, articulationOf, voiceKey } from "../../../core/articulation.js";
 import type { ISbDmTrack, ScoreBookDataModel } from "../../../core/ScoreBookDataModel.js";
 import { compareFractions, reduceFraction } from "../../../core/serialisation/numeric-functions.js";
 import type { IAudioData } from "../../../core/types/general.js";
@@ -12,7 +13,7 @@ import { requisitions } from "../../../supplement/Requisitions.js";
 import type { SelectionManager } from "../../../ui/SelectionManager.js";
 import { SelectionGranularity, type ISelectionEntry } from "../../../ui/selection-types.js";
 import { NoteStyleIcon } from "../Note/NoteStyleIcon.js";
-import { NoteStyleLineIcon, type INoteStyleLineEntry } from "../Note/NoteStyleLineIcon.js";
+import { NoteStyleLineIcon } from "../Note/NoteStyleLineIcon.js";
 import { NoteStyleSymbolViewer } from "../Note/NoteStyleSymbolViewer.js";
 import { Button } from "../framework/Button.js";
 import { Container } from "../framework/Container.js";
@@ -35,10 +36,11 @@ interface INoteStyleBarState {
     canEnter: boolean;
 }
 
-/** A note style together with its 0-based position in the instrument's style list. */
+/** A note style voice shown in the toolbar, with the representative's 0-based position and all member ids. */
 interface IStyleGroupEntry {
     style: IAudioData;
     index: number;
+    memberIds: string[];
 }
 
 /**
@@ -122,8 +124,9 @@ export class NoteStyleBar extends UIComponent<INoteStyleBarProps, INoteStyleBarS
     }
 
     /**
-     * Renders the staff-mode controls. Styles that share the same note head are grouped into a
-     * dropdown whose entries place each style on its note line, so they remain distinguishable.
+     * Renders the staff-mode controls. Styles that differ only in articulation collapse into one
+     * voice, and voices that share the same note head are grouped into a dropdown whose entries
+     * place each voice on its note line, so they remain distinguishable.
      *
      * @param noteStyles The resolved note styles.
      * @param markedStyleId The style shared by the current selection, if any.
@@ -133,7 +136,8 @@ export class NoteStyleBar extends UIComponent<INoteStyleBarProps, INoteStyleBarS
      */
     private renderStaffControls(noteStyles: IAudioData[], markedStyleId: string | undefined,
         canEnter: boolean): ComponentChild[] {
-        const groups = this.groupBySignature(noteStyles);
+        const voices = this.collapseVoices(noteStyles);
+        const groups = this.groupBySignature(voices);
         const lineCount = Math.max(1, ...noteStyles.map((style) => {
             return style.noteLine ?? 1;
         }));
@@ -149,13 +153,14 @@ export class NoteStyleBar extends UIComponent<INoteStyleBarProps, INoteStyleBarS
 
     private renderStyleButton(entry: IStyleGroupEntry, markedStyleId: string | undefined,
         canEnter: boolean): ComponentChild {
-        const { style, index } = entry;
+        const { style, index, memberIds } = entry;
+        const isMarked = markedStyleId !== undefined && memberIds.includes(markedStyleId);
 
         return (
             <Button
                 key={style.id}
                 className="noteStyleButton"
-                isDefault={style.id === markedStyleId}
+                isDefault={isMarked}
                 disabled={!canEnter}
                 data-tooltip={`${this.styleDescription(style)} (${index + 1})`}
                 onClick={() => {
@@ -168,8 +173,8 @@ export class NoteStyleBar extends UIComponent<INoteStyleBarProps, INoteStyleBarS
     }
 
     /**
-     * Renders a dropdown for a group of styles that share the same note head. The button shows all
-     * styles stacked on their lines, while each entry renders one style on its own line.
+     * Renders a dropdown for a group of styles that share the same note head. The button shows the
+     * shared note head alone, while each entry renders one style on its own note line.
      *
      * @param group The grouped style entries.
      * @param markedStyleId The style shared by the current selection, if any.
@@ -197,12 +202,8 @@ export class NoteStyleBar extends UIComponent<INoteStyleBarProps, INoteStyleBarS
             };
         });
 
-        const entries: INoteStyleLineEntry[] = group.map((entry) => {
-            return { noteStyle: entry.style, line: entry.style.noteLine ?? 1 };
-        });
-
         const marked = group.find((entry) => {
-            return entry.style.id === markedStyleId;
+            return markedStyleId !== undefined && entry.memberIds.includes(markedStyleId);
         });
         const selectedItem = marked !== undefined
             ? `${this.styleDescription(marked.style)} (${marked.index + 1})`
@@ -215,7 +216,7 @@ export class NoteStyleBar extends UIComponent<INoteStyleBarProps, INoteStyleBarS
             <Dropdown
                 key={group[0].style.id}
                 className="noteStyleDropdown"
-                icon={<NoteStyleLineIcon entries={entries} lineCount={lineCount} />}
+                icon={<NoteStyleIcon noteStyle={group[0].style} />}
                 items={items}
                 closeOnSelect
                 disabled={!canEnter}
@@ -246,23 +247,57 @@ export class NoteStyleBar extends UIComponent<INoteStyleBarProps, INoteStyleBarS
     }
 
     /**
-     * Groups note styles by their visual signature, preserving the order of first appearance.
+     * Collapses ghost and muted samples into the preceding matching voice. Other variants remain
+     * distinct styles even when they share their visual and playback characteristics.
      *
-     * @param noteStyles The note styles to group.
+     * @param noteStyles The note styles to collapse.
      *
-     * @returns The groups, each containing the style entries with their original indices.
+     * @returns The toolbar entries, keeping each representative's original index.
      */
-    private groupBySignature(noteStyles: IAudioData[]): IStyleGroupEntry[][] {
+    private collapseVoices(noteStyles: IAudioData[]): IStyleGroupEntry[] {
+        const byVoice = new Map<string, IStyleGroupEntry>();
+        const voices: IStyleGroupEntry[] = [];
+
+        noteStyles.forEach((style, index) => {
+            const key = voiceKey(style);
+            const articulation = articulationOf(style);
+            const isCollapsible = articulation === Articulation.Ghost || articulation === Articulation.Muted;
+            const existing = isCollapsible ? byVoice.get(key) : undefined;
+            if (existing !== undefined) {
+                existing.memberIds.push(style.id);
+
+                return;
+            }
+
+            const entry = { style, index, memberIds: [style.id] };
+            if (!isCollapsible && !byVoice.has(key)) {
+                byVoice.set(key, entry);
+            }
+
+            voices.push(entry);
+        });
+
+        return voices;
+    }
+
+    /**
+     * Groups voice entries by their visual signature, preserving the order of first appearance.
+     *
+     * @param entries The voice entries to group.
+     *
+     * @returns The groups, each containing the entries of one signature.
+     */
+    private groupBySignature(entries: IStyleGroupEntry[]): IStyleGroupEntry[][] {
         const groups: IStyleGroupEntry[][] = [];
         const bySignature = new Map<string, IStyleGroupEntry[]>();
 
-        noteStyles.forEach((style, index) => {
-            const signature = this.styleSignature(style);
+        entries.forEach((entry) => {
+            const signature = this.styleSignature(entry.style);
             const group = bySignature.get(signature);
             if (group) {
-                group.push({ style, index });
+                group.push(entry);
             } else {
-                const newGroup = [{ style, index }];
+                const newGroup = [entry];
                 bySignature.set(signature, newGroup);
                 groups.push(newGroup);
             }

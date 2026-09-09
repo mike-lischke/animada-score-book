@@ -209,8 +209,8 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             file: "Chocalho_Accent.mp3",
             symbol: {
                 src: xBigIcon,
-                shortDescription: "Accent",
-                description: "Chocalho Accent"
+                shortDescription: "Chocalho",
+                description: "Chocalho"
             },
             characteristics: {
                 excitationMode: ExcitationMode.Shaken,
@@ -392,7 +392,7 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             file: "Repinique_Whippy_Accent.mp3",
             symbol: {
                 src: xBigIcon,
-                shortDescription: "accent"
+                shortDescription: "Normal"
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
@@ -406,7 +406,7 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             file: "Repinique_Whippy_Ghost.mp3",
             symbol: {
                 src: xSmallIcon,
-                shortDescription: "ghost"
+                shortDescription: "Ghost"
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
@@ -429,7 +429,7 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             file: "Caixa_Accent.mp3",
             symbol: {
                 src: xBigIcon,
-                shortDescription: "accent"
+                shortDescription: "Normal"
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
@@ -443,7 +443,7 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             file: "Caixa_Ghost.mp3",
             symbol: {
                 src: xSmallIcon,
-                shortDescription: "ghost"
+                shortDescription: "Ghost"
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
@@ -457,7 +457,7 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             file: "Caixa_Buzz.mp3",
             symbol: {
                 src: tripleSlashIcon,
-                shortDescription: "buzz"
+                shortDescription: "Press Roll"
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
@@ -471,7 +471,7 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             file: "Caixa_Rimshot.mp3",
             symbol: {
                 src: sunriseRaiseIcon,
-                shortDescription: "rimshot"
+                shortDescription: "Rimshot"
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
@@ -494,7 +494,7 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             file: "Timbau_Open.mp3",
             symbol: {
                 src: oBigIcon,
-                shortDescription: "open"
+                shortDescription: "Open"
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
@@ -508,7 +508,7 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             file: "Timbau_Slap.mp3",
             symbol: {
                 src: sunRaysIcon,
-                shortDescription: "slap"
+                shortDescription: "Slap"
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
@@ -522,7 +522,7 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             file: "Timbau_Bass.mp3",
             symbol: {
                 src: oBigClosedIcon,
-                shortDescription: "bass"
+                shortDescription: "Bass"
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
@@ -538,28 +538,28 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
     typeId: "7",
     icon: highSurdoIcon,
     displayOrder: 8,
-    displayName: "High Surdo",
+    displayName: "Terceira Surdo",
     variants: [
         {
             id: "1",
             file: "High_Surdo_Accent.mp3",
             symbol: {
                 src: oBigIcon,
-                shortDescription: "accent"
+                shortDescription: "Center"
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
                 stickTechnique: StickTechnique.Normal,
                 mainDisplayType: NoteDisplayType.Oval
             },
-            sampleProfile: { builtInDamping: Damping.Open, builtInAccent: true, ghost: false },
+            sampleProfile: { builtInDamping: Damping.Open, builtInAccent: false, ghost: false },
         },
         {
             id: "2",
             file: "High_Surdo_Muted.mp3",
             symbol: {
                 src: oBigClosedIcon,
-                shortDescription: "muted"
+                shortDescription: "Muted"
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
@@ -582,21 +582,21 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             file: "Mid_Surdo_Accent.mp3",
             symbol: {
                 src: oBigIcon,
-                shortDescription: "accent"
+                shortDescription: "Center"
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
                 stickTechnique: StickTechnique.Normal,
                 mainDisplayType: NoteDisplayType.Oval
             },
-            sampleProfile: { builtInDamping: Damping.Open, builtInAccent: true, ghost: false },
+            sampleProfile: { builtInDamping: Damping.Open, builtInAccent: false, ghost: false },
         },
         {
             id: "2",
             file: "Mid_Surdo_Muted.mp3",
             symbol: {
                 src: oBigClosedIcon,
-                shortDescription: "muted"
+                shortDescription: "Muted"
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
@@ -619,21 +619,21 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             file: "Low_Surdo_Accent.mp3",
             symbol: {
                 src: oBigIcon,
-                shortDescription: "accent"
+                shortDescription: "Center"
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
                 stickTechnique: StickTechnique.Normal,
                 mainDisplayType: NoteDisplayType.Oval
             },
-            sampleProfile: { builtInDamping: Damping.Open, builtInAccent: true, ghost: false },
+            sampleProfile: { builtInDamping: Damping.Open, builtInAccent: false, ghost: false },
         },
         {
             id: "2",
             file: "Low_Surdo_Muted.mp3",
             symbol: {
                 src: oBigClosedIcon,
-                shortDescription: "muted"
+                shortDescription: "Muted"
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,

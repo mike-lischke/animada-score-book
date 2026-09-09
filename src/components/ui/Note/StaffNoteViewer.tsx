@@ -1139,7 +1139,39 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
             switch (characteristics.handTechnique) {
                 case HandTechnique.Thumb: {
                     nodes.push(
-                        <span key="thumb-circle" className="staff-note-head-thumb-circle" />,
+                        this.renderHandTechniqueIcon("thumb", "staff-note-head-thumb-svg", 14, 14,
+                            <line x1="3" y1="3" x2="13" y2="13" />),
+                    );
+                    break;
+                }
+
+                case HandTechnique.Fingers: {
+                    nodes.push(
+                        this.renderHandTechniqueIcon("fingers", "staff-note-head-fingers-svg", 16, 16,
+                            <>
+                                <line x1="6" y1="14" x2="2" y2="5" />
+                                <line x1="7.5" y1="14" x2="6" y2="3" />
+                                <line x1="9" y1="14" x2="10" y2="3" />
+                                <line x1="10.5" y1="14" x2="14" y2="5" />
+                            </>),
+                    );
+                    break;
+                }
+
+                case HandTechnique.Heel: {
+                    nodes.push(<span key="heel-circle" className="staff-note-head-heel-circle" />);
+                    break;
+                }
+
+                case HandTechnique.Open: {
+                    nodes.push(<span key="open-circle" className="staff-note-head-open-circle" />);
+                    break;
+                }
+
+                case HandTechnique.Friction: {
+                    nodes.push(
+                        this.renderHandTechniqueIcon("friction", "staff-note-head-friction-svg", 8, 16,
+                            <path d="M4 1 C0.5 3 7.5 5 4 7 C0.5 9 7.5 11 4 15" />),
                     );
                     break;
                 }
@@ -1230,6 +1262,16 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
         }
 
         return nodes.length > 0 ? nodes : null;
+    }
+
+    private renderHandTechniqueIcon(key: string, className: string, width: number, height: number,
+        content: ComponentChild): VNode {
+        return (
+            <svg key={key} className={className} width={width} height={height}
+                viewBox={`0 0 ${width} ${height}`} aria-hidden="true">
+                {content}
+            </svg>
+        );
     }
 
     /**

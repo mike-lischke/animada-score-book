@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { NoteStyleBar } from "../../src/components/ui/Arrangement/NoteStyleBar.js";
 import {
-    Damping, ExcitationMode, NoteDisplayType, StickTechnique,
+    Damping, ExcitationMode, HandTechnique, NoteDisplayType, StickTechnique,
     type ISbDmInstrument, type ISbDmTrack, type ScoreBookDataModel,
 } from "../../src/core/ScoreBookDataModel.js";
 import type { IAudioData } from "../../src/core/types/general.js";
@@ -377,6 +377,21 @@ describe.sequential("NoteStyleBar", () => {
 
         expect(renderResult.container.querySelectorAll(".noteStyleDropdown")).toHaveLength(1);
         expect(renderResult.container.querySelectorAll(".noteStyleButton")).toHaveLength(0);
+
+        // The dropdown button shows only the shared note head, without staff lines.
+        const button = renderResult.container.querySelector(".noteStyleDropdown .du-btn-ghost")!;
+        expect(button.querySelectorAll(".note-style-icon")).toHaveLength(1);
+        expect(button.querySelectorAll(".note-style-line-icon")).toHaveLength(0);
+
+        // Each menu entry places its note head on the style's note line.
+        const itemIcons = renderResult.container.querySelectorAll(".dropdown-popup .note-style-line-icon");
+        expect(itemIcons).toHaveLength(2);
+        expect(itemIcons[0].querySelectorAll(".note-style-line-icon-line")).toHaveLength(2);
+
+        // Line spacing is 7px, centered in the 24px icon: lines at 8.5 and 15.5.
+        expect(itemIcons[0].querySelector<HTMLElement>(".note-style-line-icon-head")!.style.top).toBe("15.5px");
+        expect(itemIcons[1].querySelector<HTMLElement>(".note-style-line-icon-head")!.style.top).toBe("8.5px");
+        expect(itemIcons[0].querySelectorAll(".note-style-line-icon-note-image")).toHaveLength(1);
     });
 
     it("keeps distinct note heads as separate buttons in staff mode", () => {
@@ -413,5 +428,157 @@ describe.sequential("NoteStyleBar", () => {
         expect(items).toHaveLength(2);
         expect(items[0].textContent).toContain("Low Agogo Bell (1)");
         expect(items[1].textContent).toContain("High Agogo Bell (2)");
+    });
+
+    it("collapses a ghost variant into one button in staff mode", () => {
+        const plain = makeNoteStyleWithHead("1", "Chocalho", "Chocalho", NoteDisplayType.Triangle);
+        const ghost = {
+            ...makeNoteStyleWithHead("2", "Ghost", "Chocalho Ghost Note", NoteDisplayType.Triangle),
+            sampleProfile: { builtInDamping: Damping.Open, builtInAccent: false, ghost: true },
+        } as IAudioData;
+        const track = makeTrack(7, { "1": plain, "2": ghost });
+        const dataModel = makeDataModel([track]);
+        selectionManager.selectTracks([7]);
+
+        renderResult = render(
+            <NoteStyleBar dataModel={dataModel} selectionManager={selectionManager} trackViewMode="staff" />,
+        );
+
+        expect(renderResult.container.querySelectorAll(".noteStyleDropdown")).toHaveLength(0);
+
+        const buttons = renderResult.container.querySelectorAll(".noteStyleButton");
+        expect(buttons).toHaveLength(1);
+        expect(buttons[0].getAttribute("data-tooltip")).toBe("Chocalho (1)");
+    });
+
+    it("collapses a muted variant into one button in staff mode", () => {
+        const open = makeNoteStyleWithHead("1", "Center", "Center", NoteDisplayType.Oval);
+        const muted = {
+            ...makeNoteStyleWithHead("2", "Muted", "Muted", NoteDisplayType.Oval),
+            sampleProfile: { builtInDamping: Damping.Muted, builtInAccent: false, ghost: false },
+        } as IAudioData;
+        const track = makeTrack(7, { "1": open, "2": muted });
+        const dataModel = makeDataModel([track]);
+        selectionManager.selectTracks([7]);
+
+        renderResult = render(
+            <NoteStyleBar dataModel={dataModel} selectionManager={selectionManager} trackViewMode="staff" />,
+        );
+
+        expect(renderResult.container.querySelectorAll(".noteStyleDropdown")).toHaveLength(0);
+
+        const buttons = renderResult.container.querySelectorAll(".noteStyleButton");
+        expect(buttons).toHaveLength(1);
+        expect(buttons[0].getAttribute("data-tooltip")).toBe("Center (1)");
+    });
+
+    it("marks the collapsed button when a selected note uses an articulation variant", () => {
+        const plain = makeNoteStyleWithHead("1", "Chocalho", "Chocalho", NoteDisplayType.Triangle);
+        const ghost = {
+            ...makeNoteStyleWithHead("2", "Ghost", "Chocalho Ghost Note", NoteDisplayType.Triangle),
+            sampleProfile: { builtInDamping: Damping.Open, builtInAccent: false, ghost: true },
+        } as IAudioData;
+        const track = makeTrackWithNote(7, 55, { "1": plain, "2": ghost }, 7001, "2");
+        const dataModel = makeDataModel([track]);
+
+        selectionManager.replaceSelection([
+            { granularity: SelectionGranularity.Note, bar: 1, trackId: 7, noteId: 7001, startStep: 0 },
+        ]);
+
+        renderResult = render(
+            <NoteStyleBar dataModel={dataModel} selectionManager={selectionManager} trackViewMode="staff" />,
+        );
+
+        expect(renderResult.container.querySelectorAll(".noteStyleButton.du-btn-primary")).toHaveLength(1);
+    });
+
+    it("groups non-ghost styles with the same head into a dropdown", () => {
+        const center = {
+            ...makeNoteStyleWithHead("1", "Center", "Center", NoteDisplayType.Oval),
+            sampleProfile: { builtInDamping: Damping.Open, builtInAccent: true, ghost: false },
+        } as IAudioData;
+        const outerArea = makeNoteStyleWithHead("2", "Outer Area", "Outer Area", NoteDisplayType.Oval);
+        const track = makeTrack(7, { "1": center, "2": outerArea });
+        const dataModel = makeDataModel([track]);
+        selectionManager.selectTracks([7]);
+
+        renderResult = render(
+            <NoteStyleBar dataModel={dataModel} selectionManager={selectionManager} trackViewMode="staff" />,
+        );
+
+        expect(renderResult.container.querySelectorAll(".noteStyleButton")).toHaveLength(0);
+        expect(renderResult.container.querySelectorAll(".noteStyleDropdown")).toHaveLength(1);
+
+        const items = renderResult.container.querySelectorAll(".noteStyleDropdown .dropdown-popup li");
+        expect(items).toHaveLength(2);
+        expect(items[0].textContent).toContain("Center (1)");
+        expect(items[1].textContent).toContain("Outer Area (2)");
+    });
+
+    it("renders press roll without a head and rimshot as one scalable composition", () => {
+        const pressRoll = {
+            ...makeNoteStyleWithHead("1", "Buzz", "Buzz", NoteDisplayType.Oval),
+            characteristics: {
+                excitationMode: ExcitationMode.Struck,
+                stickTechnique: StickTechnique.PressRoll,
+                mainDisplayType: NoteDisplayType.Oval,
+            },
+        } as IAudioData;
+        const rimshot = {
+            ...makeNoteStyleWithHead("2", "Rimshot", "Rimshot", NoteDisplayType.Oval),
+            characteristics: {
+                excitationMode: ExcitationMode.Struck,
+                stickTechnique: StickTechnique.RimShot,
+                mainDisplayType: NoteDisplayType.Oval,
+            },
+        } as IAudioData;
+        const track = makeTrack(7, { "1": pressRoll, "2": rimshot });
+        const dataModel = makeDataModel([track]);
+        selectionManager.selectTracks([7]);
+
+        renderResult = render(
+            <NoteStyleBar dataModel={dataModel} selectionManager={selectionManager} trackViewMode="staff" />,
+        );
+
+        const pressRollIcon = renderResult.container.querySelector(".note-style-icon.press-roll")!;
+        expect(pressRollIcon.querySelectorAll(".note-style-icon-head")).toHaveLength(0);
+        expect(pressRollIcon.querySelectorAll(".note-style-icon-press-roll line")).toHaveLength(3);
+
+        const rimshotIcon = renderResult.container.querySelector(".note-style-icon.rimshot")!;
+        expect(rimshotIcon.querySelectorAll(".note-style-icon-head.oval")).toHaveLength(1);
+        expect(rimshotIcon.querySelectorAll(".note-style-icon-rimshot-cross")).toHaveLength(1);
+    });
+
+    it("renders icons for every additional hand technique", () => {
+        const techniques = [
+            { technique: HandTechnique.Thumb, className: "note-style-icon-thumb-svg" },
+            { technique: HandTechnique.Fingers, className: "note-style-icon-fingers-svg" },
+            { technique: HandTechnique.Heel, className: "note-style-icon-heel-circle" },
+            { technique: HandTechnique.Open, className: "note-style-icon-open-circle" },
+            { technique: HandTechnique.Friction, className: "note-style-icon-friction-svg" },
+        ];
+        const noteStyles = Object.fromEntries(techniques.map(({ technique }, index) => {
+            const id = `${index + 1}`;
+            const noteStyle = {
+                ...makeNoteStyleWithHead(id, id, id, NoteDisplayType.Square),
+                characteristics: {
+                    excitationMode: ExcitationMode.Struck,
+                    handTechnique: technique,
+                    mainDisplayType: NoteDisplayType.Square,
+                },
+            } as IAudioData;
+
+            return [id, noteStyle];
+        }));
+        const dataModel = makeDataModel([makeTrack(7, noteStyles)]);
+        selectionManager.selectTracks([7]);
+
+        renderResult = render(
+            <NoteStyleBar dataModel={dataModel} selectionManager={selectionManager} trackViewMode="staff" />,
+        );
+
+        techniques.forEach(({ className }) => {
+            expect(renderResult!.container.querySelector(`.${className}`)).not.toBeNull();
+        });
     });
 });

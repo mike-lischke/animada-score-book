@@ -120,6 +120,28 @@
     display: inline-block;
     flex-shrink: 0;
     line-height: 0;
+
+    &.rimshot {
+        width: 24px;
+        height: 22px;
+        transform: scale(0.75);
+
+        .note-style-icon-head {
+            position: absolute;
+            left: 0;
+            top: 9px;
+        }
+
+        .note-style-icon-rimshot-cross {
+            left: 16px;
+            top: 0;
+        }
+    }
+
+    &.press-roll {
+        width: 16px;
+        height: 16px;
+    }
 }
 
 .note-style-icon-head {
@@ -214,14 +236,19 @@
 }
 
 .note-style-icon-press-roll {
-    left: calc(100% + 3px);
-    top: -2px;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
 }
 
 .note-style-icon-rim-line,
 .note-style-icon-body-stick,
 .note-style-icon-crossclick-line,
-.note-style-icon-thumb-circle,
+.note-style-icon-thumb-svg,
+.note-style-icon-fingers-svg,
+.note-style-icon-heel-circle,
+.note-style-icon-open-circle,
+.note-style-icon-friction-svg,
 .note-style-icon-tap-triangle,
 .note-style-icon-body-hand,
 .note-style-icon-scraped,
@@ -257,14 +284,31 @@
     background: currentColor;
 }
 
-.note-style-icon-thumb-circle {
+.note-style-icon-thumb-svg,
+.note-style-icon-fingers-svg,
+.note-style-icon-friction-svg {
     left: 50%;
     top: 50%;
     transform: translate(-50%, -50%);
-    width: 5px;
-    height: 5px;
-    border: 1px solid var(--note-style-icon-hole);
+}
+
+.note-style-icon-heel-circle,
+.note-style-icon-open-circle {
+    left: 50%;
+    top: 50%;
+    width: 8px;
+    height: 8px;
+    transform: translate(-50%, -50%);
     border-radius: 50%;
+}
+
+.note-style-icon-heel-circle {
+    background: var(--note-style-icon-hole);
+}
+
+.note-style-icon-open-circle {
+    box-sizing: border-box;
+    border: 2px solid var(--note-style-icon-hole);
 }
 
 .note-style-icon-tap-triangle {
@@ -313,23 +357,38 @@
     display: block;
     width: 24px;
     height: 24px;
-}
+    flex-shrink: 0;
 
-.note-style-line-icon-line {
-    position: absolute;
-    left: 0;
-    right: 0;
-    border-top: 1px solid var(--color-base-300);
-    transform: translateY(-50%);
-    pointer-events: none;
-}
+    /* Explicit size guards against the generic `.du-dropdown svg` 32px override. */
+    .note-style-line-icon-staff {
+        display: block;
+        width: 24px;
+        height: 24px;
+    }
 
-.note-style-line-icon-head {
-    position: absolute;
-    left: 50%;
-    transform: translate(-50%, -50%) scale(0.5);
-    transform-origin: center;
-    pointer-events: none;
+    .note-style-line-icon-line {
+        stroke: color-mix(in srgb, currentColor 45%, transparent);
+        stroke-width: 1;
+    }
+
+    /* Clip window around the sprite's note head, scaled to the icon's line spacing. */
+    .note-style-line-icon-head {
+        position: absolute;
+        left: 50%;
+        width: 16px;
+        height: 13px;
+        overflow: hidden;
+        transform: translate(-50%, -50%) scale(0.7);
+        pointer-events: none;
+
+        .note-style-line-icon-note-image {
+            position: absolute;
+            left: 0;
+            top: -41px;
+            width: 28px;
+            height: 56px;
+        }
+    }
 }
 
 /* Dropdown button in the note style bar matches the regular note style buttons. */
@@ -348,6 +407,16 @@
     &:not(:disabled):hover {
         border-color: var(--color-primary);
         background: color-mix(in srgb, var(--color-primary) 10%, var(--color-base-100));
+    }
+}
+
+/* The popup grows with its labels instead of wrapping them. */
+.noteStyleBar .noteStyleDropdown .dropdown-popup {
+    width: max-content;
+    min-width: 13rem;
+
+    li a {
+        white-space: nowrap;
     }
 }
 
@@ -1354,17 +1423,48 @@
         top: -8px;
     }
 
-    /* ---- Thumb: empty circle inside square ---- */
-    .staff-note-head-thumb-circle {
+    .staff-note-head-thumb-svg,
+    .staff-note-head-fingers-svg,
+    .staff-note-head-friction-svg {
         position: absolute;
         left: calc(50% - 7px);
-        bottom: 20px;
-        width: 6px;
-        height: 6px;
-        border: 1px solid var(--color-base-100);
-        border-radius: 50%;
-        transform: translate(-50%, -30%);
+        bottom: 22px;
+        fill: none;
+        stroke: var(--color-base-100);
+        stroke-linecap: round;
         pointer-events: none;
+        z-index: 1;
+    }
+
+    .staff-note-head-thumb-svg {
+        stroke-width: 3.5;
+    }
+
+    .staff-note-head-fingers-svg,
+    .staff-note-head-friction-svg {
+        stroke-width: 1.8;
+    }
+
+    .staff-note-head-heel-circle,
+    .staff-note-head-open-circle {
+        position: absolute;
+        left: calc(50% - 7px);
+        bottom: 25.5px;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        transform: translateX(-50%);
+        pointer-events: none;
+        z-index: 1;
+    }
+
+    .staff-note-head-heel-circle {
+        background: var(--color-base-100);
+    }
+
+    .staff-note-head-open-circle {
+        box-sizing: border-box;
+        border: 2px solid var(--color-base-100);
     }
 
     /* ---- Tap / TapWithPalm: triangle inside square (pointing up) ---- */
