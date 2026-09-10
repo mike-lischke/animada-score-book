@@ -5,13 +5,31 @@
 
 import { describe, expect, it } from "vitest";
 
+import { Arrangement } from "../../src/core/Arrangement.js";
+import { TimeParams } from "../../src/core/TimeParams.js";
 import { Track } from "../../src/core/Track.js";
 import { ArrangementMigrator } from "../../src/core/serialisation/migration/ArrangementMigrator.js";
 import type { ILegacyArrangementSnapshot } from "../../src/core/serialisation/migration/legacy-snapshot-types.js";
 import type { IAudioData } from "../../src/core/types/general.js";
+import { getNewId } from "../../src/core/utils.js";
 import { createInstrument, hydrateMeasureEvents } from "../unit-test-helpers.js";
 
 describe("Track", () => {
+    it("reserves an explicitly assigned id so it is never handed out again", () => {
+        const instrument = createInstrument("0", 0, 0);
+        const arrangement = new Arrangement();
+        arrangement.timeParams = new TimeParams("4/4", 120, 1, "1/4", 16);
+
+        const assignedId = getNewId() + 10;
+        const track = new Track(arrangement, instrument, assignedId);
+        const minted = Array.from({ length: 11 }, () => {
+            return getNewId();
+        });
+
+        expect(track.id).toBe(assignedId);
+        expect(minted).not.toContain(assignedId);
+    });
+
     it("derives sparse measures and synthesises rests for empty slots", () => {
         const instrument = createInstrument("0", 0, 0);
         const noteStyle = {

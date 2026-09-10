@@ -341,17 +341,25 @@ export class Arrangement implements ISbDmArrangement {
         // displayOrder, which is unstable when several tracks share the same instrument — a restored
         // (undone) track would then land at the end instead of its previous position.
         const restoredTracks: ISbDmTrack[] = [];
+        const restoredIds = new Set<number>();
 
         for (const trackSnapshot of arrangementSnapshot.tracks) {
             const instrument = instruments.find((inst) => {
                 return inst.typeId === trackSnapshot.instrumentId;
             })!;
 
-            const existingTrack = this.tracks.find((track) => {
-                return track.id === trackSnapshot.id;
-            });
-            const track = existingTrack ?? new Track(this, instrument, trackSnapshot.id);
+            // Ids are minted per session, so a stored score can name the same id twice: a track added while
+            // the counter stood on an id a restored track already used. Reusing such an id would resolve both
+            // entries to one and the same track, so a repeated id is dropped in favour of a fresh one.
+            const storedId = restoredIds.has(trackSnapshot.id) ? undefined : trackSnapshot.id;
+            const existingTrack = storedId === undefined
+                ? undefined
+                : this.tracks.find((track) => {
+                    return track.id === storedId;
+                });
+            const track = existingTrack ?? new Track(this, instrument, storedId);
 
+            restoredIds.add(track.id);
             this.applyTrackSnapshot(track as Track, trackSnapshot);
             restoredTracks.push(track);
         }

@@ -10,6 +10,7 @@ import type { ISbDmInstrument } from "../../src/core/ScoreBookDataModel.js";
 import { TimeParams } from "../../src/core/TimeParams.js";
 import { Track } from "../../src/core/Track.js";
 import type { IArrangementSnapshot, IAudioData, Mutable } from "../../src/core/types/general.js";
+import { getNewId } from "../../src/core/utils.js";
 import { createInstrument, emptyMeasureTrack, hydrateMeasureEvents } from "../unit-test-helpers.js";
 
 describe("Arrangement", () => {
@@ -315,6 +316,45 @@ describe("Arrangement", () => {
         expect(arrangement.tracks.map((track) => {
             return track.id;
         })).toEqual([first.id, second.id, third.id]);
+    });
+
+    it("reserves restored track ids so a new track cannot reuse them", () => {
+        const instrument = createInstrument("0", 0, 0);
+        const arrangement = new Arrangement();
+        arrangement.timeParams = new TimeParams("4/4", 120, 1, "1/4", 16);
+
+        // A score stored by an earlier session holds ids this session's counter has never handed out.
+        const storedId = getNewId() + 20;
+        arrangement.applyArrangementSnapshot({
+            version: 3,
+            title: "Stored",
+            timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4", stepResolution: 16 },
+            tracks: [emptyMeasureTrack(storedId, "0")],
+        }, [instrument]);
+
+        const minted = Array.from({ length: 21 }, () => {
+            return getNewId();
+        });
+
+        expect(arrangement.tracks[0].id).toBe(storedId);
+        expect(minted).not.toContain(storedId);
+    });
+
+    it("gives a track id that a snapshot repeats a fresh id", () => {
+        const instrument = createInstrument("0", 0, 0);
+        const arrangement = Arrangement.emptyArrangementWithInstruments([instrument, instrument]);
+        const [first, second] = arrangement.tracks;
+
+        const snapshot = arrangement.toSnapshot();
+        snapshot.tracks[1].id = snapshot.tracks[0].id;
+
+        arrangement.applyArrangementSnapshot(snapshot, [instrument]);
+
+        expect(arrangement.tracks).toHaveLength(2);
+        expect(arrangement.tracks[0]).not.toBe(arrangement.tracks[1]);
+        expect(arrangement.tracks[0].id).toBe(first.id);
+        expect(arrangement.tracks[1].id).not.toBe(first.id);
+        expect(arrangement.tracks[1].id).not.toBe(second.id);
     });
 
     it("insertBars inserts empty bars before the first bar and renumbers measures", () => {

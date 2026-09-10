@@ -10,7 +10,7 @@ import {
 } from "./ScoreBookDataModel.js";
 import { addFractions, compareFractions, reduceFraction } from "./serialisation/numeric-functions.js";
 import type { Mutable } from "./types/general.js";
-import { createBeatGroups, getNewId } from "./utils.js";
+import { createBeatGroups, getNewId, reserveId } from "./utils.js";
 
 /**
  * A track holds its content as a list of {@link ISbDmTrackMeasure} entries (one per bar).
@@ -24,6 +24,7 @@ import { createBeatGroups, getNewId } from "./utils.js";
  */
 export class Track implements ISbDmTrack {
     public readonly type = SbDmEntityType.Track;
+    public readonly id: number;
     public readonly measures: ISbDmTrackMeasure[] = [];
 
     public name = "";
@@ -31,7 +32,12 @@ export class Track implements ISbDmTrack {
     public effectiveVolume = 1;
 
     public constructor(public readonly arrangement: ISbDmArrangement, public readonly instrument: ISbDmInstrument,
-        public readonly id = getNewId()) {
+        id?: number) {
+        this.id = id ?? getNewId();
+        if (id !== undefined) {
+            reserveId(id);
+        }
+
         // Initialise with empty measures matching the current arrangement length.
         for (let measureNumber = 1; measureNumber <= this.arrangement.timeParams.length; measureNumber++) {
             this.measures.push(this.createEmptyMeasure(measureNumber));

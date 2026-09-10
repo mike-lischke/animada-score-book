@@ -96,6 +96,19 @@ export const getNewId = (): number => {
 };
 
 /**
+ * Marks an externally assigned id as taken, so {@link getNewId} can never hand it out a second time.
+ * Stored scores carry ids minted by the counter of the session that created them. Without the
+ * reservation a fresh session, whose counter restarts at 1, would eventually reuse those numbers.
+ *
+ * @param id The id to keep unique for the rest of the session.
+ */
+export const reserveId = (id: number): void => {
+    if (id >= nextId) {
+        nextId = id + 1;
+    }
+};
+
+/**
  * Converts an optional value to a string expression for use in CSS.
  *
  * @param value The value to convert. If it is a string, it's taken over as is.
