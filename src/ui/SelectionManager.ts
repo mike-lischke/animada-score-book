@@ -60,6 +60,9 @@ export class SelectionManager {
      */
     private firstLoadDone = false;
 
+    /** Edit mode as last published on `editModeChanged`, used to initialise new selection views. */
+    private editMode = false;
+
     /** Owned view — handles pointer events, rect drawing, and DOM updates. Created lazily when the container is set. */
     private view?: SelectionView;
 
@@ -68,6 +71,7 @@ export class SelectionManager {
         requisitions.register("playerStateChanged", this.handlePlayerStateChanged);
         requisitions.register("scoreBookLoaded", this.handleScoreBookLoaded);
         requisitions.register("arrangementReverted", this.handleArrangementReverted);
+        requisitions.register("editModeChanged", this.handleEditModeChanged);
     }
 
     public get selectionMode(): SelectionMode {
@@ -83,6 +87,8 @@ export class SelectionManager {
     }
 
     public dispose(): void {
+        requisitions.unregister("editModeChanged", this.handleEditModeChanged);
+
         if (this.view) {
             this.view.dispose();
             this.view = undefined;
@@ -101,7 +107,7 @@ export class SelectionManager {
             this.view.dispose();
         }
 
-        this.view = new SelectionView(this, container, scoreElementRegistry);
+        this.view = new SelectionView(this, container, scoreElementRegistry, this.editMode);
     }
 
     /**
@@ -800,6 +806,21 @@ export class SelectionManager {
                 this.restorePersistedSelection();
             }
         }, 100);
+
+        return Promise.resolve(true);
+    };
+
+    /**
+     * Remembers the edit mode published by the app. A selection view is created when the arrangement
+     * viewer mounts, which can happen after this requisition was sent, so the new view would start
+     * without a delete button unless it is told the current state.
+     *
+     * @param enabled Whether edit mode is active.
+     *
+     * @returns A resolved promise to satisfy the requisition handler signature.
+     */
+    private handleEditModeChanged = (enabled: boolean): Promise<boolean> => {
+        this.editMode = enabled;
 
         return Promise.resolve(true);
     };

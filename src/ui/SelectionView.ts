@@ -43,7 +43,7 @@ export class SelectionView {
     private autoScrollTimer?: ReturnType<typeof setInterval>;
     private autoScrollDX = 0;
     private autoScrollDY = 0;
-    private editMode = false;
+    private editMode: boolean;
     private selectionDeleteButtonCreated = false;
     private selectionRefreshFrame?: number;
 
@@ -55,8 +55,19 @@ export class SelectionView {
      */
     private zoomFactor = 1;
 
+    /**
+     * Creates a new selection view.
+     *
+     * @param manager The selection manager this view belongs to.
+     * @param eventContainer The element that receives the selection pointer events.
+     * @param scoreElementRegistry The registry of rendered score elements, if available.
+     * @param editMode The edit mode as remembered by the manager. The view cannot subscribe early
+     *                 enough to receive the requisition that announced the current state.
+     */
     public constructor(private manager: SelectionManager, private eventContainer: HTMLElement,
-        private readonly scoreElementRegistry?: ScoreElementRegistry) {
+        private readonly scoreElementRegistry?: ScoreElementRegistry, editMode = false) {
+        this.editMode = editMode;
+
         requisitions.register("selectionChanged", this.handleSelectionChanged);
         requisitions.register("editModeChanged", this.handleEditModeChanged);
         requisitions.register("trackChanged", this.handleTrackChanged);
