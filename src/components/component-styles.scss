@@ -1342,6 +1342,11 @@
 
     /* The note head is in the lower part of this SVG; lift it so the head center sits on the middle line. */
     transform: translateY(-16px);
+
+    /* Flags in the sprite are drawn for the sprite's own stem, which the staff view hides in favour of
+     * the CSS stem above. Shift them left so they attach to that stem instead of overlapping it: the
+     * sprite's view box is 60 units wide and the symbol renders 25 px wide, so 1 px equals 2.4 units. */
+    --note-flag-shift-x: -2.4px;
 }
 
 /* ---------------------------------------------------------------------------

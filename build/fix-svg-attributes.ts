@@ -50,12 +50,16 @@ const reorderAttributes = (el: HTMLElement, attrs: Array<{ name: string; value?:
 };
 
 /**
- * The canonical CSS-variable `style` attribute value for every element that controls
- * notehead/rest visibility. These are applied last so they always win over any
- * leftover values from prior repair steps.
+ * The canonical CSS-variable `style` attribute value for every element whose style has to survive
+ * a drawing-program export: the rules that control notehead/rest visibility, plus the flag group,
+ * whose transform attaches the sprite's flags to the CSS stem of the staff view.
  */
 const styleRules: Partial<Record<string, StyleRule[]>> = {
     "note.svg": [
+        // The staff view hides the sprite stem and draws its own, which sits slightly further left.
+        // An export drops the whole group (every flag is `none` by default), so the transform must
+        // be restored — but see the missing element warning below: geometry is gone for good then.
+        { id: "flags", style: "transform: translateX(var(--note-flag-shift-x, 0px))" },
         { id: "flag-32nd", style: "display: var(--note-show-flag-32nd, none)" },
         { id: "flag-16th", style: "display: var(--note-show-flag-16th, none)" },
         { id: "flag-8th", style: "display: var(--note-show-flag-8th, none)" },
@@ -123,9 +127,24 @@ const fixSvgFile = (filePath: string): void => {
     }
 
     // Restore CSS-variable display styles (overrides any leftover values from above).
-    styleRules[fileName]?.forEach(({ id, style }) => {
+    const rules = styleRules[fileName] ?? [];
+    rules.forEach(({ id, style }) => {
         root.querySelector(`#${id}`)?.setAttribute("style", style);
     });
+
+    // A drawing program drops hidden elements entirely. Attributes can be restored, geometry cannot,
+    // so a missing element has to be reported instead of being repaired silently.
+    const missingIds = rules
+        .filter(({ id }) => {
+            return !root.querySelector(`#${id}`);
+        })
+        .map(({ id }) => {
+            return `#${id}`;
+        });
+    if (missingIds.length > 0) {
+        console.warn(`⚠ ${filePath}: missing element(s) ${missingIds.join(", ")}. The export dropped them — ` +
+            "restore the geometry from git, this script cannot recreate it.");
+    }
 
     // node-html-parser expands self-closing tags; restore SVG convention.
     const output = root.toString().replace(/><\/path>/g, "/>");

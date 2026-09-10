@@ -1215,9 +1215,9 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
         if (characteristics.excitationMode === ExcitationMode.Struck && "stickTechnique" in characteristics
             && characteristics.stickTechnique === StickTechnique.PressRoll) {
             NoteImage.registerSymbol("press-roll", "0 0 14 35",
-                `<line x1="12" y1="3" x2="2" y2="8" />` +
-                `<line x1="12" y1="9" x2="2" y2="14" />` +
-                `<line x1="12" y1="15" x2="2" y2="20" />`,
+                `<line x1="11" y1="6" x2="3" y2="11" />` +
+                `<line x1="11" y1="11" x2="3" y2="16" />` +
+                `<line x1="11" y1="16" x2="3" y2="21" />`,
             );
 
             nodes.push(
