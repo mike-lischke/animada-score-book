@@ -4,7 +4,8 @@
  */
 
 import type {
-    ISbDmArrangement, ISbDmNoteEvent, ISbDmTrack, ISbDmTrackMeasure, ITiming, ScoreBookDataModel,
+    INoteResizeRequest, ISbDmArrangement, ISbDmNoteEvent, ISbDmTrack, ISbDmTrackMeasure, ITiming,
+    ScoreBookDataModel,
 } from "../core/ScoreBookDataModel.js";
 import { NoteLength, noteLengthDenominator } from "../core/rest-notation.js";
 import {
@@ -262,6 +263,45 @@ export class GridMeasureEditor {
         const start = this.resolveStartFraction(position);
 
         return start !== undefined && this.dataModel.resizeNote(position.trackId, position.bar, start, duration);
+    }
+
+    /**
+     * Applies a note length to the notes addressed by the selection entries. Notes in different
+     * tracks are resized independently, each track rippling its own following notes. Only notes are
+     * resized: rests and selections that span whole measures or tracks keep their duration.
+     *
+     * @param entries The selection entries to resize.
+     * @param length The selected note length.
+     *
+     * @returns True when at least one note duration changed.
+     */
+    public resizeSelection(entries: ISelectionEntry[], length: NoteLength): boolean {
+        const requestsByTrack = new Map<number, INoteResizeRequest[]>();
+
+        for (const entry of entries) {
+            for (const position of this.notePositionsOf(entry)) {
+                const duration = this.noteLengthDuration(length, position);
+                const start = this.resolveStartFraction(position);
+                if (duration === undefined || start === undefined) {
+                    continue;
+                }
+
+                const request = { bar: position.bar, start, duration };
+                const requests = requestsByTrack.get(position.trackId);
+                if (requests) {
+                    requests.push(request);
+                } else {
+                    requestsByTrack.set(position.trackId, [request]);
+                }
+            }
+        }
+
+        let changed = false;
+        for (const [trackId, requests] of requestsByTrack) {
+            changed = this.dataModel.resizeNotes(trackId, requests) || changed;
+        }
+
+        return changed;
     }
 
     /**
@@ -688,6 +728,51 @@ export class GridMeasureEditor {
         }
 
         return reduceFraction(position.step, cell.track.measures[position.bar - 1].meter.stepResolution);
+    }
+
+    /**
+     * Resolves the note starts addressed by a selection entry. Note entries address a single note,
+     * note groups every note inside their step range. Coarser granularities describe whole measures
+     * or tracks and are not resized.
+     *
+     * @param entry The selection entry to resolve.
+     *
+     * @returns The positions of the addressed notes.
+     */
+    private notePositionsOf(entry: ISelectionEntry): IGridEditorPosition[] {
+        if (entry.granularity === SelectionGranularity.Note) {
+            // Only the cell that starts a note carries a note id; rest cells are not resized.
+            return entry.startStep === undefined || entry.noteId === undefined
+                ? []
+                : [{ bar: entry.bar, trackId: entry.trackId, step: entry.startStep, start: entry.start }];
+        }
+
+        if (entry.granularity !== SelectionGranularity.NoteGroup
+            || entry.startStep === undefined || entry.endStep === undefined) {
+            return [];
+        }
+
+        const measure = this.resolveMeasure(entry.trackId, entry.bar);
+        if (!measure) {
+            return [];
+        }
+
+        const stepsPerBar = measure.meter.stepResolution;
+        const positions: IGridEditorPosition[] = [];
+        for (const event of measure.events) {
+            if (event.noteStyleId === undefined) {
+                continue;
+            }
+
+            const step = event.start.numerator * stepsPerBar / event.start.denominator;
+            if (!Number.isInteger(step) || step < entry.startStep || step > entry.endStep) {
+                continue;
+            }
+
+            positions.push({ bar: entry.bar, trackId: entry.trackId, step, start: event.start });
+        }
+
+        return positions;
     }
 
     private noteLengthDurationForMeasure(duration: IFraction, sourceMeasure: ISbDmTrackMeasure,

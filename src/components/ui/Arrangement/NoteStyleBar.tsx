@@ -330,7 +330,27 @@ export class NoteStyleBar extends UIComponent<INoteStyleBarProps, INoteStyleBarS
         const noteStyles = this.resolveNoteStyles(tracks);
         const markedStyleId = this.resolveMarkedStyleId(tracks, entries);
 
-        this.setState({ noteStyles, markedStyleId, canEnter: this.canEnterNotes(tracks) });
+        this.setState({ noteStyles, markedStyleId, canEnter: this.shareInstrument(tracks) });
+    }
+
+    /**
+     * Checks whether the given tracks all use the same instrument. Note styles are instrument
+     * specific, so only such a selection can be entered or marked.
+     *
+     * @param tracks The distinct selected tracks.
+     *
+     * @returns True when at least one track is selected and all of them share one instrument.
+     */
+    private shareInstrument(tracks: ISbDmTrack[]): boolean {
+        if (tracks.length === 0) {
+            return false;
+        }
+
+        const instrumentId = tracks[0].instrument.id;
+
+        return tracks.every((track) => {
+            return track.instrument.id === instrumentId;
+        });
     }
 
     /**
@@ -369,15 +389,8 @@ export class NoteStyleBar extends UIComponent<INoteStyleBarProps, INoteStyleBarS
      * @returns The resolved note styles, or an empty array without a usable instrument.
      */
     private resolveNoteStyles(tracks: ISbDmTrack[]): IAudioData[] {
-        if (tracks.length > 0) {
-            const instrumentId = tracks[0].instrument.id;
-            const allShareInstrument = tracks.every((track) => {
-                return track.instrument.id === instrumentId;
-            });
-
-            if (allShareInstrument) {
-                return Object.values(tracks[0].instrument.noteStyles);
-            }
+        if (this.shareInstrument(tracks)) {
+            return Object.values(tracks[0].instrument.noteStyles);
         }
 
         // Without a shared instrument (mixed selection or no selection) fall back to the first
@@ -386,26 +399,6 @@ export class NoteStyleBar extends UIComponent<INoteStyleBarProps, INoteStyleBarS
         const firstTrack = dataModel.arrangement?.tracks[0];
 
         return firstTrack ? Object.values(firstTrack.instrument.noteStyles) : [];
-    }
-
-    /**
-     * Checks whether note entry is currently possible: a selection exists and all selected tracks
-     * share the same instrument.
-     *
-     * @param tracks The distinct selected tracks.
-     *
-     * @returns True when the toolbar buttons can be used.
-     */
-    private canEnterNotes(tracks: ISbDmTrack[]): boolean {
-        if (tracks.length === 0) {
-            return false;
-        }
-
-        const instrumentId = tracks[0].instrument.id;
-
-        return tracks.every((track) => {
-            return track.instrument.id === instrumentId;
-        });
     }
 
     /**
@@ -422,6 +415,11 @@ export class NoteStyleBar extends UIComponent<INoteStyleBarProps, INoteStyleBarS
         });
 
         if (noteEntries.length === 0) {
+            return undefined;
+        }
+
+        // Style ids are only comparable within one instrument, so a mixed selection stays unmarked.
+        if (!this.shareInstrument(tracks)) {
             return undefined;
         }
 

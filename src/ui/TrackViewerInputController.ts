@@ -462,17 +462,12 @@ export class TrackViewerInputController {
     private handleNoteLengthChanged = (length: NoteLength): Promise<boolean> => {
         this.noteLength = length;
 
-        if (this.editMode && this.viewMode === "staff" && this.editor instanceof GridMeasureEditor
-            && this.currentPosition !== undefined) {
+        // Duration changes only exist in the staff view; the grid works with fixed steps.
+        if (this.editMode && this.viewMode === "staff" && this.editor instanceof GridMeasureEditor) {
             const entries = [...this.selectionManager.currentSelection.values()];
-            const entry = entries.length === 1 ? entries[0] : undefined;
-            if (entry?.granularity === SelectionGranularity.Note && entry.noteId !== undefined) {
-                const duration = this.editor.noteLengthDuration(length, this.currentPosition);
 
-                if (duration !== undefined && this.editor.resizeNote(this.currentPosition, duration)) {
-                    const refreshedEntry = this.editor.refreshSelection([{ ...entry, noteId: undefined }])[0];
-                    this.selectionManager.replaceSelection([refreshedEntry]);
-                }
+            if (this.editor.resizeSelection(entries, length)) {
+                this.selectionManager.replaceSelection(this.editor.refreshSelection(entries));
             }
         }
 
@@ -504,7 +499,7 @@ export class TrackViewerInputController {
 
     private enterNote(noteStyleId: string): boolean {
         const entries = [...this.selectionManager.currentSelection.values()];
-        if (this.viewMode === "grid" && this.isMultiCellSelection(entries)) {
+        if (this.isMultiCellSelection(entries)) {
             return this.enterNoteForSelection(noteStyleId, entries);
         }
 

@@ -57,13 +57,15 @@ export class NoteLengthToolbar extends UIComponent<INoteLengthToolbarProps, INot
     public override componentDidMount(): void {
         requisitions.register("selectionChanged", this.handleSelectionChanged);
         requisitions.register("arrangementReverted", this.handleArrangementReverted);
+        requisitions.register("arrangementMutated", this.handleArrangementMutated);
         requisitions.register("noteLengthChanged", this.handleNoteLengthChanged);
-        this.refreshState();
+        this.refreshState(true);
     }
 
     public override componentWillUnmount(): void {
         requisitions.unregister("selectionChanged", this.handleSelectionChanged);
         requisitions.unregister("arrangementReverted", this.handleArrangementReverted);
+        requisitions.unregister("arrangementMutated", this.handleArrangementMutated);
         requisitions.unregister("noteLengthChanged", this.handleNoteLengthChanged);
     }
 
@@ -106,13 +108,25 @@ export class NoteLengthToolbar extends UIComponent<INoteLengthToolbarProps, INot
     }
 
     private handleSelectionChanged = (): Promise<boolean> => {
-        this.refreshState();
+        this.refreshState(true);
 
         return Promise.resolve(true);
     };
 
     private handleArrangementReverted = (): Promise<boolean> => {
-        this.refreshState();
+        this.refreshState(true);
+
+        return Promise.resolve(true);
+    };
+
+    /**
+     * Re-reads the marked length after a content change. It deliberately does not announce a length
+     * on the bus, since a content change must never resize the selection.
+     *
+     * @returns True to signal that the event was handled.
+     */
+    private handleArrangementMutated = (): Promise<boolean> => {
+        this.refreshState(false);
 
         return Promise.resolve(true);
     };
@@ -123,13 +137,19 @@ export class NoteLengthToolbar extends UIComponent<INoteLengthToolbarProps, INot
         return Promise.resolve(true);
     };
 
-    private refreshState(): void {
+    /**
+     * Derives the marked length from the selected notes and rests. The mark is dropped as soon as the
+     * selection mixes lengths, so it always shows the length shared by the whole selection.
+     *
+     * @param announceLength Whether the resolved length is published on the {@link requisitions} bus.
+     */
+    private refreshState(announceLength: boolean): void {
         const { selectionManager } = this.props;
         const entries = [...selectionManager.currentSelection.values()];
         const tracks = this.resolveSelectedTracks(entries);
         const selectedNoteLength = this.resolveMarkedLength(tracks, entries);
 
-        if (selectedNoteLength !== undefined) {
+        if (announceLength && selectedNoteLength !== undefined) {
             void requisitions.execute("noteLengthChanged", selectedNoteLength);
         }
 

@@ -651,6 +651,18 @@ interface IWhoamiResponse {
     capabilities: ICapabilities;
 }
 
+/** A note whose duration should change, addressed by its exact start within a measure. */
+export interface INoteResizeRequest {
+    /** The one-based measure number containing the note. */
+    bar: number;
+
+    /** The exact note start within that measure. */
+    start: IFraction;
+
+    /** The requested duration as a fraction of the measure. */
+    duration: IFraction;
+}
+
 /** A clear target for {@link clearStepRanges}: a step range or a whole measure of one track. */
 export interface IGridClearRange {
     /** The track containing the measure to clear. */
@@ -1085,24 +1097,23 @@ export class ScoreBookDataModel {
     }
 
     /**
-     * Changes the duration of an existing note and ripples following notes through the track.
+     * Changes the duration of the given notes and ripples the following notes through the track.
      * Gaps between notes act as elastic rests: growing a note consumes later gaps before moving
-     * subsequent notes, while shrinking it expands the gap immediately after the note.
+     * subsequent notes, while shrinking it expands the gap immediately after the note. Requests may
+     * address notes in different measures of the track and are applied in one pass, so a multi-note
+     * selection stays consistent across bar lines. Style and articulation are preserved.
      *
-     * @param trackId The track containing the note.
-     * @param bar The one-based measure number.
-     * @param start The exact note start within the measure.
-     * @param duration The requested duration as a fraction of the current measure.
+     * @param trackId The track containing the notes.
+     * @param requests The notes to resize, addressed by their start within a measure.
      *
-     * @returns True when the note duration changed.
+     * @returns True when at least one note duration changed.
      */
-    public resizeNote(trackId: number, bar: number, start: IFraction, duration: IFraction): boolean {
+    public resizeNotes(trackId: number, requests: INoteResizeRequest[]): boolean {
         const arrangement = this.arrangement;
         const track = arrangement?.tracks.find((candidate) => {
             return candidate.id === trackId;
         });
-        const sourceMeasure = track?.measures[bar - 1];
-        if (!track || !sourceMeasure || track.measures.some((measure) => {
+        if (!track || requests.length === 0 || track.measures.some((measure) => {
             return measure.subdivisions.length > 0;
         })) {
             return false;
@@ -1115,15 +1126,34 @@ export class ScoreBookDataModel {
             totalSteps += measure.meter.stepResolution;
         }
 
-        const sourceStartStep = start.numerator * sourceMeasure.meter.stepResolution / start.denominator;
-        const requestedSteps = duration.numerator * sourceMeasure.meter.stepResolution / duration.denominator;
-        if (!Number.isInteger(sourceStartStep) || !Number.isInteger(requestedSteps) || requestedSteps < 1) {
+        const requestedSteps = new Map<number, number>();
+        for (const request of requests) {
+            const measure = track.measures.at(request.bar - 1);
+            if (!measure) {
+                continue;
+            }
+
+            const stepsPerBar = measure.meter.stepResolution;
+            const startStep = this.stepsFromFraction(request.start, stepsPerBar);
+            const durationSteps = this.stepsFromFraction(request.duration, stepsPerBar);
+            if (startStep === undefined || durationSteps === undefined || durationSteps < 1) {
+                continue;
+            }
+
+            // A note never crosses a bar line, so its requested duration ends at the measure end.
+            const available = stepsPerBar - startStep;
+            if (available < 1) {
+                continue;
+            }
+
+            requestedSteps.set(measureOffsets[request.bar - 1] + startStep, Math.min(durationSteps, available));
+        }
+
+        if (requestedSteps.size === 0) {
             return false;
         }
 
-        const sourceAbsoluteStart = measureOffsets[bar - 1] + sourceStartStep;
         const notes: IAbsoluteNoteEvent[] = [];
-        let sourceNote: IAbsoluteNoteEvent | undefined;
 
         for (let measureIndex = 0; measureIndex < track.measures.length; measureIndex++) {
             const measure = track.measures[measureIndex];
@@ -1134,40 +1164,39 @@ export class ScoreBookDataModel {
                     continue;
                 }
 
-                const eventStart = event.start.numerator * stepsPerBar / event.start.denominator;
-                const eventDuration = event.duration.numerator * stepsPerBar / event.duration.denominator;
-                if (!Number.isInteger(eventStart) || !Number.isInteger(eventDuration)) {
+                const eventStart = this.stepsFromFraction(event.start, stepsPerBar);
+                const eventDuration = this.stepsFromFraction(event.duration, stepsPerBar);
+                if (eventStart === undefined || eventDuration === undefined) {
                     return false;
                 }
 
-                const note = {
+                notes.push({
                     startStep: measureOffsets[measureIndex] + eventStart,
                     durationSteps: eventDuration,
                     event: this.cloneEvent(event),
-                };
-                notes.push(note);
-
-                if (measureIndex === bar - 1 && eventStart === sourceStartStep) {
-                    sourceNote = note;
-                }
+                });
             }
         }
 
-        if (!sourceNote) {
+        let firstResized = -1;
+        for (let index = 0; index < notes.length; index++) {
+            const requested = requestedSteps.get(notes[index].startStep);
+            if (requested === undefined || requested === notes[index].durationSteps) {
+                continue;
+            }
+
+            notes[index].durationSteps = requested;
+            if (firstResized < 0) {
+                firstResized = index;
+            }
+        }
+
+        if (firstResized < 0) {
             return false;
         }
 
-        const sourceMeasureEnd = measureOffsets[bar - 1] + sourceMeasure.meter.stepResolution;
-        const resizedSteps = Math.min(requestedSteps, sourceMeasureEnd - sourceAbsoluteStart);
-        if (sourceNote.durationSteps === resizedSteps) {
-            return false;
-        }
-
-        sourceNote.durationSteps = resizedSteps;
-
-        let previousEnd = sourceNote.startStep + sourceNote.durationSteps;
-        const sourceIndex = notes.indexOf(sourceNote);
-        for (let index = sourceIndex + 1; index < notes.length; index++) {
+        let previousEnd = notes[firstResized].startStep + notes[firstResized].durationSteps;
+        for (let index = firstResized + 1; index < notes.length; index++) {
             const note = notes[index];
             note.startStep = Math.max(note.startStep, previousEnd);
 
@@ -1245,6 +1274,20 @@ export class ScoreBookDataModel {
         void requisitions.execute("arrangementMutated", undefined);
 
         return true;
+    }
+
+    /**
+     * Changes the duration of a single note; see {@link resizeNotes}.
+     *
+     * @param trackId The track containing the note.
+     * @param bar The one-based measure number.
+     * @param start The exact note start within the measure.
+     * @param duration The requested duration as a fraction of the current measure.
+     *
+     * @returns True when the note duration changed.
+     */
+    public resizeNote(trackId: number, bar: number, start: IFraction, duration: IFraction): boolean {
+        return this.resizeNotes(trackId, [{ bar, start, duration }]);
     }
 
     /**
@@ -3496,6 +3539,20 @@ export class ScoreBookDataModel {
         }
 
         return -1;
+    }
+
+    /**
+     * Converts a fraction of a bar into a step count.
+     *
+     * @param fraction The fraction of the bar to convert.
+     * @param stepsPerBar The number of steps in the measure.
+     *
+     * @returns The step count, or undefined when the fraction does not land on a step.
+     */
+    private stepsFromFraction(fraction: IFraction, stepsPerBar: number): number | undefined {
+        const steps = fraction.numerator * stepsPerBar / fraction.denominator;
+
+        return Number.isInteger(steps) ? steps : undefined;
     }
 
     private parsePulse(pulse: string): IFraction {
