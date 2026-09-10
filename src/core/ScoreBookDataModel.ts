@@ -39,6 +39,12 @@ export interface ISubdivisionSlotContent {
     articulation?: INoteArticulation;
 }
 
+interface IAbsoluteNoteEvent {
+    startStep: number;
+    durationSteps: number;
+    event: IMeasureEvent;
+}
+
 export type RealTime = number;
 
 /** If a hand plays a note, how is it played? */
@@ -1079,6 +1085,169 @@ export class ScoreBookDataModel {
     }
 
     /**
+     * Changes the duration of an existing note and ripples following notes through the track.
+     * Gaps between notes act as elastic rests: growing a note consumes later gaps before moving
+     * subsequent notes, while shrinking it expands the gap immediately after the note.
+     *
+     * @param trackId The track containing the note.
+     * @param bar The one-based measure number.
+     * @param start The exact note start within the measure.
+     * @param duration The requested duration as a fraction of the current measure.
+     *
+     * @returns True when the note duration changed.
+     */
+    public resizeNote(trackId: number, bar: number, start: IFraction, duration: IFraction): boolean {
+        const arrangement = this.arrangement;
+        const track = arrangement?.tracks.find((candidate) => {
+            return candidate.id === trackId;
+        });
+        const sourceMeasure = track?.measures[bar - 1];
+        if (!track || !sourceMeasure || track.measures.some((measure) => {
+            return measure.subdivisions.length > 0;
+        })) {
+            return false;
+        }
+
+        const measureOffsets: number[] = [];
+        let totalSteps = 0;
+        for (const measure of track.measures) {
+            measureOffsets.push(totalSteps);
+            totalSteps += measure.meter.stepResolution;
+        }
+
+        const sourceStartStep = start.numerator * sourceMeasure.meter.stepResolution / start.denominator;
+        const requestedSteps = duration.numerator * sourceMeasure.meter.stepResolution / duration.denominator;
+        if (!Number.isInteger(sourceStartStep) || !Number.isInteger(requestedSteps) || requestedSteps < 1) {
+            return false;
+        }
+
+        const sourceAbsoluteStart = measureOffsets[bar - 1] + sourceStartStep;
+        const notes: IAbsoluteNoteEvent[] = [];
+        let sourceNote: IAbsoluteNoteEvent | undefined;
+
+        for (let measureIndex = 0; measureIndex < track.measures.length; measureIndex++) {
+            const measure = track.measures[measureIndex];
+            const stepsPerBar = measure.meter.stepResolution;
+
+            for (const event of measure.events) {
+                if (event.noteStyleId === undefined) {
+                    continue;
+                }
+
+                const eventStart = event.start.numerator * stepsPerBar / event.start.denominator;
+                const eventDuration = event.duration.numerator * stepsPerBar / event.duration.denominator;
+                if (!Number.isInteger(eventStart) || !Number.isInteger(eventDuration)) {
+                    return false;
+                }
+
+                const note = {
+                    startStep: measureOffsets[measureIndex] + eventStart,
+                    durationSteps: eventDuration,
+                    event: this.cloneEvent(event),
+                };
+                notes.push(note);
+
+                if (measureIndex === bar - 1 && eventStart === sourceStartStep) {
+                    sourceNote = note;
+                }
+            }
+        }
+
+        if (!sourceNote) {
+            return false;
+        }
+
+        const sourceMeasureEnd = measureOffsets[bar - 1] + sourceMeasure.meter.stepResolution;
+        const resizedSteps = Math.min(requestedSteps, sourceMeasureEnd - sourceAbsoluteStart);
+        if (sourceNote.durationSteps === resizedSteps) {
+            return false;
+        }
+
+        sourceNote.durationSteps = resizedSteps;
+
+        let previousEnd = sourceNote.startStep + sourceNote.durationSteps;
+        const sourceIndex = notes.indexOf(sourceNote);
+        for (let index = sourceIndex + 1; index < notes.length; index++) {
+            const note = notes[index];
+            note.startStep = Math.max(note.startStep, previousEnd);
+
+            const measureIndex = this.measureIndexAtStep(measureOffsets, track.measures, note.startStep);
+            if (measureIndex < 0) {
+                notes.splice(index);
+
+                break;
+            }
+
+            const measureEnd = measureOffsets[measureIndex] + track.measures[measureIndex].meter.stepResolution;
+            if (note.startStep + note.durationSteps > measureEnd) {
+                const nextMeasureIndex = measureIndex + 1;
+                if (nextMeasureIndex >= track.measures.length) {
+                    notes.splice(index);
+
+                    break;
+                }
+
+                note.startStep = measureOffsets[nextMeasureIndex];
+            }
+
+            if (note.startStep >= totalSteps) {
+                notes.splice(index);
+
+                break;
+            }
+
+            note.durationSteps = Math.min(note.durationSteps, totalSteps - note.startStep);
+            previousEnd = note.startStep + note.durationSteps;
+        }
+
+        const pulse = this.parsePulse(track.arrangement.timeParams.pulse);
+        let noteIndex = 0;
+        for (let measureIndex = 0; measureIndex < track.measures.length; measureIndex++) {
+            const measure = track.measures[measureIndex];
+            const measureStart = measureOffsets[measureIndex];
+            const stepsPerBar = measure.meter.stepResolution;
+            const measureEnd = measureStart + stepsPerBar;
+            const events: IMeasureEvent[] = [];
+            let cursorStep = measureStart;
+
+            while (noteIndex < notes.length && notes[noteIndex].startStep < measureEnd) {
+                const note = notes[noteIndex];
+
+                if (note.startStep > cursorStep) {
+                    events.push({
+                        start: reduceFraction(cursorStep - measureStart, stepsPerBar),
+                        duration: reduceFraction(note.startStep - cursorStep, stepsPerBar),
+                    });
+                }
+
+                const durationSteps = Math.min(note.durationSteps, measureEnd - note.startStep);
+                events.push({
+                    ...this.cloneEvent(note.event),
+                    start: reduceFraction(note.startStep - measureStart, stepsPerBar),
+                    duration: reduceFraction(durationSteps, stepsPerBar),
+                });
+                cursorStep = note.startStep + durationSteps;
+                noteIndex++;
+            }
+
+            if (cursorStep < measureEnd) {
+                events.push({
+                    start: reduceFraction(cursorStep - measureStart, stepsPerBar),
+                    duration: reduceFraction(measureEnd - cursorStep, stepsPerBar),
+                });
+            }
+
+            const normalized = this.normalizeRests(events, new Set(), stepsPerBar, pulse);
+            this.setMeasureEvents(measure, normalized, false);
+        }
+
+        void requisitions.execute("trackChanged", track.id);
+        void requisitions.execute("arrangementMutated", undefined);
+
+        return true;
+    }
+
+    /**
      * Clears note content across the given step ranges in one edit, turning the affected
      * notes into rests. Clearing a whole measure also removes its subdivisions. Fires one
      * arrangementMutated event (a single undo step) and one trackChanged event per affected
@@ -1403,6 +1572,31 @@ export class ScoreBookDataModel {
         const subdivision = this.findInnermostSubdivision(MeasureProjection.project(measure), start);
 
         return subdivision !== undefined && this.subdivisionIsEmpty(subdivision);
+    }
+
+    /**
+     * Checks whether the event starting at the given position belongs to a subdivision. Subdivision
+     * slots subdivide a grid step into equal fractions, so their duration is fixed and can never be
+     * replaced by a note length selected in the toolbar.
+     *
+     * @param trackId The track containing the measure.
+     * @param bar The one-based measure number.
+     * @param start The exact start position of the event.
+     *
+     * @returns True when the event is a subdivision slot.
+     */
+    public isSubdivisionSlot(trackId: number, bar: number, start: IFraction): boolean {
+        const arrangement = this.arrangement;
+        const track = arrangement?.tracks.find((candidate) => {
+            return candidate.id === trackId;
+        });
+
+        const measure = track?.measures[bar - 1];
+        if (!track || !measure) {
+            return false;
+        }
+
+        return this.subdivisionSlotStarts(measure).has(this.fractionKey(start));
     }
 
     /**
@@ -3291,6 +3485,17 @@ export class ScoreBookDataModel {
 
     private fractionsEqual(a: IFraction, b: IFraction): boolean {
         return a.numerator * b.denominator === b.numerator * a.denominator;
+    }
+
+    private measureIndexAtStep(measureOffsets: number[], measures: ISbDmTrackMeasure[], step: number): number {
+        for (let index = measureOffsets.length - 1; index >= 0; index--) {
+            if (step >= measureOffsets[index]
+                && step < measureOffsets[index] + measures[index].meter.stepResolution) {
+                return index;
+            }
+        }
+
+        return -1;
     }
 
     private parsePulse(pulse: string): IFraction {

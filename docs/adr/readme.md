@@ -20,3 +20,4 @@ hard to infer from code alone.
 |---|---|---|---|
 | ADR-0001 | accepted | Schedule audio against the AudioContext clock and drive playback with a look-ahead scheduler | playback, transport, scheduling, timing |
 | ADR-0002 | accepted | Resolve rendered score elements through a viewer-local typed registry | score rendering, selection, keyboard navigation, DOM integration |
+| ADR-0003 | accepted | Make room for note entries per view and never overwrite a following note | note entry, note length change, measure editing, grid vs. staff behaviour, subdivision slots |

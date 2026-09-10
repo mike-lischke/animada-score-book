@@ -158,8 +158,8 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
 
         if (prevState.trackViewMode !== trackViewMode) {
             // View mode switched — newly mounted components need the current selection state.
-            selectionManager.republishSelection();
             this.trackViewerInputController!.viewMode = trackViewMode;
+            selectionManager.republishSelection();
         }
 
         if (prevProps.inEditMode !== this.props.inEditMode) {

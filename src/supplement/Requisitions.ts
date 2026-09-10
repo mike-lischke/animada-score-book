@@ -5,6 +5,7 @@
 
 import type { IUISettings } from "../core/AppStorage.js";
 import type { NoteLength } from "../core/rest-notation.js";
+import type { Articulation } from "../core/articulation.js";
 import type { ISbDmScore, ISbDmScoreFolder, ISbDmTrack, ScoreBookChangeReason } from "../core/ScoreBookDataModel.js";
 import type { PlayerPlayState } from "../player/ArrangementPlayer.js";
 import type { ISelectionDelta, ISelectionRectChange } from "../ui/selection-types.js";
@@ -74,6 +75,9 @@ export interface IRequestTypeMap {
 
     /** Fired by the note length toolbar to change the duration of subsequently entered notes. */
     "noteLengthChanged": (length: NoteLength) => Promise<boolean>;
+
+    /** Fired by the articulation toolbar to change the articulation of subsequently entered notes. */
+    "articulationChanged": (articulation: Articulation) => Promise<boolean>;
 
     /**
      * Fired by ScoreBookDataModel after any mutation to the arrangement.

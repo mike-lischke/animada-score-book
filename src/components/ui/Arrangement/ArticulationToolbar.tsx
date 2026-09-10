@@ -44,7 +44,7 @@ const articulationOptions: IArticulationOption[] = [
 /**
  * Toolbar for selecting the articulation (accent, damping, ghost) of notes. The availability of
  * each articulation and the currently active one are derived from the selected instrument's note
- * styles. Editing is not wired up yet — the toolbar only reflects the selection.
+ * styles.
  */
 export class ArticulationToolbar extends UIComponent<IArticulationToolbarProps, IArticulationToolbarState> {
     public constructor(props: IArticulationToolbarProps) {
@@ -80,6 +80,9 @@ export class ArticulationToolbar extends UIComponent<IArticulationToolbarProps, 
                     isDefault={option.articulation === activeArticulation}
                     disabled={!canEnter || !isAvailable}
                     data-tooltip={option.tooltip}
+                    onClick={() => {
+                        this.selectArticulation(option.articulation);
+                    }}
                 >
                     {this.renderIcon(option.articulation)}
                 </Button>
@@ -268,6 +271,11 @@ export class ArticulationToolbar extends UIComponent<IArticulationToolbarProps, 
         });
 
         return noteEvent?.audioData?.id;
+    }
+
+    private selectArticulation(articulation: Articulation): void {
+        this.setState({ activeArticulation: articulation });
+        void requisitions.execute("articulationChanged", articulation);
     }
 
     private renderIcon(articulation: Articulation): ComponentChild {

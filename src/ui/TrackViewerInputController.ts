@@ -9,12 +9,23 @@ import { RadialMenu, type IRadialMenuItem } from "../components/ui/framework/Rad
 import { AudioBufferPlayer } from "../player/AudioBufferPlayer.js";
 import { getSharedAudioContext } from "../core/audio-context.js";
 import { NoteLength } from "../core/rest-notation.js";
+import { Articulation, articulationOf, resolveNoteStyleForArticulation } from "../core/articulation.js";
+import { addFractions, compareFractions, reduceFraction } from "../core/serialisation/numeric-functions.js";
 import { GridMeasureEditor, type IGridEditorPosition } from "./GridMeasureEditor.js";
 import { ScoreElementKind, type ScoreElementRegistry } from "./ScoreElementRegistry.js";
 import { SelectionGranularity, type ISelectionDelta, type ISelectionEntry } from "./selection-types.js";
 import type { SelectionManager } from "./SelectionManager.js";
 import { requisitions, type ISubdivisionCreationRequest } from "../supplement/Requisitions.js";
 import { h } from "preact";
+
+const noteLengthShortcuts = [
+    NoteLength.Whole,
+    NoteLength.Half,
+    NoteLength.Quarter,
+    NoteLength.Eighth,
+    NoteLength.Sixteenth,
+    NoteLength.ThirtySecond,
+];
 
 /** View-specific editor input target. Pointer events cover mouse, touch and pen input. */
 export interface ITrackViewerEditorInput {
@@ -38,6 +49,7 @@ export class TrackViewerInputController {
     private longPressTarget?: HTMLElement;
     private currentPosition?: IGridEditorPosition;
     private noteLength = NoteLength.Quarter;
+    private articulation?: Articulation;
 
     public constructor(
         private readonly eventContainer: HTMLElement,
@@ -59,6 +71,7 @@ export class TrackViewerInputController {
         requisitions.register("noteEntryRequested", this.handleNoteEntryRequested);
         requisitions.register("subdivisionCreationRequested", this.handleSubdivisionCreationRequested);
         requisitions.register("noteLengthChanged", this.handleNoteLengthChanged);
+        requisitions.register("articulationChanged", this.handleArticulationChanged);
     }
 
     public dispose(): void {
@@ -73,6 +86,7 @@ export class TrackViewerInputController {
         requisitions.unregister("noteEntryRequested", this.handleNoteEntryRequested);
         requisitions.unregister("subdivisionCreationRequested", this.handleSubdivisionCreationRequested);
         requisitions.unregister("noteLengthChanged", this.handleNoteLengthChanged);
+        requisitions.unregister("articulationChanged", this.handleArticulationChanged);
         this.clearLongPress();
         this.editor = undefined;
     }
@@ -273,11 +287,24 @@ export class TrackViewerInputController {
             return;
         }
 
-        if (this.viewMode !== "grid") {
-            return;
+        if ((event.altKey || event.metaKey) && !event.ctrlKey && !event.shiftKey) {
+            const shortcutIndex = Number.parseInt(event.key, 10) - 1;
+            const length = noteLengthShortcuts[shortcutIndex];
+            const canSelectLength = shortcutIndex >= 0 && shortcutIndex < noteLengthShortcuts.length
+                && this.selectionManager.hasSelection
+                && this.editor instanceof GridMeasureEditor
+                && this.currentPosition !== undefined
+                && this.editor.noteLengthDuration(length, this.currentPosition) !== undefined;
+            if (canSelectLength) {
+                void requisitions.execute("noteLengthChanged", length);
+                event.preventDefault();
+
+                return;
+            }
         }
 
-        if (this.editor instanceof GridMeasureEditor && this.currentPosition) {
+        if (!event.altKey && !event.metaKey && !event.ctrlKey && !event.shiftKey
+            && this.editor instanceof GridMeasureEditor && this.currentPosition) {
             const shortcutIndex = Number.parseInt(event.key, 10) - 1;
             const styles = this.editor.getNoteStyles(this.currentPosition);
             if (shortcutIndex >= 0 && shortcutIndex < styles.length) {
@@ -339,16 +366,17 @@ export class TrackViewerInputController {
             return false;
         }
 
-        editor.clearSelection(entries);
-
-        if (this.viewMode === "grid" && this.currentPosition) {
-            // Keep the selection on the now-empty cells so multi-cell selections survive the delete.
-            const clearedEntries = entries.map((entry) => {
-                return { ...entry, noteId: undefined };
-            });
-
-            this.selectionManager.replaceSelection(clearedEntries);
+        if (!editor.clearSelection(entries)) {
+            return false;
         }
+
+        // Keep the selection at the same score positions. The removed note ids must not remain in
+        // the entries because staff rendering replaces those notes with newly identified rests.
+        const clearedEntries = entries.map((entry) => {
+            return { ...entry, noteId: undefined };
+        });
+
+        this.selectionManager.replaceSelection(clearedEntries);
 
         return true;
     }
@@ -365,6 +393,10 @@ export class TrackViewerInputController {
         const position = this.currentPosition;
         if (!position) {
             return false;
+        }
+
+        if (this.viewMode === "staff") {
+            return this.deleteBeforeStaffCursor(editor, position);
         }
 
         const cell = this.getGridCellForPosition(position);
@@ -387,8 +419,40 @@ export class TrackViewerInputController {
         return true;
     }
 
+    private deleteBeforeStaffCursor(editor: GridMeasureEditor, position: IGridEditorPosition): boolean {
+        const currentRun = this.getStaffRunForPosition(position);
+        const previousRun = currentRun ? this.findPreviousStaffRun(currentRun) : undefined;
+        const location = previousRun ? this.scoreElementRegistry.getLocation(previousRun) : undefined;
+        if (location?.step === undefined) {
+            return false;
+        }
+
+        const previousPosition = {
+            bar: location.bar,
+            trackId: location.trackId,
+            step: location.step,
+            start: location.start,
+        };
+
+        if (location.noteId !== undefined) {
+            editor.clearSelection([{
+                granularity: SelectionGranularity.Note,
+                bar: location.bar,
+                trackId: location.trackId,
+                startStep: location.step,
+                endStep: location.step,
+                noteId: location.noteId,
+                start: location.start,
+            }]);
+        }
+
+        this.selectCursorPosition(previousPosition);
+
+        return true;
+    }
+
     private handleNoteEntryRequested = (noteStyleId: string): Promise<boolean> => {
-        if (!this.editMode || this.viewMode !== "grid") {
+        if (!this.editMode) {
             return Promise.resolve(false);
         }
 
@@ -397,6 +461,26 @@ export class TrackViewerInputController {
 
     private handleNoteLengthChanged = (length: NoteLength): Promise<boolean> => {
         this.noteLength = length;
+
+        if (this.editMode && this.viewMode === "staff" && this.editor instanceof GridMeasureEditor
+            && this.currentPosition !== undefined) {
+            const entries = [...this.selectionManager.currentSelection.values()];
+            const entry = entries.length === 1 ? entries[0] : undefined;
+            if (entry?.granularity === SelectionGranularity.Note && entry.noteId !== undefined) {
+                const duration = this.editor.noteLengthDuration(length, this.currentPosition);
+
+                if (duration !== undefined && this.editor.resizeNote(this.currentPosition, duration)) {
+                    const refreshedEntry = this.editor.refreshSelection([{ ...entry, noteId: undefined }])[0];
+                    this.selectionManager.replaceSelection([refreshedEntry]);
+                }
+            }
+        }
+
+        return Promise.resolve(true);
+    };
+
+    private handleArticulationChanged = (articulation: Articulation): Promise<boolean> => {
+        this.articulation = articulation;
 
         return Promise.resolve(true);
     };
@@ -420,7 +504,7 @@ export class TrackViewerInputController {
 
     private enterNote(noteStyleId: string): boolean {
         const entries = [...this.selectionManager.currentSelection.values()];
-        if (this.isMultiCellSelection(entries)) {
+        if (this.viewMode === "grid" && this.isMultiCellSelection(entries)) {
             return this.enterNoteForSelection(noteStyleId, entries);
         }
 
@@ -429,27 +513,73 @@ export class TrackViewerInputController {
             return false;
         }
 
-        const style = this.editor.getNoteStyles(position)
+        const styles = this.editor.getNoteStyles(position);
+        const requestedStyle = styles
             .find((candidate) => {
                 return candidate.id === noteStyleId;
             });
-        if (!style) {
+        if (!requestedStyle) {
             return false;
         }
 
+        const articulatedStyleId = this.articulation === undefined
+            ? undefined
+            : resolveNoteStyleForArticulation(
+                Object.fromEntries(styles.map((style) => {
+                    return [style.id, style];
+                })),
+                requestedStyle.id,
+                this.articulation,
+            );
+        const style = articulatedStyleId === undefined
+            ? requestedStyle
+            : styles.find((candidate) => {
+                return candidate.id === articulatedStyleId;
+            })!;
+
+        // Grid cells with an exact start, subdivision slots and existing notes keep their own
+        // duration. A staff rest run is filled like an empty grid cell instead, so the selected
+        // note length applies to it.
+        const fillsExactSlot = position.start !== undefined
+            && (this.viewMode !== "staff"
+                || this.editor.hasNoteAt(position) || this.editor.isSubdivisionSlot(position));
+
         let selectedStyle: ReturnType<GridMeasureEditor["setNote"]>;
-        if (position.start !== undefined) {
-            // Subdivision slots keep their exact duration; the note length only applies to grid cells.
+        let insertedPosition = position;
+        let insertedDuration: ReturnType<GridMeasureEditor["noteLengthDuration"]>;
+        if (fillsExactSlot) {
             selectedStyle = this.editor.setNote(position, style.id);
         } else {
             const duration = this.editor.noteLengthDuration(this.noteLength, position);
-            selectedStyle = duration === undefined
-                ? undefined
-                : this.editor.insertNote(position, duration, style.id);
+
+            if (this.viewMode === "staff") {
+                // Staff entries are not tied to grid steps: the note keeps the selected length and
+                // later notes give way instead of the note being shortened.
+                const entry = duration === undefined
+                    ? undefined
+                    : this.editor.insertNoteWithShift(position, duration, style.id);
+                selectedStyle = entry?.style;
+                insertedPosition = entry?.position ?? position;
+                insertedDuration = entry?.duration;
+            } else {
+                const insertion = duration === undefined
+                    ? undefined
+                    : this.editor.resolveNoteInsertion(position, duration);
+                insertedPosition = insertion?.position ?? position;
+                insertedDuration = insertion?.duration;
+                selectedStyle = insertion === undefined
+                    ? undefined
+                    : this.editor.insertNote(insertion.position, insertion.duration, style.id);
+            }
         }
 
         this.playNote(selectedStyle, this.editor.getMainVolume());
-        this.advanceCursorForPosition(position);
+        if (this.viewMode === "staff" && insertedDuration !== undefined) {
+            this.advanceStaffCursor(insertedPosition, insertedDuration);
+        } else {
+            this.advanceCursorForPosition(position);
+        }
+
         this.eventContainer.focus({ preventScroll: true });
 
         return true;
@@ -489,15 +619,27 @@ export class TrackViewerInputController {
     }
 
     private handleSelectionChanged = (delta: ISelectionDelta): Promise<boolean> => {
+        if (delta.added.length === 0 && !this.selectionManager.hasSelection) {
+            this.currentPosition = undefined;
+
+            return Promise.resolve(true);
+        }
+
         const added = delta.added[0];
-        if (delta.added.length === 1 && added.granularity === SelectionGranularity.Note
-            && added.startStep !== undefined) {
+        if (delta.added.length === 1 && (added.granularity === SelectionGranularity.Note
+            || (this.viewMode === "staff" && added.granularity === SelectionGranularity.TrackPiece))) {
             this.currentPosition = {
                 bar: added.bar,
                 trackId: added.trackId,
-                step: added.startStep,
+                step: added.startStep ?? 0,
                 start: added.start,
             };
+
+            if (added.granularity === SelectionGranularity.Note && added.noteId !== undefined
+                && this.editor instanceof GridMeasureEditor) {
+                const style = this.editor.findNote(added.noteId)?.note?.audioData;
+                this.articulation = style === undefined ? undefined : articulationOf(style);
+            }
         }
 
         return Promise.resolve(true);
@@ -516,6 +658,41 @@ export class TrackViewerInputController {
         if (cell) {
             this.advanceCursor(cell);
         }
+    }
+
+    private advanceStaffCursor(position: IGridEditorPosition, duration: NonNullable<ReturnType<
+        GridMeasureEditor["noteLengthDuration"]>>): void {
+        if (!(this.editor instanceof GridMeasureEditor)) {
+            return;
+        }
+
+        const cell = this.editor.resolveCell(position);
+        if (!cell) {
+            return;
+        }
+
+        const measure = cell.track.measures[position.bar - 1];
+        const start = position.start ?? reduceFraction(position.step, measure.meter.stepResolution);
+        const end = addFractions(start, duration);
+
+        let nextPosition: IGridEditorPosition;
+
+        if (compareFractions(end, { numerator: 1, denominator: 1 }) >= 0) {
+            if (position.bar >= cell.track.measures.length) {
+                return;
+            }
+
+            nextPosition = { bar: position.bar + 1, trackId: position.trackId, step: 0 };
+        } else {
+            const step = end.numerator * measure.meter.stepResolution / end.denominator;
+            if (!Number.isInteger(step)) {
+                return;
+            }
+
+            nextPosition = { bar: position.bar, trackId: position.trackId, step };
+        }
+
+        this.selectCursorPosition(nextPosition);
     }
 
     private advanceCursor(cell: HTMLElement): void {
@@ -636,6 +813,54 @@ export class TrackViewerInputController {
         }, ScoreElementKind.GridCell);
 
         return elements.at(0);
+    }
+
+    private getStaffRunForPosition(position: IGridEditorPosition): HTMLElement | undefined {
+        return this.scoreElementRegistry.findSelectionElements({
+            granularity: SelectionGranularity.Note,
+            bar: position.bar,
+            trackId: position.trackId,
+            startStep: position.step,
+            endStep: position.step,
+            start: position.start,
+        }, ScoreElementKind.StaffRun).at(0);
+    }
+
+    private findPreviousStaffRun(run: HTMLElement): HTMLElement | undefined {
+        const row = run.closest<HTMLElement>(".staff-measure-track-row");
+        const rowLocation = row ? this.scoreElementRegistry.getLocation(row) : undefined;
+        if (!row || !rowLocation) {
+            return undefined;
+        }
+
+        const runs = this.getStaffRuns(row);
+        const runIndex = runs.indexOf(run);
+        if (runIndex > 0) {
+            return runs[runIndex - 1];
+        }
+
+        const rows = this.scoreElementRegistry.findElements(ScoreElementKind.TrackRow, undefined, rowLocation.trackId)
+            .filter((candidate) => {
+                return candidate.classList.contains("staff-measure-track-row");
+            }).sort((left, right) => {
+                return (this.scoreElementRegistry.getLocation(left)?.bar ?? 0)
+                    - (this.scoreElementRegistry.getLocation(right)?.bar ?? 0);
+            });
+        const rowIndex = rows.indexOf(row);
+        if (rowIndex <= 0) {
+            return undefined;
+        }
+
+        return this.getStaffRuns(rows[rowIndex - 1]).at(-1);
+    }
+
+    private getStaffRuns(row: HTMLElement): HTMLElement[] {
+        return [...row.querySelectorAll<HTMLElement>(".staff-note-viewer-run")]
+            .filter((run) => {
+                return run.querySelector(
+                    ".staff-note-viewer-note-symbol, .staff-note-viewer-rest-symbol",
+                ) !== null;
+            });
     }
 
     private getTrackRows(trackId: number): HTMLElement[] {

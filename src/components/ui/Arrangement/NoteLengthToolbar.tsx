@@ -25,6 +25,7 @@ export interface INoteLengthToolbarProps extends ICommonUIProperties {
 interface INoteLengthOption {
     length: NoteLength;
     tooltip: string;
+    shortcut: number;
 }
 
 interface INoteLengthToolbarState {
@@ -34,12 +35,12 @@ interface INoteLengthToolbarState {
 
 /** Standard note lengths offered for note entry, longest first. */
 const noteLengthOptions: INoteLengthOption[] = [
-    { length: NoteLength.Whole, tooltip: "Whole note" },
-    { length: NoteLength.Half, tooltip: "Half note" },
-    { length: NoteLength.Quarter, tooltip: "Quarter note" },
-    { length: NoteLength.Eighth, tooltip: "Eighth note" },
-    { length: NoteLength.Sixteenth, tooltip: "Sixteenth note" },
-    { length: NoteLength.ThirtySecond, tooltip: "Thirty-second note" },
+    { length: NoteLength.Whole, tooltip: "Whole note", shortcut: 1 },
+    { length: NoteLength.Half, tooltip: "Half note", shortcut: 2 },
+    { length: NoteLength.Quarter, tooltip: "Quarter note", shortcut: 3 },
+    { length: NoteLength.Eighth, tooltip: "Eighth note", shortcut: 4 },
+    { length: NoteLength.Sixteenth, tooltip: "Sixteenth note", shortcut: 5 },
+    { length: NoteLength.ThirtySecond, tooltip: "Thirty-second note", shortcut: 6 },
 ];
 
 /**
@@ -56,16 +57,14 @@ export class NoteLengthToolbar extends UIComponent<INoteLengthToolbarProps, INot
     public override componentDidMount(): void {
         requisitions.register("selectionChanged", this.handleSelectionChanged);
         requisitions.register("arrangementReverted", this.handleArrangementReverted);
+        requisitions.register("noteLengthChanged", this.handleNoteLengthChanged);
         this.refreshState();
-
-        // Sync the input controller with the visible default so a remounted toolbar (e.g. after
-        // toggling edit mode) cannot drift from the length the controller actually applies.
-        void requisitions.execute("noteLengthChanged", NoteLength.Quarter);
     }
 
     public override componentWillUnmount(): void {
         requisitions.unregister("selectionChanged", this.handleSelectionChanged);
         requisitions.unregister("arrangementReverted", this.handleArrangementReverted);
+        requisitions.unregister("noteLengthChanged", this.handleNoteLengthChanged);
     }
 
     public override render(): ComponentChild {
@@ -80,7 +79,7 @@ export class NoteLengthToolbar extends UIComponent<INoteLengthToolbarProps, INot
                     className="noteLengthButton"
                     isDefault={option.length === markedLength}
                     disabled={disabled}
-                    data-tooltip={option.tooltip}
+                    data-tooltip={`${option.tooltip} (Alt/Cmd+${option.shortcut})`}
                     onClick={() => {
                         this.selectLength(option.length);
                     }}
@@ -118,14 +117,25 @@ export class NoteLengthToolbar extends UIComponent<INoteLengthToolbarProps, INot
         return Promise.resolve(true);
     };
 
+    private handleNoteLengthChanged = (length: NoteLength): Promise<boolean> => {
+        this.setState({ markedLength: length });
+
+        return Promise.resolve(true);
+    };
+
     private refreshState(): void {
         const { selectionManager } = this.props;
         const entries = [...selectionManager.currentSelection.values()];
         const tracks = this.resolveSelectedTracks(entries);
+        const selectedNoteLength = this.resolveMarkedLength(tracks, entries);
+
+        if (selectedNoteLength !== undefined) {
+            void requisitions.execute("noteLengthChanged", selectedNoteLength);
+        }
 
         this.setState({
             hasSelection: entries.length > 0,
-            markedLength: this.resolveMarkedLength(tracks, entries),
+            markedLength: selectedNoteLength,
         });
     }
 

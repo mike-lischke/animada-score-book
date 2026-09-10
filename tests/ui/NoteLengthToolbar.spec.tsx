@@ -101,7 +101,7 @@ describe.sequential("NoteLengthToolbar", () => {
 
         const selected = renderResult.container.querySelector(".noteLengthButton.du-btn-primary");
 
-        expect(selected?.getAttribute("data-tooltip")).toBe("Quarter note");
+        expect(selected?.getAttribute("data-tooltip")).toBe("Quarter note (Alt/Cmd+3)");
     });
 
     it("marks the length of a selected rest", () => {
@@ -116,7 +116,7 @@ describe.sequential("NoteLengthToolbar", () => {
 
         const selected = renderResult.container.querySelector(".noteLengthButton.du-btn-primary");
 
-        expect(selected?.getAttribute("data-tooltip")).toBe("Quarter note");
+        expect(selected?.getAttribute("data-tooltip")).toBe("Quarter note (Alt/Cmd+3)");
     });
 
     it("does not mark a note length when selected notes differ", () => {

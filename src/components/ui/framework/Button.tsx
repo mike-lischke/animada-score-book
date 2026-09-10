@@ -27,6 +27,7 @@ export interface IButtonProperties extends ICommonUIProperties {
     /** Marks this button as default on a dialog. Different styling rules apply. */
     isDefault?: boolean;
 
+    /** Whether pointer activation should move focus to the button. Defaults to preserving the current focus. */
     focusOnClick?: boolean;
 
     /** The value to returned if the button is used in a form/dialog. */
@@ -102,6 +103,8 @@ export class Button extends UIComponent<IButtonProperties> {
         const { focusOnClick } = this.props;
         if (focusOnClick) {
             this.buttonRef.current?.focus();
+        } else {
+            e.preventDefault();
         }
 
         e.stopPropagation();

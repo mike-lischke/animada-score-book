@@ -7,7 +7,9 @@ import type {
     ISbDmArrangement, ISbDmNoteEvent, ISbDmTrack, ISbDmTrackMeasure, ITiming, ScoreBookDataModel,
 } from "../core/ScoreBookDataModel.js";
 import { NoteLength, noteLengthDenominator } from "../core/rest-notation.js";
-import { addFractions, compareFractions, reduceFraction } from "../core/serialisation/numeric-functions.js";
+import {
+    addFractions, compareFractions, reduceFraction, subtractFractions,
+} from "../core/serialisation/numeric-functions.js";
 import type { IAudioData, IFraction } from "../core/types/general.js";
 import { requisitions } from "../supplement/Requisitions.js";
 import { selectionToClearRanges } from "./selection-ranges.js";
@@ -28,6 +30,17 @@ export interface IGridEditorCell extends IGridEditorPosition {
     arrangement: ISbDmArrangement;
     track: ISbDmTrack;
     note?: ISbDmNoteEvent;
+}
+
+/** The position and duration at which a note can be inserted without crossing a bar line. */
+export interface INoteInsertion {
+    position: IGridEditorPosition;
+    duration: IFraction;
+}
+
+/** A written note: where it starts, how long it is and which sound was applied. */
+export interface IInsertedNote extends INoteInsertion {
+    style: IAudioData;
 }
 
 /** A contiguous subdivision target within a single measure of one track. */
@@ -97,11 +110,83 @@ export class GridMeasureEditor {
         const measure = cell.track.measures[position.bar - 1];
         const steps = cell.arrangement.timeParams.stepResolution / noteLengthDenominator(length);
 
-        if (!Number.isInteger(steps) || steps < 1) {
+        if (!Number.isInteger(steps) || steps < 1 || steps > measure.meter.stepResolution) {
             return undefined;
         }
 
         return reduceFraction(steps, measure.meter.stepResolution);
+    }
+
+    /**
+     * Checks whether a note starts at the given position. Such a position is the target of a style
+     * change, while a position that only holds rest space is the target of a note insertion.
+     *
+     * @param position The grid position to inspect.
+     *
+     * @returns True when the position holds a note.
+     */
+    public hasNoteAt(position: IGridEditorPosition): boolean {
+        const cell = this.resolveCell(position);
+
+        return cell?.note?.audioData !== undefined;
+    }
+
+    /**
+     * Checks whether the position marks a subdivision slot, whose duration is always the slot's own
+     * fraction of the bar.
+     *
+     * @param position The grid position whose exact start identifies the slot.
+     *
+     * @returns True when the position is a subdivision slot.
+     */
+    public isSubdivisionSlot(position: IGridEditorPosition): boolean {
+        const start = this.resolveStartFraction(position);
+
+        return start !== undefined
+            && this.dataModel.isSubdivisionSlot(position.trackId, position.bar, start);
+    }
+
+    /**
+     * Moves a note that does not fit at the current position to the next bar. When a following note
+     * is in the way, the note is shortened to the free space before that note, so a rest between two
+     * notes can always be filled. In the final bar the note is shortened to the available space.
+     *
+     * The staff view uses {@link insertNoteWithShift} instead, which keeps the requested length and
+     * shifts following notes.
+     *
+     * @param position The requested insertion position.
+     * @param duration The requested note duration.
+     *
+     * @returns The usable insertion, or undefined when the position has no remaining space.
+     */
+    public resolveNoteInsertion(position: IGridEditorPosition, duration: IFraction): INoteInsertion | undefined {
+        const cell = this.resolveCell(position);
+        const start = this.resolveStartFraction(position);
+        if (!cell || start === undefined) {
+            return undefined;
+        }
+
+        const barEnd = { numerator: 1, denominator: 1 };
+        if (compareFractions(addFractions(start, duration), barEnd) <= 0) {
+            return this.limitInsertion(position, start, duration);
+        }
+
+        if (position.bar < cell.track.measures.length) {
+            const nextPosition = { bar: position.bar + 1, trackId: position.trackId, step: 0 };
+            const nextDuration = this.noteLengthDurationForMeasure(
+                duration,
+                cell.track.measures[position.bar - 1],
+                cell.track.measures[position.bar],
+            );
+
+            return nextDuration === undefined
+                ? undefined
+                : this.limitInsertion(nextPosition, { numerator: 0, denominator: 1 }, nextDuration);
+        }
+
+        const remaining = subtractFractions(barEnd, start);
+
+        return remaining.numerator > 0 ? this.limitInsertion(position, start, remaining) : undefined;
     }
 
     /**
@@ -133,6 +218,50 @@ export class GridMeasureEditor {
         return this.dataModel.insertNote(position.trackId, position.bar, start, duration, noteStyleId)
             ? style
             : undefined;
+    }
+
+    /**
+     * Inserts a note of the given duration in the staff view, where entries are not tied to fixed
+     * grid steps. If the free space before the next note is too small, the note keeps its length and
+     * the following notes give way instead of the new note being shortened. Growing the note consumes
+     * the rest behind it first; only the excess moves the later notes to the right.
+     *
+     * @param position The requested insertion position.
+     * @param duration The requested note duration.
+     * @param noteStyleId The selected instrument note-style id.
+     *
+     * @returns The written note, or undefined when the edit was invalid.
+     */
+    public insertNoteWithShift(position: IGridEditorPosition, duration: IFraction,
+        noteStyleId: string): IInsertedNote | undefined {
+        const insertion = this.resolveNoteInsertion(position, duration);
+        if (insertion === undefined) {
+            return undefined;
+        }
+
+        const style = this.insertNote(insertion.position, insertion.duration, noteStyleId);
+        if (style === undefined) {
+            return undefined;
+        }
+
+        const shifted = compareFractions(insertion.duration, duration) < 0
+            && this.resizeNote(insertion.position, duration);
+
+        return { position: insertion.position, duration: shifted ? duration : insertion.duration, style };
+    }
+
+    /**
+     * Changes an existing note's duration while preserving its style and articulation.
+     *
+     * @param position The position of the existing note.
+     * @param duration The requested note duration.
+     *
+     * @returns True when the note duration changed.
+     */
+    public resizeNote(position: IGridEditorPosition, duration: IFraction): boolean {
+        const start = this.resolveStartFraction(position);
+
+        return start !== undefined && this.dataModel.resizeNote(position.trackId, position.bar, start, duration);
     }
 
     /**
@@ -559,6 +688,64 @@ export class GridMeasureEditor {
         }
 
         return reduceFraction(position.step, cell.track.measures[position.bar - 1].meter.stepResolution);
+    }
+
+    private noteLengthDurationForMeasure(duration: IFraction, sourceMeasure: ISbDmTrackMeasure,
+        targetMeasure: ISbDmTrackMeasure): IFraction | undefined {
+        const steps = duration.numerator * sourceMeasure.meter.stepResolution / duration.denominator;
+        if (!Number.isInteger(steps)) {
+            return undefined;
+        }
+
+        return reduceFraction(steps, targetMeasure.meter.stepResolution);
+    }
+
+    /**
+     * Shortens an insertion to the free space before the next note, because an inserted note never
+     * overwrites a following note. Positions without a following note keep the requested duration.
+     *
+     * @param position The insertion position.
+     * @param start The exact insertion start.
+     * @param duration The requested note duration.
+     *
+     * @returns The usable insertion, or undefined when no space is left.
+     */
+    private limitInsertion(position: IGridEditorPosition, start: IFraction,
+        duration: IFraction): INoteInsertion | undefined {
+        const nextNoteStart = this.nextNoteStart(position, start, addFractions(start, duration));
+        const available = nextNoteStart === undefined ? duration : subtractFractions(nextNoteStart, start);
+
+        return available.numerator > 0 ? { position, duration: available } : undefined;
+    }
+
+    /**
+     * Finds the earliest note start inside the given span.
+     *
+     * @param position The position whose measure is inspected.
+     * @param start The span start, exclusive.
+     * @param end The span end, exclusive.
+     *
+     * @returns The note start, or undefined when no note starts inside the span.
+     */
+    private nextNoteStart(position: IGridEditorPosition, start: IFraction, end: IFraction): IFraction | undefined {
+        const measure = this.resolveMeasure(position.trackId, position.bar);
+        if (!measure) {
+            return undefined;
+        }
+
+        let earliest: IFraction | undefined;
+        for (const event of measure.events) {
+            if (event.noteStyleId === undefined
+                || compareFractions(event.start, start) <= 0 || compareFractions(event.start, end) >= 0) {
+                continue;
+            }
+
+            if (earliest === undefined || compareFractions(event.start, earliest) < 0) {
+                earliest = event.start;
+            }
+        }
+
+        return earliest;
     }
 
     /**

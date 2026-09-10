@@ -677,7 +677,7 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                 const decoClasses = this.resolveDecorationClasses(node.noteStyle, node.articulation);
                 headWrapperClasses.push(...decoClasses);
 
-                const needsCssStem = !hasBeam;
+                const needsCssStem = !hasBeam && node.glyph.icon !== NoteLength.Whole;
 
                 const runDivProps: Record<string, unknown> = {
                     key: `${keyPrefix}note-${index}`,

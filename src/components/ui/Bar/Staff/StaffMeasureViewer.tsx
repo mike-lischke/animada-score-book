@@ -7,9 +7,13 @@ import type { ComponentChild } from "preact";
 
 import type { ISbDmArrangement, ISbDmTrack, ScoreBookDataModel } from "../../../../core/ScoreBookDataModel.js";
 import type { ArrangementPlayer } from "../../../../player/ArrangementPlayer.js";
+import { compareFractions, reduceFraction } from "../../../../core/serialisation/numeric-functions.js";
+import type { IFraction } from "../../../../core/types/general.js";
 import { requisitions } from "../../../../supplement/Requisitions.js";
 import type { SelectionManager } from "../../../../ui/SelectionManager.js";
-import { ScoreElementKind, type ScoreElementRegistry } from "../../../../ui/ScoreElementRegistry.js";
+import {
+    ScoreElementKind, type IScoreElementLocation, type ScoreElementRegistry,
+} from "../../../../ui/ScoreElementRegistry.js";
 import {
     SelectionGranularity, type ISelectionEntry, type ISelectionHitTester,
 } from "../../../../ui/selection-types.js";
@@ -248,6 +252,7 @@ export class StaffMeasureViewer extends UIComponent<IStaffMeasureViewerProps, IS
                         startStep: runLocation.step,
                         endStep: runLocation.step,
                         noteId: runLocation.noteId,
+                        start: this.exactRunStart(runLocation),
                     });
 
                     if (runLocation.noteId !== undefined) {
@@ -608,6 +613,27 @@ export class StaffMeasureViewer extends UIComponent<IStaffMeasureViewerProps, IS
         return Math.max(1, ...Object.values(track.instrument.noteStyles).map((noteStyle) => {
             return noteStyle.noteLine ?? 1;
         }));
+    }
+
+    /**
+     * Returns the exact start of a hit run when it does not sit on a grid step. Selection entries
+     * address positions that coincide with a grid step through their step alone, while subdivision
+     * slots subdivide a step and are only addressable through their exact start fraction.
+     *
+     * @param location The registered location of the hit run.
+     *
+     * @returns The exact start fraction, or undefined when the run starts on a grid step.
+     */
+    private exactRunStart(location: IScoreElementLocation): IFraction | undefined {
+        const { start, step } = location;
+        if (start === undefined || step === undefined) {
+            return undefined;
+        }
+
+        const { stepResolution } = this.props.arrangement.timeParams;
+        const stepStart = reduceFraction(step, stepResolution);
+
+        return compareFractions(stepStart, start) === 0 ? undefined : start;
     }
 
     private handleArrangementChanged = (arrangementId: number): Promise<boolean> => {

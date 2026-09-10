@@ -45,6 +45,7 @@ export class SelectionView {
     private autoScrollDY = 0;
     private editMode = false;
     private selectionDeleteButtonCreated = false;
+    private selectionRefreshFrame?: number;
 
     /**
      * Ratio of viewport pixels to CSS pixels inside #trackViewerContainer.
@@ -58,6 +59,7 @@ export class SelectionView {
         private readonly scoreElementRegistry?: ScoreElementRegistry) {
         requisitions.register("selectionChanged", this.handleSelectionChanged);
         requisitions.register("editModeChanged", this.handleEditModeChanged);
+        requisitions.register("trackChanged", this.handleTrackChanged);
         eventContainer.addEventListener("pointerdown", this.handlePointerDown);
         document.addEventListener("keydown", this.handleKeyDown);
         document.addEventListener("keyup", this.handleKeyUp);
@@ -69,6 +71,11 @@ export class SelectionView {
         document.removeEventListener("keydown", this.handleKeyDown);
         requisitions.unregister("selectionChanged", this.handleSelectionChanged);
         requisitions.unregister("editModeChanged", this.handleEditModeChanged);
+        requisitions.unregister("trackChanged", this.handleTrackChanged);
+
+        if (this.selectionRefreshFrame !== undefined) {
+            cancelAnimationFrame(this.selectionRefreshFrame);
+        }
     }
 
     /**
@@ -639,6 +646,19 @@ export class SelectionView {
         return Promise.resolve(true);
     };
 
+    private handleTrackChanged = (): Promise<boolean> => {
+        if (this.selectionRefreshFrame !== undefined) {
+            cancelAnimationFrame(this.selectionRefreshFrame);
+        }
+
+        this.selectionRefreshFrame = requestAnimationFrame(() => {
+            this.selectionRefreshFrame = undefined;
+            this.updateTrackViewerOverlays();
+        });
+
+        return Promise.resolve(true);
+    };
+
     private handleEditModeChanged = (enabled: boolean): Promise<boolean> => {
         this.editMode = enabled;
         if (!enabled) {
@@ -1168,9 +1188,9 @@ export class SelectionView {
     private staffGlyphLeftEdge(run: HTMLElement, symbol: HTMLElement): number {
         const symbolRect = symbol.getBoundingClientRect();
 
-        // Rest glyphs are centred in the sprite with a small inset. Use a nominal inset —
-        // the exact value differs by a couple of pixels between rest types.
         if (symbol.classList.contains("staff-note-viewer-rest-symbol")) {
+            // Rests are always centred in their run via CSS, regardless of duration, so the
+            // symbol's own rendered rect (not a duration-derived anchor) gives the true position.
             return symbolRect.left + 5;
         }
 
