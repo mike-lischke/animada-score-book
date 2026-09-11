@@ -39,6 +39,42 @@ it("replaces and clears callback-ref registrations", () => {
     expect(registry.findSelectionElements(entry, ScoreElementKind.GridCell)).toEqual([]);
 });
 
+it("resolves a rendered element by the model object it renders", () => {
+    const registry = new ScoreElementRegistry();
+    const firstElement = document.createElement("div");
+    const secondElement = document.createElement("div");
+    const target = { start: { numerator: 0, denominator: 1 } };
+    const ref = registry.createRef({
+        kind: ScoreElementKind.GridCell,
+        bar: 1,
+        trackId: 3,
+        step: 0,
+    }, target);
+
+    expect(registry.findTargetElement(target)).toBeUndefined();
+
+    ref(firstElement);
+    expect(registry.findTargetElement(target)).toBe(firstElement);
+
+    ref(secondElement);
+    expect(registry.findTargetElement(target)).toBe(secondElement);
+
+    ref(null);
+    expect(registry.findTargetElement(target)).toBeUndefined();
+});
+
+it("forgets the model object index when the registry is cleared", () => {
+    const registry = new ScoreElementRegistry();
+    const element = document.createElement("div");
+    const target = {};
+
+    registry.createRef({ kind: ScoreElementKind.TrackRow, bar: 1, trackId: 3 }, target)(element);
+    expect(registry.findTargetElement(target)).toBe(element);
+
+    registry.clear();
+    expect(registry.findTargetElement(target)).toBeUndefined();
+});
+
 it("distinguishes tuplet slots that share a step", () => {
     const registry = new ScoreElementRegistry();
     const firstSlot = document.createElement("div");

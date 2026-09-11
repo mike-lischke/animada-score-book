@@ -28,6 +28,9 @@ export interface IScoreElementLocation {
 interface IScoreElementRecord {
     element: HTMLElement;
     location: IScoreElementLocation;
+
+    /** The model object the element renders, when the renderer supplies one. */
+    target?: object;
 }
 
 /**
@@ -39,6 +42,7 @@ interface IScoreElementRecord {
 export class ScoreElementRegistry {
     private readonly records = new Set<IScoreElementRecord>();
     private readonly recordsByElement = new Map<HTMLElement, IScoreElementRecord>();
+    private readonly recordsByTarget = new Map<object, IScoreElementRecord>();
     private readonly recordsByNoteId = new Map<number, IScoreElementRecord>();
     private readonly recordsByStart = new Map<string, IScoreElementRecord>();
     private readonly recordsByStep = new Map<string, Set<IScoreElementRecord>>();
@@ -47,10 +51,12 @@ export class ScoreElementRegistry {
      * Creates a callback ref that keeps the supplied location's registration current.
      *
      * @param location The domain identity to associate with the rendered element.
+     * @param target The model object the element renders. Renderers that supply it make the element
+     *               findable by object identity, which is what a selection holds.
      *
      * @returns A Preact callback ref for the score element.
      */
-    public createRef(location: IScoreElementLocation): (element: HTMLElement | null) => void {
+    public createRef(location: IScoreElementLocation, target?: object): (element: HTMLElement | null) => void {
         let record: IScoreElementRecord | undefined;
 
         return (element) => {
@@ -60,10 +66,21 @@ export class ScoreElementRegistry {
             }
 
             if (element) {
-                record = { element, location };
+                record = { element, location, target };
                 this.register(record);
             }
         };
+    }
+
+    /**
+     * Returns the element that was registered for a model object.
+     *
+     * @param target The model object the renderer supplied.
+     *
+     * @returns The live element, or undefined when the object is not rendered.
+     */
+    public findTargetElement(target: object): HTMLElement | undefined {
+        return this.recordsByTarget.get(target)?.element;
     }
 
     /**
@@ -147,15 +164,20 @@ export class ScoreElementRegistry {
     public clear(): void {
         this.records.clear();
         this.recordsByElement.clear();
+        this.recordsByTarget.clear();
         this.recordsByNoteId.clear();
         this.recordsByStart.clear();
         this.recordsByStep.clear();
     }
 
     private register(record: IScoreElementRecord): void {
-        const { element, location } = record;
+        const { element, location, target } = record;
         this.records.add(record);
         this.recordsByElement.set(element, record);
+
+        if (target !== undefined) {
+            this.recordsByTarget.set(target, record);
+        }
 
         if (location.noteId !== undefined) {
             this.recordsByNoteId.set(location.noteId, record);
@@ -178,9 +200,13 @@ export class ScoreElementRegistry {
     }
 
     private unregister(record: IScoreElementRecord): void {
-        const { element, location } = record;
+        const { element, location, target } = record;
         this.records.delete(record);
         this.recordsByElement.delete(element);
+
+        if (target !== undefined && this.recordsByTarget.get(target) === record) {
+            this.recordsByTarget.delete(target);
+        }
 
         if (location.noteId !== undefined && this.recordsByNoteId.get(location.noteId) === record) {
             this.recordsByNoteId.delete(location.noteId);
