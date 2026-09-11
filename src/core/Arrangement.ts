@@ -391,6 +391,7 @@ export class Arrangement implements ISbDmArrangement {
             return {
                 id: this.getTrackMeasureId(track, measureSnapshot.number),
                 type: SbDmEntityType.TrackMeasure,
+                track,
                 number: measureSnapshot.number,
                 meter: {
                     ...measureSnapshot.meter,

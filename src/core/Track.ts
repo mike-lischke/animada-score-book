@@ -196,6 +196,7 @@ export class Track implements ISbDmTrack {
         return {
             id: this.getMeasureId(measureNumber),
             type: SbDmEntityType.TrackMeasure,
+            track: this,
             number: measureNumber,
             meter: {
                 beats,
@@ -218,7 +219,7 @@ export class Track implements ISbDmTrack {
         return {
             id: this.getRestPlaceholderId(timing),
             type: SbDmEntityType.NoteEvent,
-            measureNumber: measure.number,
+            measure,
             start: reduceFraction(timing.step - 1, stepsPerBar),
             duration: reduceFraction(1, stepsPerBar),
             track: this,

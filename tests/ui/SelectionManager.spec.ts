@@ -101,7 +101,16 @@ const makeNote = (id: number): Mutable<ISbDmNoteEvent> => {
     return {
         type: SbDmEntityType.NoteEvent,
         id,
-        measureNumber: 1,
+        measure: {
+            type: SbDmEntityType.TrackMeasure,
+            id: 1,
+            track: undefined as unknown as ISbDmTrack,
+            number: 1,
+            meter: { beats: 4, beatUnits: 4, stepResolution: 16, beatGroups: [4, 4, 4, 4] },
+            events: [],
+            subdivisions: [],
+            noteEvents: [],
+        },
         start: { numerator: 0, denominator: 1 },
         duration: { numerator: 1, denominator: 1 },
         timing: { bar: 1, step: 1 },

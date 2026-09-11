@@ -91,24 +91,10 @@ const makeTrack = (arrangement: ISbDmArrangement): ISbDmTrack => {
 const makePolyrhythmFixture = (
     track: ISbDmTrack,
 ): { measure: ISbDmTrackMeasure; } => {
-    const event = {
-        type: SbDmEntityType.NoteEvent,
-        id: 11,
-        measureNumber: 1,
-        start: { numerator: 0, denominator: 1 },
-        duration: { numerator: 1, denominator: 8 },
-        track,
-        timing: { bar: 1, step: 1 },
-        audioData: {
-            id: "1",
-            audioBuffer: null,
-            instrument: track.instrument,
-        },
-    } as ISbDmNoteEvent;
-
-    const measure = {
+    const measure: ISbDmTrackMeasure = {
         type: SbDmEntityType.TrackMeasure,
         id: 13,
+        track,
         number: 1,
         meter: {
             beats: 4,
@@ -125,8 +111,23 @@ const makePolyrhythmFixture = (
             { start: { numerator: 1, denominator: 8 }, duration: { numerator: 7, denominator: 8 } },
         ],
         subdivisions: [],
-        noteEvents: [event],
-    } as ISbDmTrackMeasure;
+        noteEvents: [],
+    };
+
+    measure.noteEvents.push({
+        type: SbDmEntityType.NoteEvent,
+        id: 11,
+        measure,
+        start: { numerator: 0, denominator: 1 },
+        duration: { numerator: 1, denominator: 8 },
+        track,
+        timing: { bar: 1, step: 1 },
+        audioData: {
+            id: "1",
+            audioBuffer: null,
+            instrument: track.instrument,
+        },
+    } as ISbDmNoteEvent);
 
     return { measure };
 };

@@ -52,10 +52,21 @@ const makeNote = (
     timing: ITiming,
     noteStyle?: IAudioData,
 ): ISbDmNoteEvent => {
+    const measure = {
+        type: SbDmEntityType.TrackMeasure,
+        id: 1,
+        track,
+        number: 1,
+        meter: { beats: 4, beatUnits: 4, stepResolution: 16, beatGroups: [16] },
+        events: [],
+        subdivisions: [],
+        noteEvents: [],
+    } as ISbDmTrackMeasure;
+
     return {
         type: SbDmEntityType.NoteEvent,
         id: Math.floor(Math.random() * 100000),
-        measureNumber: 1,
+        measure,
         start: { numerator: timing.step - 1, denominator: 16 },
         duration: { numerator: 1, denominator: 16 },
         track,
@@ -163,28 +174,11 @@ const makeTrack = (opts?: {
         track._notes.push(polyNote);
     }
 
-    const measureEvents: ISbDmNoteEvent[] = track._notes.map((currentNote, index) => {
-        return {
-            type: SbDmEntityType.NoteEvent,
-            id: currentNote.id,
-            measureNumber: 1,
-            start: {
-                numerator: index,
-                denominator: track._notes.length,
-            },
-            duration: {
-                numerator: 1,
-                denominator: track._notes.length,
-            },
-            track,
-            timing: currentNote.timing,
-            audioData: currentNote.audioData,
-        };
-    });
-
+    const measureEvents: ISbDmNoteEvent[] = [];
     const measure: ISbDmTrackMeasure = {
         type: SbDmEntityType.TrackMeasure,
         id: 1,
+        track,
         number: 1,
         meter: {
             beats: 4,
@@ -202,6 +196,26 @@ const makeTrack = (opts?: {
         subdivisions: [],
         noteEvents: measureEvents,
     };
+
+    track._notes.forEach((currentNote, index) => {
+        measureEvents.push({
+            type: SbDmEntityType.NoteEvent,
+            id: currentNote.id,
+            measure,
+            start: {
+                numerator: index,
+                denominator: track._notes.length,
+            },
+            duration: {
+                numerator: 1,
+                denominator: track._notes.length,
+            },
+            track,
+            timing: currentNote.timing,
+            audioData: currentNote.audioData,
+        });
+    });
+
     track.measures = [measure];
 
     return track;

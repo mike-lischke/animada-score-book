@@ -123,7 +123,7 @@ export class TrackPlayer {
                 // cache rebuilds. Encodes track id, measure number and the event index within the measure.
                 id: (this.track.id * 1_000_000) + (measure.number * 1_000) + eventIndex,
                 type: SbDmEntityType.NoteEvent,
-                measureNumber: measure.number,
+                measure,
                 start: { ...event.start },
                 duration: { ...event.duration },
                 track: this.track,

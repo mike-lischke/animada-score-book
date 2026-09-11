@@ -58,22 +58,10 @@ const buildMeasure = (events: IMeasureEvent[], subdivisions: ISubdivision[],
     } as unknown as IAudioData;
 
     const track = { id: 100 } as ISbDmTrack;
-    const noteEvents: ISbDmNoteEvent[] = events.map((measureEvent, index) => {
-        return {
-            type: SbDmEntityType.NoteEvent,
-            id: (100 * 1_000_000) + (1 * 1_000) + index,
-            measureNumber: 1,
-            start: { ...measureEvent.start },
-            duration: { ...measureEvent.duration },
-            track,
-            timing: { bar: 1, step: 0 },
-            audioData: measureEvent.noteStyleId !== undefined ? audioData : undefined,
-        };
-    });
-
-    return {
+    const measure: ISbDmTrackMeasure = {
         type: SbDmEntityType.TrackMeasure,
         id: 13,
+        track,
         number: 1,
         meter: {
             beats: 4,
@@ -83,8 +71,25 @@ const buildMeasure = (events: IMeasureEvent[], subdivisions: ISubdivision[],
         },
         events,
         subdivisions,
-        noteEvents,
+        noteEvents: [],
     };
+
+    const noteEvents = events.map((measureEvent, index): ISbDmNoteEvent => {
+        return {
+            type: SbDmEntityType.NoteEvent,
+            id: (100 * 1_000_000) + (1 * 1_000) + index,
+            measure,
+            start: { ...measureEvent.start },
+            duration: { ...measureEvent.duration },
+            track,
+            timing: { bar: 1, step: 0 },
+            audioData: measureEvent.noteStyleId !== undefined ? audioData : undefined,
+        };
+    });
+
+    measure.noteEvents.push(...noteEvents);
+
+    return measure;
 };
 
 /**

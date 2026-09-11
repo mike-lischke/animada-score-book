@@ -109,9 +109,9 @@ export class TimeCoordinator {
      * @returns The real-time position.
      */
     public convertEventToRealTime(event: ISbDmNoteEvent): RealTime {
-        const { measureNumber, start } = event;
+        const { measure, start } = event;
 
-        return this.#metrics.secondsPerBar * ((measureNumber - 1) + (start.numerator / start.denominator));
+        return this.#metrics.secondsPerBar * ((measure.number - 1) + (start.numerator / start.denominator));
     }
 
     public convertToLoopProgress(realTime: number): RealTime {

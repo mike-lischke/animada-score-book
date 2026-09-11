@@ -451,6 +451,10 @@ export interface ISbDmTrack extends ISbDmCommon {
 
 export interface ISbDmTrackMeasure extends ISbDmCommon {
     readonly type: SbDmEntityType.TrackMeasure;
+
+    /** The track this measure belongs to. */
+    readonly track: ISbDmTrack;
+
     readonly number: number;
 
     /**
@@ -477,7 +481,10 @@ export interface ISbDmTrackMeasure extends ISbDmCommon {
 
 export interface ISbDmNoteEvent extends ISbDmCommon {
     readonly type: SbDmEntityType.NoteEvent;
-    readonly measureNumber: number;
+
+    /** The measure this event belongs to. */
+    readonly measure: ISbDmTrackMeasure;
+
     readonly start: IFraction;
     readonly duration: IFraction;
     readonly track: ISbDmTrack;

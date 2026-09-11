@@ -73,14 +73,14 @@ describe("Track", () => {
         expect(firstNotes).toHaveLength(2);
 
         expect(firstNotes[0]).toMatchObject({
-            measureNumber: 1,
+            measure: firstMeasure,
             start: { numerator: 0, denominator: 1 },
             // Note absorbs the rest gap up to the next pulse boundary (1/4) → quarter note.
             duration: { numerator: 1, denominator: 4 },
         });
 
         expect(firstNotes[1]).toMatchObject({
-            measureNumber: 1,
+            measure: firstMeasure,
             start: { numerator: 1, denominator: 2 },
             duration: { numerator: 1, denominator: 4 },
         });
@@ -90,7 +90,7 @@ describe("Track", () => {
         });
         expect(secondNotes).toHaveLength(1);
         expect(secondNotes[0]).toMatchObject({
-            measureNumber: 2,
+            measure: secondMeasure,
             start: { numerator: 1, denominator: 4 },
             duration: { numerator: 1, denominator: 4 },
         });
@@ -98,7 +98,7 @@ describe("Track", () => {
         // getNoteAt synthesises rest events on demand for empty grid slots.
         const restAtBar1Step5 = track.getNoteAt({ bar: 1, step: 5 });
         expect(restAtBar1Step5).toMatchObject({
-            measureNumber: 1,
+            measure: firstMeasure,
             start: { numerator: 1, denominator: 4 },
             duration: { numerator: 1, denominator: 16 },
             audioData: undefined,
