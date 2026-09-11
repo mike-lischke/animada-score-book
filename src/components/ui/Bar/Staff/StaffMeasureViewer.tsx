@@ -16,7 +16,7 @@ import {
 } from "../../../../ui/ScoreElementRegistry.js";
 import {
     SelectionGranularity, type ISelectionEntry, type ISelectionHitTester,
-} from "../../../../ui/selection-types.js";
+} from "../../../../ui/SelectionSerializer.js";
 import { UIComponent, type ICommonUIProperties } from "../../framework/UIComponent.js";
 import { StaffMeasureTrackRow } from "./StaffMeasureTrackRow.js";
 
@@ -89,7 +89,7 @@ export class StaffMeasureViewer extends UIComponent<IStaffMeasureViewerProps, IS
      * @returns Entries for any intersected elements, or a fallback measure entry.
      */
     public hitTest(rect: DOMRect): ISelectionEntry[] {
-        const { barNumber, scoreElementRegistry } = this.props;
+        const { barNumber, arrangement, scoreElementRegistry } = this.props;
         const element = this.base as HTMLElement | null;
         if (!element) {
             return [];
@@ -135,7 +135,10 @@ export class StaffMeasureViewer extends UIComponent<IStaffMeasureViewerProps, IS
             }
 
             const trackId = rowLocation.trackId;
-
+            const track = arrangement.tracks.find((candidate) => {
+                return candidate.id === trackId;
+            });
+            const measure = track?.measures[barNumber - 1];
             // Notes are translated vertically per staff line, so the note symbol can extend below the
             // row. Expand the coarse row bounds by the maximum line spread so noteheads on the lowest
             // line stay reachable. The fine-grained checks below do the precise hit-testing.
@@ -245,7 +248,8 @@ export class StaffMeasureViewer extends UIComponent<IStaffMeasureViewerProps, IS
                 }
 
                 if (noteHit) {
-                    noteEntries.push({
+                    const target = scoreElementRegistry?.getTarget(runEl);
+                    const entry: ISelectionEntry = {
                         granularity: SelectionGranularity.Note,
                         bar: runLocation.bar,
                         trackId: runLocation.trackId,
@@ -253,7 +257,12 @@ export class StaffMeasureViewer extends UIComponent<IStaffMeasureViewerProps, IS
                         endStep: runLocation.step,
                         noteId: runLocation.noteId,
                         start: this.exactRunStart(runLocation),
-                    });
+                    };
+                    if (target !== undefined && "duration" in target && measure !== undefined) {
+                        entry.target = { granularity: SelectionGranularity.Note, measure, event: target };
+                    }
+
+                    noteEntries.push(entry);
 
                     if (runLocation.noteId !== undefined) {
                         rowHasSoundingNotes = true;
@@ -532,11 +541,16 @@ export class StaffMeasureViewer extends UIComponent<IStaffMeasureViewerProps, IS
             }
 
             if (!rowHasSoundingNotes) {
-                trackPieceEntries.push({
+                const entry: ISelectionEntry = {
                     granularity: SelectionGranularity.TrackPiece,
                     bar: barNumber,
                     trackId: trackId,
-                });
+                };
+                if (track !== undefined && measure !== undefined) {
+                    entry.target = { granularity: SelectionGranularity.TrackPiece, track, measure };
+                }
+
+                trackPieceEntries.push(entry);
             }
         }
 

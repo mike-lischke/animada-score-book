@@ -8,11 +8,11 @@ import { ScoreBookChangeReason, type ISbDmArrangement, type ScoreBookDataModel }
 import type { PlayerPlayState } from "../player/ArrangementPlayer.js";
 import { requisitions } from "../supplement/Requisitions.js";
 import {
-    SelectionGranularity, SelectionMode, type ISelectionEntry, type ISelectionHitTester, type ISelectionPoint,
-    type ISelectionRectChange,
-} from "./selection-types.js";
-import { SelectionView } from "./SelectionView.js";
+    SelectionGranularity, SelectionMode, SelectionSerializer, type ISelectionEntry,
+    type ISelectionHitTester, type ISelectionPoint, type ISelectionRectChange, type ISerialisedSelectionEntry,
+} from "./SelectionSerializer.js";
 import type { ScoreElementRegistry } from "./ScoreElementRegistry.js";
+import { SelectionView } from "./SelectionView.js";
 
 /**
  * Manages selections across tracks and publishes selection changes.
@@ -739,7 +739,7 @@ export class SelectionManager {
         const viewSettings = settings.viewSettings ?? {};
 
         if (entries.length > 0) {
-            viewSettings.selectionState = JSON.stringify(entries);
+            viewSettings.selectionState = JSON.stringify(SelectionSerializer.serialise(entries));
         } else {
             delete viewSettings.selectionState;
         }
@@ -753,22 +753,24 @@ export class SelectionManager {
      * Called when the scorebook finishes loading so the arrangement and DOM are ready.
      */
     private restorePersistedSelection(): void {
+        const arrangement = this.dataModel?.arrangement;
         const state = AppStorage.loadUISettings()?.viewSettings?.selectionState;
-        if (!state) {
+        if (!arrangement || !state) {
             return;
         }
 
-        let entries: ISelectionEntry[];
+        let stored: ISerialisedSelectionEntry[];
         try {
-            entries = JSON.parse(state) as ISelectionEntry[];
+            stored = JSON.parse(state) as ISerialisedSelectionEntry[];
         } catch {
             return;
         }
 
-        if (!Array.isArray(entries) || entries.length === 0) {
+        if (!Array.isArray(stored) || stored.length === 0) {
             return;
         }
 
+        const entries = SelectionSerializer.deserialise(arrangement, stored);
         const removed = [...this.currentSelection.values()];
         this.currentSelection.clear();
         for (const entry of entries) {

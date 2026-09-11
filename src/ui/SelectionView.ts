@@ -7,8 +7,8 @@ import type { IRect } from "../core/types/general.js";
 import { requisitions } from "../supplement/Requisitions.js";
 import type { SelectionManager } from "./SelectionManager.js";
 import { ScoreElementKind, type ScoreElementRegistry } from "./ScoreElementRegistry.js";
-import type { ISelectionDelta, ISelectionEntry } from "./selection-types.js";
-import { SelectionGranularity, SelectionMode } from "./selection-types.js";
+import { SelectionGranularity, SelectionMode, type ISelectionDelta, type ISelectionEntry }
+    from "./SelectionSerializer.js";
 
 const selectionRectClass = "selection-rect";
 const selectionOverlayClass = "selection-overlay";

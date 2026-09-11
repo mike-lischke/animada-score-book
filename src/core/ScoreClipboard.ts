@@ -4,7 +4,7 @@
  */
 
 import { selectionToClearRanges } from "../ui/selection-ranges.js";
-import { SelectionGranularity, type ISelectionEntry } from "../ui/selection-types.js";
+import { SelectionGranularity, type ISelectionEntry } from "../ui/SelectionSerializer.js";
 import { expandMeasureToGridEvents } from "./grid-events.js";
 import { MeasureProjection, ProjectedItemKind } from "./MeasureProjection.js";
 import type {

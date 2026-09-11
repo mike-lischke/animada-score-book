@@ -8,7 +8,7 @@ import { describe, expect, it } from "vitest";
 import { Arrangement } from "../../src/core/Arrangement.js";
 import { ScoreBookDataModel, type ISbDmTrackMeasure } from "../../src/core/ScoreBookDataModel.js";
 import { selectionToClearRanges } from "../../src/ui/selection-ranges.js";
-import { SelectionGranularity } from "../../src/ui/selection-types.js";
+import { SelectionGranularity } from "../../src/ui/SelectionSerializer.js";
 import { createInstrument, hydrateMeasureEvents } from "../unit-test-helpers.js";
 
 describe("selectionToClearRanges", () => {

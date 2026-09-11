@@ -13,7 +13,7 @@ import { Articulation, articulationOf, resolveNoteStyleForArticulation } from ".
 import { addFractions, compareFractions, reduceFraction } from "../core/serialisation/numeric-functions.js";
 import { GridMeasureEditor, type IGridEditorPosition } from "./GridMeasureEditor.js";
 import { ScoreElementKind, type ScoreElementRegistry } from "./ScoreElementRegistry.js";
-import { SelectionGranularity, type ISelectionDelta, type ISelectionEntry } from "./selection-types.js";
+import { SelectionGranularity, type ISelectionDelta, type ISelectionEntry } from "./SelectionSerializer.js";
 import type { SelectionManager } from "./SelectionManager.js";
 import { requisitions, type ISubdivisionCreationRequest } from "../supplement/Requisitions.js";
 import { h } from "preact";

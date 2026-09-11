@@ -8,7 +8,7 @@ import type { NoteLength } from "../core/rest-notation.js";
 import type { Articulation } from "../core/articulation.js";
 import type { ISbDmScore, ISbDmScoreFolder, ISbDmTrack, ScoreBookChangeReason } from "../core/ScoreBookDataModel.js";
 import type { PlayerPlayState } from "../player/ArrangementPlayer.js";
-import type { ISelectionDelta, ISelectionRectChange } from "../ui/selection-types.js";
+import type { ISelectionDelta, ISelectionRectChange } from "../ui/SelectionSerializer.js";
 
 export type SimpleCallback = () => Promise<boolean>;
 

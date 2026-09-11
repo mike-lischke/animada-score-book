@@ -9,7 +9,7 @@ import { Arrangement } from "../../src/core/Arrangement.js";
 import { ScoreBookDataModel, type ISbDmInstrument, type ISbDmTrackMeasure } from "../../src/core/ScoreBookDataModel.js";
 import { PasteResultKind, ScoreClipboard, SubdivisionPasteMode } from "../../src/core/ScoreClipboard.js";
 import { addFractions, compareFractions } from "../../src/core/serialisation/numeric-functions.js";
-import { SelectionGranularity, type ISelectionEntry } from "../../src/ui/selection-types.js";
+import { SelectionGranularity, type ISelectionEntry } from "../../src/ui/SelectionSerializer.js";
 import { createInstrument, hydrateMeasureEvents } from "../unit-test-helpers.js";
 
 /**

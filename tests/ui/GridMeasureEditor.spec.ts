@@ -13,7 +13,7 @@ import { addFractions, compareFractions } from "../../src/core/serialisation/num
 import type { IAudioData } from "../../src/core/types/general.js";
 import { requisitions } from "../../src/supplement/Requisitions.js";
 import { GridMeasureEditor } from "../../src/ui/GridMeasureEditor.js";
-import { SelectionGranularity, type ISelectionEntry } from "../../src/ui/selection-types.js";
+import { SelectionGranularity, type ISelectionEntry } from "../../src/ui/SelectionSerializer.js";
 import { createInstrument, hydrateMeasureEvents } from "../unit-test-helpers.js";
 
 /**

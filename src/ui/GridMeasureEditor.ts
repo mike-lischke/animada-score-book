@@ -14,7 +14,7 @@ import {
 import type { IAudioData, IFraction } from "../core/types/general.js";
 import { requisitions } from "../supplement/Requisitions.js";
 import { selectionToClearRanges } from "./selection-ranges.js";
-import { SelectionGranularity, type ISelectionEntry } from "./selection-types.js";
+import { SelectionGranularity, type ISelectionEntry } from "./SelectionSerializer.js";
 
 /** Identifies a cell in the grid view using zero-based step indexing. */
 export interface IGridEditorPosition {

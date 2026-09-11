@@ -14,7 +14,7 @@ import {
 import type { IAudioData } from "../../src/core/types/general.js";
 import { requisitions } from "../../src/supplement/Requisitions.js";
 import { SelectionManager } from "../../src/ui/SelectionManager.js";
-import { SelectionGranularity } from "../../src/ui/selection-types.js";
+import { SelectionGranularity } from "../../src/ui/SelectionSerializer.js";
 
 const makeNoteStyle = (id: string, shortDescription: string, description: string): IAudioData => {
     return {

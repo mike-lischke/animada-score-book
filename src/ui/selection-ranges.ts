@@ -5,7 +5,7 @@
 
 import type { IGridClearRange, ISbDmArrangement } from "../core/ScoreBookDataModel.js";
 import { addFractions } from "../core/serialisation/numeric-functions.js";
-import { SelectionGranularity, type ISelectionEntry } from "./selection-types.js";
+import { SelectionGranularity, type ISelectionEntry } from "./SelectionSerializer.js";
 
 /**
  * Resolves the clear range of the note event occupying the selected cell. The note id is present

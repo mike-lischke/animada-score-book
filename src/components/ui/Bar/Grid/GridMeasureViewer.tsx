@@ -11,7 +11,7 @@ import type { SelectionManager } from "../../../../ui/SelectionManager.js";
 import { ScoreElementKind, type ScoreElementRegistry } from "../../../../ui/ScoreElementRegistry.js";
 import {
     SelectionGranularity, type ISelectionEntry, type ISelectionHitTester,
-} from "../../../../ui/selection-types.js";
+} from "../../../../ui/SelectionSerializer.js";
 import { Container } from "../../framework/Container.js";
 import { ChildAlignment, Orientation } from "../../framework/ui-types.js";
 import { UIComponent, type ICommonUIProperties } from "../../framework/UIComponent.js";
@@ -115,6 +115,8 @@ export class GridMeasureViewer extends UIComponent<IGridMeasureViewerProperties,
                 ScoreElementKind.GridCell, measureNumber, track.id,
             ) ?? [];
 
+            const measure = track.measures[measureNumber - 1];
+
             let rowHasNotes = false;
             for (const noteElement of noteElements) {
                 const location = scoreElementRegistry?.getLocation(noteElement);
@@ -125,7 +127,8 @@ export class GridMeasureViewer extends UIComponent<IGridMeasureViewerProperties,
                 const noteRect = noteElement.getBoundingClientRect();
                 if (rect.right >= noteRect.left && rect.left <= noteRect.right
                     && rect.bottom >= noteRect.top && rect.top <= noteRect.bottom) {
-                    noteEntries.push({
+                    const target = scoreElementRegistry?.getTarget(noteElement);
+                    const entry: ISelectionEntry = {
                         granularity: SelectionGranularity.Note,
                         bar: location.bar,
                         trackId: location.trackId,
@@ -133,17 +136,25 @@ export class GridMeasureViewer extends UIComponent<IGridMeasureViewerProperties,
                         endStep: location.step,
                         noteId: location.noteId,
                         start: location.start,
-                    });
+                    };
+                    if (target !== undefined && "duration" in target) {
+                        entry.target = { granularity: SelectionGranularity.Note, measure, event: target };
+                    }
+
+                    noteEntries.push(entry);
                     rowHasNotes = true;
                 }
             }
 
             if (!rowHasNotes) {
-                trackPieceEntries.push({
+                const entry: ISelectionEntry = {
                     granularity: SelectionGranularity.TrackPiece,
                     bar: measureNumber,
                     trackId: track.id,
-                });
+                    target: { granularity: SelectionGranularity.TrackPiece, track, measure },
+                };
+
+                trackPieceEntries.push(entry);
             }
         }
 

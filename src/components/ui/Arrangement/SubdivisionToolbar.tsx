@@ -7,7 +7,7 @@ import type { ComponentChild } from "preact";
 
 import { requisitions } from "../../../supplement/Requisitions.js";
 import type { SelectionManager } from "../../../ui/SelectionManager.js";
-import { SelectionGranularity, type ISelectionEntry } from "../../../ui/selection-types.js";
+import { SelectionGranularity, type ISelectionEntry } from "../../../ui/SelectionSerializer.js";
 import { TupletIcon } from "../Note/TupletIcon.js";
 import { Container } from "../framework/Container.js";
 import { Dropdown, type IDropdownItem } from "../framework/Dropdown.js";

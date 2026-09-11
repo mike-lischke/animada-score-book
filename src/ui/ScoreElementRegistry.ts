@@ -3,9 +3,10 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
+import type { ISbDmTrack, ISbDmTrackMeasure } from "../core/ScoreBookDataModel.js";
 import { formatFraction } from "../core/serialisation/numeric-functions.js";
-import type { IFraction } from "../core/types/general.js";
-import type { ISelectionEntry } from "./selection-types.js";
+import type { IMeasureEvent, IFraction, ISubdivision } from "../core/types/general.js";
+import type { ISelectionEntry } from "./SelectionSerializer.js";
 
 /** Rendered score element kinds that have a corresponding selection target. */
 export enum ScoreElementKind {
@@ -25,12 +26,18 @@ export interface IScoreElementLocation {
     start?: IFraction;
 }
 
+/**
+ * The model objects a rendered element can stand for. These are the objects a renderer supplies for
+ * the element it draws and the objects a selection addresses.
+ */
+export type IScoreElementTarget = IMeasureEvent | ISbDmTrack | ISbDmTrackMeasure | ISubdivision;
+
 interface IScoreElementRecord {
     element: HTMLElement;
     location: IScoreElementLocation;
 
     /** The model object the element renders, when the renderer supplies one. */
-    target?: object;
+    target?: IScoreElementTarget;
 }
 
 /**
@@ -42,7 +49,7 @@ interface IScoreElementRecord {
 export class ScoreElementRegistry {
     private readonly records = new Set<IScoreElementRecord>();
     private readonly recordsByElement = new Map<HTMLElement, IScoreElementRecord>();
-    private readonly recordsByTarget = new Map<object, IScoreElementRecord>();
+    private readonly recordsByTarget = new Map<IScoreElementTarget, IScoreElementRecord>();
     private readonly recordsByNoteId = new Map<number, IScoreElementRecord>();
     private readonly recordsByStart = new Map<string, IScoreElementRecord>();
     private readonly recordsByStep = new Map<string, Set<IScoreElementRecord>>();
@@ -56,7 +63,8 @@ export class ScoreElementRegistry {
      *
      * @returns A Preact callback ref for the score element.
      */
-    public createRef(location: IScoreElementLocation, target?: object): (element: HTMLElement | null) => void {
+    public createRef(location: IScoreElementLocation,
+        target?: IScoreElementTarget): (element: HTMLElement | null) => void {
         let record: IScoreElementRecord | undefined;
 
         return (element) => {
@@ -79,8 +87,20 @@ export class ScoreElementRegistry {
      *
      * @returns The live element, or undefined when the object is not rendered.
      */
-    public findTargetElement(target: object): HTMLElement | undefined {
+    public findTargetElement(target: IScoreElementTarget): HTMLElement | undefined {
         return this.recordsByTarget.get(target)?.element;
+    }
+
+    /**
+     * Returns the model object a rendered element stands for. Hit tests use it to put the object
+     * they matched into a selection instead of a position that would have to be translated back.
+     *
+     * @param element The live DOM element to inspect.
+     *
+     * @returns The model object, or undefined when the renderer supplied none.
+     */
+    public getTarget(element: HTMLElement): IScoreElementTarget | undefined {
+        return this.recordsByElement.get(element)?.target;
     }
 
     /**

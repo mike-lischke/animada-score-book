@@ -11,7 +11,7 @@ import type { ScoreBookDataModel } from "../../src/core/ScoreBookDataModel.js";
 import { NoteLength } from "../../src/core/rest-notation.js";
 import { requisitions } from "../../src/supplement/Requisitions.js";
 import { SelectionManager } from "../../src/ui/SelectionManager.js";
-import { SelectionGranularity } from "../../src/ui/selection-types.js";
+import { SelectionGranularity } from "../../src/ui/SelectionSerializer.js";
 
 const makeDataModel = (stepResolution: number, stepsPerBar: number): ScoreBookDataModel => {
     return {

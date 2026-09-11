@@ -11,7 +11,7 @@ import { compareFractions, reduceFraction } from "../../../core/serialisation/nu
 import type { IAudioData } from "../../../core/types/general.js";
 import { requisitions } from "../../../supplement/Requisitions.js";
 import type { SelectionManager } from "../../../ui/SelectionManager.js";
-import { SelectionGranularity, type ISelectionEntry } from "../../../ui/selection-types.js";
+import { SelectionGranularity, type ISelectionEntry } from "../../../ui/SelectionSerializer.js";
 import { NoteStyleIcon } from "../Note/NoteStyleIcon.js";
 import { NoteStyleLineIcon } from "../Note/NoteStyleLineIcon.js";
 import { NoteStyleSymbolViewer } from "../Note/NoteStyleSymbolViewer.js";

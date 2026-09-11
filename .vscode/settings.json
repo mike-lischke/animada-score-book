@@ -17,6 +17,7 @@
         "npx tsx": true,
         "npx vite": true,
         "git merge": true,
-        "git commit": true
+        "git commit": true,
+        "git rev-parse": true
     },
 }

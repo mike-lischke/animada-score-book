@@ -10,7 +10,7 @@ import { requisitions } from "../../../supplement/Requisitions.js";
 import type { SelectionManager } from "../../../ui/SelectionManager.js";
 import {
     SelectionGranularity, type ISelectionDelta, type ISelectionEntry, type ISelectionHitTester,
-} from "../../../ui/selection-types.js";
+} from "../../../ui/SelectionSerializer.js";
 import { Button } from "../framework/Button.js";
 import { UIIcon } from "../framework/UIIcon.js";
 import { Container } from "../framework/Container.js";
@@ -91,6 +91,7 @@ export class TrackControls extends UIComponent<ITrackControlsProperties, ITrackC
                     granularity: SelectionGranularity.Track,
                     bar: 0,
                     trackId: track.id,
+                    target: { granularity: SelectionGranularity.Track, track },
                 });
             }
         }

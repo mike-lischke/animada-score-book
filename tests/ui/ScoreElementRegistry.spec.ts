@@ -5,8 +5,9 @@
 
 import { expect, it } from "vitest";
 
+import type { IMeasureEvent } from "../../src/core/types/general.js";
 import { ScoreElementKind, ScoreElementRegistry } from "../../src/ui/ScoreElementRegistry.js";
-import { SelectionGranularity } from "../../src/ui/selection-types.js";
+import { SelectionGranularity } from "../../src/ui/SelectionSerializer.js";
 
 it("replaces and clears callback-ref registrations", () => {
     const registry = new ScoreElementRegistry();
@@ -43,7 +44,10 @@ it("resolves a rendered element by the model object it renders", () => {
     const registry = new ScoreElementRegistry();
     const firstElement = document.createElement("div");
     const secondElement = document.createElement("div");
-    const target = { start: { numerator: 0, denominator: 1 } };
+    const target: IMeasureEvent = {
+        start: { numerator: 0, denominator: 1 },
+        duration: { numerator: 1, denominator: 4 },
+    };
     const ref = registry.createRef({
         kind: ScoreElementKind.GridCell,
         bar: 1,
@@ -63,10 +67,30 @@ it("resolves a rendered element by the model object it renders", () => {
     expect(registry.findTargetElement(target)).toBeUndefined();
 });
 
+it("reports the model object a rendered element stands for", () => {
+    const registry = new ScoreElementRegistry();
+    const element = document.createElement("div");
+    const target: IMeasureEvent = {
+        start: { numerator: 1, denominator: 4 },
+        duration: { numerator: 1, denominator: 4 },
+    };
+
+    registry.createRef({ kind: ScoreElementKind.GridCell, bar: 1, trackId: 3, step: 4 }, target)(element);
+
+    expect(registry.getTarget(element)).toBe(target);
+
+    registry.createRef({ kind: ScoreElementKind.GridCell, bar: 1, trackId: 3, step: 5 })(document.createElement("div"));
+    expect(registry.getTarget(element)).toBe(target);
+    expect(registry.getTarget(document.createElement("div"))).toBeUndefined();
+});
+
 it("forgets the model object index when the registry is cleared", () => {
     const registry = new ScoreElementRegistry();
     const element = document.createElement("div");
-    const target = {};
+    const target: IMeasureEvent = {
+        start: { numerator: 0, denominator: 1 },
+        duration: { numerator: 1, denominator: 4 },
+    };
 
     registry.createRef({ kind: ScoreElementKind.TrackRow, bar: 1, trackId: 3 }, target)(element);
     expect(registry.findTargetElement(target)).toBe(element);

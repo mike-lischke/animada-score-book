@@ -24,7 +24,7 @@ import { TrackPlayer } from "../../src/player/TrackPlayer.js";
 import type { IRealtimeProvider } from "../../src/ui/AnimationEngine.js";
 import { ScoreElementKind, ScoreElementRegistry } from "../../src/ui/ScoreElementRegistry.js";
 import { selectionToClearRanges } from "../../src/ui/selection-ranges.js";
-import { SelectionGranularity } from "../../src/ui/selection-types.js";
+import { SelectionGranularity } from "../../src/ui/SelectionSerializer.js";
 import { createInstrument, hydrateMeasureEvents } from "../unit-test-helpers.js";
 
 class TestScoreBookDataModel extends ScoreBookDataModel {

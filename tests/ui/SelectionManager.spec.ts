@@ -5,6 +5,7 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { AppStorage } from "../../src/core/AppStorage.js";
 import {
     SbDmEntityType, type ISbDmArrangement, type ISbDmNoteEvent, type ISbDmTrack,
     type ISbDmTrackMeasure, type ScoreBookDataModel,
@@ -14,7 +15,7 @@ import { requisitions } from "../../src/supplement/Requisitions.js";
 import { SelectionManager } from "../../src/ui/SelectionManager.js";
 import {
     SelectionGranularity, type ISelectionDelta, type ISelectionEntry
-} from "../../src/ui/selection-types.js";
+} from "../../src/ui/SelectionSerializer.js";
 
 const makeArrangement = (tracks: ISbDmTrack[]): ISbDmArrangement => {
     const arrangement: ISbDmArrangement = {
@@ -136,6 +137,38 @@ describe.sequential("SelectionManager (class)", () => {
     it("starts with nothing selected", () => {
         expect(manager.currentSelection.size).toBe(0);
         expect(manager.isNoteSelected(1, 1, 1)).toBe(false);
+    });
+
+    it("stores a selection without its model objects", () => {
+        vi.useFakeTimers();
+
+        const entry: ISelectionEntry = {
+            granularity: SelectionGranularity.Note,
+            bar: 1,
+            trackId: 7,
+            startStep: 0,
+            endStep: 0,
+            target: {
+                granularity: SelectionGranularity.Note,
+                measure: noteA.measure,
+                event: { start: { numerator: 0, denominator: 1 }, duration: { numerator: 1, denominator: 4 } },
+            },
+        };
+
+        manager.replaceSelection([entry]);
+        vi.advanceTimersByTime(400);
+        vi.useRealTimers();
+
+        const stored = AppStorage.loadUISettings()?.viewSettings?.selectionState ?? "";
+
+        expect(stored).not.toBe("");
+        expect(JSON.parse(stored)).toEqual([{
+            granularity: SelectionGranularity.Note,
+            bar: 1,
+            trackId: 7,
+            startStep: 0,
+            endStep: 0,
+        }]);
     });
 
     it("can construct via new", () => {

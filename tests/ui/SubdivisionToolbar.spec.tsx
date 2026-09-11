@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { SubdivisionToolbar } from "../../src/components/ui/Arrangement/SubdivisionToolbar.js";
 import { SelectionManager } from "../../src/ui/SelectionManager.js";
-import { SelectionGranularity, type ISelectionEntry } from "../../src/ui/selection-types.js";
+import { SelectionGranularity, type ISelectionEntry } from "../../src/ui/SelectionSerializer.js";
 
 const triggerButton = (container: Element): HTMLButtonElement => {
     return container.querySelector<HTMLButtonElement>("button")!;

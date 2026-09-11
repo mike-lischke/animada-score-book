@@ -181,7 +181,7 @@ export class GridMeasureRow extends UIComponent<IGridMeasureRowProperties, IGrid
                     step: col,
                     noteId: col === startCol ? cellId : undefined,
                     start: level > 1 ? item.start : undefined,
-                }),
+                }, item.event),
                 style: { minWidth: 0, backgroundColor: isNoteCell ? noteBackground : "transparent" },
             };
 

@@ -10,7 +10,7 @@ import { requisitions } from "../../../supplement/Requisitions.js";
 import type { SelectionManager } from "../../../ui/SelectionManager.js";
 import {
     SelectionGranularity, type ISelectionDelta, type ISelectionEntry, type ISelectionHitTester,
-} from "../../../ui/selection-types.js";
+} from "../../../ui/SelectionSerializer.js";
 import type { ICommonUIProperties } from "../framework/UIComponent.js";
 import { UIComponent } from "../framework/UIComponent.js";
 
