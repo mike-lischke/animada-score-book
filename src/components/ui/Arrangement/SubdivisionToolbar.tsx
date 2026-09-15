@@ -7,7 +7,9 @@ import type { ComponentChild } from "preact";
 
 import { requisitions } from "../../../supplement/Requisitions.js";
 import type { SelectionManager } from "../../../ui/SelectionManager.js";
-import { SelectionGranularity, type ISelectionEntry } from "../../../ui/SelectionSerializer.js";
+import {
+    addressesNoteCells, SelectionGranularity, SelectionSerializer, type ISelectionEntry,
+} from "../../../ui/SelectionSerializer.js";
 import { TupletIcon } from "../Note/TupletIcon.js";
 import { Container } from "../framework/Container.js";
 import { Dropdown, type IDropdownItem } from "../framework/Dropdown.js";
@@ -109,7 +111,8 @@ export class SubdivisionToolbar extends UIComponent<ISubdivisionToolbarProps, IS
     private buildDropdownItems(): IDropdownItem[] {
         const { selectionSpan } = this.state;
         const entries = [...this.props.selectionManager.currentSelection.values()];
-        const selectedSubdivisionSlot = entries.length === 1 && entries[0].start !== undefined;
+        const selectedSubdivisionSlot = entries.length === 1
+            && SelectionSerializer.addressesSubdivisionSlot(entries[0].target);
 
         return subdivisionOptions.map((option) => {
             const enabled = selectedSubdivisionSlot || option.actual <= selectionSpan * 2;
@@ -127,18 +130,27 @@ export class SubdivisionToolbar extends UIComponent<ISubdivisionToolbarProps, IS
     }
 
     private getSelectionSpan(entries: ISelectionEntry[]): number {
-        if (entries.length === 0) {
-            return 1;
+        let minCell = Number.MAX_SAFE_INTEGER;
+        let maxCell = Number.MIN_SAFE_INTEGER;
+
+        for (const entry of entries) {
+            const { target } = entry;
+            if (!addressesNoteCells(target)) {
+                continue;
+            }
+
+            const first = target.granularity === SelectionGranularity.Note
+                ? target.start ?? target.event.start
+                : target.events[0].start;
+            const last = target.granularity === SelectionGranularity.Note
+                ? first
+                : target.events[target.events.length - 1].start;
+
+            minCell = Math.min(minCell, SelectionSerializer.cellOf(first, target.measure));
+            maxCell = Math.max(maxCell, SelectionSerializer.cellOf(last, target.measure));
         }
 
-        const startSteps = entries.map((entry) => {
-            return entry.startStep ?? 0;
-        });
-        const endSteps = entries.map((entry) => {
-            return entry.endStep ?? 0;
-        });
-
-        return Math.max(...endSteps) - Math.min(...startSteps) + 1;
+        return maxCell === Number.MIN_SAFE_INTEGER ? 1 : maxCell - minCell + 1;
     }
 
     private handleCreate(option: ISubdivisionOption): void {
@@ -164,16 +176,19 @@ export class SubdivisionToolbar extends UIComponent<ISubdivisionToolbarProps, IS
     }
 
     private isSingleTrackNoteSelection(entries: ISelectionEntry[]): boolean {
-        const first = entries[0];
+        const first = entries[0].target;
+        if (!addressesNoteCells(first)) {
+            return false;
+        }
 
         return entries.every((entry) => {
-            return entry.trackId === first.trackId
-                && entry.bar === first.bar
-                && entry.start === undefined
-                && (entry.granularity === SelectionGranularity.Note
-                    || entry.granularity === SelectionGranularity.NoteGroup)
-                && entry.startStep !== undefined
-                && entry.endStep !== undefined;
+            const { target } = entry;
+            if (!addressesNoteCells(target) || target.measure !== first.measure) {
+                return false;
+            }
+
+            // Only grid-aligned cells form a subdivision span; a subdivision slot cannot.
+            return !SelectionSerializer.addressesSubdivisionSlot(target);
         });
     }
 }

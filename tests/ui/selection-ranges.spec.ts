@@ -8,29 +8,39 @@ import { describe, expect, it } from "vitest";
 import { Arrangement } from "../../src/core/Arrangement.js";
 import { ScoreBookDataModel, type ISbDmTrackMeasure } from "../../src/core/ScoreBookDataModel.js";
 import { selectionToClearRanges } from "../../src/ui/selection-ranges.js";
-import { SelectionGranularity } from "../../src/ui/SelectionSerializer.js";
-import { createInstrument, hydrateMeasureEvents } from "../unit-test-helpers.js";
+import { createInstrument, hydrateMeasureEvents, noteEntry, setCellNote } from "../unit-test-helpers.js";
 
 describe("selectionToClearRanges", () => {
+    it("clears the whole note when a cell inside its duration is selected", () => {
+        const model = new ScoreBookDataModel();
+        model.startNewArrangement([createInstrument("0", 0, 0)]);
+        const track = model.arrangement!.tracks[0];
+
+        // The note spans four grid cells; selecting the second one still addresses the whole note.
+        model.setNoteAt(track.id, 1, { numerator: 0, denominator: 1 }, { numerator: 1, denominator: 4 }, "1");
+        hydrateMeasureEvents(model.arrangement! as Arrangement);
+
+        const measure = track.measures[0];
+        const ranges = selectionToClearRanges([noteEntry(measure, { numerator: 1, denominator: 16 })]);
+
+        expect(ranges).toEqual([{
+            trackId: track.id,
+            bar: 1,
+            start: { numerator: 0, denominator: 1 },
+            end: { numerator: 1, denominator: 4 },
+        }]);
+    });
+
     it("expands a note deletion to the note's full duration", () => {
         const model = new ScoreBookDataModel();
         model.startNewArrangement([createInstrument("0", 0, 0)]);
         const track = model.arrangement!.tracks[0];
 
         // A note placed at cell 0 occupies a single cell (1/16).
-        model.setGridNote(track.id, 1, 0, "1");
+        setCellNote(model, track.id, 1, 0, "1");
         hydrateMeasureEvents(model.arrangement! as Arrangement);
 
-        const noteId = track.measures[0].noteEvents[0].id;
-
-        const ranges = selectionToClearRanges([{
-            granularity: SelectionGranularity.Note,
-            bar: 1,
-            trackId: track.id,
-            startStep: 0,
-            endStep: 0,
-            noteId,
-        }], model.arrangement);
+        const ranges = selectionToClearRanges([noteEntry(track.measures[0], { numerator: 0, denominator: 1 })]);
 
         expect(ranges).toEqual([{
             trackId: track.id,
@@ -46,17 +56,11 @@ describe("selectionToClearRanges", () => {
         const track = model.arrangement!.tracks[0];
         const measure = track.measures[0];
 
-        model.setGridNote(track.id, 1, 0, "1");
+        setCellNote(model, track.id, 1, 0, "1");
 
-        const ranges = selectionToClearRanges([{
-            granularity: SelectionGranularity.Note,
-            bar: 1,
-            trackId: track.id,
-            startStep: 0,
-            endStep: 0,
-        }], model.arrangement);
+        const ranges = selectionToClearRanges([noteEntry(measure, { numerator: 0, denominator: 1 })]);
 
-        model.clearStepRanges(ranges);
+        model.clearRanges(ranges);
 
         expect(measure.events.every((event) => {
             return event.noteStyleId === undefined;
@@ -70,16 +74,12 @@ describe("selectionToClearRanges", () => {
         const measure = track.measures[0];
 
         // A note at cell 0 occupies one cell; the rest of the bar is a single combined rest.
-        model.setGridNote(track.id, 1, 0, "1");
+        setCellNote(model, track.id, 1, 0, "1");
 
         // Delete the second cell (a rest, no note id) — this must change nothing.
-        const cleared = model.clearStepRanges(selectionToClearRanges([{
-            granularity: SelectionGranularity.Note,
-            bar: 1,
-            trackId: track.id,
-            startStep: 1,
-            endStep: 1,
-        }], model.arrangement));
+        const cleared = model.clearRanges(selectionToClearRanges([
+            noteEntry(measure, { numerator: 1, denominator: 16 }),
+        ]));
 
         expect(cleared).toBe(false);
         expect(measure.events).toHaveLength(3);
@@ -88,16 +88,9 @@ describe("selectionToClearRanges", () => {
     });
 
     it("clearing the first subdivision note clears only that note", () => {
-        const { model, trackId, measure } = buildSubdivisionMeasure();
-        const firstNoteId = measure.noteEvents[3].id;
+        const { model, measure } = buildSubdivisionMeasure();
 
-        model.clearStepRanges(selectionToClearRanges([{
-            granularity: SelectionGranularity.Note,
-            bar: 1,
-            trackId,
-            startStep: 3,
-            noteId: firstNoteId,
-        }], model.arrangement));
+        model.clearRanges(selectionToClearRanges([noteEntry(measure, { numerator: 3, denominator: 16 })]));
 
         expect(measure.events[3].noteStyleId).toBeUndefined();
         expect(measure.events[4].noteStyleId).toBe("1");
@@ -106,16 +99,9 @@ describe("selectionToClearRanges", () => {
     });
 
     it("clearing the second subdivision note clears only that note", () => {
-        const { model, trackId, measure } = buildSubdivisionMeasure();
-        const secondNoteId = measure.noteEvents[4].id;
+        const { model, measure } = buildSubdivisionMeasure();
 
-        model.clearStepRanges(selectionToClearRanges([{
-            granularity: SelectionGranularity.Note,
-            bar: 1,
-            trackId,
-            startStep: 4,
-            noteId: secondNoteId,
-        }], model.arrangement));
+        model.clearRanges(selectionToClearRanges([noteEntry(measure, { numerator: 7, denominator: 32 })]));
 
         expect(measure.events[3].noteStyleId).toBe("1");
         expect(measure.events[4].noteStyleId).toBeUndefined();
@@ -124,16 +110,9 @@ describe("selectionToClearRanges", () => {
     });
 
     it("clearing the second subdivision note keeps the subdivision and clears only that slot", () => {
-        const { model, trackId, measure } = buildSubdivisionMeasureWithRestGap();
-        const secondNoteId = measure.noteEvents[4].id;
+        const { model, measure } = buildSubdivisionMeasureWithRestGap();
 
-        model.clearStepRanges(selectionToClearRanges([{
-            granularity: SelectionGranularity.Note,
-            bar: 1,
-            trackId,
-            startStep: 4,
-            noteId: secondNoteId,
-        }], model.arrangement));
+        model.clearRanges(selectionToClearRanges([noteEntry(measure, { numerator: 7, denominator: 32 })]));
 
         expect(measure.subdivisions).toEqual([{ startIndex: 3, actual: 2, normal: 1, isTuplet: false }]);
         expect(measure.events).toHaveLength(13);

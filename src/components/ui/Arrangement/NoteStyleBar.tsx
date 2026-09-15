@@ -7,11 +7,11 @@ import type { ComponentChild } from "preact";
 
 import { Articulation, articulationOf, voiceKey } from "../../../core/articulation.js";
 import type { ISbDmTrack, ScoreBookDataModel } from "../../../core/ScoreBookDataModel.js";
-import { compareFractions, reduceFraction } from "../../../core/serialisation/numeric-functions.js";
+import { compareFractions } from "../../../core/serialisation/numeric-functions.js";
 import type { IAudioData } from "../../../core/types/general.js";
 import { requisitions } from "../../../supplement/Requisitions.js";
 import type { SelectionManager } from "../../../ui/SelectionManager.js";
-import { SelectionGranularity, type ISelectionEntry } from "../../../ui/SelectionSerializer.js";
+import { SelectionGranularity, SelectionSerializer, type ISelectionEntry } from "../../../ui/SelectionSerializer.js";
 import { NoteStyleIcon } from "../Note/NoteStyleIcon.js";
 import { NoteStyleLineIcon } from "../Note/NoteStyleLineIcon.js";
 import { NoteStyleSymbolViewer } from "../Note/NoteStyleSymbolViewer.js";
@@ -361,18 +361,10 @@ export class NoteStyleBar extends UIComponent<INoteStyleBarProps, INoteStyleBarS
      * @returns The distinct selected tracks, in order of first appearance.
      */
     private resolveSelectedTracks(entries: ISelectionEntry[]): ISbDmTrack[] {
-        const { dataModel } = this.props;
-
-        const trackIds = new Set(entries.map((entry) => {
-            return entry.trackId;
-        }));
-
         const tracks: ISbDmTrack[] = [];
-        for (const trackId of trackIds) {
-            const track = dataModel.arrangement?.tracks.find((candidate) => {
-                return candidate.id === trackId;
-            });
-            if (track) {
+        for (const entry of entries) {
+            const track = SelectionSerializer.trackOf(entry);
+            if (!tracks.includes(track)) {
                 tracks.push(track);
             }
         }
@@ -423,32 +415,22 @@ export class NoteStyleBar extends UIComponent<INoteStyleBarProps, INoteStyleBarS
             return undefined;
         }
 
-        const firstStyleId = this.noteStyleIdOf(tracks, noteEntries[0]);
+        const firstStyleId = this.noteStyleIdOf(noteEntries[0]);
         const allMatch = noteEntries.every((entry) => {
-            return this.noteStyleIdOf(tracks, entry) === firstStyleId;
+            return this.noteStyleIdOf(entry) === firstStyleId;
         });
 
         return allMatch ? firstStyleId : undefined;
     }
 
-    private noteStyleIdOf(tracks: ISbDmTrack[], entry: ISelectionEntry): string | undefined {
-        const track = tracks.find((candidate) => {
-            return candidate.id === entry.trackId;
-        });
-        const measure = track?.measures.find((candidate) => {
-            return candidate.number === entry.bar;
-        });
-        if (!measure) {
+    private noteStyleIdOf(entry: ISelectionEntry): string | undefined {
+        const { target } = entry;
+        if (target.granularity !== SelectionGranularity.Note) {
             return undefined;
         }
 
-        const cellStart = entry.start ?? (entry.startStep === undefined
-            ? undefined
-            : reduceFraction(entry.startStep, measure.meter.stepResolution));
-        if (cellStart === undefined) {
-            return undefined;
-        }
-
+        const { measure } = target;
+        const cellStart = target.start ?? target.event.start;
         const noteEvent = measure.noteEvents.find((candidate) => {
             if (candidate.audioData === undefined) {
                 return false;

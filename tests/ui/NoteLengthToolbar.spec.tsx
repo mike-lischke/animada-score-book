@@ -7,18 +7,20 @@ import { cleanup, fireEvent, render, type RenderResult } from "@testing-library/
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { NoteLengthToolbar } from "../../src/components/ui/Arrangement/NoteLengthToolbar.js";
-import type { ScoreBookDataModel } from "../../src/core/ScoreBookDataModel.js";
+import type { ISbDmArrangement, ISbDmTrack, ISbDmTrackMeasure, ScoreBookDataModel }
+    from "../../src/core/ScoreBookDataModel.js";
 import { NoteLength } from "../../src/core/rest-notation.js";
 import { requisitions } from "../../src/supplement/Requisitions.js";
 import { SelectionManager } from "../../src/ui/SelectionManager.js";
-import { SelectionGranularity } from "../../src/ui/SelectionSerializer.js";
+import type { ISelectionEntry } from "../../src/ui/SelectionSerializer.js";
+import { noteEntry } from "../unit-test-helpers.js";
 
 const makeDataModel = (stepResolution: number, stepsPerBar: number): ScoreBookDataModel => {
     return {
         arrangement: {
             timeParams: { stepResolution },
             tracks: [
-                { measures: [{ meter: { stepResolution: stepsPerBar } }] },
+                { measures: [{ meter: { stepResolution: stepsPerBar }, subdivisions: [] }] },
             ],
         },
     } as unknown as ScoreBookDataModel;
@@ -32,38 +34,70 @@ interface INoteSpec {
 
 const makeDataModelWithNotes = (stepResolution: number, stepsPerBar: number,
     notes: INoteSpec[]): ScoreBookDataModel => {
-    return {
-        arrangement: {
-            timeParams: { stepResolution },
-            tracks: [
-                {
-                    id: 7,
-                    measures: [{
-                        number: 1,
-                        meter: { stepResolution: stepsPerBar },
-                        noteEvents: notes.map((note, index) => {
-                            return {
-                                id: 7001 + index,
-                                start: { numerator: note.start, denominator: stepsPerBar },
-                                duration: { numerator: note.duration, denominator: stepsPerBar },
-                                audioData: note.rest ? undefined : { id: "1" },
-                            };
-                        }),
-                    }],
-                },
-            ],
-        },
-    } as unknown as ScoreBookDataModel;
+    const arrangement = { timeParams: { stepResolution }, tracks: [] } as unknown as ISbDmArrangement;
+    const track = { id: 7, measures: [], arrangement } as unknown as ISbDmTrack;
+    const measure = {
+        number: 1,
+        meter: { stepResolution: stepsPerBar },
+        subdivisions: [],
+        track,
+        events: notes.map((note) => {
+            return {
+                start: { numerator: note.start, denominator: stepsPerBar },
+                duration: { numerator: note.duration, denominator: stepsPerBar },
+                noteStyleId: note.rest ? undefined : "1",
+            };
+        }),
+        noteEvents: notes.map((note, index) => {
+            return {
+                id: 7001 + index,
+                start: { numerator: note.start, denominator: stepsPerBar },
+                duration: { numerator: note.duration, denominator: stepsPerBar },
+                audioData: note.rest ? undefined : { id: "1" },
+            };
+        }),
+    } as unknown as ISbDmTrackMeasure;
+
+    track.measures.push(measure);
+    arrangement.tracks.push(track);
+
+    return { arrangement } as unknown as ScoreBookDataModel;
 };
 
+/**
+ * Builds the selection entry of one cell of the model's first measure.
+ *
+ * @param dataModel The model the toolbar renders.
+ * @param step The zero-based grid step to select.
+ *
+ * @returns The selection entry addressing that cell.
+ */
+const noteEntryAt = (dataModel: ScoreBookDataModel, step: number): ISelectionEntry => {
+    const measure = dataModel.arrangement!.tracks[0].measures[0];
+
+    return noteEntry(measure, { numerator: step, denominator: measure.meter.stepResolution });
+};
+
+/**
+ * Selects one note cell, which is all the tests that do not address a model need.
+ *
+ * @param selectionManager The manager to select in.
+ */
 const selectSingleNote = (selectionManager: SelectionManager): void => {
-    selectionManager.selectSingleNote({
-        granularity: SelectionGranularity.Note,
-        bar: 1,
-        trackId: 7,
-        startStep: 0,
-        endStep: 0,
-    });
+    const arrangement = { tracks: [] } as unknown as ISbDmArrangement;
+    const track = { id: 7, measures: [], arrangement } as unknown as ISbDmTrack;
+    const measure = {
+        number: 1,
+        meter: { stepResolution: 16 },
+        subdivisions: [],
+        track,
+        events: [{ start: { numerator: 0, denominator: 1 }, duration: { numerator: 1, denominator: 16 } }],
+        noteEvents: [],
+    } as unknown as ISbDmTrackMeasure;
+
+    track.measures.push(measure);
+    arrangement.tracks.push(track);
+    selectionManager.replaceSelection([noteEntry(measure, { numerator: 0, denominator: 1 })]);
 };
 
 describe.sequential("NoteLengthToolbar", () => {
@@ -90,13 +124,11 @@ describe.sequential("NoteLengthToolbar", () => {
     });
 
     it("marks the duration of the selected note", () => {
-        selectSingleNote(selectionManager);
+        const dataModel = makeDataModelWithNotes(32, 32, [{ start: 0, duration: 8 }]);
+        selectionManager.replaceSelection([noteEntryAt(dataModel, 0)]);
 
         renderResult = render(
-            <NoteLengthToolbar
-                dataModel={makeDataModelWithNotes(32, 32, [{ start: 0, duration: 8 }])}
-                selectionManager={selectionManager}
-            />,
+            <NoteLengthToolbar dataModel={dataModel} selectionManager={selectionManager} />,
         );
 
         const selected = renderResult.container.querySelector(".noteLengthButton.du-btn-primary");
@@ -105,13 +137,11 @@ describe.sequential("NoteLengthToolbar", () => {
     });
 
     it("marks the length of a selected rest", () => {
-        selectSingleNote(selectionManager);
+        const dataModel = makeDataModelWithNotes(32, 32, [{ start: 0, duration: 8, rest: true }]);
+        selectionManager.replaceSelection([noteEntryAt(dataModel, 0)]);
 
         renderResult = render(
-            <NoteLengthToolbar
-                dataModel={makeDataModelWithNotes(32, 32, [{ start: 0, duration: 8, rest: true }])}
-                selectionManager={selectionManager}
-            />,
+            <NoteLengthToolbar dataModel={dataModel} selectionManager={selectionManager} />,
         );
 
         const selected = renderResult.container.querySelector(".noteLengthButton.du-btn-primary");
@@ -120,19 +150,14 @@ describe.sequential("NoteLengthToolbar", () => {
     });
 
     it("does not mark a note length when selected notes differ", () => {
-        selectionManager.replaceSelection([
-            { granularity: SelectionGranularity.Note, bar: 1, trackId: 7, startStep: 0, endStep: 0 },
-            { granularity: SelectionGranularity.Note, bar: 1, trackId: 7, startStep: 8, endStep: 8 },
+        const dataModel = makeDataModelWithNotes(32, 32, [
+            { start: 0, duration: 8 },
+            { start: 8, duration: 4 },
         ]);
+        selectionManager.replaceSelection([noteEntryAt(dataModel, 0), noteEntryAt(dataModel, 8)]);
 
         renderResult = render(
-            <NoteLengthToolbar
-                dataModel={makeDataModelWithNotes(32, 32, [
-                    { start: 0, duration: 8 },
-                    { start: 8, duration: 4 },
-                ])}
-                selectionManager={selectionManager}
-            />,
+            <NoteLengthToolbar dataModel={dataModel} selectionManager={selectionManager} />,
         );
 
         expect(renderResult.container.querySelectorAll(".noteLengthButton.du-btn-primary")).toHaveLength(0);

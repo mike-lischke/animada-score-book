@@ -10,7 +10,7 @@ import type { IScoreMetrics } from "../../../../player/TimeCoordinator.js";
 import type { SelectionManager } from "../../../../ui/SelectionManager.js";
 import { ScoreElementKind, type ScoreElementRegistry } from "../../../../ui/ScoreElementRegistry.js";
 import {
-    SelectionGranularity, type ISelectionEntry, type ISelectionHitTester,
+    SelectionGranularity, SelectionSerializer, type ISelectionEntry, type ISelectionHitTester,
 } from "../../../../ui/SelectionSerializer.js";
 import { Container } from "../../framework/Container.js";
 import { ChildAlignment, Orientation } from "../../framework/ui-types.js";
@@ -128,20 +128,21 @@ export class GridMeasureViewer extends UIComponent<IGridMeasureViewerProperties,
                 if (rect.right >= noteRect.left && rect.left <= noteRect.right
                     && rect.bottom >= noteRect.top && rect.top <= noteRect.bottom) {
                     const target = scoreElementRegistry?.getTarget(noteElement);
-                    const entry: ISelectionEntry = {
-                        granularity: SelectionGranularity.Note,
-                        bar: location.bar,
-                        trackId: location.trackId,
-                        startStep: location.step,
-                        endStep: location.step,
-                        noteId: location.noteId,
-                        start: location.start,
-                    };
-                    if (target !== undefined && "duration" in target) {
-                        entry.target = { granularity: SelectionGranularity.Note, measure, event: target };
+                    if (target !== undefined && "duration" in target && location.start !== undefined) {
+                        // A grid cell covers one cell, or the whole slot when it addresses a
+                        // subdivision slot. The event behind the cell keeps its own duration.
+                        noteEntries.push({
+                            granularity: SelectionGranularity.Note,
+                            target: {
+                                granularity: SelectionGranularity.Note,
+                                measure,
+                                event: target,
+                                start: location.start,
+                                end: SelectionSerializer.spanEnd(target, location.start, measure),
+                            },
+                        });
                     }
 
-                    noteEntries.push(entry);
                     rowHasNotes = true;
                 }
             }
@@ -149,8 +150,6 @@ export class GridMeasureViewer extends UIComponent<IGridMeasureViewerProperties,
             if (!rowHasNotes) {
                 const entry: ISelectionEntry = {
                     granularity: SelectionGranularity.TrackPiece,
-                    bar: measureNumber,
-                    trackId: track.id,
                     target: { granularity: SelectionGranularity.TrackPiece, track, measure },
                 };
 
@@ -167,10 +166,14 @@ export class GridMeasureViewer extends UIComponent<IGridMeasureViewerProperties,
             return trackPieceEntries;
         }
 
+        const measure = SelectionSerializer.measureOfBar(this.props.dataModel.arrangement!, measureNumber);
+        if (measure === undefined) {
+            return [];
+        }
+
         return [{
             granularity: SelectionGranularity.Measure,
-            bar: measureNumber,
-            trackId: 0,
+            target: { granularity: SelectionGranularity.Measure, measure },
         }];
     }
 

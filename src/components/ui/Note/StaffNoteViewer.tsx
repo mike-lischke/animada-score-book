@@ -690,6 +690,7 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                         step: stepIndex,
                         noteId: measure.noteEvents.at(node.eventIndex)?.id,
                         start: node.start,
+                        measure,
                     }, measure.events[node.eventIndex]),
                 };
 

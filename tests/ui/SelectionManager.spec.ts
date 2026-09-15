@@ -10,7 +10,7 @@ import {
     SbDmEntityType, type ISbDmArrangement, type ISbDmNoteEvent, type ISbDmTrack,
     type ISbDmTrackMeasure, type ScoreBookDataModel,
 } from "../../src/core/ScoreBookDataModel.js";
-import type { Mutable } from "../../src/core/types/general.js";
+import type { IFraction, Mutable } from "../../src/core/types/general.js";
 import { requisitions } from "../../src/supplement/Requisitions.js";
 import { SelectionManager } from "../../src/ui/SelectionManager.js";
 import {
@@ -105,7 +105,7 @@ const makeNote = (id: number): Mutable<ISbDmNoteEvent> => {
         measure: {
             type: SbDmEntityType.TrackMeasure,
             id: 1,
-            track: undefined as unknown as ISbDmTrack,
+            track: { id: 7, measures: [] } as unknown as ISbDmTrack,
             number: 1,
             meter: { beats: 4, beatUnits: 4, stepResolution: 16, beatGroups: [4, 4, 4, 4] },
             events: [],
@@ -116,6 +116,22 @@ const makeNote = (id: number): Mutable<ISbDmNoteEvent> => {
         duration: { numerator: 1, denominator: 1 },
         timing: { bar: 1, step: 1 },
         track: undefined as unknown as ISbDmTrack,
+    };
+};
+
+/**
+ * Builds the selection entry of a note cell. The selection holds model objects, so the tests only
+ * need a note, its measure and the addressed start.
+ *
+ * @param note The note the cell belongs to.
+ * @param start The cell start within the note's measure.
+ *
+ * @returns The selection entry addressing that cell.
+ */
+const cellEntry = (note: Mutable<ISbDmNoteEvent>, start: IFraction): ISelectionEntry => {
+    return {
+        granularity: SelectionGranularity.Note,
+        target: { granularity: SelectionGranularity.Note, measure: note.measure, event: note, start },
     };
 };
 
@@ -136,24 +152,13 @@ describe.sequential("SelectionManager (class)", () => {
 
     it("starts with nothing selected", () => {
         expect(manager.currentSelection.size).toBe(0);
-        expect(manager.isNoteSelected(1, 1, 1)).toBe(false);
+        expect(manager.hasSelection).toBe(false);
     });
 
     it("stores a selection without its model objects", () => {
         vi.useFakeTimers();
 
-        const entry: ISelectionEntry = {
-            granularity: SelectionGranularity.Note,
-            bar: 1,
-            trackId: 7,
-            startStep: 0,
-            endStep: 0,
-            target: {
-                granularity: SelectionGranularity.Note,
-                measure: noteA.measure,
-                event: { start: { numerator: 0, denominator: 1 }, duration: { numerator: 1, denominator: 4 } },
-            },
-        };
+        const entry = cellEntry(noteA, { numerator: 0, denominator: 1 });
 
         manager.replaceSelection([entry]);
         vi.advanceTimersByTime(400);
@@ -166,8 +171,8 @@ describe.sequential("SelectionManager (class)", () => {
             granularity: SelectionGranularity.Note,
             bar: 1,
             trackId: 7,
-            startStep: 0,
-            endStep: 0,
+            start: { numerator: 0, denominator: 1 },
+            end: { numerator: 1, denominator: 1 },
         }]);
     });
 
@@ -189,34 +194,14 @@ describe.sequential("SelectionManager (class)", () => {
 
         requisitions.register("selectionChanged", spy);
 
-        const note: ISelectionEntry = {
-            granularity: SelectionGranularity.Note,
-            bar: 1,
-            trackId: 1,
-            startStep: 0,
-            endStep: 0,
-            noteId: 1,
-        };
+        const note = cellEntry(noteA, { numerator: 0, denominator: 1 });
 
         manager.selectSingleNote(note);
         added.length = 0;
         removed.length = 0;
 
-        const clearedA: ISelectionEntry = {
-            granularity: SelectionGranularity.Note,
-            bar: 1,
-            trackId: 1,
-            startStep: 0,
-            endStep: 0,
-        };
-
-        const clearedB: ISelectionEntry = {
-            granularity: SelectionGranularity.Note,
-            bar: 1,
-            trackId: 1,
-            startStep: 2,
-            endStep: 2,
-        };
+        const clearedA = cellEntry(noteA, { numerator: 0, denominator: 1 });
+        const clearedB = cellEntry(noteB, { numerator: 2, denominator: 16 });
 
         manager.replaceSelection([clearedA, clearedB]);
         requisitions.unregister("selectionChanged", spy);
@@ -229,14 +214,7 @@ describe.sequential("SelectionManager (class)", () => {
 
     it("keeps note selections for subdivision slots after note ids are cleared", () => {
         const entries: ISelectionEntry[] = [0, 1, 2].map((slot) => {
-            return {
-                granularity: SelectionGranularity.Note,
-                bar: 1,
-                trackId: 1,
-                startStep: 0,
-                endStep: 0,
-                start: { numerator: slot, denominator: 3 },
-            };
+            return cellEntry(noteA, { numerator: slot, denominator: 3 });
         });
 
         manager.replaceSelection(entries);
@@ -247,7 +225,7 @@ describe.sequential("SelectionManager (class)", () => {
 });
 
 describe.sequential("SelectionManager re-validation after undo/redo", () => {
-    it("keeps selections in unchanged measures and drops those in changed ones", () => {
+    it("keeps selections whose measure content survived an undo and drops the others", () => {
         const arrangement = makeArrangement([] as ISbDmTrack[]);
 
         const measure1 = {
@@ -255,40 +233,49 @@ describe.sequential("SelectionManager re-validation after undo/redo", () => {
             type: SbDmEntityType.TrackMeasure,
             number: 1,
             meter: { beats: 4, beatUnits: 4, stepResolution: 8, beatGroups: [8] },
-            events: [],
+            events: [{ start: { numerator: 0, denominator: 1 }, duration: { numerator: 1, denominator: 4 } }],
             subdivisions: [],
             noteEvents: [makeNote(1_001_001)],
         } as unknown as ISbDmTrackMeasure;
 
-        const measure2Events: ISbDmNoteEvent[] = [makeNote(1_002_001)];
+        const measure2Events = [
+            { start: { numerator: 0, denominator: 1 }, duration: { numerator: 1, denominator: 4 } },
+        ];
         const measure2 = {
             id: 12,
             type: SbDmEntityType.TrackMeasure,
             number: 2,
             meter: { beats: 4, beatUnits: 4, stepResolution: 8, beatGroups: [8] },
-            events: [],
+            events: measure2Events,
             subdivisions: [],
-            noteEvents: measure2Events,
+            noteEvents: [makeNote(1_002_001)],
         } as unknown as ISbDmTrackMeasure;
 
         const track = makeTrack([], arrangement);
         (track as Mutable<ISbDmTrack>).measures = [measure1, measure2];
+        (measure1 as Mutable<ISbDmTrackMeasure>).track = track;
+        (measure2 as Mutable<ISbDmTrackMeasure>).track = track;
         arrangement.tracks.push(track);
 
         const manager = new SelectionManager({ arrangement } as unknown as ScoreBookDataModel);
-        const trackId = track.id;
 
         manager.selectNotes([
-            { granularity: SelectionGranularity.Note, bar: 1, trackId, noteId: 1_001_001 },
-            { granularity: SelectionGranularity.Note, bar: 2, trackId, noteId: 1_002_001 },
+            {
+                granularity: SelectionGranularity.Note,
+                target: { granularity: SelectionGranularity.Note, measure: measure1, event: measure1.events[0] },
+            },
+            {
+                granularity: SelectionGranularity.Note,
+                target: { granularity: SelectionGranularity.Note, measure: measure2, event: measure2.events[0] },
+            },
         ]);
 
-        // Simulate an undo that reorganized measure 2, so its selected note no longer exists.
+        // Simulate an undo that removed the content of measure 2, so its selected cell no longer exists.
         measure2Events.splice(0, 1);
 
         void requisitions.execute("arrangementReverted", undefined);
 
-        expect(manager.isNoteSelected(1, trackId, 1_001_001)).toBe(true);
-        expect(manager.isNoteSelected(2, trackId, 1_002_001)).toBe(false);
+        expect(manager.isCellSelected(measure1, { numerator: 0, denominator: 1 })).toBe(true);
+        expect(manager.isCellSelected(measure2, { numerator: 0, denominator: 1 })).toBe(false);
     });
 });

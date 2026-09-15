@@ -7,11 +7,45 @@ import { cleanup, render, type RenderResult } from "@testing-library/preact";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { SubdivisionToolbar } from "../../src/components/ui/Arrangement/SubdivisionToolbar.js";
+import type { ISbDmArrangement, ISbDmTrack, ISbDmTrackMeasure } from "../../src/core/ScoreBookDataModel.js";
+import type { IFraction } from "../../src/core/types/general.js";
 import { SelectionManager } from "../../src/ui/SelectionManager.js";
-import { SelectionGranularity, type ISelectionEntry } from "../../src/ui/SelectionSerializer.js";
+import { noteEntry } from "../unit-test-helpers.js";
 
 const triggerButton = (container: Element): HTMLButtonElement => {
     return container.querySelector<HTMLButtonElement>("button")!;
+};
+
+/**
+ * Builds a one-bar measure whose events start at the given positions. The toolbar resolves a
+ * selected note through the model objects a selection entry holds, so entries need a measure.
+ *
+ * @param trackId The track identity.
+ * @param starts The positions of the measure's events.
+ *
+ * @returns The measure to address in selection entries.
+ */
+const makeMeasure = (trackId: number, starts: IFraction[]): ISbDmTrackMeasure => {
+    const arrangement = { tracks: [] } as unknown as ISbDmArrangement;
+    const track = { id: trackId, measures: [], arrangement } as unknown as ISbDmTrack;
+    const measure = {
+        number: 1,
+        track,
+        meter: { stepResolution: 16 },
+        subdivisions: [],
+        events: starts.map((start) => {
+            return { start, duration: { numerator: 1, denominator: 16 } };
+        }),
+    } as unknown as ISbDmTrackMeasure;
+
+    track.measures.push(measure);
+    arrangement.tracks.push(track);
+
+    return measure;
+};
+
+const cell = (step: number): IFraction => {
+    return { numerator: step, denominator: 16 };
 };
 
 describe.sequential("SubdivisionToolbar", () => {
@@ -38,13 +72,8 @@ describe.sequential("SubdivisionToolbar", () => {
     });
 
     it("enables the dropdown for a single note selection", () => {
-        selectionManager.selectSingleNote({
-            granularity: SelectionGranularity.Note,
-            bar: 1,
-            trackId: 7,
-            startStep: 0,
-            endStep: 0,
-        });
+        const measure = makeMeasure(7, [cell(0)]);
+        selectionManager.replaceSelection([noteEntry(measure, cell(0))]);
 
         renderResult = render(
             <SubdivisionToolbar selectionManager={selectionManager} />,
@@ -65,14 +94,9 @@ describe.sequential("SubdivisionToolbar", () => {
     });
 
     it("allows tuplets that fit inside a selected subdivision slot", () => {
-        selectionManager.selectSingleNote({
-            granularity: SelectionGranularity.Note,
-            bar: 1,
-            trackId: 7,
-            startStep: 0,
-            endStep: 0,
-            start: { numerator: 1, denominator: 24 },
-        });
+        const slotStart: IFraction = { numerator: 1, denominator: 24 };
+        const measure = makeMeasure(7, [slotStart]);
+        selectionManager.replaceSelection([noteEntry(measure, slotStart)]);
 
         renderResult = render(
             <SubdivisionToolbar selectionManager={selectionManager} />,
@@ -87,14 +111,9 @@ describe.sequential("SubdivisionToolbar", () => {
     });
 
     it("enables the dropdown for a contiguous selection within one track", () => {
-        const entries: ISelectionEntry[] = [0, 1].map((step) => {
-            return {
-                granularity: SelectionGranularity.Note,
-                bar: 1,
-                trackId: 7,
-                startStep: step,
-                endStep: step,
-            };
+        const measure = makeMeasure(7, [cell(0), cell(1)]);
+        const entries = [0, 1].map((step) => {
+            return noteEntry(measure, cell(step));
         });
 
         selectionManager.replaceSelection(entries);
@@ -107,14 +126,10 @@ describe.sequential("SubdivisionToolbar", () => {
     });
 
     it("disables the dropdown for a selection that spans multiple tracks", () => {
-        const entries: ISelectionEntry[] = [7, 8].map((trackId) => {
-            return {
-                granularity: SelectionGranularity.Note,
-                bar: 1,
-                trackId,
-                startStep: 0,
-                endStep: 0,
-            };
+        const first = makeMeasure(7, [cell(0)]);
+        const second = makeMeasure(8, [cell(0)]);
+        const entries = [first, second].map((measure) => {
+            return noteEntry(measure, cell(0));
         });
 
         selectionManager.replaceSelection(entries);
@@ -127,14 +142,9 @@ describe.sequential("SubdivisionToolbar", () => {
     });
 
     it("keeps subdivisions in the menu but disables those exceeding two notes per grid cell", () => {
-        const entries: ISelectionEntry[] = [0, 1, 2].map((step) => {
-            return {
-                granularity: SelectionGranularity.Note,
-                bar: 1,
-                trackId: 7,
-                startStep: step,
-                endStep: step,
-            };
+        const measure = makeMeasure(7, [cell(0), cell(1), cell(2)]);
+        const entries = [0, 1, 2].map((step) => {
+            return noteEntry(measure, cell(step));
         });
 
         selectionManager.replaceSelection(entries);

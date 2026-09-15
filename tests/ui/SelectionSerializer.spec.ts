@@ -24,13 +24,16 @@ describe("selection serialisation", () => {
         const event = first.measures[0].events[0];
 
         const entries: ISelectionEntry[] = [
-            { granularity: SelectionGranularity.Track, bar: 0, trackId: first.id },
             {
-                granularity: SelectionGranularity.TrackPiece, bar: 1, trackId: first.id,
+                granularity: SelectionGranularity.Track,
+                target: { granularity: SelectionGranularity.Track, track: first },
+            },
+            {
+                granularity: SelectionGranularity.TrackPiece,
                 target: { granularity: SelectionGranularity.TrackPiece, track: first, measure: first.measures[0] },
             },
             {
-                granularity: SelectionGranularity.Note, bar: 1, trackId: first.id, startStep: 0, endStep: 0,
+                granularity: SelectionGranularity.Note,
                 target: { granularity: SelectionGranularity.Note, measure: first.measures[0], event },
             },
         ];
@@ -49,12 +52,17 @@ describe("selection serialisation", () => {
         expect(restored[1].target).toEqual({
             granularity: SelectionGranularity.TrackPiece, track: first, measure: first.measures[0],
         });
+        // The restored note target carries the addressed span, so the span can be found again.
         expect(restored[2].target).toEqual({
-            granularity: SelectionGranularity.Note, measure: first.measures[0], event,
+            granularity: SelectionGranularity.Note,
+            measure: first.measures[0],
+            event,
+            start: { numerator: 0, denominator: 1 },
+            end: { numerator: 1, denominator: 4 },
         });
     });
 
-    it("leaves entries without a target when the arrangement no longer contains them", () => {
+    it("drops entries whose element the arrangement no longer contains", () => {
         const instrument = createInstrument("0", 0, 0);
         const arrangement = Arrangement.emptyArrangementWithInstruments([instrument]);
 
@@ -62,10 +70,9 @@ describe("selection serialisation", () => {
             granularity: SelectionGranularity.Note,
             bar: 4,
             trackId: arrangement.tracks[0].id,
-            startStep: 0,
+            start: { numerator: 0, denominator: 1 },
         }]);
 
-        expect(restored).toHaveLength(1);
-        expect(restored[0].target).toBeUndefined();
+        expect(restored).toEqual([]);
     });
 });

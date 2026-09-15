@@ -8,7 +8,7 @@ import type {
     IArrangementSnapshot, IFraction, IMeasureEvent, ITrackMeasureSnapshot, ISubdivision
 } from "../../types/general.js";
 import { addFractions, compareFractions, reduceFraction } from "../numeric-functions.js";
-import { decomposeRestSteps, pulseStepCount, standardRestSteps } from "../../rest-notation.js";
+import { decomposeRestSteps, pulseStepCount } from "../../rest-notation.js";
 import { arrangementSnapshotVersion } from "../snapshots.js";
 import type {
     ILegacyArrangementSnapshotV3, ILegacyMeasureSnapshot, ILegacySubdivision
@@ -221,7 +221,6 @@ const convertMeasureToV4 = (measure: ILegacyMeasureSnapshot, pulse: string): ITr
  */
 const decomposeFinalRests = (events: IMeasureEvent[], subdivisionIndices: Set<number>,
     stepResolution: number, pulseFraction: IFraction): IMeasureEvent[] => {
-    const values = standardRestSteps(stepResolution);
     const pulseSteps = pulseStepCount(pulseFraction, stepResolution);
     const result: IMeasureEvent[] = [];
 
@@ -243,7 +242,7 @@ const decomposeFinalRests = (events: IMeasureEvent[], subdivisionIndices: Set<nu
             continue;
         }
 
-        const parts = decomposeRestSteps(startStep, startStep + durationSteps, pulseSteps, values);
+        const parts = decomposeRestSteps(startStep, startStep + durationSteps, pulseSteps, stepResolution);
         let step = startStep;
 
         for (const part of parts) {

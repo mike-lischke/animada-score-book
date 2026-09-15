@@ -3,6 +3,9 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
+import {
+    addFractions, compareFractions, multiplyFraction, reduceFraction, subtractFractions,
+} from "./serialisation/numeric-functions.js";
 import type { IFraction } from "./types/general.js";
 
 /**
@@ -134,6 +137,11 @@ export const standardRestSteps = (stepsPerBar: number): number[] => {
     return steps;
 };
 
+/** The standard note values as bar fractions, in descending order. */
+export const standardNoteValueFractions: readonly IFraction[] = standardNoteValues.map(([numerator, denominator]) => {
+    return reduceFraction(numerator, denominator);
+});
+
 /**
  * Converts the pulse into an integer step count.
  *
@@ -147,66 +155,109 @@ export const pulseStepCount = (pulse: IFraction, stepsPerBar: number): number =>
 };
 
 /**
- * Decomposes a grid-aligned rest span into standard note values aligned to the pulse. The span is
- * split at pulse boundaries; each pulse-aligned segment is then represented with the largest
- * standard value that fits.
+ * Divides one fraction by another, reduced. Used to relate a duration to the pulse.
  *
- * @param startStep The first step of the rest (inclusive).
- * @param endStep The step after the rest (exclusive).
- * @param pulseSteps The pulse width in steps.
- * @param values The standard step counts, largest first.
+ * @param value The fraction to divide.
+ * @param divisor The fraction to divide by.
  *
- * @returns The step counts of the decomposed rest, in display order.
+ * @returns The reduced quotient.
  */
-export const decomposeRestSteps = (startStep: number, endStep: number, pulseSteps: number,
-    values: number[]): number[] => {
-    const result: number[] = [];
-    let position = startStep;
+const fractionRatio = (value: IFraction, divisor: IFraction): IFraction => {
+    return reduceFraction(value.numerator * divisor.denominator, value.denominator * divisor.numerator);
+};
 
-    const decomposeGreedy = (count: number): number[] => {
-        const parts: number[] = [];
-        let remaining = count;
+/**
+ * Decomposes a rest span into standard note values aligned to the pulse. The span is split at pulse
+ * boundaries; each pulse-aligned segment is then represented with the largest standard value that
+ * fits. Everything is expressed in bar fractions, so no grid resolution is needed — grid callers
+ * restrict {@link values} to the values their step resolution can represent.
+ *
+ * @param start The rest start as a fraction of the bar (inclusive).
+ * @param end The rest end as a fraction of the bar (exclusive).
+ * @param pulse The rhythmic pulse as a fraction of the bar.
+ * @param values The allowed standard values as bar fractions, largest first.
+ *
+ * @returns The durations of the decomposed rest, in display order.
+ */
+export const decomposeRestSpan = (start: IFraction, end: IFraction, pulse: IFraction,
+    values: readonly IFraction[]): IFraction[] => {
+    const result: IFraction[] = [];
+    let position = { ...start };
+
+    const fillGreedy = (span: IFraction): IFraction[] => {
+        const parts: IFraction[] = [];
+        let remaining = { ...span };
 
         for (const value of values) {
-            while (remaining >= value) {
-                parts.push(value);
-                remaining -= value;
+            while (compareFractions(remaining, value) >= 0) {
+                parts.push({ ...value });
+                remaining = subtractFractions(remaining, value);
             }
+        }
+
+        if (remaining.numerator > 0) {
+            // A span no standard value can express (e.g. a subdivision slot) keeps its length.
+            parts.push(remaining);
         }
 
         return parts;
     };
 
-    while (position < endStep) {
-        const remainingSpan = endStep - position;
-        const remainder = pulseSteps > 0 ? position % pulseSteps : 0;
+    while (compareFractions(position, end) < 0) {
+        const remaining = subtractFractions(end, position);
+        const pulses = fractionRatio(position, pulse);
+        const offset = subtractFractions(position,
+            multiplyFraction(pulse, Math.floor(pulses.numerator / pulses.denominator)));
+        const isPulseAligned = offset.numerator === 0;
 
-        if (remainder !== 0 || remainingSpan < pulseSteps) {
-            const chunkEnd = remainder !== 0
-                ? Math.min(position + (pulseSteps - remainder), endStep)
-                : endStep;
-            result.push(...decomposeGreedy(chunkEnd - position));
+        if (!isPulseAligned || compareFractions(remaining, pulse) < 0) {
+            const boundary = addFractions(position, subtractFractions(pulse, offset));
+            const chunkEnd = isPulseAligned || compareFractions(boundary, end) > 0 ? end : boundary;
+
+            result.push(...fillGreedy(subtractFractions(chunkEnd, position)));
             position = chunkEnd;
 
             continue;
         }
 
-        let chosen = 0;
-        for (const value of values) {
-            if (value % pulseSteps === 0 && value <= remainingSpan) {
-                chosen = value;
-                break;
-            }
-        }
+        // Pulse aligned with at least one full pulse left: prefer a value spanning whole pulses.
+        const chosen = values.find((value) => {
+            return fractionRatio(value, pulse).denominator === 1 && compareFractions(value, remaining) <= 0;
+        });
 
-        if (chosen === 0) {
-            result.push(...decomposeGreedy(remainingSpan));
+        if (chosen === undefined) {
+            result.push(...fillGreedy(remaining));
+
             break;
         }
 
-        result.push(chosen);
-        position += chosen;
+        result.push({ ...chosen });
+        position = addFractions(position, chosen);
     }
 
     return result;
+};
+
+/**
+ * Decomposes a grid-aligned rest span into standard note values aligned to the pulse; the step
+ * based counterpart of {@link decomposeRestSpan}, limited to the values the grid can represent.
+ *
+ * @param startStep The first step of the rest (inclusive).
+ * @param endStep The step after the rest (exclusive).
+ * @param pulseSteps The pulse width in steps.
+ * @param stepsPerBar The measure's step resolution.
+ *
+ * @returns The step counts of the decomposed rest, in display order.
+ */
+export const decomposeRestSteps = (startStep: number, endStep: number, pulseSteps: number,
+    stepsPerBar: number): number[] => {
+    const values = standardRestSteps(stepsPerBar).map((steps) => {
+        return reduceFraction(steps, stepsPerBar);
+    });
+    const parts = decomposeRestSpan(reduceFraction(startStep, stepsPerBar),
+        reduceFraction(endStep, stepsPerBar), reduceFraction(pulseSteps, stepsPerBar), values);
+
+    return parts.map((part) => {
+        return (part.numerator * stepsPerBar) / part.denominator;
+    });
 };

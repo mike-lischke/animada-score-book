@@ -24,8 +24,7 @@ import { TrackPlayer } from "../../src/player/TrackPlayer.js";
 import type { IRealtimeProvider } from "../../src/ui/AnimationEngine.js";
 import { ScoreElementKind, ScoreElementRegistry } from "../../src/ui/ScoreElementRegistry.js";
 import { selectionToClearRanges } from "../../src/ui/selection-ranges.js";
-import { SelectionGranularity } from "../../src/ui/SelectionSerializer.js";
-import { createInstrument, hydrateMeasureEvents } from "../unit-test-helpers.js";
+import { createInstrument, hydrateMeasureEvents, noteEntry } from "../unit-test-helpers.js";
 
 class TestScoreBookDataModel extends ScoreBookDataModel {
     private readonly testArrangement: ISbDmArrangement;
@@ -331,16 +330,11 @@ describe.sequential("Polyrhythm UI Integration", () => {
         const scoreElementRegistry = new ScoreElementRegistry();
 
         hydrateMeasureEvents(arrangement);
-        const secondNoteId = track.measures[0].noteEvents[2].id;
 
         // Delete the second slot (the note at the subdivision's second slot).
-        dataModel.clearStepRanges(selectionToClearRanges([{
-            granularity: SelectionGranularity.Note,
-            bar: 1,
-            trackId: track.id,
-            startStep: 3,
-            noteId: secondNoteId,
-        }], dataModel.arrangement));
+        dataModel.clearRanges(selectionToClearRanges([
+            noteEntry(track.measures[0], { numerator: 7, denominator: 32 }),
+        ]));
 
         const result = render(<GridMeasureRow
             measure={track.measures[0]}

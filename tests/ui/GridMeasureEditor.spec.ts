@@ -13,8 +13,11 @@ import { addFractions, compareFractions } from "../../src/core/serialisation/num
 import type { IAudioData } from "../../src/core/types/general.js";
 import { requisitions } from "../../src/supplement/Requisitions.js";
 import { GridMeasureEditor } from "../../src/ui/GridMeasureEditor.js";
-import { SelectionGranularity, type ISelectionEntry } from "../../src/ui/SelectionSerializer.js";
-import { createInstrument, hydrateMeasureEvents } from "../unit-test-helpers.js";
+import { SelectionGranularity, SelectionSerializer, type ISelectionEntry } from "../../src/ui/SelectionSerializer.js";
+import {
+    createInstrument, hydrateMeasureEvents, measureEntry, noteEntry, noteGroupEntry, setCellNote, trackEntry,
+    trackPieceEntry,
+} from "../unit-test-helpers.js";
 
 /**
  * Returns the note style id covering the given step of a measure, or undefined for rests.
@@ -66,16 +69,10 @@ describe.sequential("GridMeasureEditor clearSelection", () => {
 
     it("clears a single note", () => {
         const track = model.arrangement!.tracks[0];
-        model.setGridNote(track.id, 1, 2, "1");
+        setCellNote(model, track.id, 1, 2, "1");
         mutatedCalls = 0;
 
-        const entry: ISelectionEntry = {
-            granularity: SelectionGranularity.Note,
-            bar: 1,
-            trackId: track.id,
-            startStep: 2,
-            endStep: 2,
-        };
+        const entry = noteEntry(track.measures[0], { numerator: 2, denominator: 16 });
 
         expect(editor.clearSelection([entry])).toBe(true);
         expect(noteAtStep(track.measures[0], 2)).toBeUndefined();
@@ -112,16 +109,11 @@ describe.sequential("GridMeasureEditor clearSelection", () => {
     it("clears a note group range", () => {
         const track = model.arrangement!.tracks[0];
         for (let i = 0; i < 4; i++) {
-            model.setGridNote(track.id, 1, i, "1");
+            setCellNote(model, track.id, 1, i, "1");
         }
 
-        const entry: ISelectionEntry = {
-            granularity: SelectionGranularity.NoteGroup,
-            bar: 1,
-            trackId: track.id,
-            startStep: 1,
-            endStep: 2,
-        };
+        const measure = track.measures[0];
+        const entry = noteGroupEntry(measure, measure.events.slice(1, 3));
 
         expect(editor.clearSelection([entry])).toBe(true);
 
@@ -137,13 +129,9 @@ describe.sequential("GridMeasureEditor clearSelection", () => {
 
     it("clears a track piece (track × measure)", () => {
         const track = model.arrangement!.tracks[0];
-        model.setGridNote(track.id, 1, 0, "1");
+        setCellNote(model, track.id, 1, 0, "1");
 
-        const entry: ISelectionEntry = {
-            granularity: SelectionGranularity.TrackPiece,
-            bar: 1,
-            trackId: track.id,
-        };
+        const entry = trackPieceEntry(track, track.measures[0]);
 
         expect(editor.clearSelection([entry])).toBe(true);
         expect(noteAtStep(track.measures[0], 0)).toBeUndefined();
@@ -151,16 +139,12 @@ describe.sequential("GridMeasureEditor clearSelection", () => {
 
     it("clears a whole measure across all tracks", () => {
         for (const track of model.arrangement!.tracks) {
-            model.setGridNote(track.id, 1, 0, "1");
+            setCellNote(model, track.id, 1, 0, "1");
         }
 
         mutatedCalls = 0;
 
-        const entry: ISelectionEntry = {
-            granularity: SelectionGranularity.Measure,
-            bar: 1,
-            trackId: model.arrangement!.tracks[0].id,
-        };
+        const entry = measureEntry(model.arrangement!.tracks[0].measures[0]);
 
         expect(editor.clearSelection([entry])).toBe(true);
         for (const track of model.arrangement!.tracks) {
@@ -172,13 +156,9 @@ describe.sequential("GridMeasureEditor clearSelection", () => {
 
     it("clears a whole track", () => {
         const track = model.arrangement!.tracks[0];
-        model.setGridNote(track.id, 1, 0, "1");
+        setCellNote(model, track.id, 1, 0, "1");
 
-        const entry: ISelectionEntry = {
-            granularity: SelectionGranularity.Track,
-            bar: 1,
-            trackId: track.id,
-        };
+        const entry = trackEntry(track);
 
         expect(editor.clearSelection([entry])).toBe(true);
         expect(noteAtStep(track.measures[0], 0)).toBeUndefined();
@@ -211,14 +191,9 @@ describe.sequential("GridMeasureEditor setSelectionNoteStyle", () => {
 
     it("sets the note style across all selected cells of one track", () => {
         const track = model.arrangement!.tracks[0];
-        const entries: ISelectionEntry[] = [0, 1, 2].map((step) => {
-            return {
-                granularity: SelectionGranularity.Note,
-                bar: 1,
-                trackId: track.id,
-                startStep: step,
-                endStep: step,
-            };
+        const measure = track.measures[0];
+        const entries = [0, 1, 2].map((step) => {
+            return noteEntry(measure, { numerator: step, denominator: measure.meter.stepResolution });
         });
 
         expect(editor.setSelectionNoteStyle(entries, "1")).toBe(true);
@@ -232,14 +207,8 @@ describe.sequential("GridMeasureEditor setSelectionNoteStyle", () => {
         const trackA = model.arrangement!.tracks[0];
         const trackB = model.addTrack(trackA.instrument);
 
-        const entries: ISelectionEntry[] = [trackA, trackB].map((track) => {
-            return {
-                granularity: SelectionGranularity.Note,
-                bar: 1,
-                trackId: track.id,
-                startStep: 0,
-                endStep: 0,
-            };
+        const entries = [trackA, trackB].map((track) => {
+            return noteEntry(track.measures[0], { numerator: 0, denominator: 1 });
         });
 
         expect(editor.setSelectionNoteStyle(entries, "1")).toBe(true);
@@ -251,14 +220,8 @@ describe.sequential("GridMeasureEditor setSelectionNoteStyle", () => {
         const trackA = model.arrangement!.tracks[0];
         const trackB = model.arrangement!.tracks[1];
 
-        const entries: ISelectionEntry[] = [trackA, trackB].map((track) => {
-            return {
-                granularity: SelectionGranularity.Note,
-                bar: 1,
-                trackId: track.id,
-                startStep: 0,
-                endStep: 0,
-            };
+        const entries = [trackA, trackB].map((track) => {
+            return noteEntry(track.measures[0], { numerator: 0, denominator: 1 });
         });
 
         expect(editor.setSelectionNoteStyle(entries, "1")).toBe(false);
@@ -269,42 +232,39 @@ describe.sequential("GridMeasureEditor setSelectionNoteStyle", () => {
 
     it("returns false when the style is already applied to all cells", () => {
         const track = model.arrangement!.tracks[0];
-        const entries: ISelectionEntry[] = [0, 1].map((step) => {
-            return {
-                granularity: SelectionGranularity.Note,
-                bar: 1,
-                trackId: track.id,
-                startStep: step,
-                endStep: step,
-            };
+        const measure = track.measures[0];
+        const entries = [0, 1].map((step) => {
+            return noteEntry(measure, { numerator: step, denominator: measure.meter.stepResolution });
         });
 
         expect(editor.setSelectionNoteStyle(entries, "1")).toBe(true);
         expect(editor.setSelectionNoteStyle(entries, "1")).toBe(false);
     });
 
-    it("refreshSelection resolves note ids only for note start cells", () => {
+    it("refreshSelection re-resolves the model event of every selected cell", () => {
         const track = model.arrangement!.tracks[0];
         track.instrument.noteStyles["1"] = { id: "1" } as IAudioData;
 
-        // A note placed at step 0 occupies a single cell, so only step 0 is a note start.
-        model.setGridNote(track.id, 1, 0, "1");
+        // A note placed at step 0 occupies a single cell; the following cells are rest space.
+        setCellNote(model, track.id, 1, 0, "1");
         hydrateMeasureEvents(model.arrangement! as Arrangement);
 
+        const measure = track.measures[0];
+        const stepsPerBar = measure.meter.stepResolution;
         const entries: ISelectionEntry[] = [0, 1, 2].map((step) => {
-            return {
-                granularity: SelectionGranularity.Note,
-                bar: 1,
-                trackId: track.id,
-                startStep: step,
-                endStep: step,
-            };
+            return noteEntry(measure, { numerator: step, denominator: stepsPerBar });
         });
 
         const refreshed = editor.refreshSelection(entries);
-        expect(refreshed[0].noteId).toBeDefined();
-        expect(refreshed[1].noteId).toBeUndefined();
-        expect(refreshed[2].noteId).toBeUndefined();
+
+        expect(refreshed).toHaveLength(3);
+        expect(refreshed.map((entry) => {
+            return SelectionSerializer.coordinatesOf(entry).start;
+        })).toEqual([
+            { numerator: 0, denominator: 1 },
+            { numerator: 1, denominator: 16 },
+            { numerator: 1, denominator: 8 },
+        ]);
     });
 });
 
@@ -431,7 +391,8 @@ describe.sequential("GridMeasureEditor subdivision editing", () => {
 
         const childSlotStart = { ...measure.events[2].start };
         const childSlotEnd = addFractions(childSlotStart, measure.events[2].duration);
-        expect(model.setGridNote(track.id, 1, 0, "test", childSlotStart)).toBe(true);
+        expect(model.setNoteAt(track.id, 1, childSlotStart, { numerator: 1, denominator: 16 }, "test"))
+            .toBe(true);
 
         const projected = MeasureProjection.project(measure);
         const parent = projected[0];
@@ -447,7 +408,7 @@ describe.sequential("GridMeasureEditor subdivision editing", () => {
             expect(parent.items[1]).toMatchObject({ actual: 2, normal: 1 });
         }
 
-        expect(model.clearStepRanges([{
+        expect(model.clearRanges([{
             trackId: track.id,
             bar: 1,
             start: childSlotStart,
@@ -474,13 +435,18 @@ describe.sequential("GridMeasureEditor subdivision editing", () => {
             { numerator: 0, denominator: 1 }, { numerator: 1, denominator: 8 }, 3, 2);
 
         const entries: ISelectionEntry[] = [0, 1, 2].map((index) => {
+            const start = { numerator: index, denominator: 24 };
+
             return {
                 granularity: SelectionGranularity.Note,
                 bar: 1,
                 trackId: track.id,
                 startStep: 0,
                 endStep: 0,
-                start: { numerator: index, denominator: 24 },
+                start,
+                target: {
+                    granularity: SelectionGranularity.Note, measure, event: measure.events[index], start,
+                },
             };
         });
 
@@ -498,11 +464,12 @@ describe.sequential("GridMeasureEditor subdivision editing", () => {
 
         const deleted = editor.deleteEmptySubdivisionsForSelection([{
             granularity: SelectionGranularity.Note,
-            bar: 1,
-            trackId: track.id,
-            startStep: 0,
-            endStep: 0,
-            start: { numerator: 0, denominator: 24 },
+            target: {
+                granularity: SelectionGranularity.Note,
+                measure,
+                event: measure.events[0],
+                start: { numerator: 0, denominator: 24 },
+            },
         }]);
 
         expect(deleted).toBe(false);
@@ -512,18 +479,12 @@ describe.sequential("GridMeasureEditor subdivision editing", () => {
     it("copies selected note values into the first subdivision slots", () => {
         const track = model.arrangement!.tracks[0];
         const measure = track.measures[0];
-        model.setGridNote(track.id, 1, 0, "low");
-        model.setGridNote(track.id, 1, 1, "mid");
-        model.setGridNote(track.id, 1, 2, "high");
+        setCellNote(model, track.id, 1, 0, "low");
+        setCellNote(model, track.id, 1, 1, "mid");
+        setCellNote(model, track.id, 1, 2, "high");
 
         const entries: ISelectionEntry[] = [0, 1, 2].map((step) => {
-            return {
-                granularity: SelectionGranularity.Note,
-                bar: 1,
-                trackId: track.id,
-                startStep: step,
-                endStep: step,
-            };
+            return noteEntry(measure, { numerator: step, denominator: measure.meter.stepResolution });
         });
 
         const created = editor.createSubdivisionForSelection(entries, 5);

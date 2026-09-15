@@ -5,20 +5,69 @@
 
 import type { ComponentChild } from "preact";
 
-import type { ISbDmArrangement, ISbDmTrack, ScoreBookDataModel } from "../../../../core/ScoreBookDataModel.js";
+import type { ISbDmArrangement, ISbDmTrack, ISbDmTrackMeasure, ScoreBookDataModel }
+    from "../../../../core/ScoreBookDataModel.js";
 import type { ArrangementPlayer } from "../../../../player/ArrangementPlayer.js";
-import { compareFractions, reduceFraction } from "../../../../core/serialisation/numeric-functions.js";
-import type { IFraction } from "../../../../core/types/general.js";
+import { addFractions, compareFractions, reduceFraction }
+    from "../../../../core/serialisation/numeric-functions.js";
+import type { IFraction, IMeasureEvent } from "../../../../core/types/general.js";
 import { requisitions } from "../../../../supplement/Requisitions.js";
 import type { SelectionManager } from "../../../../ui/SelectionManager.js";
 import {
     ScoreElementKind, type IScoreElementLocation, type ScoreElementRegistry,
 } from "../../../../ui/ScoreElementRegistry.js";
 import {
-    SelectionGranularity, type ISelectionEntry, type ISelectionHitTester,
+    SelectionGranularity, SelectionSerializer, type ISelectionEntry, type ISelectionHitTester,
+    type ISelectionTarget,
 } from "../../../../ui/SelectionSerializer.js";
 import { UIComponent, type ICommonUIProperties } from "../../framework/UIComponent.js";
 import { StaffMeasureTrackRow } from "./StaffMeasureTrackRow.js";
+
+/**
+ * Returns the events of a measure whose start lands on a step inside the given inclusive range.
+ *
+ * @param measure The measure to scan.
+ * @param startStep The first step of the range.
+ * @param endStep The last step of the range.
+ *
+ * @returns The events of the range, in measure order.
+ */
+const eventsInSteps = (measure: ISbDmTrackMeasure, startStep: number, endStep: number): IMeasureEvent[] => {
+    const stepsPerBar = measure.meter.stepResolution;
+    const events: IMeasureEvent[] = [];
+
+    for (const event of measure.events) {
+        const step = event.start.numerator * stepsPerBar / event.start.denominator;
+        if (Number.isInteger(step) && step >= startStep && step <= endStep) {
+            events.push(event);
+        }
+    }
+
+    return events;
+};
+
+/**
+ * Builds the selection target of a hit-test note group. The group addresses the events that start
+ * inside the step range the hit test detected.
+ *
+ * @param measure The measure the group belongs to; undefined when the row has no measure.
+ * @param startStep The first step of the range.
+ * @param endStep The last step of the range.
+ *
+ * @returns The group target, or undefined when the range holds no event.
+ */
+const groupTarget = (measure: ISbDmTrackMeasure | undefined, startStep: number,
+    endStep: number): ISelectionTarget | undefined => {
+    if (measure === undefined) {
+        return undefined;
+    }
+
+    const events = eventsInSteps(measure, startStep, endStep);
+
+    return events.length === 0
+        ? undefined
+        : { granularity: SelectionGranularity.NoteGroup, measure, events };
+};
 
 export interface IStaffMeasureViewerProps extends ICommonUIProperties {
     barNumber: number;
@@ -249,20 +298,19 @@ export class StaffMeasureViewer extends UIComponent<IStaffMeasureViewerProps, IS
 
                 if (noteHit) {
                     const target = scoreElementRegistry?.getTarget(runEl);
-                    const entry: ISelectionEntry = {
-                        granularity: SelectionGranularity.Note,
-                        bar: runLocation.bar,
-                        trackId: runLocation.trackId,
-                        startStep: runLocation.step,
-                        endStep: runLocation.step,
-                        noteId: runLocation.noteId,
-                        start: this.exactRunStart(runLocation),
-                    };
                     if (target !== undefined && "duration" in target && measure !== undefined) {
-                        entry.target = { granularity: SelectionGranularity.Note, measure, event: target };
+                        // A staff run is the whole event, so it is copied with its full duration.
+                        noteEntries.push({
+                            granularity: SelectionGranularity.Note,
+                            target: {
+                                granularity: SelectionGranularity.Note,
+                                measure,
+                                event: target,
+                                start: runLocation.start ?? target.start,
+                                end: addFractions(target.start, target.duration),
+                            },
+                        });
                     }
-
-                    noteEntries.push(entry);
 
                     if (runLocation.noteId !== undefined) {
                         rowHasSoundingNotes = true;
@@ -275,8 +323,8 @@ export class StaffMeasureViewer extends UIComponent<IStaffMeasureViewerProps, IS
             // a beam should select the entire beam group.
             // However, individual note hits have the highest priority: if a note
             // was already hit in this row, skip beam/tuplet detection.
-            const rowHadNoteHits = noteEntries.some((e) => {
-                return e.trackId === trackId && e.bar === barNumber;
+            const rowHadNoteHits = noteEntries.some((entry) => {
+                return SelectionSerializer.trackOf(entry).id === trackId;
             });
 
             const beamElements = row.querySelectorAll<HTMLElement>(".staff-note-viewer-beam");
@@ -474,26 +522,28 @@ export class StaffMeasureViewer extends UIComponent<IStaffMeasureViewerProps, IS
                 // over beam hits.
                 if (!rowHadNoteHits) {
                     for (let i = noteEntries.length - 1; i >= 0; i--) {
-                        if (noteEntries[i].trackId === trackId) {
+                        if (SelectionSerializer.trackOf(noteEntries[i]).id === trackId) {
                             noteEntries.splice(i, 1);
                         }
                     }
 
                     for (const { start, end } of deduplicated) {
+                        const group = groupTarget(measure, start, end);
+                        if (group === undefined) {
+                            continue;
+                        }
+
                         noteEntries.push({
                             granularity: SelectionGranularity.NoteGroup,
-                            bar: barNumber,
-                            trackId: trackId,
-                            startStep: start,
-                            endStep: end,
+                            target: group,
                         });
                         rowHasSoundingNotes = true;
                     }
                 }
             } else {
                 // No beams were hit — try tuplet bracket/number → NoteGroup.
-                if (noteEntries.filter((e) => {
-                    return e.trackId === trackId;
+                if (noteEntries.filter((entry) => {
+                    return SelectionSerializer.trackOf(entry).id === trackId;
                 }).length === 0) {
                     const tupletElements = row.querySelectorAll<HTMLElement>(
                         ".staff-note-viewer-tuplet-number, .staff-note-viewer-tuplet-bracket",
@@ -524,14 +574,14 @@ export class StaffMeasureViewer extends UIComponent<IStaffMeasureViewerProps, IS
                             }
 
                             if (minStep !== Infinity) {
-                                noteEntries.push({
-                                    granularity: SelectionGranularity.NoteGroup,
-                                    bar: barNumber,
-                                    trackId: trackId,
-                                    startStep: minStep,
-                                    endStep: maxStep,
-                                });
-                                rowHasSoundingNotes = true;
+                                const group = groupTarget(measure, minStep, maxStep);
+                                if (group !== undefined) {
+                                    noteEntries.push({
+                                        granularity: SelectionGranularity.NoteGroup,
+                                        target: group,
+                                    });
+                                    rowHasSoundingNotes = true;
+                                }
                             }
 
                             break;
@@ -541,16 +591,12 @@ export class StaffMeasureViewer extends UIComponent<IStaffMeasureViewerProps, IS
             }
 
             if (!rowHasSoundingNotes) {
-                const entry: ISelectionEntry = {
-                    granularity: SelectionGranularity.TrackPiece,
-                    bar: barNumber,
-                    trackId: trackId,
-                };
                 if (track !== undefined && measure !== undefined) {
-                    entry.target = { granularity: SelectionGranularity.TrackPiece, track, measure };
+                    trackPieceEntries.push({
+                        granularity: SelectionGranularity.TrackPiece,
+                        target: { granularity: SelectionGranularity.TrackPiece, track, measure },
+                    });
                 }
-
-                trackPieceEntries.push(entry);
             }
         }
 
@@ -562,10 +608,14 @@ export class StaffMeasureViewer extends UIComponent<IStaffMeasureViewerProps, IS
             return trackPieceEntries;
         }
 
+        const measure = SelectionSerializer.measureOfBar(arrangement, barNumber);
+        if (measure === undefined) {
+            return [];
+        }
+
         return [{
             granularity: SelectionGranularity.Measure,
-            bar: barNumber,
-            trackId: 0,
+            target: { granularity: SelectionGranularity.Measure, measure },
         }];
     }
 

@@ -5,7 +5,9 @@
 
 import { describe, expect, it } from "vitest";
 
-import { decomposeRestSteps, pulseStepCount, standardRestSteps } from "../../src/core/rest-notation.js";
+import {
+    decomposeRestSpan, decomposeRestSteps, pulseStepCount, standardRestSteps,
+} from "../../src/core/rest-notation.js";
 
 describe("rest notation", () => {
     it("lists grid-aligned standard values for a 16-step bar", () => {
@@ -22,26 +24,54 @@ describe("rest notation", () => {
     });
 
     it("decomposes a whole rest into a single whole value", () => {
-        const values = standardRestSteps(16);
-
-        expect(decomposeRestSteps(0, 16, 4, values)).toEqual([16]);
+        expect(decomposeRestSteps(0, 16, 4, 16)).toEqual([16]);
     });
 
     it("decomposes the rest after a leading 16th note into dotted eighth plus dotted half", () => {
-        const values = standardRestSteps(16);
-
-        expect(decomposeRestSteps(1, 16, 4, values)).toEqual([3, 12]);
+        expect(decomposeRestSteps(1, 16, 4, 16)).toEqual([3, 12]);
     });
 
     it("decomposes a rest starting mid-pulse into an eighth plus a half", () => {
-        const values = standardRestSteps(16);
-
-        expect(decomposeRestSteps(6, 16, 4, values)).toEqual([2, 8]);
+        expect(decomposeRestSteps(6, 16, 4, 16)).toEqual([2, 8]);
     });
 
     it("keeps a pulse-aligned dotted half rest intact", () => {
-        const values = standardRestSteps(16);
+        expect(decomposeRestSteps(0, 12, 4, 16)).toEqual([12]);
+    });
+});
 
-        expect(decomposeRestSteps(0, 12, 4, values)).toEqual([12]);
+describe("rest notation spans", () => {
+    const pulse = { numerator: 1, denominator: 4 };
+    const values = [
+        { numerator: 1, denominator: 1 },
+        { numerator: 3, denominator: 4 },
+        { numerator: 1, denominator: 2 },
+        { numerator: 3, denominator: 8 },
+        { numerator: 1, denominator: 4 },
+        { numerator: 3, denominator: 16 },
+        { numerator: 1, denominator: 8 },
+        { numerator: 1, denominator: 16 },
+    ];
+
+    it("decomposes a whole rest of the bar into a single whole value", () => {
+        expect(decomposeRestSpan({ numerator: 0, denominator: 1 }, { numerator: 1, denominator: 1 }, pulse,
+            values)).toEqual([{ numerator: 1, denominator: 1 }]);
+    });
+
+    it("keeps a 3/16 rest as one dotted eighth", () => {
+        expect(decomposeRestSpan({ numerator: 1, denominator: 4 }, { numerator: 7, denominator: 16 }, pulse,
+            values)).toEqual([{ numerator: 3, denominator: 16 }]);
+    });
+
+    it("decomposes the rest after a leading 16th note into dotted eighth plus dotted half", () => {
+        const rest = decomposeRestSpan({ numerator: 1, denominator: 16 }, { numerator: 1, denominator: 1 }, pulse,
+            values);
+
+        expect(rest).toEqual([{ numerator: 3, denominator: 16 }, { numerator: 3, denominator: 4 }]);
+    });
+
+    it("keeps the length of a span that no standard value can express", () => {
+        expect(decomposeRestSpan({ numerator: 0, denominator: 1 }, { numerator: 1, denominator: 24 }, pulse,
+            values)).toEqual([{ numerator: 1, denominator: 24 }]);
     });
 });

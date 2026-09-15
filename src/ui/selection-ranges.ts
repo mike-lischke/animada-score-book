@@ -3,115 +3,76 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import type { IGridClearRange, ISbDmArrangement } from "../core/ScoreBookDataModel.js";
+import type { IMeasureRange } from "../core/ScoreBookDataModel.js";
+import { modelEventAt } from "../core/MeasureProjection.js";
 import { addFractions } from "../core/serialisation/numeric-functions.js";
-import { SelectionGranularity, type ISelectionEntry } from "./SelectionSerializer.js";
+import { SelectionGranularity, type ISelectionEntry, type ISelectionTarget } from "./SelectionSerializer.js";
 
 /**
- * Resolves the clear range of the note event occupying the selected cell. The note id is present
- * only on a note's start cell, so this clears the whole note (or a single subdivision slot). A cell
- * without a note id is a rest cell, which clears itself and is treated as a no-op by the per-step
- * synthesis.
- *
- * @param arrangement The arrangement the entry refers to.
- * @param entry The note selection entry.
- *
- * @returns The note's exact clear range, or undefined for a rest cell.
- */
-const noteClearRange = (arrangement: ISbDmArrangement, entry: ISelectionEntry): IGridClearRange | undefined => {
-    if (entry.startStep === undefined || entry.noteId === undefined) {
-        return undefined;
-    }
-
-    const track = arrangement.tracks.find((candidate) => {
-        return candidate.id === entry.trackId;
-    });
-    const measure = track?.measures[entry.bar - 1];
-    if (!measure) {
-        return undefined;
-    }
-
-    const eventIndex = measure.noteEvents.findIndex((noteEvent) => {
-        return noteEvent.id === entry.noteId;
-    });
-    if (eventIndex < 0) {
-        return undefined;
-    }
-
-    const event = measure.events[eventIndex];
-    const eventEnd = addFractions(event.start, event.duration);
-
-    return { trackId: entry.trackId, bar: entry.bar, start: { ...event.start }, end: eventEnd };
-};
-
-/**
- * Converts selection entries into clear ranges, honouring each entry's granularity.
- * This mapping is shared by the delete action and the clipboard cut operation.
+ * Converts selection entries into the clear ranges they cover. Every entry resolves the model
+ * objects it holds, so a selection clears exactly the content it addresses.
  *
  * @param entries The selection entries to convert.
- * @param arrangement The arrangement the entries refer to; undefined results in an empty list.
  *
  * @returns The clear ranges derived from the selection.
  */
-export const selectionToClearRanges = (entries: ISelectionEntry[],
-    arrangement: ISbDmArrangement | undefined): IGridClearRange[] => {
-    const ranges: IGridClearRange[] = [];
-
-    if (!arrangement) {
-        return ranges;
-    }
+export const selectionToClearRanges = (entries: ISelectionEntry[]): IMeasureRange[] => {
+    const ranges: IMeasureRange[] = [];
 
     for (const entry of entries) {
-        switch (entry.granularity) {
-            case SelectionGranularity.Note: {
-                if (entry.startStep !== undefined) {
-                    ranges.push(noteClearRange(arrangement, entry) ?? {
-                        trackId: entry.trackId,
-                        bar: entry.bar,
-                        startStep: entry.startStep,
-                        endStep: entry.startStep,
-                    });
-                }
-
-                break;
-            }
-
-            case SelectionGranularity.NoteGroup: {
-                if (entry.startStep !== undefined && entry.endStep !== undefined) {
-                    ranges.push({
-                        trackId: entry.trackId,
-                        bar: entry.bar,
-                        startStep: entry.startStep,
-                        endStep: entry.endStep,
-                    });
-                }
-
-                break;
-            }
-
-            case SelectionGranularity.TrackPiece: {
-                ranges.push({ trackId: entry.trackId, bar: entry.bar });
-
-                break;
-            }
-
-            case SelectionGranularity.Measure: {
-                for (const track of arrangement.tracks) {
-                    ranges.push({ trackId: track.id, bar: entry.bar });
-                }
-
-                break;
-            }
-
-            case SelectionGranularity.Track: {
-                for (let bar = 1; bar <= arrangement.timeParams.length; bar++) {
-                    ranges.push({ trackId: entry.trackId, bar });
-                }
-
-                break;
-            }
-        }
+        ranges.push(...targetClearRanges(entry.target));
     }
 
     return ranges;
+};
+
+/**
+ * Converts a selection target into the clear ranges it covers. A note clears the whole event it
+ * belongs to — also when a grid cell inside its duration was selected, because that cell is grid
+ * layout and no model content of its own.
+ *
+ * @param target The model objects the selection addresses.
+ *
+ * @returns The clear ranges derived from the target.
+ */
+const targetClearRanges = (target: ISelectionTarget): IMeasureRange[] => {
+    switch (target.granularity) {
+        case SelectionGranularity.Note: {
+            const event = modelEventAt(target.measure, target.start ?? target.event.start) ?? target.event;
+
+            return [{
+                trackId: target.measure.track.id,
+                bar: target.measure.number,
+                start: { ...event.start },
+                end: addFractions(event.start, event.duration),
+            }];
+        }
+
+        case SelectionGranularity.NoteGroup: {
+            const last = target.events[target.events.length - 1];
+
+            return [{
+                trackId: target.measure.track.id,
+                bar: target.measure.number,
+                start: { ...target.events[0].start },
+                end: addFractions(last.start, last.duration),
+            }];
+        }
+
+        case SelectionGranularity.TrackPiece: {
+            return [{ trackId: target.track.id, bar: target.measure.number }];
+        }
+
+        case SelectionGranularity.Measure: {
+            return target.measure.track.arrangement.tracks.map((track) => {
+                return { trackId: track.id, bar: target.measure.number };
+            });
+        }
+
+        case SelectionGranularity.Track: {
+            return target.track.measures.map((measure) => {
+                return { trackId: target.track.id, bar: measure.number };
+            });
+        }
+    }
 };

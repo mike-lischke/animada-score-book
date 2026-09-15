@@ -9,7 +9,7 @@ import type { Mutable } from "../../../core/types/general.js";
 import { requisitions } from "../../../supplement/Requisitions.js";
 import type { SelectionManager } from "../../../ui/SelectionManager.js";
 import {
-    SelectionGranularity, type ISelectionDelta, type ISelectionEntry, type ISelectionHitTester,
+    SelectionGranularity, SelectionSerializer, type ISelectionDelta, type ISelectionEntry, type ISelectionHitTester,
 } from "../../../ui/SelectionSerializer.js";
 import { Button } from "../framework/Button.js";
 import { UIIcon } from "../framework/UIIcon.js";
@@ -89,8 +89,6 @@ export class TrackControls extends UIComponent<ITrackControlsProperties, ITrackC
                 const track = tracks[i];
                 entries.push({
                     granularity: SelectionGranularity.Track,
-                    bar: 0,
-                    trackId: track.id,
                     target: { granularity: SelectionGranularity.Track, track },
                 });
             }
@@ -277,8 +275,9 @@ export class TrackControls extends UIComponent<ITrackControlsProperties, ITrackC
         const selectedTrackIds = new Set<number>();
 
         for (const entry of selectionManager.currentSelection.values()) {
-            if (entry.granularity === SelectionGranularity.Track && entry.trackId > 0) {
-                selectedTrackIds.add(entry.trackId);
+            if (entry.granularity === SelectionGranularity.Track) {
+                const track = SelectionSerializer.trackOf(entry);
+                selectedTrackIds.add(track.id);
             }
         }
 

@@ -51,11 +51,14 @@ import { getSharedAudioContext } from "./core/audio-context.js";
 import {
     SbDmEntityType, ScoreBookDataModel, type ISbDmInstrument, type ISbDmScore, type ISbDmScoreFolder
 } from "./core/ScoreBookDataModel.js";
-import { PasteResultKind, ScoreClipboard, SubdivisionPasteMode, type IPasteResult } from "./core/ScoreClipboard.js";
+import {
+    PasteOverflowMode, PasteResultKind, ScoreClipboard, SubdivisionPasteMode, type IPasteResult,
+} from "./core/ScoreClipboard.js";
 import { ArrangementMigrator } from "./core/serialisation/migration/ArrangementMigrator.js";
 import { stringifyPackedArrangement, tryParsePackedArrangement } from "./core/serialisation/snapshot-packing.js";
 import { mixerStepIndex, tutorialSteps } from "./core/TutorialSteps.js";
 import type { IArrangementSnapshot } from "./core/types/general.js";
+import { SelectionGranularity } from "./ui/SelectionSerializer.js";
 import { UndoManager } from "./core/UndoManager.js";
 import { convertErrorToString } from "./core/utils.js";
 import { ArrangementPlayer } from "./player/ArrangementPlayer.js";
@@ -1834,17 +1837,33 @@ export class App extends UIComponent<{}, IAppState> {
 
     private async pasteSelection(): Promise<void> {
         const entries = [...this.selectionManager.currentSelection.values()];
-        let result = this.scoreClipboard.paste(entries);
+
+        // The grid shortens content that does not fit its cells, while the staff keeps the copied
+        // notes as they are and lets the following notes give way. The display mode is read from the
+        // same setting the viewers render with, because the state value only follows the toggle.
+        const displayMode = AppStorage.loadUISettings()?.viewSettings?.arrangementViewSettings?.displayMode
+            ?? this.state.trackViewMode;
+        const overflowMode = displayMode === "staff"
+            ? PasteOverflowMode.Shift
+            : PasteOverflowMode.Truncate;
+
+        // Every entry marks a single note (a click) rather than a range: the pasted content keeps
+        // its length and is anchored at the selection instead of being spread over it.
+        const singleNote = entries.every((entry) => {
+            return entry.granularity === SelectionGranularity.Note;
+        });
+
+        let result = this.scoreClipboard.paste(entries, { overflowMode, singleNote });
 
         if (result.kind === PasteResultKind.NeedsTrackCreation) {
             const confirmed = await this.confirmTrackCreation(result.missingInstrumentTypeIds ?? []);
             if (confirmed) {
-                result = this.scoreClipboard.paste(entries, true);
+                result = this.scoreClipboard.paste(entries, { createTrack: true, overflowMode, singleNote });
             }
         } else if (result.kind === PasteResultKind.NeedsSubdivisionMode) {
             const mode = await this.confirmSubdivisionMode();
             if (mode !== undefined) {
-                result = this.scoreClipboard.paste(entries, false, mode);
+                result = this.scoreClipboard.paste(entries, { subdivisionMode: mode, overflowMode, singleNote });
             }
         }
 

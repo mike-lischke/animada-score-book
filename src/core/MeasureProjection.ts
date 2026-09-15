@@ -13,6 +13,23 @@ export interface IMeasureProjectionInput {
     meter: { stepResolution: number; };
 }
 
+/**
+ * Returns the measure event whose span covers the given position. The measure's events tile it
+ * without gaps, so a position inside a longer note belongs to that note.
+ *
+ * @param measure The measure to search.
+ * @param start The position as a fraction of the measure.
+ *
+ * @returns The covering event, or undefined when no event covers the position.
+ */
+export const modelEventAt = (measure: IMeasureProjectionInput, start: IFraction): IMeasureEvent | undefined => {
+    return measure.events.find((event) => {
+        const end = addFractions(event.start, event.duration);
+
+        return compareFractions(event.start, start) <= 0 && compareFractions(start, end) < 0;
+    });
+};
+
 /** Discriminator for projected render items. */
 export enum ProjectedItemKind {
     Event,

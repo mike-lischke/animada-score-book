@@ -9,6 +9,7 @@ import type { ISbDmTrack, ISbDmTrackMeasure, ScoreBookDataModel } from "../../..
 import {
     MeasureProjection, ProjectedItemKind, type IProjectedEvent, type IProjectedItem,
 } from "../../../../core/MeasureProjection.js";
+import { reduceFraction } from "../../../../core/serialisation/numeric-functions.js";
 import type { IAudioData } from "../../../../core/types/general.js";
 import { requisitions } from "../../../../supplement/Requisitions.js";
 import { ScoreElementKind, type ScoreElementRegistry } from "../../../../ui/ScoreElementRegistry.js";
@@ -85,6 +86,7 @@ export class GridMeasureRow extends UIComponent<IGridMeasureRowProperties, IGrid
                     kind: ScoreElementKind.TrackRow,
                     bar: barNumber,
                     trackId: track.id,
+                    measure,
                 })}>
                 <div className="grid-beat-overlay" aria-hidden="true">
                     {beatMarkers}
@@ -180,7 +182,8 @@ export class GridMeasureRow extends UIComponent<IGridMeasureRowProperties, IGrid
                     trackId: track.id,
                     step: col,
                     noteId: col === startCol ? cellId : undefined,
-                    start: level > 1 ? item.start : undefined,
+                    start: level > 1 ? item.start : reduceFraction(col, stepsPerBar),
+                    measure,
                 }, item.event),
                 style: { minWidth: 0, backgroundColor: isNoteCell ? noteBackground : "transparent" },
             };

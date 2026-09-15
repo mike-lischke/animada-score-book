@@ -46,44 +46,91 @@ export interface ISelectionPoint {
     step?: number;
 }
 
+/** The model object a whole-track selection addresses. */
+export interface ITrackTarget {
+    granularity: SelectionGranularity.Track;
+    track: ISbDmTrack;
+}
+
+/**
+ * The bar a measure-level selection addresses. A bar spans all tracks, so one of its measures
+ * stands in for the bar.
+ */
+export interface IMeasureTarget {
+    granularity: SelectionGranularity.Measure;
+    measure: ISbDmTrackMeasure;
+}
+
+/** One track within one measure. */
+export interface ITrackPieceTarget {
+    granularity: SelectionGranularity.TrackPiece;
+    track: ISbDmTrack;
+    measure: ISbDmTrackMeasure;
+}
+
+/** A group of notes, e.g. a beamed group, a tuplet or a subdivision. */
+export interface INoteGroupTarget {
+    granularity: SelectionGranularity.NoteGroup;
+    measure: ISbDmTrackMeasure;
+    events: IMeasureEvent[];
+    subdivision?: ISubdivision;
+}
+
+/** A single note event, addressed by the cell or run it was selected at. */
+export interface INoteTarget {
+    granularity: SelectionGranularity.Note;
+    measure: ISbDmTrackMeasure;
+    event: IMeasureEvent;
+
+    /** Exact start of the addressed cell or run; a longer event spans several cells. */
+    start?: IFraction;
+
+    /**
+     * Exact end (exclusive) of the addressed cell or run. A grid cell covers one cell; a staff run
+     * covers the whole event, so the same event yields different content depending on the view.
+     * When omitted, the addressed element is the whole event.
+     */
+    end?: IFraction;
+}
+
+/** The targets that address note cells of a measure: a single note or a group of notes. */
+export type INoteCellTarget = INoteTarget | INoteGroupTarget;
+
 /**
  * The model objects a selection refers to. A hit test resolves them while it matches the rendered
  * elements, so a selection holds what it selected instead of coordinates that would have to be
  * translated back into the model for every edit.
  */
 export type ISelectionTarget =
-    | { granularity: SelectionGranularity.Track; track: ISbDmTrack; }
-    | { granularity: SelectionGranularity.Measure; measure: ISbDmTrackMeasure; }
-    | { granularity: SelectionGranularity.TrackPiece; track: ISbDmTrack; measure: ISbDmTrackMeasure; }
-    | {
-        granularity: SelectionGranularity.NoteGroup; measure: ISbDmTrackMeasure;
-        events: IMeasureEvent[]; subdivision?: ISubdivision;
-    }
-    | { granularity: SelectionGranularity.Note; measure: ISbDmTrackMeasure; event: IMeasureEvent; };
+    | ITrackTarget
+    | IMeasureTarget
+    | ITrackPieceTarget
+    | INoteGroupTarget
+    | INoteTarget;
+
+/**
+ * Checks whether a target addresses note cells of a measure. Only notes and note groups cover a
+ * span of cells, which is what a subdivision or a note-range edit needs to resolve.
+ *
+ * @param target The target to inspect.
+ *
+ * @returns True when the target addresses note cells.
+ */
+export const addressesNoteCells = (target: ISelectionTarget): target is INoteCellTarget => {
+    return target.granularity === SelectionGranularity.Note
+        || target.granularity === SelectionGranularity.NoteGroup;
+};
 
 /** A single entry in the selection state, describing one selected element in the score. */
 export interface ISelectionEntry {
     granularity: SelectionGranularity;
-    bar: number;
-    trackId: number;
 
     /**
-     * The model objects this entry refers to. Set by hit tests; it replaces the coordinates below
-     * as more consumers move over.
+     * The model objects this entry refers to. A hit test resolves them while it matches the rendered
+     * elements, so a selection holds what it selected instead of coordinates that would have to be
+     * translated back into the model for every edit.
      */
-    target?: ISelectionTarget;
-
-    /** Defined for TrackPiece, NoteGroup, Note. */
-    startStep?: number;
-
-    /** Defined for TrackPiece, NoteGroup, Note. */
-    endStep?: number;
-
-    /** Defined for Note. */
-    noteId?: number;
-
-    /** Defined for Note entries on subdivision slots, which do not align to grid steps. */
-    start?: IFraction;
+    target: ISelectionTarget;
 }
 
 /**
@@ -121,18 +168,21 @@ export interface ISelectionRectChange {
 }
 
 /**
- * A selection entry in its storable form: the coordinates that identify the selected element.
- * The model objects an entry holds cannot be stored — the arrangement is a cyclic structure — so
- * they are resolved from these coordinates when the entry comes back.
+ * The coordinate form of a selection entry: what identifies the selected element in the score. A
+ * selection holds model objects, which cannot be stored — the arrangement is a cyclic structure —
+ * so this form is derived on demand, both for the persisted selection that is resolved again when
+ * it comes back, and for consumers that only need to know where an entry sits.
  */
 export interface ISerialisedSelectionEntry {
     granularity: SelectionGranularity;
     bar: number;
     trackId: number;
-    startStep?: number;
-    endStep?: number;
-    noteId?: number;
+
+    /** Exact start of the addressed span within the measure (inclusive). */
     start?: IFraction;
+
+    /** Exact end of the addressed span within the measure (exclusive). */
+    end?: IFraction;
 }
 
 /**
@@ -141,60 +191,216 @@ export interface ISerialisedSelectionEntry {
  */
 export class SelectionSerializer {
     /**
-     * Reduces selection entries to their storable form, leaving out the model objects.
+     * Reduces selection entries to their coordinate form, leaving out the model objects.
      *
      * @param entries The entries to store.
      *
-     * @returns The storable copies of the entries.
+     * @returns The coordinate copies of the entries.
      */
     public static serialise(entries: ISelectionEntry[]): ISerialisedSelectionEntry[] {
         return entries.map((entry) => {
-            const stored: ISerialisedSelectionEntry = {
-                granularity: entry.granularity,
-                bar: entry.bar,
-                trackId: entry.trackId,
-            };
-
-            if (entry.startStep !== undefined) {
-                stored.startStep = entry.startStep;
-            }
-
-            if (entry.endStep !== undefined) {
-                stored.endStep = entry.endStep;
-            }
-
-            if (entry.noteId !== undefined) {
-                stored.noteId = entry.noteId;
-            }
-
-            if (entry.start !== undefined) {
-                stored.start = { ...entry.start };
-            }
-
-            return stored;
+            return SelectionSerializer.coordinatesOf(entry);
         });
     }
 
     /**
-     * Resolves stored selection entries against the current arrangement and attaches the model objects
-     * they address. An entry whose element no longer exists keeps its coordinates without a target.
+     * Resolves the track a selection entry belongs to. A track selection addresses the track itself;
+     * every other granularity belongs to the track of the measure it addresses.
+     *
+     * @param entry The entry to resolve.
+     *
+     * @returns The track the entry belongs to.
+     */
+    public static trackOf(entry: ISelectionEntry): ISbDmTrack {
+        const { target } = entry;
+
+        return target.granularity === SelectionGranularity.Track ? target.track : target.measure.track;
+    }
+
+    /**
+     * Resolves the bar a selection entry addresses. A track selection spans the whole score and
+     * carries no bar of its own.
+     *
+     * @param entry The entry to resolve.
+     *
+     * @returns The one-based bar number, or 0 for a track selection.
+     */
+    public static barOf(entry: ISelectionEntry): number {
+        const { target } = entry;
+
+        return target.granularity === SelectionGranularity.Track ? 0 : target.measure.number;
+    }
+
+    /**
+     * Derives the coordinate form of a selection entry from the model objects it holds. The span an
+     * entry addresses is stored as fractions of its measure, so the stored form stays independent of
+     * the resolution the score is displayed in.
+     *
+     * @param entry The entry to reduce.
+     *
+     * @returns The entry's coordinates.
+     */
+    public static coordinatesOf(entry: ISelectionEntry): ISerialisedSelectionEntry {
+        const { target } = entry;
+
+        switch (target.granularity) {
+            case SelectionGranularity.Track: {
+                return { granularity: target.granularity, bar: 0, trackId: target.track.id };
+            }
+
+            case SelectionGranularity.Measure: {
+                return {
+                    granularity: target.granularity,
+                    bar: target.measure.number,
+                    trackId: target.measure.track.id,
+                };
+            }
+
+            case SelectionGranularity.TrackPiece: {
+                return {
+                    granularity: target.granularity,
+                    bar: target.measure.number,
+                    trackId: target.track.id,
+                };
+            }
+
+            case SelectionGranularity.NoteGroup: {
+                const { measure, events } = target;
+                const last = events[events.length - 1];
+                const end = addFractions(last.start, last.duration);
+
+                return {
+                    granularity: target.granularity,
+                    bar: measure.number,
+                    trackId: measure.track.id,
+                    start: reduceFraction(events[0].start.numerator, events[0].start.denominator),
+                    end: reduceFraction(end.numerator, end.denominator),
+                };
+            }
+
+            case SelectionGranularity.Note: {
+                const { measure, event } = target;
+                const start = target.start ?? event.start;
+                const end = target.end ?? addFractions(event.start, event.duration);
+
+                return {
+                    granularity: target.granularity,
+                    bar: measure.number,
+                    trackId: measure.track.id,
+                    start: reduceFraction(start.numerator, start.denominator),
+                    end: reduceFraction(end.numerator, end.denominator),
+                };
+            }
+        }
+    }
+
+    /**
+     * Resolves stored selection entries against the current arrangement, dropping entries whose
+     * element no longer exists — a selection cannot hold something the arrangement lacks.
      *
      * @param arrangement The arrangement the entries refer to.
      * @param entries The stored entries to resolve.
      *
-     * @returns The entries with the resolved model objects.
+     * @returns The entries holding the resolved model objects.
      */
     public static deserialise(arrangement: ISbDmArrangement,
         entries: ISerialisedSelectionEntry[]): ISelectionEntry[] {
-        return entries.map((stored) => {
-            const entry: ISelectionEntry = { ...stored };
+        const resolved: ISelectionEntry[] = [];
+        for (const stored of entries) {
             const target = SelectionSerializer.resolveTarget(arrangement, stored);
             if (target !== undefined) {
-                entry.target = target;
+                resolved.push({ granularity: stored.granularity, target });
             }
+        }
 
-            return entry;
-        });
+        return resolved;
+    }
+
+    /**
+     * Resolves the reference measure a bar number refers to. A measure-level selection addresses a
+     * bar, which spans all tracks, so the first track that has the bar supplies the measure the
+     * selection points at.
+     *
+     * @param arrangement The arrangement to search.
+     * @param bar The one-based measure number.
+     *
+     * @returns The reference measure, or undefined when no track has that bar.
+     */
+    public static measureOfBar(arrangement: ISbDmArrangement, bar: number): ISbDmTrackMeasure | undefined {
+        for (const track of arrangement.tracks) {
+            const measure = track.measures.at(bar - 1);
+            if (measure) {
+                return measure;
+            }
+        }
+
+        return undefined;
+    }
+
+    /**
+     * Checks whether a target addresses a subdivision slot instead of a plain grid cell. A slot
+     * occupies an exact fraction of the measure, so its start does not align to the grid cell that
+     * contains it — that is how the hit tests tell the two apart.
+     *
+     * @param target The target to inspect.
+     *
+     * @returns True when the target addresses a subdivision slot.
+     */
+    public static addressesSubdivisionSlot(target: ISelectionTarget): boolean {
+        if (target.granularity === SelectionGranularity.NoteGroup) {
+            return target.subdivision !== undefined;
+        }
+
+        if (target.granularity !== SelectionGranularity.Note) {
+            return false;
+        }
+
+        const start = target.start ?? target.event.start;
+        const cellStart = reduceFraction(SelectionSerializer.cellOf(start, target.measure),
+            target.measure.meter.stepResolution);
+
+        return compareFractions(start, cellStart) !== 0;
+    }
+
+    /**
+     * Returns the end of the span a note selection covers by default: the whole slot for a position
+     * inside a subdivision slot (which may be wider than a grid cell), otherwise the addressed grid
+     * cell, shortened at the end of the event.
+     *
+     * @param event The event the position belongs to.
+     * @param start The addressed position.
+     * @param measure The measure the position belongs to.
+     *
+     * @returns The default span end.
+     */
+    public static spanEnd(event: IMeasureEvent, start: IFraction, measure: ISbDmTrackMeasure): IFraction {
+        const eventEnd = addFractions(event.start, event.duration);
+        if (SelectionSerializer.subdivisionAt(measure, start) !== undefined) {
+            return eventEnd;
+        }
+
+        const cellEnd = addFractions(start, reduceFraction(1, measure.meter.stepResolution));
+
+        return compareFractions(cellEnd, eventEnd) < 0 ? cellEnd : eventEnd;
+    }
+
+    /**
+     * Converts a position inside a measure into the grid cell that addresses it. Grid consumers —
+     * the overlay, the toolbars and the grid editor — place and compare cells with this, while the
+     * stored coordinates stay fractions. A position inside a subdivision slot belongs to the
+     * subdivision's parent cell — the cell the rendered slot stands in for — so a slot selection
+     * covers the same cell as the note it replaced.
+     *
+     * @param start The position as a fraction of the measure.
+     * @param measure The measure supplying the step resolution.
+     *
+     * @returns The grid cell index.
+     */
+    public static cellOf(start: IFraction, measure: ISbDmTrackMeasure): number {
+        const subdivision = SelectionSerializer.subdivisionAt(measure, start);
+        const position = subdivision === undefined ? start : measure.events[subdivision.startIndex].start;
+
+        return Math.floor(position.numerator * measure.meter.stepResolution / position.denominator);
     }
 
     /**
@@ -235,12 +441,25 @@ export class SelectionSerializer {
             }
 
             case SelectionGranularity.Note: {
-                const start = stored.start ?? SelectionSerializer.stepFraction(stored.startStep ?? 0, measure);
-                const event = SelectionSerializer.eventAt(measure, start);
+                const { start } = stored;
+                if (start === undefined) {
+                    return undefined;
+                }
 
-                return event === undefined
-                    ? undefined
-                    : { granularity: SelectionGranularity.Note, measure, event };
+                const event = SelectionSerializer.eventAt(measure, start);
+                if (event === undefined) {
+                    return undefined;
+                }
+
+                return {
+                    granularity: SelectionGranularity.Note,
+                    measure,
+                    event,
+                    start: { ...start },
+                    end: stored.end === undefined
+                        ? addFractions(event.start, event.duration)
+                        : { ...stored.end },
+                };
             }
 
             case SelectionGranularity.NoteGroup: {
@@ -277,7 +496,7 @@ export class SelectionSerializer {
     }
 
     /**
-     * Returns the events whose start lands inside the step range of a note group entry.
+     * Returns the events whose start lands inside the stored span of a note group entry.
      *
      * @param measure The measure to search.
      * @param stored The stored note group entry.
@@ -285,14 +504,13 @@ export class SelectionSerializer {
      * @returns The events of the group, in measure order.
      */
     private static eventsInRange(measure: ISbDmTrackMeasure, stored: ISerialisedSelectionEntry): IMeasureEvent[] {
-        const stepsPerBar = measure.meter.stepResolution;
-        const startStep = stored.startStep ?? 0;
-        const endStep = stored.endStep ?? startStep;
+        const { start, end } = stored;
+        if (start === undefined || end === undefined) {
+            return [];
+        }
 
         return measure.events.filter((event) => {
-            const step = SelectionSerializer.stepOf(event.start, stepsPerBar);
-
-            return step !== undefined && step >= startStep && step <= endStep;
+            return compareFractions(event.start, start) >= 0 && compareFractions(event.start, end) < 0;
         });
     }
 
@@ -313,28 +531,32 @@ export class SelectionSerializer {
     }
 
     /**
-     * Converts a step index into its fraction of the measure.
+     * Returns the innermost subdivision that covers a position inside a measure.
      *
-     * @param step The zero-based step index.
-     * @param measure The measure supplying the step resolution.
-     *
-     * @returns The position as a reduced fraction of the measure.
-     */
-    private static stepFraction(step: number, measure: ISbDmTrackMeasure): IFraction {
-        return reduceFraction(step, measure.meter.stepResolution);
-    }
-
-    /**
-     * Converts a position inside a measure into a step index.
-     *
+     * @param measure The measure to scan.
      * @param start The position as a fraction of the measure.
-     * @param stepsPerBar The measure's step resolution.
      *
-     * @returns The step index, or undefined when the position does not land on a step.
+     * @returns The covering subdivision, or undefined when the position is not subdivided.
      */
-    private static stepOf(start: IFraction, stepsPerBar: number): number | undefined {
-        const step = start.numerator * stepsPerBar / start.denominator;
+    private static subdivisionAt(measure: ISbDmTrackMeasure, start: IFraction): ISubdivision | undefined {
+        let found: ISubdivision | undefined;
+        let foundStart: IFraction | undefined;
 
-        return Number.isInteger(step) ? step : undefined;
+        for (const subdivision of measure.subdivisions) {
+            const first = measure.events.at(subdivision.startIndex);
+            const last = measure.events.at(subdivision.startIndex + subdivision.actual - 1);
+            if (first === undefined || last === undefined) {
+                continue;
+            }
+
+            const end = addFractions(last.start, last.duration);
+            const covers = compareFractions(first.start, start) <= 0 && compareFractions(start, end) < 0;
+            if (covers && (foundStart === undefined || compareFractions(first.start, foundStart) > 0)) {
+                found = subdivision;
+                foundStart = first.start;
+            }
+        }
+
+        return found;
     }
 }

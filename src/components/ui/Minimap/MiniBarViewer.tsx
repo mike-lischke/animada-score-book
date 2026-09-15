@@ -9,7 +9,7 @@ import type { ISbDmArrangement } from "../../../core/ScoreBookDataModel.js";
 import { requisitions } from "../../../supplement/Requisitions.js";
 import type { SelectionManager } from "../../../ui/SelectionManager.js";
 import {
-    SelectionGranularity, type ISelectionDelta, type ISelectionEntry, type ISelectionHitTester,
+    SelectionGranularity, SelectionSerializer, type ISelectionDelta, type ISelectionEntry, type ISelectionHitTester,
 } from "../../../ui/SelectionSerializer.js";
 import type { ICommonUIProperties } from "../framework/UIComponent.js";
 import { UIComponent } from "../framework/UIComponent.js";
@@ -51,7 +51,7 @@ export class MiniBarViewer extends UIComponent<IMiniBarViewerProps, IMiniBarView
     }
 
     public hitTest(rect: DOMRect): ISelectionEntry[] {
-        const { barNumber } = this.props;
+        const { barNumber, arrangement } = this.props;
         const element = this.base as HTMLElement | null;
         if (!element) {
             return [];
@@ -63,10 +63,14 @@ export class MiniBarViewer extends UIComponent<IMiniBarViewerProps, IMiniBarView
             return [];
         }
 
+        const measure = SelectionSerializer.measureOfBar(arrangement, barNumber);
+        if (measure === undefined) {
+            return [];
+        }
+
         return [{
             granularity: SelectionGranularity.Measure,
-            bar: barNumber,
-            trackId: 0,
+            target: { granularity: SelectionGranularity.Measure, measure },
         }];
     }
 
@@ -137,13 +141,16 @@ export class MiniBarViewer extends UIComponent<IMiniBarViewerProps, IMiniBarView
         const selectedTrackIds = new Set<number>();
         for (const entry of sm.currentSelection.values()) {
             // Track-level selection (bar: 0) — applies to all bars of that track.
-            if (entry.granularity === SelectionGranularity.Track && entry.trackId > 0) {
-                selectedTrackIds.add(entry.trackId);
+            if (entry.granularity === SelectionGranularity.Track) {
+                selectedTrackIds.add(SelectionSerializer.trackOf(entry).id);
+
+                continue;
             }
 
             // Per-bar track selection — applies only to this specific bar.
-            if (entry.bar === barNumber && entry.trackId > 0) {
-                selectedTrackIds.add(entry.trackId);
+            const coordinates = SelectionSerializer.coordinatesOf(entry);
+            if (coordinates.bar === barNumber) {
+                selectedTrackIds.add(coordinates.trackId);
             }
         }
 

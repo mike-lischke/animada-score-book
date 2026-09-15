@@ -6,11 +6,17 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { Arrangement } from "../../src/core/Arrangement.js";
-import { ScoreBookDataModel, type ISbDmInstrument, type ISbDmTrackMeasure } from "../../src/core/ScoreBookDataModel.js";
-import { PasteResultKind, ScoreClipboard, SubdivisionPasteMode } from "../../src/core/ScoreClipboard.js";
+import { ScoreBookDataModel, type ISbDmInstrument, type ISbDmTrack, type ISbDmTrackMeasure }
+    from "../../src/core/ScoreBookDataModel.js";
+import {
+    PasteOverflowMode, PasteResultKind, ScoreClipboard, SubdivisionPasteMode,
+} from "../../src/core/ScoreClipboard.js";
 import { addFractions, compareFractions } from "../../src/core/serialisation/numeric-functions.js";
-import { SelectionGranularity, type ISelectionEntry } from "../../src/ui/SelectionSerializer.js";
-import { createInstrument, hydrateMeasureEvents } from "../unit-test-helpers.js";
+import { type ISelectionEntry } from "../../src/ui/SelectionSerializer.js";
+import {
+    createInstrument, hydrateMeasureEvents, measureEntry, noteEntry, runEntry, setCellNote, trackEntry,
+    trackPieceEntry,
+} from "../unit-test-helpers.js";
 
 /**
  * Returns the note style id covering the given step of a measure, or undefined for rests.
@@ -68,6 +74,21 @@ describe("ScoreClipboard", () => {
         (model as unknown as { data: { instruments: ISbDmInstrument[]; }; }).data.instruments = instruments;
     };
 
+    /**
+     * Builds a note selection entry addressing one grid cell of a track's measure.
+     *
+     * @param track The track to select a cell of.
+     * @param step The zero-based grid step to select.
+     * @param bar The one-based measure number; defaults to the first measure.
+     *
+     * @returns The selection entry addressing that cell.
+     */
+    const cell = (track: ISbDmTrack, step: number, bar = 1): ISelectionEntry => {
+        const measure = track.measures[bar - 1];
+
+        return noteEntry(measure, { numerator: step, denominator: measure.meter.stepResolution });
+    };
+
     beforeEach(() => {
         model = new ScoreBookDataModel();
         clipboard = new ScoreClipboard(model);
@@ -81,21 +102,17 @@ describe("ScoreClipboard", () => {
         const target = tracks[1];
 
         // A rest at the first cell followed by a note that absorbs the rest of the pulse.
-        model.setGridNote(source.id, 1, 1, "note");
+        setCellNote(model, source.id, 1, 1, "note");
 
         hydrateMeasureEvents(model.arrangement! as Arrangement);
 
+        const sourceMeasure = source.measures[0];
         clipboard.copy([
-            { granularity: SelectionGranularity.Note, bar: 1, trackId: source.id, startStep: 0, endStep: 0 },
-            {
-                granularity: SelectionGranularity.Note, bar: 1, trackId: source.id, startStep: 1, endStep: 1,
-                noteId: source.measures[0].noteEvents[1].id,
-            },
+            noteEntry(sourceMeasure, { numerator: 0, denominator: 16 }),
+            noteEntry(sourceMeasure, { numerator: 1, denominator: 16 }),
         ]);
 
-        const result = clipboard.paste([
-            { granularity: SelectionGranularity.TrackPiece, bar: 1, trackId: target.id },
-        ]);
+        const result = clipboard.paste([trackPieceEntry(target, target.measures[0])]);
 
         expect(result.kind).toBe(PasteResultKind.Success);
 
@@ -109,21 +126,126 @@ describe("ScoreClipboard", () => {
         }
     });
 
+    // A copied note keeps its duration: the source events are laid out contiguously from the target
+    // range start, so the quarter note overwrites the last target cell and the following rest.
+    it("writes the copied notes over the selected target range", () => {
+        model.startNewArrangement([instrumentA(), instrumentA()]);
+        const [source, target] = model.arrangement!.tracks;
+
+        // Source: two 16th notes followed by a quarter note.
+        model.setNoteAt(source.id, 1, { numerator: 0, denominator: 16 }, { numerator: 1, denominator: 16 }, "1");
+        model.setNoteAt(source.id, 1, { numerator: 1, denominator: 16 }, { numerator: 1, denominator: 16 }, "1");
+        model.setNoteAt(source.id, 1, { numerator: 2, denominator: 16 }, { numerator: 1, denominator: 4 }, "1");
+        hydrateMeasureEvents(model.arrangement! as Arrangement);
+
+        // Target: a 16th note, an 8th rest and another 16th note.
+        model.setNoteAt(target.id, 1, { numerator: 0, denominator: 16 }, { numerator: 1, denominator: 16 }, "1");
+        model.setNoteAt(target.id, 1, { numerator: 3, denominator: 16 }, { numerator: 1, denominator: 16 }, "1");
+        hydrateMeasureEvents(model.arrangement! as Arrangement);
+
+        clipboard.copy([
+            noteEntry(source.measures[0], { numerator: 0, denominator: 16 }),
+            noteEntry(source.measures[0], { numerator: 1, denominator: 16 }),
+            noteEntry(source.measures[0], { numerator: 2, denominator: 16 }),
+        ]);
+
+        const result = clipboard.paste([
+            noteEntry(target.measures[0], { numerator: 0, denominator: 16 }),
+            noteEntry(target.measures[0], { numerator: 1, denominator: 16 }),
+            noteEntry(target.measures[0], { numerator: 3, denominator: 16 }),
+        ]);
+
+        expect(result.kind).toBe(PasteResultKind.Success);
+
+        const measure = target.measures[0];
+
+        // The two 16th notes and the quarter note replace the selected cells.
+        expect(noteAtFraction(measure, 0, 16)).toBe("1");
+        expect(noteAtFraction(measure, 1, 16)).toBe("1");
+
+        const quarter = measure.events.find((event) => {
+            return compareFractions(event.start, { numerator: 2, denominator: 16 }) === 0;
+        });
+        expect(quarter?.noteStyleId).toBe("1");
+        expect(quarter?.duration).toEqual({ numerator: 1, denominator: 4 });
+        expect(quarter?.articulation).toBeUndefined();
+        expect(noteAtFraction(measure, 6, 16)).toBeUndefined();
+    });
+
+    // The staff view keeps a pasted phrase as it is: the notes behind the replaced quarter rest give
+    // way, so the last two 16th notes of the measure flow into the next one.
+    it("shifts the following notes when the target run is smaller than the source", () => {
+        model.startNewArrangement([instrumentA(), instrumentA()], { length: 2 });
+        const [source, target] = model.arrangement!.tracks;
+
+        // Source: two 16th notes followed by a quarter note.
+        model.setNoteAt(source.id, 1, { numerator: 0, denominator: 16 }, { numerator: 1, denominator: 16 }, "1");
+        model.setNoteAt(source.id, 1, { numerator: 1, denominator: 16 }, { numerator: 1, denominator: 16 }, "1");
+        model.setNoteAt(source.id, 1, { numerator: 2, denominator: 16 }, { numerator: 1, denominator: 4 }, "1");
+
+        // Target: four 16th notes, a quarter rest and eight 16th notes.
+        for (let step = 0; step < 4; step++) {
+            setCellNote(model, target.id, 1, step, "2");
+        }
+
+        for (let step = 8; step < 16; step++) {
+            setCellNote(model, target.id, 1, step, "2");
+        }
+
+        hydrateMeasureEvents(model.arrangement! as Arrangement);
+
+        // The staff selects runs, so every entry addresses a measure event instead of a grid cell.
+        const sourceMeasure = source.measures[0];
+
+        clipboard.copy(sourceMeasure.events.slice(0, 3).map((event) => {
+            return runEntry(sourceMeasure, event);
+        }));
+
+        const targetMeasure = target.measures[0];
+        const rest = targetMeasure.events.find((event) => {
+            return event.noteStyleId === undefined
+                && event.start.numerator === 1 && event.start.denominator === 4;
+        })!;
+        const result = clipboard.paste([runEntry(targetMeasure, rest)],
+            { overflowMode: PasteOverflowMode.Shift });
+
+        expect(result.kind).toBe(PasteResultKind.Success);
+
+        const first = target.measures[0];
+        const second = target.measures[1];
+
+        // The notes before the rest keep their place, the copied phrase starts where it was.
+        for (let step = 0; step < 4; step++) {
+            expect(noteAtStep(first, step), `step ${step}`).toBe("2");
+        }
+
+        expect(noteAtStep(first, 4)).toBe("1");
+        expect(noteAtStep(first, 5)).toBe("1");
+        expect(noteAtStep(first, 9)).toBe("1");
+
+        // The eight 16th notes move two steps to the right, the last two into the next measure.
+        for (let step = 10; step < 16; step++) {
+            expect(noteAtStep(first, step), `step ${step}`).toBe("2");
+        }
+
+        expect(noteAtStep(second, 0)).toBe("2");
+        expect(noteAtStep(second, 1)).toBe("2");
+        expect(noteAtStep(second, 2)).toBeUndefined();
+    });
+
     it("tiles a copied note across a selected note group", () => {
         const instruments = [instrumentA()];
         model.startNewArrangement(instruments);
         const track = model.arrangement!.tracks[0];
-        model.setGridNote(track.id, 1, 0, "1");
+        setCellNote(model, track.id, 1, 0, "1");
 
-        const copied = clipboard.copy([{
-            granularity: SelectionGranularity.Note, bar: 1, trackId: track.id, startStep: 0,
-        }]);
+        const copied = clipboard.copy([cell(track, 0)]);
 
         expect(copied).toBe(true);
 
-        const result = clipboard.paste([{
-            granularity: SelectionGranularity.NoteGroup, bar: 1, trackId: track.id, startStep: 4, endStep: 7,
-        }]);
+        const result = clipboard.paste([
+            cell(track, 4), cell(track, 5), cell(track, 6), cell(track, 7),
+        ]);
 
         expect(result.kind).toBe(PasteResultKind.Success);
         for (let step = 4; step <= 7; step++) {
@@ -136,19 +258,12 @@ describe("ScoreClipboard", () => {
         const track = model.arrangement!.tracks[0];
 
         for (let step = 0; step < 4; step++) {
-            model.setGridNote(track.id, 1, step, String(step + 1));
+            setCellNote(model, track.id, 1, step, String(step + 1));
         }
 
-        clipboard.copy([
-            { granularity: SelectionGranularity.Note, bar: 1, trackId: track.id, startStep: 0 },
-            { granularity: SelectionGranularity.Note, bar: 1, trackId: track.id, startStep: 1 },
-            { granularity: SelectionGranularity.Note, bar: 1, trackId: track.id, startStep: 2 },
-            { granularity: SelectionGranularity.Note, bar: 1, trackId: track.id, startStep: 3 },
-        ]);
+        clipboard.copy([cell(track, 0), cell(track, 1), cell(track, 2), cell(track, 3)]);
 
-        const result = clipboard.paste([
-            { granularity: SelectionGranularity.NoteGroup, bar: 1, trackId: track.id, startStep: 5, endStep: 6 },
-        ]);
+        const result = clipboard.paste([cell(track, 5), cell(track, 6)]);
 
         expect(result.kind).toBe(PasteResultKind.Success);
         expect(noteAtStep(track.measures[0], 5)).toBe("1");
@@ -161,20 +276,14 @@ describe("ScoreClipboard", () => {
         model.startNewArrangement(instruments);
         const tracks = model.arrangement!.tracks;
 
-        model.setGridNote(tracks[0].id, 1, 0, "A");
-        model.setGridNote(tracks[1].id, 1, 0, "B");
+        setCellNote(model, tracks[0].id, 1, 0, "A");
+        setCellNote(model, tracks[1].id, 1, 0, "B");
 
-        clipboard.copy([
-            { granularity: SelectionGranularity.Note, bar: 1, trackId: tracks[0].id, startStep: 0 },
-            { granularity: SelectionGranularity.Note, bar: 1, trackId: tracks[1].id, startStep: 0 },
-        ]);
+        clipboard.copy([cell(tracks[0], 0), cell(tracks[1], 0)]);
 
         // Two adjacent cells on the first track only: the second source track must not be pasted
         // into the unselected second track.
-        const result = clipboard.paste([
-            { granularity: SelectionGranularity.Note, bar: 1, trackId: tracks[0].id, startStep: 4, endStep: 4 },
-            { granularity: SelectionGranularity.Note, bar: 1, trackId: tracks[0].id, startStep: 5, endStep: 5 },
-        ]);
+        const result = clipboard.paste([cell(tracks[0], 4), cell(tracks[0], 5)]);
 
         expect(result.kind).toBe(PasteResultKind.Success);
         expect(noteAtStep(tracks[0].measures[0], 4)).toBe("A");
@@ -186,17 +295,13 @@ describe("ScoreClipboard", () => {
     it("tiles a copied track piece across a whole track", () => {
         model.startNewArrangement([instrumentA()], { length: 3 });
         const track = model.arrangement!.tracks[0];
-        model.setGridNote(track.id, 1, 0, "1");
+        setCellNote(model, track.id, 1, 0, "1");
 
-        const copied = clipboard.copy([{
-            granularity: SelectionGranularity.TrackPiece, bar: 1, trackId: track.id,
-        }]);
+        const copied = clipboard.copy([trackPieceEntry(track, track.measures[0])]);
 
         expect(copied).toBe(true);
 
-        const result = clipboard.paste([{
-            granularity: SelectionGranularity.Track, bar: 0, trackId: track.id,
-        }]);
+        const result = clipboard.paste([trackEntry(track)]);
 
         expect(result.kind).toBe(PasteResultKind.Success);
         for (const measure of track.measures) {
@@ -207,23 +312,20 @@ describe("ScoreClipboard", () => {
     it("tiles a multi-bar note selection across a target range", () => {
         model.startNewArrangement([instrumentA()], { length: 2 });
         const track = model.arrangement!.tracks[0];
-        model.setGridNote(track.id, 1, 0, "1");
-        model.setGridNote(track.id, 1, 1, "2");
-        model.setGridNote(track.id, 2, 0, "3");
-        model.setGridNote(track.id, 2, 1, "4");
+        setCellNote(model, track.id, 1, 0, "1");
+        setCellNote(model, track.id, 1, 1, "2");
+        setCellNote(model, track.id, 2, 0, "3");
+        setCellNote(model, track.id, 2, 1, "4");
 
         const copied = clipboard.copy([
-            { granularity: SelectionGranularity.Note, bar: 1, trackId: track.id, startStep: 0 },
-            { granularity: SelectionGranularity.Note, bar: 1, trackId: track.id, startStep: 1 },
-            { granularity: SelectionGranularity.Note, bar: 2, trackId: track.id, startStep: 0 },
-            { granularity: SelectionGranularity.Note, bar: 2, trackId: track.id, startStep: 1 },
+            cell(track, 0, 1), cell(track, 1, 1), cell(track, 0, 2), cell(track, 1, 2),
         ]);
 
         expect(copied).toBe(true);
 
-        const result = clipboard.paste([{
-            granularity: SelectionGranularity.NoteGroup, bar: 1, trackId: track.id, startStep: 4, endStep: 13,
-        }]);
+        const result = clipboard.paste(Array.from({ length: 10 }, (_, index) => {
+            return cell(track, 4 + index);
+        }));
 
         expect(result.kind).toBe(PasteResultKind.Success);
 
@@ -238,21 +340,14 @@ describe("ScoreClipboard", () => {
         const track = model.arrangement!.tracks[0];
 
         for (let step = 0; step < 4; step++) {
-            model.setGridNote(track.id, 1, step, String(step + 1));
+            setCellNote(model, track.id, 1, step, String(step + 1));
         }
 
-        const copied = clipboard.copy([
-            { granularity: SelectionGranularity.Note, bar: 1, trackId: track.id, startStep: 0 },
-            { granularity: SelectionGranularity.Note, bar: 1, trackId: track.id, startStep: 1 },
-            { granularity: SelectionGranularity.Note, bar: 1, trackId: track.id, startStep: 2 },
-            { granularity: SelectionGranularity.Note, bar: 1, trackId: track.id, startStep: 3 },
-        ]);
+        const copied = clipboard.copy([cell(track, 0), cell(track, 1), cell(track, 2), cell(track, 3)]);
 
         expect(copied).toBe(true);
 
-        const result = clipboard.paste([
-            { granularity: SelectionGranularity.Note, bar: 1, trackId: track.id, startStep: 8 },
-        ]);
+        const result = clipboard.paste([cell(track, 8)], { singleNote: true });
 
         expect(result.kind).toBe(PasteResultKind.Success);
         expect(noteAtStep(track.measures[0], 8)).toBe("1");
@@ -275,27 +370,20 @@ describe("ScoreClipboard", () => {
             return track.instrument.typeId === "c";
         })!;
 
-        model.setGridNote(trackA.id, 1, 0, "a1");
-        model.setGridNote(trackA.id, 1, 1, "a2");
-        model.setGridNote(trackB.id, 1, 0, "b1");
-        model.setGridNote(trackB.id, 1, 1, "b2");
-        model.setGridNote(trackC.id, 1, 0, "c1");
-        model.setGridNote(trackC.id, 1, 1, "c2");
+        setCellNote(model, trackA.id, 1, 0, "a1");
+        setCellNote(model, trackA.id, 1, 1, "a2");
+        setCellNote(model, trackB.id, 1, 0, "b1");
+        setCellNote(model, trackB.id, 1, 1, "b2");
+        setCellNote(model, trackC.id, 1, 0, "c1");
+        setCellNote(model, trackC.id, 1, 1, "c2");
 
         const copied = clipboard.copy([
-            { granularity: SelectionGranularity.Note, bar: 1, trackId: trackA.id, startStep: 0 },
-            { granularity: SelectionGranularity.Note, bar: 1, trackId: trackA.id, startStep: 1 },
-            { granularity: SelectionGranularity.Note, bar: 1, trackId: trackB.id, startStep: 0 },
-            { granularity: SelectionGranularity.Note, bar: 1, trackId: trackB.id, startStep: 1 },
-            { granularity: SelectionGranularity.Note, bar: 1, trackId: trackC.id, startStep: 0 },
-            { granularity: SelectionGranularity.Note, bar: 1, trackId: trackC.id, startStep: 1 },
+            cell(trackA, 0), cell(trackA, 1), cell(trackB, 0), cell(trackB, 1), cell(trackC, 0), cell(trackC, 1),
         ]);
 
         expect(copied).toBe(true);
 
-        const result = clipboard.paste([
-            { granularity: SelectionGranularity.Note, bar: 2, trackId: trackA.id, startStep: 0 },
-        ]);
+        const result = clipboard.paste([cell(trackA, 0, 2)], { singleNote: true });
 
         expect(result.kind).toBe(PasteResultKind.Success);
         expect(noteAtStep(trackA.measures[1], 0)).toBe("a1");
@@ -320,15 +408,11 @@ describe("ScoreClipboard", () => {
             return track.instrument.typeId === "c";
         })!;
 
-        model.setGridNote(trackA.id, 1, 0, "a1");
-        model.setGridNote(trackB.id, 1, 0, "b1");
-        model.setGridNote(trackC.id, 1, 0, "c1");
+        setCellNote(model, trackA.id, 1, 0, "a1");
+        setCellNote(model, trackB.id, 1, 0, "b1");
+        setCellNote(model, trackC.id, 1, 0, "c1");
 
-        const copied = clipboard.copy([
-            { granularity: SelectionGranularity.Note, bar: 1, trackId: trackA.id, startStep: 0 },
-            { granularity: SelectionGranularity.Note, bar: 1, trackId: trackB.id, startStep: 0 },
-            { granularity: SelectionGranularity.Note, bar: 1, trackId: trackC.id, startStep: 0 },
-        ]);
+        const copied = clipboard.copy([cell(trackA, 0), cell(trackB, 0), cell(trackC, 0)]);
 
         expect(copied).toBe(true);
 
@@ -338,9 +422,7 @@ describe("ScoreClipboard", () => {
         const newTrackA = model.arrangement!.tracks.find((track) => {
             return track.instrument.typeId === "a";
         })!;
-        const result = clipboard.paste([
-            { granularity: SelectionGranularity.Note, bar: 2, trackId: newTrackA.id, startStep: 0 },
-        ]);
+        const result = clipboard.paste([cell(newTrackA, 0, 2)]);
 
         expect(result.kind).toBe(PasteResultKind.Success);
         expect(noteAtStep(newTrackA.measures[1], 0)).toBe("a1");
@@ -359,20 +441,17 @@ describe("ScoreClipboard", () => {
         model.startNewArrangement(instruments);
 
         const tracks = model.arrangement!.tracks;
-        model.setGridNote(tracks[0].id, 1, 0, "1");
-        model.setGridNote(tracks[0].id, 1, 1, "2");
+        setCellNote(model, tracks[0].id, 1, 0, "1");
+        setCellNote(model, tracks[0].id, 1, 1, "2");
 
-        const copied = clipboard.copy([
-            { granularity: SelectionGranularity.Note, bar: 1, trackId: tracks[0].id, startStep: 0 },
-            { granularity: SelectionGranularity.Note, bar: 1, trackId: tracks[0].id, startStep: 1 },
-        ]);
+        const copied = clipboard.copy([cell(tracks[0], 0), cell(tracks[0], 1)]);
 
         expect(copied).toBe(true);
 
         const entries: ISelectionEntry[] = [];
         for (const track of tracks) {
             for (let step = 4; step <= 8; step++) {
-                entries.push({ granularity: SelectionGranularity.Note, bar: 1, trackId: track.id, startStep: step });
+                entries.push(cell(track, step));
             }
         }
 
@@ -392,17 +471,15 @@ describe("ScoreClipboard", () => {
     it("replaces the whole target measure when a measure is pasted onto a note", () => {
         model.startNewArrangement([instrumentA()]);
         const track = model.arrangement!.tracks[0];
-        model.setGridNote(track.id, 1, 0, "1");
-        model.setGridNote(track.id, 1, 1, "1");
+        setCellNote(model, track.id, 1, 0, "1");
+        setCellNote(model, track.id, 1, 1, "1");
 
-        clipboard.copy([{ granularity: SelectionGranularity.Measure, bar: 1, trackId: 0 }]);
+        clipboard.copy([measureEntry(track.measures[0])]);
 
-        model.setGridNote(track.id, 1, 0);
-        model.setGridNote(track.id, 1, 1);
+        setCellNote(model, track.id, 1, 0);
+        setCellNote(model, track.id, 1, 1);
 
-        const result = clipboard.paste([{
-            granularity: SelectionGranularity.Note, bar: 1, trackId: track.id, startStep: 5,
-        }]);
+        const result = clipboard.paste([cell(track, 5)]);
 
         expect(result.kind).toBe(PasteResultKind.Success);
         expect(noteAtStep(track.measures[0], 0)).toBe("1");
@@ -418,11 +495,11 @@ describe("ScoreClipboard", () => {
         const trackB = model.arrangement!.tracks.find((track) => {
             return track.instrument.typeId === "b";
         })!;
-        model.setGridNote(trackA.id, 1, 0, "1");
+        setCellNote(model, trackA.id, 1, 0, "1");
 
-        clipboard.copy([{ granularity: SelectionGranularity.TrackPiece, bar: 1, trackId: trackA.id }]);
+        clipboard.copy([trackPieceEntry(trackA, trackA.measures[0])]);
 
-        const result = clipboard.paste([{ granularity: SelectionGranularity.TrackPiece, bar: 1, trackId: trackB.id }]);
+        const result = clipboard.paste([trackPieceEntry(trackB, trackB.measures[0])]);
 
         expect(result.kind).toBe(PasteResultKind.InstrumentMismatch);
     });
@@ -430,16 +507,14 @@ describe("ScoreClipboard", () => {
     it("rejects pasting across different meters", () => {
         model.startNewArrangement([instrumentA()]);
         const track = model.arrangement!.tracks[0];
-        model.setGridNote(track.id, 1, 0, "1");
+        setCellNote(model, track.id, 1, 0, "1");
 
-        clipboard.copy([{ granularity: SelectionGranularity.TrackPiece, bar: 1, trackId: track.id }]);
+        clipboard.copy([trackPieceEntry(track, track.measures[0])]);
 
         model.startNewArrangement([instrumentA()], { stepResolution: 8 });
         const targetTrack = model.arrangement!.tracks[0];
 
-        const result = clipboard.paste([
-            { granularity: SelectionGranularity.TrackPiece, bar: 1, trackId: targetTrack.id },
-        ]);
+        const result = clipboard.paste([trackPieceEntry(targetTrack, targetTrack.measures[0])]);
 
         expect(result.kind).toBe(PasteResultKind.MeterMismatch);
     });
@@ -447,10 +522,10 @@ describe("ScoreClipboard", () => {
     it("cut copies the content and clears the source", () => {
         model.startNewArrangement([instrumentA()]);
         const track = model.arrangement!.tracks[0];
-        model.setGridNote(track.id, 1, 0, "1");
-        model.setGridNote(track.id, 1, 1, "1");
+        setCellNote(model, track.id, 1, 0, "1");
+        setCellNote(model, track.id, 1, 1, "1");
 
-        const cut = clipboard.cut([{ granularity: SelectionGranularity.TrackPiece, bar: 1, trackId: track.id }]);
+        const cut = clipboard.cut([trackPieceEntry(track, track.measures[0])]);
 
         expect(cut).toBe(true);
         expect(noteAtStep(track.measures[0], 0)).toBeUndefined();
@@ -466,21 +541,20 @@ describe("ScoreClipboard", () => {
         const sourceTrack = model.arrangement!.tracks.find((track) => {
             return track.instrument.typeId === "a";
         })!;
-        model.setGridNote(sourceTrack.id, 1, 0, "1");
+        setCellNote(model, sourceTrack.id, 1, 0, "1");
 
-        clipboard.copy([{ granularity: SelectionGranularity.Track, bar: 0, trackId: sourceTrack.id }]);
+        clipboard.copy([trackEntry(sourceTrack)]);
 
         model.startNewArrangement([instrumentB()]);
         const targetTrack = model.arrangement!.tracks[0];
 
-        const pending = clipboard.paste([
-            { granularity: SelectionGranularity.TrackPiece, bar: 1, trackId: targetTrack.id },
-        ]);
+        const pending = clipboard.paste([trackPieceEntry(targetTrack, targetTrack.measures[0])]);
 
         expect(pending.kind).toBe(PasteResultKind.NeedsTrackCreation);
 
         const created = clipboard.paste(
-            [{ granularity: SelectionGranularity.TrackPiece, bar: 1, trackId: targetTrack.id }], true,
+            [trackPieceEntry(targetTrack, targetTrack.measures[0])],
+            { createTrack: true },
         );
 
         expect(created.kind).toBe(PasteResultKind.Success);
@@ -495,9 +569,9 @@ describe("ScoreClipboard", () => {
     it("returns no selection for an empty paste target", () => {
         model.startNewArrangement([instrumentA()]);
         const track = model.arrangement!.tracks[0];
-        model.setGridNote(track.id, 1, 0, "1");
+        setCellNote(model, track.id, 1, 0, "1");
 
-        clipboard.copy([{ granularity: SelectionGranularity.Note, bar: 1, trackId: track.id, startStep: 0 }]);
+        clipboard.copy([cell(track, 0)]);
 
         const result = clipboard.paste([] as ISelectionEntry[]);
 
@@ -513,14 +587,9 @@ describe("ScoreClipboard", () => {
         );
         hydrateMeasureEvents(model.arrangement! as Arrangement);
 
-        const noteId = track.measures[0].noteEvents[0].id;
-        clipboard.copy([{
-            granularity: SelectionGranularity.Note, bar: 1, trackId: track.id, startStep: 0, noteId,
-        }]);
+        clipboard.copy([cell(track, 0)]);
 
-        const result = clipboard.paste([{
-            granularity: SelectionGranularity.Note, bar: 1, trackId: track.id, startStep: 8, endStep: 8,
-        }]);
+        const result = clipboard.paste([cell(track, 8)]);
 
         expect(result.kind).toBe(PasteResultKind.Success);
         // The pasted note keeps the full quarter-note duration (steps 8-11), not a single step.
@@ -534,14 +603,12 @@ describe("ScoreClipboard", () => {
         const track = model.arrangement!.tracks[0];
 
         for (let step = 0; step < 8; step++) {
-            model.setGridNote(track.id, 1, step, "A");
+            setCellNote(model, track.id, 1, step, "A");
         }
 
-        clipboard.copy([{ granularity: SelectionGranularity.Note, bar: 1, trackId: track.id, startStep: 0 }]);
+        clipboard.copy([cell(track, 0)]);
 
-        const result = clipboard.paste([{
-            granularity: SelectionGranularity.Note, bar: 1, trackId: track.id, startStep: 4,
-        }]);
+        const result = clipboard.paste([cell(track, 4)]);
 
         expect(result.kind).toBe(PasteResultKind.Success);
         expect(noteAtStep(track.measures[0], 4)).toBe("A");
@@ -556,23 +623,17 @@ describe("ScoreClipboard", () => {
         const tracks = model.arrangement!.tracks;
 
         // Source: a single-cell note, followed by another note so it does not absorb the pulse.
-        model.setGridNote(tracks[0].id, 1, 0, "src");
-        model.setGridNote(tracks[0].id, 1, 1, "src-next");
+        setCellNote(model, tracks[0].id, 1, 0, "src");
+        setCellNote(model, tracks[0].id, 1, 1, "src-next");
 
         // Target: a pulse-length note at the second cell, as if the user typed "1" there.
-        model.setGridNote(tracks[1].id, 1, 1, "typed");
+        setCellNote(model, tracks[1].id, 1, 1, "typed");
 
         hydrateMeasureEvents(model.arrangement! as Arrangement);
 
-        clipboard.copy([{
-            granularity: SelectionGranularity.Note, bar: 1, trackId: tracks[0].id, startStep: 0, endStep: 0,
-            noteId: tracks[0].measures[0].noteEvents[0].id,
-        }]);
+        clipboard.copy([cell(tracks[0], 0)]);
 
-        const result = clipboard.paste([{
-            granularity: SelectionGranularity.Note, bar: 1, trackId: tracks[1].id, startStep: 1, endStep: 1,
-            noteId: tracks[1].measures[0].noteEvents[0].id,
-        }]);
+        const result = clipboard.paste([cell(tracks[1], 1)]);
 
         expect(result.kind).toBe(PasteResultKind.Success);
 
@@ -592,25 +653,20 @@ describe("ScoreClipboard", () => {
 
         for (const track of tracks) {
             for (let step = 0; step < 3; step++) {
-                model.setGridNote(track.id, 1, step, `${track.id}-${step}`);
+                setCellNote(model, track.id, 1, step, `${track.id}-${step}`);
             }
         }
 
         const entries: ISelectionEntry[] = [];
         for (const track of tracks) {
             for (let step = 0; step < 3; step++) {
-                entries.push({
-                    granularity: SelectionGranularity.Note, bar: 1, trackId: track.id,
-                    startStep: step, endStep: step,
-                });
+                entries.push(cell(track, step));
             }
         }
 
         clipboard.copy(entries);
 
-        const result = clipboard.paste([
-            { granularity: SelectionGranularity.Track, bar: 0, trackId: tracks[0].id },
-        ]);
+        const result = clipboard.paste([trackEntry(tracks[0])]);
 
         expect(result.kind).toBe(PasteResultKind.Success);
 
@@ -643,25 +699,20 @@ describe("ScoreClipboard", () => {
 
         for (const track of repiTracks) {
             for (let step = 0; step < 3; step++) {
-                model.setGridNote(track.id, 1, step, `${track.id}-${step}`);
+                setCellNote(model, track.id, 1, step, `${track.id}-${step}`);
             }
         }
 
         const entries: ISelectionEntry[] = [];
         for (const track of repiTracks) {
             for (let step = 0; step < 3; step++) {
-                entries.push({
-                    granularity: SelectionGranularity.Note, bar: 1, trackId: track.id,
-                    startStep: step, endStep: step,
-                });
+                entries.push(cell(track, step));
             }
         }
 
         clipboard.copy(entries);
 
-        const result = clipboard.paste([
-            { granularity: SelectionGranularity.Note, bar: 1, trackId: surdoTrack.id, startStep: 5, endStep: 5 },
-        ]);
+        const result = clipboard.paste([cell(surdoTrack, 5)]);
 
         expect(result.kind).toBe(PasteResultKind.InstrumentMismatch);
 
@@ -685,17 +736,14 @@ describe("ScoreClipboard", () => {
 
         for (const track of repiTracks) {
             for (let step = 0; step < 3; step++) {
-                model.setGridNote(track.id, 1, step, `${track.id}-${step}`);
+                setCellNote(model, track.id, 1, step, `${track.id}-${step}`);
             }
         }
 
         const entries: ISelectionEntry[] = [];
         for (const track of repiTracks) {
             for (let step = 0; step < 3; step++) {
-                entries.push({
-                    granularity: SelectionGranularity.Note, bar: 1, trackId: track.id,
-                    startStep: step, endStep: step,
-                });
+                entries.push(cell(track, step));
             }
         }
 
@@ -703,9 +751,7 @@ describe("ScoreClipboard", () => {
 
         // Cursor on the last of the three copied tracks: the remaining source rows would land in
         // the following track, which is a different instrument.
-        const result = clipboard.paste([
-            { granularity: SelectionGranularity.Note, bar: 1, trackId: lastRepiTrack.id, startStep: 5, endStep: 5 },
-        ]);
+        const result = clipboard.paste([cell(lastRepiTrack, 5)]);
 
         expect(result.kind).toBe(PasteResultKind.InstrumentMismatch);
         expect(noteAtStep(lastRepiTrack.measures[0], 5)).toBeUndefined();
@@ -732,21 +778,15 @@ describe("ScoreClipboard", () => {
 
         const entries: ISelectionEntry[] = [];
         for (let slot = 0; slot < 3; slot++) {
-            entries.push({
-                granularity: SelectionGranularity.Note, bar: 1, trackId: track.id, startStep: 0, endStep: 0,
-                start: { numerator: slot, denominator: 12 }, noteId: track.measures[0].noteEvents[slot]?.id,
-            });
+            entries.push(noteEntry(track.measures[0], { numerator: slot, denominator: 12 }));
         }
 
         clipboard.copy(entries);
 
         const cursorSlot = 5;
         const result = clipboard.paste([
-            {
-                granularity: SelectionGranularity.Note, bar: 1, trackId: track.id, startStep: 0, endStep: 0,
-                start: { numerator: cursorSlot, denominator: 12 }, noteId: track.measures[0].noteEvents[cursorSlot]?.id,
-            },
-        ]);
+            noteEntry(track.measures[0], { numerator: cursorSlot, denominator: 12 }),
+        ], { singleNote: true });
 
         expect(result.kind).toBe(PasteResultKind.Success);
 
@@ -783,20 +823,14 @@ describe("ScoreClipboard", () => {
 
         const entries: ISelectionEntry[] = [];
         for (let slot = 0; slot < 3; slot++) {
-            entries.push({
-                granularity: SelectionGranularity.Note, bar: 1, trackId: track.id, startStep: 0, endStep: 0,
-                start: { numerator: slot, denominator: 12 }, noteId: track.measures[0].noteEvents[slot]?.id,
-            });
+            entries.push(noteEntry(track.measures[0], { numerator: slot, denominator: 12 }));
         }
 
         clipboard.copy(entries);
 
         const targetEntries: ISelectionEntry[] = [];
         for (let slot = 5; slot <= 7; slot++) {
-            targetEntries.push({
-                granularity: SelectionGranularity.Note, bar: 1, trackId: track.id, startStep: 0, endStep: 0,
-                start: { numerator: slot, denominator: 12 }, noteId: track.measures[0].noteEvents[slot]?.id,
-            });
+            targetEntries.push(noteEntry(track.measures[0], { numerator: slot, denominator: 12 }));
         }
 
         const result = clipboard.paste(targetEntries);
@@ -836,20 +870,14 @@ describe("ScoreClipboard", () => {
 
         const entries: ISelectionEntry[] = [];
         for (let slot = 0; slot < 3; slot++) {
-            entries.push({
-                granularity: SelectionGranularity.Note, bar: 1, trackId: sourceTrack.id, startStep: 0, endStep: 0,
-                start: { numerator: slot, denominator: 12 }, noteId: sourceTrack.measures[0].noteEvents[slot]?.id,
-            });
+            entries.push(noteEntry(sourceTrack.measures[0], { numerator: slot, denominator: 12 }));
         }
 
         clipboard.copy(entries);
 
         const result = clipboard.paste([
-            {
-                granularity: SelectionGranularity.Note, bar: 1, trackId: targetTrack.id, startStep: 0, endStep: 0,
-                start: { numerator: 5, denominator: 12 }, noteId: targetTrack.measures[0].noteEvents[5]?.id,
-            },
-        ]);
+            noteEntry(targetTrack.measures[0], { numerator: 5, denominator: 12 }),
+        ], { singleNote: true });
 
         expect(result.kind).toBe(PasteResultKind.Success);
 
@@ -885,19 +913,12 @@ describe("ScoreClipboard", () => {
 
         const entries: ISelectionEntry[] = [];
         for (let slot = 0; slot < 3; slot++) {
-            entries.push({
-                granularity: SelectionGranularity.Note, bar: 1, trackId: sourceTrack.id, startStep: 0, endStep: 0,
-                start: { numerator: slot, denominator: 12 }, noteId: sourceTrack.measures[0].noteEvents[slot]?.id,
-            });
+            entries.push(noteEntry(sourceTrack.measures[0], { numerator: slot, denominator: 12 }));
         }
 
         clipboard.copy(entries);
 
-        const result = clipboard.paste([
-            {
-                granularity: SelectionGranularity.Note, bar: 1, trackId: targetTrack.id, startStep: 5, endStep: 5,
-            },
-        ]);
+        const result = clipboard.paste([cell(targetTrack, 5)], { singleNote: true });
 
         expect(result.kind).toBe(PasteResultKind.Success);
         expect(result.selectionInvalidated).toBe(true);
@@ -935,26 +956,20 @@ describe("ScoreClipboard", () => {
 
         const entries: ISelectionEntry[] = [];
         for (let slot = 0; slot < 3; slot++) {
-            entries.push({
-                granularity: SelectionGranularity.Note, bar: 1, trackId: sourceTrack.id, startStep: 0, endStep: 0,
-                start: { numerator: slot, denominator: 12 }, noteId: sourceTrack.measures[0].noteEvents[slot]?.id,
-            });
+            entries.push(noteEntry(sourceTrack.measures[0], { numerator: slot, denominator: 12 }));
         }
 
         clipboard.copy(entries);
 
         const targetEntries: ISelectionEntry[] = [];
         for (let slot = 5; slot <= 6; slot++) {
-            targetEntries.push({
-                granularity: SelectionGranularity.Note, bar: 1, trackId: targetTrack.id, startStep: 0, endStep: 0,
-                start: { numerator: slot, denominator: 12 }, noteId: targetTrack.measures[0].noteEvents[slot]?.id,
-            });
+            targetEntries.push(noteEntry(targetTrack.measures[0], { numerator: slot, denominator: 12 }));
         }
 
         const pending = clipboard.paste(targetEntries);
         expect(pending.kind).toBe(PasteResultKind.NeedsSubdivisionMode);
 
-        const result = clipboard.paste(targetEntries, false, SubdivisionPasteMode.NewBase);
+        const result = clipboard.paste(targetEntries, { subdivisionMode: SubdivisionPasteMode.NewBase });
 
         expect(result.kind).toBe(PasteResultKind.Success);
 
@@ -991,18 +1006,12 @@ describe("ScoreClipboard", () => {
 
         const entries: ISelectionEntry[] = [];
         for (let slot = 0; slot < 3; slot++) {
-            entries.push({
-                granularity: SelectionGranularity.Note, bar: 1, trackId: sourceTrack.id, startStep: 0, endStep: 0,
-                start: { numerator: slot, denominator: 12 }, noteId: sourceTrack.measures[0].noteEvents[slot]?.id,
-            });
+            entries.push(noteEntry(sourceTrack.measures[0], { numerator: slot, denominator: 12 }));
         }
 
         clipboard.copy(entries);
 
-        const result = clipboard.paste([
-            { granularity: SelectionGranularity.Note, bar: 1, trackId: targetTrack.id, startStep: 5, endStep: 5 },
-            { granularity: SelectionGranularity.Note, bar: 1, trackId: targetTrack.id, startStep: 6, endStep: 6 },
-        ]);
+        const result = clipboard.paste([cell(targetTrack, 5), cell(targetTrack, 6)]);
 
         expect(result.kind).toBe(PasteResultKind.Success);
 
@@ -1042,20 +1051,14 @@ describe("ScoreClipboard", () => {
         const entries: ISelectionEntry[] = [];
         for (const track of tracks) {
             for (let slot = 0; slot < 3; slot++) {
-                entries.push({
-                    granularity: SelectionGranularity.Note, bar: 1, trackId: track.id, startStep: 0, endStep: 0,
-                    start: { numerator: slot, denominator: 12 }, noteId: track.measures[0].noteEvents[slot]?.id,
-                });
+                entries.push(noteEntry(track.measures[0], { numerator: slot, denominator: 12 }));
             }
         }
 
         clipboard.copy(entries);
 
         const result = clipboard.paste([
-            {
-                granularity: SelectionGranularity.Note, bar: 1, trackId: tracks[0].id, startStep: 0, endStep: 0,
-                start: { numerator: 5, denominator: 12 }, noteId: tracks[0].measures[0].noteEvents[5]?.id,
-            },
+            noteEntry(tracks[0].measures[0], { numerator: 5, denominator: 12 }),
         ]);
 
         expect(result.kind).toBe(PasteResultKind.TooComplex);
@@ -1087,25 +1090,14 @@ describe("ScoreClipboard", () => {
 
         const entries: ISelectionEntry[] = [];
         for (let slot = 0; slot < 3; slot++) {
-            entries.push({
-                granularity: SelectionGranularity.Note, bar: 1, trackId: track.id, startStep: 0, endStep: 0,
-                start: { numerator: slot, denominator: 12 }, noteId: track.measures[0].noteEvents[slot]?.id,
-            });
+            entries.push(noteEntry(track.measures[0], { numerator: slot, denominator: 12 }));
         }
 
-        entries.push({
-            granularity: SelectionGranularity.Note, bar: 1, trackId: track.id, startStep: 0, endStep: 0,
-            start: { numerator: 4, denominator: 12 }, noteId: track.measures[0].noteEvents[4]?.id,
-        });
+        entries.push(noteEntry(track.measures[0], { numerator: 4, denominator: 12 }));
 
         clipboard.copy(entries);
 
-        const result = clipboard.paste([
-            {
-                granularity: SelectionGranularity.Note, bar: 1, trackId: track.id, startStep: 0, endStep: 0,
-                start: { numerator: 8, denominator: 12 }, noteId: track.measures[0].noteEvents[8]?.id,
-            },
-        ]);
+        const result = clipboard.paste([noteEntry(track.measures[0], { numerator: 8, denominator: 12 })]);
 
         expect(result.kind).toBe(PasteResultKind.TooComplex);
     });
@@ -1132,18 +1124,13 @@ describe("ScoreClipboard", () => {
 
         const entries: ISelectionEntry[] = [];
         for (let slot = 0; slot < 3; slot++) {
-            entries.push({
-                granularity: SelectionGranularity.Note, bar: 1, trackId: sourceTrack.id, startStep: 0, endStep: 0,
-                start: { numerator: slot, denominator: 12 }, noteId: sourceTrack.measures[0].noteEvents[slot]?.id,
-            });
+            entries.push(noteEntry(sourceTrack.measures[0], { numerator: slot, denominator: 12 }));
         }
 
         clipboard.copy(entries);
 
         const targetEntries: ISelectionEntry[] = Array.from({ length: 9 }, (_, step) => {
-            return {
-                granularity: SelectionGranularity.Note, bar: 1, trackId: targetTrack.id, startStep: step, endStep: step,
-            };
+            return cell(targetTrack, step);
         });
 
         const result = clipboard.paste(targetEntries);
@@ -1173,21 +1160,16 @@ describe("ScoreClipboard", () => {
 
         const entries: ISelectionEntry[] = [];
         for (let slot = 0; slot < 3; slot++) {
-            entries.push({
-                granularity: SelectionGranularity.Note, bar: 1, trackId: sourceTrack.id, startStep: 0, endStep: 0,
-                start: { numerator: slot, denominator: 12 }, noteId: sourceTrack.measures[0].noteEvents[slot]?.id,
-            });
+            entries.push(noteEntry(sourceTrack.measures[0], { numerator: slot, denominator: 12 }));
         }
 
         clipboard.copy(entries);
 
         const targetEntries: ISelectionEntry[] = Array.from({ length: 9 }, (_, step) => {
-            return {
-                granularity: SelectionGranularity.Note, bar: 1, trackId: targetTrack.id, startStep: step, endStep: step,
-            };
+            return cell(targetTrack, step);
         });
 
-        const result = clipboard.paste(targetEntries, false, SubdivisionPasteMode.NewBase);
+        const result = clipboard.paste(targetEntries, { subdivisionMode: SubdivisionPasteMode.NewBase });
 
         expect(result.kind).toBe(PasteResultKind.Success);
         expect(targetTrack.measures[0].subdivisions).toEqual([{
@@ -1221,21 +1203,16 @@ describe("ScoreClipboard", () => {
 
         const entries: ISelectionEntry[] = [];
         for (let slot = 0; slot < 3; slot++) {
-            entries.push({
-                granularity: SelectionGranularity.Note, bar: 1, trackId: sourceTrack.id, startStep: 0, endStep: 0,
-                start: { numerator: slot, denominator: 12 }, noteId: sourceTrack.measures[0].noteEvents[slot]?.id,
-            });
+            entries.push(noteEntry(sourceTrack.measures[0], { numerator: slot, denominator: 12 }));
         }
 
         clipboard.copy(entries);
 
         const targetEntries: ISelectionEntry[] = Array.from({ length: 9 }, (_, step) => {
-            return {
-                granularity: SelectionGranularity.Note, bar: 1, trackId: targetTrack.id, startStep: step, endStep: step,
-            };
+            return cell(targetTrack, step);
         });
 
-        const result = clipboard.paste(targetEntries, false, SubdivisionPasteMode.Dissolve);
+        const result = clipboard.paste(targetEntries, { subdivisionMode: SubdivisionPasteMode.Dissolve });
 
         expect(result.kind).toBe(PasteResultKind.Success);
         expect(targetTrack.measures[0].subdivisions).toEqual([]);
@@ -1252,7 +1229,7 @@ describe("ScoreClipboard", () => {
         const targetTrack = model.arrangement!.tracks[1];
 
         for (let step = 0; step < 3; step++) {
-            model.setGridNote(sourceTrack.id, 1, step, `${sourceTrack.id}-${step}`);
+            setCellNote(model, sourceTrack.id, 1, step, `${sourceTrack.id}-${step}`);
         }
 
         targetTrack.measures[0].events.splice(0, targetTrack.measures[0].events.length,
@@ -1271,19 +1248,14 @@ describe("ScoreClipboard", () => {
 
         const entries: ISelectionEntry[] = [];
         for (let step = 0; step < 3; step++) {
-            entries.push({
-                granularity: SelectionGranularity.Note, bar: 1, trackId: sourceTrack.id, startStep: step, endStep: step,
-            });
+            entries.push(cell(sourceTrack, step));
         }
 
         clipboard.copy(entries);
 
         const targetEntries: ISelectionEntry[] = [];
         for (let slot = 5; slot <= 7; slot++) {
-            targetEntries.push({
-                granularity: SelectionGranularity.Note, bar: 1, trackId: targetTrack.id, startStep: 0, endStep: 0,
-                start: { numerator: slot, denominator: 12 }, noteId: targetTrack.measures[0].noteEvents[slot]?.id,
-            });
+            targetEntries.push(noteEntry(targetTrack.measures[0], { numerator: slot, denominator: 12 }));
         }
 
         const result = clipboard.paste(targetEntries);
@@ -1310,25 +1282,20 @@ describe("ScoreClipboard", () => {
 
         for (const track of tracks) {
             for (let step = 0; step < 3; step++) {
-                model.setGridNote(track.id, 1, step, `${track.id}-${step}`);
+                setCellNote(model, track.id, 1, step, `${track.id}-${step}`);
             }
         }
 
         const entries: ISelectionEntry[] = [];
         for (const track of tracks) {
             for (let step = 0; step < 3; step++) {
-                entries.push({
-                    granularity: SelectionGranularity.Note, bar: 1, trackId: track.id,
-                    startStep: step, endStep: step,
-                });
+                entries.push(cell(track, step));
             }
         }
 
         clipboard.copy(entries);
 
-        const result = clipboard.paste([
-            { granularity: SelectionGranularity.Note, bar: 2, trackId: tracks[0].id, startStep: 5, endStep: 5 },
-        ]);
+        const result = clipboard.paste([cell(tracks[0], 5, 2)], { singleNote: true });
 
         expect(result.kind).toBe(PasteResultKind.Success);
         expect(result.selectionInvalidated).toBeUndefined();

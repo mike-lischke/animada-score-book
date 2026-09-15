@@ -5,9 +5,9 @@
 
 import type { ComponentChild } from "preact";
 
-import type { ISbDmTrack, ScoreBookDataModel } from "../../../core/ScoreBookDataModel.js";
+import type { ScoreBookDataModel } from "../../../core/ScoreBookDataModel.js";
 import { noteLengthForSteps, NoteLength, noteLengthDenominator } from "../../../core/rest-notation.js";
-import { compareFractions, reduceFraction } from "../../../core/serialisation/numeric-functions.js";
+import { compareFractions } from "../../../core/serialisation/numeric-functions.js";
 import { requisitions } from "../../../supplement/Requisitions.js";
 import type { SelectionManager } from "../../../ui/SelectionManager.js";
 import { SelectionGranularity, type ISelectionEntry } from "../../../ui/SelectionSerializer.js";
@@ -146,8 +146,7 @@ export class NoteLengthToolbar extends UIComponent<INoteLengthToolbarProps, INot
     private refreshState(announceLength: boolean): void {
         const { selectionManager } = this.props;
         const entries = [...selectionManager.currentSelection.values()];
-        const tracks = this.resolveSelectedTracks(entries);
-        const selectedNoteLength = this.resolveMarkedLength(tracks, entries);
+        const selectedNoteLength = this.resolveMarkedLength(entries);
 
         if (announceLength && selectedNoteLength !== undefined) {
             void requisitions.execute("noteLengthChanged", selectedNoteLength);
@@ -160,41 +159,13 @@ export class NoteLengthToolbar extends UIComponent<INoteLengthToolbarProps, INot
     }
 
     /**
-     * Collects the distinct tracks referenced by the current selection.
-     *
-     * @param entries All current selection entries.
-     *
-     * @returns The distinct selected tracks, in order of first appearance.
-     */
-    private resolveSelectedTracks(entries: ISelectionEntry[]): ISbDmTrack[] {
-        const { dataModel } = this.props;
-
-        const trackIds = new Set(entries.map((entry) => {
-            return entry.trackId;
-        }));
-
-        const tracks: ISbDmTrack[] = [];
-        for (const trackId of trackIds) {
-            const track = dataModel.arrangement?.tracks.find((candidate) => {
-                return candidate.id === trackId;
-            });
-            if (track) {
-                tracks.push(track);
-            }
-        }
-
-        return tracks;
-    }
-
-    /**
      * Resolves the note length shared by all currently selected notes.
      *
-     * @param tracks The distinct selected tracks.
      * @param entries All current selection entries.
      *
      * @returns The common note length, or undefined when no single length is shared.
      */
-    private resolveMarkedLength(tracks: ISbDmTrack[], entries: ISelectionEntry[]): NoteLength | undefined {
+    private resolveMarkedLength(entries: ISelectionEntry[]): NoteLength | undefined {
         const noteEntries = entries.filter((entry) => {
             return entry.granularity === SelectionGranularity.Note;
         });
@@ -203,38 +174,28 @@ export class NoteLengthToolbar extends UIComponent<INoteLengthToolbarProps, INot
             return undefined;
         }
 
-        const firstLength = this.noteLengthOf(tracks, noteEntries[0]);
+        const firstLength = this.noteLengthOf(noteEntries[0]);
         const allMatch = noteEntries.every((entry) => {
-            return this.noteLengthOf(tracks, entry) === firstLength;
+            return this.noteLengthOf(entry) === firstLength;
         });
 
         return allMatch ? firstLength : undefined;
     }
 
-    private noteLengthOf(tracks: ISbDmTrack[], entry: ISelectionEntry): NoteLength | undefined {
+    private noteLengthOf(entry: ISelectionEntry): NoteLength | undefined {
         const { dataModel } = this.props;
         const arrangement = dataModel.arrangement;
         if (!arrangement) {
             return undefined;
         }
 
-        const track = tracks.find((candidate) => {
-            return candidate.id === entry.trackId;
-        });
-        const measure = track?.measures.find((candidate) => {
-            return candidate.number === entry.bar;
-        });
-        if (!measure) {
+        const { target } = entry;
+        if (target.granularity !== SelectionGranularity.Note) {
             return undefined;
         }
 
-        const cellStart = entry.start ?? (entry.startStep === undefined
-            ? undefined
-            : reduceFraction(entry.startStep, measure.meter.stepResolution));
-        if (cellStart === undefined) {
-            return undefined;
-        }
-
+        const { measure } = target;
+        const cellStart = target.start ?? target.event.start;
         const noteEvent = measure.noteEvents.find((candidate) => {
             return compareFractions(cellStart, candidate.start) === 0;
         });

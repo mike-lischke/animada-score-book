@@ -9,11 +9,11 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { ArticulationToolbar } from "../../src/components/ui/Arrangement/ArticulationToolbar.js";
 import {
     Damping, ExcitationMode, NoteDisplayType, StickTechnique,
-    type ISbDmTrack, type ScoreBookDataModel,
+    type ISbDmArrangement, type ISbDmTrack, type ISbDmTrackMeasure, type ScoreBookDataModel,
 } from "../../src/core/ScoreBookDataModel.js";
 import type { IAudioData } from "../../src/core/types/general.js";
 import { SelectionManager } from "../../src/ui/SelectionManager.js";
-import { SelectionGranularity } from "../../src/ui/SelectionSerializer.js";
+import { noteEntry, trackEntry } from "../unit-test-helpers.js";
 
 const makeNoteStyle = (
     id: string,
@@ -46,30 +46,56 @@ const makeTrackWithNote = (
     noteStyles: Record<string, IAudioData>,
     styleId: string,
 ): ISbDmTrack => {
-    return {
+    const arrangement = { tracks: [] } as unknown as ISbDmArrangement;
+    const track = {
         id,
         instrument: { id: instrumentId, noteStyles },
-        measures: [
+        measures: [],
+        arrangement,
+    } as unknown as ISbDmTrack;
+    const measure = {
+        number: 1,
+        meter: { stepResolution: 16 },
+        subdivisions: [],
+        track,
+        events: [{
+            start: { numerator: 0, denominator: 16 },
+            duration: { numerator: 1, denominator: 16 },
+            noteStyleId: styleId,
+        }],
+        noteEvents: [
             {
-                number: 1,
-                meter: { stepResolution: 16 },
-                noteEvents: [
-                    {
-                        id: 7001,
-                        start: { numerator: 0, denominator: 16 },
-                        duration: { numerator: 1, denominator: 16 },
-                        audioData: { id: styleId },
-                    },
-                ],
+                id: 7001,
+                start: { numerator: 0, denominator: 16 },
+                duration: { numerator: 1, denominator: 16 },
+                audioData: { id: styleId },
             },
         ],
-    } as unknown as ISbDmTrack;
+    } as unknown as ISbDmTrackMeasure;
+
+    track.measures.push(measure);
+    arrangement.tracks.push(track);
+
+    return track;
 };
 
+/** The tracks the stub model holds; a test fills them in through {@link makeDataModel}. */
+const modelTracks: ISbDmTrack[] = [];
+
+/** The stub model the selection manager is bound to; {@link makeDataModel} keeps it in sync. */
+const modelStub = { arrangement: { tracks: modelTracks } } as unknown as ScoreBookDataModel;
+
+/**
+ * Creates the model a toolbar renders.
+ *
+ * @param tracks The tracks of the model.
+ *
+ * @returns The model to render.
+ */
 const makeDataModel = (tracks: ISbDmTrack[]): ScoreBookDataModel => {
-    return {
-        arrangement: { tracks },
-    } as unknown as ScoreBookDataModel;
+    modelTracks.splice(0, modelTracks.length, ...tracks);
+
+    return modelStub;
 };
 
 describe.sequential("ArticulationToolbar", () => {
@@ -78,7 +104,9 @@ describe.sequential("ArticulationToolbar", () => {
 
     beforeEach(() => {
         renderResult = null;
-        selectionManager = new SelectionManager();
+
+        // The manager resolves selected tracks against the model it is bound to.
+        selectionManager = new SelectionManager(modelStub);
     });
 
     afterEach(() => {
@@ -174,9 +202,7 @@ describe.sequential("ArticulationToolbar", () => {
         const track = makeTrackWithNote(7, 55, noteStyles, "2");
         const dataModel = makeDataModel([track]);
 
-        selectionManager.replaceSelection([
-            { granularity: SelectionGranularity.Note, bar: 1, trackId: 7, noteId: 7001, startStep: 0 },
-        ]);
+        selectionManager.replaceSelection([noteEntry(track.measures[0], { numerator: 0, denominator: 1 })]);
 
         renderResult = render(
             <ArticulationToolbar dataModel={dataModel} selectionManager={selectionManager} />,
@@ -201,10 +227,7 @@ describe.sequential("ArticulationToolbar", () => {
         });
         const dataModel = makeDataModel([trackA, trackB]);
 
-        selectionManager.replaceSelection([
-            { granularity: SelectionGranularity.Track, bar: 0, trackId: 7 },
-            { granularity: SelectionGranularity.Track, bar: 0, trackId: 8 },
-        ]);
+        selectionManager.replaceSelection([trackEntry(trackA), trackEntry(trackB)]);
 
         renderResult = render(
             <ArticulationToolbar dataModel={dataModel} selectionManager={selectionManager} />,

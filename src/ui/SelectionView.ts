@@ -3,12 +3,16 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import type { IRect } from "../core/types/general.js";
+import type { IFraction, IRect } from "../core/types/general.js";
 import { requisitions } from "../supplement/Requisitions.js";
 import type { SelectionManager } from "./SelectionManager.js";
-import { ScoreElementKind, type ScoreElementRegistry } from "./ScoreElementRegistry.js";
-import { SelectionGranularity, SelectionMode, type ISelectionDelta, type ISelectionEntry }
-    from "./SelectionSerializer.js";
+import {
+    ScoreElementKind, type IScoreElementLocation, type ScoreElementRegistry,
+} from "./ScoreElementRegistry.js";
+import {
+    addressesNoteCells, SelectionGranularity, SelectionMode, SelectionSerializer, type ISelectionDelta,
+    type ISelectionEntry, type ISelectionTarget, type ISerialisedSelectionEntry,
+} from "./SelectionSerializer.js";
 
 const selectionRectClass = "selection-rect";
 const selectionOverlayClass = "selection-overlay";
@@ -16,6 +20,24 @@ const selectionCursorClass = "selection-cursor";
 const noteSelectedClass = "note-selected";
 const staffNoteRunClass = "staff-note-viewer-run";
 const formElementNames = new Set(["BUTTON", "INPUT", "SELECT", "TEXTAREA"]);
+
+/** The start of a measure as a bar fraction. */
+const measureStart: IFraction = { numerator: 0, denominator: 1 };
+
+/** A selection entry together with the coordinates and grid cells derived from the model objects. */
+interface ILocatedEntry {
+    entry: ISelectionEntry;
+    coordinates: ISerialisedSelectionEntry;
+
+    /** The first grid cell the entry covers. */
+    firstCell: number;
+
+    /** The last grid cell the entry covers. */
+    lastCell: number;
+
+    /** True when the entry addresses a subdivision slot rather than a plain cell. */
+    slot: boolean;
+}
 
 /**
  * Pure view layer for selection — handles pointer events, draws the selection rectangle,
@@ -307,14 +329,14 @@ export class SelectionView {
             return false;
         }
 
+        const noteTarget = this.noteTargetOf(target, location);
+        if (noteTarget === undefined) {
+            return false;
+        }
+
         this.manager.selectSingleNote({
             granularity: SelectionGranularity.Note,
-            bar: location.bar,
-            trackId: location.trackId,
-            startStep: location.step,
-            endStep: location.step,
-            noteId: location.noteId,
-            start: location.start,
+            target: noteTarget,
         });
 
         // Keep the cursor visible: scroll the nearest scroll hosts so the newly selected
@@ -865,7 +887,7 @@ export class SelectionView {
             ].join(", ");
 
             for (const entry of noteGroups) {
-                const runs = this.scoreElementRegistry?.findSelectionElements(entry, ScoreElementKind.StaffRun) ?? [];
+                const runs = this.elementsOf(entry, ScoreElementKind.StaffRun);
 
                 if (runs.length === 0) {
                     continue;
@@ -936,45 +958,65 @@ export class SelectionView {
             return;
         }
 
-        // Grid mode: group by track, then sort by bar and startStep so adjacent bars can merge.
-        const byTrack = new Map<number, ISelectionEntry[]>();
+        // Grid mode: group by track, then sort by bar and cell so adjacent bars can merge.
+        const located: ILocatedEntry[] = [];
         for (const entry of entries) {
-            let list = byTrack.get(entry.trackId);
-            if (!list) {
-                list = [];
-                byTrack.set(entry.trackId, list);
+            const { target } = entry;
+            if (!addressesNoteCells(target)) {
+                continue;
             }
 
-            list.push(entry);
+            const coordinates = SelectionSerializer.coordinatesOf(entry);
+            const start = coordinates.start ?? measureStart;
+            const firstCell = SelectionSerializer.cellOf(start, target.measure);
+            const coveredCells = SelectionSerializer.cellOf(coordinates.end ?? start, target.measure);
+
+            located.push({
+                entry,
+                coordinates,
+                firstCell,
+                lastCell: Math.max(firstCell, coveredCells - 1),
+                slot: SelectionSerializer.addressesSubdivisionSlot(target),
+            });
+        }
+
+        const byTrack = new Map<number, ILocatedEntry[]>();
+        for (const item of located) {
+            let list = byTrack.get(item.coordinates.trackId);
+            if (!list) {
+                list = [];
+                byTrack.set(item.coordinates.trackId, list);
+            }
+
+            list.push(item);
         }
 
         const noteOverlayGroups: Array<{ elements: HTMLElement[]; bars: Set<number>; }> = [];
 
         for (const [, groupEntries] of byTrack) {
-            groupEntries.sort((a, b) => {
-                return a.bar - b.bar || (a.startStep ?? 0) - (b.startStep ?? 0);
+            groupEntries.sort((left, right) => {
+                return left.coordinates.bar - right.coordinates.bar || left.firstCell - right.firstCell;
             });
 
             let groupElements: HTMLElement[] = [];
-            let lastEndStep: number | undefined;
+            let lastEndCell: number | undefined;
             let lastBar: number | undefined;
             let groupBars = new Set<number>();
             let groupSubdivision: HTMLElement | undefined;
 
-            for (const entry of groupEntries) {
+            for (const item of groupEntries) {
+                const { entry, coordinates } = item;
                 const elements = this.findNoteElements(entry);
                 if (elements.length === 0) {
                     continue;
                 }
 
-                const startStep = entry.startStep ?? 0;
-                const endStep = entry.endStep ?? startStep;
-                const subdivision = entry.start === undefined
-                    ? undefined
-                    : elements[0].closest<HTMLElement>(".subdivision") ?? undefined;
+                const subdivision = item.slot
+                    ? elements[0].closest<HTMLElement>(".subdivision") ?? undefined
+                    : undefined;
                 const isSameSubdivision = subdivision !== undefined && subdivision === groupSubdivision;
-                const isContiguous = lastEndStep !== undefined && startStep === lastEndStep + 1;
-                const isAdjacentBar = lastBar !== undefined && entry.bar === lastBar + 1;
+                const isContiguous = lastEndCell !== undefined && item.firstCell === lastEndCell + 1;
+                const isAdjacentBar = lastBar !== undefined && coordinates.bar === lastBar + 1;
                 const isAdjacentSubdivision = (groupSubdivision !== undefined || subdivision !== undefined)
                     && this.areSelectionBlocksAdjacent(groupElements, elements);
 
@@ -982,16 +1024,16 @@ export class SelectionView {
                     && !isAdjacentBar && !isAdjacentSubdivision) {
                     noteOverlayGroups.push({ elements: groupElements, bars: groupBars });
                     groupElements = [];
-                    lastEndStep = undefined;
+                    lastEndCell = undefined;
                     lastBar = undefined;
                     groupBars = new Set<number>();
                     groupSubdivision = undefined;
                 }
 
                 groupElements.push(...elements);
-                lastEndStep = endStep;
-                lastBar = entry.bar;
-                groupBars.add(entry.bar);
+                lastEndCell = item.lastCell;
+                lastBar = coordinates.bar;
+                groupBars.add(coordinates.bar);
                 groupSubdivision = subdivision;
             }
 
@@ -1126,6 +1168,23 @@ export class SelectionView {
     }
 
     /**
+     * Builds the selection target of a rendered cell or run, which the arrow-key cursor addresses.
+     *
+     * @param element The rendered element the cursor sits on.
+     * @param location The element's registered location.
+     *
+     * @returns The note target, or undefined when the element renders no event of a known measure.
+     */
+    private noteTargetOf(element: HTMLElement, location: IScoreElementLocation): ISelectionTarget | undefined {
+        const event = this.scoreElementRegistry?.getTarget(element);
+        const measure = location.measure;
+
+        return event === undefined || !("duration" in event) || measure === undefined
+            ? undefined
+            : { granularity: SelectionGranularity.Note, measure, event, start: location.start };
+    }
+
+    /**
      * Finds the DOM element(s) for a note or note-group selection entry.
      * For note groups that span a step range all elements in the range are returned
      * so the overlay covers the full width of the group.
@@ -1135,7 +1194,27 @@ export class SelectionView {
      * @returns The matching elements, or an empty array if none found.
      */
     private findNoteElements(entry: ISelectionEntry): HTMLElement[] {
-        return this.scoreElementRegistry?.findSelectionElements(entry) ?? [];
+        return this.elementsOf(entry);
+    }
+
+    /**
+     * Builds the selection target of a rendered cell or run, which the arrow-key cursor addresses.
+     *
+    /**
+     * Resolves the rendered elements a selection entry refers to.
+     *
+     * @param entry The selection entry to resolve.
+     * @param kind Optional rendered kind to restrict the result to.
+     *
+     * @returns The matching elements, or an empty array if none are rendered.
+     */
+    private elementsOf(entry: ISelectionEntry, kind?: ScoreElementKind): HTMLElement[] {
+        const registry = this.scoreElementRegistry;
+        if (!registry) {
+            return [];
+        }
+
+        return registry.findTargetElements(entry.target, kind);
     }
 
     /**
@@ -1254,13 +1333,15 @@ export class SelectionView {
         // 1. Group entries by bar.
         const byBar = new Map<number, Set<number>>();
         for (const entry of entries) {
-            let trackIds = byBar.get(entry.bar);
+            const coordinates = SelectionSerializer.coordinatesOf(entry);
+
+            let trackIds = byBar.get(coordinates.bar);
             if (!trackIds) {
                 trackIds = new Set();
-                byBar.set(entry.bar, trackIds);
+                byBar.set(coordinates.bar, trackIds);
             }
 
-            trackIds.add(entry.trackId);
+            trackIds.add(coordinates.trackId);
         }
 
         // 2. Within each bar, merge consecutive tracks into per-bar groups.
@@ -1371,8 +1452,8 @@ export class SelectionView {
             return;
         }
 
-        const selectedTrackIds = new Set(entries.map((e) => {
-            return e.trackId;
+        const selectedTrackIds = new Set(entries.map((entry) => {
+            return SelectionSerializer.trackOf(entry).id;
         }));
 
         // Iterate through registered rows of bar 1 in DOM order. Consecutive rows whose
@@ -1431,8 +1512,8 @@ export class SelectionView {
             return;
         }
 
-        const selectedBars = new Set(entries.map((e) => {
-            return e.bar;
+        const selectedBars = new Set(entries.map((entry) => {
+            return SelectionSerializer.coordinatesOf(entry).bar;
         }));
 
         // Iterate through registered bar containers in DOM order.

@@ -10,8 +10,9 @@ import { Arrangement } from "../../src/core/Arrangement.js";
 import { ScoreBookDataModel, type ISbDmTrackMeasure } from "../../src/core/ScoreBookDataModel.js";
 import { PasteResultKind, ScoreClipboard } from "../../src/core/ScoreClipboard.js";
 import { addFractions, compareFractions } from "../../src/core/serialisation/numeric-functions.js";
-import { SelectionGranularity, type ISelectionEntry } from "../../src/ui/SelectionSerializer.js";
-import { createInstrument, hydrateMeasureEvents } from "../unit-test-helpers.js";
+import type { ISelectionEntry } from "../../src/ui/SelectionSerializer.js";
+import { createInstrument, hydrateMeasureEvents, noteEntry, setCellNote, trackPieceEntry }
+    from "../unit-test-helpers.js";
 
 const stepsPerBar = 16;
 
@@ -39,22 +40,6 @@ const noteAtStep = (measure: ISbDmTrackMeasure, step: number): string | undefine
 };
 
 /**
- * Resolves the runtime note id of the note that starts exactly at the given cell.
- *
- * @param measure The measure to inspect.
- * @param cell The 0-based grid cell.
- * @returns The note event id, or undefined when the cell is not a note start.
- */
-const noteIdAtCell = (measure: ISbDmTrackMeasure, cell: number): number | undefined => {
-    const start = { numerator: cell, denominator: stepsPerBar };
-    const eventIndex = measure.events.findIndex((candidate) => {
-        return compareFractions(candidate.start, start) === 0 && candidate.noteStyleId !== undefined;
-    });
-
-    return eventIndex >= 0 ? measure.noteEvents[eventIndex]?.id : undefined;
-};
-
-/**
  * Resolves the duration in cells of the note that starts exactly at the given cell.
  *
  * @param measure The measure to inspect.
@@ -78,7 +63,7 @@ const noteDurationInCells = (measure: ISbDmTrackMeasure, cell: number): number =
  * itself. A lone note is copied with its full (absorbed) duration, so the clipboard is that single
  * note stretched across its cells.
  *
- * @param measure The source measure (correctly built via setGridNote).
+ * @param measure The source measure (correctly built via setCellNote).
  * @param pattern The four-bit pattern of the group (1 = note, 0 = rest).
  * @param groupStart The first cell of the group.
  * @param copyCells The number of cells to copy (1..4).
@@ -146,34 +131,25 @@ describe("ScoreClipboard pattern tiling", () => {
 
                             for (let bit = 0; bit < 4; bit++) {
                                 if (pattern[bit] === 1) {
-                                    model.setGridNote(source.id, 1, variant.cells[bit], "note");
+                                    setCellNote(model, source.id, 1, variant.cells[bit], "note");
                                 }
                             }
 
                             hydrateMeasureEvents(model.arrangement! as Arrangement);
 
                             const groupStart = variant.cells[0];
+                            const sourceMeasure = source.measures[0];
                             const entries: ISelectionEntry[] = [];
 
                             for (let offset = 0; offset < copyCells; offset++) {
-                                const cell = groupStart + offset;
-                                const entry: ISelectionEntry = {
-                                    granularity: SelectionGranularity.Note, bar: 1, trackId: source.id,
-                                    startStep: cell, endStep: cell,
-                                };
-
-                                if (pattern[offset] === 1) {
-                                    entry.noteId = noteIdAtCell(source.measures[0], cell);
-                                }
-
-                                entries.push(entry);
+                                entries.push(noteEntry(sourceMeasure, {
+                                    numerator: groupStart + offset, denominator: stepsPerBar,
+                                }));
                             }
 
                             clipboard.copy(entries);
 
-                            const result = clipboard.paste([
-                                { granularity: SelectionGranularity.TrackPiece, bar: 1, trackId: target.id },
-                            ]);
+                            const result = clipboard.paste([trackPieceEntry(target, target.measures[0])]);
 
                             expect(result.kind).toBe(PasteResultKind.Success);
 

@@ -4,7 +4,12 @@
 */
 
 import { AppStorage } from "../core/AppStorage.js";
-import { ScoreBookChangeReason, type ISbDmArrangement, type ScoreBookDataModel } from "../core/ScoreBookDataModel.js";
+import {
+    ScoreBookChangeReason, type ISbDmTrackMeasure, type ScoreBookDataModel,
+} from "../core/ScoreBookDataModel.js";
+import { modelEventAt } from "../core/MeasureProjection.js";
+import { compareFractions, formatFraction } from "../core/serialisation/numeric-functions.js";
+import type { IFraction } from "../core/types/general.js";
 import type { PlayerPlayState } from "../player/ArrangementPlayer.js";
 import { requisitions } from "../supplement/Requisitions.js";
 import {
@@ -19,8 +24,8 @@ import { SelectionView } from "./SelectionView.js";
  */
 export class SelectionManager {
     /**
-     * Granular selection entries keyed by a stable string identifier.
-     * Keys follow the pattern `"granularity:bar:trackId[:step/noteId]"`.
+     * Granular selection entries keyed by a stable string identifier derived from the model objects
+     * an entry addresses.
      */
     public readonly currentSelection: Map<string, ISelectionEntry> = new Map<string, ISelectionEntry>();
 
@@ -139,16 +144,15 @@ export class SelectionManager {
     }
 
     /**
-     * Checks if a note is selected in the new model.
+     * Checks whether a grid cell is selected.
      *
-     * @param bar The measure number (1-based).
-     * @param trackId The track identifier.
-     * @param noteId The note event identifier.
+     * @param measure The measure the cell belongs to.
+     * @param start The exact start of the cell within the measure.
      *
-     * @returns True if the note is selected.
+     * @returns True if the cell is selected.
      */
-    public isNoteSelected(bar: number, trackId: number, noteId: number): boolean {
-        return this.currentSelection.has(`note:${bar}:${trackId}:${noteId}`);
+    public isCellSelected(measure: ISbDmTrackMeasure, start: IFraction): boolean {
+        return this.currentSelection.has(this.noteKey(measure, measure.track.id, start));
     }
 
     /**
@@ -243,13 +247,29 @@ export class SelectionManager {
      */
     public previewNote(clickRect: DOMRect): void {
         const entries = this.resolveEntries(clickRect);
-        if (entries.length === 0 || entries[0].granularity !== SelectionGranularity.Note) {
-            return;
+
+        const noteIds: number[] = [];
+        for (const entry of entries) {
+            const { target } = entry;
+            if (target.granularity !== SelectionGranularity.Note) {
+                continue;
+            }
+
+            // Only a note's own start cell previews the note; cells inside its duration and
+            // subdivision slots do not address a note event.
+            const { measure } = target;
+            const cellStart = target.start ?? target.event.start;
+            const modelEvent = modelEventAt(measure, cellStart);
+            if (modelEvent === undefined || compareFractions(modelEvent.start, cellStart) !== 0) {
+                continue;
+            }
+
+            const noteEvent = measure.noteEvents.at(measure.events.indexOf(modelEvent));
+            if (noteEvent !== undefined) {
+                noteIds.push(noteEvent.id);
+            }
         }
 
-        const noteIds = entries.flatMap((entry) => {
-            return entry.noteId === undefined ? [] : [entry.noteId];
-        });
         if (noteIds.length > 0) {
             void requisitions.execute("notesClicked", noteIds);
         }
@@ -262,14 +282,27 @@ export class SelectionManager {
      * @param trackIds Optional track filter; when omitted all tracks in the measure are implied.
      */
     public selectMeasures(barNumbers: number[], trackIds?: number[]): void {
+        const arrangement = this.dataModel?.arrangement;
+        if (!arrangement) {
+            return;
+        }
+
+        const tracks = trackIds === undefined
+            ? arrangement.tracks
+            : arrangement.tracks.filter((track) => {
+                return trackIds.includes(track.id);
+            });
+
         const entries: ISelectionEntry[] = [];
         for (const bar of barNumbers) {
-            if (trackIds) {
-                for (const trackId of trackIds) {
-                    entries.push({ granularity: SelectionGranularity.Measure, bar, trackId });
+            for (const track of tracks) {
+                const measure = track.measures.at(bar - 1);
+                if (measure) {
+                    entries.push({
+                        granularity: SelectionGranularity.Measure,
+                        target: { granularity: SelectionGranularity.Measure, measure },
+                    });
                 }
-            } else {
-                entries.push({ granularity: SelectionGranularity.Measure, bar, trackId: 0 });
             }
         }
 
@@ -300,9 +333,21 @@ export class SelectionManager {
      * @param trackIds The track identifiers to select.
      */
     public selectTracks(trackIds: number[]): void {
-        const entries: ISelectionEntry[] = trackIds.map((trackId) => {
-            return { granularity: SelectionGranularity.Track, bar: 0, trackId };
-        });
+        const arrangement = this.dataModel?.arrangement;
+
+        const entries: ISelectionEntry[] = [];
+        for (const trackId of trackIds) {
+            const track = arrangement?.tracks.find((candidate) => {
+                return candidate.id === trackId;
+            });
+
+            if (track) {
+                entries.push({
+                    granularity: SelectionGranularity.Track,
+                    target: { granularity: SelectionGranularity.Track, track },
+                });
+            }
+        }
 
         this.applySelection(entries);
     }
@@ -452,36 +497,44 @@ export class SelectionManager {
      * @returns A string key unique to the entry's granularity and position.
      */
     private entryKey(entry: ISelectionEntry): string {
-        const { granularity, bar, trackId, startStep, endStep, noteId } = entry;
-        switch (granularity) {
+        const { target } = entry;
+
+        switch (target.granularity) {
             case SelectionGranularity.Track: {
-                return `track:${trackId}`;
+                return `track:${target.track.id}`;
             }
 
             case SelectionGranularity.Measure: {
-                return `measure:${bar}`;
+                return `measure:${target.measure.number}`;
             }
 
             case SelectionGranularity.TrackPiece: {
-                return `trackPiece:${bar}:${trackId}`;
+                return `trackPiece:${target.measure.number}:${target.track.id}`;
             }
 
             case SelectionGranularity.NoteGroup: {
-                return `noteGroup:${bar}:${trackId}:${startStep}-${endStep}`;
+                return `noteGroup:${target.measure.number}:${target.measure.track.id}:`
+                    + formatFraction(target.events[0].start);
             }
 
             case SelectionGranularity.Note: {
-                return noteId !== undefined
-                    ? `note:${bar}:${trackId}:${noteId}`
-                    : entry.start !== undefined
-                        ? `note:${bar}:${trackId}:start${entry.start.numerator}/${entry.start.denominator}`
-                        : `note:${bar}:${trackId}:step${startStep}`;
-            }
-
-            default: {
-                return "";
+                return this.noteKey(target.measure, target.measure.track.id,
+                    target.start ?? target.event.start);
             }
         }
+    }
+
+    /**
+     * Builds the key of a grid cell, which is addressed by its measure and exact start.
+     *
+     * @param measure The measure the cell belongs to.
+     * @param trackId The track identity.
+     * @param start The exact cell start within the measure.
+     *
+     * @returns The cell's selection key.
+     */
+    private noteKey(measure: ISbDmTrackMeasure, trackId: number, start: IFraction): string {
+        return `note:${measure.number}:${trackId}:${formatFraction(start)}`;
     }
 
     /**
@@ -604,8 +657,9 @@ export class SelectionManager {
     private publishPlayRange(): void {
         const bars = new Set<number>();
         for (const entry of this.currentSelection.values()) {
-            if (entry.bar > 0) {
-                bars.add(entry.bar);
+            const { target } = entry;
+            if (target.granularity !== SelectionGranularity.Track) {
+                bars.add(target.measure.number);
             }
         }
 
@@ -662,19 +716,26 @@ export class SelectionManager {
         // Save the original selection for later restoration.
         this.originalSelection = new Map(this.currentSelection);
 
-        // Collect all distinct bar numbers from the current selection.
-        const barSet = new Set<number>();
+        // Collect the measures of the selected bars.
+        const measures = new Map<number, ISbDmTrackMeasure>();
         for (const entry of this.currentSelection.values()) {
-            if (entry.bar > 0) {
-                barSet.add(entry.bar);
+            const coordinates = SelectionSerializer.coordinatesOf(entry);
+            if (coordinates.bar < 1) {
+                continue;
+            }
+
+            const measure = this.measureOfBar(coordinates.bar);
+            if (measure !== undefined) {
+                measures.set(coordinates.bar, measure);
             }
         }
 
-        const measureEntries: ISelectionEntry[] = [...barSet].map((bar) => {
+        const measureEntries: ISelectionEntry[] = [...measures.values()].map((measure) => {
             return {
                 granularity: SelectionGranularity.Measure,
-                bar,
-                trackId: 0,
+                bar: measure.number,
+                trackId: measure.track.id,
+                target: { granularity: SelectionGranularity.Measure, measure },
             };
         });
 
@@ -687,6 +748,24 @@ export class SelectionManager {
 
         void requisitions.execute("selectionChanged", { added: measureEntries, removed });
         this.publishPlayRange();
+    }
+
+    /**
+     * Returns one of the bar's measures, which represents the bar for a measure-level selection.
+     *
+     * @param bar The one-based measure number.
+     *
+     * @returns A measure of that bar, or undefined when no track has it.
+     */
+    private measureOfBar(bar: number): ISbDmTrackMeasure | undefined {
+        for (const track of this.dataModel?.arrangement?.tracks ?? []) {
+            const measure = track.measures.at(bar - 1);
+            if (measure) {
+                return measure;
+            }
+        }
+
+        return undefined;
     }
 
     /**
@@ -828,22 +907,22 @@ export class SelectionManager {
     };
 
     /**
-     * Reacts to an undo/redo by pruning selection entries that no longer reference existing content.
-     * Only the currently selected elements are validated — the rest of the arrangement is ignored.
+     * Reacts to an undo/redo by re-resolving the selection against the current arrangement.
      *
      * @returns A resolved promise to satisfy the requisition handler signature.
      */
     private handleArrangementReverted = (): Promise<boolean> => {
-        this.pruneInvalidSelection();
+        this.reResolveSelection();
 
         return Promise.resolve(true);
     };
 
     /**
-     * Removes selection entries that reference notes, measures or tracks which no longer exist after an
-     * undo/redo. Publishes a selection change only when at least one entry was removed.
+     * Re-resolves the selection against the current arrangement. An undo/redo replaces the model
+     * objects, so the entries are serialised to their coordinates and resolved back; entries whose
+     * element no longer exists are dropped. Publishes a change only when the selection differs.
      */
-    private pruneInvalidSelection(): void {
+    private reResolveSelection(): void {
         const arrangement = this.dataModel?.arrangement;
         if (!arrangement) {
             this.internalClearSelection();
@@ -851,76 +930,32 @@ export class SelectionManager {
             return;
         }
 
-        const removed: ISelectionEntry[] = [];
-        for (const [key, entry] of this.currentSelection) {
-            if (!this.isEntryValid(arrangement, entry)) {
-                removed.push(entry);
-                this.currentSelection.delete(key);
-            }
-        }
+        const previous = [...this.currentSelection.values()];
+        const resolved = SelectionSerializer.deserialise(arrangement, SelectionSerializer.serialise(previous));
 
-        if (removed.length === 0) {
-            return;
-        }
+        const previousKeys = new Set(previous.map((entry) => {
+            return this.entryKey(entry);
+        }));
+        const resolvedKeys = new Set(resolved.map((entry) => {
+            return this.entryKey(entry);
+        }));
 
-        void requisitions.execute("selectionChanged", { added: [], removed });
-        this.publishPlayRange();
-        this.schedulePersist();
-    }
-
-    /**
-     * Checks whether a selection entry still refers to existing arrangement content.
-     *
-     * @param arrangement The current arrangement.
-     * @param entry The selection entry to validate.
-     *
-     * @returns True when the referenced note, measure or track still exists.
-     */
-    private isEntryValid(arrangement: ISbDmArrangement, entry: ISelectionEntry): boolean {
-        const track = arrangement.tracks.find((candidate) => {
-            return candidate.id === entry.trackId;
+        const added = resolved.filter((entry) => {
+            return !previousKeys.has(this.entryKey(entry));
+        });
+        const removed = previous.filter((entry) => {
+            return !resolvedKeys.has(this.entryKey(entry));
         });
 
-        switch (entry.granularity) {
-            case SelectionGranularity.Track: {
-                return track !== undefined;
-            }
+        this.currentSelection.clear();
+        for (const entry of resolved) {
+            this.currentSelection.set(this.entryKey(entry), entry);
+        }
 
-            case SelectionGranularity.Measure: {
-                if (entry.trackId !== 0 && track === undefined) {
-                    return false;
-                }
-
-                return entry.bar >= 1 && entry.bar <= arrangement.timeParams.length;
-            }
-
-            case SelectionGranularity.TrackPiece:
-            case SelectionGranularity.NoteGroup: {
-                return track !== undefined && entry.bar >= 1 && entry.bar <= arrangement.timeParams.length;
-            }
-
-            case SelectionGranularity.Note: {
-                if (track === undefined) {
-                    return false;
-                }
-
-                const measure = entry.bar >= 1 ? track.measures.at(entry.bar - 1) : undefined;
-                if (!measure) {
-                    return false;
-                }
-
-                if (entry.noteId === undefined) {
-                    return true;
-                }
-
-                return measure.noteEvents.some((noteEvent) => {
-                    return noteEvent.id === entry.noteId;
-                });
-            }
-
-            default: {
-                return false;
-            }
+        if (added.length > 0 || removed.length > 0) {
+            void requisitions.execute("selectionChanged", { added, removed });
+            this.publishPlayRange();
+            this.schedulePersist();
         }
     }
 }

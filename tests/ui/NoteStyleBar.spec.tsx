@@ -9,12 +9,14 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { NoteStyleBar } from "../../src/components/ui/Arrangement/NoteStyleBar.js";
 import {
     Damping, ExcitationMode, HandTechnique, NoteDisplayType, StickTechnique,
-    type ISbDmInstrument, type ISbDmTrack, type ScoreBookDataModel,
+    type ISbDmArrangement, type ISbDmInstrument, type ISbDmTrack, type ISbDmTrackMeasure,
+    type ScoreBookDataModel,
 } from "../../src/core/ScoreBookDataModel.js";
 import type { IAudioData } from "../../src/core/types/general.js";
 import { requisitions } from "../../src/supplement/Requisitions.js";
 import { SelectionManager } from "../../src/ui/SelectionManager.js";
-import { SelectionGranularity } from "../../src/ui/SelectionSerializer.js";
+import type { ISelectionEntry } from "../../src/ui/SelectionSerializer.js";
+import { noteEntry } from "../unit-test-helpers.js";
 
 const makeNoteStyle = (id: string, shortDescription: string, description: string): IAudioData => {
     return {
@@ -66,31 +68,77 @@ const makeTrackWithNote = (
     noteStyles: Record<string, IAudioData>,
     noteEventId: number,
     styleId: string,
+    durationSteps = 1,
 ): ISbDmTrack => {
-    return {
+    const arrangement = { tracks: [] } as unknown as ISbDmArrangement;
+    const track = {
         id,
         instrument: { id: instrumentId, noteStyles },
-        measures: [
+        measures: [],
+        arrangement,
+    } as unknown as ISbDmTrack;
+    const measure = {
+        number: 1,
+        meter: { stepResolution: 16 },
+        subdivisions: [],
+        track,
+        events: [
             {
-                number: 1,
-                meter: { stepResolution: 16 },
-                noteEvents: [
-                    {
-                        id: noteEventId,
-                        start: { numerator: 0, denominator: 16 },
-                        duration: { numerator: 1, denominator: 16 },
-                        audioData: { id: styleId },
-                    },
-                ],
+                start: { numerator: 0, denominator: 16 },
+                duration: { numerator: durationSteps, denominator: 16 },
+                noteStyleId: styleId,
+            },
+            {
+                start: { numerator: durationSteps, denominator: 16 },
+                duration: { numerator: 16 - durationSteps, denominator: 16 },
             },
         ],
-    } as unknown as ISbDmTrack;
+        noteEvents: [
+            {
+                id: noteEventId,
+                start: { numerator: 0, denominator: 16 },
+                duration: { numerator: durationSteps, denominator: 16 },
+                audioData: { id: styleId },
+            },
+        ],
+    } as unknown as ISbDmTrackMeasure;
+
+    track.measures.push(measure);
+    arrangement.tracks.push(track);
+
+    return track;
 };
 
+/** The tracks the stub model holds; a test fills them in through {@link makeDataModel}. */
+const modelTracks: ISbDmTrack[] = [];
+
+/** The stub model the selection manager is bound to; {@link makeDataModel} keeps it in sync. */
+const modelStub = { arrangement: { tracks: modelTracks } } as unknown as ScoreBookDataModel;
+
+/**
+ * Creates the model a toolbar renders.
+ *
+ * @param tracks The tracks of the model.
+ *
+ * @returns The model to render.
+ */
 const makeDataModel = (tracks: ISbDmTrack[]): ScoreBookDataModel => {
-    return {
-        arrangement: { tracks },
-    } as unknown as ScoreBookDataModel;
+    modelTracks.splice(0, modelTracks.length, ...tracks);
+
+    return modelStub;
+};
+
+/**
+ * Builds the note selection entry of the first cell of a track's measure.
+ *
+ * @param track The track to select a note of.
+ *
+ * @returns The selection entry addressing that cell.
+ */
+const noteEntryOf = (track: ISbDmTrack): ISelectionEntry => {
+    const measure = track.measures[0];
+
+    return noteEntry(measure, { numerator: 0, denominator: measure.meter.stepResolution });
 };
 
 describe.sequential("NoteStyleBar", () => {
@@ -99,7 +147,9 @@ describe.sequential("NoteStyleBar", () => {
 
     beforeEach(() => {
         renderResult = null;
-        selectionManager = new SelectionManager();
+
+        // The manager resolves selected tracks against the model it is bound to.
+        selectionManager = new SelectionManager(modelStub);
     });
 
     afterEach(() => {
@@ -271,10 +321,7 @@ describe.sequential("NoteStyleBar", () => {
         const trackB = makeTrackWithNote(8, 55, noteStyles, 8001, "1");
         const dataModel = makeDataModel([trackA, trackB]);
 
-        selectionManager.replaceSelection([
-            { granularity: SelectionGranularity.Note, bar: 1, trackId: 7, noteId: 7001, startStep: 0 },
-            { granularity: SelectionGranularity.Note, bar: 1, trackId: 8, noteId: 8001, startStep: 0 },
-        ]);
+        selectionManager.replaceSelection([noteEntryOf(trackA), noteEntryOf(trackB)]);
 
         renderResult = render(
             <NoteStyleBar dataModel={dataModel} selectionManager={selectionManager} />,
@@ -294,10 +341,7 @@ describe.sequential("NoteStyleBar", () => {
         const trackB = makeTrackWithNote(8, 55, noteStyles, 8001, "2");
         const dataModel = makeDataModel([trackA, trackB]);
 
-        selectionManager.replaceSelection([
-            { granularity: SelectionGranularity.Note, bar: 1, trackId: 7, noteId: 7001, startStep: 0 },
-            { granularity: SelectionGranularity.Note, bar: 1, trackId: 8, noteId: 8001, startStep: 0 },
-        ]);
+        selectionManager.replaceSelection([noteEntryOf(trackA), noteEntryOf(trackB)]);
 
         renderResult = render(
             <NoteStyleBar dataModel={dataModel} selectionManager={selectionManager} />,
@@ -315,10 +359,7 @@ describe.sequential("NoteStyleBar", () => {
         );
         const dataModel = makeDataModel([trackA, trackB]);
 
-        selectionManager.replaceSelection([
-            { granularity: SelectionGranularity.Note, bar: 1, trackId: 7, noteId: 7001, startStep: 0 },
-            { granularity: SelectionGranularity.Note, bar: 1, trackId: 8, noteId: 8001, startStep: 0 },
-        ]);
+        selectionManager.replaceSelection([noteEntryOf(trackA), noteEntryOf(trackB)]);
 
         renderResult = render(
             <NoteStyleBar dataModel={dataModel} selectionManager={selectionManager} />,
@@ -331,29 +372,12 @@ describe.sequential("NoteStyleBar", () => {
 
     it("marks no note style when the cursor sits inside a note's duration", () => {
         const noteStyles = { "1": makeNoteStyle("1", "Accent", "Tamborim Accent") };
-        const track = {
-            id: 7,
-            instrument: { id: 55, noteStyles },
-            measures: [
-                {
-                    number: 1,
-                    meter: { stepResolution: 16 },
-                    noteEvents: [
-                        {
-                            id: 7001,
-                            start: { numerator: 0, denominator: 16 },
-                            duration: { numerator: 4, denominator: 16 },
-                            audioData: { id: "1" },
-                        },
-                    ],
-                },
-            ],
-        } as unknown as ISbDmTrack;
+        const track = makeTrackWithNote(7, 55, noteStyles, 7001, "1", 4);
         const dataModel = makeDataModel([track]);
 
         // Step 1 is inside the note's duration but is not the note's start cell.
         selectionManager.replaceSelection([
-            { granularity: SelectionGranularity.Note, bar: 1, trackId: 7, startStep: 1 },
+            noteEntry(track.measures[0], { numerator: 1, denominator: 16 }),
         ]);
 
         renderResult = render(
@@ -481,9 +505,7 @@ describe.sequential("NoteStyleBar", () => {
         const track = makeTrackWithNote(7, 55, { "1": plain, "2": ghost }, 7001, "2");
         const dataModel = makeDataModel([track]);
 
-        selectionManager.replaceSelection([
-            { granularity: SelectionGranularity.Note, bar: 1, trackId: 7, noteId: 7001, startStep: 0 },
-        ]);
+        selectionManager.replaceSelection([noteEntryOf(track)]);
 
         renderResult = render(
             <NoteStyleBar dataModel={dataModel} selectionManager={selectionManager} trackViewMode="staff" />,

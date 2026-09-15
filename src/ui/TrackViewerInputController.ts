@@ -13,7 +13,10 @@ import { Articulation, articulationOf, resolveNoteStyleForArticulation } from ".
 import { addFractions, compareFractions, reduceFraction } from "../core/serialisation/numeric-functions.js";
 import { GridMeasureEditor, type IGridEditorPosition } from "./GridMeasureEditor.js";
 import { ScoreElementKind, type ScoreElementRegistry } from "./ScoreElementRegistry.js";
-import { SelectionGranularity, type ISelectionDelta, type ISelectionEntry } from "./SelectionSerializer.js";
+import {
+    addressesNoteCells, SelectionGranularity, SelectionSerializer, type ISelectionDelta, type ISelectionEntry,
+    type ISelectionTarget,
+} from "./SelectionSerializer.js";
 import type { SelectionManager } from "./SelectionManager.js";
 import { requisitions, type ISubdivisionCreationRequest } from "../supplement/Requisitions.js";
 import { h } from "preact";
@@ -370,13 +373,8 @@ export class TrackViewerInputController {
             return false;
         }
 
-        // Keep the selection at the same score positions. The removed note ids must not remain in
-        // the entries because staff rendering replaces those notes with newly identified rests.
-        const clearedEntries = entries.map((entry) => {
-            return { ...entry, noteId: undefined };
-        });
-
-        this.selectionManager.replaceSelection(clearedEntries);
+        // The cleared cells no longer hold the selected content, so the selection is dropped.
+        this.selectionManager.clearSelection();
 
         return true;
     }
@@ -434,15 +432,12 @@ export class TrackViewerInputController {
             start: location.start,
         };
 
-        if (location.noteId !== undefined) {
+        const previousTarget = previousRun ? this.scoreElementRegistry.getTarget(previousRun) : undefined;
+        const measure = location.measure;
+        if (previousTarget !== undefined && "duration" in previousTarget && measure !== undefined) {
             editor.clearSelection([{
                 granularity: SelectionGranularity.Note,
-                bar: location.bar,
-                trackId: location.trackId,
-                startStep: location.step,
-                endStep: location.step,
-                noteId: location.noteId,
-                start: location.start,
+                target: { granularity: SelectionGranularity.Note, measure, event: previousTarget },
             }]);
         }
 
@@ -621,18 +616,28 @@ export class TrackViewerInputController {
         }
 
         const added = delta.added[0];
-        if (delta.added.length === 1 && (added.granularity === SelectionGranularity.Note
-            || (this.viewMode === "staff" && added.granularity === SelectionGranularity.TrackPiece))) {
+        const isCursorEntry = delta.added.length === 1 && (added.granularity === SelectionGranularity.Note
+            || (this.viewMode === "staff" && added.granularity === SelectionGranularity.TrackPiece));
+        if (isCursorEntry) {
+            const { target } = added;
+            const coordinates = SelectionSerializer.coordinatesOf(added);
+            const start = coordinates.start;
+
             this.currentPosition = {
-                bar: added.bar,
-                trackId: added.trackId,
-                step: added.startStep ?? 0,
-                start: added.start,
+                bar: coordinates.bar,
+                trackId: coordinates.trackId,
+                step: addressesNoteCells(target) && start !== undefined
+                    ? SelectionSerializer.cellOf(start, target.measure)
+                    : 0,
+                start,
             };
 
-            if (added.granularity === SelectionGranularity.Note && added.noteId !== undefined
+            if (target.granularity === SelectionGranularity.Note
                 && this.editor instanceof GridMeasureEditor) {
-                const style = this.editor.findNote(added.noteId)?.note?.audioData;
+                const noteIndex = target.measure.events.indexOf(target.event);
+                const noteEvent = noteIndex < 0 ? undefined : target.measure.noteEvents.at(noteIndex);
+                const style = noteEvent?.audioData;
+
                 this.articulation = style === undefined ? undefined : articulationOf(style);
             }
         }
@@ -710,20 +715,26 @@ export class TrackViewerInputController {
             return;
         }
 
-        const noteId = this.scoreElementRegistry.getLocation(cell)?.noteId;
-        this.selectCursorPosition(position, noteId);
+        this.selectCursorPosition(position);
     }
 
-    private selectCursorPosition(position: IGridEditorPosition, noteId?: number): void {
+    private selectCursorPosition(position: IGridEditorPosition): void {
         this.currentPosition = position;
+
+        const cell = this.getGridCellForPosition(position);
+        const event = cell === undefined ? undefined : this.scoreElementRegistry.getTarget(cell);
+        const measure = cell === undefined ? undefined : this.scoreElementRegistry.getLocation(cell)?.measure;
+        const target: ISelectionTarget | undefined = event === undefined || !("duration" in event)
+            || measure === undefined
+            ? undefined
+            : { granularity: SelectionGranularity.Note, measure, event, start: position.start };
+        if (target === undefined) {
+            return;
+        }
+
         this.selectionManager.selectSingleNote({
             granularity: SelectionGranularity.Note,
-            bar: position.bar,
-            trackId: position.trackId,
-            startStep: position.step,
-            endStep: position.step,
-            noteId,
-            start: position.start,
+            target,
         });
     }
 
@@ -798,27 +809,13 @@ export class TrackViewerInputController {
     }
 
     private getGridCellForPosition(position: IGridEditorPosition): HTMLElement | undefined {
-        const elements = this.scoreElementRegistry.findSelectionElements({
-            granularity: SelectionGranularity.Note,
-            bar: position.bar,
-            trackId: position.trackId,
-            startStep: position.step,
-            endStep: position.step,
-            start: position.start,
-        }, ScoreElementKind.GridCell);
-
-        return elements.at(0);
+        return this.scoreElementRegistry.findPositionElement(position.bar, position.trackId,
+            ScoreElementKind.GridCell, position.step, position.start);
     }
 
     private getStaffRunForPosition(position: IGridEditorPosition): HTMLElement | undefined {
-        return this.scoreElementRegistry.findSelectionElements({
-            granularity: SelectionGranularity.Note,
-            bar: position.bar,
-            trackId: position.trackId,
-            startStep: position.step,
-            endStep: position.step,
-            start: position.start,
-        }, ScoreElementKind.StaffRun).at(0);
+        return this.scoreElementRegistry.findPositionElement(position.bar, position.trackId,
+            ScoreElementKind.StaffRun, position.step, position.start);
     }
 
     private findPreviousStaffRun(run: HTMLElement): HTMLElement | undefined {

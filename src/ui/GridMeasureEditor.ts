@@ -11,10 +11,11 @@ import { NoteLength, noteLengthDenominator } from "../core/rest-notation.js";
 import {
     addFractions, compareFractions, reduceFraction, subtractFractions,
 } from "../core/serialisation/numeric-functions.js";
-import type { IAudioData, IFraction } from "../core/types/general.js";
+import type { IAudioData, IFraction, IMeasureEvent } from "../core/types/general.js";
 import { requisitions } from "../supplement/Requisitions.js";
+import { modelEventAt } from "../core/MeasureProjection.js";
 import { selectionToClearRanges } from "./selection-ranges.js";
-import { SelectionGranularity, type ISelectionEntry } from "./SelectionSerializer.js";
+import { SelectionGranularity, SelectionSerializer, type ISelectionEntry } from "./SelectionSerializer.js";
 
 /** Identifies a cell in the grid view using zero-based step indexing. */
 export interface IGridEditorPosition {
@@ -84,12 +85,14 @@ export class GridMeasureEditor {
     public setNote(position: IGridEditorPosition, noteStyleId: string): IAudioData | undefined {
         const cell = this.resolveCell(position);
         const style = cell?.track.instrument.noteStyles[noteStyleId];
-        if (!cell || !style) {
+        const measure = cell?.track.measures[position.bar - 1];
+        const start = this.resolveStartFraction(position);
+        if (!style || measure === undefined || start === undefined) {
             return undefined;
         }
 
-        this.dataModel.setGridNote(position.trackId, position.bar, position.step, noteStyleId,
-            position.start);
+        this.dataModel.setNoteAt(position.trackId, position.bar, start,
+            reduceFraction(1, measure.meter.stepResolution), noteStyleId);
 
         return style;
     }
@@ -216,7 +219,7 @@ export class GridMeasureEditor {
             return undefined;
         }
 
-        return this.dataModel.insertNote(position.trackId, position.bar, start, duration, noteStyleId)
+        return this.dataModel.setNoteAt(position.trackId, position.bar, start, duration, noteStyleId)
             ? style
             : undefined;
     }
@@ -311,8 +314,15 @@ export class GridMeasureEditor {
      * @returns True when the cell changed.
      */
     public clearNote(position: IGridEditorPosition): boolean {
-        return this.dataModel.setGridNote(position.trackId, position.bar, position.step, undefined,
-            position.start);
+        const cell = this.resolveCell(position);
+        const measure = cell?.track.measures[position.bar - 1];
+        const start = this.resolveStartFraction(position);
+        if (measure === undefined || start === undefined) {
+            return false;
+        }
+
+        return this.dataModel.setNoteAt(position.trackId, position.bar, start,
+            reduceFraction(1, measure.meter.stepResolution), undefined);
     }
 
     /**
@@ -325,7 +335,7 @@ export class GridMeasureEditor {
      * @returns True when any content changed.
      */
     public clearSelection(entries: ISelectionEntry[]): boolean {
-        return this.dataModel.clearStepRanges(selectionToClearRanges(entries, this.dataModel.arrangement));
+        return this.dataModel.clearRanges(selectionToClearRanges(entries));
     }
 
     /**
@@ -344,7 +354,7 @@ export class GridMeasureEditor {
             return false;
         }
 
-        const ranges = selectionToClearRanges(entries, arrangement);
+        const ranges = selectionToClearRanges(entries);
         if (ranges.length === 0) {
             return false;
         }
@@ -442,20 +452,28 @@ export class GridMeasureEditor {
             return false;
         }
 
-        const initialEvents = entries
-            .filter((entry) => {
-                return entry.startStep !== undefined;
-            })
-            .sort((left, right) => {
-                return (left.startStep ?? 0) - (right.startStep ?? 0);
-            })
-            .map((entry) => {
-                const stepStart = reduceFraction(entry.startStep ?? 0, measure.meter.stepResolution);
+        const initialEvents: IMeasureEvent[] = [];
+        for (const entry of entries) {
+            const target = entry.target;
+            if (target.granularity === SelectionGranularity.Track
+                || target.granularity === SelectionGranularity.Measure
+                || target.granularity === SelectionGranularity.TrackPiece) {
+                continue;
+            }
 
-                return measure.events.find((event) => {
-                    return compareFractions(event.start, stepStart) === 0;
-                });
-            });
+            const events = target.granularity === SelectionGranularity.Note
+                ? [modelEventAt(target.measure, target.start ?? target.event.start) ?? target.event]
+                : target.events;
+            for (const event of events) {
+                if (!initialEvents.includes(event)) {
+                    initialEvents.push(event);
+                }
+            }
+        }
+
+        initialEvents.sort((left, right) => {
+            return compareFractions(left.start, right.start);
+        });
 
         return this.dataModel.createSubdivision(range.trackId, range.bar, range.start, range.end,
             actual, range.spanSteps, initialEvents);
@@ -498,34 +516,27 @@ export class GridMeasureEditor {
      * @returns True when at least one complete empty subdivision was deleted.
      */
     public deleteEmptySubdivisionsForSelection(entries: ISelectionEntry[]): boolean {
-        const arrangement = this.dataModel.arrangement;
-        if (!arrangement || entries.length === 0) {
+        if (entries.length === 0) {
             return false;
         }
 
         const candidates = new Map<string, IEmptySubdivisionCandidate>();
         for (const entry of entries) {
-            if (entry.granularity !== SelectionGranularity.Note || entry.start === undefined) {
+            const target = entry.target;
+            if (target.granularity !== SelectionGranularity.Note) {
                 return false;
             }
 
-            const entryStart = entry.start;
-            const track = arrangement.tracks.find((candidate) => {
-                return candidate.id === entry.trackId;
-            });
-            const measure = track?.measures[entry.bar - 1];
-            if (!measure) {
-                return false;
-            }
-
+            const { measure } = target;
+            const cellStart = target.start ?? target.event.start;
             const eventIndex = measure.events.findIndex((event) => {
-                return compareFractions(event.start, entryStart) === 0;
+                return compareFractions(event.start, cellStart) === 0;
             });
             const subdivision = measure.subdivisions.find((candidate) => {
                 return eventIndex >= candidate.startIndex
                     && eventIndex < candidate.startIndex + candidate.actual;
             });
-            if (eventIndex < 0 || !subdivision
+            if (!subdivision
                 || measure.events.slice(subdivision.startIndex, subdivision.startIndex + subdivision.actual)
                     .some((event) => {
                         return event.noteStyleId !== undefined;
@@ -533,10 +544,10 @@ export class GridMeasureEditor {
                 return false;
             }
 
-            const key = `${entry.trackId}:${entry.bar}:${subdivision.startIndex}`;
+            const key = `${measure.track.id}:${measure.number}:${subdivision.startIndex}`;
             candidates.set(key, {
-                trackId: entry.trackId,
-                bar: entry.bar,
+                trackId: measure.track.id,
+                bar: measure.number,
                 start: { ...measure.events[subdivision.startIndex].start },
                 startIndex: subdivision.startIndex,
                 actual: subdivision.actual,
@@ -544,10 +555,7 @@ export class GridMeasureEditor {
         }
 
         for (const candidate of candidates.values()) {
-            const track = arrangement.tracks.find((item) => {
-                return item.id === candidate.trackId;
-            });
-            const measure = track?.measures[candidate.bar - 1];
+            const measure = this.resolveMeasure(candidate.trackId, candidate.bar);
             if (!measure) {
                 return false;
             }
@@ -556,10 +564,11 @@ export class GridMeasureEditor {
                 .slice(candidate.startIndex, candidate.startIndex + candidate.actual)
                 .every((event) => {
                     return entries.some((entry) => {
-                        return entry.trackId === candidate.trackId
-                            && entry.bar === candidate.bar
-                            && entry.start !== undefined
-                            && compareFractions(entry.start, event.start) === 0;
+                        const target = entry.target;
+
+                        return target.granularity === SelectionGranularity.Note
+                            && target.measure === measure
+                            && compareFractions(target.start ?? target.event.start, event.start) === 0;
                     });
                 });
             if (!complete) {
@@ -577,13 +586,14 @@ export class GridMeasureEditor {
     }
 
     /**
-     * Re-resolves the note ids of the given note entries against the current measure content, so
-     * selections stay accurate after structural edits such as filling a range with a note style.
-     * Only note start cells carry a note id; absorbed cells and rests resolve to undefined.
+     * Re-resolves the given selection entries against the current measure content, so selections stay
+     * accurate after structural edits such as filling a range with a note style. An edit replaces the
+     * events, so the entries are serialised to their coordinates and resolved back; entries whose
+     * element no longer exists are dropped.
      *
      * @param entries The selection entries to refresh.
      *
-     * @returns The entries with updated note ids.
+     * @returns The entries holding the current model objects.
      */
     public refreshSelection(entries: ISelectionEntry[]): ISelectionEntry[] {
         const arrangement = this.dataModel.arrangement;
@@ -591,43 +601,7 @@ export class GridMeasureEditor {
             return entries;
         }
 
-        return entries.map((entry) => {
-            if (entry.granularity !== SelectionGranularity.Note) {
-                return entry;
-            }
-
-            const track = arrangement.tracks.find((candidate) => {
-                return candidate.id === entry.trackId;
-            });
-            const measure = track?.measures[entry.bar - 1];
-            if (!measure) {
-                return entry;
-            }
-
-            const cellStart = entry.start ?? (entry.startStep === undefined
-                ? undefined
-                : reduceFraction(entry.startStep, measure.meter.stepResolution));
-            if (cellStart === undefined) {
-                return entry;
-            }
-
-            const noteEvent = measure.noteEvents.find((candidate) => {
-                if (candidate.audioData === undefined) {
-                    return false;
-                }
-
-                const eventEnd = addFractions(candidate.start, candidate.duration);
-
-                return compareFractions(cellStart, candidate.start) >= 0
-                    && compareFractions(cellStart, eventEnd) < 0;
-            });
-
-            const noteId = noteEvent !== undefined && compareFractions(cellStart, noteEvent.start) === 0
-                ? noteEvent.id
-                : undefined;
-
-            return { ...entry, noteId };
-        });
+        return SelectionSerializer.deserialise(arrangement, SelectionSerializer.serialise(entries));
     }
 
     /**
@@ -732,47 +706,57 @@ export class GridMeasureEditor {
 
     /**
      * Resolves the note starts addressed by a selection entry. Note entries address a single note,
-     * note groups every note inside their step range. Coarser granularities describe whole measures
-     * or tracks and are not resized.
+     * note groups every note they contain. Coarser granularities describe whole measures or tracks
+     * and are not resized.
      *
      * @param entry The selection entry to resolve.
      *
      * @returns The positions of the addressed notes.
      */
     private notePositionsOf(entry: ISelectionEntry): IGridEditorPosition[] {
-        if (entry.granularity === SelectionGranularity.Note) {
-            // Only the cell that starts a note carries a note id; rest cells are not resized.
-            return entry.startStep === undefined || entry.noteId === undefined
-                ? []
-                : [{ bar: entry.bar, trackId: entry.trackId, step: entry.startStep, start: entry.start }];
+        const { target } = entry;
+
+        if (target.granularity === SelectionGranularity.Note) {
+            // Only a cell that starts a note is resized; cells inside its duration are grid layout.
+            const start = target.start ?? target.event.start;
+            const event = modelEventAt(target.measure, start);
+            if (event?.noteStyleId === undefined || compareFractions(event.start, start) !== 0) {
+                return [];
+            }
+
+            return [this.positionOf(target.measure, event.start)];
         }
 
-        if (entry.granularity !== SelectionGranularity.NoteGroup
-            || entry.startStep === undefined || entry.endStep === undefined) {
+        if (target.granularity !== SelectionGranularity.NoteGroup) {
             return [];
         }
 
-        const measure = this.resolveMeasure(entry.trackId, entry.bar);
-        if (!measure) {
-            return [];
-        }
-
-        const stepsPerBar = measure.meter.stepResolution;
         const positions: IGridEditorPosition[] = [];
-        for (const event of measure.events) {
-            if (event.noteStyleId === undefined) {
-                continue;
+        for (const event of target.events) {
+            if (event.noteStyleId !== undefined) {
+                positions.push(this.positionOf(target.measure, event.start));
             }
-
-            const step = event.start.numerator * stepsPerBar / event.start.denominator;
-            if (!Number.isInteger(step) || step < entry.startStep || step > entry.endStep) {
-                continue;
-            }
-
-            positions.push({ bar: entry.bar, trackId: entry.trackId, step, start: event.start });
         }
 
         return positions;
+    }
+
+    /**
+     * Resolves the grid position of a position inside a measure. The exact start is carried along so
+     * subdivision slots, which do not align to a grid step, stay addressable.
+     *
+     * @param measure The measure the position belongs to.
+     * @param start The position as a fraction of the measure.
+     *
+     * @returns The grid position of that measure position.
+     */
+    private positionOf(measure: ISbDmTrackMeasure, start: IFraction): IGridEditorPosition {
+        return {
+            bar: measure.number,
+            trackId: measure.track.id,
+            step: start.numerator * measure.meter.stepResolution / start.denominator,
+            start: { ...start },
+        };
     }
 
     private noteLengthDurationForMeasure(duration: IFraction, sourceMeasure: ISbDmTrackMeasure,
@@ -862,46 +846,51 @@ export class GridMeasureEditor {
             return undefined;
         }
 
-        const first = entries[0];
-        const trackId = first.trackId;
-        const bar = first.bar;
+        const first = entries[0].target;
+        if (first.granularity === SelectionGranularity.Track
+            || first.granularity === SelectionGranularity.Measure
+            || first.granularity === SelectionGranularity.TrackPiece) {
+            return undefined;
+        }
+
+        const measure = first.measure;
+        const stepsPerBar = measure.meter.stepResolution;
 
         let minStep = Number.MAX_SAFE_INTEGER;
         let maxStep = Number.MIN_SAFE_INTEGER;
 
         for (const entry of entries) {
-            if (entry.trackId !== trackId || entry.bar !== bar || entry.start !== undefined) {
+            const target = entry.target;
+            if (target.granularity === SelectionGranularity.Track
+                || target.granularity === SelectionGranularity.Measure
+                || target.granularity === SelectionGranularity.TrackPiece || target.measure !== measure) {
                 return undefined;
             }
 
-            if (entry.granularity !== SelectionGranularity.Note
-                && entry.granularity !== SelectionGranularity.NoteGroup) {
-                return undefined;
-            }
+            const events = target.granularity === SelectionGranularity.Note ? [target.event] : target.events;
+            for (const event of events) {
+                const start = event.start.numerator * stepsPerBar / event.start.denominator;
+                const end = start + (event.duration.numerator * stepsPerBar / event.duration.denominator);
 
-            if (entry.startStep === undefined || entry.endStep === undefined) {
-                return undefined;
-            }
+                // A subdivision slot does not align to a step and cannot become a subdivision again.
+                if (!Number.isInteger(start) || !Number.isInteger(end)) {
+                    return undefined;
+                }
 
-            minStep = Math.min(minStep, entry.startStep, entry.endStep);
-            maxStep = Math.max(maxStep, entry.startStep, entry.endStep);
+                minStep = Math.min(minStep, start);
+                maxStep = Math.max(maxStep, end - 1);
+            }
         }
 
-        const measure = this.resolveMeasure(trackId, bar);
-        if (!measure) {
-            return undefined;
-        }
-
-        const stepsPerBar = measure.meter.stepResolution;
-        if (minStep < 0 || maxStep >= stepsPerBar) {
+        if (minStep === Number.MAX_SAFE_INTEGER || minStep < 0 || maxStep >= stepsPerBar) {
             return undefined;
         }
 
         const spanSteps = maxStep - minStep + 1;
 
         return {
-            trackId,
-            bar,
+            trackId: measure.track.id,
+            bar: measure.number,
             start: reduceFraction(minStep, stepsPerBar),
             end: reduceFraction(maxStep + 1, stepsPerBar),
             spanSteps,

@@ -43,9 +43,11 @@ test("keyboard navigation scrolls the staff viewer to keep the cursor visible", 
         await page.keyboard.press("ArrowRight");
     }
 
-    const scrollLeft = await page.evaluate(() => {
-        return document.querySelector<HTMLElement>("#trackViewerHost")?.scrollLeft ?? 0;
-    });
-
-    expect(scrollLeft).toBeGreaterThan(0);
+    // The cursor moves one run per key press and the viewer follows it in the same render pass, so
+    // the assertion waits for the scroll instead of sampling the value right after the key events.
+    await expect.poll(() => {
+        return page.evaluate(() => {
+            return document.querySelector<HTMLElement>("#trackViewerHost")?.scrollLeft ?? 0;
+        });
+    }).toBeGreaterThan(0);
 });

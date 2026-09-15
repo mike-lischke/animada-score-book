@@ -7,11 +7,11 @@ import type { ComponentChild } from "preact";
 
 import { Articulation, articulationOf, availableArticulations } from "../../../core/articulation.js";
 import type { ISbDmTrack, ScoreBookDataModel } from "../../../core/ScoreBookDataModel.js";
-import { compareFractions, reduceFraction } from "../../../core/serialisation/numeric-functions.js";
+import { compareFractions } from "../../../core/serialisation/numeric-functions.js";
 import type { IAudioData } from "../../../core/types/general.js";
 import { requisitions } from "../../../supplement/Requisitions.js";
 import type { SelectionManager } from "../../../ui/SelectionManager.js";
-import { SelectionGranularity, type ISelectionEntry } from "../../../ui/SelectionSerializer.js";
+import { SelectionGranularity, SelectionSerializer, type ISelectionEntry } from "../../../ui/SelectionSerializer.js";
 import { Button } from "../framework/Button.js";
 import { Container } from "../framework/Container.js";
 import { GooeyGroup } from "../framework/GooeyGroup.js";
@@ -123,7 +123,7 @@ export class ArticulationToolbar extends UIComponent<IArticulationToolbarProps, 
         const entries = [...selectionManager.currentSelection.values()];
         const tracks = this.resolveSelectedTracks(entries);
         const noteStyles = this.resolveNoteStyles(tracks);
-        const markedStyleId = this.resolveMarkedStyleId(tracks, entries);
+        const markedStyleId = this.resolveMarkedStyleId(entries);
 
         const noteStyleList = Object.values(noteStyles);
         const voiceStyle = markedStyleId !== undefined
@@ -153,18 +153,10 @@ export class ArticulationToolbar extends UIComponent<IArticulationToolbarProps, 
      * @returns The distinct selected tracks, in order of first appearance.
      */
     private resolveSelectedTracks(entries: ISelectionEntry[]): ISbDmTrack[] {
-        const { dataModel } = this.props;
-
-        const trackIds = new Set(entries.map((entry) => {
-            return entry.trackId;
-        }));
-
         const tracks: ISbDmTrack[] = [];
-        for (const trackId of trackIds) {
-            const track = dataModel.arrangement?.tracks.find((candidate) => {
-                return candidate.id === trackId;
-            });
-            if (track) {
+        for (const entry of entries) {
+            const track = SelectionSerializer.trackOf(entry);
+            if (!tracks.includes(track)) {
                 tracks.push(track);
             }
         }
@@ -222,12 +214,11 @@ export class ArticulationToolbar extends UIComponent<IArticulationToolbarProps, 
     /**
      * Determines the note style shared by all currently selected notes across all selected tracks.
      *
-     * @param tracks The distinct selected tracks.
      * @param entries All current selection entries.
      *
      * @returns The common note style id, or undefined when no single style is shared.
      */
-    private resolveMarkedStyleId(tracks: ISbDmTrack[], entries: ISelectionEntry[]): string | undefined {
+    private resolveMarkedStyleId(entries: ISelectionEntry[]): string | undefined {
         const noteEntries = entries.filter((entry) => {
             return entry.granularity === SelectionGranularity.Note;
         });
@@ -236,32 +227,22 @@ export class ArticulationToolbar extends UIComponent<IArticulationToolbarProps, 
             return undefined;
         }
 
-        const firstStyleId = this.noteStyleIdOf(tracks, noteEntries[0]);
+        const firstStyleId = this.noteStyleIdOf(noteEntries[0]);
         const allMatch = noteEntries.every((entry) => {
-            return this.noteStyleIdOf(tracks, entry) === firstStyleId;
+            return this.noteStyleIdOf(entry) === firstStyleId;
         });
 
         return allMatch ? firstStyleId : undefined;
     }
 
-    private noteStyleIdOf(tracks: ISbDmTrack[], entry: ISelectionEntry): string | undefined {
-        const track = tracks.find((candidate) => {
-            return candidate.id === entry.trackId;
-        });
-        const measure = track?.measures.find((candidate) => {
-            return candidate.number === entry.bar;
-        });
-        if (!measure) {
+    private noteStyleIdOf(entry: ISelectionEntry): string | undefined {
+        const { target } = entry;
+        if (target.granularity !== SelectionGranularity.Note) {
             return undefined;
         }
 
-        const cellStart = entry.start ?? (entry.startStep === undefined
-            ? undefined
-            : reduceFraction(entry.startStep, measure.meter.stepResolution));
-        if (cellStart === undefined) {
-            return undefined;
-        }
-
+        const { measure } = target;
+        const cellStart = target.start ?? target.event.start;
         const noteEvent = measure.noteEvents.find((candidate) => {
             if (candidate.audioData === undefined) {
                 return false;
