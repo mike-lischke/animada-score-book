@@ -746,6 +746,7 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                         trackId,
                         step: stepIndex,
                         start: node.start,
+                        measure,
                     }, measure.events[node.eventIndex])}>
                     <NoteImage
                         className="staff-note-viewer-rest-symbol"
