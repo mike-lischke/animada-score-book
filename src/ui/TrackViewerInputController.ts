@@ -408,14 +408,26 @@ export class TrackViewerInputController {
 
     private deleteBeforeStaffCursor(position: IStaffEditorPosition): boolean {
         const editor = this.staffEditor;
-        const currentRun = this.getStaffRunForPosition(position);
-        const previousRun = currentRun ? this.findPreviousStaffRun(currentRun) : undefined;
-        const previousPosition = previousRun ? this.getStaffPosition(previousRun) : undefined;
-        if (editor === undefined || previousPosition === undefined) {
+
+        // Backspace removes the event before the cursor, so a selection of several elements has no
+        // target of its own.
+        if (editor === undefined || this.selectionManager.currentSelection.size > 1) {
             return false;
         }
 
-        editor.clearNote(previousPosition);
+        const currentRun = this.getStaffRunForPosition(position);
+        const previousRun = currentRun ? this.findPreviousStaffRun(currentRun) : undefined;
+        const previousPosition = previousRun ? this.getStaffPosition(previousRun) : undefined;
+        if (previousPosition === undefined) {
+            return false;
+        }
+
+        // The event leaves no rest behind. Where shifting is impossible — a track holding
+        // subdivisions — it is cleared to a rest instead, so Backspace never does nothing silently.
+        if (!editor.deleteEventWithShift(previousPosition) && !editor.clearNote(previousPosition)) {
+            return false;
+        }
+
         this.selectStaffCursor(previousPosition);
 
         return true;

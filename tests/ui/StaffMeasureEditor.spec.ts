@@ -146,6 +146,18 @@ describe.sequential("StaffMeasureEditor", () => {
         expect(styleAt(measure, { numerator: 1, denominator: 2 })).toBe("2");
     });
 
+    it("removes the event at the position and pulls the following events left", () => {
+        setEvents(model, [
+            { start: { numerator: 0, denominator: 1 }, duration: { numerator: 1, denominator: 4 }, noteStyleId: "1" },
+            { start: { numerator: 1, denominator: 4 }, duration: { numerator: 1, denominator: 4 }, noteStyleId: "2" },
+            { start: { numerator: 1, denominator: 2 }, duration: { numerator: 1, denominator: 2 } },
+        ]);
+
+        expect(editor.deleteEventWithShift(position)).toBe(true);
+        expect(styleAt(measure, { numerator: 0, denominator: 1 })).toBe("2");
+        expect(durationAt(measure, { numerator: 0, denominator: 1 })).toEqual({ numerator: 1, denominator: 4 });
+    });
+
     it("reports whether a note starts at the addressed position", () => {
         setEvents(model, [
             { start: { numerator: 0, denominator: 1 }, duration: { numerator: 1, denominator: 2 }, noteStyleId: "1" },

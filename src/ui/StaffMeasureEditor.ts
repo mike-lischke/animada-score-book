@@ -155,6 +155,19 @@ export class StaffMeasureEditor extends MeasureEditor {
     }
 
     /**
+     * Removes the event at the given position and pulls the following events to the left by its
+     * length. Unlike {@link clearNote}, no rest stays behind: a rest is removed as well and the
+     * track becomes shorter.
+     *
+     * @param position The position of the event to remove.
+     *
+     * @returns True when the event was removed.
+     */
+    public deleteEventWithShift(position: IStaffEditorPosition): boolean {
+        return this.dataModel.deleteEventWithShift(position.trackId, position.bar, position.start);
+    }
+
+    /**
      * Resolves the note starts addressed by a selection entry. A run addresses the note it renders,
      * a note group every note it contains. Unlike a grid cell, a run never sits inside a longer note,
      * so the addressed note is always the one to resize.

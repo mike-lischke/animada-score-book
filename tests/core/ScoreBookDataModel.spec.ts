@@ -726,6 +726,74 @@ describe.sequential("ScoreBookDataModel track actions", () => {
         ]);
     });
 
+    it("deleteEventWithShift removes a note and pulls the following notes to the left", () => {
+        model.startNewArrangement([createInstrument("0", 0, 0)]);
+        const track = model.arrangement!.tracks[0];
+        model.setNoteAt(track.id, 1, { numerator: 0, denominator: 1 }, { numerator: 1, denominator: 4 }, "1");
+        model.setNoteAt(track.id, 1, { numerator: 1, denominator: 4 }, { numerator: 1, denominator: 4 }, "2");
+        model.setNoteAt(track.id, 1, { numerator: 1, denominator: 2 }, { numerator: 1, denominator: 4 }, "3");
+
+        mutatedCalls = 0;
+        const deleted = model.deleteEventWithShift(track.id, 1, { numerator: 1, denominator: 4 });
+
+        expect(deleted).toBe(true);
+        expect(mutatedCalls).toBe(1);
+        // The half rest behind the removed note fills the freed quarter: the last note moves left onto
+        // the removed note's position and the rest behind it grows.
+        expect(eventList(track.measures[0])).toEqual([
+            "0/1+1/4:1",
+            "1/4+1/4:3",
+            "1/2+1/2:-",
+        ]);
+    });
+
+    it("deleteEventWithShift removes a rest and pulls the following notes to the left", () => {
+        model.startNewArrangement([createInstrument("0", 0, 0)]);
+        const track = model.arrangement!.tracks[0];
+        model.setNoteAt(track.id, 1, { numerator: 0, denominator: 1 }, { numerator: 1, denominator: 4 }, "1");
+        model.setNoteAt(track.id, 1, { numerator: 1, denominator: 2 }, { numerator: 1, denominator: 4 }, "2");
+
+        mutatedCalls = 0;
+        const deleted = model.deleteEventWithShift(track.id, 1, { numerator: 1, denominator: 4 });
+
+        expect(deleted).toBe(true);
+        expect(mutatedCalls).toBe(1);
+        expect(eventList(track.measures[0])).toEqual([
+            "0/1+1/4:1",
+            "1/4+1/4:2",
+            "1/2+1/2:-",
+        ]);
+    });
+
+    it("deleteEventWithShift keeps every measure tiling its meter", () => {
+        model.startNewArrangement([createInstrument("0", 0, 0)], { length: 2 });
+        const track = model.arrangement!.tracks[0];
+        model.setNoteAt(track.id, 1, { numerator: 1, denominator: 2 }, { numerator: 1, denominator: 4 }, "1");
+        model.setNoteAt(track.id, 2, { numerator: 0, denominator: 1 }, { numerator: 1, denominator: 4 }, "2");
+
+        // Removing the trailing quarter rest pulls the whole tail of the track to the left, so the
+        // note of the second measure steps over the bar line into the first one.
+        expect(model.deleteEventWithShift(track.id, 1, { numerator: 3, denominator: 4 })).toBe(true);
+        expect(eventList(track.measures[0])).toEqual([
+            "0/1+1/2:-",
+            "1/2+1/4:1",
+            "3/4+1/4:2",
+        ]);
+        expect(eventList(track.measures[1])).toEqual(["0/1+1/1:-"]);
+    });
+
+    it("deleteEventWithShift skips tracks that contain subdivisions", () => {
+        model.startNewArrangement([createInstrument("0", 0, 0)]);
+        const track = model.arrangement!.tracks[0];
+        model.createSubdivision(track.id, 1, { numerator: 0, denominator: 1 }, { numerator: 1, denominator: 4 },
+            3, 4);
+
+        mutatedCalls = 0;
+
+        expect(model.deleteEventWithShift(track.id, 1, { numerator: 1, denominator: 4 })).toBe(false);
+        expect(mutatedCalls).toBe(0);
+    });
+
     it("clearAllTracks clears every track and fires arrangementMutated once", () => {
         const instruments = [createInstrument("0", 0, 0), createInstrument("1", 1, 1)];
         model.startNewArrangement(instruments);

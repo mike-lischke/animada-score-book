@@ -1289,6 +1289,74 @@ export class ScoreBookDataModel {
     }
 
     /**
+     * Removes one event from a measure and pulls everything behind it to the left by the removed
+     * length, so a rest takes no time either. Content that no longer fits into its measure is cut
+     * off at the bar line and continues at the start of the next measure; the tail of the track is
+     * filled with a rest, so every measure keeps tiling its meter. Tracks with subdivisions are
+     * skipped: their slots do not take part in length changes yet.
+     *
+     * @param trackId The track containing the event.
+     * @param bar The one-based measure number.
+     * @param start The exact start of the event within the measure.
+     *
+     * @returns True when the event was removed.
+     */
+    public deleteEventWithShift(trackId: number, bar: number, start: IFraction): boolean {
+        const arrangement = this.arrangement;
+        const track = arrangement?.tracks.find((candidate) => {
+            return candidate.id === trackId;
+        });
+
+        const measure = track?.measures[bar - 1];
+        if (!track || !measure || this.hasSubdivisions(track)) {
+            return false;
+        }
+
+        const stepsPerBar = measure.meter.stepResolution;
+        const eventStart = this.stepsFromFraction(start, stepsPerBar);
+        const removed = measure.events.find((event) => {
+            return compareFractions(event.start, start) === 0;
+        });
+        const removedSteps = removed === undefined
+            ? undefined
+            : this.stepsFromFraction(removed.duration, stepsPerBar);
+        const timeline = this.measureTimeline(track);
+        const notes = this.collectAbsoluteNotes(track, timeline);
+        if (eventStart === undefined || removedSteps === undefined || notes === undefined) {
+            return false;
+        }
+
+        const removeFrom = timeline.offsets[bar - 1] + eventStart;
+        const removeTo = removeFrom + removedSteps;
+        const remaining: IAbsoluteNoteEvent[] = [];
+
+        for (const note of notes) {
+            if (note.startStep >= removeTo) {
+                note.startStep -= removedSteps;
+                remaining.push(note);
+
+                continue;
+            }
+
+            // The removed event itself disappears; a note reaching into it is shortened at its start.
+            if (note.startStep >= removeFrom) {
+                continue;
+            }
+
+            note.durationSteps = Math.min(note.durationSteps, removeFrom - note.startStep);
+            remaining.push(note);
+        }
+
+        const pulse = this.parsePulse(track.arrangement.timeParams.pulse);
+        this.layOutAbsoluteNotes(track, timeline, remaining, pulse);
+
+        void requisitions.execute("trackChanged", track.id);
+        void requisitions.execute("arrangementMutated", undefined);
+
+        return true;
+    }
+
+    /**
      * Changes the duration of a single note; see {@link resizeNotes}.
      *
      * @param trackId The track containing the note.
