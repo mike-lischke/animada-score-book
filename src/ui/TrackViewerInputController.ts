@@ -10,8 +10,11 @@ import { AudioBufferPlayer } from "../player/AudioBufferPlayer.js";
 import { getSharedAudioContext } from "../core/audio-context.js";
 import { NoteLength } from "../core/rest-notation.js";
 import { Articulation, articulationOf, resolveNoteStyleForArticulation } from "../core/articulation.js";
-import { addFractions, compareFractions, reduceFraction } from "../core/serialisation/numeric-functions.js";
+import { addFractions, compareFractions } from "../core/serialisation/numeric-functions.js";
+import type { IAudioData, IFraction } from "../core/types/general.js";
 import { GridMeasureEditor, type IGridEditorPosition } from "./GridMeasureEditor.js";
+import { MeasureEditor } from "./MeasureEditor.js";
+import { StaffMeasureEditor, type IInsertedStaffNote, type IStaffEditorPosition } from "./StaffMeasureEditor.js";
 import { ScoreElementKind, type ScoreElementRegistry } from "./ScoreElementRegistry.js";
 import {
     addressesNoteCells, SelectionGranularity, SelectionSerializer, type ISelectionDelta, type ISelectionEntry,
@@ -30,13 +33,14 @@ const noteLengthShortcuts = [
     NoteLength.ThirtySecond,
 ];
 
-/** View-specific editor input target. Pointer events cover mouse, touch and pen input. */
-export interface ITrackViewerEditorInput {
-    handlePointerDown?(event: PointerEvent): boolean;
-    handlePointerUp?(event: PointerEvent): boolean;
-    handlePointerCancel?(event: PointerEvent): boolean;
-    handleKeyDown?(event: KeyboardEvent, position?: IGridEditorPosition): boolean;
-}
+/** The start of a measure as a bar fraction. */
+const measureStart: IFraction = { numerator: 0, denominator: 1 };
+
+/** The bar line as a bar fraction. */
+const barLine: IFraction = { numerator: 1, denominator: 1 };
+
+/** The cursor position of the current view: a grid cell or a staff run. */
+type ICursorPosition = IGridEditorPosition | IStaffEditorPosition;
 
 /** Routes edit input without owning selection or rendering concerns. */
 export class TrackViewerInputController {
@@ -46,11 +50,12 @@ export class TrackViewerInputController {
     private static readonly longPressDuration = 500;
     private static readonly longPressMoveTolerance = 10;
 
-    private editor?: ITrackViewerEditorInput;
+    private gridEditor?: GridMeasureEditor;
+    private staffEditor?: StaffMeasureEditor;
     private longPressTimer?: ReturnType<typeof setTimeout>;
     private longPressPointerId?: number;
     private longPressTarget?: HTMLElement;
-    private currentPosition?: IGridEditorPosition;
+    private currentPosition?: ICursorPosition;
     private noteLength = NoteLength.Quarter;
     private articulation?: Articulation;
 
@@ -91,24 +96,18 @@ export class TrackViewerInputController {
         requisitions.unregister("noteLengthChanged", this.handleNoteLengthChanged);
         requisitions.unregister("articulationChanged", this.handleArticulationChanged);
         this.clearLongPress();
-        this.editor = undefined;
+        this.gridEditor = undefined;
+        this.staffEditor = undefined;
     }
 
-    public setEditor(editor: ITrackViewerEditorInput | undefined): void {
-        this.editor = editor;
-    }
-
-    public setGridEditor(editor: GridMeasureEditor | undefined): void {
-        this.editor = editor;
+    public setEditors(gridEditor: GridMeasureEditor, staffEditor: StaffMeasureEditor): void {
+        this.gridEditor = gridEditor;
+        this.staffEditor = staffEditor;
     }
 
     private handlePointerDown = (event: PointerEvent): void => {
-        if (!this.editMode || this.viewMode !== "grid" || !this.editor?.handlePointerDown) {
+        if (!this.editMode || this.viewMode !== "grid") {
             return;
-        }
-
-        if (this.editor.handlePointerDown(event)) {
-            event.preventDefault();
         }
 
         this.eventContainer.focus({ preventScroll: true });
@@ -134,26 +133,10 @@ export class TrackViewerInputController {
 
     private handlePointerUp = (event: PointerEvent): void => {
         this.clearLongPress(event.pointerId);
-
-        if (!this.editMode || this.viewMode !== "grid" || !this.editor?.handlePointerUp) {
-            return;
-        }
-
-        if (this.editor.handlePointerUp(event)) {
-            event.preventDefault();
-        }
     };
 
     private handlePointerCancel = (event: PointerEvent): void => {
         this.clearLongPress(event.pointerId);
-
-        if (!this.editMode || this.viewMode !== "grid" || !this.editor?.handlePointerCancel) {
-            return;
-        }
-
-        if (this.editor.handlePointerCancel(event)) {
-            event.preventDefault();
-        }
     };
 
     private handlePointerMove = (event: PointerEvent): void => {
@@ -207,16 +190,13 @@ export class TrackViewerInputController {
     }
 
     private openNoteMenu(position: IGridEditorPosition, target: EventTarget | null): void {
-        if (!(this.editor instanceof GridMeasureEditor)) {
-            return;
-        }
-
+        const editor = this.gridEditor;
         const cell = this.getGridCell(target);
-        if (!cell) {
+        if (editor === undefined || !cell) {
             return;
         }
 
-        const items: IRadialMenuItem[] = this.editor.getNoteStyles(position).map((style, index) => {
+        const items: IRadialMenuItem[] = editor.getNoteStyles(position.trackId).map((style, index) => {
             const name = style.symbol?.shortDescription ?? style.id;
             const tooltip = style.symbol?.description ?? name;
 
@@ -226,13 +206,8 @@ export class TrackViewerInputController {
                 tooltip: `${tooltip} (${index + 1})`,
                 icon: h(NoteStyleSymbolViewer, { noteStyle: style, "data-tooltip": "inherit" }),
                 onClick: () => {
-                    const selectedStyle = this.editor instanceof GridMeasureEditor
-                        ? this.editor.setNote(position, style.id)
-                        : undefined;
-                    const volume = this.editor instanceof GridMeasureEditor
-                        ? this.editor.getMainVolume()
-                        : 1;
-                    this.playNote(selectedStyle, volume);
+                    const selectedStyle = editor.setNote(position, style.id);
+                    this.playNote(selectedStyle, editor.getMainVolume());
                     this.advanceCursor(cell);
                     this.eventContainer.focus({ preventScroll: true });
                 },
@@ -279,8 +254,33 @@ export class TrackViewerInputController {
         return location?.kind === ScoreElementKind.GridCell ? cell ?? undefined : undefined;
     }
 
+    /**
+     * Resolves the staff position of a rendered run.
+     *
+     * @param target The event target to resolve.
+     *
+     * @returns The exact staff position, or undefined when the target is not a run.
+     */
+    private getStaffPosition(target: EventTarget | null): IStaffEditorPosition | undefined {
+        if (!(target instanceof HTMLElement)) {
+            return undefined;
+        }
+
+        const run = target.closest<HTMLElement>(".staff-note-viewer-run");
+        if (!run) {
+            return undefined;
+        }
+
+        const location = this.scoreElementRegistry.getLocation(run);
+        if (location?.kind !== ScoreElementKind.StaffRun || location.start === undefined) {
+            return undefined;
+        }
+
+        return { bar: location.bar, trackId: location.trackId, start: { ...location.start } };
+    }
+
     private handleKeyDown = (event: KeyboardEvent): void => {
-        if (!this.editMode || !this.editor?.handleKeyDown) {
+        if (!this.editMode || this.currentEditor() === undefined) {
             return;
         }
 
@@ -290,14 +290,13 @@ export class TrackViewerInputController {
             return;
         }
 
+        const shortcutIndex = Number.parseInt(event.key, 10) - 1;
+
         if ((event.altKey || event.metaKey) && !event.ctrlKey && !event.shiftKey) {
-            const shortcutIndex = Number.parseInt(event.key, 10) - 1;
             const length = noteLengthShortcuts[shortcutIndex];
             const canSelectLength = shortcutIndex >= 0 && shortcutIndex < noteLengthShortcuts.length
                 && this.selectionManager.hasSelection
-                && this.editor instanceof GridMeasureEditor
-                && this.currentPosition !== undefined
-                && this.editor.noteLengthDuration(length, this.currentPosition) !== undefined;
+                && this.noteLengthDurationOf(length) !== undefined;
             if (canSelectLength) {
                 void requisitions.execute("noteLengthChanged", length);
                 event.preventDefault();
@@ -306,10 +305,8 @@ export class TrackViewerInputController {
             }
         }
 
-        if (!event.altKey && !event.metaKey && !event.ctrlKey && !event.shiftKey
-            && this.editor instanceof GridMeasureEditor && this.currentPosition) {
-            const shortcutIndex = Number.parseInt(event.key, 10) - 1;
-            const styles = this.editor.getNoteStyles(this.currentPosition);
+        if (!event.altKey && !event.metaKey && !event.ctrlKey && !event.shiftKey) {
+            const styles = this.noteStylesAtCursor();
             if (shortcutIndex >= 0 && shortcutIndex < styles.length) {
                 this.enterNote(styles[shortcutIndex].id);
                 event.preventDefault();
@@ -317,20 +314,12 @@ export class TrackViewerInputController {
                 return;
             }
         }
-
-        if (this.editor.handleKeyDown(event, this.currentPosition)) {
-            event.preventDefault();
-        }
     };
 
     private handleDelete(event: KeyboardEvent): void {
-        if (!(this.editor instanceof GridMeasureEditor)) {
-            return;
-        }
-
         const handled = event.key === "Backspace"
-            ? this.deleteBeforeCursor(this.editor)
-            : this.deleteAtCursor(this.editor);
+            ? this.deleteBeforeCursor()
+            : this.deleteSelection();
 
         if (handled) {
             event.preventDefault();
@@ -338,34 +327,31 @@ export class TrackViewerInputController {
     }
 
     private handleSelectionDeleteRequested = (): Promise<boolean> => {
-        if (!(this.editor instanceof GridMeasureEditor)) {
-            return Promise.resolve(false);
-        }
-
         const entries = [...this.selectionManager.currentSelection.values()];
         if (entries.length === 0) {
             return Promise.resolve(false);
         }
 
-        if (this.editor.deleteEmptySubdivisionsForSelection(entries)) {
+        // Removing a whole empty subdivision is a subdivision edit, so it belongs to the grid editor
+        // even when the selection was made in the staff view.
+        if (this.gridEditor?.deleteEmptySubdivisionsForSelection(entries)) {
             this.selectionManager.clearSelection();
 
             return Promise.resolve(true);
         }
 
-        return Promise.resolve(this.deleteAtCursor(this.editor));
+        return Promise.resolve(this.deleteSelection());
     };
 
     /**
-     * Deletes the note content at the cursor position (the current selection).
-     *
-     * @param editor The grid editor performing the edit.
+     * Deletes the content described by the current selection.
      *
      * @returns True when content was deleted.
      */
-    private deleteAtCursor(editor: GridMeasureEditor): boolean {
+    private deleteSelection(): boolean {
+        const editor = this.currentEditor();
         const entries = [...this.selectionManager.currentSelection.values()];
-        if (entries.length === 0) {
+        if (editor === undefined || entries.length === 0) {
             return false;
         }
 
@@ -373,28 +359,33 @@ export class TrackViewerInputController {
             return false;
         }
 
-        // The cleared cells no longer hold the selected content, so the selection is dropped.
+        // The cleared elements no longer hold the selected content, so the selection is dropped.
         this.selectionManager.clearSelection();
 
         return true;
     }
 
     /**
-     * Deletes the content immediately before the cursor. A subdivision containing the previous
-     * slot is removed as a whole; otherwise the note of the previous cell is cleared.
-     *
-     * @param editor The grid editor performing the edit.
+     * Deletes the content immediately before the cursor: in the grid the previous cell's note or the
+     * subdivision containing the previous slot, in the staff the previous run.
      *
      * @returns True when content was deleted.
      */
-    private deleteBeforeCursor(editor: GridMeasureEditor): boolean {
+    private deleteBeforeCursor(): boolean {
         const position = this.currentPosition;
-        if (!position) {
+        if (position === undefined) {
             return false;
         }
 
-        if (this.viewMode === "staff") {
-            return this.deleteBeforeStaffCursor(editor, position);
+        return "step" in position
+            ? this.deleteBeforeGridCursor(position)
+            : this.deleteBeforeStaffCursor(position);
+    }
+
+    private deleteBeforeGridCursor(position: IGridEditorPosition): boolean {
+        const editor = this.gridEditor;
+        if (editor === undefined) {
+            return false;
         }
 
         const cell = this.getGridCellForPosition(position);
@@ -406,42 +397,26 @@ export class TrackViewerInputController {
 
         if (editor.hasEmptySubdivisionAt(position)) {
             editor.deleteSubdivisionAt(position);
-            this.selectCursorPosition(previousPosition);
-
-            return true;
+        } else {
+            editor.clearNote(previousPosition);
         }
 
-        editor.clearNote(previousPosition);
         this.selectCursorPosition(previousPosition);
 
         return true;
     }
 
-    private deleteBeforeStaffCursor(editor: GridMeasureEditor, position: IGridEditorPosition): boolean {
+    private deleteBeforeStaffCursor(position: IStaffEditorPosition): boolean {
+        const editor = this.staffEditor;
         const currentRun = this.getStaffRunForPosition(position);
         const previousRun = currentRun ? this.findPreviousStaffRun(currentRun) : undefined;
-        const location = previousRun ? this.scoreElementRegistry.getLocation(previousRun) : undefined;
-        if (location?.step === undefined) {
+        const previousPosition = previousRun ? this.getStaffPosition(previousRun) : undefined;
+        if (editor === undefined || previousPosition === undefined) {
             return false;
         }
 
-        const previousPosition = {
-            bar: location.bar,
-            trackId: location.trackId,
-            step: location.step,
-            start: location.start,
-        };
-
-        const previousTarget = previousRun ? this.scoreElementRegistry.getTarget(previousRun) : undefined;
-        const measure = location.measure;
-        if (previousTarget !== undefined && "duration" in previousTarget && measure !== undefined) {
-            editor.clearSelection([{
-                granularity: SelectionGranularity.Note,
-                target: { granularity: SelectionGranularity.Note, measure, event: previousTarget },
-            }]);
-        }
-
-        this.selectCursorPosition(previousPosition);
+        editor.clearNote(previousPosition);
+        this.selectStaffCursor(previousPosition);
 
         return true;
     }
@@ -458,11 +433,12 @@ export class TrackViewerInputController {
         this.noteLength = length;
 
         // Duration changes only exist in the staff view; the grid works with fixed steps.
-        if (this.editMode && this.viewMode === "staff" && this.editor instanceof GridMeasureEditor) {
+        const editor = this.staffEditor;
+        if (this.editMode && this.viewMode === "staff" && editor !== undefined) {
             const entries = [...this.selectionManager.currentSelection.values()];
 
-            if (this.editor.resizeSelection(entries, length)) {
-                this.selectionManager.replaceSelection(this.editor.refreshSelection(entries));
+            if (editor.resizeSelection(entries, length)) {
+                this.selectionManager.replaceSelection(editor.refreshSelection(entries));
             }
         }
 
@@ -476,20 +452,21 @@ export class TrackViewerInputController {
     };
 
     private handleSubdivisionCreationRequested = (request: ISubdivisionCreationRequest): Promise<boolean> => {
-        if (!this.editMode || this.viewMode !== "grid" || !(this.editor instanceof GridMeasureEditor)) {
+        const editor = this.gridEditor;
+        if (!this.editMode || this.viewMode !== "grid" || editor === undefined) {
             return Promise.resolve(false);
         }
 
         const entries = [...this.selectionManager.currentSelection.values()];
 
         if (this.isMultiCellSelection(entries)) {
-            return Promise.resolve(this.editor.createSubdivisionForSelection(entries, request.actual));
+            return Promise.resolve(editor.createSubdivisionForSelection(entries, request.actual));
         }
 
         const position = this.currentPosition;
 
-        return Promise.resolve(position !== undefined
-            && this.editor.createSubdivisionAtCursor(position, request.actual, request.normal));
+        return Promise.resolve(position !== undefined && "step" in position
+            && editor.createSubdivisionAtCursor(position, request.actual, request.normal));
     };
 
     private enterNote(noteStyleId: string): boolean {
@@ -499,75 +476,89 @@ export class TrackViewerInputController {
         }
 
         const position = this.currentPosition;
-        if (!(this.editor instanceof GridMeasureEditor) || !position) {
+        if (position === undefined) {
             return false;
         }
 
-        const styles = this.editor.getNoteStyles(position);
-        const requestedStyle = styles
-            .find((candidate) => {
-                return candidate.id === noteStyleId;
-            });
-        if (!requestedStyle) {
+        return "step" in position
+            ? this.enterGridNote(position, noteStyleId)
+            : this.enterStaffNote(position, noteStyleId);
+    }
+
+    /**
+     * Writes a note in the grid view. A cell that addresses a subdivision slot keeps the slot's own
+     * duration and only changes its style; every other cell resolves the insertion through the grid,
+     * which shortens the note to the free space before the next note (ADR-0003).
+     *
+     * @param position The grid cell to write to.
+     * @param noteStyleId The selected instrument note-style id.
+     *
+     * @returns True when the edit was applied.
+     */
+    private enterGridNote(position: IGridEditorPosition, noteStyleId: string): boolean {
+        const editor = this.gridEditor;
+        if (editor === undefined) {
             return false;
         }
 
-        const articulatedStyleId = this.articulation === undefined
+        const style = this.resolveNoteStyle(editor.getNoteStyles(position.trackId), noteStyleId);
+        if (style === undefined) {
+            return false;
+        }
+
+        let selectedStyle: IAudioData | undefined;
+        if (position.start !== undefined) {
+            selectedStyle = editor.setNote(position, style.id);
+        } else {
+            const duration = editor.noteLengthDuration(this.noteLength, position);
+            const insertion = duration === undefined ? undefined : editor.resolveNoteInsertion(position, duration);
+            selectedStyle = insertion === undefined
+                ? undefined
+                : editor.insertNote(insertion.position, insertion.duration, style.id);
+        }
+
+        this.playNote(selectedStyle, editor.getMainVolume());
+        this.advanceCursorForPosition(position);
+        this.eventContainer.focus({ preventScroll: true });
+
+        return true;
+    }
+
+    /**
+     * Writes a note in the staff view. A run holding a note or addressing a subdivision slot keeps
+     * its own duration and only changes its style; a rest run is filled with the selected length,
+     * which shifts the following notes (ADR-0003).
+     *
+     * @param position The staff position to write to.
+     * @param noteStyleId The selected instrument note-style id.
+     *
+     * @returns True when the edit was applied.
+     */
+    private enterStaffNote(position: IStaffEditorPosition, noteStyleId: string): boolean {
+        const editor = this.staffEditor;
+        if (editor === undefined) {
+            return false;
+        }
+
+        const style = this.resolveNoteStyle(editor.getNoteStyles(position.trackId), noteStyleId);
+        if (style === undefined) {
+            return false;
+        }
+
+        if (editor.hasNoteAt(position) || editor.isSubdivisionSlot(position)) {
+            this.playNote(editor.setNote(position, style.id), editor.getMainVolume());
+
+            return true;
+        }
+
+        const duration = editor.noteLengthDuration(this.noteLength, position);
+        const inserted = duration === undefined
             ? undefined
-            : resolveNoteStyleForArticulation(
-                Object.fromEntries(styles.map((style) => {
-                    return [style.id, style];
-                })),
-                requestedStyle.id,
-                this.articulation,
-            );
-        const style = articulatedStyleId === undefined
-            ? requestedStyle
-            : styles.find((candidate) => {
-                return candidate.id === articulatedStyleId;
-            })!;
+            : editor.insertNoteWithShift(position, duration, style.id);
 
-        // Grid cells with an exact start, subdivision slots and existing notes keep their own
-        // duration. A staff rest run is filled like an empty grid cell instead, so the selected
-        // note length applies to it.
-        const fillsExactSlot = position.start !== undefined
-            && (this.viewMode !== "staff"
-                || this.editor.hasNoteAt(position) || this.editor.isSubdivisionSlot(position));
-
-        let selectedStyle: ReturnType<GridMeasureEditor["setNote"]>;
-        let insertedPosition = position;
-        let insertedDuration: ReturnType<GridMeasureEditor["noteLengthDuration"]>;
-        if (fillsExactSlot) {
-            selectedStyle = this.editor.setNote(position, style.id);
-        } else {
-            const duration = this.editor.noteLengthDuration(this.noteLength, position);
-
-            if (this.viewMode === "staff") {
-                // Staff entries are not tied to grid steps: the note keeps the selected length and
-                // later notes give way instead of the note being shortened.
-                const entry = duration === undefined
-                    ? undefined
-                    : this.editor.insertNoteWithShift(position, duration, style.id);
-                selectedStyle = entry?.style;
-                insertedPosition = entry?.position ?? position;
-                insertedDuration = entry?.duration;
-            } else {
-                const insertion = duration === undefined
-                    ? undefined
-                    : this.editor.resolveNoteInsertion(position, duration);
-                insertedPosition = insertion?.position ?? position;
-                insertedDuration = insertion?.duration;
-                selectedStyle = insertion === undefined
-                    ? undefined
-                    : this.editor.insertNote(insertion.position, insertion.duration, style.id);
-            }
-        }
-
-        this.playNote(selectedStyle, this.editor.getMainVolume());
-        if (this.viewMode === "staff" && insertedDuration !== undefined) {
-            this.advanceStaffCursor(insertedPosition, insertedDuration);
-        } else {
-            this.advanceCursorForPosition(position);
+        this.playNote(inserted?.style, editor.getMainVolume());
+        if (inserted !== undefined) {
+            this.advanceStaffCursor(inserted);
         }
 
         this.eventContainer.focus({ preventScroll: true });
@@ -575,21 +566,55 @@ export class TrackViewerInputController {
         return true;
     }
 
+    /**
+     * Resolves the style to write: the requested one, or its articulation variant when an
+     * articulation is selected.
+     *
+     * @param styles The styles the addressed instrument offers.
+     * @param noteStyleId The selected instrument note-style id.
+     *
+     * @returns The style to write, or undefined when the instrument does not offer it.
+     */
+    private resolveNoteStyle(styles: IAudioData[], noteStyleId: string): IAudioData | undefined {
+        const requested = styles.find((candidate) => {
+            return candidate.id === noteStyleId;
+        });
+        if (requested === undefined || this.articulation === undefined) {
+            return requested;
+        }
+
+        const articulatedId = resolveNoteStyleForArticulation(
+            Object.fromEntries(styles.map((style) => {
+                return [style.id, style];
+            })),
+            requested.id,
+            this.articulation,
+        );
+        if (articulatedId === undefined) {
+            return requested;
+        }
+
+        return styles.find((candidate) => {
+            return candidate.id === articulatedId;
+        }) ?? requested;
+    }
+
     private enterNoteForSelection(noteStyleId: string, entries: ISelectionEntry[]): boolean {
-        if (!(this.editor instanceof GridMeasureEditor)) {
+        const editor = this.currentEditor();
+        if (editor === undefined) {
             return false;
         }
 
-        const applied = this.editor.setSelectionNoteStyle(entries, noteStyleId);
+        const applied = editor.setSelectionNoteStyle(entries, noteStyleId);
         if (!applied) {
-            // Either the style is already applied to every cell (no-op) or the selection spans
+            // Either the style is already applied to every element (no-op) or the selection spans
             // multiple instruments. Keep the selection untouched in both cases.
             return false;
         }
 
-        // Keep the selection on the now-filled cells with fresh note ids and refresh the
+        // Keep the selection on the now-filled elements with fresh note ids and refresh the
         // note-style marking.
-        const refreshedEntries = this.editor.refreshSelection(entries);
+        const refreshedEntries = editor.refreshSelection(entries);
         this.selectionManager.replaceSelection(refreshedEntries);
         this.eventContainer.focus({ preventScroll: true });
 
@@ -619,21 +644,10 @@ export class TrackViewerInputController {
         const isCursorEntry = delta.added.length === 1 && (added.granularity === SelectionGranularity.Note
             || (this.viewMode === "staff" && added.granularity === SelectionGranularity.TrackPiece));
         if (isCursorEntry) {
+            this.setCursorFromEntry(added);
+
             const { target } = added;
-            const coordinates = SelectionSerializer.coordinatesOf(added);
-            const start = coordinates.start;
-
-            this.currentPosition = {
-                bar: coordinates.bar,
-                trackId: coordinates.trackId,
-                step: addressesNoteCells(target) && start !== undefined
-                    ? SelectionSerializer.cellOf(start, target.measure)
-                    : 0,
-                start,
-            };
-
-            if (target.granularity === SelectionGranularity.Note
-                && this.editor instanceof GridMeasureEditor) {
+            if (target.granularity === SelectionGranularity.Note) {
                 const noteIndex = target.measure.events.indexOf(target.event);
                 const noteEvent = noteIndex < 0 ? undefined : target.measure.noteEvents.at(noteIndex);
                 const style = noteEvent?.audioData;
@@ -645,7 +659,38 @@ export class TrackViewerInputController {
         return Promise.resolve(true);
     };
 
-    private playNote(style: ReturnType<GridMeasureEditor["setNote"]>, volume: number): void {
+    /**
+     * Derives the cursor from the entry that was just selected. The grid cursor is the addressed
+     * cell, the staff cursor the exact start of the addressed run; an entry without an exact
+     * position starts at the measure.
+     *
+     * @param entry The entry added to the selection.
+     */
+    private setCursorFromEntry(entry: ISelectionEntry): void {
+        const { target } = entry;
+        if (target.granularity === SelectionGranularity.Track) {
+            return;
+        }
+
+        const { measure } = target;
+        const exact = addressesNoteCells(target)
+            ? SelectionSerializer.coordinatesOf(entry).start ?? measureStart
+            : measureStart;
+
+        // A grid cell is addressed by its step alone; only a subdivision slot carries its exact start.
+        const slot = SelectionSerializer.addressesSubdivisionSlot(target);
+
+        this.currentPosition = this.viewMode === "staff"
+            ? { bar: measure.number, trackId: measure.track.id, start: { ...exact } }
+            : {
+                bar: measure.number,
+                trackId: measure.track.id,
+                step: SelectionSerializer.cellOf(exact, measure),
+                start: slot ? { ...exact } : undefined,
+            };
+    }
+
+    private playNote(style: IAudioData | undefined, volume: number): void {
         if (!style?.audioBuffer) {
             return;
         }
@@ -660,39 +705,21 @@ export class TrackViewerInputController {
         }
     }
 
-    private advanceStaffCursor(position: IGridEditorPosition, duration: NonNullable<ReturnType<
-        GridMeasureEditor["noteLengthDuration"]>>): void {
-        if (!(this.editor instanceof GridMeasureEditor)) {
-            return;
+    /**
+     * Moves the staff cursor behind a written note: to the exact position after it, or to the start
+     * of the following bar when the note ends at the bar line.
+     *
+     * @param inserted The note that was written.
+     */
+    private advanceStaffCursor(inserted: IInsertedStaffNote): void {
+        const end = addFractions(inserted.start, inserted.duration);
+        const next = compareFractions(end, barLine) < 0
+            ? { bar: inserted.bar, trackId: inserted.trackId, start: end }
+            : { bar: inserted.bar + 1, trackId: inserted.trackId, start: measureStart };
+
+        if (this.getStaffRunForPosition(next) !== undefined) {
+            this.selectStaffCursor(next);
         }
-
-        const cell = this.editor.resolveCell(position);
-        if (!cell) {
-            return;
-        }
-
-        const measure = cell.track.measures[position.bar - 1];
-        const start = position.start ?? reduceFraction(position.step, measure.meter.stepResolution);
-        const end = addFractions(start, duration);
-
-        let nextPosition: IGridEditorPosition;
-
-        if (compareFractions(end, { numerator: 1, denominator: 1 }) >= 0) {
-            if (position.bar >= cell.track.measures.length) {
-                return;
-            }
-
-            nextPosition = { bar: position.bar + 1, trackId: position.trackId, step: 0 };
-        } else {
-            const step = end.numerator * measure.meter.stepResolution / end.denominator;
-            if (!Number.isInteger(step)) {
-                return;
-            }
-
-            nextPosition = { bar: position.bar, trackId: position.trackId, step };
-        }
-
-        this.selectCursorPosition(nextPosition);
     }
 
     private advanceCursor(cell: HTMLElement): void {
@@ -735,6 +762,27 @@ export class TrackViewerInputController {
         this.selectionManager.selectSingleNote({
             granularity: SelectionGranularity.Note,
             target,
+        });
+    }
+
+    /**
+     * Selects the staff run at the given position and makes it the cursor.
+     *
+     * @param position The exact staff position to select.
+     */
+    private selectStaffCursor(position: IStaffEditorPosition): void {
+        this.currentPosition = position;
+
+        const run = this.getStaffRunForPosition(position);
+        const event = run === undefined ? undefined : this.scoreElementRegistry.getTarget(run);
+        const measure = run === undefined ? undefined : this.scoreElementRegistry.getLocation(run)?.measure;
+        if (event === undefined || !("duration" in event) || measure === undefined) {
+            return;
+        }
+
+        this.selectionManager.selectSingleNote({
+            granularity: SelectionGranularity.Note,
+            target: { granularity: SelectionGranularity.Note, measure, event, start: { ...position.start } },
         });
     }
 
@@ -813,9 +861,50 @@ export class TrackViewerInputController {
             ScoreElementKind.GridCell, position.step, position.start);
     }
 
-    private getStaffRunForPosition(position: IGridEditorPosition): HTMLElement | undefined {
+    private getStaffRunForPosition(position: IStaffEditorPosition): HTMLElement | undefined {
         return this.scoreElementRegistry.findPositionElement(position.bar, position.trackId,
-            ScoreElementKind.StaffRun, position.step, position.start);
+            ScoreElementKind.StaffRun, undefined, position.start);
+    }
+
+    /**
+     * Returns the editor of the current view. The edits both views share — note styles, selection
+     * clears, volume — go through it, so their call sites do not branch on the view mode (ADR-0005).
+     *
+     * @returns The editor of the current view.
+     */
+    private currentEditor(): MeasureEditor | undefined {
+        return this.viewMode === "staff" ? this.staffEditor : this.gridEditor;
+    }
+
+    /**
+     * Returns the note styles at the cursor, supplied by the instrument of its track.
+     *
+     * @returns The note styles, or an empty array when there is no cursor.
+     */
+    private noteStylesAtCursor(): IAudioData[] {
+        const position = this.currentPosition;
+
+        return position === undefined ? [] : this.currentEditor()?.getNoteStyles(position.trackId) ?? [];
+    }
+
+    /**
+     * Resolves the duration of a note length at the cursor in the current view.
+     *
+     * @param length The note length to resolve.
+     *
+     * @returns The duration as a fraction of the bar, or undefined when the view cannot represent it.
+     */
+    private noteLengthDurationOf(length: NoteLength): IFraction | undefined {
+        const position = this.currentPosition;
+        if (position === undefined) {
+            return undefined;
+        }
+
+        if ("step" in position) {
+            return this.gridEditor?.noteLengthDuration(length, position);
+        }
+
+        return this.staffEditor?.noteLengthDuration(length, position);
     }
 
     private findPreviousStaffRun(run: HTMLElement): HTMLElement | undefined {

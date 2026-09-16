@@ -4,18 +4,17 @@
  */
 
 import type {
-    INoteResizeRequest, ISbDmArrangement, ISbDmNoteEvent, ISbDmTrack, ISbDmTrackMeasure, ITiming,
-    ScoreBookDataModel,
+    ISbDmArrangement, ISbDmNoteEvent, ISbDmTrack, ISbDmTrackMeasure, ITiming,
 } from "../core/ScoreBookDataModel.js";
-import { NoteLength, noteLengthDenominator } from "../core/rest-notation.js";
+import { NoteLength } from "../core/rest-notation.js";
 import {
     addFractions, compareFractions, reduceFraction, subtractFractions,
 } from "../core/serialisation/numeric-functions.js";
 import type { IAudioData, IFraction, IMeasureEvent } from "../core/types/general.js";
 import { requisitions } from "../supplement/Requisitions.js";
 import { modelEventAt } from "../core/MeasureProjection.js";
-import { selectionToClearRanges } from "./selection-ranges.js";
-import { SelectionGranularity, SelectionSerializer, type ISelectionEntry } from "./SelectionSerializer.js";
+import { MeasureEditor, type INoteStart } from "./MeasureEditor.js";
+import { SelectionGranularity, type ISelectionEntry } from "./SelectionSerializer.js";
 
 /** Identifies a cell in the grid view using zero-based step indexing. */
 export interface IGridEditorPosition {
@@ -40,11 +39,6 @@ export interface INoteInsertion {
     duration: IFraction;
 }
 
-/** A written note: where it starts, how long it is and which sound was applied. */
-export interface IInsertedNote extends INoteInsertion {
-    style: IAudioData;
-}
-
 /** A contiguous subdivision target within a single measure of one track. */
 interface ISubdivisionRange {
     trackId: number;
@@ -62,19 +56,12 @@ interface IEmptySubdivisionCandidate {
     actual: number;
 }
 
-/** Handles grid editing decisions without rendering or listening to DOM events. */
-export class GridMeasureEditor {
-    public constructor(private readonly dataModel: ScoreBookDataModel) {
-    }
-
-    public handlePointerDown(): boolean {
-        return false;
-    }
-
-    public handleKeyDown(): boolean {
-        return false;
-    }
-
+/**
+ * Handles the edits of the grid view without rendering or listening to DOM events. On top of the
+ * shared edits it owns the raster: cells, subdivision slots and the space making that follows fixed
+ * steps (ADR-0003, ADR-0005).
+ */
+export class GridMeasureEditor extends MeasureEditor {
     /**
      * Applies a note style to a grid cell.
      *
@@ -84,7 +71,7 @@ export class GridMeasureEditor {
      */
     public setNote(position: IGridEditorPosition, noteStyleId: string): IAudioData | undefined {
         const cell = this.resolveCell(position);
-        const style = cell?.track.instrument.noteStyles[noteStyleId];
+        const style = this.noteStyleOf(position.trackId, noteStyleId);
         const measure = cell?.track.measures[position.bar - 1];
         const start = this.resolveStartFraction(position);
         if (!style || measure === undefined || start === undefined) {
@@ -111,14 +98,7 @@ export class GridMeasureEditor {
             return undefined;
         }
 
-        const measure = cell.track.measures[position.bar - 1];
-        const steps = cell.arrangement.timeParams.stepResolution / noteLengthDenominator(length);
-
-        if (!Number.isInteger(steps) || steps < 1 || steps > measure.meter.stepResolution) {
-            return undefined;
-        }
-
-        return reduceFraction(steps, measure.meter.stepResolution);
+        return this.noteLengthDurationFor(length, cell.track.measures[position.bar - 1]);
     }
 
     /**
@@ -155,8 +135,8 @@ export class GridMeasureEditor {
      * is in the way, the note is shortened to the free space before that note, so a rest between two
      * notes can always be filled. In the final bar the note is shortened to the available space.
      *
-     * The staff view uses {@link insertNoteWithShift} instead, which keeps the requested length and
-     * shifts following notes.
+     * The staff view uses {@link StaffMeasureEditor.insertNoteWithShift} instead, which keeps the
+     * requested length and shifts following notes.
      *
      * @param position The requested insertion position.
      * @param duration The requested note duration.
@@ -204,7 +184,7 @@ export class GridMeasureEditor {
      */
     public insertNote(position: IGridEditorPosition, duration: IFraction, noteStyleId: string): IAudioData | undefined {
         const cell = this.resolveCell(position);
-        const style = cell?.track.instrument.noteStyles[noteStyleId];
+        const style = this.noteStyleOf(position.trackId, noteStyleId);
         if (!cell || !style) {
             return undefined;
         }
@@ -225,89 +205,6 @@ export class GridMeasureEditor {
     }
 
     /**
-     * Inserts a note of the given duration in the staff view, where entries are not tied to fixed
-     * grid steps. If the free space before the next note is too small, the note keeps its length and
-     * the following notes give way instead of the new note being shortened. Growing the note consumes
-     * the rest behind it first; only the excess moves the later notes to the right.
-     *
-     * @param position The requested insertion position.
-     * @param duration The requested note duration.
-     * @param noteStyleId The selected instrument note-style id.
-     *
-     * @returns The written note, or undefined when the edit was invalid.
-     */
-    public insertNoteWithShift(position: IGridEditorPosition, duration: IFraction,
-        noteStyleId: string): IInsertedNote | undefined {
-        const insertion = this.resolveNoteInsertion(position, duration);
-        if (insertion === undefined) {
-            return undefined;
-        }
-
-        const style = this.insertNote(insertion.position, insertion.duration, noteStyleId);
-        if (style === undefined) {
-            return undefined;
-        }
-
-        const shifted = compareFractions(insertion.duration, duration) < 0
-            && this.resizeNote(insertion.position, duration);
-
-        return { position: insertion.position, duration: shifted ? duration : insertion.duration, style };
-    }
-
-    /**
-     * Changes an existing note's duration while preserving its style and articulation.
-     *
-     * @param position The position of the existing note.
-     * @param duration The requested note duration.
-     *
-     * @returns True when the note duration changed.
-     */
-    public resizeNote(position: IGridEditorPosition, duration: IFraction): boolean {
-        const start = this.resolveStartFraction(position);
-
-        return start !== undefined && this.dataModel.resizeNote(position.trackId, position.bar, start, duration);
-    }
-
-    /**
-     * Applies a note length to the notes addressed by the selection entries. Notes in different
-     * tracks are resized independently, each track rippling its own following notes. Only notes are
-     * resized: rests and selections that span whole measures or tracks keep their duration.
-     *
-     * @param entries The selection entries to resize.
-     * @param length The selected note length.
-     *
-     * @returns True when at least one note duration changed.
-     */
-    public resizeSelection(entries: ISelectionEntry[], length: NoteLength): boolean {
-        const requestsByTrack = new Map<number, INoteResizeRequest[]>();
-
-        for (const entry of entries) {
-            for (const position of this.notePositionsOf(entry)) {
-                const duration = this.noteLengthDuration(length, position);
-                const start = this.resolveStartFraction(position);
-                if (duration === undefined || start === undefined) {
-                    continue;
-                }
-
-                const request = { bar: position.bar, start, duration };
-                const requests = requestsByTrack.get(position.trackId);
-                if (requests) {
-                    requests.push(request);
-                } else {
-                    requestsByTrack.set(position.trackId, [request]);
-                }
-            }
-        }
-
-        let changed = false;
-        for (const [trackId, requests] of requestsByTrack) {
-            changed = this.dataModel.resizeNotes(trackId, requests) || changed;
-        }
-
-        return changed;
-    }
-
-    /**
      * Clears the note style at a grid cell.
      *
      * @param position The grid cell to clear.
@@ -323,60 +220,6 @@ export class GridMeasureEditor {
 
         return this.dataModel.setNoteAt(position.trackId, position.bar, start,
             reduceFraction(1, measure.meter.stepResolution), undefined);
-    }
-
-    /**
-     * Clears the note content described by the given selection entries, honouring their
-     * granularity. The data model batches the changes into one undo step and notifies the
-     * affected tracks so viewers recompute their note structure.
-     *
-     * @param entries The selection entries to clear.
-     *
-     * @returns True when any content changed.
-     */
-    public clearSelection(entries: ISelectionEntry[]): boolean {
-        return this.dataModel.clearRanges(selectionToClearRanges(entries));
-    }
-
-    /**
-     * Applies a note style to all cells described by the given selection entries, honouring their
-     * granularity. The style is applied only when all selected cells belong to the same instrument.
-     * The data model batches the changes into one undo step.
-     *
-     * @param entries The selection entries to fill.
-     * @param noteStyleId The instrument note-style id to apply.
-     *
-     * @returns True when any content changed.
-     */
-    public setSelectionNoteStyle(entries: ISelectionEntry[], noteStyleId: string): boolean {
-        const arrangement = this.dataModel.arrangement;
-        if (!arrangement) {
-            return false;
-        }
-
-        const ranges = selectionToClearRanges(entries);
-        if (ranges.length === 0) {
-            return false;
-        }
-
-        const trackIds = new Set(ranges.map((range) => {
-            return range.trackId;
-        }));
-        const instrumentIds = new Set<number>();
-        for (const trackId of trackIds) {
-            const track = arrangement.tracks.find((candidate) => {
-                return candidate.id === trackId;
-            });
-            if (track) {
-                instrumentIds.add(track.instrument.id);
-            }
-        }
-
-        if (instrumentIds.size > 1) {
-            return false;
-        }
-
-        return this.dataModel.setNoteStyleRanges(ranges, noteStyleId);
     }
 
     /**
@@ -586,46 +429,6 @@ export class GridMeasureEditor {
     }
 
     /**
-     * Re-resolves the given selection entries against the current measure content, so selections stay
-     * accurate after structural edits such as filling a range with a note style. An edit replaces the
-     * events, so the entries are serialised to their coordinates and resolved back; entries whose
-     * element no longer exists are dropped.
-     *
-     * @param entries The selection entries to refresh.
-     *
-     * @returns The entries holding the current model objects.
-     */
-    public refreshSelection(entries: ISelectionEntry[]): ISelectionEntry[] {
-        const arrangement = this.dataModel.arrangement;
-        if (!arrangement) {
-            return entries;
-        }
-
-        return SelectionSerializer.deserialise(arrangement, SelectionSerializer.serialise(entries));
-    }
-
-    /**
-     * Returns the current arrangement's main playback volume as a gain value.
-     *
-     * @returns The main volume converted to a gain value.
-     */
-    public getMainVolume(): number {
-        return (this.dataModel.arrangement?.mainVolume ?? 100) / 100;
-    }
-
-    /**
-     * Returns all note styles offered by the instrument at a grid position.
-     *
-     * @param position The grid position whose track instrument supplies the styles.
-     * @returns The instrument's note styles, or an empty array for an invalid position.
-     */
-    public getNoteStyles(position: IGridEditorPosition): IAudioData[] {
-        const cell = this.resolveCell(position);
-
-        return cell ? Object.values(cell.track.instrument.noteStyles) : [];
-    }
-
-    /**
      * Resolves a grid position against the current arrangement.
      *
      * @param position The zero-based grid position.
@@ -684,6 +487,41 @@ export class GridMeasureEditor {
     }
 
     /**
+     * Resolves the note starts addressed by a selection entry. A cell that starts a note is resized,
+     * a cell inside a longer note is grid layout and holds no note of its own.
+     *
+     * @param entry The selection entry to resolve.
+     *
+     * @returns The addressed note starts, in measure order.
+     */
+    protected override noteStartsOf(entry: ISelectionEntry): INoteStart[] {
+        const { target } = entry;
+
+        if (target.granularity === SelectionGranularity.Note) {
+            const start = target.start ?? target.event.start;
+            const event = modelEventAt(target.measure, start);
+            if (event?.noteStyleId === undefined || compareFractions(event.start, start) !== 0) {
+                return [];
+            }
+
+            return [this.noteStartOf(event.start, target.measure)];
+        }
+
+        if (target.granularity !== SelectionGranularity.NoteGroup) {
+            return [];
+        }
+
+        const starts: INoteStart[] = [];
+        for (const event of target.events) {
+            if (event.noteStyleId !== undefined) {
+                starts.push(this.noteStartOf(event.start, target.measure));
+            }
+        }
+
+        return starts;
+    }
+
+    /**
      * Resolves the exact start fraction of a grid position, falling back to the grid step when the
      * position does not carry an exact subdivision-slot start.
      *
@@ -705,58 +543,15 @@ export class GridMeasureEditor {
     }
 
     /**
-     * Resolves the note starts addressed by a selection entry. Note entries address a single note,
-     * note groups every note they contain. Coarser granularities describe whole measures or tracks
-     * and are not resized.
+     * Describes a position inside a measure the way the data model addresses a note.
      *
-     * @param entry The selection entry to resolve.
-     *
-     * @returns The positions of the addressed notes.
-     */
-    private notePositionsOf(entry: ISelectionEntry): IGridEditorPosition[] {
-        const { target } = entry;
-
-        if (target.granularity === SelectionGranularity.Note) {
-            // Only a cell that starts a note is resized; cells inside its duration are grid layout.
-            const start = target.start ?? target.event.start;
-            const event = modelEventAt(target.measure, start);
-            if (event?.noteStyleId === undefined || compareFractions(event.start, start) !== 0) {
-                return [];
-            }
-
-            return [this.positionOf(target.measure, event.start)];
-        }
-
-        if (target.granularity !== SelectionGranularity.NoteGroup) {
-            return [];
-        }
-
-        const positions: IGridEditorPosition[] = [];
-        for (const event of target.events) {
-            if (event.noteStyleId !== undefined) {
-                positions.push(this.positionOf(target.measure, event.start));
-            }
-        }
-
-        return positions;
-    }
-
-    /**
-     * Resolves the grid position of a position inside a measure. The exact start is carried along so
-     * subdivision slots, which do not align to a grid step, stay addressable.
-     *
-     * @param measure The measure the position belongs to.
      * @param start The position as a fraction of the measure.
+     * @param measure The measure the position belongs to.
      *
-     * @returns The grid position of that measure position.
+     * @returns The note start.
      */
-    private positionOf(measure: ISbDmTrackMeasure, start: IFraction): IGridEditorPosition {
-        return {
-            bar: measure.number,
-            trackId: measure.track.id,
-            step: start.numerator * measure.meter.stepResolution / start.denominator,
-            start: { ...start },
-        };
+    private noteStartOf(start: IFraction, measure: ISbDmTrackMeasure): INoteStart {
+        return { trackId: measure.track.id, bar: measure.number, start: { ...start } };
     }
 
     private noteLengthDurationForMeasure(duration: IFraction, sourceMeasure: ISbDmTrackMeasure,
@@ -781,56 +576,11 @@ export class GridMeasureEditor {
      */
     private limitInsertion(position: IGridEditorPosition, start: IFraction,
         duration: IFraction): INoteInsertion | undefined {
-        const nextNoteStart = this.nextNoteStart(position, start, addFractions(start, duration));
+        const nextNoteStart = this.nextNoteStart(position.trackId, position.bar, start,
+            addFractions(start, duration));
         const available = nextNoteStart === undefined ? duration : subtractFractions(nextNoteStart, start);
 
         return available.numerator > 0 ? { position, duration: available } : undefined;
-    }
-
-    /**
-     * Finds the earliest note start inside the given span.
-     *
-     * @param position The position whose measure is inspected.
-     * @param start The span start, exclusive.
-     * @param end The span end, exclusive.
-     *
-     * @returns The note start, or undefined when no note starts inside the span.
-     */
-    private nextNoteStart(position: IGridEditorPosition, start: IFraction, end: IFraction): IFraction | undefined {
-        const measure = this.resolveMeasure(position.trackId, position.bar);
-        if (!measure) {
-            return undefined;
-        }
-
-        let earliest: IFraction | undefined;
-        for (const event of measure.events) {
-            if (event.noteStyleId === undefined
-                || compareFractions(event.start, start) <= 0 || compareFractions(event.start, end) >= 0) {
-                continue;
-            }
-
-            if (earliest === undefined || compareFractions(event.start, earliest) < 0) {
-                earliest = event.start;
-            }
-        }
-
-        return earliest;
-    }
-
-    /**
-     * Resolves the measure of a track at a one-based bar number.
-     *
-     * @param trackId The track containing the measure.
-     * @param bar The one-based measure number.
-     *
-     * @returns The measure, or undefined when the track or measure does not exist.
-     */
-    private resolveMeasure(trackId: number, bar: number): ISbDmTrackMeasure | undefined {
-        const arrangement = this.dataModel.arrangement;
-
-        return arrangement?.tracks.find((candidate) => {
-            return candidate.id === trackId;
-        })?.measures[bar - 1];
     }
 
     /**

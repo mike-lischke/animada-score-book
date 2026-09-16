@@ -13,6 +13,7 @@ import type { PlayerPlayState } from "../../../player/ArrangementPlayer.js";
 import { requisitions } from "../../../supplement/Requisitions.js";
 import type { SelectionManager } from "../../../ui/SelectionManager.js";
 import { GridMeasureEditor } from "../../../ui/GridMeasureEditor.js";
+import { StaffMeasureEditor } from "../../../ui/StaffMeasureEditor.js";
 import { ScoreElementKind, ScoreElementRegistry } from "../../../ui/ScoreElementRegistry.js";
 import { TrackViewerInputController } from "../../../ui/TrackViewerInputController.js";
 import { GridMeasureViewer } from "../Bar/Grid/GridMeasureViewer.js";
@@ -115,10 +116,11 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         contentHost.tabIndex = -1;
         contentHost.style.outline = "none";
         const gridEditor = new GridMeasureEditor(this.props.dataModel);
+        const staffEditor = new StaffMeasureEditor(this.props.dataModel);
         this.trackViewerInputController = new TrackViewerInputController(
             contentHost, this.gridRadialMenuRef.current!, selectionManager, this.scoreElementRegistry,
         );
-        this.trackViewerInputController.setGridEditor(gridEditor);
+        this.trackViewerInputController.setEditors(gridEditor, staffEditor);
         this.trackViewerInputController.editMode = this.props.inEditMode;
         this.trackViewerInputController.viewMode = trackViewMode;
         this.trackViewerInputController.attach();
