@@ -7,7 +7,7 @@ import type { ComponentChild } from "preact";
 
 import type { ScoreBookDataModel } from "../../../core/ScoreBookDataModel.js";
 import {
-    NoteLength, noteValueForUnits, noteValueFraction, type INoteValue,
+    NoteLength, noteLengthDenominator, noteValueForUnits, noteValueFraction, type INoteValue,
 } from "../../../core/rest-notation.js";
 import { compareFractions } from "../../../core/serialisation/numeric-functions.js";
 import { requisitions } from "../../../supplement/Requisitions.js";
@@ -49,6 +49,56 @@ const noteLengthOptions: INoteLengthOption[] = [
     { length: NoteLength.Sixteenth, tooltip: "Sixteenth note", shortcut: 5 },
     { length: NoteLength.ThirtySecond, tooltip: "Thirty-second note", shortcut: 6 },
 ];
+
+/** Position, size and border width of a note head symbol, in the user units of the icon. */
+interface INoteHeadGeometry {
+    centerX: number;
+    centerY: number;
+    radius: number;
+    lineWidth: number;
+}
+
+/** The two paths a note head is drawn from, which carry the outline and the fill color. */
+interface INoteHeadPaths {
+    outline: string;
+    segment: string;
+}
+
+/** Size of the square icon the note symbols are drawn in. */
+const noteIconSize = 20;
+
+/** Border width of the note symbols. */
+const noteHeadLineWidth = 2;
+
+/** The circle the plain note values show, centered in the icon. */
+const noteHeadCircle: INoteHeadGeometry = {
+    centerX: noteIconSize / 2,
+    centerY: noteIconSize / 2,
+    radius: 8,
+    lineWidth: noteHeadLineWidth,
+};
+
+/**
+ * The quarter the flagged values show. It carries twice the radius of the circle and is centered in
+ * the icon as a shape, so it deliberately does not follow the circles of the longer values.
+ */
+const noteHeadQuarter: INoteHeadGeometry = {
+    centerX: (noteIconSize - (noteHeadCircle.radius * 2)) / 2,
+    centerY: (noteIconSize + (noteHeadCircle.radius * 2)) / 2,
+    radius: noteHeadCircle.radius * 2,
+    lineWidth: noteHeadLineWidth,
+};
+
+/**
+ * Rounds a path coordinate, which trims the floating point noise of trigonometric end points.
+ *
+ * @param value The coordinate to round.
+ *
+ * @returns The coordinate, rounded to two decimals.
+ */
+const roundCoordinate = (value: number): number => {
+    return Math.round(value * 100) / 100;
+};
 
 /**
  * Toolbar for selecting the duration of the next note to enter. The selection is shared with the
@@ -263,72 +313,172 @@ export class NoteLengthToolbar extends UIComponent<INoteLengthToolbarProps, INot
     }
 
     /**
-     * Renders an abstract note symbol for a note length: a circle, an optional vertical line
-     * beside it and up to three horizontal lines for shorter values. Whole and half notes use a
-     * hollow head.
+     * Renders the note symbol for a note length: an outline carrying a segment filled from its
+     * apex, which spans the share of a whole circle the note value stands for. Outline and segment
+     * are separate paths, because they carry different colors.
      *
      * @param length The note length to render.
      *
      * @returns The SVG symbol for the note length.
      */
     private renderIcon(length: NoteLength): ComponentChild {
-        const filled = length !== NoteLength.Whole && length !== NoteLength.Half;
-        const hasLine = length !== NoteLength.Whole;
-        const headX = hasLine ? 8 : 12;
-
-        const flags: ComponentChild[] = [];
-        const flagCount = this.flagCountFor(length);
-        const spacing = 4;
-        const flagSpan = (flagCount - 1) * spacing;
-        const topY = 16 - (flagSpan / 2);
-        for (let index = 0; index < flagCount; index++) {
-            const y = topY + (index * spacing);
-
-            flags.push(<line key={index} x1="18" y1={y} x2="23" y2={y} strokeWidth={1} />);
-        }
+        const { outline, segment } = this.headPathsFor(length);
+        const outlinePath = <path className="noteLengthIconOutline" d={outline} />;
+        const segmentPath = segment.length > 0
+            ? <path className="noteLengthIconFill" d={segment} />
+            : undefined;
 
         return (
-            <svg className="noteLengthIcon" viewBox="0 0 24 32" width={24} height={32}
-                stroke="currentColor" strokeWidth={2} aria-hidden="true">
-                <circle className={filled ? "noteLengthIconHead" : "noteLengthIconHead hollow"}
-                    cx={headX} cy="16" r="6" />
-                {hasLine ? <line x1="18" y1="10" x2="18" y2="22" /> : null}
-                {flags}
+            <svg className="noteLengthIcon" viewBox={`0 0 ${noteIconSize} ${noteIconSize}`}
+                width={noteIconSize} height={noteIconSize} aria-hidden="true">
+                {segmentPath}
+                {outlinePath}
             </svg>
         );
     }
 
-    private flagCountFor(length: NoteLength): number {
-        switch (length) {
-            case NoteLength.Eighth: {
-                return 1;
-            }
-
-            case NoteLength.Sixteenth: {
-                return 2;
-            }
-
-            case NoteLength.ThirtySecond: {
-                return 3;
-            }
-
-            default: {
-                return 0;
-            }
+    /**
+     * Builds the note head as two paths: the outline plus the segment of the note value, which
+     * reaches into the outline. The outline is drawn over the segment, so it covers the overlap and
+     * the two colors meet without a seam. The whole note has no segment.
+     *
+     * @param length The note length to build the head for.
+     *
+     * @returns The `d` attributes of the head paths.
+     */
+    private headPathsFor(length: NoteLength): INoteHeadPaths {
+        if (this.isFlagged(length)) {
+            return {
+                outline: this.quarterOutlinePathFor(noteHeadQuarter),
+                segment: this.segmentPathFor(noteHeadQuarter, length),
+            };
         }
+
+        return {
+            outline: this.circleOutlinePathFor(noteHeadCircle),
+            segment: this.segmentPathFor(noteHeadCircle, length),
+        };
     }
 
     /**
-     * Renders the dot the button adds to a value: a note head with an augmentation dot beside it.
+     * Note values shorter than a quarter are flagged. Their head shows a quarter of the outline
+     * instead of a full circle.
+     *
+     * @param length The note length to check.
+     *
+     * @returns True for the flagged values, which follow the quarter note in the enum order.
+     */
+    private isFlagged(length: NoteLength): boolean {
+        return length >= NoteLength.Eighth;
+    }
+
+    /**
+     * Describes the outline of a plain value as a ring: the outer circle plus, in opposite winding,
+     * the inner one, which keeps the middle of the head open.
+     *
+     * @param head The geometry of the head to build the outline for.
+     *
+     * @returns The `d` attribute of the ring subpaths.
+     */
+    private circleOutlinePathFor(head: INoteHeadGeometry): string {
+        const { centerX, centerY, radius, lineWidth } = head;
+        const half = lineWidth / 2;
+        const outer = this.circlePathFor(centerX, centerY, radius + half, true);
+        const inner = this.circlePathFor(centerX, centerY, radius - half, false);
+
+        return `${outer} ${inner}`;
+    }
+
+    /**
+     * Describes the outline of a flagged value as the border of the top-right quarter: the band
+     * along the arc plus a band along each of the two straight edges, which close the quarter into
+     * a shape. Both edge bands reach past the apex, so they overlap there and form the square
+     * corner of a mitred join.
+     *
+     * @param head The geometry of the head to build the outline for.
+     *
+     * @returns The `d` attribute of the quarter outline subpaths.
+     */
+    private quarterOutlinePathFor(head: INoteHeadGeometry): string {
+        const { centerX, centerY, radius, lineWidth } = head;
+        const half = lineWidth / 2;
+        const outerRadius = radius + half;
+        const innerRadius = radius - half;
+        const arc = `M ${centerX} ${centerY - outerRadius} A ${outerRadius} ${outerRadius} 0 0 1 ` +
+            `${centerX + outerRadius} ${centerY} L ${centerX + innerRadius} ${centerY} ` +
+            `A ${innerRadius} ${innerRadius} 0 0 0 ${centerX} ${centerY - innerRadius} Z`;
+        const topEdge = `M ${centerX - half} ${centerY + half} L ${centerX - half} ${centerY - outerRadius} ` +
+            `L ${centerX + half} ${centerY - outerRadius} L ${centerX + half} ${centerY + half} Z`;
+        const rightEdge = `M ${centerX - half} ${centerY - half} L ${centerX + outerRadius} ${centerY - half} ` +
+            `L ${centerX + outerRadius} ${centerY + half} L ${centerX - half} ${centerY + half} Z`;
+
+        return `${arc} ${topEdge} ${rightEdge}`;
+    }
+
+    /**
+     * Builds the filled segment of a note head. It has the full radius of the head, so it reaches
+     * into the outline, which covers the overlap and leaves the visible segment bounded by the
+     * inner edge of the outline.
+     *
+     * @param head The geometry of the head to build the segment for.
+     * @param length The note length to build the segment for.
+     *
+     * @returns The `d` attribute of the segment, or an empty string when the head stays empty.
+     */
+    private segmentPathFor(head: INoteHeadGeometry, length: NoteLength): string {
+        const { centerX, centerY, radius } = head;
+
+        if (length === NoteLength.Whole) {
+            return "";
+        }
+
+        if (length === NoteLength.Half) {
+            // The half note fills the upper half of the head.
+            const left = `${centerX - radius} ${centerY}`;
+            const right = `${centerX + radius} ${centerY}`;
+
+            return `M ${left} A ${radius} ${radius} 0 0 1 ${right} Z`;
+        }
+
+        // The quarter note and the flagged values fill a wedge from the apex, which reaches from the
+        // vertical top edge clockwise by the share of a circle the value stands for.
+        const radians = ((360 / noteLengthDenominator(length)) * Math.PI) / 180;
+        const endX = roundCoordinate(centerX + (radius * Math.sin(radians)));
+        const endY = roundCoordinate(centerY - (radius * Math.cos(radians)));
+
+        return `M ${centerX} ${centerY} L ${centerX} ${centerY - radius} ` +
+            `A ${radius} ${radius} 0 0 1 ${endX} ${endY} Z`;
+    }
+
+    /**
+     * Describes a full circle as an SVG arc pair.
+     *
+     * @param cx The horizontal center of the circle.
+     * @param cy The vertical center of the circle.
+     * @param radius The radius of the circle.
+     * @param clockwise The winding direction; opposite windings cut a hole into the shape.
+     *
+     * @returns The `d` attribute of the circle subpath.
+     */
+    private circlePathFor(cx: number, cy: number, radius: number, clockwise: boolean): string {
+        const sweep = clockwise ? 1 : 0;
+        const left = `${cx - radius} ${cy}`;
+        const right = `${cx + radius} ${cy}`;
+
+        return `M ${left} A ${radius} ${radius} 0 0 ${sweep} ${right} ` +
+            `A ${radius} ${radius} 0 0 ${sweep} ${left} Z`;
+    }
+
+    /**
+     * Renders the dot the button adds to a value: a single augmentation dot, centered
+     * horizontally at the bottom edge of the button.
      *
      * @returns The SVG symbol for the dot toggle.
      */
     private renderDotIcon(): ComponentChild {
         return (
-            <svg className="noteLengthIcon" viewBox="0 0 24 32" width={24} height={32}
-                stroke="currentColor" strokeWidth={2} aria-hidden="true">
-                <circle className="noteLengthIconHead hollow" cx="8" cy="16" r="6" />
-                <circle className="noteLengthIconDot" cx="18" cy="16" r="3" />
+            <svg className="noteLengthIcon" viewBox="0 0 24 32" width={24} height={32} aria-hidden="true">
+                <circle className="noteLengthIconDot" cx="12" cy="27" r="3" />
             </svg>
         );
     }

@@ -478,14 +478,14 @@
         color: var(--color-base-content);
         display: block;
 
-        .noteLengthIconHead {
-            fill: color-mix(in srgb, currentColor 35%, transparent);
+        .noteLengthIconOutline {
+            fill: currentColor;
             stroke: none;
+        }
 
-            &.hollow {
-                fill: none;
-                stroke: color-mix(in srgb, currentColor 35%, transparent);
-            }
+        .noteLengthIconFill {
+            fill: var(--color-primary);
+            stroke: none;
         }
 
         .noteLengthIconDot {
