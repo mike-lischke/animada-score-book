@@ -65,6 +65,8 @@ git clone https://github.com/mike-lischke/animada-score-book.git
 cd animada-score-book
 ```
 
+What changed in each version is documented in the [release notes](release-notes.md).
+
 #### 2. Install Dependencies
 
 ```bash
