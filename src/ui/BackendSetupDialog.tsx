@@ -7,7 +7,7 @@ import { ComponentChild, createRef } from "preact";
 
 import { Semaphore } from "../supplement/Semaphore.js";
 import { Button } from "../components/ui/framework/Button.js";
-import { Codicon } from "../components/ui/framework/Codicon.js";
+import { UIIcon } from "../components/ui/framework/UIIcon.js";
 import { Container } from "../components/ui/framework/Container.js";
 import { Dialog } from "../components/ui/framework/Dialog.js";
 import { Icon } from "../components/ui/framework/Icon.js";
@@ -108,7 +108,7 @@ export class BackendSetupDialog extends UIComponent<IBackendSetupDialogPropertie
                 content = (
                     <Container orientation={Orientation.TopDown} crossAlignment={ChildAlignment.Center}>
                         <Icon
-                            src={Codicon.Error}
+                            src={UIIcon.Error}
                             style={{ fontSize: "48px", color: "var(--color-error)", marginBottom: "12px" }}
                         />
                         <Label caption="Backend configuration is missing or invalid." heading wrap />
@@ -145,7 +145,7 @@ export class BackendSetupDialog extends UIComponent<IBackendSetupDialogPropertie
                     <>
                         <Label caption="Database setup complete." />
                         <Icon
-                            src={Codicon.Check}
+                            src={UIIcon.Check}
                             style={{ fontSize: "24px", fontWeight: 800, color: "var(--color-success)" }}
                         />
                     </>
@@ -208,7 +208,7 @@ export class BackendSetupDialog extends UIComponent<IBackendSetupDialogPropertie
                     orientation={Orientation.LeftToRight}
                     crossAlignment={ChildAlignment.Center}
                 >
-                    <Icon src={Codicon.Database} style={{ fontSize: "24px", marginRight: "8px" }} />
+                    <Icon src={UIIcon.Database} style={{ fontSize: "24px", marginRight: "8px" }} />
                     Backend Setup
                 </Container>
 
@@ -228,7 +228,7 @@ export class BackendSetupDialog extends UIComponent<IBackendSetupDialogPropertie
             return (
                 <Container orientation={Orientation.LeftToRight} crossAlignment={ChildAlignment.Center}>
                     <Icon
-                        src={Codicon.Warning}
+                        src={UIIcon.Warning}
                         style={{
                             fontSize: "24px", fontWeight: 800,
                             color: "var(--color-warning)", marginRight: "8px",
@@ -255,7 +255,7 @@ export class BackendSetupDialog extends UIComponent<IBackendSetupDialogPropertie
                         crossAlignment={ChildAlignment.Center}
                         style={{ marginBottom: "12px" }}
                     >
-                        <Icon src={Codicon.Error} style={{ fontSize: "16px", marginRight: "8px" }} />
+                        <Icon src={UIIcon.Error} style={{ fontSize: "16px", marginRight: "8px" }} />
                         <Label caption={errorMessage} wrap />
                     </Container>
                 )}

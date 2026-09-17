@@ -5,31 +5,16 @@
 
 import { type ComponentChild, type CSSProperties, type RefObject } from "preact";
 
+import { NoteLength } from "../../../core/rest-notation.js";
+import { NoteDisplayType } from "../../../core/ScoreBookDataModel.js";
 import { UIComponent } from "./UIComponent.js";
 import { type IImageBaseProps } from "./Image.js";
+
+export { NoteLength };
 
 export enum NoteKind {
     Note,
     Rest
-}
-
-export enum NoteLength {
-    Whole,
-    Half,
-    Quarter,
-    Eighth,
-    Sixteenth,
-    ThirtySecond
-}
-
-export enum NoteImageHeadType {
-    Oval,
-    Cross,
-    Diamond,
-    /** Filled square for hand-struck notes (e.g. Repinique de mão, Conga). */
-    Square,
-    /** Hollow equilateral triangle for shaken instruments (e.g. Chocalho, Ganzá). */
-    Triangle
 }
 
 export interface INoteImageProperties extends IImageBaseProps {
@@ -40,7 +25,7 @@ export interface INoteImageProperties extends IImageBaseProps {
     value: NoteLength;
 
     /** Note head variant (used only when kind="note"). */
-    headType?: NoteImageHeadType;
+    headType?: NoteDisplayType;
 
     /** Optional override for stem visibility (used only for notes). */
     hasStem?: boolean;
@@ -63,23 +48,15 @@ export interface INoteImageProperties extends IImageBaseProps {
     innerRef?: RefObject<SVGSVGElement>;
 }
 
-interface INoteImageState {
-    loaded: boolean;
-}
-
 /**
  * Renders notes from one composable SVG sprite (`note.svg`) and rests from predefined rest symbols.
  * Individual note parts are selected via CSS custom properties.
  */
-export class NoteImage extends UIComponent<INoteImageProperties, INoteImageState> {
+export class NoteImage extends UIComponent<INoteImageProperties> {
     public static override defaultProps = {
         disabled: false,
         kind: NoteKind.Note,
-        headType: NoteImageHeadType.Oval,
-    };
-
-    public override state: INoteImageState = {
-        loaded: false,
+        headType: NoteDisplayType.Oval,
     };
 
     private static readonly noteSpriteSource = new URL("../../../assets/images/notes/note.svg", import.meta.url).href;
@@ -114,22 +91,23 @@ export class NoteImage extends UIComponent<INoteImageProperties, INoteImageState
         return symbolId;
     }
 
+    public override componentDidMount(): void {
+        const { kind = NoteKind.Note } = this.props;
+        const source = kind === NoteKind.Note ? NoteImage.noteSpriteSource : NoteImage.restSpriteSource;
+
+        // Fire-and-forget. The <use> element resolves automatically once the symbol lands in the
+        // holder, while the SVG keeps its fixed CSS size from the first render onwards.
+        void this.cacheSprite(source);
+    }
+
     public override render(): ComponentChild {
         const {
             id, title, alt, style, disabled, width, height, innerRef, kind = NoteKind.Note, value,
-            headType = NoteImageHeadType.Oval, dotted = false, hideStem = false,
+            headType = NoteDisplayType.Oval, dotted = false, hideStem = false,
         } = this.props;
 
         const source = kind === NoteKind.Note ? NoteImage.noteSpriteSource : NoteImage.restSpriteSource;
         const symbolId = this.symbolIdFromPath(source);
-        const { loaded } = this.state;
-        if (!loaded) {
-            void this.cacheSprite(source).then(() => {
-                this.setState({ loaded: true });
-            });
-
-            return null;
-        }
 
         const mergedClassName = this.generateFinalClassName([
             "note-image",
@@ -160,14 +138,14 @@ export class NoteImage extends UIComponent<INoteImageProperties, INoteImageState
     }
 
     private computeNoteStyle(baseStyle: CSSProperties, value: NoteLength,
-        headType: NoteImageHeadType, dotted: boolean, hideStem = false): CSSProperties {
+        headType: NoteDisplayType, dotted: boolean, hideStem = false): CSSProperties {
         const { flagCount, hasStem: hasStemOverride } = this.props;
         const style = { ...baseStyle } as CSSProperties & Record<string, string>;
 
         const flags = flagCount ?? this.defaultFlagCount(value);
         const stemDefault = value !== NoteLength.Whole;
         const hasStem = hideStem ? false : (hasStemOverride ?? stemDefault);
-        const isOval = headType === NoteImageHeadType.Oval;
+        const isOval = headType === NoteDisplayType.Oval;
 
         style["--note-show-oval-body"] = isOval && value !== NoteLength.Whole ? "inline" : "none";
         style["--note-show-oval-stem"] = hasStem ? "inline" : "none";
@@ -229,27 +207,34 @@ export class NoteImage extends UIComponent<INoteImageProperties, INoteImageState
 
         NoteImage.registeredSymbols.add(symbolId);
 
-        const res = await fetch(source);
-        const text = await res.text();
+        try {
+            const res = await fetch(source);
+            const text = await res.text();
 
-        const tpl = document.createElement("template");
-        tpl.innerHTML = text.trim();
-        const svg = tpl.content.firstElementChild as SVGSVGElement | null;
-        if (!svg) {
-            return;
+            const tpl = document.createElement("template");
+            tpl.innerHTML = text.trim();
+            const svg = tpl.content.firstElementChild as SVGSVGElement | null;
+            if (!svg) {
+                return;
+            }
+
+            const viewBox = svg.getAttribute("viewBox") ?? "0 0 24 24";
+
+            const symbol = document.createElementNS("http://www.w3.org/2000/svg", "symbol");
+            symbol.setAttribute("id", symbolId);
+            symbol.setAttribute("viewBox", viewBox);
+
+            while (svg.firstChild) {
+                symbol.appendChild(svg.firstChild);
+            }
+
+            NoteImage.svgHolder.appendChild(symbol);
+        } catch {
+            // The sprite load is best-effort. A failed fetch (e.g. offline or in jsdom tests)
+            // must not surface as an unhandled rejection; drop the registration so a later
+            // render can retry.
+            NoteImage.registeredSymbols.delete(symbolId);
         }
-
-        const viewBox = svg.getAttribute("viewBox") ?? "0 0 24 24";
-
-        const symbol = document.createElementNS("http://www.w3.org/2000/svg", "symbol");
-        symbol.setAttribute("id", symbolId);
-        symbol.setAttribute("viewBox", viewBox);
-
-        while (svg.firstChild) {
-            symbol.appendChild(svg.firstChild);
-        }
-
-        NoteImage.svgHolder.appendChild(symbol);
     }
 
     /**

@@ -12,6 +12,7 @@ import { type ICommonUIProperties, type MouseEventCallback, UIComponent } from "
 export interface IDropdownItem {
     label?: string;
     icon?: ComponentChild;
+    disabled?: boolean;
     onClick?: MouseEventCallback;
 }
 
@@ -45,7 +46,7 @@ export class Dropdown extends UIComponent<IDropdownProperties, IDropdownState> {
         const { activeIndex } = this.state;
 
         const children = items.map((item, index) => {
-            const isInteractive = item.onClick !== undefined;
+            const isInteractive = item.onClick !== undefined && !item.disabled;
 
             return (
                 <li
@@ -53,11 +54,12 @@ export class Dropdown extends UIComponent<IDropdownProperties, IDropdownState> {
                     className={[
                         item.label === selectedItem ? "selected" : "",
                         isInteractive && index === activeIndex ? "active" : "",
-                        isInteractive ? "" : "dropdown-caption",
+                        item.disabled ? "disabled" : isInteractive ? "" : "dropdown-caption",
                     ].filter(Boolean).join(" ")}
                 >
                     <a
                         tabIndex={isInteractive ? 0 : -1}
+                        aria-disabled={item.disabled ? "true" : undefined}
                         onClick={(e) => {
                             if (isInteractive) {
                                 this.selectItem(index, e);
@@ -87,6 +89,7 @@ export class Dropdown extends UIComponent<IDropdownProperties, IDropdownState> {
                     onClick={(e) => {
                         e.stopPropagation();
                     }}
+                    {...this.dataAttributes}
                 >
                     {icon}
                     {caption ?? defaultCaption}
@@ -214,7 +217,9 @@ export class Dropdown extends UIComponent<IDropdownProperties, IDropdownState> {
 
         if (popover.matches(":popover-open")) {
             this.setState({ activeIndex: -1 }, () => {
-                const first = this.listRef.current?.querySelector("li:not(.dropdown-caption) a") as HTMLElement | null;
+                const first = this.listRef.current?.querySelector(
+                    "li:not(.dropdown-caption):not(.disabled) a",
+                ) as HTMLElement | null;
 
                 first?.focus();
             });

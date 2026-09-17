@@ -25,6 +25,7 @@ export class AnimationEngine {
 
                 return Promise.resolve(true);
             }
+
             this.stop();
 
             return Promise.resolve(true);

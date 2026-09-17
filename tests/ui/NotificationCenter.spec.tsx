@@ -46,7 +46,7 @@ describe.sequential("NotificationCenter", () => {
         const toasts = container.querySelectorAll(".toast");
         expect(toasts).toHaveLength(1);
         expect(toasts[0].textContent).toContain("Info message");
-        expect(toasts[0].querySelector(".codicon-info")).not.toBeNull();
+        expect(toasts[0].querySelector("svg.icon[data-icon='Info']")).not.toBeNull();
     });
 
     it("shows a warning notification with correct icon", async () => {
@@ -59,7 +59,7 @@ describe.sequential("NotificationCenter", () => {
         const toasts = container.querySelectorAll(".toast");
         expect(toasts).toHaveLength(1);
         expect(toasts[0].textContent).toContain("Warning");
-        expect(toasts[0].querySelector(".codicon-warning")).not.toBeNull();
+        expect(toasts[0].querySelector("svg.icon[data-icon='Warning']")).not.toBeNull();
     });
 
     it("shows an error notification with correct icon", async () => {
@@ -72,7 +72,7 @@ describe.sequential("NotificationCenter", () => {
         const toasts = container.querySelectorAll(".toast");
         expect(toasts).toHaveLength(1);
         expect(toasts[0].textContent).toContain("Error");
-        expect(toasts[0].querySelector(".codicon-error")).not.toBeNull();
+        expect(toasts[0].querySelector("svg.icon[data-icon='Error']")).not.toBeNull();
     });
 
     it("removes a toast when close button is clicked", async () => {

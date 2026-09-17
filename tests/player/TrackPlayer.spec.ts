@@ -12,6 +12,7 @@ import {
 import type { IAudioData, ITimeParams, Mutable } from "../../src/core/types/general.js";
 import type { TimeCoordinator } from "../../src/player/TimeCoordinator.js";
 import { TrackPlayer } from "../../src/player/TrackPlayer.js";
+import { requisitions } from "../../src/supplement/Requisitions.js";
 
 /**
  * Minimal stub for the ITimeCoordinator used by TrackPlayer.
@@ -51,10 +52,21 @@ const makeNote = (
     timing: ITiming,
     noteStyle?: IAudioData,
 ): ISbDmNoteEvent => {
+    const measure = {
+        type: SbDmEntityType.TrackMeasure,
+        id: 1,
+        track,
+        number: 1,
+        meter: { beats: 4, beatUnits: 4, stepResolution: 16, beatGroups: [16] },
+        events: [],
+        subdivisions: [],
+        noteEvents: [],
+    } as ISbDmTrackMeasure;
+
     return {
         type: SbDmEntityType.NoteEvent,
         id: Math.floor(Math.random() * 100000),
-        measureNumber: 1,
+        measure,
         start: { numerator: timing.step - 1, denominator: 16 },
         duration: { numerator: 1, denominator: 16 },
         track,
@@ -94,6 +106,7 @@ const makeTrack = (opts?: {
             return track;
         }),
         removeTrack: vi.fn(),
+        duplicateTrack: vi.fn(),
         applyArrangementSnapshot: vi.fn(),
         measureLabels: {}
     };
@@ -161,11 +174,34 @@ const makeTrack = (opts?: {
         track._notes.push(polyNote);
     }
 
-    const measureEvents: ISbDmNoteEvent[] = track._notes.map((currentNote, index) => {
-        return {
+    const measureEvents: ISbDmNoteEvent[] = [];
+    const measure: ISbDmTrackMeasure = {
+        type: SbDmEntityType.TrackMeasure,
+        id: 1,
+        track,
+        number: 1,
+        meter: {
+            beats: 4,
+            beatUnits: 4,
+            stepResolution: track._notes.length,
+            beatGroups: [track._notes.length],
+        },
+        events: track._notes.map((currentNote, index) => {
+            return {
+                start: { numerator: index, denominator: track._notes.length },
+                duration: { numerator: 1, denominator: track._notes.length },
+                noteStyleId: currentNote.audioData?.id,
+            };
+        }),
+        subdivisions: [],
+        noteEvents: measureEvents,
+    };
+
+    track._notes.forEach((currentNote, index) => {
+        measureEvents.push({
             type: SbDmEntityType.NoteEvent,
             id: currentNote.id,
-            measureNumber: 1,
+            measure,
             start: {
                 numerator: index,
                 denominator: track._notes.length,
@@ -177,25 +213,9 @@ const makeTrack = (opts?: {
             track,
             timing: currentNote.timing,
             audioData: currentNote.audioData,
-        };
+        });
     });
 
-    const measure: ISbDmTrackMeasure = {
-        type: SbDmEntityType.TrackMeasure,
-        id: 1,
-        number: 1,
-        meter: {
-            beats: 4,
-            beatUnits: 4,
-            stepResolution: track._notes.length,
-            beatGroups: [track._notes.length],
-        },
-        steps: track._notes.map((currentNote, index) => {
-            return { index, noteStyleId: currentNote.audioData?.id };
-        }),
-        subdivisions: [],
-        events: measureEvents,
-    };
     track.measures = [measure];
 
     return track;
@@ -235,5 +255,25 @@ describe("TrackPlayer", () => {
         player.dispose();
         const events = player.getEvents({ start: 0, end: 1 });
         expect(events.length).toBe(0);
+    });
+
+    it("keeps note event ids stable across cache rebuilds", async () => {
+        const track = makeTrack({ instrumentLoaded: true });
+        const player = new TrackPlayer(track, makeTimeCoordinator());
+
+        const idsBefore = track.measures[0].noteEvents.map((event) => {
+            return event.id;
+        });
+
+        // Trigger a rebuild as it happens after any track edit.
+        await requisitions.execute("trackChanged", track.id);
+
+        const idsAfter = track.measures[0].noteEvents.map((event) => {
+            return event.id;
+        });
+
+        expect(idsAfter).toEqual(idsBefore);
+
+        player.dispose();
     });
 });

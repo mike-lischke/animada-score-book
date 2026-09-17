@@ -161,6 +161,7 @@ export class PopoverSlider extends UIComponent<IPopoverSliderProperties, IPopove
             ev.preventDefault();
             this.close(false);
         }
+
         if (ev.key === "Enter") {
             ev.preventDefault();
             this.close(true);

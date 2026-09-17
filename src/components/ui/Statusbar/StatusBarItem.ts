@@ -3,6 +3,8 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
+import { type ComponentChild } from "preact";
+
 import { getNewId } from "../../../core/utils.js";
 
 /** Represents the alignment of status bar items. */
@@ -24,6 +26,9 @@ export interface IStatusBarItemOptions {
     alignment?: StatusBarAlignment;
     priority?: number;
     timeout?: number;
+
+    /** Optional icon to render before the text. Overrides $(icon-name) syntax when set. */
+    icon?: ComponentChild;
 }
 
 /**
@@ -42,11 +47,14 @@ export interface IStatusBarItem extends IStatusBarItemOptions {
      */
     readonly priority?: number;
 
-    /** The text to show for the entry. Supports $(icon-name) codicon syntax. */
+    /** The text to show for the entry. Supports $(icon-name) syntax to embed an icon. */
     text: string;
 
     /** The tooltip text when hovering over this entry. */
     tooltip?: string;
+
+    /** Optional icon to render before the text. Overrides $(icon-name) syntax when set. */
+    icon?: ComponentChild;
 
     /** The foreground color for this entry. */
     color?: string;
@@ -83,15 +91,26 @@ export class StatusBarItem implements IStatusBarItem {
     public backgroundColor?: string;
     public command?: string;
 
+    #icon?: ComponentChild;
     #visible: boolean;
     #text = "";
     #timeout: number | undefined;
+
+    public get icon(): ComponentChild {
+        return this.#icon;
+    }
+
+    public set icon(value: ComponentChild) {
+        this.#icon = value;
+        this.update();
+    }
 
     public constructor(private update: UpdateFunction, options: IStatusBarItemOptions) {
         this.id = options.id ?? `statusBarItem.${getNewId()}`;
         this.text = options.text ?? "";
         this.tooltip = options.tooltip;
         this.command = options.command;
+        this.#icon = options.icon;
         this.alignment = options.alignment ?? StatusBarAlignment.Left;
         this.priority = options.priority;
         this.#visible = true;

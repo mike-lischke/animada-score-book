@@ -5,7 +5,7 @@
 
 import type { ComponentChild } from "preact";
 
-import { Codicon } from "../components/ui/framework/Codicon.js";
+import { UIIcon } from "../components/ui/framework/UIIcon.js";
 import { Icon } from "../components/ui/framework/Icon.js";
 
 export interface IPermIndicatorProps {
@@ -70,11 +70,11 @@ export const PermIndicator = (props: IPermIndicatorProps): ComponentChild => {
         >
             {!canWrite && (
                 <span class="permReadOnlyIcon" title="Read-only">
-                    <Icon src={Codicon.Edit} />
+                    <Icon src={UIIcon.Edit} />
                 </span>
             )}
             {isWorld && (
-                <Icon src={Codicon.Globe} className="permWorldIcon" title="Publicly accessible" />
+                <Icon src={UIIcon.Globe} className="permWorldIcon" title="Publicly accessible" />
             )}
         </span>
     );

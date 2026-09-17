@@ -7,7 +7,7 @@ import { Component, ComponentChild, createRef } from "preact";
 
 import { Button } from "../components/ui/framework/Button.js";
 import { Checkbox } from "../components/ui/framework/Checkbox.js";
-import { Codicon } from "../components/ui/framework/Codicon.js";
+import { UIIcon } from "../components/ui/framework/UIIcon.js";
 import { Container } from "../components/ui/framework/Container.js";
 import { Icon } from "../components/ui/framework/Icon.js";
 import { Portal } from "../components/ui/framework/Portal.js";
@@ -225,7 +225,7 @@ export class TutorialWizard extends Component<ITutorialWizardProps, ITutorialWiz
                     crossAlignment={ChildAlignment.Center}
                     className="tutorial-wizard-topbar-left"
                 >
-                    <Icon src={Codicon.Lightbulb} className="tutorial-wizard-icon" />
+                    <Icon src={UIIcon.Lightbulb} className="tutorial-wizard-icon" />
                     <span class="tutorial-wizard-title">Tutorial</span>
                 </Container>
                 <Button
@@ -235,7 +235,7 @@ export class TutorialWizard extends Component<ITutorialWizardProps, ITutorialWiz
                         onClose(false);
                     }}
                 >
-                    <Icon src={Codicon.ChromeClose} />
+                    <Icon src={UIIcon.ChromeClose} />
                 </Button>
             </div>
         );

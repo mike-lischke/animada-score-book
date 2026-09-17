@@ -42,8 +42,9 @@ Animada Score Book is your ensemble's digital home for rhythm — a rich, browse
 - **BananaDrum Import.** Import scores from BananaDrum URLs to bring your existing repertoire on board.
 
 > [!IMPORTANT]
-> **Editing is not yet implemented.** The current version focuses on score library browsing, arrangement playback,
-> and printing. Full score and arrangement editing capabilities are planned for a future release.
+> **Editing is implemented.** It works in both views: notes can be entered, given a note style and an articulation,
+> copied, pasted, subdivided and removed in the grid view and in the staff view; the staff view additionally offers
+> the note length toolbar. What arrived with each version is listed in the [release notes](release-notes.md).
 
 ## Getting Started
 
@@ -64,6 +65,8 @@ Animada Score Book consists of two parts that work together: a **backend server*
 git clone https://github.com/mike-lischke/animada-score-book.git
 cd animada-score-book
 ```
+
+What changed in each version is documented in the [release notes](release-notes.md).
 
 #### 2. Install Dependencies
 
@@ -164,6 +167,18 @@ This opens the app at `http://localhost:5173` and updates automatically as you e
 | `npm run test:e2e` | Runs end-to-end browser tests (Playwright) |
 
 The project is written in **TypeScript** with **Preact** for the UI, **SCSS** and **Tailwind** for styling, and **DaisyUI** for components. The backend is a plain Node.js HTTP server with MySQL/MariaDB/PostgreSQL adapters.
+
+### Database Migrations
+
+Schema changes are managed through timestamped SQL migration files in the `migrations/` directory. The migration runner executes automatically on server startup — no manual steps needed.
+
+**Branch-specific databases:** When working on a feature branch, the server automatically creates and uses a branch-specific copy of the main database (named `<database>__<branch>`). This isolates schema changes during development. The main branch and release branches always use the base database name.
+
+**After rebasing** onto an updated `main` branch, restart the backend server. The migration runner will detect and apply any new migrations from `main`, then re-apply your branch's migrations on the updated schema.
+
+**Cleaning up:** Run `npm run db:cleanup` to scan for orphaned branch databases (branches that have been deleted locally) and get instructions for dropping them.
+
+**Migration files** use `-- @mysql` and `-- @postgres` markers to include engine-specific DDL in the same file. Only DDL statements belong in migrations — no data manipulation.
 
 ### VS Code ###
 This project ist developed in VS Code and already has a launch configuration you can use to start a debugging session.

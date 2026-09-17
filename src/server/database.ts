@@ -10,9 +10,6 @@ export enum DatabaseEngine {
     Postgres = "postgres",
 }
 
-/** The required database schema version. Increment when the table structure changes. */
-export const schemaVersion = 1;
-
 export interface IDatabaseConfig {
     engine: DatabaseEngine;
     host: string;
@@ -62,6 +59,14 @@ export interface IDatabaseAdapter {
     isInitialized(): boolean;
 
     /**
+     * Lightweight connectivity check using the existing pool. Runs SELECT 1 and returns
+     * true if the database is reachable. Throws with a descriptive error on failure.
+     *
+     * @returns True if the database responded.
+     */
+    ping(): Promise<boolean>;
+
+    /**
      * Executes a SELECT-like query and returns rows.
      *
      * @param sql    The SQL query.
@@ -95,12 +100,6 @@ export interface IDatabaseAdapter {
      * @param sql The SQL string containing multiple statements.
      */
     executeMultiple(sql: string): Promise<void>;
-
-    /**
-     * @returns The current schema version stored in the database, or 0 if the version table
-     *          does not exist yet (pre-versioning installation).
-     */
-    getSchemaVersion(): Promise<number>;
 
     /**
      * Closes the connection pool.

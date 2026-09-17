@@ -20,6 +20,12 @@ export interface IToggleProperties extends ICommonUIProperties {
     /** When true, the toggle is rendered rotated 90° (handle moves vertically). */
     vertical?: boolean;
 
+    /** Icon shown inside the toggle while it is unchecked. */
+    uncheckedIcon?: ComponentChild;
+
+    /** Icon shown inside the toggle while it is checked. */
+    checkedIcon?: ComponentChild;
+
     onChange?: (e: InputEvent, checkState: CheckState) => void;
 }
 
@@ -51,12 +57,34 @@ export class Toggle extends UIComponent<IToggleProperties> {
     }
 
     public render(): ComponentChild {
-        const { id, checkState, vertical } = this.props;
+        const { id, checkState, vertical, disabled, uncheckedIcon, checkedIcon } = this.props;
+
         const className = this.generateFinalClassName([
             "toggle",
             "du-toggle",
             ...(vertical ? ["toggle-vertical"] : []),
         ]);
+
+        const input = (
+            <input
+                id={id}
+                ref={this.toggleRef}
+                type="checkbox"
+                checked={checkState === CheckState.Checked}
+                disabled={disabled}
+                onInput={this.handleInput}
+            />
+        );
+
+        if (uncheckedIcon !== undefined || checkedIcon !== undefined) {
+            return (
+                <label className={className} {...this.dataAttributes}>
+                    {input}
+                    {uncheckedIcon}
+                    {checkedIcon}
+                </label>
+            );
+        }
 
         return (
             <input
@@ -65,7 +93,9 @@ export class Toggle extends UIComponent<IToggleProperties> {
                 className={className}
                 type="checkbox"
                 checked={checkState === CheckState.Checked}
+                disabled={disabled}
                 onInput={this.handleInput}
+                {...this.dataAttributes}
             />
         );
     }

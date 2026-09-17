@@ -5,17 +5,15 @@
 
 import { createRef, type ComponentChild } from "preact";
 
-import type { ISbDmArrangement } from "../../../core/ScoreBookDataModel.js";
-import type { UndoManager } from "../../../core/UndoManager.js";
-import { Input } from "../framework/Input.js";
+import type { ISbDmArrangement, ScoreBookDataModel } from "../../../core/ScoreBookDataModel.js";
+import { KeyboardKeys } from "../../../core/utils.js";
 import { Label } from "../framework/Label.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
 
 export interface IArrangementTitleProperties extends ICommonUIProperties {
     arrangement: Readonly<ISbDmArrangement>;
-    undoManager: UndoManager;
+    dataModel: ScoreBookDataModel;
     editMode: boolean;
-    onEditEnd: () => void;
 }
 
 interface IArrangementTitleState {
@@ -35,10 +33,7 @@ export class ArrangementTitle extends UIComponent<IArrangementTitleProperties, I
     }
 
     public override componentDidMount(): void {
-        const { editMode, arrangement } = this.props;
-        if (editMode) {
-            this.inputRef.current?.focus();
-        }
+        const { arrangement } = this.props;
 
         this.setState({ title: arrangement.title, inputValue: arrangement.title });
     }
@@ -53,30 +48,24 @@ export class ArrangementTitle extends UIComponent<IArrangementTitleProperties, I
     }
 
     public override render(): ComponentChild {
-        const { id, editMode } = this.props;
+        const { id, className, style, editMode } = this.props;
         const { title, inputValue } = this.state;
 
         if (editMode) {
             return (
-                <Input
+                <input
                     id={id}
                     ref={this.inputRef}
-                    className={`input px-0 py-0`}
-                    autoFocus
-                    onChange={(e) => {
+                    className={className}
+                    style={style}
+                    onInput={(e) => {
                         this.setState({
                             inputValue: (e.target as HTMLInputElement).value
                         });
                     }}
-                    onConfirm={this.onConfirm}
-                    onCancel={this.onCancel}
-                    onBlur={this.onBlur}
-                    onKeyDown={(e) => {
-                        // Don't forward key events to parent elements, as they might trigger unwanted actions
-                        // (e.g. space triggering play/pause).
-                        e.stopPropagation();
-                    }}
-                    placeholder="Add a title..."
+                    onFocus={this.handleFocus}
+                    onKeyDown={this.handleInputKeyDown}
+                    onBlur={this.handleBlur}
                     value={inputValue}
                 />
             );
@@ -85,6 +74,8 @@ export class ArrangementTitle extends UIComponent<IArrangementTitleProperties, I
         return (
             <Label
                 id={id}
+                className={className}
+                style={style}
                 {...this.dataAttributes}
             >
                 {title}
@@ -92,33 +83,53 @@ export class ArrangementTitle extends UIComponent<IArrangementTitleProperties, I
         );
     }
 
-    private onBlur = (event: FocusEvent) => {
-        const { editMode, onEditEnd, undoManager, arrangement } = this.props;
+    private handleFocus = (): void => {
+        this.inputRef.current?.select();
+    };
 
-        if (editMode) {
-            undoManager.edit({
-                type: "EditCommand_ArrangementTitle", arrangement,
-                newTitle: (event.target as HTMLInputElement).value
-            });
-            onEditEnd();
+    private handleBlur = (event: FocusEvent) => {
+        const { dataModel, arrangement } = this.props;
+        const { title } = this.state;
+        const newTitle = (event.target as HTMLInputElement).value;
+
+        if (newTitle === arrangement.title) {
+            if (title !== arrangement.title) {
+                this.setState({ title: arrangement.title, inputValue: arrangement.title });
+            }
+
+            return;
         }
+
+        dataModel.setTitle(newTitle);
     };
 
-    private onConfirm = (event: KeyboardEvent) => {
-        const { onEditEnd, undoManager, arrangement } = this.props;
+    private handleInputKeyDown = (e: KeyboardEvent) => {
+        const { arrangement } = this.props;
 
-        undoManager.edit({
-            type: "EditCommand_ArrangementTitle", arrangement,
-            newTitle: (event.target as HTMLInputElement).value
-        });
-        onEditEnd();
-    };
+        switch (e.key) {
+            case KeyboardKeys.Enter: {
+                this.inputRef.current?.blur();
 
-    private onCancel = (event: KeyboardEvent) => {
-        const { onEditEnd, arrangement } = this.props;
+                break;
+            }
 
-        this.setState({ inputValue: arrangement.title });
-        onEditEnd();
+            case KeyboardKeys.Escape: {
+                const input = this.inputRef.current;
+                if (input) {
+                    input.value = arrangement.title;
+                }
+
+                this.setState({ inputValue: arrangement.title }, () => {
+                    this.inputRef.current?.blur();
+                });
+
+                break;
+            }
+
+            default: {
+                break;
+            }
+        }
     };
 
 }

@@ -5,7 +5,7 @@
 
 import { expect, test } from "@playwright/test";
 
-import { routeApi } from "./helpers.js";
+import { routeApi } from "./e2e-test-helpers.js";
 
 const bolero3Url = "/?t=Bolero%203&a2=6-8.50.1.3-8.8.319ihbrp-4UX1WbY5oS";
 
@@ -27,14 +27,13 @@ test.describe("Staff view selection", () => {
             await trackViewToggle.check({ force: true });
         }
 
-        await expect(page.locator(".bar-track-row.staff-mode").first()).toBeVisible();
+        await expect(page.locator(".staff-measure-track-row").first()).toBeVisible();
     });
 
     test("clicking a single note selects it with the note-selected CSS class", async ({ page }) => {
         // Find the first note symbol in the first bar of the first track.
-        const firstNote = page.locator(
-            ".bar-track-row.staff-mode[data-bar='1'][data-track] .staff-note-viewer-note-symbol",
-        ).first();
+        const firstNote = page.locator(".staff-measure-viewer").first()
+            .locator(".staff-measure-track-row .staff-note-viewer-note-symbol").first();
 
         await expect(firstNote).toBeVisible();
         await firstNote.click();
@@ -65,9 +64,10 @@ test.describe("Staff view selection", () => {
         await expect(overlay).toBeVisible();
     });
 
-    test("clicking a subdivision container beam selects the beamed note group", async ({ page }) => {
-        // Bolero 3 has a nested subdivision where the container beam connects
-        // the last inner note to the next note outside. Switch to this arrangement.
+    test("clicking a subdivision-crossing beam selects the beamed note group", async ({ page }) => {
+        // Bolero 3 has a nested subdivision. Beams are anchored at each note's onset, so a beam
+        // connecting a subdivision's last inner note to the next note outside spans the boundary
+        // without exceeding its own run's width.
         await page.goto(bolero3Url);
         await expect(page.locator("#trackViewerHost")).toBeVisible();
 
@@ -76,41 +76,38 @@ test.describe("Staff view selection", () => {
             await trackViewToggle.check({ force: true });
         }
 
-        await expect(page.locator(".bar-track-row.staff-mode").first()).toBeVisible();
+        await expect(page.locator(".staff-measure-track-row").first()).toBeVisible();
 
-        // Subdivision container beams are rendered inside the subdivision div,
-        // not inside a .staff-note-viewer-run. Find beams whose parent is not a run.
-        const beamCount = await page.locator(".staff-note-viewer-beam").count();
-
-        let containerBeamBox: { x: number; y: number; width: number; height: number; } | null = null;
-
-        for (let i = 0; i < beamCount; i++) {
-            const beam = page.locator(".staff-note-viewer-beam").nth(i);
-            const hasRunParent = await beam.locator("..").first()
-                .evaluate((el) => {
-                    return el.classList.contains("staff-note-viewer-run");
+        // Find a shared beam whose run sits inside a subdivision container (not a direct child of
+        // the top-level runs container), i.e. a beam that crosses a subdivision boundary.
+        const crossingBeamBox = await page.evaluate(() => {
+            const nestedRun = Array.from(document.querySelectorAll<HTMLElement>(".staff-note-viewer-run"))
+                .find((run) => {
+                    return run.parentElement !== null
+                        && !run.parentElement.classList.contains("staff-note-viewer-runs");
                 });
 
-            if (!hasRunParent) {
-                const box = await beam.boundingBox();
-                if (box && box.width > 12) { // shared-right beams are wider than partial stubs
-                    containerBeamBox = box;
+            const beam = nestedRun?.querySelector<HTMLElement>(".staff-note-viewer-beam");
 
-                    break;
-                }
+            if (!beam) {
+                return null;
             }
-        }
 
-        if (!containerBeamBox) {
-            test.skip(true, "No subdivision container beam found in this arrangement");
+            const rect = beam.getBoundingClientRect();
+
+            return { x: rect.left, y: rect.top, width: rect.width, height: rect.height };
+        });
+
+        if (!crossingBeamBox) {
+            test.skip(true, "No nested-subdivision beam found in this arrangement");
 
             return;
         }
 
-        // Click at the center of the subdivision container beam.
+        // Click at the center of the beam for a stable hit.
         await page.mouse.click(
-            containerBeamBox.x + (containerBeamBox.width / 2),
-            containerBeamBox.y + (containerBeamBox.height / 2),
+            crossingBeamBox.x + (crossingBeamBox.width / 2),
+            crossingBeamBox.y + (crossingBeamBox.height / 2),
         );
 
         // A selection overlay should appear for the beam group.
@@ -144,7 +141,9 @@ test.describe("Staff view selection", () => {
 
     test("dragging a selection rect across notes selects them individually", async ({ page }) => {
         // Find two adjacent note runs.
-        const runs = page.locator(".bar-track-row.staff-mode .staff-note-viewer-run[data-note-id]");
+        const runs = page.locator(
+            ".staff-measure-track-row .staff-note-viewer-run:has(.staff-note-viewer-note-symbol)",
+        );
         const count = await runs.count();
         if (count < 2) {
             test.skip(true, "Not enough note runs for drag test");
@@ -175,7 +174,7 @@ test.describe("Staff view selection", () => {
     test("deselecting by clicking empty space clears all selections", async ({ page }) => {
         // First select a note.
         const firstNote = page.locator(
-            ".bar-track-row.staff-mode .staff-note-viewer-note-symbol",
+            ".staff-measure-track-row .staff-note-viewer-note-symbol",
         ).first();
         await expect(firstNote).toBeVisible();
         await firstNote.click();

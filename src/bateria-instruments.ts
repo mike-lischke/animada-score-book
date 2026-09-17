@@ -55,9 +55,33 @@ export const pastelColors: string[] = [
     "hsl(306, 100%, 75%)",
     "hsl(324, 100%, 75%)",
     "hsl(342, 100%, 75%)",
-];
+] as const;
+
+const summerColors = [
+    "hsl(193 82% 41%)",
+    "hsl(12 95% 64%)",
+    "hsl(257 30% 50%)",
+    "hsl(42 95% 82%)",
+    "hsl(333 62% 46%)",
+    "hsl(40 96% 57%)",
+    "hsl(207 48% 20%)",
+    "hsl(24 90% 48%)",
+    "hsl(179 88% 24%)",
+    "hsl(350 82% 54%)",
+    "hsl(229 34% 27%)",
+    "hsl(45 96% 68%)",
+    "hsl(5 90% 56%)",
+    "hsl(152 52% 39%)",
+    "hsl(320 44% 34%)",
+    "hsl(35 96% 51%)",
+    "hsl(182 84% 23%)",
+    "hsl(27 96% 72%)",
+    "hsl(354 70% 52%)",
+    "hsl(205 52% 28%)",
+] as const;
 
 const colorOffset = 0;
+const colors = summerColors;
 
 export const bateriaInstruments: IInstrumentMeta[] = [{
     id: 0,
@@ -71,7 +95,8 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             file: "Agogo_Low.mp3",
             symbol: {
                 src: arrowDownIcon,
-                string: "low"
+                shortDescription: "Low",
+                description: "Low Agogo Bell"
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
@@ -86,7 +111,8 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             file: "Agogo_High.mp3",
             symbol: {
                 src: arrowUpIcon,
-                string: "high"
+                shortDescription: "High",
+                description: "High Agogo Bell"
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
@@ -97,7 +123,7 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             sampleProfile: { builtInDamping: Damping.Open, builtInAccent: false, ghost: false },
         }
     ],
-    color: pastelColors[(colorOffset + 0) % pastelColors.length],
+    color: colors[(colorOffset + 0) % colors.length],
 }, {
     id: 10,
     typeId: "a",
@@ -110,7 +136,8 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             file: "4_Bell_Agogo_Low_Low.mp3",
             symbol: {
                 src: arrowDownWithLineIcon,
-                string: "low"
+                shortDescription: "Lowest",
+                description: "Lowest 4-Bell Agogo"
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
@@ -125,7 +152,8 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             file: "4_Bell_Agogo_Low.mp3",
             symbol: {
                 src: arrowHalfDownIcon,
-                string: "high"
+                shortDescription: "Lower",
+                description: "Lower 4-Bell Agogo"
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
@@ -140,7 +168,8 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             file: "4_Bell_Agogo_High.mp3",
             symbol: {
                 src: arrowHalfUpIcon,
-                string: "low"
+                shortDescription: "Higher",
+                description: "Higher 4-Bell Agogo"
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
@@ -155,7 +184,8 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             file: "4_Bell_Agogo_High_High.mp3",
             symbol: {
                 src: arrowUpWithLineIcon,
-                string: "high"
+                shortDescription: "Highest",
+                description: "Highest 4-Bell Agogo"
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
@@ -166,7 +196,7 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             sampleProfile: { builtInDamping: Damping.Open, builtInAccent: false, ghost: false },
         }
     ],
-    color: pastelColors[(colorOffset + 1) % pastelColors.length],
+    color: colors[(colorOffset + 1) % colors.length],
 }, {
     id: 1,
     typeId: "1",
@@ -179,7 +209,8 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             file: "Chocalho_Accent.mp3",
             symbol: {
                 src: xBigIcon,
-                string: "accent"
+                shortDescription: "Chocalho",
+                description: "Chocalho"
             },
             characteristics: {
                 excitationMode: ExcitationMode.Shaken,
@@ -192,7 +223,8 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             file: "Chocalho_Ghost.mp3",
             symbol: {
                 src: xSmallIcon,
-                string: "ghost"
+                shortDescription: "Ghost",
+                description: "Chocalho Ghost Note"
             },
             characteristics: {
                 excitationMode: ExcitationMode.Shaken,
@@ -201,7 +233,7 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             sampleProfile: { builtInDamping: Damping.Open, builtInAccent: false, ghost: true },
         }
     ],
-    color: pastelColors[(colorOffset + 2) % pastelColors.length]
+    color: colors[(colorOffset + 2) % colors.length]
 }, {
     id: 2,
     typeId: "2",
@@ -214,7 +246,8 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             file: "Tamborim_Accent.mp3",
             symbol: {
                 src: xBigIcon,
-                string: "accent"
+                shortDescription: "Accent",
+                description: "Tamborim Accent"
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
@@ -228,17 +261,18 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             file: "Tamborim_Ghost.mp3",
             symbol: {
                 src: xSmallIcon,
-                string: "ghost"
+                shortDescription: "Ghost",
+                description: "Tamborim Ghost Note"
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
                 stickTechnique: StickTechnique.Normal,
-                mainDisplayType: NoteDisplayType.Cross
+                mainDisplayType: NoteDisplayType.Cross,
             },
             sampleProfile: { builtInDamping: Damping.Open, builtInAccent: false, ghost: true },
         }
     ],
-    color: pastelColors[(colorOffset + 3) % pastelColors.length]
+    color: colors[(colorOffset + 3) % colors.length]
 }, {
     id: 3,
     typeId: "3",
@@ -251,7 +285,7 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             file: "Repinique_Center.mp3",
             symbol: {
                 src: xBigIcon,
-                string: "center"
+                shortDescription: "Center"
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
@@ -265,7 +299,7 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             file: "Repinique_Edge.mp3",
             symbol: {
                 src: xSmallIcon,
-                string: "edge"
+                shortDescription: "Outer Area"
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
@@ -279,7 +313,7 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             file: "Repinique_Rimshot.mp3",
             symbol: {
                 src: sunriseRaiseIcon,
-                string: "rimshot"
+                shortDescription: "Rimshot"
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
@@ -293,7 +327,7 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             file: "Repinique_Rim.mp3",
             symbol: {
                 src: rimIcon,
-                string: "rim"
+                shortDescription: "Rim"
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
@@ -307,7 +341,7 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             file: "Repinique_Buzz.mp3",
             symbol: {
                 src: tripleSlashIcon,
-                string: "buzz"
+                shortDescription: "Buzz"
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
@@ -321,12 +355,12 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             file: "Repinique_Hand.mp3",
             symbol: {
                 src: oBigIcon,
-                string: "hand"
+                shortDescription: "Open"
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
                 handTechnique: HandTechnique.Open,
-                mainDisplayType: NoteDisplayType.Oval
+                mainDisplayType: NoteDisplayType.Square
             },
             sampleProfile: { builtInDamping: Damping.Open, builtInAccent: false, ghost: false },
         },
@@ -335,7 +369,7 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             file: "Repinique_Slap.mp3",
             symbol: {
                 src: sunRaysIcon,
-                string: "slap"
+                shortDescription: "Slap"
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
@@ -345,7 +379,7 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             sampleProfile: { builtInDamping: Damping.Open, builtInAccent: true, ghost: false },
         }
     ],
-    color: pastelColors[(colorOffset + 4) % pastelColors.length]
+    color: colors[(colorOffset + 4) % colors.length]
 }, {
     id: 4,
     typeId: "4",
@@ -358,7 +392,7 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             file: "Repinique_Whippy_Accent.mp3",
             symbol: {
                 src: xBigIcon,
-                string: "accent"
+                shortDescription: "Normal"
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
@@ -372,7 +406,7 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             file: "Repinique_Whippy_Ghost.mp3",
             symbol: {
                 src: xSmallIcon,
-                string: "ghost"
+                shortDescription: "Ghost"
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
@@ -382,7 +416,7 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             sampleProfile: { builtInDamping: Damping.Open, builtInAccent: false, ghost: true },
         }
     ],
-    color: pastelColors[(colorOffset + 5) % pastelColors.length]
+    color: colors[(colorOffset + 5) % colors.length]
 }, {
     id: 5,
     typeId: "5",
@@ -395,7 +429,7 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             file: "Caixa_Accent.mp3",
             symbol: {
                 src: xBigIcon,
-                string: "accent"
+                shortDescription: "Normal"
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
@@ -409,7 +443,7 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             file: "Caixa_Ghost.mp3",
             symbol: {
                 src: xSmallIcon,
-                string: "ghost"
+                shortDescription: "Ghost"
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
@@ -423,7 +457,7 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             file: "Caixa_Buzz.mp3",
             symbol: {
                 src: tripleSlashIcon,
-                string: "buzz"
+                shortDescription: "Press Roll"
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
@@ -437,7 +471,7 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             file: "Caixa_Rimshot.mp3",
             symbol: {
                 src: sunriseRaiseIcon,
-                string: "rimshot"
+                shortDescription: "Rimshot"
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
@@ -447,7 +481,7 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             sampleProfile: { builtInDamping: Damping.Open, builtInAccent: false, ghost: false },
         },
     ],
-    color: pastelColors[(colorOffset + 6) % pastelColors.length]
+    color: colors[(colorOffset + 6) % colors.length]
 }, {
     id: 6,
     typeId: "6",
@@ -460,7 +494,7 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             file: "Timbau_Open.mp3",
             symbol: {
                 src: oBigIcon,
-                string: "open"
+                shortDescription: "Open"
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
@@ -474,7 +508,7 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             file: "Timbau_Slap.mp3",
             symbol: {
                 src: sunRaysIcon,
-                string: "slap"
+                shortDescription: "Slap"
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
@@ -488,7 +522,7 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             file: "Timbau_Bass.mp3",
             symbol: {
                 src: oBigClosedIcon,
-                string: "bass"
+                shortDescription: "Bass"
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
@@ -498,34 +532,34 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             sampleProfile: { builtInDamping: Damping.Open, builtInAccent: false, ghost: false },
         }
     ],
-    color: pastelColors[(colorOffset + 7) % pastelColors.length]
+    color: colors[(colorOffset + 7) % colors.length]
 }, {
     id: 7,
     typeId: "7",
     icon: highSurdoIcon,
     displayOrder: 8,
-    displayName: "High Surdo",
+    displayName: "Terceira Surdo",
     variants: [
         {
             id: "1",
             file: "High_Surdo_Accent.mp3",
             symbol: {
                 src: oBigIcon,
-                string: "accent"
+                shortDescription: "Center"
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
                 stickTechnique: StickTechnique.Normal,
                 mainDisplayType: NoteDisplayType.Oval
             },
-            sampleProfile: { builtInDamping: Damping.Open, builtInAccent: true, ghost: false },
+            sampleProfile: { builtInDamping: Damping.Open, builtInAccent: false, ghost: false },
         },
         {
             id: "2",
             file: "High_Surdo_Muted.mp3",
             symbol: {
                 src: oBigClosedIcon,
-                string: "muted"
+                shortDescription: "Muted"
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
@@ -535,7 +569,7 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             sampleProfile: { builtInDamping: Damping.Muted, builtInAccent: false, ghost: false },
         }
     ],
-    color: pastelColors[(colorOffset + 8) % pastelColors.length]
+    color: colors[(colorOffset + 8) % colors.length]
 }, {
     id: 8,
     typeId: "8",
@@ -548,21 +582,21 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             file: "Mid_Surdo_Accent.mp3",
             symbol: {
                 src: oBigIcon,
-                string: "accent"
+                shortDescription: "Center"
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
                 stickTechnique: StickTechnique.Normal,
                 mainDisplayType: NoteDisplayType.Oval
             },
-            sampleProfile: { builtInDamping: Damping.Open, builtInAccent: true, ghost: false },
+            sampleProfile: { builtInDamping: Damping.Open, builtInAccent: false, ghost: false },
         },
         {
             id: "2",
             file: "Mid_Surdo_Muted.mp3",
             symbol: {
                 src: oBigClosedIcon,
-                string: "muted"
+                shortDescription: "Muted"
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
@@ -572,7 +606,7 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             sampleProfile: { builtInDamping: Damping.Muted, builtInAccent: false, ghost: false },
         }
     ],
-    color: pastelColors[(colorOffset + 9) % pastelColors.length]
+    color: colors[(colorOffset + 9) % colors.length]
 }, {
     id: 9,
     typeId: "9",
@@ -585,21 +619,21 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             file: "Low_Surdo_Accent.mp3",
             symbol: {
                 src: oBigIcon,
-                string: "accent"
+                shortDescription: "Center"
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
                 stickTechnique: StickTechnique.Normal,
                 mainDisplayType: NoteDisplayType.Oval
             },
-            sampleProfile: { builtInDamping: Damping.Open, builtInAccent: true, ghost: false },
+            sampleProfile: { builtInDamping: Damping.Open, builtInAccent: false, ghost: false },
         },
         {
             id: "2",
             file: "Low_Surdo_Muted.mp3",
             symbol: {
                 src: oBigClosedIcon,
-                string: "muted"
+                shortDescription: "Muted"
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
@@ -609,5 +643,5 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             sampleProfile: { builtInDamping: Damping.Muted, builtInAccent: false, ghost: false },
         }
     ],
-    color: pastelColors[(colorOffset + 10) % pastelColors.length]
+    color: colors[(colorOffset + 10) % colors.length]
 }];

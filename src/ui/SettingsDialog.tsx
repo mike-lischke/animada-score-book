@@ -9,7 +9,7 @@ import { ComponentChild, createRef } from "preact";
 
 import { Button } from "../components/ui/framework/Button.js";
 import { Checkbox } from "../components/ui/framework/Checkbox.js";
-import { Codicon } from "../components/ui/framework/Codicon.js";
+import { UIIcon } from "../components/ui/framework/UIIcon.js";
 import { Container } from "../components/ui/framework/Container.js";
 import { Dialog } from "../components/ui/framework/Dialog.js";
 import { Dropdown, type IDropdownItem } from "../components/ui/framework/Dropdown.js";
@@ -114,7 +114,7 @@ export class SettingsDialog extends UIComponent<{}, ISettingsDialogState> {
                     orientation={Orientation.LeftToRight}
                     crossAlignment={ChildAlignment.Center}
                 >
-                    <Icon src={Codicon.Gear} style={{ fontSize: "24px", marginRight: "8px" }} />
+                    <Icon src={UIIcon.Gear} style={{ fontSize: "24px", marginRight: "8px" }} />
                     Settings
                 </Container>
 

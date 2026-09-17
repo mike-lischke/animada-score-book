@@ -15,6 +15,9 @@
         "npx playwright": true,
         "git checkout": true,
         "npx tsx": true,
-        "npx vite": true
+        "npx vite": true,
+        "git merge": true,
+        "git commit": true,
+        "git rev-parse": true
     },
 }

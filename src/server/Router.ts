@@ -12,7 +12,7 @@ import { resolve } from "node:path";
 
 import { convertErrorToString } from "../core/utils.js";
 import { Auth } from "./Auth.js";
-import { DatabaseEngine, schemaVersion, type IDatabaseAdapter, type IDatabaseConfig } from "./database.js";
+import { DatabaseEngine, type IDatabaseAdapter, type IDatabaseConfig } from "./database.js";
 import { MySqlAdapter } from "./mysql-adapter.js";
 import { PostgresAdapter } from "./postgres-adapter.js";
 import { type IServerConfig } from "./config.js";
@@ -147,6 +147,21 @@ export class Router {
 
                     case "clearAll":
                         await this.scoreRoutes.handleClearAll(req, res);
+
+                        break;
+
+                    case "lockScore":
+                        await this.scoreRoutes.handleLockScore(req, res);
+
+                        break;
+
+                    case "unlockScore":
+                        await this.scoreRoutes.handleUnlockScore(req, res);
+
+                        break;
+
+                    case "forceUnlockScore":
+                        await this.scoreRoutes.handleForceUnlockScore(req, res);
 
                         break;
 
@@ -353,44 +368,127 @@ export class Router {
             return;
         }
 
-        let hasData = false;
-        let anyUsers = false;
-        let dbError: string | undefined;
+        if (!this.auth.adapter.isInitialized()) {
+            // Pool not created yet — the backend may have failed to auto-connect or
+            // is waiting for first-time setup. Test connectivity to distinguish the two.
+            const connResult = await this.auth.adapter.testConnection(this.config.database);
 
-        if (this.auth.adapter.isInitialized()) {
-            const dbVersion = await this.auth.adapter.getSchemaVersion();
+            if (!connResult.success) {
+                this.ctx.sendJson(res, {
+                    status: "error",
+                    dbStatus: "db_unreachable",
+                    dbError: `Database unreachable: ${connResult.error ?? "unknown reason"}`,
+                    configLoaded: true,
+                    initialized: false,
+                    engine: this.config.database.engine,
+                    host: this.config.database.host,
+                    port: this.config.database.port,
+                    database: this.config.database.database,
+                    hasData: false,
+                    hasUsers: false,
+                });
 
-            if (dbVersion === 0) {
-                dbError = "Database schema is from an older version without version tracking. "
-                    + "A reset is required.";
-            } else if (dbVersion < schemaVersion) {
-                dbError = `Database schema is version ${dbVersion}, `
-                    + `but version ${schemaVersion} is required. Use Reset Database to upgrade.`;
+                return;
             }
 
-            // Always query actual data counts so the frontend can show the correct confirmation dialog.
+            // DB server is reachable — try to auto-initialise so the backend
+            // self-heals when the database becomes available after a temporary outage.
             try {
+                await this.auth.adapter.initialize(this.config.database);
+
+                const { engine, host, port, database } = this.config.database;
+                console.log(
+                    `Backend initialised via health check: ${engine} @ ${host}:${port}/${database}`,
+                );
+
+                // Run the same seeding as normal startup (idempotent — seed only if empty,
+                // anonymous user only if missing).
                 const rows = await this.auth.adapter.query<{ cnt: number; }>(
                     "SELECT COUNT(*) AS cnt FROM folders",
                 );
 
-                hasData = (rows[0]?.cnt ?? 0) > 0;
-                anyUsers = await this.auth.hasUsers();
+                if ((rows[0]?.cnt ?? 0) === 0) {
+                    await this.seedIfExists(this.auth.adapter);
+                }
+
+                await this.seedAnonymousUser(this.auth.adapter);
+
+                // Fall through to the normal health path below (pool is now ready).
             } catch (e) {
-                dbError = `Schema check failed: ${convertErrorToString(e)}`;
+                this.ctx.sendJson(res, {
+                    status: "error",
+                    dbStatus: "db_unreachable",
+                    dbError: `Database initialisation failed: ${(e as Error).message}`,
+                    configLoaded: true,
+                    initialized: false,
+                    engine: this.config.database.engine,
+                    host: this.config.database.host,
+                    port: this.config.database.port,
+                    database: this.config.database.database,
+                    hasData: false,
+                    hasUsers: false,
+                });
+
+                return;
             }
         }
 
+        // Isolated infrastructure check — a lightweight SELECT 1 on the existing pool.
+        // If this fails we know it is a connectivity problem, not a schema or data issue.
+        try {
+            await this.auth.adapter.ping();
+        } catch (e) {
+            this.ctx.sendJson(res, {
+                status: "error",
+                dbStatus: "db_unreachable",
+                dbError: `Database unreachable: ${(e as Error).message}`,
+                configLoaded: true,
+                initialized: true,
+                engine: this.config.database.engine,
+                host: this.config.database.host,
+                port: this.config.database.port,
+                database: this.config.database.database,
+                hasData: false,
+                hasUsers: false,
+            });
+
+            return;
+        }
+
+        // Connectivity is confirmed — schema and data queries are trusted to produce
+        // meaningful errors if they fail.
+        let hasData = false;
+        let anyUsers = false;
+        let dbError: string | undefined;
+        let dbStatus: string | undefined;
+
+        // Check if migration_history exists to confirm the DB was properly initialised.
+        try {
+            await this.auth.adapter.query("SELECT 1 FROM migration_history LIMIT 1");
+        } catch {
+            dbStatus = "schema_mismatch";
+            dbError = "Database has not been initialised with the migration system. "
+                + "Restart the server to apply migrations.";
+        }
+
+        const rows = await this.auth.adapter.query<{ cnt: number; }>(
+            "SELECT COUNT(*) AS cnt FROM folders",
+        );
+
+        hasData = (rows[0]?.cnt ?? 0) > 0;
+        anyUsers = await this.auth.hasUsers();
+
         this.ctx.sendJson(res, {
-            status: "ok",
+            status: dbStatus ? "error" : "ok",
             configLoaded: true,
-            initialized: this.auth.adapter.isInitialized(),
+            initialized: true,
             engine: this.config.database.engine,
             host: this.config.database.host,
             port: this.config.database.port,
             database: this.config.database.database,
             hasData,
             hasUsers: anyUsers,
+            dbStatus,
             dbError,
         });
     };

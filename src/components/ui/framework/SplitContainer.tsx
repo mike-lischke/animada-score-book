@@ -454,6 +454,7 @@ export class SplitContainer extends UIComponent<ISplitContainerProperties> {
                         // In fact it would prevent certain automatic layout.
                         entry.initialSize = undefined;
                     }
+
                     entry.startSize = actualSize;
                     entry.currentSize = actualSize;
 
@@ -505,6 +506,7 @@ export class SplitContainer extends UIComponent<ISplitContainerProperties> {
                                     }
                                 }
                             }
+
                             --remainingStretchCount;
                         }
 
@@ -532,6 +534,7 @@ export class SplitContainer extends UIComponent<ISplitContainerProperties> {
                         } else {
                             ++assignableCount;
                         }
+
                         totalPaneSize += entry.startSize > -1 ? entry.startSize : 0;
                     }
 
@@ -572,11 +575,13 @@ export class SplitContainer extends UIComponent<ISplitContainerProperties> {
                                     ++availableAssignableCount;
                                 }
                             }
+
                             --remainingAssignableCount;
                         }
 
                         ++index;
                     }
+
                     remainingAssignableCount = availableAssignableCount;
                     availableAssignableCount = 0;
 

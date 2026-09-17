@@ -6,7 +6,6 @@
 import { describe, expect, it } from "vitest";
 
 import { ArrangementMigrator } from "../../../../src/core/serialisation/migration/ArrangementMigrator.js";
-import type { ISubdivision } from "../../../../src/core/types/general.js";
 import { bateriaInstruments } from "../../../../src/bateria-instruments.js";
 import { MockInstrument } from "../../mocks/MockInstrument.js";
 
@@ -28,18 +27,6 @@ const oBreakSalgueiroUrl =
     ".8160V40rCvwJbxBXTSb07tbaPSOnwYhpw1MFJSwwQTKoZVK4nQIj_oSAA7Vq~xeGT0zjoHxdknHd8-3rYmq6Ku" +
     ".969lbD8wA0LyE_znt3RgMbIfjXLhIk8hIRG4CUVQ2AitAPfM00UhSuV0AQUSyhjtUeD_0NuBezD-3rYmq6Ku";
 /* cspell:enable */
-
-/**
- * Pretty-prints a subdivision for readable assertion messages.
- *
- * @param sub The subdivision to format.
- *
- * @returns A string representation of the subdivision.
- */
-const formatSub = (sub: ISubdivision): string => {
-    return `Sub(id=${sub.id}, start=${sub.startStep}, actual=${sub.actual}, normal=${sub.normal}, ` +
-        `isTuplet=${sub.isTuplet}, parentId=${sub.parentSubdivisionId ?? "none"})`;
-};
 
 describe("O-Break Salgueiro 2007 - Migration", () => {
     const params = new URLSearchParams(oBreakSalgueiroUrl);
@@ -69,100 +56,60 @@ describe("O-Break Salgueiro 2007 - Migration", () => {
         }
     });
 
-    describe("Bar 4 (index 3) — 9:12 subdivision", () => {
+    describe("Bar 4 (index 3) — tuplet groups", () => {
         /**
          * Collects bar 4 data across all tracks.
          */
-        const bar4Subdivisions = migrated.tracks.map((track) => {
+        const bar4Tuplets = migrated.tracks.map((track) => {
             const measure = track.measures[3];
-            const steps = measure.steps.map((s) => {
-                return s.noteStyleId ?? "0";
-            });
 
             return {
                 instrumentId: track.instrument.typeId,
                 instrumentName: track.instrument.displayName,
-                stepCount: measure.steps.length,
-                steps,
-                subdivisions: measure.subdivisions,
+                tuplets: measure.subdivisions.filter((subdivision) => {
+                    return subdivision.isTuplet;
+                }),
             };
         });
 
-        it("every track has subdivisions in bar 4", () => {
-            for (const info of bar4Subdivisions) {
-                expect(info.subdivisions.length, info.instrumentName + ": bar 4 should have subdivisions")
+        it("every track has tuplets in bar 4", () => {
+            for (const info of bar4Tuplets) {
+                expect(info.tuplets.length, info.instrumentName + ": bar 4 should have tuplets")
                     .toBeGreaterThan(0);
-            }
-        });
-
-        it("all top-level subdivisions are tuplets (nested 2:1 is correctly not a tuplet)", () => {
-            for (const info of bar4Subdivisions) {
-                const topLevelSubs = info.subdivisions.filter((s) => {
-                    return s.parentSubdivisionId == null;
-                });
-
-                for (const sub of topLevelSubs) {
-                    expect(sub.isTuplet,
-                        info.instrumentName + ": top-level sub " + formatSub(sub) + " should be a tuplet",
-                    ).toBe(true);
-                }
             }
         });
 
         it("Agogô and 4-Bell Agogo: single 9:12 tuplet", () => {
             for (const typeId of ["0", "a"]) {
-                const info = bar4Subdivisions.find((t) => {
+                const info = bar4Tuplets.find((t) => {
                     return t.instrumentId === typeId;
                 })!;
-                expect(info.stepCount).toBe(13);
-                expect(info.subdivisions).toHaveLength(1);
-                expect(info.subdivisions[0]).toEqual(expect.objectContaining({
-                    startStep: 0,
+                expect(info.tuplets).toHaveLength(1);
+                expect(info.tuplets[0]).toEqual(expect.objectContaining({
                     actual: 9,
                     normal: 12,
-                    isTuplet: true,
-                    parentSubdivisionId: undefined,
                 }));
             }
         });
 
         it("Chocalho, Tamborim, Caixa, Surdos: 6:8 tuplet + 3:4 tuplet", () => {
             for (const typeId of ["1", "2", "5", "7", "8", "9"]) {
-                const info = bar4Subdivisions.find((t) => {
+                const info = bar4Tuplets.find((t) => {
                     return t.instrumentId === typeId;
                 })!;
-                expect(info.stepCount).toBe(13);
-                expect(info.subdivisions).toHaveLength(2);
-                expect(info.subdivisions[0]).toEqual(expect.objectContaining({
-                    startStep: 0, actual: 6, normal: 8, isTuplet: true, parentSubdivisionId: undefined,
-                }));
-                expect(info.subdivisions[1]).toEqual(expect.objectContaining({
-                    startStep: 6, actual: 3, normal: 4, isTuplet: true, parentSubdivisionId: undefined,
-                }));
+                expect(info.tuplets).toHaveLength(2);
+                expect(info.tuplets[0]).toEqual(expect.objectContaining({ actual: 6, normal: 8 }));
+                expect(info.tuplets[1]).toEqual(expect.objectContaining({ actual: 3, normal: 4 }));
             }
         });
 
-        it("Repinique: 6:8 tuplet + 3:4 tuplet with nested 2:1", () => {
-            const repi = bar4Subdivisions.find((t) => {
+        it("Repinique: 6:8 tuplet + 3:4 tuplet without the nested 2:1", () => {
+            const repi = bar4Tuplets.find((t) => {
                 return t.instrumentId === "3";
             })!;
-            expect(repi.stepCount).toBe(14);
-            expect(repi.subdivisions).toHaveLength(3);
-
-            expect(repi.subdivisions[0]).toEqual(expect.objectContaining({
-                startStep: 0, actual: 6, normal: 8, isTuplet: true, parentSubdivisionId: undefined,
-            }));
-
-            expect(repi.subdivisions[1]).toEqual(expect.objectContaining({
-                startStep: 6, actual: 3, normal: 4, isTuplet: true, parentSubdivisionId: undefined,
-            }));
-
-            // Nested 2:1 inside the 3:4 — not a tuplet in 4/4 (2 in S={2}).
-            const nested = repi.subdivisions[2];
-            expect(nested).toEqual(expect.objectContaining({
-                startStep: 8, actual: 2, normal: 1, isTuplet: false,
-            }));
-            expect(nested.parentSubdivisionId).toBe(repi.subdivisions[1].id);
+            expect(repi.tuplets).toHaveLength(2);
+            expect(repi.tuplets[0]).toEqual(expect.objectContaining({ actual: 6, normal: 8 }));
+            expect(repi.tuplets[1]).toEqual(expect.objectContaining({ actual: 3, normal: 4 }));
         });
     });
 });

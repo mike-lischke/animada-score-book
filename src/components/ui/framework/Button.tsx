@@ -27,6 +27,7 @@ export interface IButtonProperties extends ICommonUIProperties {
     /** Marks this button as default on a dialog. Different styling rules apply. */
     isDefault?: boolean;
 
+    /** Whether pointer activation should move focus to the button. Defaults to preserving the current focus. */
     focusOnClick?: boolean;
 
     /** The value to returned if the button is used in a form/dialog. */
@@ -35,6 +36,12 @@ export interface IButtonProperties extends ICommonUIProperties {
     value?: string;
 
     popoverTarget?: string;
+
+    /**
+     * When set, the daisyUI style variants (circle, disabled, primary) are omitted, so only the
+     * base `btn`/`du-btn` classes remain and the button can be styled entirely through custom CSS.
+     */
+    plain?: boolean;
 
     onContextMenu?: MouseEventCallback;
 }
@@ -51,16 +58,16 @@ export class Button extends UIComponent<IButtonProperties> {
     public render(): ComponentChild {
         const {
             id, children, caption, style, orientation, round, imageOnly, disabled, isDefault, title, role,
-            name, type, value, popoverTarget, onClick
+            name, type, value, popoverTarget, onClick, plain
         } = this.props;
 
         const className = this.generateFinalClassName([
             "btn",
             "du-btn",
-            this.classFromProperty(round, "du-btn-circle"),
+            this.classFromProperty(!plain && round, "du-btn-circle"),
             this.classFromProperty(imageOnly, "imageOnly"),
-            this.classFromProperty(disabled, "du-btn-disabled"),
-            this.classFromProperty(isDefault, "du-btn-primary"),
+            this.classFromProperty(!plain && disabled, "du-btn-disabled"),
+            this.classFromProperty(!plain && isDefault, "du-btn-primary"),
         ]);
 
         const content = children ?? caption;
@@ -96,6 +103,8 @@ export class Button extends UIComponent<IButtonProperties> {
         const { focusOnClick } = this.props;
         if (focusOnClick) {
             this.buttonRef.current?.focus();
+        } else {
+            e.preventDefault();
         }
 
         e.stopPropagation();

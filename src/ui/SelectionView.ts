@@ -3,17 +3,41 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import type { IRect } from "../core/types/general.js";
+import type { IFraction, IRect } from "../core/types/general.js";
 import { requisitions } from "../supplement/Requisitions.js";
 import type { SelectionManager } from "./SelectionManager.js";
-import type { ISelectionDelta, ISelectionEntry } from "./selection-types.js";
-import { SelectionGranularity, SelectionMode } from "./selection-types.js";
+import {
+    ScoreElementKind, type IScoreElementLocation, type ScoreElementRegistry,
+} from "./ScoreElementRegistry.js";
+import {
+    addressesNoteCells, SelectionGranularity, SelectionMode, SelectionSerializer, type ISelectionDelta,
+    type ISelectionEntry, type ISelectionTarget, type ISerialisedSelectionEntry,
+} from "./SelectionSerializer.js";
 
 const selectionRectClass = "selection-rect";
 const selectionOverlayClass = "selection-overlay";
+const selectionCursorClass = "selection-cursor";
 const noteSelectedClass = "note-selected";
 const staffNoteRunClass = "staff-note-viewer-run";
 const formElementNames = new Set(["BUTTON", "INPUT", "SELECT", "TEXTAREA"]);
+
+/** The start of a measure as a bar fraction. */
+const measureStart: IFraction = { numerator: 0, denominator: 1 };
+
+/** A selection entry together with the coordinates and grid cells derived from the model objects. */
+interface ILocatedEntry {
+    entry: ISelectionEntry;
+    coordinates: ISerialisedSelectionEntry;
+
+    /** The first grid cell the entry covers. */
+    firstCell: number;
+
+    /** The last grid cell the entry covers. */
+    lastCell: number;
+
+    /** True when the entry addresses a subdivision slot rather than a plain cell. */
+    slot: boolean;
+}
 
 /**
  * Pure view layer for selection — handles pointer events, draws the selection rectangle,
@@ -26,11 +50,24 @@ const formElementNames = new Set(["BUTTON", "INPUT", "SELECT", "TEXTAREA"]);
 export class SelectionView {
     private rectElement?: HTMLDivElement;
     private captureElement?: HTMLElement;
+    private horizontalScrollHost?: HTMLElement;
+    private verticalScrollHost?: HTMLElement;
 
     private dragPending = false;
     private isDragging = false;
     private startX = 0;
     private startY = 0;
+    private startScrollLeft = 0;
+    private startScrollTop = 0;
+    private startVerticalScrollTop = 0;
+    private lastPointerX = 0;
+    private lastPointerY = 0;
+    private autoScrollTimer?: ReturnType<typeof setInterval>;
+    private autoScrollDX = 0;
+    private autoScrollDY = 0;
+    private editMode: boolean;
+    private selectionDeleteButtonCreated = false;
+    private selectionRefreshFrame?: number;
 
     /**
      * Ratio of viewport pixels to CSS pixels inside #trackViewerContainer.
@@ -40,8 +77,22 @@ export class SelectionView {
      */
     private zoomFactor = 1;
 
-    public constructor(private manager: SelectionManager, private eventContainer: HTMLElement) {
+    /**
+     * Creates a new selection view.
+     *
+     * @param manager The selection manager this view belongs to.
+     * @param eventContainer The element that receives the selection pointer events.
+     * @param scoreElementRegistry The registry of rendered score elements, if available.
+     * @param editMode The edit mode as remembered by the manager. The view cannot subscribe early
+     *                 enough to receive the requisition that announced the current state.
+     */
+    public constructor(private manager: SelectionManager, private eventContainer: HTMLElement,
+        private readonly scoreElementRegistry?: ScoreElementRegistry, editMode = false) {
+        this.editMode = editMode;
+
         requisitions.register("selectionChanged", this.handleSelectionChanged);
+        requisitions.register("editModeChanged", this.handleEditModeChanged);
+        requisitions.register("trackChanged", this.handleTrackChanged);
         eventContainer.addEventListener("pointerdown", this.handlePointerDown);
         document.addEventListener("keydown", this.handleKeyDown);
         document.addEventListener("keyup", this.handleKeyUp);
@@ -52,12 +103,38 @@ export class SelectionView {
         this.eventContainer.removeEventListener("pointerdown", this.handlePointerDown);
         document.removeEventListener("keydown", this.handleKeyDown);
         requisitions.unregister("selectionChanged", this.handleSelectionChanged);
+        requisitions.unregister("editModeChanged", this.handleEditModeChanged);
+        requisitions.unregister("trackChanged", this.handleTrackChanged);
+
+        if (this.selectionRefreshFrame !== undefined) {
+            cancelAnimationFrame(this.selectionRefreshFrame);
+        }
+    }
+
+    /**
+     * Sets the scroll host elements whose scroll positions are tracked during drag selection
+     * so the selection rectangle stays anchored to the content. Also enables edge auto-scroll.
+     *
+     * @param horizontal The horizontally-scrollable container (typically `#trackViewerHost`).
+     * @param vertical The vertically-scrollable container (typically the arrangement viewer parent).
+     */
+    public setScrollHosts(horizontal: HTMLElement, vertical: HTMLElement): void {
+        this.horizontalScrollHost = horizontal;
+        this.verticalScrollHost = vertical;
     }
 
     private handlePointerDown = (event: PointerEvent): void => {
         if (event.defaultPrevented || this.isFormElement(event.target)) {
             return;
         }
+
+        // Take keyboard focus on the score content so subsequent arrow-key navigation is not
+        // swallowed by a previously focused form control (slider, toggle, button).
+        this.eventContainer.querySelector<HTMLElement>("#trackViewerContentHost")
+            ?.focus({ preventScroll: true });
+
+        // Clear any lingering text selection so the score's custom selection is the only one.
+        window.getSelection()?.removeAllRanges();
 
         this.captureElement = event.target instanceof HTMLElement ? event.target : document.body;
         this.captureElement.setPointerCapture(event.pointerId);
@@ -69,6 +146,25 @@ export class SelectionView {
         this.dragPending = true;
         this.startX = event.clientX;
         this.startY = event.clientY;
+        this.lastPointerX = event.clientX;
+        this.lastPointerY = event.clientY;
+
+        const half = 2;
+        const clickRect = new DOMRect(event.clientX - half, event.clientY - half,
+            (half * 2) + 1, (half * 2) + 1);
+        this.manager.previewNote(clickRect);
+
+        if (this.horizontalScrollHost) {
+            this.startScrollLeft = this.horizontalScrollHost.scrollLeft;
+            this.startScrollTop = this.horizontalScrollHost.scrollTop;
+            this.horizontalScrollHost.addEventListener("scroll", this.handleScroll, { passive: true });
+        }
+
+        if (this.verticalScrollHost && this.verticalScrollHost !== this.horizontalScrollHost) {
+            this.startVerticalScrollTop = this.verticalScrollHost.scrollTop;
+            this.verticalScrollHost.addEventListener("scroll", this.handleScroll, { passive: true });
+        }
+
         this.createRectElement(event.clientX, event.clientY);
 
         event.preventDefault();
@@ -79,7 +175,11 @@ export class SelectionView {
             return;
         }
 
+        this.lastPointerX = event.clientX;
+        this.lastPointerY = event.clientY;
+
         this.updateRectElement(event.clientX, event.clientY);
+        this.updateAutoScroll(event.clientX, event.clientY);
 
         const rect = this.rectElement.getBoundingClientRect();
         if (rect.width > 2 || rect.height > 2) {
@@ -97,7 +197,7 @@ export class SelectionView {
         }
     };
 
-    private handlePointerUp = (_event: PointerEvent): void => {
+    private handlePointerUp = (event: PointerEvent): void => {
         if (!this.isDragging && this.dragPending) {
             // The user pressed and released without significant movement — treat as a click.
             // The selection mode is already live on the manager via handleKeyDown/handleKeyUp.
@@ -109,7 +209,59 @@ export class SelectionView {
             this.manager.endSelection(clickRect);
         }
 
+        if (this.isDragging) {
+            //event.preventDefault();
+        }
+
         this.cancelDrag();
+    };
+
+    /**
+     * Adjusts the selection start point when any scroll host scrolls during a drag,
+     * keeping the anchor pinned to the content rather than the viewport.
+     *
+     * @param event The scroll event from one of the registered scroll hosts.
+     */
+    private handleScroll = (event: Event): void => {
+        if (!this.rectElement) {
+            return;
+        }
+
+        const target = event.target;
+        let deltaX = 0;
+        let deltaY = 0;
+        let handled = false;
+
+        const hHost = this.horizontalScrollHost;
+        if (hHost && target === hHost) {
+            deltaX = hHost.scrollLeft - this.startScrollLeft;
+            deltaY = hHost.scrollTop - this.startScrollTop;
+            this.startScrollLeft = hHost.scrollLeft;
+            this.startScrollTop = hHost.scrollTop;
+            handled = true;
+        }
+
+        const vHost = this.verticalScrollHost;
+        if (vHost && target === vHost) {
+            const verticalDelta = vHost.scrollTop - this.startVerticalScrollTop;
+            deltaY += verticalDelta;
+            this.startVerticalScrollTop = vHost.scrollTop;
+            handled = true;
+        }
+
+        if (!handled) {
+            return;
+        }
+
+        this.startX -= deltaX;
+        this.startY -= deltaY;
+
+        this.updateRectElement(this.lastPointerX, this.lastPointerY);
+
+        if (this.isDragging) {
+            const rect = this.rectElement.getBoundingClientRect();
+            void requisitions.execute("selectionRectChanged", { rect });
+        }
     };
 
     private selectionModeFromEvent(event: KeyboardEvent | MouseEvent): SelectionMode {
@@ -123,6 +275,10 @@ export class SelectionView {
     }
 
     private handleKeyDown = (event: KeyboardEvent): void => {
+        if (this.handleArrowKey(event)) {
+            return;
+        }
+
         if (event.key === "Escape" && this.isDragging) {
             this.cancelDrag();
         } else {
@@ -137,16 +293,346 @@ export class SelectionView {
         }
     };
 
+    private handleArrowKey(event: KeyboardEvent): boolean {
+        if (this.isDragging || this.isFormElement(event.target)
+            || !["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) {
+            return false;
+        }
+
+        const entries = [...this.manager.currentSelection.values()];
+        if (entries.length !== 1 || entries[0].granularity !== SelectionGranularity.Note) {
+            return false;
+        }
+
+        const entry = entries[0];
+        const contentHost = this.eventContainer.querySelector<HTMLElement>("#trackViewerContentHost");
+        if (!contentHost) {
+            return false;
+        }
+
+        const noteElement = this.findNoteElements(entry).at(0);
+        if (!noteElement) {
+            return false;
+        }
+
+        const isStaffMode = noteElement.classList.contains(staffNoteRunClass);
+        const target = isStaffMode
+            ? this.findStaffArrowTarget(noteElement, event.key)
+            : this.findArrowTarget(noteElement, event.key);
+
+        if (!target) {
+            return false;
+        }
+
+        const location = this.scoreElementRegistry?.getLocation(target);
+        if (location?.step === undefined) {
+            return false;
+        }
+
+        const noteTarget = this.noteTargetOf(target, location);
+        if (noteTarget === undefined) {
+            return false;
+        }
+
+        this.manager.selectSingleNote({
+            granularity: SelectionGranularity.Note,
+            target: noteTarget,
+        });
+
+        // Keep the cursor visible: scroll the nearest scroll hosts so the newly selected
+        // element stays inside the viewport (horizontally across measures, vertically across tracks).
+        target.scrollIntoView({ block: "nearest", inline: "nearest" });
+
+        event.preventDefault();
+
+        return true;
+    }
+
+    private findStaffArrowTarget(noteElement: HTMLElement, key: string): HTMLElement | undefined {
+        const row = noteElement.closest<HTMLElement>(".staff-measure-track-row");
+        if (!row) {
+            return undefined;
+        }
+
+        const navigableRuns = (rowElement: HTMLElement): HTMLElement[] => {
+            return [...rowElement.querySelectorAll<HTMLElement>(".staff-note-viewer-run")]
+                .filter((run) => {
+                    return run.querySelector(
+                        ".staff-note-viewer-note-symbol, .staff-note-viewer-rest-symbol",
+                    ) !== null;
+                });
+        };
+
+        if (key === "ArrowLeft" || key === "ArrowRight") {
+            const contentHost = this.eventContainer.querySelector<HTMLElement>("#trackViewerContentHost");
+            const scoreElementRegistry = this.scoreElementRegistry;
+            const rowLocation = scoreElementRegistry?.getLocation(row);
+            if (!contentHost || !scoreElementRegistry || !rowLocation) {
+                return undefined;
+            }
+
+            const rows = scoreElementRegistry.findElements(ScoreElementKind.TrackRow, undefined, rowLocation.trackId)
+                .filter((candidate) => {
+                    return contentHost.contains(candidate) && candidate.classList.contains("staff-measure-track-row");
+                }).sort((left, right) => {
+                    const leftBar = this.scoreElementRegistry?.getLocation(left)?.bar ?? 0;
+                    const rightBar = this.scoreElementRegistry?.getLocation(right)?.bar ?? 0;
+
+                    return leftBar - rightBar;
+                });
+
+            const rowIndex = rows.indexOf(row);
+            const rowRuns = navigableRuns(row);
+            const runIndex = rowRuns.indexOf(noteElement);
+            const direction = key === "ArrowLeft" ? -1 : 1;
+
+            if (runIndex + direction >= 0 && runIndex + direction < rowRuns.length) {
+                return rowRuns[runIndex + direction];
+            }
+
+            const adjacentRowIndex = rowIndex + direction;
+            if (adjacentRowIndex < 0 || adjacentRowIndex >= rows.length) {
+                return undefined;
+            }
+
+            const adjacentRuns = navigableRuns(rows[adjacentRowIndex]);
+            if (adjacentRuns.length === 0) {
+                return undefined;
+            }
+
+            return direction < 0 ? adjacentRuns[adjacentRuns.length - 1] : adjacentRuns[0];
+        }
+
+        const contentHost = this.eventContainer.querySelector<HTMLElement>("#trackViewerContentHost");
+        const scoreElementRegistry = this.scoreElementRegistry;
+        const rowLocation = scoreElementRegistry?.getLocation(row);
+        if (!contentHost || !scoreElementRegistry || !rowLocation) {
+            return undefined;
+        }
+
+        const rows = scoreElementRegistry.findElements(ScoreElementKind.TrackRow, rowLocation.bar)
+            .filter((candidate) => {
+                return contentHost.contains(candidate) && candidate.classList.contains("staff-measure-track-row");
+            });
+        const rowIndex = rows.indexOf(row);
+        const direction = key === "ArrowUp" ? -1 : 1;
+        const adjacentRowIndex = rowIndex + direction;
+        if (adjacentRowIndex < 0 || adjacentRowIndex >= rows.length) {
+            return undefined;
+        }
+
+        const adjacentRuns = navigableRuns(rows[adjacentRowIndex]);
+        if (adjacentRuns.length === 0) {
+            return undefined;
+        }
+
+        // Match the glyph whose actual horizontal position is closest to the source glyph, not
+        // the run whose slot starts closest. Note glyphs sit at their onset + half a step while
+        // rest glyphs are centred in their slot, so the run's left edge is a poor proxy.
+        const cursorX = this.staffRunGlyphCenterX(noteElement);
+
+        return adjacentRuns.reduce((closest, run) => {
+            const closestDistance = Math.abs(this.staffRunGlyphCenterX(closest) - cursorX);
+            const runDistance = Math.abs(this.staffRunGlyphCenterX(run) - cursorX);
+
+            return runDistance < closestDistance ? run : closest;
+        });
+    }
+
+    private findArrowTarget(noteElement: HTMLElement, key: string): HTMLElement | undefined {
+        const row = noteElement.closest<HTMLElement>(".grid-measure-row");
+        if (!row) {
+            return undefined;
+        }
+
+        const cells = (): HTMLElement[] => {
+            return [...row.querySelectorAll<HTMLElement>(".note-viewer")];
+        };
+
+        if (key === "ArrowLeft" || key === "ArrowRight") {
+            const contentHost = this.eventContainer.querySelector<HTMLElement>("#trackViewerContentHost");
+            const scoreElementRegistry = this.scoreElementRegistry;
+            const rowLocation = scoreElementRegistry?.getLocation(row);
+            if (!contentHost || !scoreElementRegistry || !rowLocation) {
+                return undefined;
+            }
+
+            const rows = scoreElementRegistry.findElements(ScoreElementKind.TrackRow, undefined, rowLocation.trackId)
+                .filter((candidate) => {
+                    return contentHost.contains(candidate) && candidate.classList.contains("grid-measure-row");
+                }).sort((left, right) => {
+                    const leftBar = this.scoreElementRegistry?.getLocation(left)?.bar ?? 0;
+                    const rightBar = this.scoreElementRegistry?.getLocation(right)?.bar ?? 0;
+
+                    return leftBar - rightBar;
+                });
+            const rowIndex = rows.indexOf(row);
+            const rowCells = cells();
+            const cellIndex = rowCells.indexOf(noteElement);
+            const direction = key === "ArrowLeft" ? -1 : 1;
+
+            if (cellIndex + direction >= 0 && cellIndex + direction < rowCells.length) {
+                return rowCells[cellIndex + direction];
+            }
+
+            const adjacentRowIndex = rowIndex + direction;
+            if (adjacentRowIndex < 0 || adjacentRowIndex >= rows.length) {
+                return undefined;
+            }
+
+            const adjacentRow = rows[adjacentRowIndex];
+
+            const adjacentCells = [...adjacentRow.querySelectorAll<HTMLElement>(".note-viewer")];
+            if (adjacentCells.length === 0) {
+                return undefined;
+            }
+
+            if (direction < 0) {
+                return adjacentCells[adjacentCells.length - 1];
+            }
+
+            return adjacentCells[0];
+        }
+
+        const contentHost = this.eventContainer.querySelector<HTMLElement>("#trackViewerContentHost");
+        const scoreElementRegistry = this.scoreElementRegistry;
+        const rowLocation = scoreElementRegistry?.getLocation(row);
+        if (!contentHost || !scoreElementRegistry || !rowLocation) {
+            return undefined;
+        }
+
+        const rows = scoreElementRegistry.findElements(ScoreElementKind.TrackRow, rowLocation.bar)
+            .filter((candidate) => {
+                return contentHost.contains(candidate) && candidate.classList.contains("grid-measure-row");
+            });
+        const rowIndex = rows.indexOf(row);
+        const direction = key === "ArrowUp" ? -1 : 1;
+        const adjacentRowIndex = rowIndex + direction;
+        if (adjacentRowIndex < 0 || adjacentRowIndex >= rows.length) {
+            return undefined;
+        }
+
+        const adjacentRow = rows[adjacentRowIndex];
+
+        const adjacentCells = [...adjacentRow.querySelectorAll<HTMLElement>(".note-viewer")];
+
+        if (adjacentCells.length === 0) {
+            return undefined;
+        }
+
+        const cursorX = noteElement.getBoundingClientRect().left;
+        const cellAtCursor = adjacentCells.find((cell) => {
+            const cellRect = cell.getBoundingClientRect();
+
+            return cursorX >= cellRect.left && cursorX < cellRect.right;
+        });
+        if (cellAtCursor) {
+            return cellAtCursor;
+        }
+
+        return adjacentCells.reduce((closest, cell) => {
+            const closestDistance = Math.abs(closest.getBoundingClientRect().left - cursorX);
+            const cellDistance = Math.abs(cell.getBoundingClientRect().left - cursorX);
+
+            return cellDistance < closestDistance ? cell : closest;
+        });
+    }
+
     private cancelDrag(): void {
         this.isDragging = false;
         this.dragPending = false;
+        this.stopAutoScroll();
         this.removeRectElement();
+
+        if (this.horizontalScrollHost) {
+            this.horizontalScrollHost.removeEventListener("scroll", this.handleScroll);
+            this.startScrollLeft = 0;
+            this.startScrollTop = 0;
+        }
+
+        if (this.verticalScrollHost && this.verticalScrollHost !== this.horizontalScrollHost) {
+            this.verticalScrollHost.removeEventListener("scroll", this.handleScroll);
+            this.startVerticalScrollTop = 0;
+        }
 
         if (this.captureElement) {
             this.captureElement.removeEventListener("pointermove", this.handlePointerMove);
             this.captureElement.removeEventListener("pointerup", this.handlePointerUp);
             this.captureElement.removeEventListener("lostpointercapture", this.handlePointerUp);
             this.captureElement = undefined;
+        }
+    }
+
+    /**
+     * Starts, updates or stops auto-scroll based on the pointer's distance from the scroll host edges.
+     * The further the pointer is outside the host, the faster the scroll speed.
+     *
+     * @param clientX The current pointer X position in viewport coordinates.
+     * @param clientY The current pointer Y position in viewport coordinates.
+     */
+    private updateAutoScroll(clientX: number, clientY: number): void {
+        if (!this.horizontalScrollHost && !this.verticalScrollHost) {
+            return;
+        }
+
+        const edgeThreshold = 10;
+        let scrollDX = 0;
+        let scrollDY = 0;
+
+        // Horizontal auto-scroll on the horizontal host.
+        if (this.horizontalScrollHost) {
+            const hostRect = this.horizontalScrollHost.getBoundingClientRect();
+            const distLeft = clientX - hostRect.left;
+            const distRight = hostRect.right - clientX;
+
+            if (distLeft < edgeThreshold) {
+                scrollDX = -Math.max(1, Math.ceil((edgeThreshold - distLeft) / 2));
+            } else if (distRight < edgeThreshold) {
+                scrollDX = Math.max(1, Math.ceil((edgeThreshold - distRight) / 2));
+            }
+        }
+
+        // Vertical auto-scroll on the vertical host.
+        const verticalHost = this.verticalScrollHost ?? this.horizontalScrollHost;
+        if (verticalHost) {
+            const hostRect = verticalHost.getBoundingClientRect();
+            const distTop = clientY - hostRect.top;
+            const distBottom = hostRect.bottom - clientY;
+
+            if (distTop < edgeThreshold) {
+                scrollDY = -Math.max(1, Math.ceil((edgeThreshold - distTop) / 2));
+            } else if (distBottom < edgeThreshold) {
+                scrollDY = Math.max(1, Math.ceil((edgeThreshold - distBottom) / 2));
+            }
+        }
+
+        this.autoScrollDX = scrollDX;
+        this.autoScrollDY = scrollDY;
+
+        if (scrollDX !== 0 || scrollDY !== 0) {
+            this.autoScrollTimer ??= setInterval(() => {
+                if (this.autoScrollDX !== 0 && this.horizontalScrollHost) {
+                    this.horizontalScrollHost.scrollBy(this.autoScrollDX, 0);
+                }
+
+                if (this.autoScrollDY !== 0) {
+                    const vh = this.verticalScrollHost ?? this.horizontalScrollHost;
+                    if (vh) {
+                        vh.scrollBy(0, this.autoScrollDY);
+                    }
+                }
+            }, 16);
+        } else {
+            this.stopAutoScroll();
+        }
+    }
+
+    private stopAutoScroll(): void {
+        if (this.autoScrollTimer) {
+            clearInterval(this.autoScrollTimer);
+            this.autoScrollTimer = undefined;
+            this.autoScrollDX = 0;
+            this.autoScrollDY = 0;
         }
     }
 
@@ -193,6 +679,41 @@ export class SelectionView {
         return Promise.resolve(true);
     };
 
+    private handleTrackChanged = (): Promise<boolean> => {
+        if (this.selectionRefreshFrame !== undefined) {
+            cancelAnimationFrame(this.selectionRefreshFrame);
+        }
+
+        this.selectionRefreshFrame = requestAnimationFrame(() => {
+            this.selectionRefreshFrame = undefined;
+            this.updateTrackViewerOverlays();
+        });
+
+        return Promise.resolve(true);
+    };
+
+    private handleEditModeChanged = (enabled: boolean): Promise<boolean> => {
+        this.editMode = enabled;
+        if (!enabled) {
+            const overlayContainer = this.eventContainer.querySelector<HTMLElement>(
+                "#trackViewerDecorationOverlay",
+            );
+            const cursor = overlayContainer?.querySelector<HTMLElement>(`.${selectionCursorClass}`);
+            if (cursor) {
+                cursor.style.display = "none";
+            }
+
+            overlayContainer?.querySelectorAll<HTMLElement>(".selection-delete-button").forEach((button) => {
+                button.remove();
+            });
+            this.selectionDeleteButtonCreated = false;
+        }
+
+        this.updateTrackViewerOverlays();
+
+        return Promise.resolve(true);
+    };
+
     /**
      * Renders selection decoration as absolutely-positioned overlay divs inside
      * {@link trackViewerDecorationOverlay}. Adjacent selection rects are merged:
@@ -213,6 +734,10 @@ export class SelectionView {
         overlayContainer.querySelectorAll(`.${selectionOverlayClass}`).forEach((el) => {
             el.remove();
         });
+        this.selectionDeleteButtonCreated = false;
+
+        const cursor = this.getSelectionCursor(overlayContainer);
+        cursor.style.display = "none";
 
         // Clear any legacy note CSS highlights.
         const contentHost = this.eventContainer.querySelector<HTMLElement>("#trackViewerContentHost");
@@ -307,6 +832,8 @@ export class SelectionView {
             return;
         }
 
+        const cursor = this.getSelectionCursor(overlayContainer);
+
         // Separate single-note from note-group entries.
         const singleNotes: ISelectionEntry[] = [];
         const noteGroups: ISelectionEntry[] = [];
@@ -321,15 +848,23 @@ export class SelectionView {
 
         // Detect view mode from the first element.
         const firstElements = singleNotes.length > 0
-            ? this.findNoteElements(contentHost, singleNotes[0])
-            : this.findNoteElements(contentHost, noteGroups[0]);
+            ? this.findNoteElements(singleNotes[0])
+            : this.findNoteElements(noteGroups[0]);
         const isStaffMode = firstElements.length > 0
             && firstElements[0].classList.contains(staffNoteRunClass);
+
+        // Position the cursor directly before a single selected note in both view modes.
+        if (singleNotes.length === 1) {
+            const rect = this.findNoteCursorRect(singleNotes[0], isStaffMode);
+            if (rect) {
+                this.positionSelectionCursor(cursor, containerRect, rect, isStaffMode ? -4 : 0);
+            }
+        }
 
         // Single notes in staff mode: apply CSS class for head/stem colouring.
         if (isStaffMode && singleNotes.length > 0) {
             for (const entry of singleNotes) {
-                const elements = this.findNoteElements(contentHost, entry);
+                const elements = this.findNoteElements(entry);
                 for (const el of elements) {
                     el.classList.add(noteSelectedClass);
                 }
@@ -352,23 +887,7 @@ export class SelectionView {
             ].join(", ");
 
             for (const entry of noteGroups) {
-                const row = contentHost.querySelector<HTMLElement>(
-                    `[data-bar="${entry.bar}"][data-track="${entry.trackId}"]`,
-                );
-                if (!row) {
-                    continue;
-                }
-
-                const startStep = entry.startStep ?? 0;
-                const endStep = entry.endStep ?? startStep;
-                const runs: HTMLElement[] = [];
-
-                for (let step = startStep; step <= endStep; step++) {
-                    const el = row.querySelector<HTMLElement>(`[data-step-index="${step}"]`);
-                    if (el) {
-                        runs.push(el);
-                    }
-                }
+                const runs = this.elementsOf(entry, ScoreElementKind.StaffRun);
 
                 if (runs.length === 0) {
                     continue;
@@ -439,49 +958,230 @@ export class SelectionView {
             return;
         }
 
-        // Grid mode: group by bar+track, then sort by startStep and merge contiguous steps.
-        const byBarTrack = new Map<string, ISelectionEntry[]>();
+        // Grid mode: group by track, then sort by bar and cell so adjacent bars can merge.
+        const located: ILocatedEntry[] = [];
         for (const entry of entries) {
-            const key = `${entry.bar}:${entry.trackId}`;
-            let list = byBarTrack.get(key);
-            if (!list) {
-                list = [];
-                byBarTrack.set(key, list);
+            const { target } = entry;
+            if (!addressesNoteCells(target)) {
+                continue;
             }
 
-            list.push(entry);
+            const coordinates = SelectionSerializer.coordinatesOf(entry);
+            const start = coordinates.start ?? measureStart;
+            const firstCell = SelectionSerializer.cellOf(start, target.measure);
+            const coveredCells = SelectionSerializer.cellOf(coordinates.end ?? start, target.measure);
+
+            located.push({
+                entry,
+                coordinates,
+                firstCell,
+                lastCell: Math.max(firstCell, coveredCells - 1),
+                slot: SelectionSerializer.addressesSubdivisionSlot(target),
+            });
         }
 
-        for (const [, groupEntries] of byBarTrack) {
-            groupEntries.sort((a, b) => {
-                return (a.startStep ?? 0) - (b.startStep ?? 0);
+        const byTrack = new Map<number, ILocatedEntry[]>();
+        for (const item of located) {
+            let list = byTrack.get(item.coordinates.trackId);
+            if (!list) {
+                list = [];
+                byTrack.set(item.coordinates.trackId, list);
+            }
+
+            list.push(item);
+        }
+
+        const noteOverlayGroups: Array<{ elements: HTMLElement[]; bars: Set<number>; }> = [];
+
+        for (const [, groupEntries] of byTrack) {
+            groupEntries.sort((left, right) => {
+                return left.coordinates.bar - right.coordinates.bar || left.firstCell - right.firstCell;
             });
 
             let groupElements: HTMLElement[] = [];
-            let lastEndStep: number | undefined;
+            let lastEndCell: number | undefined;
+            let lastBar: number | undefined;
+            let groupBars = new Set<number>();
+            let groupSubdivision: HTMLElement | undefined;
 
-            for (const entry of groupEntries) {
-                const elements = this.findNoteElements(contentHost, entry);
+            for (const item of groupEntries) {
+                const { entry, coordinates } = item;
+                const elements = this.findNoteElements(entry);
                 if (elements.length === 0) {
                     continue;
                 }
 
-                const startStep = entry.startStep ?? 0;
-                const endStep = entry.endStep ?? startStep;
+                const subdivision = item.slot
+                    ? elements[0].closest<HTMLElement>(".subdivision") ?? undefined
+                    : undefined;
+                const isSameSubdivision = subdivision !== undefined && subdivision === groupSubdivision;
+                const isContiguous = lastEndCell !== undefined && item.firstCell === lastEndCell + 1;
+                const isAdjacentBar = lastBar !== undefined && coordinates.bar === lastBar + 1;
+                const isAdjacentSubdivision = (groupSubdivision !== undefined || subdivision !== undefined)
+                    && this.areSelectionBlocksAdjacent(groupElements, elements);
 
-                if (lastEndStep !== undefined && startStep !== lastEndStep + 1) {
-                    this.createMergedOverlay(overlayContainer, containerRect, groupElements);
+                if (groupElements.length > 0 && !isSameSubdivision && !isContiguous
+                    && !isAdjacentBar && !isAdjacentSubdivision) {
+                    noteOverlayGroups.push({ elements: groupElements, bars: groupBars });
                     groupElements = [];
+                    lastEndCell = undefined;
+                    lastBar = undefined;
+                    groupBars = new Set<number>();
+                    groupSubdivision = undefined;
                 }
 
                 groupElements.push(...elements);
-                lastEndStep = endStep;
+                lastEndCell = item.lastCell;
+                lastBar = coordinates.bar;
+                groupBars.add(coordinates.bar);
+                groupSubdivision = subdivision;
             }
 
             if (groupElements.length > 0) {
-                this.createMergedOverlay(overlayContainer, containerRect, groupElements);
+                noteOverlayGroups.push({ elements: groupElements, bars: groupBars });
             }
         }
+
+        // Merge groups that cover the same horizontal selection range in adjacent tracks.
+        // This keeps partial track-piece selections as one rectangular overlay.
+        noteOverlayGroups.sort((first, second) => {
+            const firstRect = first.elements[0].getBoundingClientRect();
+            const secondRect = second.elements[0].getBoundingClientRect();
+
+            return firstRect.top - secondRect.top || firstRect.left - secondRect.left;
+        });
+
+        const mergedGroups: Array<{ elements: HTMLElement[]; bars: Set<number>; }> = [];
+        for (const group of noteOverlayGroups) {
+            const previous = mergedGroups.at(-1);
+            const sharesBar = [...group.bars].some((bar) => {
+                return previous?.bars.has(bar) ?? false;
+            });
+
+            if (previous && sharesBar
+                && this.areSelectionGroupsVerticallyAdjacent(previous.elements, group.elements)) {
+                previous.elements.push(...group.elements);
+                for (const bar of group.bars) {
+                    previous.bars.add(bar);
+                }
+            } else {
+                mergedGroups.push({ elements: [...group.elements], bars: new Set(group.bars) });
+            }
+        }
+
+        for (const group of mergedGroups) {
+            this.createMergedOverlay(overlayContainer, containerRect, group.elements);
+        }
+    }
+
+    private areSelectionGroupsVerticallyAdjacent(first: HTMLElement[], second: HTMLElement[]): boolean {
+        if (first.length === 0 || second.length === 0) {
+            return false;
+        }
+
+        let firstLeft = Infinity;
+        let firstRight = -Infinity;
+        let secondLeft = Infinity;
+        let secondRight = -Infinity;
+        const firstRows = new Set<HTMLElement>();
+        const secondRows = new Set<HTMLElement>();
+
+        for (const element of first) {
+            const raw = element.getBoundingClientRect();
+            firstLeft = Math.min(firstLeft, raw.left);
+            firstRight = Math.max(firstRight, raw.right);
+            const row = element.closest<HTMLElement>(".grid-measure-row");
+            if (row) {
+                firstRows.add(row);
+            }
+        }
+
+        for (const element of second) {
+            const raw = element.getBoundingClientRect();
+            secondLeft = Math.min(secondLeft, raw.left);
+            secondRight = Math.max(secondRight, raw.right);
+            const row = element.closest<HTMLElement>(".grid-measure-row");
+            if (row) {
+                secondRows.add(row);
+            }
+        }
+
+        const horizontalOverlap = secondRight >= firstLeft && secondLeft <= firstRight;
+        if (!horizontalOverlap) {
+            return false;
+        }
+
+        for (const firstRow of firstRows) {
+            const firstLocation = this.scoreElementRegistry?.getLocation(firstRow);
+            if (!firstLocation) {
+                continue;
+            }
+
+            const rows = this.scoreElementRegistry?.findElements(ScoreElementKind.TrackRow, firstLocation.bar)
+                .filter((candidate) => {
+                    return candidate.classList.contains("grid-measure-row");
+                }) ?? [];
+
+            const firstIndex = rows.indexOf(firstRow);
+            for (const secondRow of secondRows) {
+                const secondLocation = this.scoreElementRegistry?.getLocation(secondRow);
+                if (secondLocation?.bar === firstLocation.bar && Math.abs(firstIndex - rows.indexOf(secondRow)) === 1) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private areSelectionBlocksAdjacent(groupElements: HTMLElement[], nextElements: HTMLElement[]): boolean {
+        if (groupElements.length === 0 || nextElements.length === 0) {
+            return false;
+        }
+
+        const groupRight = Math.max(...groupElements.map((element) => {
+            return this.getSelectionBlockRect(element).right;
+        }));
+        const nextLeft = Math.min(...nextElements.map((element) => {
+            return this.getSelectionBlockRect(element).left;
+        }));
+
+        return nextLeft <= groupRight + 2;
+    }
+
+    private getSelectionBlockRect(element: HTMLElement): DOMRect {
+        const row = element.closest<HTMLElement>(".grid-measure-row");
+        const ancestors: HTMLElement[] = [];
+        let current = element.parentElement;
+
+        while (current && current !== row) {
+            if (current.classList.contains("subdivision")) {
+                ancestors.push(current);
+            }
+
+            current = current.parentElement;
+        }
+
+        const outerSubdivision = ancestors.at(-1);
+
+        return outerSubdivision?.getBoundingClientRect() ?? element.getBoundingClientRect();
+    }
+
+    /**
+     * Builds the selection target of a rendered cell or run, which the arrow-key cursor addresses.
+     *
+     * @param element The rendered element the cursor sits on.
+     * @param location The element's registered location.
+     *
+     * @returns The note target, or undefined when the element renders no event of a known measure.
+     */
+    private noteTargetOf(element: HTMLElement, location: IScoreElementLocation): ISelectionTarget | undefined {
+        const event = this.scoreElementRegistry?.getTarget(element);
+        const measure = location.measure;
+
+        return event === undefined || !("duration" in event) || measure === undefined
+            ? undefined
+            : { granularity: SelectionGranularity.Note, measure, event, start: location.start };
     }
 
     /**
@@ -489,35 +1189,127 @@ export class SelectionView {
      * For note groups that span a step range all elements in the range are returned
      * so the overlay covers the full width of the group.
      *
-     * @param scope The element to query within.
      * @param entry The selection entry identifying the note or group.
      *
      * @returns The matching elements, or an empty array if none found.
      */
-    private findNoteElements(scope: HTMLElement, entry: ISelectionEntry): HTMLElement[] {
-        if (entry.noteId !== undefined) {
-            const el = scope.querySelector<HTMLElement>(`[data-note-id="${entry.noteId}"]`);
+    private findNoteElements(entry: ISelectionEntry): HTMLElement[] {
+        return this.elementsOf(entry);
+    }
 
-            return el ? [el] : [];
+    /**
+     * Builds the selection target of a rendered cell or run, which the arrow-key cursor addresses.
+     *
+    /**
+     * Resolves the rendered elements a selection entry refers to.
+     *
+     * @param entry The selection entry to resolve.
+     * @param kind Optional rendered kind to restrict the result to.
+     *
+     * @returns The matching elements, or an empty array if none are rendered.
+     */
+    private elementsOf(entry: ISelectionEntry, kind?: ScoreElementKind): HTMLElement[] {
+        const registry = this.scoreElementRegistry;
+        if (!registry) {
+            return [];
         }
 
-        if (entry.startStep !== undefined) {
-            const endStep = entry.endStep ?? entry.startStep;
-            const elements: HTMLElement[] = [];
+        return registry.findTargetElements(entry.target, kind);
+    }
 
-            for (let step = entry.startStep; step <= endStep; step++) {
-                const el = scope.querySelector<HTMLElement>(
-                    `[data-bar="${entry.bar}"][data-track="${entry.trackId}"] [data-step-index="${step}"]`,
-                );
-                if (el) {
-                    elements.push(el);
-                }
-            }
-
-            return elements;
+    /**
+     * Computes the rectangle that should anchor the selection cursor for a single note.
+     * In grid mode this is the note cell. In staff mode the horizontal position comes from the
+     * note/rest symbol while the vertical position is corrected to the single-line reference, so
+     * the cursor stays put when notes on different staff lines are selected.
+     *
+     * @param entry The selection entry identifying the note or group.
+     * @param isStaffMode Whether the arrangement is rendered in staff mode.
+     *
+     * @returns The cursor anchor rectangle, or undefined if none found.
+     */
+    private findNoteCursorRect(entry: ISelectionEntry,
+        isStaffMode: boolean): DOMRect | undefined {
+        const elements = this.findNoteElements(entry);
+        if (elements.length === 0) {
+            return undefined;
         }
 
-        return [];
+        const noteElement = elements[0];
+        if (!isStaffMode) {
+            return noteElement.getBoundingClientRect();
+        }
+
+        const symbol = noteElement.querySelector<HTMLElement>(
+            ".staff-note-viewer-note-symbol, .staff-note-viewer-rest-symbol",
+        );
+        if (!symbol) {
+            return noteElement.getBoundingClientRect();
+        }
+
+        const runRect = noteElement.getBoundingClientRect();
+        const symbolRect = symbol.getBoundingClientRect();
+
+        // Anchor the cursor to the run and move it so the cursor matches the single-line note position.
+        const baseTranslateY = 8;
+        const singleLineTop = runRect.top + ((runRect.height - symbolRect.height) / 2) - baseTranslateY;
+        const glyphLeft = this.staffGlyphLeftEdge(noteElement, symbol);
+
+        return new DOMRect(glyphLeft, singleLineTop, symbolRect.width, symbolRect.height);
+    }
+
+    /**
+     * Returns the horizontal centre of a staff run's glyph. Notes sit at their onset + half a step
+     * while rests are centred in their slot, so the run's own left edge is not a reliable anchor.
+     *
+     * @param run The staff note or rest run element.
+     *
+     * @returns The glyph centre in viewport pixels.
+     */
+    private staffRunGlyphCenterX(run: HTMLElement): number {
+        const symbol = run.querySelector<HTMLElement>(
+            ".staff-note-viewer-note-symbol, .staff-note-viewer-rest-symbol",
+        );
+        const rect = (symbol ?? run).getBoundingClientRect();
+
+        return rect.left + (rect.width / 2);
+    }
+
+    private staffGlyphLeftEdge(run: HTMLElement, symbol: HTMLElement): number {
+        const symbolRect = symbol.getBoundingClientRect();
+
+        if (symbol.classList.contains("staff-note-viewer-rest-symbol")) {
+            // Rests are always centred in their run via CSS, regardless of duration, so the
+            // symbol's own rendered rect (not a duration-derived anchor) gives the true position.
+            return symbolRect.left + 5;
+        }
+
+        const head = run.querySelector<HTMLElement>(".staff-note-head");
+        const headRect = head?.getBoundingClientRect();
+        const centerX = headRect
+            ? headRect.left + (headRect.width / 2)
+            : symbolRect.left + (symbolRect.width / 2);
+
+        if (head?.classList.contains("cross")) {
+            const cross = head.querySelector<HTMLElement>(".staff-note-head-cross-svg");
+
+            return cross ? cross.getBoundingClientRect().left : centerX - 7;
+        }
+
+        if (head?.classList.contains("square")) {
+            return centerX - 14;
+        }
+
+        if (head?.classList.contains("triangle")) {
+            return centerX - 7;
+        }
+
+        if (head?.classList.contains("diamond")) {
+            return centerX - 5.5;
+        }
+
+        // Oval: the head is drawn at the left edge of the note sprite.
+        return symbolRect.left + 1;
     }
 
     // ---- Track-piece overlays --------------------------------------------------------
@@ -541,13 +1333,15 @@ export class SelectionView {
         // 1. Group entries by bar.
         const byBar = new Map<number, Set<number>>();
         for (const entry of entries) {
-            let trackIds = byBar.get(entry.bar);
+            const coordinates = SelectionSerializer.coordinatesOf(entry);
+
+            let trackIds = byBar.get(coordinates.bar);
             if (!trackIds) {
                 trackIds = new Set();
-                byBar.set(entry.bar, trackIds);
+                byBar.set(coordinates.bar, trackIds);
             }
 
-            trackIds.add(entry.trackId);
+            trackIds.add(coordinates.trackId);
         }
 
         // 2. Within each bar, merge consecutive tracks into per-bar groups.
@@ -562,18 +1356,16 @@ export class SelectionView {
         const barGroups: IBarGroup[] = [];
 
         for (const [bar, selectedTrackIds] of byBar) {
-            const rows = contentHost.querySelectorAll<HTMLElement>(`[data-bar="${bar}"][data-track]`);
+            const rows = this.scoreElementRegistry?.findElements(ScoreElementKind.TrackRow, bar) ?? [];
             const rowData: Array<{ trackId: number; el: HTMLElement; }> = [];
 
             for (const row of rows) {
-                if (!(row instanceof HTMLElement)) {
+                const location = this.scoreElementRegistry?.getLocation(row);
+                if (!contentHost.contains(row) || !location) {
                     continue;
                 }
 
-                const trackId = parseInt(row.getAttribute("data-track") ?? "", 10);
-                if (!isNaN(trackId)) {
-                    rowData.push({ trackId, el: row });
-                }
+                rowData.push({ trackId: location.trackId, el: row });
             }
 
             // Group consecutive selected tracks within this bar.
@@ -634,7 +1426,9 @@ export class SelectionView {
 
         merged.push(current);
 
-        // 4. Create overlays.
+        // 4. Create overlays. Track pieces stay within the row (no upward offset), so they
+        //    don't overlap the accent zone of the track above. The bottom edge aligns with
+        //    the row bottom, matching whole-track overlays.
         for (const group of merged) {
             this.createMergedOverlay(overlayContainer, containerRect, group.elements, 0, 0);
         }
@@ -658,24 +1452,24 @@ export class SelectionView {
             return;
         }
 
-        const selectedTrackIds = new Set(entries.map((e) => {
-            return e.trackId;
+        const selectedTrackIds = new Set(entries.map((entry) => {
+            return SelectionSerializer.trackOf(entry).id;
         }));
 
-        // Iterate through all rows of bar 1 in DOM order. Consecutive rows whose
+        // Iterate through registered rows of bar 1 in DOM order. Consecutive rows whose
         // track ID is selected form a group; unselected rows break the group.
-        const firstBarRows = contentHost.querySelectorAll<HTMLElement>("[data-bar=\"1\"][data-track]");
+        const firstBarRows = this.scoreElementRegistry?.findElements(ScoreElementKind.TrackRow, 1) ?? [];
         const groups: number[][] = [];
         let group: number[] = [];
 
         for (const row of firstBarRows) {
-            if (!(row instanceof HTMLElement)) {
+            const location = this.scoreElementRegistry?.getLocation(row);
+            if (!contentHost.contains(row) || !location) {
                 continue;
             }
 
-            const trackId = parseInt(row.getAttribute("data-track") ?? "", 10);
-            if (!isNaN(trackId) && selectedTrackIds.has(trackId)) {
-                group.push(trackId);
+            if (selectedTrackIds.has(location.trackId)) {
+                group.push(location.trackId);
             } else if (group.length > 0) {
                 groups.push(group);
                 group = [];
@@ -687,19 +1481,20 @@ export class SelectionView {
         }
 
         for (const trackIds of groups) {
-            const selectors = trackIds.map((id) => {
-                return `[data-track="${id}"]`;
-            });
+            const elements: HTMLElement[] = [];
+            for (const trackId of trackIds) {
+                elements.push(...(this.scoreElementRegistry?.findElements(
+                    ScoreElementKind.TrackRow, undefined, trackId,
+                ).filter((element) => {
+                    return contentHost.contains(element);
+                }) ?? []));
+            }
 
-            const rect = this.computeMergedRect(contentHost, selectors.join(","), containerRect);
-            if (rect) {
-                rect.y -= 10;
-                this.createOverlay(overlayContainer, rect);
+            if (elements.length > 0) {
+                this.createMergedOverlay(overlayContainer, containerRect, elements);
             }
         }
     }
-
-    // ---- Whole-measure overlays ------------------------------------------------------
 
     /**
      * Renders merged overlays for whole-measure selections. Bars that are visually
@@ -717,28 +1512,25 @@ export class SelectionView {
             return;
         }
 
-        const selectedBars = new Set(entries.map((e) => {
-            return e.bar;
+        const selectedBars = new Set(entries.map((entry) => {
+            return SelectionSerializer.coordinatesOf(entry).bar;
         }));
 
-        // Iterate through all bar elements in DOM order, deduplicating by bar number
-        // so each bar is only considered the first time it appears.
-        const barElements = contentHost.querySelectorAll<HTMLElement>("[data-bar]");
+        // Iterate through registered bar containers in DOM order.
+        const barElements = this.scoreElementRegistry?.findElements(ScoreElementKind.BarContainer)
+            .filter((element) => {
+                return contentHost.contains(element);
+            }) ?? [];
         const groups: number[][] = [];
         let group: number[] = [];
-        const seen = new Set<number>();
 
         for (const el of barElements) {
-            if (!(el instanceof HTMLElement)) {
+            const location = this.scoreElementRegistry?.getLocation(el);
+            if (!location) {
                 continue;
             }
 
-            const bar = parseInt(el.getAttribute("data-bar") ?? "", 10);
-            if (isNaN(bar) || seen.has(bar)) {
-                continue;
-            }
-
-            seen.add(bar);
+            const { bar } = location;
 
             if (selectedBars.has(bar)) {
                 group.push(bar);
@@ -753,12 +1545,16 @@ export class SelectionView {
         }
 
         for (const barNumbers of groups) {
-            const selectors = barNumbers.map((bar) => {
-                return `[data-bar="${bar}"]`;
-            });
+            const elements: HTMLElement[] = [];
+            for (const bar of barNumbers) {
+                elements.push(...(this.scoreElementRegistry?.findElements(ScoreElementKind.BarContainer, bar)
+                    .filter((element) => {
+                        return contentHost.contains(element);
+                    }) ?? []));
+            }
 
-            const rect = this.computeMergedRect(contentHost, selectors.join(","), containerRect);
-            if (rect) {
+            if (elements.length > 0) {
+                const rect = this.computeElementsRect(elements, containerRect);
                 rect.x += 4;
                 rect.width -= 8;
                 this.createOverlay(overlayContainer, rect);
@@ -837,35 +1633,13 @@ export class SelectionView {
         };
     }
 
-    /**
-     * Computes a bounding rectangle that covers all elements matching the selector,
-     * relative to the overlay container.
-     *
-     * Horizontal bounds use raw element rects to avoid margin-induced over-extension;
-     * vertical bounds use margin-expanded rects so adjacent track rows touch without gaps.
-     *
-     * @param scope The element to query within.
-     * @param selector The CSS selector for target elements.
-     * @param containerRect The overlay container's bounding rect in viewport coordinates.
-     *
-     * @returns The merged rect relative to the container, or undefined if no elements match.
-     */
-    private computeMergedRect(scope: HTMLElement, selector: string, containerRect: DOMRect): IRect | undefined {
-        const elements = scope.querySelectorAll(selector);
-        if (elements.length === 0) {
-            return undefined;
-        }
-
+    private computeElementsRect(elements: HTMLElement[], containerRect: DOMRect): IRect {
         let minLeft = Infinity;
         let minTop = Infinity;
         let maxRight = -Infinity;
         let maxBottom = -Infinity;
 
         for (const el of elements) {
-            if (!(el instanceof HTMLElement)) {
-                continue;
-            }
-
             const r = this.computeElementRect(el, containerRect);
             const absTop = r.y + containerRect.top;
             const absBottom = absTop + r.height;
@@ -902,11 +1676,48 @@ export class SelectionView {
         const overlay = document.createElement("div");
         overlay.className = selectionOverlayClass;
         overlay.style.position = "absolute";
-        overlay.style.left = `${rect.x}px`;
+        overlay.style.left = `${rect.x - 2}px`;
         overlay.style.top = `${rect.y}px`;
-        overlay.style.width = `${rect.width}px`;
+        overlay.style.width = `${rect.width + 4}px`;
         overlay.style.height = `${rect.height}px`;
+
+        if (this.editMode && !this.selectionDeleteButtonCreated) {
+            const deleteButton = document.createElement("button");
+            deleteButton.type = "button";
+            deleteButton.className = "selection-delete-button";
+            deleteButton.setAttribute("aria-label", "Clear selection");
+            deleteButton.setAttribute("data-tooltip", "Clear selection");
+            deleteButton.addEventListener("click", (event) => {
+                event.stopPropagation();
+                void requisitions.execute("selectionDeleteRequested", undefined);
+            });
+            overlay.appendChild(deleteButton);
+            this.selectionDeleteButtonCreated = true;
+        }
+
         container.appendChild(overlay);
+    }
+
+    private getSelectionCursor(container: HTMLElement): HTMLElement {
+        const existingCursor = container.querySelector<HTMLElement>(`.${selectionCursorClass}`);
+        if (existingCursor) {
+            return existingCursor;
+        }
+
+        const cursor = document.createElement("div");
+        cursor.className = selectionCursorClass;
+        cursor.style.position = "absolute";
+        container.appendChild(cursor);
+
+        return cursor;
+    }
+
+    private positionSelectionCursor(cursor: HTMLElement, containerRect: DOMRect,
+        elementRect: DOMRect, offsetX = 0): void {
+        cursor.style.display = "block";
+        cursor.style.left = `${((elementRect.left - containerRect.left) / this.zoomFactor) + offsetX}px`;
+        cursor.style.top = `${((elementRect.top - containerRect.top) / this.zoomFactor) - 4}px`;
+        cursor.style.height = `${(elementRect.height / this.zoomFactor) + 8}px`;
     }
 
     private isFormElement(target: EventTarget | null): boolean {

@@ -6,13 +6,11 @@
 import type { ComponentChild } from "preact";
 
 import type { ScoreBookDataModel } from "../../core/ScoreBookDataModel.js";
-import type { UndoManager } from "../../core/UndoManager.js";
 import { Button } from "./framework/Button.js";
 import { UIComponent, type ICommonUIProperties } from "./framework/UIComponent.js";
 import { InstrumentChooser } from "./InstrumentChooser.js";
 
 export interface IInstrumentBrowserProperties extends ICommonUIProperties {
-    undoManager: UndoManager;
     dataModel: ScoreBookDataModel;
     close: () => void;
 }
@@ -20,7 +18,7 @@ export interface IInstrumentBrowserProperties extends ICommonUIProperties {
 export class InstrumentBrowser extends UIComponent<IInstrumentBrowserProperties> {
 
     public render(): ComponentChild {
-        const { close, undoManager, dataModel } = this.props;
+        const { close, dataModel } = this.props;
         const instruments = dataModel.instruments;
 
         return (
@@ -31,7 +29,6 @@ export class InstrumentBrowser extends UIComponent<IInstrumentBrowserProperties>
                             key={meta.id}
                             instrument={meta}
                             close={close}
-                            undoManager={undoManager}
                             dataModel={dataModel}
                         />;
                     })}

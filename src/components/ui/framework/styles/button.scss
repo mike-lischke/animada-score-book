@@ -17,3 +17,15 @@
         background-color: color-mix(in srgb, var(--color-primary) 85%, black);
     }
 }
+
+/* Disabled buttons swallow pointer events (daisyUI), which also kills the
+   hover-based tooltip. Re-enable pointer events only for tooltip-carrying
+   disabled buttons and signal the non-interactive state via the cursor. */
+.btn:disabled[data-tooltip] {
+    pointer-events: all;
+    cursor: not-allowed;
+}
+
+.btn:disabled > svg {
+    color: color-mix(in srgb, var(--color-base-content) 25%, var(--color-base-100));
+}

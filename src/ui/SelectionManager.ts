@@ -4,36 +4,28 @@
 */
 
 import { AppStorage } from "../core/AppStorage.js";
-import type { ISbDmNoteEvent, ISbDmTrack } from "../core/ScoreBookDataModel.js";
-import { ScoreBookChangeReason } from "../core/ScoreBookDataModel.js";
+import {
+    ScoreBookChangeReason, type ISbDmTrackMeasure, type ScoreBookDataModel,
+} from "../core/ScoreBookDataModel.js";
+import { modelEventAt } from "../core/MeasureProjection.js";
+import { compareFractions, formatFraction } from "../core/serialisation/numeric-functions.js";
+import type { IFraction } from "../core/types/general.js";
 import type { PlayerPlayState } from "../player/ArrangementPlayer.js";
 import { requisitions } from "../supplement/Requisitions.js";
 import {
-    SelectionGranularity, SelectionMode, type ISelectionEntry, type ISelectionHitTester, type ISelectionPoint,
-    type ISelectionRectChange,
-} from "./selection-types.js";
+    SelectionGranularity, SelectionMode, SelectionSerializer, type ISelectionEntry,
+    type ISelectionHitTester, type ISelectionPoint, type ISelectionRectChange, type ISerialisedSelectionEntry,
+} from "./SelectionSerializer.js";
+import type { ScoreElementRegistry } from "./ScoreElementRegistry.js";
 import { SelectionView } from "./SelectionView.js";
-
-interface ITrackSelection {
-    selectedNotes: Set<ISbDmNoteEvent>;
-    range: [ISbDmNoteEvent | undefined, ISbDmNoteEvent | undefined];
-}
 
 /**
  * Manages selections across tracks and publishes selection changes.
- *
- * Maintains two parallel data structures during the transition to the new MVC model:
- * - {@link currentTrackSelections} (old): per-track Map used by edit commands and legacy interaction.
- * - {@link currentSelection} (new): granular, model-level entries for the SelectionView and future features
- *   (clipboard, drag-drop, templates).
  */
 export class SelectionManager {
-    /** Current selections per track, including selected notes and range per track. */
-    public readonly currentTrackSelections: Map<ISbDmTrack, ITrackSelection> = new Map<ISbDmTrack, ITrackSelection>();
-
     /**
-     * Granular selection entries keyed by a stable string identifier.
-     * Keys follow the pattern `"granularity:bar:trackId[:step/noteId]"`.
+     * Granular selection entries keyed by a stable string identifier derived from the model objects
+     * an entry addresses.
      */
     public readonly currentSelection: Map<string, ISelectionEntry> = new Map<string, ISelectionEntry>();
 
@@ -73,17 +65,18 @@ export class SelectionManager {
      */
     private firstLoadDone = false;
 
+    /** Edit mode as last published on `editModeChanged`, used to initialise new selection views. */
+    private editMode = false;
+
     /** Owned view — handles pointer events, rect drawing, and DOM updates. Created lazily when the container is set. */
     private view?: SelectionView;
 
-    private anchor?: ISbDmNoteEvent;
-    private lastClickedNote?: ISbDmNoteEvent;
-    private lastMouseDownNote?: ISbDmNoteEvent;
-
-    public constructor() {
+    public constructor(private readonly dataModel?: ScoreBookDataModel) {
         requisitions.register("selectionRectChanged", this.handleSelectionRectChanged);
         requisitions.register("playerStateChanged", this.handlePlayerStateChanged);
         requisitions.register("scoreBookLoaded", this.handleScoreBookLoaded);
+        requisitions.register("arrangementReverted", this.handleArrangementReverted);
+        requisitions.register("editModeChanged", this.handleEditModeChanged);
     }
 
     public get selectionMode(): SelectionMode {
@@ -99,6 +92,8 @@ export class SelectionManager {
     }
 
     public dispose(): void {
+        requisitions.unregister("editModeChanged", this.handleEditModeChanged);
+
         if (this.view) {
             this.view.dispose();
             this.view = undefined;
@@ -110,13 +105,25 @@ export class SelectionManager {
      * Must be called before any selection interaction can occur.
      *
      * @param container The DOM element to listen for pointer events on.
+     * @param scoreElementRegistry The optional registry of rendered score elements.
      */
-    public setEventContainer(container: HTMLElement): void {
+    public setEventContainer(container: HTMLElement, scoreElementRegistry?: ScoreElementRegistry): void {
         if (this.view) {
             this.view.dispose();
         }
 
-        this.view = new SelectionView(this, container);
+        this.view = new SelectionView(this, container, scoreElementRegistry, this.editMode);
+    }
+
+    /**
+     * Sets the scroll host elements for the selection view.
+     * Must be called after {@link setEventContainer}.
+     *
+     * @param horizontal The horizontally-scrollable container (typically `#trackViewerHost`).
+     * @param vertical The vertically-scrollable container.
+     */
+    public setScrollHosts(horizontal: HTMLElement, vertical: HTMLElement): void {
+        this.view?.setScrollHosts(horizontal, vertical);
     }
 
     public registerHitTester(tester: ISelectionHitTester): void {
@@ -128,158 +135,24 @@ export class SelectionManager {
     }
 
     /**
-     * Checks if a note is currently selected.
-     *
-     * @param note The note to check.
-     * @returns True if the note is selected.
-     */
-    public isSelected(note: ISbDmNoteEvent): boolean {
-        if (!this.currentTrackSelections.has(note.track)) {
-            return false;
-        }
-
-        return this.currentTrackSelections.get(note.track)!.selectedNotes.has(note);
-    }
-
-    /**
-     * Handles a click on a note, updating selections accordingly.
-     * - Clicking the current anchor again (and it is the only selection) will clear the selection.
-     * - Clicking selects a contiguous range between the anchor and the clicked note.
-     *
-     * @param clickedNote The clicked note.
-     */
-    public handleClick(clickedNote: ISbDmNoteEvent): void {
-        // Special case: deselect when clicking the anchor if it's the only note selected.
-        // This mirrors the legacy behavior where a second click on the anchor toggles it off.
-        if (clickedNote === this.anchor && this.currentTrackSelections.size === 1) {
-            const onlySelection = this.currentTrackSelections.get(this.anchor.track);
-            const isOnlySelected = onlySelection?.selectedNotes.size === 1
-                && onlySelection.selectedNotes.has(clickedNote);
-            if (isOnlySelected) {
-                this.clearSelection();
-
-                return;
-            }
-        }
-
-        // Selecting a single note is simpler than a range selection, so when starting from scratch
-        // or re-anchoring on the same note we restart the selection using the clicked note.
-        if (!this.currentTrackSelections.size || clickedNote === this.anchor) {
-            this.restartSelection(clickedNote);
-
-            return;
-        }
-
-        this.lastClickedNote = clickedNote;
-
-        // Step 1: rejig selection tracks before anything else.
-        this.recalcSelectedTracks(clickedNote);
-
-        if (this.currentTrackSelections.size === 1) {
-            const trackSelection = this.currentTrackSelections.get(this.anchor!.track)!;
-            const noteIterator = this.anchor!.track.notes;
-
-            this.deselectUntilMatch(trackSelection, noteIterator, (note) => {
-                return note === this.anchor || note === clickedNote;
-            });
-            this.selectUntilMatch(trackSelection, noteIterator, (note) => {
-                return note === this.anchor || note === clickedNote;
-            });
-            this.deselectUntilNoMoreSelected(trackSelection, noteIterator);
-        } else {
-            const anchorISbDmNoteEvent = document.getElementById(`note-${this.anchor!.id}`);
-            const clickedISbDmNoteEvent = document.getElementById(`note-${clickedNote.id}`);
-            const { left: anchorLeft, right: anchorRight } = anchorISbDmNoteEvent!.getBoundingClientRect();
-            const { left: clickedNoteLeft, right: clickedNoteRight } = clickedISbDmNoteEvent!.getBoundingClientRect();
-            const leftBound = anchorLeft < clickedNoteLeft ? anchorLeft : clickedNoteLeft;
-            const rightBound = anchorRight > clickedNoteRight ? anchorRight : clickedNoteRight;
-
-            // In this case, we know no track contains both anchor and clickedNote. Some may not include either.
-            for (const track of this.currentTrackSelections.keys()) {
-                const trackSelection = this.currentTrackSelections.get(track)!;
-                const noteIterator = track.notes;
-                const [knownNote, knownNoteIsOnLeftEdge, knownNoteIsOnRightEdge] =
-                    this.anchor!.track === track
-                        ? [this.anchor, anchorLeft === leftBound, anchorRight === rightBound]
-                        : clickedNote.track === track
-                            ? [clickedNote, clickedNoteLeft === leftBound, clickedNoteRight === rightBound]
-                            : [undefined];
-
-                if (knownNote) {
-                    const leftEdgeTest = knownNoteIsOnLeftEdge
-                        ? (note: ISbDmNoteEvent) => {
-                            return note === knownNote;
-                        }
-                        : this.getAboutHalfCoveredTest(leftBound, rightBound);
-                    this.deselectUntilMatch(trackSelection, noteIterator, leftEdgeTest);
-
-                    if (knownNoteIsOnRightEdge) {
-                        if (!knownNoteIsOnLeftEdge) {
-                            this.selectUntilMatch(trackSelection, noteIterator, (note) => {
-                                return note === knownNote;
-                            });
-                        }
-                    } else {
-                        this.selectUntilNoMoreMatches(trackSelection, noteIterator,
-                            this.getAboutHalfCoveredTest(leftBound, rightBound));
-                    }
-
-                    this.deselectUntilNoMoreSelected(trackSelection, noteIterator);
-                } else {
-                    const inclusionTest = this.getAboutHalfCoveredTest(leftBound, rightBound);
-
-                    this.deselectUntilMatch(trackSelection, noteIterator, inclusionTest);
-                    this.selectUntilNoMoreMatches(trackSelection, noteIterator, inclusionTest);
-                    this.deselectUntilNoMoreSelected(trackSelection, noteIterator);
-                }
-            }
-        }
-
-        void requisitions.execute("selectionChanged", { added: [], removed: [] });
-    }
-
-    /**
-     * Records the note where a drag selection begins.
-     *
-     * @param note The note where the mouse was pressed.
-     */
-    public handleMouseDown(note: ISbDmNoteEvent): void {
-        this.lastMouseDownNote = note;
-    }
-
-    /**
-     * Handles a drag selection up to the given note, restarting selection if necessary.
-     *
-     * @param note The note reached by the drag.
-     */
-    public handleDragSelect(note: ISbDmNoteEvent): void {
-        if (this.anchor !== this.lastMouseDownNote) {
-            this.restartSelection(this.lastMouseDownNote);
-        }
-
-        this.handleClick(note);
-    }
-
-    /**
-     * Whether any selection exists (old or new model).
+     * Whether any selection exists.
      *
      * @returns True if at least one selection entry exists.
      */
     public get hasSelection(): boolean {
-        return this.currentTrackSelections.size > 0 || this.currentSelection.size > 0;
+        return this.currentSelection.size > 0;
     }
 
     /**
-     * Checks if a note is selected in the new model.
+     * Checks whether a grid cell is selected.
      *
-     * @param bar The measure number (1-based).
-     * @param trackId The track identifier.
-     * @param noteId The note event identifier.
+     * @param measure The measure the cell belongs to.
+     * @param start The exact start of the cell within the measure.
      *
-     * @returns True if the note is selected.
+     * @returns True if the cell is selected.
      */
-    public isNoteSelected(bar: number, trackId: number, noteId: number): boolean {
-        return this.currentSelection.has(`note:${bar}:${trackId}:${noteId}`);
+    public isCellSelected(measure: ISbDmTrackMeasure, start: IFraction): boolean {
+        return this.currentSelection.has(this.noteKey(measure, measure.track.id, start));
     }
 
     /**
@@ -311,8 +184,6 @@ export class SelectionManager {
      * @param selectionMode The selection mode to use for the new selection. If omitted, the current mode is used.
      */
     public beginSelection(selectionMode?: SelectionMode): void {
-        this.anchor = undefined;
-        this.lastClickedNote = undefined;
         this.previousEntries = [];
 
         if (selectionMode) {
@@ -370,20 +241,68 @@ export class SelectionManager {
     }
 
     /**
+     * Previews a note at the pointer position before selection is committed.
+     *
+     * @param clickRect A tiny rect at the pointer position.
+     */
+    public previewNote(clickRect: DOMRect): void {
+        const entries = this.resolveEntries(clickRect);
+
+        const noteIds: number[] = [];
+        for (const entry of entries) {
+            const { target } = entry;
+            if (target.granularity !== SelectionGranularity.Note) {
+                continue;
+            }
+
+            // Only a note's own start cell previews the note; cells inside its duration and
+            // subdivision slots do not address a note event.
+            const { measure } = target;
+            const cellStart = target.start ?? target.event.start;
+            const modelEvent = modelEventAt(measure, cellStart);
+            if (modelEvent === undefined || compareFractions(modelEvent.start, cellStart) !== 0) {
+                continue;
+            }
+
+            const noteEvent = measure.noteEvents.at(measure.events.indexOf(modelEvent));
+            if (noteEvent !== undefined) {
+                noteIds.push(noteEvent.id);
+            }
+        }
+
+        if (noteIds.length > 0) {
+            void requisitions.execute("notesClicked", noteIds);
+        }
+    }
+
+    /**
      * Selects one or more whole measures, optionally filtered by track.
      *
      * @param barNumbers The measure numbers to select (1-based).
      * @param trackIds Optional track filter; when omitted all tracks in the measure are implied.
      */
     public selectMeasures(barNumbers: number[], trackIds?: number[]): void {
+        const arrangement = this.dataModel?.arrangement;
+        if (!arrangement) {
+            return;
+        }
+
+        const tracks = trackIds === undefined
+            ? arrangement.tracks
+            : arrangement.tracks.filter((track) => {
+                return trackIds.includes(track.id);
+            });
+
         const entries: ISelectionEntry[] = [];
         for (const bar of barNumbers) {
-            if (trackIds) {
-                for (const trackId of trackIds) {
-                    entries.push({ granularity: SelectionGranularity.Measure, bar, trackId });
+            for (const track of tracks) {
+                const measure = track.measures.at(bar - 1);
+                if (measure) {
+                    entries.push({
+                        granularity: SelectionGranularity.Measure,
+                        target: { granularity: SelectionGranularity.Measure, measure },
+                    });
                 }
-            } else {
-                entries.push({ granularity: SelectionGranularity.Measure, bar, trackId: 0 });
             }
         }
 
@@ -414,9 +333,21 @@ export class SelectionManager {
      * @param trackIds The track identifiers to select.
      */
     public selectTracks(trackIds: number[]): void {
-        const entries: ISelectionEntry[] = trackIds.map((trackId) => {
-            return { granularity: SelectionGranularity.Track, bar: 0, trackId };
-        });
+        const arrangement = this.dataModel?.arrangement;
+
+        const entries: ISelectionEntry[] = [];
+        for (const trackId of trackIds) {
+            const track = arrangement?.tracks.find((candidate) => {
+                return candidate.id === trackId;
+            });
+
+            if (track) {
+                entries.push({
+                    granularity: SelectionGranularity.Track,
+                    target: { granularity: SelectionGranularity.Track, track },
+                });
+            }
+        }
 
         this.applySelection(entries);
     }
@@ -438,11 +369,45 @@ export class SelectionManager {
      * Clears all selection state and publishes a change.
      */
     public clearSelection(): void {
-        const wasClear = this.internalClearSelection();
-        if (wasClear) {
-            this.anchor = undefined;
-            this.lastClickedNote = undefined;
+        this.internalClearSelection();
+    }
+
+    /**
+     * Selects exactly one grid cell, replacing the current selection.
+     *
+     * @param entry The grid note or rest cell to select.
+     */
+    public selectSingleNote(entry: ISelectionEntry): void {
+        if (entry.granularity !== SelectionGranularity.Note) {
+            return;
         }
+
+        const removed = [...this.currentSelection.values()];
+        const key = this.entryKey(entry);
+        this.currentSelection.clear();
+        this.currentSelection.set(key, entry);
+        this.previousEntries = [];
+
+        void requisitions.execute("selectionChanged", { added: [entry], removed });
+        this.schedulePersist();
+    }
+
+    /**
+     * Replaces the current selection with the given entries in a single change.
+     *
+     * @param entries The entries that become the new selection.
+     */
+    public replaceSelection(entries: ISelectionEntry[]): void {
+        const removed = [...this.currentSelection.values()];
+        this.currentSelection.clear();
+        for (const entry of entries) {
+            this.currentSelection.set(this.entryKey(entry), entry);
+        }
+
+        this.previousEntries = [];
+
+        void requisitions.execute("selectionChanged", { added: entries, removed });
+        this.schedulePersist();
     }
 
     /**
@@ -508,10 +473,9 @@ export class SelectionManager {
      * @returns True if there was a selection to clear, false otherwise.
      */
     private internalClearSelection(): boolean {
-        const hadSelection = this.currentTrackSelections.size > 0 || this.currentSelection.size > 0;
+        const hadSelection = this.currentSelection.size > 0;
         if (hadSelection) {
             const removed = [...this.currentSelection.values()];
-            this.currentTrackSelections.clear();
             this.currentSelection.clear();
             this.previousEntries = [];
             void requisitions.execute("selectionChanged", { added: [], removed });
@@ -533,200 +497,48 @@ export class SelectionManager {
      * @returns A string key unique to the entry's granularity and position.
      */
     private entryKey(entry: ISelectionEntry): string {
-        const { granularity, bar, trackId, startStep, endStep, noteId } = entry;
-        switch (granularity) {
+        const { target } = entry;
+
+        switch (target.granularity) {
             case SelectionGranularity.Track: {
-                return `track:${trackId}`;
+                return `track:${target.track.id}`;
             }
 
             case SelectionGranularity.Measure: {
-                return `measure:${bar}`;
+                return `measure:${target.measure.number}`;
             }
 
             case SelectionGranularity.TrackPiece: {
-                return `trackPiece:${bar}:${trackId}`;
+                return `trackPiece:${target.measure.number}:${target.track.id}`;
             }
 
             case SelectionGranularity.NoteGroup: {
-                return `noteGroup:${bar}:${trackId}:${startStep}-${endStep}`;
+                return `noteGroup:${target.measure.number}:${target.measure.track.id}:`
+                    + formatFraction(target.events[0].start);
             }
 
             case SelectionGranularity.Note: {
-                return noteId !== undefined
-                    ? `note:${bar}:${trackId}:${noteId}`
-                    : `note:${bar}:${trackId}:step${startStep}`;
+                return this.noteKey(target.measure, target.measure.track.id,
+                    target.start ?? target.event.start);
             }
-
-            default: {
-                return "";
-            }
-        }
-    }
-
-    private restartSelection(note?: ISbDmNoteEvent): void {
-        this.currentTrackSelections.clear();
-
-        if (note) {
-            this.currentTrackSelections.set(note.track, this.createTrackSelection(note));
-        }
-
-        this.anchor = note;
-        void requisitions.execute("selectionChanged", { added: [], removed: [] });
-    }
-
-    private recalcSelectedTracks(clickedNote: ISbDmNoteEvent): void {
-        const allTracks = this.anchor!.track.arrangement.tracks;
-        const anchorTrackIndex = allTracks.indexOf(this.anchor!.track);
-        const clickedTrackIndex = allTracks.indexOf(clickedNote.track);
-        const [start, end] = anchorTrackIndex < clickedTrackIndex
-            ? [anchorTrackIndex, clickedTrackIndex]
-            : [clickedTrackIndex, anchorTrackIndex];
-
-        let index = 0;
-        for (; index < start; index++) {
-            this.currentTrackSelections.delete(allTracks[index]);
-        }
-        for (; index <= end; index++) {
-            if (!this.currentTrackSelections.has(allTracks[index])) {
-                this.currentTrackSelections.set(allTracks[index], this.createTrackSelection());
-            }
-        }
-        for (; index < allTracks.length; index++) {
-            this.currentTrackSelections.delete(allTracks[index]);
-        }
-    }
-
-    private createTrackSelection(note?: ISbDmNoteEvent): ITrackSelection {
-        if (note) {
-            return {
-                selectedNotes: new Set<ISbDmNoteEvent>().add(note),
-                range: [note, note]
-            };
-        }
-
-        return {
-            selectedNotes: new Set(),
-            range: [undefined, undefined],
-        };
-    }
-
-    private getAboutHalfCoveredTest(leftBound: number, rightBound: number): ((note: ISbDmNoteEvent) => boolean) {
-        const selectionWidth = rightBound - leftBound;
-
-        return (note: ISbDmNoteEvent) => {
-            const testElement = document.getElementById(`note-${note.id}`)!;
-            const { left, right, width } = testElement.getBoundingClientRect();
-
-            if (right > rightBound) {
-                if (left > rightBound) {
-                    // This element is to the right of the selection area, with no overlap.
-                    return false;
-                }
-                if (left > leftBound) {
-                    // This element covers the right edge of the selection area.
-                    return (rightBound - left) / width > 0.4;
-                }
-                // This element is wider than the selection area, and completely covers it.
-
-                return selectionWidth / width > 0.4;
-            } else {
-                if (right < leftBound) {
-                    // This element is to the left of the selection area, with no overlap.
-                    return false;
-                }
-                if (left < leftBound) {
-                    // This element covers the left edge of the selection area.
-                    return (right - leftBound) / width > 0.4;
-                }
-                // This element is completely inside the selection area.
-
-                return true;
-            }
-        };
-    }
-
-    private deselectUntilMatch(trackSelection: ITrackSelection, iterator: IterableIterator<ISbDmNoteEvent>,
-        matches: (note: ISbDmNoteEvent) => boolean): void {
-        while (true) {
-            const next = iterator.next();
-            if (next.done) {
-                return;
-            }
-
-            const note = next.value;
-
-            if (matches(note)) {
-                trackSelection.range[0] = note;
-                // For cases where there's only one selected note in this track.
-                trackSelection.range[1] = note;
-                trackSelection.selectedNotes.add(note);
-
-                return;
-            }
-
-            trackSelection.selectedNotes.delete(note);
-        }
-    }
-
-    private selectUntilMatch(trackSelection: ITrackSelection, iterator: IterableIterator<ISbDmNoteEvent>,
-        matches: (note: ISbDmNoteEvent) => boolean): void {
-        while (true) {
-            const next = iterator.next();
-            if (next.done) {
-                return;
-            }
-
-            const note = next.value;
-            trackSelection.selectedNotes.add(note);
-
-            if (matches(note)) {
-                trackSelection.range[1] = note;
-
-                return;
-            }
-        }
-    }
-
-    private selectUntilNoMoreMatches(trackSelection: ITrackSelection, iterator: IterableIterator<ISbDmNoteEvent>,
-        matches: (note: ISbDmNoteEvent) => boolean): void {
-        while (true) {
-            const next = iterator.next();
-            if (next.done) {
-                return;
-            }
-
-            const note = next.value;
-
-            if (matches(note)) {
-                trackSelection.selectedNotes.add(note);
-                trackSelection.range[1] = note;
-            } else {
-                trackSelection.selectedNotes.delete(note);
-
-                return;
-            }
-        }
-    }
-
-    private deselectUntilNoMoreSelected(trackSelection: ITrackSelection,
-        iterator: IterableIterator<ISbDmNoteEvent>): void {
-        while (true) {
-            const next = iterator.next();
-            if (next.done) {
-                return;
-            }
-
-            const note = next.value;
-
-            if (trackSelection.selectedNotes.has(note)) {
-                trackSelection.selectedNotes.delete(note);
-            } else {
-                return;
-            } // Once we find no more selected notes, we're done.
         }
     }
 
     /**
+     * Builds the key of a grid cell, which is addressed by its measure and exact start.
+     *
+     * @param measure The measure the cell belongs to.
+     * @param trackId The track identity.
+     * @param start The exact cell start within the measure.
+     *
+     * @returns The cell's selection key.
+     */
+    private noteKey(measure: ISbDmTrackMeasure, trackId: number, start: IFraction): string {
+        return `note:${measure.number}:${trackId}:${formatFraction(start)}`;
+    }
+
+    /**
+     * Filters entries to the most specific granularity present, discarding all others.
      * Filters entries to the most specific granularity present, discarding all others.
      * When any Note entries exist only Notes are kept; otherwise NoteGroups; then TrackPieces; etc.
      *
@@ -765,12 +577,11 @@ export class SelectionManager {
             rawEntries.push(...tester.hitTest(rect));
         }
 
-        if (rawEntries.some((e) => {
-            return e.granularity === SelectionGranularity.Track;
-        })) {
-            return rawEntries.filter((e) => {
-                return e.granularity === SelectionGranularity.Track;
-            });
+        const trackEntries = rawEntries.filter((entry) => {
+            return entry.granularity === SelectionGranularity.Track;
+        });
+        if (trackEntries.length > 0) {
+            return trackEntries;
         }
 
         return this.filterToDominantGranularity(rawEntries);
@@ -846,8 +657,9 @@ export class SelectionManager {
     private publishPlayRange(): void {
         const bars = new Set<number>();
         for (const entry of this.currentSelection.values()) {
-            if (entry.bar > 0) {
-                bars.add(entry.bar);
+            const { target } = entry;
+            if (target.granularity !== SelectionGranularity.Track) {
+                bars.add(target.measure.number);
             }
         }
 
@@ -904,19 +716,26 @@ export class SelectionManager {
         // Save the original selection for later restoration.
         this.originalSelection = new Map(this.currentSelection);
 
-        // Collect all distinct bar numbers from the current selection.
-        const barSet = new Set<number>();
+        // Collect the measures of the selected bars.
+        const measures = new Map<number, ISbDmTrackMeasure>();
         for (const entry of this.currentSelection.values()) {
-            if (entry.bar > 0) {
-                barSet.add(entry.bar);
+            const coordinates = SelectionSerializer.coordinatesOf(entry);
+            if (coordinates.bar < 1) {
+                continue;
+            }
+
+            const measure = this.measureOfBar(coordinates.bar);
+            if (measure !== undefined) {
+                measures.set(coordinates.bar, measure);
             }
         }
 
-        const measureEntries: ISelectionEntry[] = [...barSet].map((bar) => {
+        const measureEntries: ISelectionEntry[] = [...measures.values()].map((measure) => {
             return {
                 granularity: SelectionGranularity.Measure,
-                bar,
-                trackId: 0,
+                bar: measure.number,
+                trackId: measure.track.id,
+                target: { granularity: SelectionGranularity.Measure, measure },
             };
         });
 
@@ -929,6 +748,24 @@ export class SelectionManager {
 
         void requisitions.execute("selectionChanged", { added: measureEntries, removed });
         this.publishPlayRange();
+    }
+
+    /**
+     * Returns one of the bar's measures, which represents the bar for a measure-level selection.
+     *
+     * @param bar The one-based measure number.
+     *
+     * @returns A measure of that bar, or undefined when no track has it.
+     */
+    private measureOfBar(bar: number): ISbDmTrackMeasure | undefined {
+        for (const track of this.dataModel?.arrangement?.tracks ?? []) {
+            const measure = track.measures.at(bar - 1);
+            if (measure) {
+                return measure;
+            }
+        }
+
+        return undefined;
     }
 
     /**
@@ -981,7 +818,7 @@ export class SelectionManager {
         const viewSettings = settings.viewSettings ?? {};
 
         if (entries.length > 0) {
-            viewSettings.selectionState = JSON.stringify(entries);
+            viewSettings.selectionState = JSON.stringify(SelectionSerializer.serialise(entries));
         } else {
             delete viewSettings.selectionState;
         }
@@ -995,22 +832,24 @@ export class SelectionManager {
      * Called when the scorebook finishes loading so the arrangement and DOM are ready.
      */
     private restorePersistedSelection(): void {
+        const arrangement = this.dataModel?.arrangement;
         const state = AppStorage.loadUISettings()?.viewSettings?.selectionState;
-        if (!state) {
+        if (!arrangement || !state) {
             return;
         }
 
-        let entries: ISelectionEntry[];
+        let stored: ISerialisedSelectionEntry[];
         try {
-            entries = JSON.parse(state) as ISelectionEntry[];
+            stored = JSON.parse(state) as ISerialisedSelectionEntry[];
         } catch {
             return;
         }
 
-        if (!Array.isArray(entries) || entries.length === 0) {
+        if (!Array.isArray(stored) || stored.length === 0) {
             return;
         }
 
+        const entries = SelectionSerializer.deserialise(arrangement, stored);
         const removed = [...this.currentSelection.values()];
         this.currentSelection.clear();
         for (const entry of entries) {
@@ -1051,4 +890,72 @@ export class SelectionManager {
 
         return Promise.resolve(true);
     };
+
+    /**
+     * Remembers the edit mode published by the app. A selection view is created when the arrangement
+     * viewer mounts, which can happen after this requisition was sent, so the new view would start
+     * without a delete button unless it is told the current state.
+     *
+     * @param enabled Whether edit mode is active.
+     *
+     * @returns A resolved promise to satisfy the requisition handler signature.
+     */
+    private handleEditModeChanged = (enabled: boolean): Promise<boolean> => {
+        this.editMode = enabled;
+
+        return Promise.resolve(true);
+    };
+
+    /**
+     * Reacts to an undo/redo by re-resolving the selection against the current arrangement.
+     *
+     * @returns A resolved promise to satisfy the requisition handler signature.
+     */
+    private handleArrangementReverted = (): Promise<boolean> => {
+        this.reResolveSelection();
+
+        return Promise.resolve(true);
+    };
+
+    /**
+     * Re-resolves the selection against the current arrangement. An undo/redo replaces the model
+     * objects, so the entries are serialised to their coordinates and resolved back; entries whose
+     * element no longer exists are dropped. Publishes a change only when the selection differs.
+     */
+    private reResolveSelection(): void {
+        const arrangement = this.dataModel?.arrangement;
+        if (!arrangement) {
+            this.internalClearSelection();
+
+            return;
+        }
+
+        const previous = [...this.currentSelection.values()];
+        const resolved = SelectionSerializer.deserialise(arrangement, SelectionSerializer.serialise(previous));
+
+        const previousKeys = new Set(previous.map((entry) => {
+            return this.entryKey(entry);
+        }));
+        const resolvedKeys = new Set(resolved.map((entry) => {
+            return this.entryKey(entry);
+        }));
+
+        const added = resolved.filter((entry) => {
+            return !previousKeys.has(this.entryKey(entry));
+        });
+        const removed = previous.filter((entry) => {
+            return !resolvedKeys.has(this.entryKey(entry));
+        });
+
+        this.currentSelection.clear();
+        for (const entry of resolved) {
+            this.currentSelection.set(this.entryKey(entry), entry);
+        }
+
+        if (added.length > 0 || removed.length > 0) {
+            void requisitions.execute("selectionChanged", { added, removed });
+            this.publishPlayRange();
+            this.schedulePersist();
+        }
+    }
 }

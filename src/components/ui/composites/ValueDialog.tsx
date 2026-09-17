@@ -7,7 +7,7 @@ import { ComponentChild, createRef } from "preact";
 
 import { Semaphore } from "../../../supplement/Semaphore.js";
 import { Button } from "../framework/Button.js";
-import { Codicon } from "../framework/Codicon.js";
+import { UIIcon } from "../framework/UIIcon.js";
 import { Container } from "../framework/Container.js";
 import { Dialog, DialogResponseClosure, type IDialogResponse } from "../framework/Dialog.js";
 import { Grid } from "../framework/Grid.js";
@@ -73,7 +73,7 @@ export interface IValueDialogShowOptions {
 export interface IValueDialogState {
     id: string;
     caption: string;
-    icon: Codicon;
+    icon: UIIcon;
     entries: IValueEditorEntry[];
     valueMap: Map<string, IValueEditorValueEntry>;
     acceptLabel: string;
@@ -100,7 +100,7 @@ export class ValueDialog extends UIComponent<{}, IValueDialogState> {
         this.state = {
             id: "",
             caption: "",
-            icon: Codicon.Undefined,
+            icon: UIIcon.Undefined,
             valueMap: new Map(),
             entries: [],
             acceptLabel: "OK",
@@ -127,7 +127,7 @@ export class ValueDialog extends UIComponent<{}, IValueDialogState> {
         this.dialogRef.current?.close(false);
     }
 
-    public async show(id: string, caption: string, icon: Codicon,
+    public async show(id: string, caption: string, icon: UIIcon,
         entries: IValueEditorEntry[], options?: IValueDialogShowOptions): Promise<IDialogResponse> {
         const { acceptLabel, declineLabel, errorMessage, hideActions, isDefault } = options ?? {};
 
@@ -284,7 +284,7 @@ export class ValueDialog extends UIComponent<{}, IValueDialogState> {
                     orientation={Orientation.LeftToRight}
                     crossAlignment={ChildAlignment.Center}
                 >
-                    <Icon src={Codicon.Error}
+                    <Icon src={UIIcon.Error}
                         style={{ fontSize: "16px", marginRight: "8px" }} />
                     <Label caption={errorMessage} wrap />
                 </Container>

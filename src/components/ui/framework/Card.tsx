@@ -27,12 +27,15 @@ export class Card extends UIComponent<ICardProperties> {
         if (roundedCorners.topLeft !== undefined) {
             newStyle.borderTopLeftRadius = `${roundedCorners.topLeft}px`;
         }
+
         if (roundedCorners.topRight !== undefined) {
             newStyle.borderTopRightRadius = `${roundedCorners.topRight}px`;
         }
+
         if (roundedCorners.bottomLeft !== undefined) {
             newStyle.borderBottomLeftRadius = `${roundedCorners.bottomLeft}px`;
         }
+
         if (roundedCorners.bottomRight !== undefined) {
             newStyle.borderBottomRightRadius = `${roundedCorners.bottomRight}px`;
         }

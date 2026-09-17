@@ -200,6 +200,16 @@ export default tseslint.config(
                     prev: "*",
                     next: "return",
                 },
+                {
+                    blankLine: "always",
+                    prev: "block-like",
+                    next: "*",
+                },
+                {
+                    blankLine: "any",
+                    prev: "case",
+                    next: "case",
+                },
             ],
             "@stylistic/quotes": [
                 "error",

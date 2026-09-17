@@ -65,6 +65,7 @@ interface IDialogProperties extends ICommonUIProperties {
  */
 export class Dialog extends UIComponent<IDialogProperties> {
     private portalRef = createRef<Portal>();
+    private dialogRef = createRef<HTMLDivElement>();
 
     /** When set, suppresses the default onClose mapping in handlePortalClose. */
     private customReturnValue?: string;
@@ -78,9 +79,11 @@ export class Dialog extends UIComponent<IDialogProperties> {
             <Portal
                 ref={this.portalRef}
                 onClose={this.handlePortalClose}
+                onEnter={this.handleEnter}
             >
                 <div
                     id={id}
+                    ref={this.dialogRef}
                     class={className}
                     onClick={(e: Event) => {
                         e.stopPropagation();
@@ -143,5 +146,20 @@ export class Dialog extends UIComponent<IDialogProperties> {
             this.customReturnValue = button.value;
             this.portalRef.current?.close(button.value !== "accept");
         }
+    };
+
+    private handleEnter = (e: KeyboardEvent): void => {
+        const target = e.target as HTMLElement | null;
+
+        // Keep native Enter handling for focused inputs and buttons.
+        if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement
+            || target instanceof HTMLSelectElement || target instanceof HTMLButtonElement) {
+            return;
+        }
+
+        const defaultButton = this.dialogRef.current
+            ?.querySelector<HTMLButtonElement>("button.du-btn-primary");
+
+        defaultButton?.click();
     };
 }

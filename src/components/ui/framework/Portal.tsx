@@ -34,6 +34,9 @@ export interface IPortalProperties extends ICommonUIProperties {
 
     onOpen?: (props: IPortalProperties) => void;
     onClose?: (cancelled: boolean, props: IPortalProperties) => void;
+
+    /** Called when Enter is pressed while this is the topmost portal. */
+    onEnter?: (event: KeyboardEvent) => void;
 }
 
 interface IPortalState {
@@ -90,6 +93,7 @@ export class Portal extends UIComponent<IPortalProperties, IPortalState> {
                 this.host.addEventListener("wheel", this.handlePortalMouseWheel);
                 container.appendChild(this.host);
             }
+
             render(children, this.host);
         } else {
             this.host?.remove();
@@ -176,21 +180,33 @@ export class Portal extends UIComponent<IPortalProperties, IPortalState> {
     };
 
     static {
-        // A single keydown handler for all portals. Only the topmost
-        // portal responds, respecting its closeOnEscape setting.
+        // A single keydown handler for all portals. Only the topmost portal responds: Escape closes it
+        // (respecting closeOnEscape), Enter is forwarded to its onEnter callback (e.g. the dialog's
+        // default action).
         document.body.addEventListener("keydown", (e: KeyboardEvent): void => {
-            if (Portal.portalStack.length > 0 && e.key === "Escape") {
-                const portal = Portal.portalStack.top;
+            if (Portal.portalStack.length === 0) {
+                return;
+            }
 
-                if (portal) {
-                    const { options } = portal.state;
+            const portal = Portal.portalStack.top;
+            if (!portal) {
+                return;
+            }
 
-                    if (options.closeOnEscape) {
-                        e.stopImmediatePropagation();
-                        e.stopPropagation();
-                        portal.close(true);
-                    }
+            if (e.key === "Escape") {
+                const { options } = portal.state;
+
+                if (options.closeOnEscape) {
+                    e.stopImmediatePropagation();
+                    e.stopPropagation();
+                    portal.close(true);
                 }
+
+                return;
+            }
+
+            if (e.key === "Enter") {
+                portal.props.onEnter?.(e);
             }
         });
     }

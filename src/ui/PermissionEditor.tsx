@@ -7,7 +7,7 @@ import { createRef, type ComponentChild } from "preact";
 import type { RefObject } from "preact";
 
 import { Button } from "../components/ui/framework/Button.js";
-import { Codicon } from "../components/ui/framework/Codicon.js";
+import { UIIcon } from "../components/ui/framework/UIIcon.js";
 import { ConfirmDialog } from "../components/ui/composites/ConfirmDialog.js";
 import { DialogResponseClosure } from "../components/ui/framework/Dialog.js";
 import { Container } from "../components/ui/framework/Container.js";
@@ -280,7 +280,7 @@ export class PermissionEditor extends UIComponent<IPermissionEditorProperties, I
                             onRemove();
                         }}
                     >
-                        <Icon src={Codicon.Close} />
+                        <Icon src={UIIcon.Close} />
                     </Button>
                 )}
             </span>

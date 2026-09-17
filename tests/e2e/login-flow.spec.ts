@@ -4,7 +4,7 @@
  */
 
 import { expect, test } from "@playwright/test";
-import { routeApi, setupAnonymousSession } from "./helpers.js";
+import { routeApi, setupAnonymousSession } from "./e2e-test-helpers.js";
 
 test.describe("Login Flow", () => {
     test.beforeEach(async ({ page }) => {
@@ -53,6 +53,36 @@ test.describe("Login Flow", () => {
         // Splash should fade out — class removed, opacity animating to 0.
         await expect(splash).not.toHaveClass(/splash-visible/);
         await expect(page.locator("#appRoot")).toBeVisible();
+    });
+
+    test("typing into username and password fields updates input values", async ({ page }) => {
+        const jsErrors: string[] = [];
+        page.on("pageerror", (error) => {
+            jsErrors.push(error.message);
+        });
+
+        await page.goto("/");
+
+        const loginDialog = page.locator("#loginDialog");
+        await expect(loginDialog).toBeVisible();
+
+        const usernameInput = loginDialog.locator("#login-username");
+        const passwordInput = loginDialog.locator("#login-password");
+
+        // Verify no JS exceptions occurred during page load and dialog render.
+        expect(jsErrors).toEqual([]);
+
+        // Type character by character (simulates real user input, not .fill()).
+        await usernameInput.click();
+        await page.keyboard.type("test-user");
+        await expect(usernameInput).toHaveValue("test-user");
+
+        await passwordInput.click();
+        await page.keyboard.type("secret123");
+        await expect(passwordInput).toHaveValue("secret123");
+
+        // Verify no errors during typing.
+        expect(jsErrors).toEqual([]);
     });
 
     test("successful login closes dialog and shows app", async ({ page }) => {

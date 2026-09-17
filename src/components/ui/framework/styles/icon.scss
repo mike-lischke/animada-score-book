@@ -29,13 +29,13 @@
     min-height: 16px;
     color: var(--color-base-content);
 
-    &.codicon {
+    &:is(svg) {
         display: inline-flex;
         align-items: center;
         justify-content: center;
     }
 
-    &:not(.codicon) {
+    &:not(svg) {
         mask-repeat: no-repeat;
         mask-position: center;
         mask-size: contain;
@@ -48,6 +48,20 @@
         mask-composite: subtract;
 
         background-color: var(--color-base-content);
+    }
+
+    &.spin {
+        animation: icon-spin 2s infinite linear;
+    }
+}
+
+@keyframes icon-spin {
+    from {
+        transform: rotate(0deg);
+    }
+
+    to {
+        transform: rotate(360deg);
     }
 }
 

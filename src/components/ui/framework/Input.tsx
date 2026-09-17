@@ -7,7 +7,7 @@ import { ComponentChild, createRef } from "preact";
 
 import { KeyboardKeys } from "../../../core/utils.js";
 import { Button } from "./Button.js";
-import { Codicon } from "./Codicon.js";
+import { UIIcon } from "./UIIcon.js";
 import { Icon } from "./Icon.js";
 import { UIComponent, type ICommonUIProperties } from "./UIComponent.js";
 import type { TextAlignment } from "./ui-types.js";
@@ -145,7 +145,7 @@ export class Input extends UIComponent<IInputProperties, IInputState> {
                         }}
                     >
                         <Icon
-                            src={passwordVisible ? Codicon.EyeClosed : Codicon.Eye}
+                            src={passwordVisible ? UIIcon.EyeClosed : UIIcon.Eye}
                             style={{ fontSize: "14px" }}
                         />
                     </Button>

@@ -6,7 +6,7 @@
 import type { ComponentChild } from "preact";
 
 import { WaveformPlayer } from "../components/ui/composites/WaveformPlayer.js";
-import { Codicon } from "../components/ui/framework/Codicon.js";
+import { UIIcon } from "../components/ui/framework/UIIcon.js";
 import { Container } from "../components/ui/framework/Container.js";
 import { Icon } from "../components/ui/framework/Icon.js";
 import { Label } from "../components/ui/framework/Label.js";
@@ -39,10 +39,10 @@ export class TranscriptionEditor extends UIComponent<ITranscriptionEditorPropert
                 orientation={Orientation.TopDown}
             >
                 <Container orientation={Orientation.LeftToRight} style={{ marginBottom: "16px" }}>
-                    <Icon src={Codicon.VmRunning} style={{ fontSize: "50px", color: "cornflowerblue" }} />
-                    <Icon src={Codicon.ArrowRight} style={{ fontSize: "16px", marginTop: "auto" }} />
+                    <Icon src={UIIcon.VmRunning} style={{ fontSize: "50px", color: "cornflowerblue" }} />
+                    <Icon src={UIIcon.ArrowRight} style={{ fontSize: "16px", marginTop: "auto" }} />
                     <Icon
-                        src={Codicon.Music}
+                        src={UIIcon.Music}
                         style={{ fontSize: "30px", marginTop: "auto", color: "cornflowerblue" }}
                     />
                     <Label heading={true} style={{ marginLeft: "16px" }}>Transcribe a Song</Label>

@@ -82,9 +82,11 @@ vi.mock("../../src/player/TrackPlayer.js", () => {
                 firstEvent = event;
                 break;
             }
+
             if (firstEvent) {
                 events.push({ realTime: t, audioBuffer: {} as AudioBuffer, event: firstEvent });
             }
+
             events.push({
                 realTime: t,
                 callback: () => {
@@ -108,11 +110,26 @@ vi.mock("../../src/player/TrackPlayer.js", () => {
 });
 
 // Build simple track/arrangement factories
+const makeMeasure = (track: ISbDmTrack, stepResolution = 16): ISbDmTrackMeasure => {
+    return {
+        type: SbDmEntityType.TrackMeasure,
+        id: getNewId(),
+        track,
+        number: 1,
+        meter: { beats: 4, beatUnits: 4, stepResolution, beatGroups: [stepResolution] },
+        events: [],
+        subdivisions: [],
+        noteEvents: [],
+    };
+};
+
 const makeNote = (track: ISbDmTrack, timing: ITiming, noteStyle?: IAudioData): ISbDmNoteEvent => {
+    const measure = makeMeasure(track);
+
     return {
         type: SbDmEntityType.NoteEvent,
         id: getNewId(),
-        measureNumber: 1,
+        measure,
         start: { numerator: timing.step - 1, denominator: 16 },
         duration: { numerator: 1, denominator: 16 },
         track,
@@ -193,29 +210,23 @@ const makeArrangement = (trackCount: number): ISbDmArrangement => {
 
         const sourceNote = makeNote(track, { bar: 1, step: 1 }, noteStyle);
         notes.push(sourceNote);
-        track.measures.push({
-            type: SbDmEntityType.TrackMeasure,
-            id: getNewId(),
-            number: 1,
-            meter: {
-                beats: 4,
-                beatUnits: 4,
-                stepResolution: 1,
-                beatGroups: [1],
-            },
-            steps: [{ index: 0, noteStyleId: sourceNote.audioData?.id }],
-            subdivisions: [],
-            events: [{
-                type: SbDmEntityType.NoteEvent,
-                id: sourceNote.id,
-                measureNumber: 1,
-                start: { numerator: 0, denominator: 1 },
-                duration: { numerator: 1, denominator: 1 },
-                track: track as unknown as ISbDmTrack,
-                timing: { bar: 1, step: 1 },
-                audioData: sourceNote.audioData,
-            }],
+        const measure = makeMeasure(track as unknown as ISbDmTrack, 1);
+        measure.events.push({
+            start: { numerator: 0, denominator: 1 },
+            duration: { numerator: 1, denominator: 1 },
+            noteStyleId: sourceNote.audioData?.id,
         });
+        measure.noteEvents.push({
+            type: SbDmEntityType.NoteEvent,
+            id: sourceNote.id,
+            measure,
+            start: { numerator: 0, denominator: 1 },
+            duration: { numerator: 1, denominator: 1 },
+            track: track as unknown as ISbDmTrack,
+            timing: { bar: 1, step: 1 },
+            audioData: sourceNote.audioData,
+        });
+        track.measures.push(measure);
         tracks.push(track);
     }
 
@@ -227,6 +238,7 @@ const makeArrangement = (trackCount: number): ISbDmArrangement => {
         tracks,
         addTrack: vi.fn(),
         removeTrack: vi.fn(),
+        duplicateTrack: vi.fn(),
         applyArrangementSnapshot: vi.fn(),
         mainVolume: 1,
         loop: false,
@@ -245,7 +257,7 @@ const makeArrangement = (trackCount: number): ISbDmArrangement => {
 // Import after mocks
 import {
     SbDmEntityType, ScoreBookDataModel, type ISbDmArrangement, type ISbDmInstrument, type ISbDmNoteEvent,
-    type ISbDmTimeParams, type ISbDmTrack, type ITiming, type RealTime
+    type ISbDmTimeParams, type ISbDmTrack, type ISbDmTrackMeasure, type ITiming, type RealTime
 } from "../../src/core/ScoreBookDataModel.js";
 import { getNewId } from "../../src/core/utils.js";
 import { ArrangementPlayer } from "../../src/player/ArrangementPlayer.js";

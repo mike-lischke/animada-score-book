@@ -5,7 +5,7 @@
 
 import { type IncomingMessage, type ServerResponse } from "node:http";
 
-import { Auth, type ITokenPayload, LoginAuditEvent } from "./Auth.js";
+import { Auth, type ITokenPayload, LoginAuditEvent, EntityType } from "./Auth.js";
 import { type RequestContext } from "./RequestContext.js";
 
 export class AuthRoutes {
@@ -409,14 +409,14 @@ export class AuthRoutes {
         );
 
         for (const f of orphanFolders) {
-            await this.ctx.auth.setOwner("folder", f.id, result.insertId);
+            await this.ctx.auth.setOwner(EntityType.Folder, f.id, result.insertId);
 
             if (worldId !== undefined) {
-                await this.ctx.auth.addEntityGroup("folder", f.id, worldId, false);
+                await this.ctx.auth.addEntityGroup(EntityType.Folder, f.id, worldId, false);
             }
 
             if (defaultGroupId) {
-                await this.ctx.auth.addEntityGroup("folder", f.id, defaultGroupId, false);
+                await this.ctx.auth.addEntityGroup(EntityType.Folder, f.id, defaultGroupId, false);
             }
         }
 
@@ -429,14 +429,14 @@ export class AuthRoutes {
         );
 
         for (const s of orphanScores) {
-            await this.ctx.auth.setOwner("score", s.id, result.insertId);
+            await this.ctx.auth.setOwner(EntityType.Score, s.id, result.insertId);
 
             if (worldId !== undefined) {
-                await this.ctx.auth.addEntityGroup("score", s.id, worldId, false);
+                await this.ctx.auth.addEntityGroup(EntityType.Score, s.id, worldId, false);
             }
 
             if (defaultGroupId) {
-                await this.ctx.auth.addEntityGroup("score", s.id, defaultGroupId, false);
+                await this.ctx.auth.addEntityGroup(EntityType.Score, s.id, defaultGroupId, false);
             }
         }
 

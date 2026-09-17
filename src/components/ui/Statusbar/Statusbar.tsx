@@ -7,6 +7,8 @@ import { ComponentChild, createRef } from "preact";
 
 import { requisitions } from "../../../supplement/Requisitions.js";
 import { Container } from "../framework/Container.js";
+import { Icon } from "../framework/Icon.js";
+import { iconNameToUIIcon } from "../framework/UIIcon.js";
 import { Orientation, ChildAlignment } from "../framework/ui-types.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
 import { StatusBarAlignment, StatusBarItem, type IStatusBarItem, type IStatusBarItemOptions } from "./StatusBarItem.js";
@@ -64,7 +66,7 @@ export class Statusbar extends UIComponent<ICommonUIProperties, IStatusBarState>
     /**
      * Shows a temporary status bar message.
      *
-     * @param text The message to show, supports $(icon-name) codicon syntax.
+     * @param text The message to show, supports $(icon-name) syntax to embed an icon.
      * @param hideAfterTimeout Timeout in milliseconds after which the message will be disposed.
      *
      * @returns A disposable which hides the status bar message.
@@ -73,7 +75,7 @@ export class Statusbar extends UIComponent<ICommonUIProperties, IStatusBarState>
     /**
      * Shows a temporary status bar message that hides when the promise resolves or rejects.
      *
-     * @param text The message to show, supports $(icon-name) codicon syntax.
+     * @param text The message to show, supports $(icon-name) syntax to embed an icon.
      * @param hideWhenDone Promise on whose completion the message will be disposed.
      *
      * @returns A disposable which hides the status bar message.
@@ -194,7 +196,7 @@ export class Statusbar extends UIComponent<ICommonUIProperties, IStatusBarState>
 
     /**
      * Creates a span element for a single status bar item.
-     * Converts $(icon-name) syntax in text to codicon spans.
+     * Converts $(icon-name) syntax in text to inline icons.
      *
      * @param index The index of the item used for the preact key.
      * @param item The status bar item details for rendering.
@@ -204,6 +206,11 @@ export class Statusbar extends UIComponent<ICommonUIProperties, IStatusBarState>
     private renderItemButton(index: number, item: IStatusBarItem): ComponentChild {
         const text = item.text.replace(/[\n\r]/g, "");
         const elements: ComponentChild[] = [];
+
+        if (item.icon) {
+            elements.push(item.icon);
+        }
+
         let lastIndex = 0;
         const matches = [...text.matchAll(/\$\([a-z-~]+\)/g)];
 
@@ -212,15 +219,19 @@ export class Statusbar extends UIComponent<ICommonUIProperties, IStatusBarState>
                 elements.push(text.substring(lastIndex, match.index));
             }
 
-            let icon = match[0].slice(2, -1);
-            let iconClass = "";
-            if (icon.endsWith("~spin")) {
-                iconClass += "codicon-modifier-spin ";
-                icon = icon.slice(0, -5);
+            let iconName = match[0].slice(2, -1);
+            let spin = false;
+            if (iconName.endsWith("~spin")) {
+                spin = true;
+                iconName = iconName.slice(0, -5);
             }
-            iconClass += `codicon codicon-${icon}`;
 
-            elements.push(<span key={`icon-${index}-${i}`} className={iconClass} />);
+            const uiIcon = iconNameToUIIcon.get(iconName);
+            if (uiIcon !== undefined) {
+                elements.push(
+                    <Icon key={`icon-${index}-${i}`} src={uiIcon} className={spin ? "spin" : undefined} />,
+                );
+            }
 
             lastIndex = match.index + match[0].length;
         });

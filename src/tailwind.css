@@ -23,8 +23,3 @@
     @apply outline-1 outline-base-content/50 outline-offset-0;
   }
 }
-
-/* Allow mouse events reaching disabled buttons (for tooltips). */
-.du-btn:disabled {
-    pointer-events: all;
-}

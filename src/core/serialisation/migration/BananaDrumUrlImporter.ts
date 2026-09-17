@@ -208,6 +208,7 @@ export class LegacyArrangement {
                 result[1] = note;
                 break;
             }
+
             index++;
         }
 

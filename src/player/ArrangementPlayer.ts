@@ -133,6 +133,7 @@ export class ArrangementPlayer {
         for (const player of this.trackPlayers.values()) {
             player.onStop();
         }
+
         this.metronome.onStop();
     };
 
@@ -144,6 +145,7 @@ export class ArrangementPlayer {
         if (this.disposed) {
             return;
         }
+
         this.disposed = true;
 
         // Stop any ongoing play state.
@@ -341,6 +343,7 @@ export class ArrangementPlayer {
         if (this.disposed) {
             return [];
         }
+
         const events: Event[] = [];
         this.trackPlayers.forEach((trackPlayer) => {
             trackPlayer.getEvents(interval).forEach((event) => {

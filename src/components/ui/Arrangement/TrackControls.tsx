@@ -6,13 +6,13 @@
 import { AppStorage } from "../../../core/AppStorage.js";
 import type { ISbDmTrack } from "../../../core/ScoreBookDataModel.js";
 import type { Mutable } from "../../../core/types/general.js";
-import type { ScoreBookUiServices } from "../../../player/types.js";
 import { requisitions } from "../../../supplement/Requisitions.js";
+import type { SelectionManager } from "../../../ui/SelectionManager.js";
 import {
-    SelectionGranularity, type ISelectionDelta, type ISelectionEntry, type ISelectionHitTester,
-} from "../../../ui/selection-types.js";
+    SelectionGranularity, SelectionSerializer, type ISelectionDelta, type ISelectionEntry, type ISelectionHitTester,
+} from "../../../ui/SelectionSerializer.js";
 import { Button } from "../framework/Button.js";
-import { Codicon } from "../framework/Codicon.js";
+import { UIIcon } from "../framework/UIIcon.js";
 import { Container } from "../framework/Container.js";
 import { Icon } from "../framework/Icon.js";
 import { NoteImage, NoteLength } from "../framework/NoteImage.js";
@@ -23,7 +23,7 @@ import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.
 
 export interface ITrackControlsProperties extends ICommonUIProperties {
     tracks: ISbDmTrack[];
-    services: ScoreBookUiServices;
+    selectionManager: SelectionManager;
     innerRef?: preact.RefObject<HTMLDivElement>;
 }
 
@@ -52,15 +52,15 @@ export class TrackControls extends UIComponent<ITrackControlsProperties, ITrackC
     }
 
     public override componentDidMount(): void {
-        const { services } = this.props;
-        services.selectionManager.registerHitTester(this);
+        const { selectionManager } = this.props;
+        selectionManager.registerHitTester(this);
         requisitions.register("selectionChanged", this.handleSelectionChanged);
         this.recomputeEffectiveVolumes();
     }
 
     public override componentWillUnmount(): void {
-        const { services } = this.props;
-        services.selectionManager.unregisterHitTester(this);
+        const { selectionManager } = this.props;
+        selectionManager.unregisterHitTester(this);
         requisitions.unregister("selectionChanged", this.handleSelectionChanged);
     }
 
@@ -89,8 +89,7 @@ export class TrackControls extends UIComponent<ITrackControlsProperties, ITrackC
                 const track = tracks[i];
                 entries.push({
                     granularity: SelectionGranularity.Track,
-                    bar: 0,
-                    trackId: track.id,
+                    target: { granularity: SelectionGranularity.Track, track },
                 });
             }
         }
@@ -117,7 +116,6 @@ export class TrackControls extends UIComponent<ITrackControlsProperties, ITrackC
                 <Container
                     key={track.id}
                     className="trackControls"
-                    data-track={track.id}
                     orientation={Orientation.LeftToRight}
                     crossAlignment={ChildAlignment.Center}
                 >
@@ -177,7 +175,7 @@ export class TrackControls extends UIComponent<ITrackControlsProperties, ITrackC
                         imageOnly
                         onClick={this.toggleMixer}
                     >
-                        <Icon src={Codicon.Settings} width={16} height={16} alt="Collapse mixer" />
+                        <Icon src={UIIcon.Settings} width={16} height={16} alt="Collapse mixer" />
                     </Button>
                     <Container
                         className="trackViewModeToggleGroup"
@@ -273,12 +271,13 @@ export class TrackControls extends UIComponent<ITrackControlsProperties, ITrackC
     };
 
     private handleSelectionChanged = (_delta: ISelectionDelta): Promise<boolean> => {
-        const { services } = this.props;
+        const { selectionManager } = this.props;
         const selectedTrackIds = new Set<number>();
 
-        for (const entry of services.selectionManager.currentSelection.values()) {
-            if (entry.granularity === SelectionGranularity.Track && entry.trackId > 0) {
-                selectedTrackIds.add(entry.trackId);
+        for (const entry of selectionManager.currentSelection.values()) {
+            if (entry.granularity === SelectionGranularity.Track) {
+                const track = SelectionSerializer.trackOf(entry);
+                selectedTrackIds.add(track.id);
             }
         }
 

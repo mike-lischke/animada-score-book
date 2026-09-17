@@ -7,7 +7,7 @@ import { createRef, type ComponentChild, type RefObject } from "preact";
 
 import { requisitions } from "../../../supplement/Requisitions.js";
 import { Button } from "../framework/Button.js";
-import { Codicon } from "../framework/Codicon.js";
+import { UIIcon } from "../framework/UIIcon.js";
 import { Container } from "../framework/Container.js";
 import { Icon } from "../framework/Icon.js";
 import { Label } from "../framework/Label.js";
@@ -93,10 +93,10 @@ const singleton = createRef<NotificationCenter>();
  * For critical messages use the (modal) `Dialog` class.
  */
 export class NotificationCenter extends UIComponent<ICommonUIProperties, INotificationCenterState> {
-    private static typeToIconMap = new Map<NotificationType, Codicon>([
-        [NotificationType.Error, Codicon.Error],
-        [NotificationType.Information, Codicon.Info],
-        [NotificationType.Warning, Codicon.Warning],
+    private static typeToIconMap = new Map<NotificationType, UIIcon>([
+        [NotificationType.Error, UIIcon.Error],
+        [NotificationType.Information, UIIcon.Info],
+        [NotificationType.Warning, UIIcon.Warning],
     ]);
     private static nextToastId = 0;
 
@@ -278,7 +278,7 @@ export class NotificationCenter extends UIComponent<ICommonUIProperties, INotifi
                             imageOnly
                             onClick={this.closeToast.bind(this, toast, undefined)}
                         >
-                            <Icon src={Codicon.Close} />
+                            <Icon src={UIIcon.Close} />
                         </Button>
                     </Container>
                     {buttons.length > 0 && (
@@ -321,21 +321,21 @@ export class NotificationCenter extends UIComponent<ICommonUIProperties, INotifi
                     data-tooltip="Clear All Notifications"
                     onClick={this.clearHistory}
                 >
-                    <Icon data-tooltip="inherit" className="actionIcon" src={Codicon.ClearAll} />
+                    <Icon data-tooltip="inherit" className="actionIcon" src={UIIcon.ClearAll} />
                 </Button>
                 <Button
                     imageOnly
                     data-tooltip="Toggle Do Not Disturb Mode"
                     onClick={this.toggleSilentMode}
                 >
-                    <Icon data-tooltip="inherit" className="actionIcon" src={Codicon.BellSlash} />
+                    <Icon data-tooltip="inherit" className="actionIcon" src={UIIcon.BellSlash} />
                 </Button>
                 <Button
                     imageOnly
                     onClick={this.toggleHistory}
                     data-tooltip="Hide Notifications (Escape)"
                 >
-                    <Icon data-tooltip="inherit" className="actionIcon" src={Codicon.ChevronDown} />
+                    <Icon data-tooltip="inherit" className="actionIcon" src={UIIcon.ChevronDown} />
                 </Button>
             </Container>
         );
@@ -379,7 +379,7 @@ export class NotificationCenter extends UIComponent<ICommonUIProperties, INotifi
                             imageOnly
                             onClick={this.closeToast.bind(this, toast, undefined)}
                         >
-                            <Icon src={Codicon.Close} />
+                            <Icon src={UIIcon.Close} />
                         </Button>
                     </Container>
                     {buttons.length > 0 && (

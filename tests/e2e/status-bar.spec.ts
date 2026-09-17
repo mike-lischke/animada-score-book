@@ -5,7 +5,7 @@
 
 import { expect, test } from "@playwright/test";
 
-import { beijaFlorImportPath, expectImportedPolyrhythmSong, routeApi } from "./helpers.js";
+import { beijaFlorImportPath, expectImportedPolyrhythmSong, routeApi } from "./e2e-test-helpers.js";
 
 test.beforeEach(async ({ page }) => {
     await routeApi(page);

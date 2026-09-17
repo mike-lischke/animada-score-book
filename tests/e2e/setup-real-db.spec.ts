@@ -84,6 +84,7 @@ test.describe.serial("Setup: real database integration", () => {
                 DB_NAME: testDbName,
                 DB_USER: dbUser,
                 DB_PASSWORD: dbPassword,
+                VITEST: "true",
             },
             stdio: "pipe",
         });
