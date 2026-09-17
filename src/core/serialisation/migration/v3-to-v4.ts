@@ -8,7 +8,7 @@ import type {
     IArrangementSnapshot, IFraction, IMeasureEvent, ITrackMeasureSnapshot, ISubdivision
 } from "../../types/general.js";
 import { addFractions, compareFractions, reduceFraction } from "../numeric-functions.js";
-import { decomposeRestSteps, pulseStepCount } from "../../rest-notation.js";
+import { decomposeRestSpan } from "../../rest-notation.js";
 import { arrangementSnapshotVersion } from "../snapshots.js";
 import type {
     ILegacyArrangementSnapshotV3, ILegacyMeasureSnapshot, ILegacySubdivision
@@ -184,7 +184,7 @@ const convertMeasureToV4 = (measure: ILegacyMeasureSnapshot, pulse: string): ITr
         }
     }
 
-    const events = decomposeFinalRests(final, subdivisionFinalIndices, stepResolution, pulseFraction);
+    const events = decomposeFinalRests(final, subdivisionFinalIndices, stepResolution);
 
     const subdivisions: ISubdivision[] = subdivisionRecords.map((record) => {
         const start = serialized[record.firstSerializedIndex].start;
@@ -209,19 +209,18 @@ const convertMeasureToV4 = (measure: ILegacyMeasureSnapshot, pulse: string): ITr
 };
 
 /**
- * Decomposes every non-subdivision rest into standard note values aligned to the pulse, so the
- * staff view can render each rest with a single glyph. Subdivision slot events stay untouched.
+ * Decomposes every non-subdivision rest into standard note values, so the staff view can render
+ * each rest with a single glyph. Only the span decides the split, so a dotted value may stand
+ * wherever it fits. Subdivision slot events stay untouched.
  *
  * @param events The synthesised measure events.
  * @param subdivisionIndices Indices into {@link events} that are subdivision slot events.
  * @param stepResolution The measure's step resolution.
- * @param pulseFraction The rhythmic pulse as a fraction.
  *
  * @returns The events with standard-value rests.
  */
 const decomposeFinalRests = (events: IMeasureEvent[], subdivisionIndices: Set<number>,
-    stepResolution: number, pulseFraction: IFraction): IMeasureEvent[] => {
-    const pulseSteps = pulseStepCount(pulseFraction, stepResolution);
+    stepResolution: number): IMeasureEvent[] => {
     const result: IMeasureEvent[] = [];
 
     for (let index = 0; index < events.length; index++) {
@@ -242,15 +241,10 @@ const decomposeFinalRests = (events: IMeasureEvent[], subdivisionIndices: Set<nu
             continue;
         }
 
-        const parts = decomposeRestSteps(startStep, startStep + durationSteps, pulseSteps, stepResolution);
-        let step = startStep;
-
-        for (const part of parts) {
-            result.push({
-                start: reduceFraction(step, stepResolution),
-                duration: reduceFraction(part, stepResolution),
-            });
-            step += part;
+        let position = { ...event.start };
+        for (const part of decomposeRestSpan(event.duration)) {
+            result.push({ start: position, duration: { ...part } });
+            position = addFractions(position, part);
         }
     }
 

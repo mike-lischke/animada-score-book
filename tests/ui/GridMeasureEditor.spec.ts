@@ -15,7 +15,8 @@ import { requisitions } from "../../src/supplement/Requisitions.js";
 import { GridMeasureEditor } from "../../src/ui/GridMeasureEditor.js";
 import { SelectionGranularity, SelectionSerializer, type ISelectionEntry } from "../../src/ui/SelectionSerializer.js";
 import {
-    createInstrument, hydrateMeasureEvents, measureEntry, noteEntry, noteGroupEntry, setCellNote, trackEntry,
+    createInstrument, hydrateMeasureEvents, measureEntry, noteEntry, noteGroupEntry, noteValue, setCellNote,
+    trackEntry,
     trackPieceEntry,
 } from "../unit-test-helpers.js";
 
@@ -283,19 +284,29 @@ describe.sequential("GridMeasureEditor note length entry", () => {
         const track = model.arrangement!.tracks[0];
         const position = { bar: 1, trackId: track.id, step: 0 };
 
-        expect(editor.noteLengthDuration(NoteLength.Whole, position)).toEqual({ numerator: 1, denominator: 1 });
-        expect(editor.noteLengthDuration(NoteLength.Half, position)).toEqual({ numerator: 1, denominator: 2 });
-        expect(editor.noteLengthDuration(NoteLength.Quarter, position)).toEqual({ numerator: 1, denominator: 4 });
-        expect(editor.noteLengthDuration(NoteLength.Eighth, position)).toEqual({ numerator: 1, denominator: 8 });
-        expect(editor.noteLengthDuration(NoteLength.Sixteenth, position)).toEqual({ numerator: 1, denominator: 16 });
-        expect(editor.noteLengthDuration(NoteLength.ThirtySecond, position)).toBeUndefined();
+        expect(editor.noteValueDuration(noteValue(NoteLength.Whole), position))
+            .toEqual({ numerator: 1, denominator: 1 });
+        expect(editor.noteValueDuration(noteValue(NoteLength.Half), position))
+            .toEqual({ numerator: 1, denominator: 2 });
+        expect(editor.noteValueDuration(noteValue(NoteLength.Quarter), position))
+            .toEqual({ numerator: 1, denominator: 4 });
+        expect(editor.noteValueDuration(noteValue(NoteLength.Eighth), position))
+            .toEqual({ numerator: 1, denominator: 8 });
+        expect(editor.noteValueDuration(noteValue(NoteLength.Sixteenth), position))
+            .toEqual({ numerator: 1, denominator: 16 });
+        expect(editor.noteValueDuration(noteValue(NoteLength.ThirtySecond), position)).toBeUndefined();
+
+        // The dot adds half of the value, and a dotted whole note does not fit into a bar.
+        expect(editor.noteValueDuration(noteValue(NoteLength.Quarter, true), position))
+            .toEqual({ numerator: 3, denominator: 8 });
+        expect(editor.noteValueDuration(noteValue(NoteLength.Whole, true), position)).toBeUndefined();
     });
 
     it("inserts a note spanning the selected duration", () => {
         const track = model.arrangement!.tracks[0];
         track.instrument.noteStyles["1"] = { id: "1" } as IAudioData;
         const position = { bar: 1, trackId: track.id, step: 0 };
-        const duration = editor.noteLengthDuration(NoteLength.Quarter, position)!;
+        const duration = editor.noteValueDuration(noteValue(NoteLength.Quarter), position)!;
 
         const style = editor.insertNote(position, duration, "1");
 
@@ -303,6 +314,21 @@ describe.sequential("GridMeasureEditor note length entry", () => {
         expect(noteAtStep(track.measures[0], 0)).toBe("1");
         expect(noteAtStep(track.measures[0], 3)).toBe("1");
         expect(noteAtStep(track.measures[0], 4)).toBeUndefined();
+    });
+
+    it("keeps a rest's length when a length is applied to a rest cell", () => {
+        const track = model.arrangement!.tracks[0];
+        const measure = track.measures[0];
+        const rest = measure.events[0];
+        expect(rest.noteStyleId).toBeUndefined();
+
+        const entry = noteEntry(measure, { numerator: 0, denominator: 1 });
+
+        // The grid addresses cells of its raster, so a rest keeps its length: the space a longer
+        // rest would need can only come from the staff, which has free positions.
+        expect(editor.resizeSelection([entry], noteValue(NoteLength.Half))).toBe(false);
+        expect(measure.events).toHaveLength(1);
+        expect(measure.events[0].duration).toEqual({ numerator: 1, denominator: 1 });
     });
 
     it("rejects a note that would extend past the bar", () => {

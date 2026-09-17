@@ -4,9 +4,9 @@
  */
 
 import type {
-    INoteResizeRequest, ISbDmTrack, ISbDmTrackMeasure, ScoreBookDataModel,
+    IEventResizeRequest, ISbDmTrack, ISbDmTrackMeasure, ScoreBookDataModel,
 } from "../core/ScoreBookDataModel.js";
-import { NoteLength, noteLengthDenominator } from "../core/rest-notation.js";
+import { noteValueFraction, type INoteValue } from "../core/rest-notation.js";
 import { compareFractions, reduceFraction } from "../core/serialisation/numeric-functions.js";
 import type { IAudioData, IFraction } from "../core/types/general.js";
 import { selectionToClearRanges } from "./selection-ranges.js";
@@ -15,8 +15,8 @@ import { SelectionSerializer, type ISelectionEntry } from "./SelectionSerializer
 /** The bar line as a bar fraction. */
 const barLine: IFraction = { numerator: 1, denominator: 1 };
 
-/** A note start as the data model addresses it: one track, one measure, one exact position. */
-export interface INoteStart {
+/** An event a selection entry addresses, as the data model addresses it: track, measure, position. */
+export interface IAddressedEvent {
     trackId: number;
     bar: number;
     start: IFraction;
@@ -86,41 +86,42 @@ export abstract class MeasureEditor {
     }
 
     /**
-     * Applies a note length to the notes addressed by the selection entries. Notes in different
-     * tracks are resized independently, each track rippling its own following notes. Only notes are
-     * resized: rests and selections that span whole measures or tracks keep their duration.
+     * Applies a note value to the events addressed by the selection entries. Notes in different
+     * tracks are resized independently, each track rippling its own following notes; a rest takes the
+     * value by moving the content behind it. Only what the entries address is resized: selections
+     * that span whole measures or tracks keep their duration.
      *
      * @param entries The selection entries to resize.
-     * @param length The selected note length.
+     * @param value The selected note value, including its augmentation dot.
      *
-     * @returns True when at least one note duration changed.
+     * @returns True when at least one duration changed.
      */
-    public resizeSelection(entries: ISelectionEntry[], length: NoteLength): boolean {
-        const requestsByTrack = new Map<number, INoteResizeRequest[]>();
+    public resizeSelection(entries: ISelectionEntry[], value: INoteValue): boolean {
+        const requestsByTrack = new Map<number, IEventResizeRequest[]>();
 
         for (const entry of entries) {
-            for (const note of this.noteStartsOf(entry)) {
-                const measure = this.resolveMeasure(note.trackId, note.bar);
+            for (const addressed of this.addressedEventsOf(entry)) {
+                const measure = this.resolveMeasure(addressed.trackId, addressed.bar);
                 const duration = measure === undefined
                     ? undefined
-                    : this.noteLengthDurationFor(length, measure);
+                    : this.noteValueDurationFor(value, measure);
                 if (duration === undefined) {
                     continue;
                 }
 
-                const request = { bar: note.bar, start: note.start, duration };
-                const requests = requestsByTrack.get(note.trackId);
+                const request = { bar: addressed.bar, start: addressed.start, duration };
+                const requests = requestsByTrack.get(addressed.trackId);
                 if (requests) {
                     requests.push(request);
                 } else {
-                    requestsByTrack.set(note.trackId, [request]);
+                    requestsByTrack.set(addressed.trackId, [request]);
                 }
             }
         }
 
         let changed = false;
         for (const [trackId, requests] of requestsByTrack) {
-            changed = this.dataModel.resizeNotes(trackId, requests) || changed;
+            changed = this.dataModel.resizeEvents(trackId, requests) || changed;
         }
 
         return changed;
@@ -168,29 +169,25 @@ export abstract class MeasureEditor {
     }
 
     /**
-     * Converts a note length into its duration as a fraction of the measure. The arrangement's step
+     * Converts a note value into its duration as a fraction of the measure. The arrangement's step
      * resolution counts steps per whole note, the measure's resolution steps per bar. The data model
      * addresses notes by whole steps, so a value that does not land on one is rejected here instead
      * of being dropped silently later.
      *
-     * @param length The selected note length.
+     * @param value The selected note value, including its augmentation dot.
      * @param measure The measure the duration is expressed in.
      *
      * @returns The duration as a fraction of the measure, or undefined when the value is invalid.
      */
-    protected noteLengthDurationFor(length: NoteLength, measure: ISbDmTrackMeasure): IFraction | undefined {
+    protected noteValueDurationFor(value: INoteValue, measure: ISbDmTrackMeasure): IFraction | undefined {
         const arrangement = this.dataModel.arrangement;
         if (!arrangement) {
             return undefined;
         }
 
-        const denominator = noteLengthDenominator(length);
-        if (denominator <= 0) {
-            return undefined;
-        }
-
-        const duration = reduceFraction(arrangement.timeParams.stepResolution,
-            denominator * measure.meter.stepResolution);
+        const fraction = noteValueFraction(value);
+        const duration = reduceFraction(arrangement.timeParams.stepResolution * fraction.numerator,
+            fraction.denominator * measure.meter.stepResolution);
         const steps = duration.numerator * measure.meter.stepResolution / duration.denominator;
 
         return Number.isInteger(steps) && steps >= 1 && compareFractions(duration, barLine) <= 0
@@ -288,13 +285,14 @@ export abstract class MeasureEditor {
     }
 
     /**
-     * Resolves the note starts a selection entry addresses. A note addresses the note it was
-     * selected at, a note group every note it contains; coarser granularities describe whole
-     * measures or tracks and address no notes at all.
+     * Resolves the events a selection entry addresses. A note addresses the event it was selected at,
+     * a note group every event it contains; coarser granularities describe whole measures or tracks
+     * and address no events at all. What the data model finds at an address — a note or a rest —
+     * decides how a length change applies.
      *
      * @param entry The selection entry to resolve.
      *
-     * @returns The addressed note starts, in measure order.
+     * @returns The addressed events, in measure order.
      */
-    protected abstract noteStartsOf(entry: ISelectionEntry): INoteStart[];
+    protected abstract addressedEventsOf(entry: ISelectionEntry): IAddressedEvent[];
 }

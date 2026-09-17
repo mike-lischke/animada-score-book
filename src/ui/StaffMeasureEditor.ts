@@ -4,10 +4,10 @@
  */
 
 import type { ISbDmTrackMeasure } from "../core/ScoreBookDataModel.js";
-import { NoteLength } from "../core/rest-notation.js";
+import type { INoteValue } from "../core/rest-notation.js";
 import { addFractions, compareFractions, subtractFractions } from "../core/serialisation/numeric-functions.js";
 import type { IAudioData, IFraction, IMeasureEvent } from "../core/types/general.js";
-import { MeasureEditor, type INoteStart } from "./MeasureEditor.js";
+import { MeasureEditor, type IAddressedEvent } from "./MeasureEditor.js";
 import { SelectionGranularity, type ISelectionEntry } from "./SelectionSerializer.js";
 
 /** The bar line as a bar fraction. */
@@ -60,18 +60,18 @@ export class StaffMeasureEditor extends MeasureEditor {
     }
 
     /**
-     * Resolves the bar fraction covered by a note of the given length at the given position. The
+     * Resolves the bar fraction covered by a note of the given value at the given position. The
      * staff has no raster, so every value the meter can express is allowed.
      *
-     * @param length The selected note length.
+     * @param value The selected note value, including its augmentation dot.
      * @param position The position whose measure supplies the meter.
      *
      * @returns The duration as a fraction of the bar, or undefined when the value is invalid.
      */
-    public noteLengthDuration(length: NoteLength, position: IStaffEditorPosition): IFraction | undefined {
+    public noteValueDuration(value: INoteValue, position: IStaffEditorPosition): IFraction | undefined {
         const measure = this.resolveMeasure(position.trackId, position.bar);
 
-        return measure === undefined ? undefined : this.noteLengthDurationFor(length, measure);
+        return measure === undefined ? undefined : this.noteValueDurationFor(value, measure);
     }
 
     /**
@@ -168,35 +168,28 @@ export class StaffMeasureEditor extends MeasureEditor {
     }
 
     /**
-     * Resolves the note starts addressed by a selection entry. A run addresses the note it renders,
-     * a note group every note it contains. Unlike a grid cell, a run never sits inside a longer note,
-     * so the addressed note is always the one to resize.
+     * Resolves the events addressed by a selection entry. A run addresses the event it renders, a note
+     * group every event it contains. The staff has free positions, so a rest is addressed as well: a
+     * length change moves the content behind it instead of ignoring it.
      *
      * @param entry The selection entry to resolve.
      *
-     * @returns The addressed note starts, in measure order.
+     * @returns The addressed events, in measure order.
      */
-    protected override noteStartsOf(entry: ISelectionEntry): INoteStart[] {
+    protected override addressedEventsOf(entry: ISelectionEntry): IAddressedEvent[] {
         const { target } = entry;
 
         if (target.granularity === SelectionGranularity.Note) {
-            return target.event.noteStyleId === undefined
-                ? []
-                : [this.noteStartOf(target.measure, target.start ?? target.event.start)];
+            return [this.addressedEventOf(target.event.start, target.measure)];
         }
 
         if (target.granularity !== SelectionGranularity.NoteGroup) {
             return [];
         }
 
-        const starts: INoteStart[] = [];
-        for (const event of target.events) {
-            if (event.noteStyleId !== undefined) {
-                starts.push(this.noteStartOf(target.measure, event.start));
-            }
-        }
-
-        return starts;
+        return target.events.map((event) => {
+            return this.addressedEventOf(event.start, target.measure);
+        });
     }
 
     /**
@@ -238,14 +231,14 @@ export class StaffMeasureEditor extends MeasureEditor {
     }
 
     /**
-     * Describes a position inside a measure the way the data model addresses a note.
+     * Describes a position inside a measure the way the data model addresses an event.
      *
-     * @param measure The measure the position belongs to.
      * @param start The position as a fraction of the measure.
+     * @param measure The measure the position belongs to.
      *
-     * @returns The note start.
+     * @returns The addressed event.
      */
-    private noteStartOf(measure: ISbDmTrackMeasure, start: IFraction): INoteStart {
+    private addressedEventOf(start: IFraction, measure: ISbDmTrackMeasure): IAddressedEvent {
         return { trackId: measure.track.id, bar: measure.number, start: { ...start } };
     }
 }

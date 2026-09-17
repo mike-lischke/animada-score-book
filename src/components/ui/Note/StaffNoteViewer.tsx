@@ -15,6 +15,7 @@ import {
     MeasureProjection, ProjectedItemKind, type IProjectedEvent, type IProjectedItem,
 } from "../../../core/MeasureProjection.js";
 import type { IFraction, IAudioData } from "../../../core/types/general.js";
+import { noteValueForUnits, type INoteValue } from "../../../core/rest-notation.js";
 import type { IScoreMetrics } from "../../../player/TimeCoordinator.js";
 import { addFractions, compareFractions, subtractFractions } from "../../../core/serialisation/numeric-functions.js";
 import { ScoreElementKind, type ScoreElementRegistry } from "../../../ui/ScoreElementRegistry.js";
@@ -59,7 +60,7 @@ interface IStaffNoteNode {
     /** Identity of the innermost enclosing tuplet, or undefined for notes outside any tuplet. */
     tupletId?: number;
 
-    glyph: INoteGlyph;
+    glyph: INoteValue;
     beamCount: number;
     displayType: NoteDisplayType;
     diamondOpen?: boolean;
@@ -80,11 +81,6 @@ interface IStaffSubdivisionNode {
 }
 
 type IStaffTreeNode = IStaffNoteNode | IStaffSubdivisionNode;
-
-interface INoteGlyph {
-    icon: NoteLength;
-    dotted: boolean;
-}
 
 interface IBeamInfo {
     segments: IBeamSegment[];
@@ -254,7 +250,7 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
             ? measure.noteEvents[item.eventIndex]?.audioData
             : undefined;
 
-        let glyph: INoteGlyph = { icon: NoteLength.Sixteenth, dotted: false };
+        let glyph: INoteValue = { length: NoteLength.Sixteenth, dotted: false };
         let beamCount = 0;
 
         if (audioData) {
@@ -266,10 +262,10 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                     : 0;
 
                 glyph = this.getStandaloneNoteGlyph(lengthSteps, stepsPerBar, stepsPerPulse, event.duration)
-                    ?? { icon: NoteLength.Sixteenth, dotted: false };
+                    ?? { length: NoteLength.Sixteenth, dotted: false };
             }
 
-            beamCount = this.glyphBeamCount(glyph.icon);
+            beamCount = this.glyphBeamCount(glyph.length);
         }
 
         let displayType = NoteDisplayType.Oval;
@@ -677,7 +673,7 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                 const decoClasses = this.resolveDecorationClasses(node.noteStyle, node.articulation);
                 headWrapperClasses.push(...decoClasses);
 
-                const needsCssStem = !hasBeam && node.glyph.icon !== NoteLength.Whole;
+                const needsCssStem = !hasBeam && node.glyph.length !== NoteLength.Whole;
 
                 const runDivProps: Record<string, unknown> = {
                     key: `${keyPrefix}note-${index}`,
@@ -700,7 +696,7 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                             <NoteImage
                                 className="staff-note-viewer-note-symbol"
                                 kind={NoteKind.Note}
-                                value={node.glyph.icon}
+                                value={node.glyph.length}
                                 style={{
                                     flexShrink: 0,
                                     transform: translateY,
@@ -735,8 +731,8 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                 : 1;
             const restGlyph = this.getStandaloneNoteGlyph(lengthSteps, scoreMetrics.stepsPerBar,
                 scoreMetrics.stepsPerPulse, node.duration)
-                ?? { icon: NoteLength.Sixteenth, dotted: false };
-            const isWholeOrHalf = restGlyph.icon === NoteLength.Whole || restGlyph.icon === NoteLength.Half;
+                ?? { length: NoteLength.Sixteenth, dotted: false };
+            const isWholeOrHalf = restGlyph.length === NoteLength.Whole || restGlyph.length === NoteLength.Half;
 
             return (
                 <div key={`${keyPrefix}rest-${index}`} className="staff-note-viewer-run" style={slotStyle}
@@ -751,7 +747,7 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                     <NoteImage
                         className="staff-note-viewer-rest-symbol"
                         kind={NoteKind.Rest}
-                        value={restGlyph.icon}
+                        value={restGlyph.length}
                         style={{
                             flexShrink: 0,
                             ...(isWholeOrHalf ? { transform: `translateY(${restLineOffset}px)` } : {}),
@@ -921,31 +917,31 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
      *
      * @returns The glyph for the note.
      */
-    private subdivisionGlyph(depth: number): INoteGlyph {
+    private subdivisionGlyph(depth: number): INoteValue {
         if (depth <= 1) {
-            return { icon: NoteLength.Eighth, dotted: false };
+            return { length: NoteLength.Eighth, dotted: false };
         }
 
         if (depth === 2) {
-            return { icon: NoteLength.Sixteenth, dotted: false };
+            return { length: NoteLength.Sixteenth, dotted: false };
         }
 
-        return { icon: NoteLength.ThirtySecond, dotted: false };
+        return { length: NoteLength.ThirtySecond, dotted: false };
     }
 
     private getStandaloneNoteGlyph(lengthSteps: number, stepsPerBar: number, stepsPerPulse: number,
-        duration: IFraction): INoteGlyph | undefined {
+        duration: IFraction): INoteValue | undefined {
         if (stepsPerBar <= 0) {
             return undefined;
         }
 
         if (stepsPerPulse > 0 && stepsPerPulse % 3 === 0 && lengthSteps * 3 === stepsPerPulse
             && duration.numerator * stepsPerBar === duration.denominator) {
-            return { icon: NoteLength.Eighth, dotted: false };
+            return { length: NoteLength.Eighth, dotted: false };
         }
 
         if (duration.denominator > 0 && duration.numerator * 12 === duration.denominator) {
-            return { icon: NoteLength.Eighth, dotted: false };
+            return { length: NoteLength.Eighth, dotted: false };
         }
 
         // Compute note value from the actual duration fraction, not from the
@@ -953,19 +949,8 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
         const units = duration.denominator > 0
             ? (duration.numerator * 32) / duration.denominator
             : (lengthSteps * 32) / stepsPerBar;
-        switch (units) {
-            case 32: return { icon: NoteLength.Whole, dotted: false };
-            case 24: return { icon: NoteLength.Half, dotted: true };
-            case 16: return { icon: NoteLength.Half, dotted: false };
-            case 12: return { icon: NoteLength.Quarter, dotted: true };
-            case 8: return { icon: NoteLength.Quarter, dotted: false };
-            case 6: return { icon: NoteLength.Eighth, dotted: true };
-            case 4: return { icon: NoteLength.Eighth, dotted: false };
-            case 3: return { icon: NoteLength.Sixteenth, dotted: true };
-            case 2: return { icon: NoteLength.Sixteenth, dotted: false };
-            case 1: return { icon: NoteLength.ThirtySecond, dotted: false };
-            default: return undefined;
-        }
+
+        return noteValueForUnits(units);
     }
 
     private getTupletRestIcon(effectiveStepsPerPulse: number): NoteLength {

@@ -9,11 +9,11 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { NoteLengthToolbar } from "../../src/components/ui/Arrangement/NoteLengthToolbar.js";
 import type { ISbDmArrangement, ISbDmTrack, ISbDmTrackMeasure, ScoreBookDataModel }
     from "../../src/core/ScoreBookDataModel.js";
-import { NoteLength } from "../../src/core/rest-notation.js";
+import { NoteLength, type INoteValue } from "../../src/core/rest-notation.js";
 import { requisitions } from "../../src/supplement/Requisitions.js";
 import { SelectionManager } from "../../src/ui/SelectionManager.js";
 import type { ISelectionEntry } from "../../src/ui/SelectionSerializer.js";
-import { noteEntry } from "../unit-test-helpers.js";
+import { noteEntry, noteValue } from "../unit-test-helpers.js";
 
 const makeDataModel = (stepResolution: number, stepsPerBar: number): ScoreBookDataModel => {
     return {
@@ -149,6 +149,95 @@ describe.sequential("NoteLengthToolbar", () => {
         expect(selected?.getAttribute("data-tooltip")).toBe("Quarter note (Alt/Cmd+3)");
     });
 
+    it("renders the dot behind the lengths", () => {
+        const dataModel = makeDataModelWithNotes(32, 32, [{ start: 0, duration: 24 }]);
+        selectionManager.replaceSelection([noteEntryAt(dataModel, 0)]);
+
+        renderResult = render(
+            <NoteLengthToolbar dataModel={dataModel} selectionManager={selectionManager} />,
+        );
+
+        const buttons = [...renderResult.container.querySelectorAll(".noteLengthToolbar button")];
+
+        expect(buttons).toHaveLength(7);
+        expect(buttons[6].classList.contains("noteDotButton")).toBe(true);
+    });
+
+    it("marks a dotted value with its base length and the dot", () => {
+        const dataModel = makeDataModelWithNotes(32, 32, [{ start: 0, duration: 24 }]);
+        selectionManager.replaceSelection([noteEntryAt(dataModel, 0)]);
+
+        renderResult = render(
+            <NoteLengthToolbar dataModel={dataModel} selectionManager={selectionManager} />,
+        );
+
+        const marked = renderResult.container.querySelector(".noteLengthButton.du-btn-primary");
+
+        expect(marked?.getAttribute("data-tooltip")).toBe("Half note (Alt/Cmd+2)");
+        expect(renderResult.container.querySelector(".noteDotButton.du-btn-primary")).not.toBeNull();
+    });
+
+    it("publishes the toggled value when the dot is clicked", () => {
+        const dataModel = makeDataModelWithNotes(32, 32, [{ start: 0, duration: 8 }]);
+        selectionManager.replaceSelection([noteEntryAt(dataModel, 0)]);
+
+        renderResult = render(
+            <NoteLengthToolbar dataModel={dataModel} selectionManager={selectionManager} />,
+        );
+
+        const received: INoteValue[] = [];
+        const handler = (value: INoteValue): Promise<boolean> => {
+            received.push(value);
+
+            return Promise.resolve(true);
+        };
+
+        requisitions.register("noteLengthChanged", handler);
+        fireEvent.click(renderResult.container.querySelector(".noteDotButton")!);
+
+        expect(received).toEqual([noteValue(NoteLength.Quarter, true)]);
+
+        requisitions.unregister("noteLengthChanged", handler);
+    });
+
+    it("applies the dot to the length chosen afterwards", () => {
+        const dataModel = makeDataModelWithNotes(32, 32, [{ start: 0, duration: 24 }]);
+        selectionManager.replaceSelection([noteEntryAt(dataModel, 0)]);
+
+        renderResult = render(
+            <NoteLengthToolbar dataModel={dataModel} selectionManager={selectionManager} />,
+        );
+
+        const received: INoteValue[] = [];
+        const handler = (value: INoteValue): Promise<boolean> => {
+            received.push(value);
+
+            return Promise.resolve(true);
+        };
+
+        requisitions.register("noteLengthChanged", handler);
+        fireEvent.click(renderResult.container.querySelectorAll(".noteLengthButton")[3]);
+
+        expect(received).toEqual([noteValue(NoteLength.Eighth, true)]);
+
+        requisitions.unregister("noteLengthChanged", handler);
+    });
+
+    it("disables a length the dot cannot stretch in the bar", () => {
+        const dataModel = makeDataModelWithNotes(32, 32, [{ start: 0, duration: 24 }]);
+        selectionManager.replaceSelection([noteEntryAt(dataModel, 0)]);
+
+        renderResult = render(
+            <NoteLengthToolbar dataModel={dataModel} selectionManager={selectionManager} />,
+        );
+
+        const buttons = [...renderResult.container.querySelectorAll<HTMLButtonElement>(".noteLengthButton")];
+
+        // The dotted whole note needs more than one bar, so the whole note cannot be chosen.
+        expect(buttons[0].disabled).toBe(true);
+        expect(buttons[1].disabled).toBe(false);
+    });
+
     it("does not mark a note length when selected notes differ", () => {
         const dataModel = makeDataModelWithNotes(32, 32, [
             { start: 0, duration: 8 },
@@ -161,6 +250,58 @@ describe.sequential("NoteLengthToolbar", () => {
         );
 
         expect(renderResult.container.querySelectorAll(".noteLengthButton.du-btn-primary")).toHaveLength(0);
+    });
+
+    it("marks the length of the current measure when the entry's measure was replaced", () => {
+        const dataModel = makeDataModelWithNotes(32, 32, [{ start: 0, duration: 8, rest: true }]);
+        const entry = noteEntryAt(dataModel, 0);
+        const track = dataModel.arrangement!.tracks[0];
+
+        // An undo splices new measure objects into the same track, so an entry keeps the old one.
+        track.measures[0] = {
+            ...track.measures[0],
+            events: [{
+                start: { numerator: 0, denominator: 1 },
+                duration: { numerator: 16, denominator: 32 },
+            }],
+            noteEvents: [{
+                id: 8001,
+                start: { numerator: 0, denominator: 1 },
+                duration: { numerator: 16, denominator: 32 },
+            }],
+        } as unknown as ISbDmTrackMeasure;
+        selectionManager.replaceSelection([entry]);
+
+        renderResult = render(
+            <NoteLengthToolbar dataModel={dataModel} selectionManager={selectionManager} />,
+        );
+
+        const selected = renderResult.container.querySelector(".noteLengthButton.du-btn-primary");
+
+        expect(selected?.getAttribute("data-tooltip")).toBe("Half note (Alt/Cmd+2)");
+    });
+
+    it("does not announce a length when the arrangement is reverted", async () => {
+        const dataModel = makeDataModelWithNotes(32, 32, [{ start: 0, duration: 8 }]);
+        selectionManager.replaceSelection([noteEntryAt(dataModel, 0)]);
+
+        renderResult = render(
+            <NoteLengthToolbar dataModel={dataModel} selectionManager={selectionManager} />,
+        );
+
+        const received: INoteValue[] = [];
+        const handler = (value: INoteValue): Promise<boolean> => {
+            received.push(value);
+
+            return Promise.resolve(true);
+        };
+
+        requisitions.register("noteLengthChanged", handler);
+        await requisitions.execute("arrangementReverted", undefined);
+
+        expect(received).toEqual([]);
+
+        requisitions.unregister("noteLengthChanged", handler);
     });
 
     it("does not mark a note length when nothing is selected", () => {
@@ -182,6 +323,10 @@ describe.sequential("NoteLengthToolbar", () => {
         expect(buttons.every((button) => {
             return button.disabled;
         })).toBe(true);
+
+        const dot = renderResult.container.querySelector<HTMLButtonElement>(".noteDotButton");
+
+        expect(dot?.disabled).toBe(true);
     });
 
     it("fires noteLengthChanged when a button is clicked", () => {
@@ -191,9 +336,9 @@ describe.sequential("NoteLengthToolbar", () => {
             <NoteLengthToolbar dataModel={makeDataModel(32, 32)} selectionManager={selectionManager} />,
         );
 
-        const received: NoteLength[] = [];
-        const handler = (length: NoteLength): Promise<boolean> => {
-            received.push(length);
+        const received: INoteValue[] = [];
+        const handler = (value: INoteValue): Promise<boolean> => {
+            received.push(value);
 
             return Promise.resolve(true);
         };
@@ -203,7 +348,7 @@ describe.sequential("NoteLengthToolbar", () => {
         const buttons = renderResult.container.querySelectorAll(".noteLengthButton");
         fireEvent.click(buttons[3]);
 
-        expect(received).toEqual([NoteLength.Eighth]);
+        expect(received).toEqual([noteValue(NoteLength.Eighth)]);
 
         requisitions.unregister("noteLengthChanged", handler);
     });

@@ -160,9 +160,9 @@ describe("migrateV3ToV4", () => {
         expect(events[2].noteStyleId).toBe("a");
         expect(events[2].duration).toEqual({ numerator: 1, denominator: 24 });
         expect(events[3].noteStyleId).toBeUndefined();
-        expect(events[3].duration).toEqual({ numerator: 1, denominator: 8 });
+        expect(events[3].duration).toEqual({ numerator: 3, denominator: 4 });
         expect(events[4].noteStyleId).toBeUndefined();
-        expect(events[4].duration).toEqual({ numerator: 3, denominator: 4 });
+        expect(events[4].duration).toEqual({ numerator: 1, denominator: 8 });
     });
 
     it("carries articulation onto migrated events", () => {

@@ -8,7 +8,7 @@ import { ComponentPlacement } from "../components/ui/framework/UIComponent.js";
 import { RadialMenu, type IRadialMenuItem } from "../components/ui/framework/RadialMenu.js";
 import { AudioBufferPlayer } from "../player/AudioBufferPlayer.js";
 import { getSharedAudioContext } from "../core/audio-context.js";
-import { NoteLength } from "../core/rest-notation.js";
+import { NoteLength, type INoteValue } from "../core/rest-notation.js";
 import { Articulation, articulationOf, resolveNoteStyleForArticulation } from "../core/articulation.js";
 import { addFractions, compareFractions } from "../core/serialisation/numeric-functions.js";
 import type { IAudioData, IFraction } from "../core/types/general.js";
@@ -56,7 +56,7 @@ export class TrackViewerInputController {
     private longPressPointerId?: number;
     private longPressTarget?: HTMLElement;
     private currentPosition?: ICursorPosition;
-    private noteLength = NoteLength.Quarter;
+    private noteValue: INoteValue = { length: NoteLength.Quarter, dotted: false };
     private articulation?: Articulation;
 
     public constructor(
@@ -293,12 +293,19 @@ export class TrackViewerInputController {
         const shortcutIndex = Number.parseInt(event.key, 10) - 1;
 
         if ((event.altKey || event.metaKey) && !event.ctrlKey && !event.shiftKey) {
+            if (event.key === ".") {
+                this.handleDotShortcut(event);
+
+                return;
+            }
+
             const length = noteLengthShortcuts[shortcutIndex];
+            const value: INoteValue = { length, dotted: this.noteValue.dotted };
             const canSelectLength = shortcutIndex >= 0 && shortcutIndex < noteLengthShortcuts.length
                 && this.selectionManager.hasSelection
-                && this.noteLengthDurationOf(length) !== undefined;
+                && this.noteLengthDurationOf(value) !== undefined;
             if (canSelectLength) {
-                void requisitions.execute("noteLengthChanged", length);
+                void requisitions.execute("noteLengthChanged", value);
                 event.preventDefault();
 
                 return;
@@ -441,15 +448,15 @@ export class TrackViewerInputController {
         return Promise.resolve(this.enterNote(noteStyleId));
     };
 
-    private handleNoteLengthChanged = (length: NoteLength): Promise<boolean> => {
-        this.noteLength = length;
+    private handleNoteLengthChanged = (value: INoteValue): Promise<boolean> => {
+        this.noteValue = value;
 
         // Duration changes only exist in the staff view; the grid works with fixed steps.
         const editor = this.staffEditor;
         if (this.editMode && this.viewMode === "staff" && editor !== undefined) {
             const entries = [...this.selectionManager.currentSelection.values()];
 
-            if (editor.resizeSelection(entries, length)) {
+            if (editor.resizeSelection(entries, value)) {
                 this.selectionManager.replaceSelection(editor.refreshSelection(entries));
             }
         }
@@ -522,7 +529,7 @@ export class TrackViewerInputController {
         if (position.start !== undefined) {
             selectedStyle = editor.setNote(position, style.id);
         } else {
-            const duration = editor.noteLengthDuration(this.noteLength, position);
+            const duration = editor.noteValueDuration(this.noteValue, position);
             const insertion = duration === undefined ? undefined : editor.resolveNoteInsertion(position, duration);
             selectedStyle = insertion === undefined
                 ? undefined
@@ -563,7 +570,7 @@ export class TrackViewerInputController {
             return true;
         }
 
-        const duration = editor.noteLengthDuration(this.noteLength, position);
+        const duration = editor.noteValueDuration(this.noteValue, position);
         const inserted = duration === undefined
             ? undefined
             : editor.insertNoteWithShift(position, duration, style.id);
@@ -900,23 +907,40 @@ export class TrackViewerInputController {
     }
 
     /**
-     * Resolves the duration of a note length at the cursor in the current view.
+     * Resolves the duration of a note value at the cursor in the current view.
      *
-     * @param length The note length to resolve.
+     * @param value The note value to resolve.
      *
      * @returns The duration as a fraction of the bar, or undefined when the view cannot represent it.
      */
-    private noteLengthDurationOf(length: NoteLength): IFraction | undefined {
+    private noteLengthDurationOf(value: INoteValue): IFraction | undefined {
         const position = this.currentPosition;
         if (position === undefined) {
             return undefined;
         }
 
         if ("step" in position) {
-            return this.gridEditor?.noteLengthDuration(length, position);
+            return this.gridEditor?.noteValueDuration(value, position);
         }
 
-        return this.staffEditor?.noteLengthDuration(length, position);
+        return this.staffEditor?.noteValueDuration(value, position);
+    }
+
+    /**
+     * Switches the augmentation dot of the note value used for entry and applies the result to the
+     * selection. Only a value the current view can represent is published.
+     *
+     * @param event The key event, to prevent the default action when the shortcut applies.
+     */
+    private handleDotShortcut(event: KeyboardEvent): void {
+        const value: INoteValue = { length: this.noteValue.length, dotted: !this.noteValue.dotted };
+
+        if (!this.selectionManager.hasSelection || this.noteLengthDurationOf(value) === undefined) {
+            return;
+        }
+
+        void requisitions.execute("noteLengthChanged", value);
+        event.preventDefault();
     }
 
     private findPreviousStaffRun(run: HTMLElement): HTMLElement | undefined {

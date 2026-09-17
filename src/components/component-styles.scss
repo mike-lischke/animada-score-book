@@ -457,7 +457,8 @@
     gap: 4px;
 }
 
-.noteLengthButton {
+.noteLengthButton,
+.noteDotButton {
     height: 40px;
     width: 40px;
     min-width: 40px;
@@ -485,6 +486,11 @@
                 fill: none;
                 stroke: color-mix(in srgb, currentColor 35%, transparent);
             }
+        }
+
+        .noteLengthIconDot {
+            fill: currentColor;
+            stroke: none;
         }
     }
 

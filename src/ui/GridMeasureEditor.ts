@@ -6,14 +6,14 @@
 import type {
     ISbDmArrangement, ISbDmNoteEvent, ISbDmTrack, ISbDmTrackMeasure, ITiming,
 } from "../core/ScoreBookDataModel.js";
-import { NoteLength } from "../core/rest-notation.js";
+import type { INoteValue } from "../core/rest-notation.js";
 import {
     addFractions, compareFractions, reduceFraction, subtractFractions,
 } from "../core/serialisation/numeric-functions.js";
 import type { IAudioData, IFraction, IMeasureEvent } from "../core/types/general.js";
 import { requisitions } from "../supplement/Requisitions.js";
 import { modelEventAt } from "../core/MeasureProjection.js";
-import { MeasureEditor, type INoteStart } from "./MeasureEditor.js";
+import { MeasureEditor, type IAddressedEvent } from "./MeasureEditor.js";
 import { SelectionGranularity, type ISelectionEntry } from "./SelectionSerializer.js";
 
 /** Identifies a cell in the grid view using zero-based step indexing. */
@@ -85,20 +85,20 @@ export class GridMeasureEditor extends MeasureEditor {
     }
 
     /**
-     * Resolves the bar fraction covered by a note of the given length at the given position.
+     * Resolves the bar fraction covered by a note of the given value at the given position.
      *
-     * @param length The selected note length.
+     * @param value The selected note value, including its augmentation dot.
      * @param position The grid position whose measure supplies the meter.
      *
      * @returns The duration as a fraction of the bar, or undefined when the value is invalid.
      */
-    public noteLengthDuration(length: NoteLength, position: IGridEditorPosition): IFraction | undefined {
+    public noteValueDuration(value: INoteValue, position: IGridEditorPosition): IFraction | undefined {
         const cell = this.resolveCell(position);
         if (!cell) {
             return undefined;
         }
 
-        return this.noteLengthDurationFor(length, cell.track.measures[position.bar - 1]);
+        return this.noteValueDurationFor(value, cell.track.measures[position.bar - 1]);
     }
 
     /**
@@ -487,14 +487,15 @@ export class GridMeasureEditor extends MeasureEditor {
     }
 
     /**
-     * Resolves the note starts addressed by a selection entry. A cell that starts a note is resized,
-     * a cell inside a longer note is grid layout and holds no note of its own.
+     * Resolves the events addressed by a selection entry. The grid edits cells, so only a cell that
+     * starts a note is addressed: a cell inside a longer note is grid layout and holds no note of its
+     * own, and a rest keeps its length, because the grid has no free positions to move content into.
      *
      * @param entry The selection entry to resolve.
      *
-     * @returns The addressed note starts, in measure order.
+     * @returns The addressed notes, in measure order.
      */
-    protected override noteStartsOf(entry: ISelectionEntry): INoteStart[] {
+    protected override addressedEventsOf(entry: ISelectionEntry): IAddressedEvent[] {
         const { target } = entry;
 
         if (target.granularity === SelectionGranularity.Note) {
@@ -504,21 +505,21 @@ export class GridMeasureEditor extends MeasureEditor {
                 return [];
             }
 
-            return [this.noteStartOf(event.start, target.measure)];
+            return [this.addressedEventOf(event.start, target.measure)];
         }
 
         if (target.granularity !== SelectionGranularity.NoteGroup) {
             return [];
         }
 
-        const starts: INoteStart[] = [];
+        const addressed: IAddressedEvent[] = [];
         for (const event of target.events) {
             if (event.noteStyleId !== undefined) {
-                starts.push(this.noteStartOf(event.start, target.measure));
+                addressed.push(this.addressedEventOf(event.start, target.measure));
             }
         }
 
-        return starts;
+        return addressed;
     }
 
     /**
@@ -548,9 +549,9 @@ export class GridMeasureEditor extends MeasureEditor {
      * @param start The position as a fraction of the measure.
      * @param measure The measure the position belongs to.
      *
-     * @returns The note start.
+     * @returns The addressed event.
      */
-    private noteStartOf(start: IFraction, measure: ISbDmTrackMeasure): INoteStart {
+    private addressedEventOf(start: IFraction, measure: ISbDmTrackMeasure): IAddressedEvent {
         return { trackId: measure.track.id, bar: measure.number, start: { ...start } };
     }
 

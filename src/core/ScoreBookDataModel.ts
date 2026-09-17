@@ -13,7 +13,7 @@ import {
     addFractions, compareFractions, divideFraction, multiplyFraction, reduceFraction, subtractFractions,
 } from "./serialisation/numeric-functions.js";
 import { stringifyPackedArrangement } from "./serialisation/snapshot-packing.js";
-import { decomposeRestSpan, decomposeRestSteps, pulseStepCount, standardNoteValueFractions } from "./rest-notation.js";
+import { decomposeRestSpan } from "./rest-notation.js";
 import { computeIsTuplet } from "./tuplets.js";
 
 import { requisitions } from "../supplement/Requisitions.js";
@@ -682,12 +682,12 @@ interface IWhoamiResponse {
     capabilities: ICapabilities;
 }
 
-/** A note whose duration should change, addressed by its exact start within a measure. */
-export interface INoteResizeRequest {
-    /** The one-based measure number containing the note. */
+/** An event whose duration should change, addressed by its exact start within a measure. */
+export interface IEventResizeRequest {
+    /** The one-based measure number containing the event. */
     bar: number;
 
-    /** The exact note start within that measure. */
+    /** The exact event start within that measure. */
     start: IFraction;
 
     /** The requested duration as a fraction of the measure. */
@@ -1084,8 +1084,7 @@ export class ScoreBookDataModel {
         } else if (duration.numerator <= 0) {
             return false;
         } else {
-            changed = this.insertNoteAt(measure, start, duration, noteStyleId,
-                this.parsePulse(track.arrangement.timeParams.pulse));
+            changed = this.insertNoteAt(measure, start, duration, noteStyleId);
         }
 
         if (changed) {
@@ -1108,108 +1107,64 @@ export class ScoreBookDataModel {
      *
      * @returns True when at least one note duration changed.
      */
-    public resizeNotes(trackId: number, requests: INoteResizeRequest[]): boolean {
-        const arrangement = this.arrangement;
-        const track = arrangement?.tracks.find((candidate) => {
-            return candidate.id === trackId;
-        });
+    public resizeNotes(trackId: number, requests: IEventResizeRequest[]): boolean {
+        const track = this.trackById(trackId);
         if (!track || requests.length === 0 || this.hasSubdivisions(track)) {
             return false;
         }
 
-        const timeline = this.measureTimeline(track);
-        const { offsets: measureOffsets, totalSteps } = timeline;
-
-        const requestedSteps = new Map<number, number>();
-        for (const request of requests) {
-            const measure = track.measures.at(request.bar - 1);
-            if (!measure) {
-                continue;
-            }
-
-            const stepsPerBar = measure.meter.stepResolution;
-            const startStep = this.stepsFromFraction(request.start, stepsPerBar);
-            const durationSteps = this.stepsFromFraction(request.duration, stepsPerBar);
-            if (startStep === undefined || durationSteps === undefined || durationSteps < 1) {
-                continue;
-            }
-
-            // A note never crosses a bar line, so its requested duration ends at the measure end.
-            const available = stepsPerBar - startStep;
-            if (available < 1) {
-                continue;
-            }
-
-            requestedSteps.set(measureOffsets[request.bar - 1] + startStep, Math.min(durationSteps, available));
-        }
-
-        if (requestedSteps.size === 0) {
+        if (!this.resizeTrackNotes(track, requests)) {
             return false;
         }
 
-        const notes = this.collectAbsoluteNotes(track, timeline);
-        if (!notes) {
-            return false;
-        }
-
-        let firstResized = -1;
-        for (let index = 0; index < notes.length; index++) {
-            const requested = requestedSteps.get(notes[index].startStep);
-            if (requested === undefined || requested === notes[index].durationSteps) {
-                continue;
-            }
-
-            notes[index].durationSteps = requested;
-            if (firstResized < 0) {
-                firstResized = index;
-            }
-        }
-
-        if (firstResized < 0) {
-            return false;
-        }
-
-        let previousEnd = notes[firstResized].startStep + notes[firstResized].durationSteps;
-        for (let index = firstResized + 1; index < notes.length; index++) {
-            const note = notes[index];
-            note.startStep = Math.max(note.startStep, previousEnd);
-
-            const measureIndex = this.measureIndexAtStep(measureOffsets, track.measures, note.startStep);
-            if (measureIndex < 0) {
-                notes.splice(index);
-
-                break;
-            }
-
-            const measureEnd = measureOffsets[measureIndex] + track.measures[measureIndex].meter.stepResolution;
-            if (note.startStep + note.durationSteps > measureEnd) {
-                const nextMeasureIndex = measureIndex + 1;
-                if (nextMeasureIndex >= track.measures.length) {
-                    notes.splice(index);
-
-                    break;
-                }
-
-                note.startStep = measureOffsets[nextMeasureIndex];
-            }
-
-            if (note.startStep >= totalSteps) {
-                notes.splice(index);
-
-                break;
-            }
-
-            note.durationSteps = Math.min(note.durationSteps, totalSteps - note.startStep);
-            previousEnd = note.startStep + note.durationSteps;
-        }
-
-        const pulse = this.parsePulse(track.arrangement.timeParams.pulse);
-        this.layOutAbsoluteNotes(track, timeline, notes, pulse);
-
-        void requisitions.execute("trackChanged", track.id);
-        void requisitions.execute("arrangementMutated", undefined);
+        this.announceTrackEdit(track);
 
         return true;
+    }
+
+    /**
+     * Sets the duration of the addressed events and lays out the content behind them. A note keeps
+     * its style and takes the slack of the rests behind it (ADR-0003). A rest that changes its length
+     * moves the following events instead, so a rest can take any length. Requests are applied from the
+     * last one to the first, because an edit only moves the content behind it, which keeps the
+     * remaining positions valid. The whole change is one edit: it fires one arrangementMutated event.
+     *
+     * @param trackId The track containing the events.
+     * @param requests The events to resize, addressed by their start within a measure.
+     *
+     * @returns True when at least one duration changed.
+     */
+    public resizeEvents(trackId: number, requests: IEventResizeRequest[]): boolean {
+        const track = this.trackById(trackId);
+        if (!track || requests.length === 0 || this.hasSubdivisions(track)) {
+            return false;
+        }
+
+        const sorted = [...requests].sort((left, right) => {
+            return left.bar === right.bar ? compareFractions(right.start, left.start) : right.bar - left.bar;
+        });
+
+        let changed = false;
+
+        for (const request of sorted) {
+            const measure = track.measures.at(request.bar - 1);
+            const event = measure?.events.find((candidate) => {
+                return compareFractions(candidate.start, request.start) === 0;
+            });
+            if (event === undefined) {
+                continue;
+            }
+
+            changed = event.noteStyleId === undefined
+                ? this.setEventSpan(track, request.bar, request.start, request.duration) || changed
+                : this.resizeTrackNotes(track, [request]) || changed;
+        }
+
+        if (changed) {
+            this.announceTrackEdit(track);
+        }
+
+        return changed;
     }
 
     /**
@@ -1270,10 +1225,8 @@ export class ScoreBookDataModel {
                 }),
             ];
 
-            const pulse = this.parsePulse(track.arrangement.timeParams.pulse);
-
-            this.setMeasureEvents(measure, this.normalizeMeasureEvents(this.padMeasureEnd(replaced), pulse));
-            this.carryOverflow(track, measure.number - 1, pulse);
+            this.setMeasureEvents(measure, this.normalizeMeasureEvents(this.padMeasureEnd(replaced)));
+            this.carryOverflow(track, measure.number - 1);
             changed.add(track.id);
         }
 
@@ -1302,56 +1255,16 @@ export class ScoreBookDataModel {
      * @returns True when the event was removed.
      */
     public deleteEventWithShift(trackId: number, bar: number, start: IFraction): boolean {
-        const arrangement = this.arrangement;
-        const track = arrangement?.tracks.find((candidate) => {
-            return candidate.id === trackId;
-        });
-
-        const measure = track?.measures[bar - 1];
-        if (!track || !measure || this.hasSubdivisions(track)) {
+        const track = this.trackById(trackId);
+        if (!track || this.hasSubdivisions(track)) {
             return false;
         }
 
-        const stepsPerBar = measure.meter.stepResolution;
-        const eventStart = this.stepsFromFraction(start, stepsPerBar);
-        const removed = measure.events.find((event) => {
-            return compareFractions(event.start, start) === 0;
-        });
-        const removedSteps = removed === undefined
-            ? undefined
-            : this.stepsFromFraction(removed.duration, stepsPerBar);
-        const timeline = this.measureTimeline(track);
-        const notes = this.collectAbsoluteNotes(track, timeline);
-        if (eventStart === undefined || removedSteps === undefined || notes === undefined) {
+        if (!this.setEventSpan(track, bar, start)) {
             return false;
         }
 
-        const removeFrom = timeline.offsets[bar - 1] + eventStart;
-        const removeTo = removeFrom + removedSteps;
-        const remaining: IAbsoluteNoteEvent[] = [];
-
-        for (const note of notes) {
-            if (note.startStep >= removeTo) {
-                note.startStep -= removedSteps;
-                remaining.push(note);
-
-                continue;
-            }
-
-            // The removed event itself disappears; a note reaching into it is shortened at its start.
-            if (note.startStep >= removeFrom) {
-                continue;
-            }
-
-            note.durationSteps = Math.min(note.durationSteps, removeFrom - note.startStep);
-            remaining.push(note);
-        }
-
-        const pulse = this.parsePulse(track.arrangement.timeParams.pulse);
-        this.layOutAbsoluteNotes(track, timeline, remaining, pulse);
-
-        void requisitions.execute("trackChanged", track.id);
-        void requisitions.execute("arrangementMutated", undefined);
+        this.announceTrackEdit(track);
 
         return true;
     }
@@ -1401,8 +1314,7 @@ export class ScoreBookDataModel {
 
             const rangeChanged = range.start === undefined && range.end === undefined
                 ? this.clearMeasureContent(measure)
-                : this.replaceSpan(measure, range.start ?? barStart, range.end ?? barLine, undefined,
-                    this.parsePulse(track.arrangement.timeParams.pulse));
+                : this.replaceSpan(measure, range.start ?? barStart, range.end ?? barLine, undefined);
             if (rangeChanged) {
                 changed = true;
                 affectedTracks.add(range.trackId);
@@ -3066,19 +2978,18 @@ export class ScoreBookDataModel {
      * @param start The exact start position as a fraction.
      * @param duration The note's duration as a fraction.
      * @param noteStyleId The style to apply, or undefined to clear the span.
-     * @param pulse The rhythmic pulse as a fraction.
      *
      * @returns True when the measure changed.
      */
     private insertNoteAt(measure: ISbDmTrackMeasure, start: IFraction, duration: IFraction,
-        noteStyleId: string | undefined, pulse: IFraction): boolean {
+        noteStyleId: string | undefined): boolean {
         const end = addFractions(start, duration);
 
         if (noteStyleId !== undefined && this.spanOverlapsFollowingNote(measure, start, end)) {
             return false;
         }
 
-        return this.replaceSpan(measure, start, end, noteStyleId, pulse);
+        return this.replaceSpan(measure, start, end, noteStyleId);
     }
 
     /**
@@ -3109,16 +3020,13 @@ export class ScoreBookDataModel {
      * @param start The exact start position of the span (inclusive).
      * @param end The exact end position of the span (exclusive).
      * @param noteStyleId The style of the replacement event, or undefined for a rest.
-     * @param pulse The rhythmic pulse as a fraction.
      *
      * @returns True when the measure changed.
      */
     private replaceSpan(measure: ISbDmTrackMeasure, start: IFraction, end: IFraction,
-        noteStyleId: string | undefined, pulse: IFraction): boolean {
-        const stepsPerBar = measure.meter.stepResolution;
+        noteStyleId: string | undefined): boolean {
         const protectedStarts = this.subdivisionSlotStarts(measure);
-        const events = this.replaceSpanEvents(measure.events, protectedStarts, stepsPerBar, pulse,
-            start, end, noteStyleId);
+        const events = this.replaceSpanEvents(measure.events, protectedStarts, start, end, noteStyleId);
 
         return this.setMeasureEvents(measure, events);
     }
@@ -3130,16 +3038,14 @@ export class ScoreBookDataModel {
      *
      * @param events The events to edit.
      * @param protectedStarts Start fractions that must not participate in a rest merge.
-     * @param stepsPerBar The measure's step resolution.
-     * @param pulse The rhythmic pulse as a fraction.
      * @param start The exact start position of the span (inclusive).
      * @param end The exact end position of the span (exclusive).
      * @param noteStyleId The style of the replacement event, or undefined for a rest.
      *
      * @returns The edited events with rests combined and decomposed.
      */
-    private replaceSpanEvents(events: IMeasureEvent[], protectedStarts: Set<string>, stepsPerBar: number,
-        pulse: IFraction, start: IFraction, end: IFraction, noteStyleId?: string): IMeasureEvent[] {
+    private replaceSpanEvents(events: IMeasureEvent[], protectedStarts: Set<string>,
+        start: IFraction, end: IFraction, noteStyleId?: string): IMeasureEvent[] {
         const withStart = this.splitEventsAt(events, start);
         const withEnd = this.splitEventsAt(withStart, end);
 
@@ -3167,7 +3073,7 @@ export class ScoreBookDataModel {
             }
         }
 
-        return this.normalizeRests(result, protectedStarts, stepsPerBar, pulse);
+        return this.normalizeRests(result, protectedStarts);
     }
 
     /**
@@ -3181,37 +3087,30 @@ export class ScoreBookDataModel {
      *
      * @returns The normalised events.
      */
-    private normalizeRests(events: IMeasureEvent[], protectedStarts: Set<string>, stepsPerBar: number,
-        pulse: IFraction): IMeasureEvent[] {
-        const merged = this.mergeRests(events, protectedStarts);
-        const pulseSteps = pulseStepCount(pulse, stepsPerBar);
+    /**
+     * Combines adjacent rest events and decomposes every non-subdivision rest into standard note
+     * values, so the staff view can render each rest with a single glyph. The span alone decides the
+     * split: the staff view places rests freely, so no pulse or grid position is honoured.
+     *
+     * @param events The events to normalise.
+     * @param protectedStarts Start fractions of subdivision slots, which must stay untouched.
+     *
+     * @returns The normalised events.
+     */
+    private normalizeRests(events: IMeasureEvent[], protectedStarts: Set<string>): IMeasureEvent[] {
         const result: IMeasureEvent[] = [];
 
-        for (const event of merged) {
+        for (const event of this.mergeRests(events, protectedStarts)) {
             if (event.noteStyleId !== undefined || protectedStarts.has(this.fractionKey(event.start))) {
                 result.push(event);
 
                 continue;
             }
 
-            const startStep = (event.start.numerator * stepsPerBar) / event.start.denominator;
-            const durationSteps = (event.duration.numerator * stepsPerBar) / event.duration.denominator;
-
-            if (!Number.isInteger(startStep) || !Number.isInteger(durationSteps) || durationSteps <= 0) {
-                result.push(event);
-
-                continue;
-            }
-
-            const parts = decomposeRestSteps(startStep, startStep + durationSteps, pulseSteps, stepsPerBar);
-            let step = startStep;
-
-            for (const part of parts) {
-                result.push({
-                    start: reduceFraction(step, stepsPerBar),
-                    duration: reduceFraction(part, stepsPerBar),
-                });
-                step += part;
+            let position = { ...event.start };
+            for (const part of decomposeRestSpan(event.duration)) {
+                result.push({ start: position, duration: { ...part } });
+                position = addFractions(position, part);
             }
         }
 
@@ -3555,6 +3454,197 @@ export class ScoreBookDataModel {
     }
 
     /**
+     * Announces a finished change of one track: the viewers recompute their structure and the undo
+     * manager stores one step.
+     *
+     * @param track The track whose content changed.
+     */
+    private announceTrackEdit(track: ISbDmTrack): void {
+        void requisitions.execute("trackChanged", track.id);
+        void requisitions.execute("arrangementMutated", undefined);
+    }
+
+    /**
+     * Resolves a track of the current arrangement.
+     *
+     * @param trackId The track to resolve.
+     *
+     * @returns The track, or undefined when the arrangement does not contain it.
+     */
+    private trackById(trackId: number): ISbDmTrack | undefined {
+        return this.arrangement?.tracks.find((candidate) => {
+            return candidate.id === trackId;
+        });
+    }
+
+    /**
+     * Gives the event at the given position a new length and moves the content behind it by the
+     * difference, so a rest takes the time it is given. A missing length removes the event. Content
+     * that no longer fits into its measure continues at the start of the next one and the tail of the
+     * track becomes rests.
+     *
+     * @param track The track containing the event.
+     * @param bar The one-based measure number.
+     * @param start The exact start of the event within the measure.
+     * @param newDuration The length the event should take, or undefined to remove it.
+     *
+     * @returns True when the track content changed.
+     */
+    private setEventSpan(track: ISbDmTrack, bar: number, start: IFraction, newDuration?: IFraction): boolean {
+        const measure = track.measures.at(bar - 1);
+        const stepsPerBar = measure?.meter.stepResolution;
+        const event = measure?.events.find((candidate) => {
+            return compareFractions(candidate.start, start) === 0;
+        });
+        if (stepsPerBar === undefined || event === undefined) {
+            return false;
+        }
+
+        const eventStart = this.stepsFromFraction(start, stepsPerBar);
+        const oldSteps = this.stepsFromFraction(event.duration, stepsPerBar);
+        const requestedSteps = newDuration === undefined ? 0 : this.stepsFromFraction(newDuration, stepsPerBar);
+        const timeline = this.measureTimeline(track);
+        const notes = this.collectAbsoluteNotes(track, timeline);
+
+        if (eventStart === undefined || oldSteps === undefined || requestedSteps === undefined
+            || notes === undefined) {
+            return false;
+        }
+
+        // An event never crosses a bar line, so a request that reaches past it ends at the measure end.
+        const newSteps = Math.min(requestedSteps, stepsPerBar - eventStart);
+        if (newSteps === oldSteps) {
+            return false;
+        }
+
+        const spanStart = timeline.offsets[bar - 1] + eventStart;
+        const spanEnd = spanStart + oldSteps;
+        const remaining: IAbsoluteNoteEvent[] = [];
+
+        for (const note of notes) {
+            if (note.startStep >= spanEnd) {
+                note.startStep += newSteps - oldSteps;
+                remaining.push(note);
+
+                continue;
+            }
+
+            // The changed event itself disappears when it is a note; a note reaching into the span is
+            // shortened at its start.
+            if (note.startStep >= spanStart) {
+                continue;
+            }
+
+            note.durationSteps = Math.min(note.durationSteps, spanStart - note.startStep);
+            remaining.push(note);
+        }
+
+        this.layOutAbsoluteNotes(track, timeline, remaining);
+
+        return true;
+    }
+
+    /**
+     * Resizes notes without announcing the change, so callers can batch several edits into one.
+     *
+     * @param track The track containing the notes.
+     * @param requests The notes to resize, addressed by their start within a measure.
+     *
+     * @returns True when at least one note duration changed.
+     */
+    private resizeTrackNotes(track: ISbDmTrack, requests: IEventResizeRequest[]): boolean {
+        const timeline = this.measureTimeline(track);
+        const { offsets: measureOffsets, totalSteps } = timeline;
+
+        const requestedSteps = new Map<number, number>();
+        for (const request of requests) {
+            const measure = track.measures.at(request.bar - 1);
+            if (!measure) {
+                continue;
+            }
+
+            const stepsPerBar = measure.meter.stepResolution;
+            const startStep = this.stepsFromFraction(request.start, stepsPerBar);
+            const durationSteps = this.stepsFromFraction(request.duration, stepsPerBar);
+            if (startStep === undefined || durationSteps === undefined || durationSteps < 1) {
+                continue;
+            }
+
+            // A note never crosses a bar line, so its requested duration ends at the measure end.
+            const available = stepsPerBar - startStep;
+            if (available < 1) {
+                continue;
+            }
+
+            requestedSteps.set(measureOffsets[request.bar - 1] + startStep, Math.min(durationSteps, available));
+        }
+
+        if (requestedSteps.size === 0) {
+            return false;
+        }
+
+        const notes = this.collectAbsoluteNotes(track, timeline);
+        if (!notes) {
+            return false;
+        }
+
+        let firstResized = -1;
+        for (let index = 0; index < notes.length; index++) {
+            const requested = requestedSteps.get(notes[index].startStep);
+            if (requested === undefined || requested === notes[index].durationSteps) {
+                continue;
+            }
+
+            notes[index].durationSteps = requested;
+            if (firstResized < 0) {
+                firstResized = index;
+            }
+        }
+
+        if (firstResized < 0) {
+            return false;
+        }
+
+        let previousEnd = notes[firstResized].startStep + notes[firstResized].durationSteps;
+        for (let index = firstResized + 1; index < notes.length; index++) {
+            const note = notes[index];
+            note.startStep = Math.max(note.startStep, previousEnd);
+
+            const measureIndex = this.measureIndexAtStep(measureOffsets, track.measures, note.startStep);
+            if (measureIndex < 0) {
+                notes.splice(index);
+
+                break;
+            }
+
+            const measureEnd = measureOffsets[measureIndex] + track.measures[measureIndex].meter.stepResolution;
+            if (note.startStep + note.durationSteps > measureEnd) {
+                const nextMeasureIndex = measureIndex + 1;
+                if (nextMeasureIndex >= track.measures.length) {
+                    notes.splice(index);
+
+                    break;
+                }
+
+                note.startStep = measureOffsets[nextMeasureIndex];
+            }
+
+            if (note.startStep >= totalSteps) {
+                notes.splice(index);
+
+                break;
+            }
+
+            note.durationSteps = Math.min(note.durationSteps, totalSteps - note.startStep);
+            previousEnd = note.startStep + note.durationSteps;
+        }
+
+        this.layOutAbsoluteNotes(track, timeline, notes);
+
+        return true;
+    }
+
+    /**
      * Collects a track's notes on its absolute step timeline. Rests are left out on purpose: every
      * layout recomputes them from the gaps between the notes.
      *
@@ -3601,10 +3691,9 @@ export class ScoreBookDataModel {
      * @param track The track to rewrite.
      * @param timeline The track's step timeline.
      * @param notes The notes to lay out, sorted by start step.
-     * @param pulse The rhythmic pulse as a fraction.
      */
-    private layOutAbsoluteNotes(track: ISbDmTrack, timeline: IMeasureTimeline, notes: IAbsoluteNoteEvent[],
-        pulse: IFraction): void {
+    private layOutAbsoluteNotes(track: ISbDmTrack, timeline: IMeasureTimeline,
+        notes: IAbsoluteNoteEvent[]): void {
         const measureOffsets = timeline.offsets;
         let noteIndex = 0;
 
@@ -3643,7 +3732,7 @@ export class ScoreBookDataModel {
                 });
             }
 
-            const normalized = this.normalizeRests(events, new Set(), stepsPerBar, pulse);
+            const normalized = this.normalizeMeasureEvents(events);
             this.setMeasureEvents(measure, normalized, false);
         }
     }
@@ -3673,30 +3762,11 @@ export class ScoreBookDataModel {
      * into standard note values, so the staff view can draw it with a single glyph.
      *
      * @param events The measure's events, in display order.
-     * @param pulse The rhythmic pulse as a bar fraction.
      *
      * @returns The events with combined and decomposed rests.
      */
-    private normalizeMeasureEvents(events: IMeasureEvent[], pulse: IFraction): IMeasureEvent[] {
-        const result: IMeasureEvent[] = [];
-
-        for (const event of this.mergeRests(events, new Set())) {
-            if (event.noteStyleId !== undefined) {
-                result.push(event);
-
-                continue;
-            }
-
-            const end = addFractions(event.start, event.duration);
-            let position = event.start;
-
-            for (const part of decomposeRestSpan(event.start, end, pulse, standardNoteValueFractions)) {
-                result.push({ start: position, duration: { ...part } });
-                position = addFractions(position, part);
-            }
-        }
-
-        return result;
+    private normalizeMeasureEvents(events: IMeasureEvent[]): IMeasureEvent[] {
+        return this.normalizeRests(events, new Set());
     }
 
     /**
@@ -3747,9 +3817,8 @@ export class ScoreBookDataModel {
      *
      * @param track The track to edit.
      * @param fromMeasure The index of the measure to start the check at.
-     * @param pulse The rhythmic pulse as a bar fraction.
      */
-    private carryOverflow(track: ISbDmTrack, fromMeasure: number, pulse: IFraction): void {
+    private carryOverflow(track: ISbDmTrack, fromMeasure: number): void {
         for (let index = fromMeasure; index < track.measures.length; index++) {
             const measure = track.measures[index];
             const { kept, overflow } = this.splitAtBarLine(measure.events);
@@ -3757,7 +3826,7 @@ export class ScoreBookDataModel {
                 return;
             }
 
-            this.setMeasureEvents(measure, this.normalizeMeasureEvents(kept, pulse));
+            this.setMeasureEvents(measure, this.normalizeMeasureEvents(kept));
 
             if (index + 1 >= track.measures.length) {
                 // The excess of the last measure is dropped.
@@ -3775,7 +3844,7 @@ export class ScoreBookDataModel {
                 return moved;
             });
 
-            this.setMeasureEvents(next, this.normalizeMeasureEvents([...overflow, ...shifted], pulse));
+            this.setMeasureEvents(next, this.normalizeMeasureEvents([...overflow, ...shifted]));
         }
     }
 
@@ -3791,15 +3860,6 @@ export class ScoreBookDataModel {
         const steps = fraction.numerator * stepsPerBar / fraction.denominator;
 
         return Number.isInteger(steps) ? steps : undefined;
-    }
-
-    private parsePulse(pulse: string): IFraction {
-        const [numerator, denominator] = pulse.split("/").map(Number);
-        if (!Number.isFinite(numerator) || !Number.isFinite(denominator) || denominator === 0) {
-            return { numerator: 1, denominator: 4 };
-        }
-
-        return reduceFraction(numerator, denominator);
     }
 
     /**

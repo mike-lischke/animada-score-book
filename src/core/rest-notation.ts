@@ -4,7 +4,7 @@
  */
 
 import {
-    addFractions, compareFractions, multiplyFraction, reduceFraction, subtractFractions,
+    compareFractions, reduceFraction, subtractFractions,
 } from "./serialisation/numeric-functions.js";
 import type { IFraction } from "./types/general.js";
 
@@ -19,6 +19,15 @@ export enum NoteLength {
     Eighth,
     Sixteenth,
     ThirtySecond,
+}
+
+/**
+ * A note value as the length toolbar and the measure editors handle it: a plain note length plus
+ * the augmentation dot, which lengthens the value by half.
+ */
+export interface INoteValue {
+    length: NoteLength;
+    dotted: boolean;
 }
 
 /**
@@ -57,45 +66,49 @@ export const noteLengthDenominator = (length: NoteLength): number => {
 };
 
 /**
- * Resolves the plain note length for a duration expressed in grid steps.
- *
- * @param steps The note duration in grid steps.
- * @param stepsPerWholeNote The number of grid steps in a whole note.
- *
- * @returns The matching note length, or undefined for dotted or tuplet durations.
+ * The note values a single glyph can express, as 32nd-note units (whole note = 32), largest first.
+ * A dotted whole note would exceed a whole note, so it is not offered.
  */
-export const noteLengthForSteps = (steps: number, stepsPerWholeNote: number): NoteLength | undefined => {
-    const units = (steps * 32) / stepsPerWholeNote;
+const noteValueUnits: ReadonlyArray<readonly [number, INoteValue]> = [
+    [32, { length: NoteLength.Whole, dotted: false }],
+    [24, { length: NoteLength.Half, dotted: true }],
+    [16, { length: NoteLength.Half, dotted: false }],
+    [12, { length: NoteLength.Quarter, dotted: true }],
+    [8, { length: NoteLength.Quarter, dotted: false }],
+    [6, { length: NoteLength.Eighth, dotted: true }],
+    [4, { length: NoteLength.Eighth, dotted: false }],
+    [3, { length: NoteLength.Sixteenth, dotted: true }],
+    [2, { length: NoteLength.Sixteenth, dotted: false }],
+    [1, { length: NoteLength.ThirtySecond, dotted: false }],
+];
 
-    switch (units) {
-        case 32: {
-            return NoteLength.Whole;
-        }
+/**
+ * Resolves the note value of a duration expressed in 32nd-note units.
+ *
+ * @param units The duration as a multiple of a 32nd note (whole note = 32).
+ *
+ * @returns The matching note value, or undefined for a duration no single value can express.
+ */
+export const noteValueForUnits = (units: number): INoteValue | undefined => {
+    return noteValueUnits.find(([valueUnits]) => {
+        return valueUnits === units;
+    })?.[1];
+};
 
-        case 16: {
-            return NoteLength.Half;
-        }
+/**
+ * Returns the duration of a note value as a fraction of a whole note, with the augmentation dot
+ * applied.
+ *
+ * @param value The note value to convert.
+ *
+ * @returns The duration of the value as a fraction of a whole note.
+ */
+export const noteValueFraction = (value: INoteValue): IFraction => {
+    const denominator = noteLengthDenominator(value.length);
 
-        case 8: {
-            return NoteLength.Quarter;
-        }
-
-        case 4: {
-            return NoteLength.Eighth;
-        }
-
-        case 2: {
-            return NoteLength.Sixteenth;
-        }
-
-        case 1: {
-            return NoteLength.ThirtySecond;
-        }
-
-        default: {
-            return undefined;
-        }
-    }
+    return value.dotted
+        ? reduceFraction(3, denominator * 2)
+        : reduceFraction(1, denominator);
 };
 
 /**
@@ -116,148 +129,35 @@ const standardNoteValues: ReadonlyArray<readonly [number, number]> = [
     [1, 32],  // thirty-second
 ];
 
-/**
- * Returns the grid-aligned standard note values as integer step counts, largest first. Values
- * that do not land on a whole grid step are omitted, because the grid view cannot represent them.
- *
- * @param stepsPerBar The measure's step resolution.
- *
- * @returns The standard step counts in descending order.
- */
-export const standardRestSteps = (stepsPerBar: number): number[] => {
-    const steps: number[] = [];
-
-    for (const [numerator, denominator] of standardNoteValues) {
-        const value = (numerator * stepsPerBar) / denominator;
-        if (Number.isInteger(value) && value >= 1) {
-            steps.push(value);
-        }
-    }
-
-    return steps;
-};
-
 /** The standard note values as bar fractions, in descending order. */
 export const standardNoteValueFractions: readonly IFraction[] = standardNoteValues.map(([numerator, denominator]) => {
     return reduceFraction(numerator, denominator);
 });
 
 /**
- * Converts the pulse into an integer step count.
+ * Decomposes a rest span into the standard note values, largest first. Only the span decides the
+ * split: the staff view places rests freely, so a dotted value may stand wherever its length fits
+ * — a dotted quarter rest is never split into a quarter plus an eighth rest.
  *
- * @param pulse The pulse as a fraction.
- * @param stepsPerBar The measure's step resolution.
- *
- * @returns The pulse width in steps.
- */
-export const pulseStepCount = (pulse: IFraction, stepsPerBar: number): number => {
-    return (pulse.numerator * stepsPerBar) / pulse.denominator;
-};
-
-/**
- * Divides one fraction by another, reduced. Used to relate a duration to the pulse.
- *
- * @param value The fraction to divide.
- * @param divisor The fraction to divide by.
- *
- * @returns The reduced quotient.
- */
-const fractionRatio = (value: IFraction, divisor: IFraction): IFraction => {
-    return reduceFraction(value.numerator * divisor.denominator, value.denominator * divisor.numerator);
-};
-
-/**
- * Decomposes a rest span into standard note values aligned to the pulse. The span is split at pulse
- * boundaries; each pulse-aligned segment is then represented with the largest standard value that
- * fits. Everything is expressed in bar fractions, so no grid resolution is needed — grid callers
- * restrict {@link values} to the values their step resolution can represent.
- *
- * @param start The rest start as a fraction of the bar (inclusive).
- * @param end The rest end as a fraction of the bar (exclusive).
- * @param pulse The rhythmic pulse as a fraction of the bar.
- * @param values The allowed standard values as bar fractions, largest first.
+ * @param span The rest length as a bar fraction.
  *
  * @returns The durations of the decomposed rest, in display order.
  */
-export const decomposeRestSpan = (start: IFraction, end: IFraction, pulse: IFraction,
-    values: readonly IFraction[]): IFraction[] => {
-    const result: IFraction[] = [];
-    let position = { ...start };
+export const decomposeRestSpan = (span: IFraction): IFraction[] => {
+    const parts: IFraction[] = [];
+    let remaining = { ...span };
 
-    const fillGreedy = (span: IFraction): IFraction[] => {
-        const parts: IFraction[] = [];
-        let remaining = { ...span };
-
-        for (const value of values) {
-            while (compareFractions(remaining, value) >= 0) {
-                parts.push({ ...value });
-                remaining = subtractFractions(remaining, value);
-            }
+    for (const value of standardNoteValueFractions) {
+        while (compareFractions(remaining, value) >= 0) {
+            parts.push({ ...value });
+            remaining = subtractFractions(remaining, value);
         }
-
-        if (remaining.numerator > 0) {
-            // A span no standard value can express (e.g. a subdivision slot) keeps its length.
-            parts.push(remaining);
-        }
-
-        return parts;
-    };
-
-    while (compareFractions(position, end) < 0) {
-        const remaining = subtractFractions(end, position);
-        const pulses = fractionRatio(position, pulse);
-        const offset = subtractFractions(position,
-            multiplyFraction(pulse, Math.floor(pulses.numerator / pulses.denominator)));
-        const isPulseAligned = offset.numerator === 0;
-
-        if (!isPulseAligned || compareFractions(remaining, pulse) < 0) {
-            const boundary = addFractions(position, subtractFractions(pulse, offset));
-            const chunkEnd = isPulseAligned || compareFractions(boundary, end) > 0 ? end : boundary;
-
-            result.push(...fillGreedy(subtractFractions(chunkEnd, position)));
-            position = chunkEnd;
-
-            continue;
-        }
-
-        // Pulse aligned with at least one full pulse left: prefer a value spanning whole pulses.
-        const chosen = values.find((value) => {
-            return fractionRatio(value, pulse).denominator === 1 && compareFractions(value, remaining) <= 0;
-        });
-
-        if (chosen === undefined) {
-            result.push(...fillGreedy(remaining));
-
-            break;
-        }
-
-        result.push({ ...chosen });
-        position = addFractions(position, chosen);
     }
 
-    return result;
-};
+    if (remaining.numerator > 0) {
+        // A span no standard value can express (e.g. a subdivision slot) keeps its length.
+        parts.push(remaining);
+    }
 
-/**
- * Decomposes a grid-aligned rest span into standard note values aligned to the pulse; the step
- * based counterpart of {@link decomposeRestSpan}, limited to the values the grid can represent.
- *
- * @param startStep The first step of the rest (inclusive).
- * @param endStep The step after the rest (exclusive).
- * @param pulseSteps The pulse width in steps.
- * @param stepsPerBar The measure's step resolution.
- *
- * @returns The step counts of the decomposed rest, in display order.
- */
-export const decomposeRestSteps = (startStep: number, endStep: number, pulseSteps: number,
-    stepsPerBar: number): number[] => {
-    const values = standardRestSteps(stepsPerBar).map((steps) => {
-        return reduceFraction(steps, stepsPerBar);
-    });
-    const parts = decomposeRestSpan(reduceFraction(startStep, stepsPerBar),
-        reduceFraction(endStep, stepsPerBar), reduceFraction(pulseSteps, stepsPerBar), values);
-
-    return parts.map((part) => {
-        return (part.numerator * stepsPerBar) / part.denominator;
-    });
+    return parts;
 };

@@ -11,7 +11,7 @@ import { ScoreBookDataModel, type ISbDmTrackMeasure } from "../../src/core/Score
 import { addFractions, compareFractions } from "../../src/core/serialisation/numeric-functions.js";
 import type { IAudioData, IFraction, IMeasureEvent } from "../../src/core/types/general.js";
 import { StaffMeasureEditor, type IStaffEditorPosition } from "../../src/ui/StaffMeasureEditor.js";
-import { createInstrument, hydrateMeasureEvents, runEntry } from "../unit-test-helpers.js";
+import { createInstrument, hydrateMeasureEvents, noteValue, runEntry } from "../unit-test-helpers.js";
 
 /**
  * Replaces the events of the first measure and re-derives the note events from them.
@@ -82,7 +82,7 @@ describe.sequential("StaffMeasureEditor", () => {
     });
 
     it("writes a note of the selected length into a rest", () => {
-        const duration = editor.noteLengthDuration(NoteLength.Quarter, position)!;
+        const duration = editor.noteValueDuration(noteValue(NoteLength.Quarter), position)!;
 
         const inserted = editor.insertNoteWithShift(position, duration, "1");
 
@@ -141,9 +141,40 @@ describe.sequential("StaffMeasureEditor", () => {
         ]);
         const entries = [runEntry(measure, measure.events[0])];
 
-        expect(editor.resizeSelection(entries, NoteLength.Half)).toBe(true);
+        expect(editor.resizeSelection(entries, noteValue(NoteLength.Half))).toBe(true);
         expect(durationAt(measure, { numerator: 0, denominator: 1 })).toEqual({ numerator: 1, denominator: 2 });
         expect(styleAt(measure, { numerator: 1, denominator: 2 })).toBe("2");
+    });
+
+    it("resizes the addressed rest and moves the following events", () => {
+        setEvents(model, [
+            { start: { numerator: 0, denominator: 1 }, duration: { numerator: 1, denominator: 4 }, noteStyleId: "1" },
+            { start: { numerator: 1, denominator: 4 }, duration: { numerator: 1, denominator: 4 } },
+            { start: { numerator: 1, denominator: 2 }, duration: { numerator: 1, denominator: 2 }, noteStyleId: "2" },
+        ]);
+        const restEntry = runEntry(measure, measure.events[1]);
+
+        expect(editor.resizeSelection([restEntry], noteValue(NoteLength.Eighth))).toBe(true);
+        expect(durationAt(measure, { numerator: 1, denominator: 4 })).toEqual({ numerator: 1, denominator: 8 });
+
+        // The note behind the rest moves left by the length the rest gave up.
+        expect(styleAt(measure, { numerator: 3, denominator: 8 })).toBe("2");
+    });
+
+    it("grows an addressed rest by the augmentation dot", () => {
+        setEvents(model, [
+            { start: { numerator: 0, denominator: 1 }, duration: { numerator: 1, denominator: 4 }, noteStyleId: "1" },
+            { start: { numerator: 1, denominator: 4 }, duration: { numerator: 1, denominator: 4 } },
+            { start: { numerator: 1, denominator: 2 }, duration: { numerator: 1, denominator: 4 }, noteStyleId: "2" },
+        ]);
+        const restEntry = runEntry(measure, measure.events[1]);
+
+        expect(editor.resizeSelection([restEntry], noteValue(NoteLength.Quarter, true))).toBe(true);
+
+        // The dot makes the rest a dotted quarter, wherever it stands: no pulse or grid position
+        // splits the value, so the note behind the rest moves right by an eighth.
+        expect(durationAt(measure, { numerator: 1, denominator: 4 })).toEqual({ numerator: 3, denominator: 8 });
+        expect(styleAt(measure, { numerator: 5, denominator: 8 })).toBe("2");
     });
 
     it("removes the event at the position and pulls the following events left", () => {
@@ -180,7 +211,8 @@ describe.sequential("StaffMeasureEditor", () => {
     it("rejects note lengths the data model cannot address", () => {
         // A thirty-second does not land on a whole step in this meter, so the model could not store
         // it — the editor never hands such a value to the model.
-        expect(editor.noteLengthDuration(NoteLength.ThirtySecond, position)).toBeUndefined();
-        expect(editor.noteLengthDuration(NoteLength.Sixteenth, position)).toEqual({ numerator: 1, denominator: 16 });
+        expect(editor.noteValueDuration(noteValue(NoteLength.ThirtySecond), position)).toBeUndefined();
+        expect(editor.noteValueDuration(noteValue(NoteLength.Sixteenth), position))
+            .toEqual({ numerator: 1, denominator: 16 });
     });
 });

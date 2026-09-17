@@ -9,11 +9,24 @@ import {
     SbDmEntityType, type ISbDmInstrument, type ISbDmTrack, type ISbDmTrackMeasure, type ScoreBookDataModel,
 } from "../src/core/ScoreBookDataModel.js";
 import { addFractions, reduceFraction } from "../src/core/serialisation/numeric-functions.js";
+import { NoteLength, type INoteValue } from "../src/core/rest-notation.js";
 import type { IFraction, IMeasureEvent, ITrackSnapshot } from "../src/core/types/general.js";
 import { SelectionGranularity, SelectionSerializer, type ISelectionEntry }
     from "../src/ui/SelectionSerializer.js";
 import { TimeCoordinator } from "../src/player/TimeCoordinator.js";
 import { TrackPlayer } from "../src/player/TrackPlayer.js";
+
+/**
+ * Builds a note value, undotted unless a dot is asked for.
+ *
+ * @param length The plain note length.
+ * @param dotted Whether the value carries an augmentation dot.
+ *
+ * @returns The note value.
+ */
+export const noteValue = (length: NoteLength, dotted = false): INoteValue => {
+    return { length, dotted };
+};
 
 /**
  * Creates a note selection entry addressing one grid cell of a measure. A cell covers one step,

@@ -383,10 +383,10 @@ describe.sequential("ScoreBookDataModel track actions", () => {
         expect(measure.events[0].duration).toEqual({ numerator: 1, denominator: 16 });
         expect(measure.events[1].noteStyleId).toBeUndefined();
         expect(measure.events[1].start).toEqual({ numerator: 1, denominator: 16 });
-        expect(measure.events[1].duration).toEqual({ numerator: 3, denominator: 16 });
+        expect(measure.events[1].duration).toEqual({ numerator: 3, denominator: 4 });
         expect(measure.events[2].noteStyleId).toBeUndefined();
-        expect(measure.events[2].start).toEqual({ numerator: 1, denominator: 4 });
-        expect(measure.events[2].duration).toEqual({ numerator: 3, denominator: 4 });
+        expect(measure.events[2].start).toEqual({ numerator: 13, denominator: 16 });
+        expect(measure.events[2].duration).toEqual({ numerator: 3, denominator: 16 });
     });
 
     it("setNoteAt preserves a note that spans a pulse boundary", () => {
@@ -552,14 +552,14 @@ describe.sequential("ScoreBookDataModel track actions", () => {
         expect(noteSteps(track.measures[0])).toEqual([0, 1, 2, 3, 4, 5, 6, 10, 11, 12, 13, 14, 15]);
         expect(noteSteps(track.measures[1])).toEqual([0, 1]);
 
-        // The rest behind the notes is combined and split into standard values only.
+        // The rest behind the notes is combined and split into standard values only, largest first.
         expect(track.measures[1].events.map((event) => {
             return event.duration;
         })).toEqual([
             { numerator: 1, denominator: 16 },
             { numerator: 1, denominator: 16 },
-            { numerator: 1, denominator: 8 },
             { numerator: 3, denominator: 4 },
+            { numerator: 1, denominator: 8 },
         ]);
 
         const quarter = track.measures[0].events.find((event) => {
@@ -688,9 +688,9 @@ describe.sequential("ScoreBookDataModel track actions", () => {
             "5/8+1/16:2", "11/16+1/16:2", "3/4+1/16:2", "13/16+1/16:2", "7/8+1/16:2", "15/16+1/16:2",
         ]);
 
-        // The two notes that no longer fit continue in the next measure, followed by a plain rest.
+        // The two notes that no longer fit continue in the next measure, followed by rests.
         expect(eventList(track.measures[1])).toEqual([
-            "0/1+1/16:2", "1/16+1/16:2", "1/8+1/8:-", "1/4+3/4:-",
+            "0/1+1/16:2", "1/16+1/16:2", "1/8+3/4:-", "7/8+1/8:-",
         ]);
     });
 
@@ -780,6 +780,80 @@ describe.sequential("ScoreBookDataModel track actions", () => {
             "3/4+1/4:2",
         ]);
         expect(eventList(track.measures[1])).toEqual(["0/1+1/1:-"]);
+    });
+
+    it("resizeEvents gives a rest a new length and moves the following notes", () => {
+        model.startNewArrangement([createInstrument("0", 0, 0)]);
+        const track = model.arrangement!.tracks[0];
+        model.setNoteAt(track.id, 1, { numerator: 0, denominator: 1 }, { numerator: 1, denominator: 4 }, "1");
+        model.setNoteAt(track.id, 1, { numerator: 1, denominator: 2 }, { numerator: 1, denominator: 4 }, "2");
+
+        mutatedCalls = 0;
+        const changed = model.resizeEvents(track.id, [{
+            bar: 1, start: { numerator: 1, denominator: 4 }, duration: { numerator: 1, denominator: 2 },
+        }]);
+
+        expect(changed).toBe(true);
+        expect(mutatedCalls).toBe(1);
+        // The quarter rest between the notes grows to a half, so the second note moves behind it.
+        expect(eventList(track.measures[0])).toEqual([
+            "0/1+1/4:1",
+            "1/4+1/2:-",
+            "3/4+1/4:2",
+        ]);
+    });
+
+    it("resizeEvents applies notes and rests of one selection in a single edit", () => {
+        model.startNewArrangement([createInstrument("0", 0, 0)]);
+        const track = model.arrangement!.tracks[0];
+        model.setNoteAt(track.id, 1, { numerator: 0, denominator: 1 }, { numerator: 1, denominator: 4 }, "1");
+        model.setNoteAt(track.id, 1, { numerator: 1, denominator: 2 }, { numerator: 1, denominator: 4 }, "2");
+
+        mutatedCalls = 0;
+        const changed = model.resizeEvents(track.id, [
+            { bar: 1, start: { numerator: 1, denominator: 4 }, duration: { numerator: 1, denominator: 8 } },
+            { bar: 1, start: { numerator: 1, denominator: 2 }, duration: { numerator: 1, denominator: 8 } },
+        ]);
+
+        expect(changed).toBe(true);
+        expect(mutatedCalls).toBe(1);
+        // The rest shrinks to an eighth and pulls the note behind it left; the note keeps its start
+        // because it was resized first, as the requests run from the last one to the first.
+        expect(eventList(track.measures[0])).toEqual([
+            "0/1+1/4:1",
+            "1/4+1/8:-",
+            "3/8+1/8:2",
+            "1/2+1/2:-",
+        ]);
+    });
+
+    it("resizeEvents caps a rest at the bar line", () => {
+        model.startNewArrangement([createInstrument("0", 0, 0)]);
+        const track = model.arrangement!.tracks[0];
+
+        // The trailing quarter rest of the measure cannot grow into a half.
+        const changed = model.resizeEvents(track.id, [{
+            bar: 1, start: { numerator: 3, denominator: 4 }, duration: { numerator: 1, denominator: 2 },
+        }]);
+
+        expect(changed).toBe(false);
+        expect(eventList(track.measures[0])).toEqual(["0/1+1/1:-"]);
+    });
+
+    it("resizeEvents skips tracks that contain subdivisions", () => {
+        model.startNewArrangement([createInstrument("0", 0, 0)]);
+        const track = model.arrangement!.tracks[0];
+        model.createSubdivision(track.id, 1, { numerator: 0, denominator: 1 }, { numerator: 1, denominator: 4 },
+            3, 4);
+
+        mutatedCalls = 0;
+
+        const changed = model.resizeEvents(track.id, [{
+            bar: 1, start: { numerator: 1, denominator: 4 }, duration: { numerator: 1, denominator: 2 },
+        }]);
+
+        expect(changed).toBe(false);
+        expect(mutatedCalls).toBe(0);
     });
 
     it("deleteEventWithShift skips tracks that contain subdivisions", () => {
