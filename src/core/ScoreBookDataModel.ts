@@ -3076,17 +3076,6 @@ export class ScoreBookDataModel {
 
     /**
      * Combines adjacent rest events and decomposes every non-subdivision rest into standard note
-     * values aligned to the pulse, so the staff view can render each rest with a single glyph.
-     *
-     * @param events The events to normalise.
-     * @param protectedStarts Start fractions of subdivision slots, which must stay untouched.
-     * @param stepsPerBar The measure's step resolution.
-     * @param pulse The rhythmic pulse as a fraction.
-     *
-     * @returns The normalised events.
-     */
-    /**
-     * Combines adjacent rest events and decomposes every non-subdivision rest into standard note
      * values, so the staff view can render each rest with a single glyph. The span alone decides the
      * split: the staff view places rests freely, so no pulse or grid position is honoured.
      *
