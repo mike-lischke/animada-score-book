@@ -356,7 +356,9 @@ describe.sequential("NoteLengthToolbar", () => {
     it("disables note lengths that do not fit a single bar", () => {
         selectSingleNote(selectionManager);
 
-        // 3/4 with 16 steps per whole note: 12 steps per bar, so whole and thirty-second don't fit.
+        // 3/4 with 16 steps per whole note: 12 steps per bar, so only the whole note does not fit.
+        // The thirty-second fits: the staff places any length the meter can express, even between
+        // two grid steps.
         renderResult = render(
             <NoteLengthToolbar dataModel={makeDataModel(16, 12)} selectionManager={selectionManager} />,
         );
@@ -365,7 +367,7 @@ describe.sequential("NoteLengthToolbar", () => {
 
         expect(buttons.map((button) => {
             return button.disabled;
-        })).toEqual([true, false, false, false, false, true]);
+        })).toEqual([true, false, false, false, false, false]);
     });
 
     it("disables all note lengths when no arrangement is loaded", () => {

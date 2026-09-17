@@ -63,7 +63,9 @@ interface IEmptySubdivisionCandidate {
  */
 export class GridMeasureEditor extends MeasureEditor {
     /**
-     * Applies a note style to a grid cell.
+     * Applies a note style to a grid cell. A cell covers one grid step, so a style written into an
+     * empty cell takes that step's length. A cell that addresses a position inside a step — a slot of
+     * a subdivision or of a step that holds thirty-seconds — keeps the length of the event it shows.
      *
      * @param position The target grid cell.
      * @param noteStyleId The selected instrument note-style id.
@@ -78,14 +80,19 @@ export class GridMeasureEditor extends MeasureEditor {
             return undefined;
         }
 
-        this.dataModel.setNoteAt(position.trackId, position.bar, start,
-            reduceFraction(1, measure.meter.stepResolution), noteStyleId);
+        const step = reduceFraction(1, measure.meter.stepResolution);
+        const aligned = compareFractions(start, reduceFraction(position.step, measure.meter.stepResolution)) === 0;
+        const event = aligned ? undefined : modelEventAt(measure, start);
+
+        this.dataModel.setNoteAt(position.trackId, position.bar, start, event?.duration ?? step, noteStyleId);
 
         return style;
     }
 
     /**
-     * Resolves the bar fraction covered by a note of the given value at the given position.
+     * Resolves the bar fraction covered by a note of the given value at the given position. The grid
+     * addresses notes by whole steps, so a value that does not land on one has no cell and is
+     * rejected here.
      *
      * @param value The selected note value, including its augmentation dot.
      * @param position The grid position whose measure supplies the meter.
@@ -94,11 +101,15 @@ export class GridMeasureEditor extends MeasureEditor {
      */
     public noteValueDuration(value: INoteValue, position: IGridEditorPosition): IFraction | undefined {
         const cell = this.resolveCell(position);
-        if (!cell) {
+        const measure = cell?.track.measures[position.bar - 1];
+        const duration = measure === undefined ? undefined : this.noteValueDurationFor(value, measure);
+        if (measure === undefined || duration === undefined) {
             return undefined;
         }
 
-        return this.noteValueDurationFor(value, cell.track.measures[position.bar - 1]);
+        const steps = duration.numerator * measure.meter.stepResolution / duration.denominator;
+
+        return Number.isInteger(steps) && steps >= 1 ? duration : undefined;
     }
 
     /**

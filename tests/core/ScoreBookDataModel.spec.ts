@@ -56,6 +56,21 @@ const eventList = (measure: ISbDmTrackMeasure): string[] => {
     });
 };
 
+/**
+ * Lists the spans of a measure's notes, which also covers starts between two grid steps.
+ *
+ * @param measure The measure to inspect.
+ * @returns One "start+duration" entry per note, in display order.
+ */
+const noteSpans = (measure: ISbDmTrackMeasure): string[] => {
+    return measure.events.filter((event) => {
+        return event.noteStyleId !== undefined;
+    }).map((event) => {
+        return `${event.start.numerator}/${event.start.denominator}`
+            + `+${event.duration.numerator}/${event.duration.denominator}`;
+    });
+};
+
 describe.sequential("ScoreBookDataModel — Auth State", () => {
     let model: ScoreBookDataModel;
     let authChangedCalls: number;
@@ -838,6 +853,38 @@ describe.sequential("ScoreBookDataModel track actions", () => {
 
         expect(changed).toBe(false);
         expect(eventList(track.measures[0])).toEqual(["0/1+1/1:-"]);
+    });
+
+    it("resizes a note whose start sits between two grid steps", () => {
+        model.startNewArrangement([createInstrument("0", 0, 0)]);
+        const track = model.arrangement!.tracks[0];
+        model.setNoteAt(track.id, 1, { numerator: 0, denominator: 1 }, { numerator: 1, denominator: 32 }, "1");
+        model.setNoteAt(track.id, 1, { numerator: 1, denominator: 16 }, { numerator: 1, denominator: 16 }, "2");
+
+        mutatedCalls = 0;
+        const changed = model.resizeEvents(track.id, [{
+            bar: 1, start: { numerator: 1, denominator: 16 }, duration: { numerator: 1, denominator: 8 },
+        }]);
+
+        expect(changed).toBe(true);
+        expect(mutatedCalls).toBe(1);
+        // The second note keeps its half-step start and grows: neither its position nor the
+        // thirty-second before it stops the space making.
+        expect(noteSpans(track.measures[0])).toEqual(["0/1+1/32", "1/16+1/8"]);
+    });
+
+    it("deleteEventWithShift works on a track holding a sub-step note", () => {
+        model.startNewArrangement([createInstrument("0", 0, 0)]);
+        const track = model.arrangement!.tracks[0];
+        model.setNoteAt(track.id, 1, { numerator: 0, denominator: 1 }, { numerator: 1, denominator: 32 }, "1");
+        model.setNoteAt(track.id, 1, { numerator: 1, denominator: 16 }, { numerator: 1, denominator: 16 }, "2");
+
+        mutatedCalls = 0;
+        const deleted = model.deleteEventWithShift(track.id, 1, { numerator: 1, denominator: 16 });
+
+        expect(deleted).toBe(true);
+        expect(mutatedCalls).toBe(1);
+        expect(noteSpans(track.measures[0])).toEqual(["0/1+1/32"]);
     });
 
     it("resizeEvents skips tracks that contain subdivisions", () => {

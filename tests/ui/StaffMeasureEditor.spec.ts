@@ -208,11 +208,18 @@ describe.sequential("StaffMeasureEditor", () => {
         expect(editor.isSubdivisionSlot(position)).toBe(true);
     });
 
-    it("rejects note lengths the data model cannot address", () => {
-        // A thirty-second does not land on a whole step in this meter, so the model could not store
-        // it — the editor never hands such a value to the model.
-        expect(editor.noteValueDuration(noteValue(NoteLength.ThirtySecond), position)).toBeUndefined();
-        expect(editor.noteValueDuration(noteValue(NoteLength.Sixteenth), position))
-            .toEqual({ numerator: 1, denominator: 16 });
+    it("accepts a note value that lands between two grid steps", () => {
+        // The staff has no raster: a thirty-second is a plain length, written where it fits.
+        const thirtySecond = { numerator: 1, denominator: 32 };
+
+        expect(editor.noteValueDuration(noteValue(NoteLength.ThirtySecond), position)).toEqual(thirtySecond);
+        expect(editor.noteValueDuration(noteValue(NoteLength.Whole, true), position)).toBeUndefined();
+
+        const inserted = editor.insertNoteWithShift({ ...position, start: { numerator: 1, denominator: 16 } },
+            thirtySecond, "1");
+
+        expect(inserted?.duration).toEqual(thirtySecond);
+        expect(styleAt(measure, { numerator: 1, denominator: 16 })).toBe("1");
+        expect(durationAt(measure, { numerator: 1, denominator: 16 })).toEqual(thirtySecond);
     });
 });

@@ -170,9 +170,9 @@ export abstract class MeasureEditor {
 
     /**
      * Converts a note value into its duration as a fraction of the measure. The arrangement's step
-     * resolution counts steps per whole note, the measure's resolution steps per bar. The data model
-     * addresses notes by whole steps, so a value that does not land on one is rejected here instead
-     * of being dropped silently later.
+     * resolution counts steps per whole note, the measure's resolution steps per bar. The duration
+     * stays a fraction: the grid adds its raster on top, because a value the raster cannot address
+     * has no cell, while the staff places any value the meter can express.
      *
      * @param value The selected note value, including its augmentation dot.
      * @param measure The measure the duration is expressed in.
@@ -188,11 +188,8 @@ export abstract class MeasureEditor {
         const fraction = noteValueFraction(value);
         const duration = reduceFraction(arrangement.timeParams.stepResolution * fraction.numerator,
             fraction.denominator * measure.meter.stepResolution);
-        const steps = duration.numerator * measure.meter.stepResolution / duration.denominator;
 
-        return Number.isInteger(steps) && steps >= 1 && compareFractions(duration, barLine) <= 0
-            ? duration
-            : undefined;
+        return compareFractions(duration, barLine) <= 0 ? duration : undefined;
     }
 
     /**

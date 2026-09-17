@@ -255,7 +255,9 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
 
         if (audioData) {
             if (depth > 0) {
-                glyph = this.subdivisionGlyph(depth);
+                // A slot of a plain subdivision can hold a length the grid cannot address — a 2:1 split
+                // of a step holds thirty-seconds — and must keep the beams of that length.
+                glyph = this.subdivisionSlotGlyph(event.duration) ?? this.subdivisionGlyph(depth);
             } else {
                 const lengthSteps = event.duration.denominator > 0
                     ? (event.duration.numerator * stepsPerBar) / event.duration.denominator
@@ -639,7 +641,8 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
 
             // Noteheads are anchored at the note's onset plus half a grid step. As a fraction of
             // this run's width that is 1 / (2 * durationInSteps), so a top-level step note sits at
-            // 50 % and a subdivision slot sits where the replaced note's notehead was.
+            // 50 % and a subdivision slot sits where the replaced note's notehead was. The offset is
+            // the same for every note, which is what makes a beam reach the next note's anchor.
             const anchorPercent = node.duration.denominator > 0 && node.duration.numerator > 0
                 ? (node.duration.denominator / (2 * node.duration.numerator * scoreMetrics.stepsPerBar)) * 100
                 : 50;
@@ -906,6 +909,22 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
         }
 
         return 0;
+    }
+
+    /**
+     * Resolves the glyph of a subdivision slot from the length the slot actually has.
+     *
+     * @param duration The slot's duration as a fraction of the bar.
+     *
+     * @returns The glyph, or undefined when the length is no single note value — the slots of a
+     *          tuplet are such lengths, and keep the glyph their nesting depth gives them.
+     */
+    private subdivisionSlotGlyph(duration: IFraction): INoteValue | undefined {
+        if (duration.numerator <= 0 || duration.denominator <= 0) {
+            return undefined;
+        }
+
+        return noteValueForUnits((duration.numerator * 32) / duration.denominator);
     }
 
     /**

@@ -9,7 +9,7 @@ import type { ScoreBookDataModel } from "../../../core/ScoreBookDataModel.js";
 import {
     NoteLength, noteLengthDenominator, noteValueForUnits, noteValueFraction, type INoteValue,
 } from "../../../core/rest-notation.js";
-import { compareFractions } from "../../../core/serialisation/numeric-functions.js";
+import { compareFractions, reduceFraction } from "../../../core/serialisation/numeric-functions.js";
 import { requisitions } from "../../../supplement/Requisitions.js";
 import type { SelectionManager } from "../../../ui/SelectionManager.js";
 import { SelectionGranularity, type ISelectionEntry } from "../../../ui/SelectionSerializer.js";
@@ -501,11 +501,13 @@ export class NoteLengthToolbar extends UIComponent<INoteLengthToolbarProps, INot
     }
 
     /**
-     * Checks whether a note value fits into a single bar on the current step grid.
+     * Checks whether a note value fits into a single bar. The toolbar belongs to the staff view, which
+     * has no raster: every value the meter can express is available, including one that does not land
+     * on a grid step.
      *
      * @param value The note value to evaluate.
      *
-     * @returns True when the value resolves to a whole number of grid steps within one bar.
+     * @returns True when the value fits into one bar.
      */
     private isAvailable(value: INoteValue): boolean {
         const { dataModel } = this.props;
@@ -518,8 +520,9 @@ export class NoteLengthToolbar extends UIComponent<INoteLengthToolbarProps, INot
         }
 
         const fraction = noteValueFraction(value);
-        const steps = (stepsPerWholeNote * fraction.numerator) / fraction.denominator;
+        const duration = reduceFraction(stepsPerWholeNote * fraction.numerator,
+            fraction.denominator * stepsPerBar);
 
-        return Number.isInteger(steps) && steps >= 1 && steps <= stepsPerBar;
+        return duration.numerator > 0 && duration.numerator <= duration.denominator;
     }
 }

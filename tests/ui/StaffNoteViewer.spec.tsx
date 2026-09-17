@@ -218,6 +218,92 @@ describe.sequential("StaffNoteViewer beams", () => {
         expect(widthPercent).toBeCloseTo(33.333, 3);
     });
 
+    it("beams a pair of thirty-seconds outside a subdivision", () => {
+        const measure = buildMeasure([
+            event(fraction(0, 1), fraction(1, 32), "1"),
+            event(fraction(1, 32), fraction(1, 32), "1"),
+            event(fraction(1, 16), fraction(15, 16)),
+        ], []);
+
+        renderResult = render(
+            <StaffNoteViewer
+                isLastBar={true}
+                timeSignature="4/4"
+                scoreMetrics={scoreMetrics}
+                baseSteps={16}
+                measure={measure}
+                barNumber={1}
+                trackId={100}
+            />,
+        );
+
+        const runs = [...renderResult.container.querySelectorAll<HTMLElement>(".staff-note-viewer-run")];
+        const beams = runs.map((run) => {
+            return [...run.querySelectorAll<HTMLElement>(".staff-note-viewer-beam")].map((beam) => {
+                return beam.style.width;
+            });
+        });
+
+        // Both notes carry three beam levels: the first bridges to its neighbour, the second stubs back.
+        expect(beams[0]).toEqual(["100%", "100%", "100%"]);
+        expect(beams[1]).toEqual(["12px", "12px", "12px"]);
+    });
+
+    it("beams a pair of dotted thirty-seconds with three beams", () => {
+        const measure = buildMeasure([
+            event(fraction(0, 1), fraction(3, 64), "1"),
+            event(fraction(3, 64), fraction(3, 64), "1"),
+            event(fraction(3, 32), fraction(29, 32)),
+        ], []);
+
+        renderResult = render(
+            <StaffNoteViewer
+                isLastBar={true}
+                timeSignature="4/4"
+                scoreMetrics={scoreMetrics}
+                baseSteps={16}
+                measure={measure}
+                barNumber={1}
+                trackId={100}
+            />,
+        );
+
+        const runs = [...renderResult.container.querySelectorAll<HTMLElement>(".staff-note-viewer-run")];
+        const beamCounts = runs.map((run) => {
+            return run.querySelectorAll(".staff-note-viewer-beam").length;
+        });
+
+        expect(beamCounts.slice(0, 2)).toEqual([3, 3]);
+    });
+
+    it("beams a 2:1 split of a step as thirty-seconds", () => {
+        const measure = buildMeasure([
+            event(fraction(0, 1), fraction(1, 32), "1"),
+            event(fraction(1, 32), fraction(1, 32), "1"),
+            event(fraction(1, 16), fraction(15, 16)),
+        ], [{ startIndex: 0, actual: 2, normal: 1, isTuplet: false }]);
+
+        renderResult = render(
+            <StaffNoteViewer
+                isLastBar={true}
+                timeSignature="4/4"
+                scoreMetrics={scoreMetrics}
+                baseSteps={16}
+                measure={measure}
+                barNumber={1}
+                trackId={100}
+            />,
+        );
+
+        const runs = [...renderResult.container.querySelectorAll<HTMLElement>(".staff-note-viewer-run")];
+        const beamCounts = runs.map((run) => {
+            return run.querySelectorAll(".staff-note-viewer-beam").length;
+        });
+
+        // The slots hold thirty-seconds, so they need three beams even though the split nests once.
+        expect(beamCounts.slice(0, 2)).toEqual([3, 3]);
+    });
+
     it("points the trailing beam stub towards the group for mixed durations", () => {
         const measure = buildMeasure([
             event(fraction(0, 16), fraction(1, 16), "1"),

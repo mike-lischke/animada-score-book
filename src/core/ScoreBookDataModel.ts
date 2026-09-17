@@ -39,19 +39,17 @@ export interface ISubdivisionSlotContent {
     articulation?: INoteArticulation;
 }
 
+/** One bar, the unit of a track's timeline. */
+const barLength: IFraction = { numerator: 1, denominator: 1 };
+
 interface IAbsoluteNoteEvent {
-    startStep: number;
-    durationSteps: number;
+    /** Absolute position on the track's timeline, as a fraction of a bar. */
+    start: IFraction;
+
+    /** Length of the note, as a fraction of a bar. */
+    duration: IFraction;
+
     event: IMeasureEvent;
-}
-
-/** A track's measures as one continuous step timeline. */
-interface IMeasureTimeline {
-    /** Absolute step offset of every measure. */
-    offsets: number[];
-
-    /** Total number of steps of the track. */
-    totalSteps: number;
 }
 
 /** A measure's events split at its bar line. */
@@ -3417,34 +3415,28 @@ export class ScoreBookDataModel {
         return a.numerator * b.denominator === b.numerator * a.denominator;
     }
 
-    private measureIndexAtStep(measureOffsets: number[], measures: ISbDmTrackMeasure[], step: number): number {
-        for (let index = measureOffsets.length - 1; index >= 0; index--) {
-            if (step >= measureOffsets[index]
-                && step < measureOffsets[index] + measures[index].meter.stepResolution) {
-                return index;
-            }
-        }
-
-        return -1;
+    /**
+     * Resolves the position a measure-local fraction has on the track's timeline. Every measure spans
+     * one bar, so the timeline unit is one bar.
+     *
+     * @param measureIndex The zero-based index of the measure.
+     * @param start The position within the measure.
+     *
+     * @returns The absolute position on the track's timeline.
+     */
+    private absolutePositionOf(measureIndex: number, start: IFraction): IFraction {
+        return addFractions(reduceFraction(measureIndex, 1), start);
     }
 
     /**
-     * Collects a track's measures as one continuous step timeline.
+     * Resolves the measure an absolute track position falls into.
      *
-     * @param track The track to inspect.
+     * @param absolute The absolute position on the track's timeline.
      *
-     * @returns The absolute step offset of every measure and the track's total step count.
+     * @returns The zero-based index of the measure.
      */
-    private measureTimeline(track: ISbDmTrack): IMeasureTimeline {
-        const offsets: number[] = [];
-        let totalSteps = 0;
-
-        for (const measure of track.measures) {
-            offsets.push(totalSteps);
-            totalSteps += measure.meter.stepResolution;
-        }
-
-        return { offsets, totalSteps };
+    private measureIndexAt(absolute: IFraction): number {
+        return Math.floor(absolute.numerator / absolute.denominator);
     }
 
     private hasSubdivisions(track: ISbDmTrack): boolean {
@@ -3492,38 +3484,29 @@ export class ScoreBookDataModel {
      */
     private setEventSpan(track: ISbDmTrack, bar: number, start: IFraction, newDuration?: IFraction): boolean {
         const measure = track.measures.at(bar - 1);
-        const stepsPerBar = measure?.meter.stepResolution;
         const event = measure?.events.find((candidate) => {
             return compareFractions(candidate.start, start) === 0;
         });
-        if (stepsPerBar === undefined || event === undefined) {
-            return false;
-        }
-
-        const eventStart = this.stepsFromFraction(start, stepsPerBar);
-        const oldSteps = this.stepsFromFraction(event.duration, stepsPerBar);
-        const requestedSteps = newDuration === undefined ? 0 : this.stepsFromFraction(newDuration, stepsPerBar);
-        const timeline = this.measureTimeline(track);
-        const notes = this.collectAbsoluteNotes(track, timeline);
-
-        if (eventStart === undefined || oldSteps === undefined || requestedSteps === undefined
-            || notes === undefined) {
+        if (event === undefined) {
             return false;
         }
 
         // An event never crosses a bar line, so a request that reaches past it ends at the measure end.
-        const newSteps = Math.min(requestedSteps, stepsPerBar - eventStart);
-        if (newSteps === oldSteps) {
+        const room = subtractFractions(barLength, start);
+        const requested = newDuration ?? { numerator: 0, denominator: 1 };
+        const duration = compareFractions(requested, room) < 0 ? requested : room;
+        if (compareFractions(duration, event.duration) === 0) {
             return false;
         }
 
-        const spanStart = timeline.offsets[bar - 1] + eventStart;
-        const spanEnd = spanStart + oldSteps;
+        const spanStart = this.absolutePositionOf(bar - 1, start);
+        const spanEnd = addFractions(spanStart, event.duration);
+        const delta = subtractFractions(duration, event.duration);
         const remaining: IAbsoluteNoteEvent[] = [];
 
-        for (const note of notes) {
-            if (note.startStep >= spanEnd) {
-                note.startStep += newSteps - oldSteps;
+        for (const note of this.collectAbsoluteNotes(track)) {
+            if (compareFractions(note.start, spanEnd) >= 0) {
+                note.start = addFractions(note.start, delta);
                 remaining.push(note);
 
                 continue;
@@ -3531,15 +3514,18 @@ export class ScoreBookDataModel {
 
             // The changed event itself disappears when it is a note; a note reaching into the span is
             // shortened at its start.
-            if (note.startStep >= spanStart) {
+            if (compareFractions(note.start, spanStart) >= 0) {
                 continue;
             }
 
-            note.durationSteps = Math.min(note.durationSteps, spanStart - note.startStep);
+            if (compareFractions(addFractions(note.start, note.duration), spanStart) > 0) {
+                note.duration = subtractFractions(spanStart, note.start);
+            }
+
             remaining.push(note);
         }
 
-        this.layOutAbsoluteNotes(track, timeline, remaining);
+        this.layOutAbsoluteNotes(track, remaining);
 
         return true;
     }
@@ -3553,49 +3539,37 @@ export class ScoreBookDataModel {
      * @returns True when at least one note duration changed.
      */
     private resizeTrackNotes(track: ISbDmTrack, requests: IEventResizeRequest[]): boolean {
-        const timeline = this.measureTimeline(track);
-        const { offsets: measureOffsets, totalSteps } = timeline;
+        const requestedDurations = new Map<string, IFraction>();
 
-        const requestedSteps = new Map<number, number>();
         for (const request of requests) {
-            const measure = track.measures.at(request.bar - 1);
-            if (!measure) {
+            if (track.measures.at(request.bar - 1) === undefined || request.duration.numerator <= 0) {
                 continue;
             }
 
-            const stepsPerBar = measure.meter.stepResolution;
-            const startStep = this.stepsFromFraction(request.start, stepsPerBar);
-            const durationSteps = this.stepsFromFraction(request.duration, stepsPerBar);
-            if (startStep === undefined || durationSteps === undefined || durationSteps < 1) {
+            // A note never crosses a bar line, so a request that reaches past it ends at the measure end.
+            const room = subtractFractions(barLength, request.start);
+            const duration = compareFractions(request.duration, room) < 0 ? request.duration : room;
+            if (duration.numerator <= 0) {
                 continue;
             }
 
-            // A note never crosses a bar line, so its requested duration ends at the measure end.
-            const available = stepsPerBar - startStep;
-            if (available < 1) {
-                continue;
-            }
-
-            requestedSteps.set(measureOffsets[request.bar - 1] + startStep, Math.min(durationSteps, available));
+            const position = this.absolutePositionOf(request.bar - 1, request.start);
+            requestedDurations.set(this.fractionKey(position), duration);
         }
 
-        if (requestedSteps.size === 0) {
+        if (requestedDurations.size === 0) {
             return false;
         }
 
-        const notes = this.collectAbsoluteNotes(track, timeline);
-        if (!notes) {
-            return false;
-        }
-
+        const notes = this.collectAbsoluteNotes(track);
         let firstResized = -1;
         for (let index = 0; index < notes.length; index++) {
-            const requested = requestedSteps.get(notes[index].startStep);
-            if (requested === undefined || requested === notes[index].durationSteps) {
+            const requested = requestedDurations.get(this.fractionKey(notes[index].start));
+            if (requested === undefined || compareFractions(requested, notes[index].duration) === 0) {
                 continue;
             }
 
-            notes[index].durationSteps = requested;
+            notes[index].duration = requested;
             if (firstResized < 0) {
                 firstResized = index;
             }
@@ -3605,76 +3579,74 @@ export class ScoreBookDataModel {
             return false;
         }
 
-        let previousEnd = notes[firstResized].startStep + notes[firstResized].durationSteps;
+        const trackLength = reduceFraction(track.measures.length, 1);
+        let previousEnd = addFractions(notes[firstResized].start, notes[firstResized].duration);
+
         for (let index = firstResized + 1; index < notes.length; index++) {
             const note = notes[index];
-            note.startStep = Math.max(note.startStep, previousEnd);
+            if (compareFractions(note.start, previousEnd) < 0) {
+                note.start = previousEnd;
+            }
 
-            const measureIndex = this.measureIndexAtStep(measureOffsets, track.measures, note.startStep);
-            if (measureIndex < 0) {
+            const measureIndex = this.measureIndexAt(note.start);
+            if (measureIndex >= track.measures.length) {
                 notes.splice(index);
 
                 break;
             }
 
-            const measureEnd = measureOffsets[measureIndex] + track.measures[measureIndex].meter.stepResolution;
-            if (note.startStep + note.durationSteps > measureEnd) {
-                const nextMeasureIndex = measureIndex + 1;
-                if (nextMeasureIndex >= track.measures.length) {
+            // A note that no longer fits into its measure continues at the start of the next one.
+            const measureEnd = reduceFraction(measureIndex + 1, 1);
+            if (compareFractions(addFractions(note.start, note.duration), measureEnd) > 0) {
+                const nextMeasure = measureIndex + 1;
+                if (nextMeasure >= track.measures.length) {
                     notes.splice(index);
 
                     break;
                 }
 
-                note.startStep = measureOffsets[nextMeasureIndex];
+                note.start = reduceFraction(nextMeasure, 1);
             }
 
-            if (note.startStep >= totalSteps) {
+            const remaining = subtractFractions(trackLength, note.start);
+            if (remaining.numerator <= 0) {
                 notes.splice(index);
 
                 break;
             }
 
-            note.durationSteps = Math.min(note.durationSteps, totalSteps - note.startStep);
-            previousEnd = note.startStep + note.durationSteps;
+            if (compareFractions(note.duration, remaining) > 0) {
+                note.duration = remaining;
+            }
+
+            previousEnd = addFractions(note.start, note.duration);
         }
 
-        this.layOutAbsoluteNotes(track, timeline, notes);
+        this.layOutAbsoluteNotes(track, notes);
 
         return true;
     }
 
     /**
-     * Collects a track's notes on its absolute step timeline. Rests are left out on purpose: every
-     * layout recomputes them from the gaps between the notes.
+     * Collects a track's notes on its absolute timeline of bar fractions. Rests are left out on
+     * purpose: every layout recomputes them from the gaps between the notes.
      *
      * @param track The track to inspect.
-     * @param timeline The track's step timeline.
      *
-     * @returns The notes in display order, or undefined when a note does not land on a grid step.
+     * @returns The notes in track order.
      */
-    private collectAbsoluteNotes(track: ISbDmTrack,
-        timeline: IMeasureTimeline): IAbsoluteNoteEvent[] | undefined {
+    private collectAbsoluteNotes(track: ISbDmTrack): IAbsoluteNoteEvent[] {
         const notes: IAbsoluteNoteEvent[] = [];
 
         for (let measureIndex = 0; measureIndex < track.measures.length; measureIndex++) {
-            const measure = track.measures[measureIndex];
-            const stepsPerBar = measure.meter.stepResolution;
-
-            for (const event of measure.events) {
+            for (const event of track.measures[measureIndex].events) {
                 if (event.noteStyleId === undefined) {
                     continue;
                 }
 
-                const eventStart = this.stepsFromFraction(event.start, stepsPerBar);
-                const eventDuration = this.stepsFromFraction(event.duration, stepsPerBar);
-                if (eventStart === undefined || eventDuration === undefined) {
-                    return undefined;
-                }
-
                 notes.push({
-                    startStep: timeline.offsets[measureIndex] + eventStart,
-                    durationSteps: eventDuration,
+                    start: this.absolutePositionOf(measureIndex, event.start),
+                    duration: { ...event.duration },
                     event: this.cloneEvent(event),
                 });
             }
@@ -3685,55 +3657,51 @@ export class ScoreBookDataModel {
 
     /**
      * Writes an absolute note timeline back into the track, measure by measure. Gaps become rests, a
-     * note that would cross a bar line moves to the start of the next measure, and notes beyond the
-     * track's last measure are dropped.
+     * note reaching past a bar line is cut off there, and notes beyond the track's last measure are
+     * dropped.
      *
      * @param track The track to rewrite.
-     * @param timeline The track's step timeline.
-     * @param notes The notes to lay out, sorted by start step.
+     * @param notes The notes to lay out, sorted by their absolute start.
      */
-    private layOutAbsoluteNotes(track: ISbDmTrack, timeline: IMeasureTimeline,
-        notes: IAbsoluteNoteEvent[]): void {
-        const measureOffsets = timeline.offsets;
+    private layOutAbsoluteNotes(track: ISbDmTrack, notes: IAbsoluteNoteEvent[]): void {
         let noteIndex = 0;
 
         for (let measureIndex = 0; measureIndex < track.measures.length; measureIndex++) {
             const measure = track.measures[measureIndex];
-            const measureStart = measureOffsets[measureIndex];
-            const stepsPerBar = measure.meter.stepResolution;
-            const measureEnd = measureStart + stepsPerBar;
+            const measureStart = reduceFraction(measureIndex, 1);
+            const measureEnd = reduceFraction(measureIndex + 1, 1);
             const events: IMeasureEvent[] = [];
-            let cursorStep = measureStart;
+            let cursor = measureStart;
 
-            while (noteIndex < notes.length && notes[noteIndex].startStep < measureEnd) {
+            while (noteIndex < notes.length && compareFractions(notes[noteIndex].start, measureEnd) < 0) {
                 const note = notes[noteIndex];
 
-                if (note.startStep > cursorStep) {
+                if (compareFractions(note.start, cursor) > 0) {
                     events.push({
-                        start: reduceFraction(cursorStep - measureStart, stepsPerBar),
-                        duration: reduceFraction(note.startStep - cursorStep, stepsPerBar),
+                        start: subtractFractions(cursor, measureStart),
+                        duration: subtractFractions(note.start, cursor),
                     });
                 }
 
-                const durationSteps = Math.min(note.durationSteps, measureEnd - note.startStep);
+                const room = subtractFractions(measureEnd, note.start);
+                const duration = compareFractions(note.duration, room) < 0 ? note.duration : room;
                 events.push({
                     ...this.cloneEvent(note.event),
-                    start: reduceFraction(note.startStep - measureStart, stepsPerBar),
-                    duration: reduceFraction(durationSteps, stepsPerBar),
+                    start: subtractFractions(note.start, measureStart),
+                    duration: { ...duration },
                 });
-                cursorStep = note.startStep + durationSteps;
+                cursor = addFractions(note.start, duration);
                 noteIndex++;
             }
 
-            if (cursorStep < measureEnd) {
+            if (compareFractions(cursor, measureEnd) < 0) {
                 events.push({
-                    start: reduceFraction(cursorStep - measureStart, stepsPerBar),
-                    duration: reduceFraction(measureEnd - cursorStep, stepsPerBar),
+                    start: subtractFractions(cursor, measureStart),
+                    duration: subtractFractions(measureEnd, cursor),
                 });
             }
 
-            const normalized = this.normalizeMeasureEvents(events);
-            this.setMeasureEvents(measure, normalized, false);
+            this.setMeasureEvents(measure, this.normalizeMeasureEvents(events), false);
         }
     }
 
@@ -3846,20 +3814,6 @@ export class ScoreBookDataModel {
 
             this.setMeasureEvents(next, this.normalizeMeasureEvents([...overflow, ...shifted]));
         }
-    }
-
-    /**
-     * Converts a fraction of a bar into a step count.
-     *
-     * @param fraction The fraction of the bar to convert.
-     * @param stepsPerBar The number of steps in the measure.
-     *
-     * @returns The step count, or undefined when the fraction does not land on a step.
-     */
-    private stepsFromFraction(fraction: IFraction, stepsPerBar: number): number | undefined {
-        const steps = fraction.numerator * stepsPerBar / fraction.denominator;
-
-        return Number.isInteger(steps) ? steps : undefined;
     }
 
     /**

@@ -338,6 +338,32 @@ describe.sequential("GridMeasureEditor note length entry", () => {
 
         expect(editor.insertNote(position, { numerator: 1, denominator: 4 }, "1")).toBeUndefined();
     });
+
+    it("keeps the length of an event that sits inside a step", () => {
+        const track = model.arrangement!.tracks[0];
+        track.instrument.noteStyles["1"] = { id: "1" } as IAudioData;
+        const measure = track.measures[0];
+        measure.events.splice(0, measure.events.length,
+            {
+                start: { numerator: 0, denominator: 1 }, duration: { numerator: 1, denominator: 32 },
+                noteStyleId: "1"
+            },
+            { start: { numerator: 1, denominator: 32 }, duration: { numerator: 1, denominator: 32 } },
+            { start: { numerator: 1, denominator: 16 }, duration: { numerator: 15, denominator: 16 } },
+        );
+        hydrateMeasureEvents(model.arrangement! as Arrangement);
+
+        // The part of the step keeps its own length, so the thirty-second pair stays intact, while a
+        // style written into a whole cell still takes the step's length.
+        const position = { bar: 1, trackId: track.id, step: 0, start: { numerator: 1, denominator: 32 } };
+        const style = editor.setNote(position, "1");
+
+        expect(style?.id).toBe("1");
+        expect(measure.events.slice(0, 2).map((event) => {
+            return `${event.start.numerator}/${event.start.denominator}`
+                + `+${event.duration.numerator}/${event.duration.denominator}:${event.noteStyleId}`;
+        })).toEqual(["0/1+1/32:1", "1/32+1/32:1"]);
+    });
 });
 
 describe.sequential("GridMeasureEditor subdivision editing", () => {

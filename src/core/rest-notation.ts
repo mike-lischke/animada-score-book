@@ -67,7 +67,8 @@ export const noteLengthDenominator = (length: NoteLength): number => {
 
 /**
  * The note values a single glyph can express, as 32nd-note units (whole note = 32), largest first.
- * A dotted whole note would exceed a whole note, so it is not offered.
+ * A dotted whole note would exceed a whole note, so it is not offered. A dotted 32nd note is the
+ * shortest value and the only one below a 32nd-note unit: it halves the 32nd note, hence 1.5 units.
  */
 const noteValueUnits: ReadonlyArray<readonly [number, INoteValue]> = [
     [32, { length: NoteLength.Whole, dotted: false }],
@@ -79,6 +80,7 @@ const noteValueUnits: ReadonlyArray<readonly [number, INoteValue]> = [
     [4, { length: NoteLength.Eighth, dotted: false }],
     [3, { length: NoteLength.Sixteenth, dotted: true }],
     [2, { length: NoteLength.Sixteenth, dotted: false }],
+    [1.5, { length: NoteLength.ThirtySecond, dotted: true }],
     [1, { length: NoteLength.ThirtySecond, dotted: false }],
 ];
 
@@ -126,6 +128,7 @@ const standardNoteValues: ReadonlyArray<readonly [number, number]> = [
     [1, 8],   // eighth
     [3, 32],  // dotted sixteenth
     [1, 16],  // sixteenth
+    [3, 64],  // dotted thirty-second
     [1, 32],  // thirty-second
 ];
 

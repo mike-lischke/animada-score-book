@@ -14,6 +14,9 @@ describe("rest notation", () => {
         expect(noteValueForUnits(16)).toEqual({ length: NoteLength.Half, dotted: false });
         expect(noteValueForUnits(24)).toEqual({ length: NoteLength.Half, dotted: true });
         expect(noteValueForUnits(3)).toEqual({ length: NoteLength.Sixteenth, dotted: true });
+
+        // The dotted thirty-second is the one value below a 32nd-note unit.
+        expect(noteValueForUnits(1.5)).toEqual({ length: NoteLength.ThirtySecond, dotted: true });
         expect(noteValueForUnits(0)).toBeUndefined();
         expect(noteValueForUnits(48)).toBeUndefined();
     });
@@ -36,6 +39,7 @@ describe("rest notation", () => {
             { numerator: 1, denominator: 8 },
             { numerator: 3, denominator: 32 },
             { numerator: 1, denominator: 16 },
+            { numerator: 3, denominator: 64 },
             { numerator: 1, denominator: 32 },
         ]);
     });
