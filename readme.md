@@ -42,8 +42,9 @@ Animada Score Book is your ensemble's digital home for rhythm — a rich, browse
 - **BananaDrum Import.** Import scores from BananaDrum URLs to bring your existing repertoire on board.
 
 > [!IMPORTANT]
-> **Editing is not yet implemented.** The current version focuses on score library browsing, arrangement playback,
-> and printing. Full score and arrangement editing capabilities are planned for a future release.
+> **Editing is implemented.** It works in both views: notes can be entered, given a note style and an articulation,
+> copied, pasted, subdivided and removed in the grid view and in the staff view; the staff view additionally offers
+> the note length toolbar. What arrived with each version is listed in the [release notes](release-notes.md).
 
 ## Getting Started
 
