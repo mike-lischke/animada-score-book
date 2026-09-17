@@ -6,11 +6,12 @@
 import type {
     IEventResizeRequest, ISbDmTrack, ISbDmTrackMeasure, ScoreBookDataModel,
 } from "../core/ScoreBookDataModel.js";
+import { modelEventAt } from "../core/MeasureProjection.js";
 import { noteValueFraction, type INoteValue } from "../core/rest-notation.js";
 import { compareFractions, reduceFraction } from "../core/serialisation/numeric-functions.js";
-import type { IAudioData, IFraction } from "../core/types/general.js";
+import type { IAudioData, IFraction, IMeasureEvent } from "../core/types/general.js";
 import { selectionToClearRanges } from "./selection-ranges.js";
-import { SelectionSerializer, type ISelectionEntry } from "./SelectionSerializer.js";
+import { SelectionGranularity, SelectionSerializer, type ISelectionEntry } from "./SelectionSerializer.js";
 
 /** The bar line as a bar fraction. */
 const barLine: IFraction = { numerator: 1, denominator: 1 };
@@ -166,6 +167,41 @@ export abstract class MeasureEditor {
      */
     public getMainVolume(): number {
         return (this.dataModel.arrangement?.mainVolume ?? 100) / 100;
+    }
+
+    /**
+     * Collects the events the selection addresses, in measure order and without duplicates. A
+     * subdivision copies their content into its leading slots, so the notes it replaces keep their
+     * sound.
+     *
+     * @param entries The selection entries to read.
+     *
+     * @returns The addressed events, ordered by their start.
+     */
+    protected selectedEventsOf(entries: ISelectionEntry[]): IMeasureEvent[] {
+        const events: IMeasureEvent[] = [];
+
+        for (const entry of entries) {
+            const { target } = entry;
+            if (target.granularity === SelectionGranularity.Track
+                || target.granularity === SelectionGranularity.Measure
+                || target.granularity === SelectionGranularity.TrackPiece) {
+                continue;
+            }
+
+            const addressed = target.granularity === SelectionGranularity.Note
+                ? [modelEventAt(target.measure, target.start ?? target.event.start) ?? target.event]
+                : target.events;
+            for (const event of addressed) {
+                if (!events.includes(event)) {
+                    events.push(event);
+                }
+            }
+        }
+
+        return events.sort((left, right) => {
+            return compareFractions(left.start, right.start);
+        });
     }
 
     /**

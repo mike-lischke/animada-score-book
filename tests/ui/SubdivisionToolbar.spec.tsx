@@ -10,7 +10,7 @@ import { SubdivisionToolbar } from "../../src/components/ui/Arrangement/Subdivis
 import type { ISbDmArrangement, ISbDmTrack, ISbDmTrackMeasure } from "../../src/core/ScoreBookDataModel.js";
 import type { IFraction } from "../../src/core/types/general.js";
 import { SelectionManager } from "../../src/ui/SelectionManager.js";
-import { noteEntry } from "../unit-test-helpers.js";
+import { noteEntry, runEntry } from "../unit-test-helpers.js";
 
 const triggerButton = (container: Element): HTMLButtonElement => {
     return container.querySelector<HTMLButtonElement>("button")!;
@@ -22,10 +22,12 @@ const triggerButton = (container: Element): HTMLButtonElement => {
  *
  * @param trackId The track identity.
  * @param starts The positions of the measure's events.
+ * @param duration The length every event gets.
  *
  * @returns The measure to address in selection entries.
  */
-const makeMeasure = (trackId: number, starts: IFraction[]): ISbDmTrackMeasure => {
+const makeMeasure = (trackId: number, starts: IFraction[],
+    duration: IFraction = { numerator: 1, denominator: 16 }): ISbDmTrackMeasure => {
     const arrangement = { tracks: [] } as unknown as ISbDmArrangement;
     const track = { id: trackId, measures: [], arrangement } as unknown as ISbDmTrack;
     const measure = {
@@ -34,7 +36,7 @@ const makeMeasure = (trackId: number, starts: IFraction[]): ISbDmTrackMeasure =>
         meter: { stepResolution: 16 },
         subdivisions: [],
         events: starts.map((start) => {
-            return { start, duration: { numerator: 1, denominator: 16 } };
+            return { start, duration };
         }),
     } as unknown as ISbDmTrackMeasure;
 
@@ -141,7 +143,7 @@ describe.sequential("SubdivisionToolbar", () => {
         expect(triggerButton(renderResult.container).disabled).toBe(true);
     });
 
-    it("keeps subdivisions in the menu but disables those exceeding two notes per grid cell", () => {
+    it("disables subdivisions whose slots would be shorter than a thirty-second", () => {
         const measure = makeMeasure(7, [cell(0), cell(1), cell(2)]);
         const entries = [0, 1, 2].map((step) => {
             return noteEntry(measure, cell(step));
@@ -163,5 +165,26 @@ describe.sequential("SubdivisionToolbar", () => {
 
         expect(nontuplet?.getAttribute("aria-disabled")).toBe("true");
         expect(triplet?.getAttribute("aria-disabled")).toBeNull();
+    });
+
+    it("sizes the limit by the selected note length", () => {
+        // A quarter note holds eight thirty-seconds, so a 4:1 split is offered for it.
+        const measure = makeMeasure(7, [{ numerator: 0, denominator: 1 }], { numerator: 1, denominator: 4 });
+        selectionManager.replaceSelection([runEntry(measure, measure.events[0])]);
+
+        renderResult = render(
+            <SubdivisionToolbar selectionManager={selectionManager} />,
+        );
+
+        const dropdownItems = [...renderResult.container.querySelectorAll<HTMLAnchorElement>("a")];
+        const quadruplet = dropdownItems.find((item) => {
+            return item.textContent === "Quadruplet";
+        });
+        const nontuplet = dropdownItems.find((item) => {
+            return item.textContent === "Nontuplet";
+        });
+
+        expect(quadruplet?.getAttribute("aria-disabled")).toBeNull();
+        expect(nontuplet?.getAttribute("aria-disabled")).toBe("true");
     });
 });

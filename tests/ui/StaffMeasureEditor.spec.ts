@@ -208,6 +208,39 @@ describe.sequential("StaffMeasureEditor", () => {
         expect(editor.isSubdivisionSlot(position)).toBe(true);
     });
 
+    it("creates a subdivision over the selected notes", () => {
+        setEvents(model, [
+            { start: { numerator: 0, denominator: 1 }, duration: { numerator: 1, denominator: 8 }, noteStyleId: "1" },
+            { start: { numerator: 1, denominator: 8 }, duration: { numerator: 1, denominator: 8 }, noteStyleId: "1" },
+            { start: { numerator: 1, denominator: 4 }, duration: { numerator: 3, denominator: 4 } },
+        ]);
+        const entries = [runEntry(measure, measure.events[0]), runEntry(measure, measure.events[1])];
+
+        expect(editor.createSubdivisionForSelection(entries, 3)).toBe(true);
+
+        // Two eighths cover four sixteenth steps, so the triplet replaces them with three slot eighths.
+        expect(measure.subdivisions).toHaveLength(1);
+        expect(measure.subdivisions[0].actual).toBe(3);
+        expect(measure.subdivisions[0].normal).toBe(4);
+        expect(durationAt(measure, { numerator: 0, denominator: 1 })).toEqual({ numerator: 1, denominator: 12 });
+        expect(styleAt(measure, { numerator: 0, denominator: 1 })).toBe("1");
+        expect(styleAt(measure, { numerator: 1, denominator: 12 })).toBe("1");
+        expect(styleAt(measure, { numerator: 1, denominator: 6 })).toBeUndefined();
+    });
+
+    it("rejects a subdivision span that does not cover whole grid steps", () => {
+        setEvents(model, [
+            { start: { numerator: 0, denominator: 1 }, duration: { numerator: 1, denominator: 32 }, noteStyleId: "1" },
+            { start: { numerator: 1, denominator: 32 }, duration: { numerator: 1, denominator: 32 }, noteStyleId: "1" },
+            { start: { numerator: 1, denominator: 16 }, duration: { numerator: 15, denominator: 16 } },
+        ]);
+        const entries = [runEntry(measure, measure.events[1])];
+
+        // A single thirty-second spans half a step, which no subdivision can replace.
+        expect(editor.createSubdivisionForSelection(entries, 2)).toBe(false);
+        expect(measure.subdivisions).toHaveLength(0);
+    });
+
     it("accepts a note value that lands between two grid steps", () => {
         // The staff has no raster: a thirty-second is a plain length, written where it fits.
         const thirtySecond = { numerator: 1, denominator: 32 };

@@ -471,12 +471,21 @@ export class TrackViewerInputController {
     };
 
     private handleSubdivisionCreationRequested = (request: ISubdivisionCreationRequest): Promise<boolean> => {
-        const editor = this.gridEditor;
-        if (!this.editMode || this.viewMode !== "grid" || editor === undefined) {
+        if (!this.editMode) {
             return Promise.resolve(false);
         }
 
         const entries = [...this.selectionManager.currentSelection.values()];
+
+        if (this.viewMode !== "grid") {
+            // The staff has no raster: the selection itself is the span the subdivision replaces.
+            return Promise.resolve(this.staffEditor?.createSubdivisionForSelection(entries, request.actual) ?? false);
+        }
+
+        const editor = this.gridEditor;
+        if (editor === undefined) {
+            return Promise.resolve(false);
+        }
 
         if (this.isMultiCellSelection(entries)) {
             return Promise.resolve(editor.createSubdivisionForSelection(entries, request.actual));

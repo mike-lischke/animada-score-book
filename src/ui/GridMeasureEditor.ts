@@ -10,7 +10,7 @@ import type { INoteValue } from "../core/rest-notation.js";
 import {
     addFractions, compareFractions, reduceFraction, subtractFractions,
 } from "../core/serialisation/numeric-functions.js";
-import type { IAudioData, IFraction, IMeasureEvent } from "../core/types/general.js";
+import type { IAudioData, IFraction } from "../core/types/general.js";
 import { requisitions } from "../supplement/Requisitions.js";
 import { modelEventAt } from "../core/MeasureProjection.js";
 import { MeasureEditor, type IAddressedEvent } from "./MeasureEditor.js";
@@ -306,31 +306,8 @@ export class GridMeasureEditor extends MeasureEditor {
             return false;
         }
 
-        const initialEvents: IMeasureEvent[] = [];
-        for (const entry of entries) {
-            const target = entry.target;
-            if (target.granularity === SelectionGranularity.Track
-                || target.granularity === SelectionGranularity.Measure
-                || target.granularity === SelectionGranularity.TrackPiece) {
-                continue;
-            }
-
-            const events = target.granularity === SelectionGranularity.Note
-                ? [modelEventAt(target.measure, target.start ?? target.event.start) ?? target.event]
-                : target.events;
-            for (const event of events) {
-                if (!initialEvents.includes(event)) {
-                    initialEvents.push(event);
-                }
-            }
-        }
-
-        initialEvents.sort((left, right) => {
-            return compareFractions(left.start, right.start);
-        });
-
         return this.dataModel.createSubdivision(range.trackId, range.bar, range.start, range.end,
-            actual, range.spanSteps, initialEvents);
+            actual, range.spanSteps, this.selectedEventsOf(entries));
     }
 
     /**

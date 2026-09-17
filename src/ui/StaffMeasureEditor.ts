@@ -7,6 +7,7 @@ import type { ISbDmTrackMeasure } from "../core/ScoreBookDataModel.js";
 import type { INoteValue } from "../core/rest-notation.js";
 import { addFractions, compareFractions, subtractFractions } from "../core/serialisation/numeric-functions.js";
 import type { IAudioData, IFraction, IMeasureEvent } from "../core/types/general.js";
+import { requisitions } from "../supplement/Requisitions.js";
 import { MeasureEditor, type IAddressedEvent } from "./MeasureEditor.js";
 import { SelectionGranularity, type ISelectionEntry } from "./SelectionSerializer.js";
 
@@ -168,6 +169,39 @@ export class StaffMeasureEditor extends MeasureEditor {
     }
 
     /**
+     * Creates a subdivision over the events the selection addresses. The span from the first to the
+     * last addressed event becomes the subdivision's grid span, and the selected note styles are
+     * copied into its leading slots — the same edit the grid performs for a cell selection. The span
+     * must cover whole grid steps, since a subdivision replaces steps.
+     *
+     * @param entries The selection entries defining the subdivision span.
+     * @param actual The number of equal slots the subdivision contains.
+     *
+     * @returns True when the subdivision was created.
+     */
+    public createSubdivisionForSelection(entries: ISelectionEntry[], actual: number): boolean {
+        const events = this.selectedEventsOf(entries);
+        const first = events.at(0);
+        const last = events.at(-1);
+        const measure = this.measureOfSelection(entries);
+
+        if (measure === undefined || first === undefined || last === undefined) {
+            return false;
+        }
+
+        const start = { ...first.start };
+        const end = addFractions(last.start, last.duration);
+        const steps = this.stepSpanOf(start, end, measure);
+        if (steps === undefined) {
+            void requisitions.execute("showWarning", "This selection does not cover whole grid steps.");
+
+            return false;
+        }
+
+        return this.dataModel.createSubdivision(measure.track.id, measure.number, start, end, actual, steps, events);
+    }
+
+    /**
      * Resolves the events addressed by a selection entry. A run addresses the event it renders, a note
      * group every event it contains. The staff has free positions, so a rest is addressed as well: a
      * length change moves the content behind it instead of ignoring it.
@@ -190,6 +224,49 @@ export class StaffMeasureEditor extends MeasureEditor {
         return target.events.map((event) => {
             return this.addressedEventOf(event.start, target.measure);
         });
+    }
+
+    /**
+     * Resolves the measure the selection lives in. A subdivision replaces a span of one measure, so a
+     * selection that addresses whole tracks or several measures cannot host one.
+     *
+     * @param entries The selection entries to inspect.
+     *
+     * @returns The measure, or undefined when the selection is not confined to one.
+     */
+    private measureOfSelection(entries: ISelectionEntry[]): ISbDmTrackMeasure | undefined {
+        const measures = new Set<ISbDmTrackMeasure>();
+
+        for (const entry of entries) {
+            const { target } = entry;
+            if (target.granularity !== SelectionGranularity.Note
+                && target.granularity !== SelectionGranularity.NoteGroup) {
+                return undefined;
+            }
+
+            measures.add(target.measure);
+        }
+
+        const [measure] = measures;
+
+        return measures.size === 1 ? measure : undefined;
+    }
+
+    /**
+     * Resolves the number of grid steps a fractional span covers.
+     *
+     * @param start The span start as a fraction of the measure.
+     * @param end The span end as a fraction of the measure.
+     * @param measure The measure supplying the step resolution.
+     *
+     * @returns The step count, or undefined when the span does not run from step boundary to step boundary.
+     */
+    private stepSpanOf(start: IFraction, end: IFraction, measure: ISbDmTrackMeasure): number | undefined {
+        const stepsPerBar = measure.meter.stepResolution;
+        const from = (start.numerator * stepsPerBar) / start.denominator;
+        const to = (end.numerator * stepsPerBar) / end.denominator;
+
+        return Number.isInteger(from) && Number.isInteger(to) && to - from >= 1 ? to - from : undefined;
     }
 
     /**
