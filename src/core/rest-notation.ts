@@ -98,6 +98,67 @@ export const noteValueForUnits = (units: number): INoteValue | undefined => {
 };
 
 /**
+ * Returns the note value a subdivision slot is notated with when its exact duration matches no
+ * value. A tuplet replaces notes of one value, so the slot is drawn with that value: a top-level
+ * subdivision stands for eighths, a subdivision nested in it for sixteenths.
+ *
+ * @param depth The subdivision nesting depth, 1 for a slot of a top-level subdivision.
+ *
+ * @returns The note value the slot is drawn with.
+ */
+const subdivisionSlotValue = (depth: number): INoteValue => {
+    if (depth <= 1) {
+        return { length: NoteLength.Eighth, dotted: false };
+    }
+
+    if (depth === 2) {
+        return { length: NoteLength.Sixteenth, dotted: false };
+    }
+
+    return { length: NoteLength.ThirtySecond, dotted: false };
+};
+
+/**
+ * Resolves the note value an event is drawn with. The exact duration wins when a single value can
+ * express it, so a plain 2:1 split of a step keeps its thirty-seconds. A slot of a real subdivision
+ * has a duration no single value expresses and falls back to the value of its subdivision.
+ *
+ * @param duration The event's duration as a fraction of the measure.
+ * @param depth The subdivision nesting depth; 0 for an event outside any subdivision.
+ * @param stepsPerBar The number of base-grid steps in one bar.
+ * @param stepsPerPulse The number of base-grid steps in one pulse.
+ *
+ * @returns The note value the event is drawn with, or undefined when its duration has no value.
+ */
+export const noteValueForEvent = (duration: IFraction, depth: number, stepsPerBar: number,
+    stepsPerPulse: number): INoteValue | undefined => {
+    const units = duration.denominator > 0 ? (duration.numerator * 32) / duration.denominator : 0;
+
+    if (depth > 0) {
+        return noteValueForUnits(units) ?? subdivisionSlotValue(depth);
+    }
+
+    if (stepsPerBar <= 0) {
+        return undefined;
+    }
+
+    const lengthSteps = (duration.numerator * stepsPerBar) / duration.denominator;
+
+    // A ternary pulse fills three steps, and a single step of it stands for an eighth.
+    if (stepsPerPulse > 0 && stepsPerPulse % 3 === 0 && lengthSteps * 3 === stepsPerPulse
+        && duration.numerator * stepsPerBar === duration.denominator) {
+        return { length: NoteLength.Eighth, dotted: false };
+    }
+
+    // A twelfth of a bar is a quarter-note triplet slot, which stands for an eighth.
+    if (duration.numerator * 12 === duration.denominator) {
+        return { length: NoteLength.Eighth, dotted: false };
+    }
+
+    return noteValueForUnits(units);
+};
+
+/**
  * Returns the duration of a note value as a fraction of a whole note, with the augmentation dot
  * applied.
  *

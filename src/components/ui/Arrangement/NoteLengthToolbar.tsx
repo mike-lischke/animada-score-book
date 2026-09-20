@@ -5,14 +5,17 @@
 
 import type { ComponentChild } from "preact";
 
-import type { ScoreBookDataModel } from "../../../core/ScoreBookDataModel.js";
+import type { ISbDmTrackMeasure, ScoreBookDataModel } from "../../../core/ScoreBookDataModel.js";
+import { MeasureProjection } from "../../../core/MeasureProjection.js";
 import {
-    NoteLength, noteLengthDenominator, noteValueForUnits, noteValueFraction, type INoteValue,
+    NoteLength, noteLengthDenominator, noteValueForEvent, noteValueFraction, type INoteValue,
 } from "../../../core/rest-notation.js";
-import { compareFractions, reduceFraction } from "../../../core/serialisation/numeric-functions.js";
+import { reduceFraction } from "../../../core/serialisation/numeric-functions.js";
+import { TimeCoordinator } from "../../../player/TimeCoordinator.js";
 import { requisitions } from "../../../supplement/Requisitions.js";
 import type { SelectionManager } from "../../../ui/SelectionManager.js";
-import { SelectionGranularity, type ISelectionEntry } from "../../../ui/SelectionSerializer.js";
+import { type ISelectionEntry } from "../../../ui/SelectionSerializer.js";
+import { selectionEventsOf, type IAddressedMeasureEvents } from "../../../ui/selection-ranges.js";
 import { Button } from "../framework/Button.js";
 import { Container } from "../framework/Container.js";
 import { GooeyGroup } from "../framework/GooeyGroup.js";
@@ -31,13 +34,23 @@ interface INoteLengthOption {
 }
 
 interface INoteLengthToolbarState {
-    hasSelection: boolean;
+    /** Whether the selection holds an event the model can give a new length. */
+    canResize: boolean;
 
     /** The value the buttons apply: the one the selection shares, otherwise the last chosen one. */
     activeValue: INoteValue;
 
     /** Base length of the value the whole selection shares, for the highlight; undefined when mixed. */
     markedLength?: NoteLength;
+
+    /** Augmentation dot the whole selection shares, for the dot button; undefined when mixed. */
+    markedDotted?: boolean;
+}
+
+/** The note value a selection shares, with each property undefined when its members differ. */
+interface ISharedNoteValue {
+    length?: NoteLength;
+    dotted?: boolean;
 }
 
 /** Standard note lengths offered for note entry, longest first. */
@@ -58,17 +71,11 @@ interface INoteHeadGeometry {
     lineWidth: number;
 }
 
-/** The two paths a note head is drawn from, which carry the outline and the fill color. */
-interface INoteHeadPaths {
-    outline: string;
-    segment: string;
-}
-
 /** Size of the square icon the note symbols are drawn in. */
 const noteIconSize = 20;
 
 /** Border width of the note symbols. */
-const noteHeadLineWidth = 2;
+const noteHeadLineWidth = 1;
 
 /** The circle the plain note values show, centered in the icon. */
 const noteHeadCircle: INoteHeadGeometry = {
@@ -109,7 +116,7 @@ export class NoteLengthToolbar extends UIComponent<INoteLengthToolbarProps, INot
         super(props);
 
         this.state = {
-            hasSelection: false,
+            canResize: false,
             activeValue: { length: NoteLength.Quarter, dotted: false },
         };
     }
@@ -130,11 +137,11 @@ export class NoteLengthToolbar extends UIComponent<INoteLengthToolbarProps, INot
     }
 
     public override render(): ComponentChild {
-        const { hasSelection, markedLength, activeValue } = this.state;
+        const { canResize, markedLength, markedDotted, activeValue } = this.state;
 
         const lengthButtons = noteLengthOptions.map((option) => {
             const value: INoteValue = { length: option.length, dotted: activeValue.dotted };
-            const disabled = !hasSelection || !this.isAvailable(value);
+            const disabled = !canResize || !this.isAvailable(value);
 
             return (
                 <Button
@@ -158,8 +165,8 @@ export class NoteLengthToolbar extends UIComponent<INoteLengthToolbarProps, INot
         const dotButton = (
             <Button
                 className="noteDotButton"
-                isDefault={activeValue.dotted}
-                disabled={!hasSelection || !this.isAvailable(toggledValue)}
+                isDefault={markedDotted === true}
+                disabled={!canResize || !this.isAvailable(toggledValue)}
                 data-tooltip="Dotted (Alt/Cmd+.)"
                 onClick={() => {
                     this.toggleDots();
@@ -215,7 +222,18 @@ export class NoteLengthToolbar extends UIComponent<INoteLengthToolbarProps, INot
     };
 
     private handleNoteLengthChanged = (value: INoteValue): Promise<boolean> => {
-        this.setState({ activeValue: value, markedLength: value.length });
+        // The announcement is a request: only the model decides whether the value applies. With a
+        // selection the mark is therefore taken from the events, and without one the value is the
+        // one the next note is entered with.
+        if (this.props.selectionManager.currentSelection.size === 0) {
+            this.setState({
+                activeValue: value,
+                markedLength: undefined,
+                markedDotted: undefined,
+            });
+        } else {
+            this.refreshState(false);
+        }
 
         return Promise.resolve(true);
     };
@@ -229,135 +247,154 @@ export class NoteLengthToolbar extends UIComponent<INoteLengthToolbarProps, INot
     private refreshState(announceValue: boolean): void {
         const { selectionManager } = this.props;
         const entries = [...selectionManager.currentSelection.values()];
-        const selectedValue = this.resolveMarkedValue(entries);
+        const shared = this.resolveSharedValue(entries);
+        const { activeValue } = this.state;
 
-        if (announceValue && selectedValue !== undefined) {
-            void requisitions.execute("noteLengthChanged", selectedValue);
+        if (announceValue && shared.length !== undefined) {
+            void requisitions.execute("noteLengthChanged", {
+                length: shared.length,
+                dotted: shared.dotted ?? activeValue.dotted,
+            });
         }
 
         this.setState({
-            hasSelection: entries.length > 0,
-            activeValue: selectedValue ?? this.state.activeValue,
-            markedLength: selectedValue?.length,
+            canResize: this.canResizeSelection(entries),
+            activeValue: { length: shared.length ?? activeValue.length, dotted: shared.dotted ?? activeValue.dotted },
+            markedLength: shared.length,
+            markedDotted: shared.dotted,
         });
     }
 
     /**
-     * Resolves the note value shared by all currently selected notes.
+     * Checks whether the selection holds an event the model can give a new length. A slot of a
+     * subdivision keeps the length its ratio dictates, so it offers none. Every other selection does,
+     * a whole track or measure as much as a single note.
      *
      * @param entries All current selection entries.
      *
-     * @returns The common note value, or undefined when no single value is shared.
+     * @returns True when at least one addressed event takes a length change.
      */
-    private resolveMarkedValue(entries: ISelectionEntry[]): INoteValue | undefined {
-        const noteEntries = entries.filter((entry) => {
-            return entry.granularity === SelectionGranularity.Note;
+    private canResizeSelection(entries: ISelectionEntry[]): boolean {
+        return this.addressedEvents(entries).some((covered) => {
+            return covered.indexes.some((index) => {
+                return MeasureProjection.subdivisionDepthOf(covered.measure, index) === 0;
+            });
         });
-
-        if (noteEntries.length === 0) {
-            return undefined;
-        }
-
-        const firstUnits = this.noteUnitsOf(noteEntries[0]);
-        if (firstUnits === undefined) {
-            return undefined;
-        }
-
-        const allMatch = noteEntries.every((entry) => {
-            return this.noteUnitsOf(entry) === firstUnits;
-        });
-
-        return allMatch ? noteValueForUnits(firstUnits) : undefined;
     }
 
     /**
-     * Resolves the duration of the event a selection entry addresses, in 32nd-note units.
+     * Resolves the note value the selection shares. The base length and the augmentation dot are
+     * resolved on their own, so a selection whose members share only their lengths still marks that
+     * length. A property the members do not share stays undefined, which leaves it without a mark.
      *
-     * @param entry The selection entry to resolve.
+     * @param entries All current selection entries.
      *
-     * @returns The duration in 32nd-note units, or undefined when the entry addresses no event.
+     * @returns The shared length and dot, each undefined when the selection does not share it.
      */
-    private noteUnitsOf(entry: ISelectionEntry): number | undefined {
-        const { dataModel } = this.props;
-        const arrangement = dataModel.arrangement;
+    private resolveSharedValue(entries: ISelectionEntry[]): ISharedNoteValue {
+        const values: INoteValue[] = [];
+
+        for (const covered of this.addressedEvents(entries)) {
+            for (const index of covered.indexes) {
+                const value = this.noteValueOf(covered.measure, index);
+                if (value === undefined) {
+                    return {};
+                }
+
+                values.push(value);
+            }
+        }
+
+        const firstValue = values.at(0);
+        if (firstValue === undefined) {
+            return {};
+        }
+
+        const lengthsMatch = values.every((value) => {
+            return value.length === firstValue.length;
+        });
+        const dotsMatch = values.every((value) => {
+            return value.dotted === firstValue.dotted;
+        });
+
+        return {
+            length: lengthsMatch ? firstValue.length : undefined,
+            dotted: dotsMatch ? firstValue.dotted : undefined,
+        };
+    }
+
+    /**
+     * Resolves the note value the staff view draws a measure event with. A slot of a real subdivision
+     * has no value of its own, so it resolves to the value of its subdivision.
+     *
+     * @param measure The measure holding the event.
+     * @param index The index of the event in the measure.
+     *
+     * @returns The note value, or undefined when the arrangement is not loaded.
+     */
+    private noteValueOf(measure: ISbDmTrackMeasure, index: number): INoteValue | undefined {
+        const arrangement = this.props.dataModel.arrangement;
         if (!arrangement) {
             return undefined;
         }
 
-        const { target } = entry;
-        if (target.granularity !== SelectionGranularity.Note) {
-            return undefined;
-        }
+        const depth = MeasureProjection.subdivisionDepthOf(measure, index);
 
-        // An entry refers to the measure it was resolved against. An undo replaces a track's measures
-        // while the track object stays the same, so the current measure is found through the track.
-        const track = arrangement.tracks.find((candidate) => {
-            return candidate.id === target.measure.track.id;
-        });
-        const measure = track?.measures[target.measure.number - 1];
-        if (measure === undefined) {
-            return undefined;
-        }
-
-        const cellStart = target.start ?? target.event.start;
-        const event = measure.events.find((candidate) => {
-            return compareFractions(cellStart, candidate.start) === 0;
-        });
-        if (!event) {
-            return undefined;
-        }
-
-        const units = (event.duration.numerator * 32) / event.duration.denominator;
-
-        return units;
+        return noteValueForEvent(measure.events[index].duration, depth, measure.meter.stepResolution,
+            TimeCoordinator.stepsPerPulseOf(arrangement.timeParams));
     }
 
     /**
-     * Renders the note symbol for a note length: an outline carrying a segment filled from its
-     * apex, which spans the share of a whole circle the note value stands for. Outline and segment
-     * are separate paths, because they carry different colors.
+     * Resolves the measure events the selection addresses. A whole track or a whole measure covers all
+     * of its events, so it takes a length like any other selection.
+     *
+     * @param entries All current selection entries.
+     *
+     * @returns The addressed measures with their event indexes.
+     */
+    private addressedEvents(entries: ISelectionEntry[]): IAddressedMeasureEvents[] {
+        const arrangement = this.props.dataModel.arrangement;
+
+        return arrangement ? selectionEventsOf(arrangement, entries) : [];
+    }
+
+    /**
+     * Renders the note symbol for a note length: the head outline plus a segment filled from its
+     * apex, which spans the share of a whole circle the note value stands for. The segment is drawn
+     * over the outline and reaches exactly to its outer edge, so it hides the outline where it lies.
+     * Both are separate elements, because they carry different colors.
      *
      * @param length The note length to render.
      *
      * @returns The SVG symbol for the note length.
      */
     private renderIcon(length: NoteLength): ComponentChild {
-        const { outline, segment } = this.headPathsFor(length);
-        const outlinePath = <path className="noteLengthIconOutline" d={outline} />;
+        const flagged = this.isFlagged(length);
+        const head = flagged ? noteHeadQuarter : noteHeadCircle;
+        const segment = this.segmentPathFor(head, length);
         const segmentPath = segment.length > 0
             ? <path className="noteLengthIconFill" d={segment} />
             : undefined;
 
+        // The quarter of the flagged values is a band with straight edges, which only a path can
+        // describe. The plain values are a full circle, so a stroked circle draws their outline.
+        let outline: ComponentChild;
+        if (flagged) {
+            outline = <path className="noteLengthIconOutline" d={this.quarterOutlinePathFor(head)} />;
+        } else {
+            outline = (
+                <circle className="noteLengthIconRing" cx={head.centerX} cy={head.centerY} r={head.radius}
+                    strokeWidth={head.lineWidth} />
+            );
+        }
+
         return (
             <svg className="noteLengthIcon" viewBox={`0 0 ${noteIconSize} ${noteIconSize}`}
                 width={noteIconSize} height={noteIconSize} aria-hidden="true">
+                {outline}
                 {segmentPath}
-                {outlinePath}
             </svg>
         );
-    }
-
-    /**
-     * Builds the note head as two paths: the outline plus the segment of the note value, which
-     * reaches into the outline. The outline is drawn over the segment, so it covers the overlap and
-     * the two colors meet without a seam. The whole note has no segment.
-     *
-     * @param length The note length to build the head for.
-     *
-     * @returns The `d` attributes of the head paths.
-     */
-    private headPathsFor(length: NoteLength): INoteHeadPaths {
-        if (this.isFlagged(length)) {
-            return {
-                outline: this.quarterOutlinePathFor(noteHeadQuarter),
-                segment: this.segmentPathFor(noteHeadQuarter, length),
-            };
-        }
-
-        return {
-            outline: this.circleOutlinePathFor(noteHeadCircle),
-            segment: this.segmentPathFor(noteHeadCircle, length),
-        };
     }
 
     /**
@@ -373,20 +410,20 @@ export class NoteLengthToolbar extends UIComponent<INoteLengthToolbarProps, INot
     }
 
     /**
-     * Describes the outline of a plain value as a ring: the outer circle plus, in opposite winding,
-     * the inner one, which keeps the middle of the head open.
+     * Describes the band along the vertical edge of a flagged value, which runs from the apex to the
+     * arc. The filled segment takes the same band over, so it covers the outline there completely.
      *
-     * @param head The geometry of the head to build the outline for.
+     * @param head The geometry of the head to build the band for.
      *
-     * @returns The `d` attribute of the ring subpaths.
+     * @returns The `d` attribute of the band.
      */
-    private circleOutlinePathFor(head: INoteHeadGeometry): string {
+    private verticalEdgePathFor(head: INoteHeadGeometry): string {
         const { centerX, centerY, radius, lineWidth } = head;
         const half = lineWidth / 2;
-        const outer = this.circlePathFor(centerX, centerY, radius + half, true);
-        const inner = this.circlePathFor(centerX, centerY, radius - half, false);
+        const outerRadius = radius + half;
 
-        return `${outer} ${inner}`;
+        return `M ${centerX - half} ${centerY + half} L ${centerX - half} ${centerY - outerRadius} ` +
+            `L ${centerX + half} ${centerY - outerRadius} L ${centerX + half} ${centerY + half} Z`;
     }
 
     /**
@@ -407,18 +444,15 @@ export class NoteLengthToolbar extends UIComponent<INoteLengthToolbarProps, INot
         const arc = `M ${centerX} ${centerY - outerRadius} A ${outerRadius} ${outerRadius} 0 0 1 ` +
             `${centerX + outerRadius} ${centerY} L ${centerX + innerRadius} ${centerY} ` +
             `A ${innerRadius} ${innerRadius} 0 0 0 ${centerX} ${centerY - innerRadius} Z`;
-        const topEdge = `M ${centerX - half} ${centerY + half} L ${centerX - half} ${centerY - outerRadius} ` +
-            `L ${centerX + half} ${centerY - outerRadius} L ${centerX + half} ${centerY + half} Z`;
         const rightEdge = `M ${centerX - half} ${centerY - half} L ${centerX + outerRadius} ${centerY - half} ` +
             `L ${centerX + outerRadius} ${centerY + half} L ${centerX - half} ${centerY + half} Z`;
 
-        return `${arc} ${topEdge} ${rightEdge}`;
+        return `${arc} ${this.verticalEdgePathFor(head)} ${rightEdge}`;
     }
 
     /**
-     * Builds the filled segment of a note head. It has the full radius of the head, so it reaches
-     * into the outline, which covers the overlap and leaves the visible segment bounded by the
-     * inner edge of the outline.
+     * Builds the filled segment of a note head. It carries the outer radius of the outline, so it
+     * ends where the outline ends and covers it completely in the share of the circle it spans.
      *
      * @param head The geometry of the head to build the segment for.
      * @param length The note length to build the segment for.
@@ -426,7 +460,8 @@ export class NoteLengthToolbar extends UIComponent<INoteLengthToolbarProps, INot
      * @returns The `d` attribute of the segment, or an empty string when the head stays empty.
      */
     private segmentPathFor(head: INoteHeadGeometry, length: NoteLength): string {
-        const { centerX, centerY, radius } = head;
+        const { centerX, centerY, lineWidth } = head;
+        const radius = head.radius + (lineWidth / 2);
 
         if (length === NoteLength.Whole) {
             return "";
@@ -445,28 +480,16 @@ export class NoteLengthToolbar extends UIComponent<INoteLengthToolbarProps, INot
         const radians = ((360 / noteLengthDenominator(length)) * Math.PI) / 180;
         const endX = roundCoordinate(centerX + (radius * Math.sin(radians)));
         const endY = roundCoordinate(centerY - (radius * Math.cos(radians)));
-
-        return `M ${centerX} ${centerY} L ${centerX} ${centerY - radius} ` +
+        const wedge = `M ${centerX} ${centerY} L ${centerX} ${centerY - radius} ` +
             `A ${radius} ${radius} 0 0 1 ${endX} ${endY} Z`;
-    }
 
-    /**
-     * Describes a full circle as an SVG arc pair.
-     *
-     * @param cx The horizontal center of the circle.
-     * @param cy The vertical center of the circle.
-     * @param radius The radius of the circle.
-     * @param clockwise The winding direction; opposite windings cut a hole into the shape.
-     *
-     * @returns The `d` attribute of the circle subpath.
-     */
-    private circlePathFor(cx: number, cy: number, radius: number, clockwise: boolean): string {
-        const sweep = clockwise ? 1 : 0;
-        const left = `${cx - radius} ${cy}`;
-        const right = `${cx + radius} ${cy}`;
+        if (!this.isFlagged(length)) {
+            return wedge;
+        }
 
-        return `M ${left} A ${radius} ${radius} 0 0 ${sweep} ${right} ` +
-            `A ${radius} ${radius} 0 0 ${sweep} ${left} Z`;
+        // The flagged head carries a band along its vertical edge instead of a full ring, so the
+        // wedge takes that band over and ends flush with the outer edge of the outline.
+        return `${this.verticalEdgePathFor(head)} ${wedge}`;
     }
 
     /**
@@ -488,16 +511,13 @@ export class NoteLengthToolbar extends UIComponent<INoteLengthToolbarProps, INot
     }
 
     /**
-     * Switches the augmentation dot of the active value. The local state follows immediately, so the
-     * button reflects the choice even when the edit itself changes nothing; the selection and the
-     * arrangement handlers keep it in sync afterwards.
+     * Switches the augmentation dot of the active value. The mark follows the model, so a value the
+     * model refuses leaves the button where it was.
      */
     private toggleDots(): void {
         const { activeValue } = this.state;
-        const value: INoteValue = { length: activeValue.length, dotted: !activeValue.dotted };
 
-        this.setState({ activeValue: value });
-        void requisitions.execute("noteLengthChanged", value);
+        void requisitions.execute("noteLengthChanged", { length: activeValue.length, dotted: !activeValue.dotted });
     }
 
     /**

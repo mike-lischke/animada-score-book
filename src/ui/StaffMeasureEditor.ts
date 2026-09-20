@@ -10,6 +10,7 @@ import type { IAudioData, IFraction, IMeasureEvent } from "../core/types/general
 import { requisitions } from "../supplement/Requisitions.js";
 import { MeasureEditor, type IAddressedEvent } from "./MeasureEditor.js";
 import { SelectionGranularity, type ISelectionEntry } from "./SelectionSerializer.js";
+import { selectionEventTargets } from "./selection-ranges.js";
 
 /** The bar line as a bar fraction. */
 const barLine: IFraction = { numerator: 1, denominator: 1 };
@@ -213,12 +214,17 @@ export class StaffMeasureEditor extends MeasureEditor {
     protected override addressedEventsOf(entry: ISelectionEntry): IAddressedEvent[] {
         const { target } = entry;
 
-        if (target.granularity === SelectionGranularity.Note) {
-            return [this.addressedEventOf(target.event.start, target.measure)];
+        // A track, a whole measure or a track piece addresses every event it covers, so a length
+        // applies to all of them at once.
+        if (target.granularity === SelectionGranularity.Track || target.granularity === SelectionGranularity.Measure
+            || target.granularity === SelectionGranularity.TrackPiece) {
+            const arrangement = this.dataModel.arrangement;
+
+            return arrangement ? selectionEventTargets(arrangement, [entry]) : [];
         }
 
-        if (target.granularity !== SelectionGranularity.NoteGroup) {
-            return [];
+        if (target.granularity === SelectionGranularity.Note) {
+            return [this.addressedEventOf(target.event.start, target.measure)];
         }
 
         return target.events.map((event) => {

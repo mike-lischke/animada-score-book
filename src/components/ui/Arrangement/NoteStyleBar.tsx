@@ -11,7 +11,8 @@ import { compareFractions } from "../../../core/serialisation/numeric-functions.
 import type { IAudioData } from "../../../core/types/general.js";
 import { requisitions } from "../../../supplement/Requisitions.js";
 import type { SelectionManager } from "../../../ui/SelectionManager.js";
-import { SelectionGranularity, SelectionSerializer, type ISelectionEntry } from "../../../ui/SelectionSerializer.js";
+import { SelectionGranularity, type ISelectionEntry } from "../../../ui/SelectionSerializer.js";
+import { selectionTracksOf } from "../../../ui/selection-ranges.js";
 import { NoteStyleIcon } from "../Note/NoteStyleIcon.js";
 import { NoteStyleLineIcon } from "../Note/NoteStyleLineIcon.js";
 import { NoteStyleSymbolViewer } from "../Note/NoteStyleSymbolViewer.js";
@@ -354,22 +355,19 @@ export class NoteStyleBar extends UIComponent<INoteStyleBarProps, INoteStyleBarS
     }
 
     /**
-     * Collects the distinct tracks referenced by the current selection.
+     * Collects the distinct tracks the current selection addresses. A whole measure covers every
+     * track of its bar, so such a selection contributes all of them and note styles can only be
+     * applied when they all share one instrument.
      *
      * @param entries All current selection entries.
      *
      * @returns The distinct selected tracks, in order of first appearance.
      */
     private resolveSelectedTracks(entries: ISelectionEntry[]): ISbDmTrack[] {
-        const tracks: ISbDmTrack[] = [];
-        for (const entry of entries) {
-            const track = SelectionSerializer.trackOf(entry);
-            if (!tracks.includes(track)) {
-                tracks.push(track);
-            }
-        }
+        const { dataModel } = this.props;
+        const arrangement = dataModel.arrangement;
 
-        return tracks;
+        return arrangement ? selectionTracksOf(arrangement, entries) : [];
     }
 
     /**

@@ -887,20 +887,80 @@ describe.sequential("ScoreBookDataModel track actions", () => {
         expect(noteSpans(track.measures[0])).toEqual(["0/1+1/32"]);
     });
 
-    it("resizeEvents skips tracks that contain subdivisions", () => {
+    it("resizeEvents keeps the slots of a subdivision at their length", () => {
         model.startNewArrangement([createInstrument("0", 0, 0)]);
         const track = model.arrangement!.tracks[0];
-        model.createSubdivision(track.id, 1, { numerator: 0, denominator: 1 }, { numerator: 1, denominator: 4 },
+        model.createSubdivision(track.id, 1, { numerator: 1, denominator: 2 }, { numerator: 3, denominator: 4 },
             3, 4);
 
         mutatedCalls = 0;
 
+        // A slot's length follows from the subdivision's ratio, so the request cannot change it.
         const changed = model.resizeEvents(track.id, [{
-            bar: 1, start: { numerator: 1, denominator: 4 }, duration: { numerator: 1, denominator: 2 },
+            bar: 1, start: { numerator: 7, denominator: 12 }, duration: { numerator: 1, denominator: 8 },
         }]);
 
         expect(changed).toBe(false);
         expect(mutatedCalls).toBe(0);
+        expect(eventList(track.measures[0])).toEqual([
+            "0/1+1/2:-",
+            "1/2+1/12:-",
+            "7/12+1/12:-",
+            "2/3+1/12:-",
+            "3/4+1/4:-",
+        ]);
+    });
+
+    it("resizeEvents moves a subdivision aside when a note in front of it grows", () => {
+        model.startNewArrangement([createInstrument("0", 0, 0)]);
+        const track = model.arrangement!.tracks[0];
+        model.setNoteAt(track.id, 1, { numerator: 0, denominator: 1 }, { numerator: 1, denominator: 4 }, "1");
+        model.createSubdivision(track.id, 1, { numerator: 1, denominator: 2 }, { numerator: 3, denominator: 4 },
+            3, 4);
+
+        mutatedCalls = 0;
+        const changed = model.resizeEvents(track.id, [{
+            bar: 1, start: { numerator: 0, denominator: 1 }, duration: { numerator: 3, denominator: 4 },
+        }]);
+
+        expect(changed).toBe(true);
+        expect(mutatedCalls).toBe(1);
+        // The subdivision steps aside as one block: its slots keep their length and their spacing, and
+        // its record follows the first slot to its new index.
+        expect(eventList(track.measures[0])).toEqual([
+            "0/1+3/4:1",
+            "3/4+1/12:-",
+            "5/6+1/12:-",
+            "11/12+1/12:-",
+        ]);
+
+        const measure = track.measures[0];
+        const subdivision = measure.subdivisions[0];
+        expect(subdivision.actual).toBe(3);
+        expect(subdivision.normal).toBe(4);
+        expect(measure.events[subdivision.startIndex].start).toEqual({ numerator: 3, denominator: 4 });
+    });
+
+    it("resizeEvents moves a subdivision aside when a rest in front of it shrinks", () => {
+        model.startNewArrangement([createInstrument("0", 0, 0)]);
+        const track = model.arrangement!.tracks[0];
+        model.createSubdivision(track.id, 1, { numerator: 1, denominator: 2 }, { numerator: 3, denominator: 4 },
+            3, 4);
+
+        mutatedCalls = 0;
+        const changed = model.resizeEvents(track.id, [{
+            bar: 1, start: { numerator: 0, denominator: 1 }, duration: { numerator: 1, denominator: 4 },
+        }]);
+
+        expect(changed).toBe(true);
+        expect(mutatedCalls).toBe(1);
+        expect(eventList(track.measures[0])).toEqual([
+            "0/1+1/4:-",
+            "1/4+1/12:-",
+            "1/3+1/12:-",
+            "5/12+1/12:-",
+            "1/2+1/2:-",
+        ]);
     });
 
     it("deleteEventWithShift skips tracks that contain subdivisions", () => {

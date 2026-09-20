@@ -42,14 +42,31 @@ export interface ISubdivisionSlotContent {
 /** One bar, the unit of a track's timeline. */
 const barLength: IFraction = { numerator: 1, denominator: 1 };
 
-interface IAbsoluteNoteEvent {
+interface IAbsoluteTrackItem {
     /** Absolute position on the track's timeline, as a fraction of a bar. */
     start: IFraction;
 
-    /** Length of the note, as a fraction of a bar. */
+    /** The item's length as a fraction of a bar: a note's duration, or a subdivision's span. */
     duration: IFraction;
 
-    event: IMeasureEvent;
+    /** The event to resize; undefined for a subdivision. */
+    event?: IMeasureEvent;
+
+    /**
+     * A subdivision's leaf events, with starts relative to the item's start. A subdivision is one
+     * item because its span follows from its ratio: it only ever moves as a whole, its slots keep
+     * their relative positions.
+     */
+    slots?: IMeasureEvent[];
+
+    /** A subdivision's records, with the start of their first slot relative to the item's start. */
+    subdivisions?: ISubdivisionPlacement[];
+}
+
+/** A subdivision together with the start of its first slot, relative to the item's start. */
+interface ISubdivisionPlacement {
+    group: ISubdivision;
+    start: IFraction;
 }
 
 /** A measure's events split at its bar line. */
@@ -1107,7 +1124,7 @@ export class ScoreBookDataModel {
      */
     public resizeNotes(trackId: number, requests: IEventResizeRequest[]): boolean {
         const track = this.trackById(trackId);
-        if (!track || requests.length === 0 || this.hasSubdivisions(track)) {
+        if (!track || requests.length === 0) {
             return false;
         }
 
@@ -1134,7 +1151,7 @@ export class ScoreBookDataModel {
      */
     public resizeEvents(trackId: number, requests: IEventResizeRequest[]): boolean {
         const track = this.trackById(trackId);
-        if (!track || requests.length === 0 || this.hasSubdivisions(track)) {
+        if (!track || requests.length === 0) {
             return false;
         }
 
@@ -1149,7 +1166,12 @@ export class ScoreBookDataModel {
             const event = measure?.events.find((candidate) => {
                 return compareFractions(candidate.start, request.start) === 0;
             });
-            if (event === undefined) {
+            if (measure === undefined || event === undefined) {
+                continue;
+            }
+
+            // A slot's length follows from its subdivision's ratio, not from a request.
+            if (this.isSlotStart(measure, request.start)) {
                 continue;
             }
 
@@ -3491,30 +3513,38 @@ export class ScoreBookDataModel {
         const spanStart = this.absolutePositionOf(bar - 1, start);
         const spanEnd = addFractions(spanStart, event.duration);
         const delta = subtractFractions(duration, event.duration);
-        const remaining: IAbsoluteNoteEvent[] = [];
+        const remaining: IAbsoluteTrackItem[] = [];
 
-        for (const note of this.collectAbsoluteNotes(track)) {
-            if (compareFractions(note.start, spanEnd) >= 0) {
-                note.start = addFractions(note.start, delta);
-                remaining.push(note);
+        for (const item of this.collectAbsoluteItems(track)) {
+            if (compareFractions(item.start, spanEnd) >= 0) {
+                item.start = addFractions(item.start, delta);
+                remaining.push(item);
 
                 continue;
             }
 
-            // The changed event itself disappears when it is a note; a note reaching into the span is
-            // shortened at its start.
-            if (compareFractions(note.start, spanStart) >= 0) {
+            // The changed event itself disappears when it is a note; an item reaching into the span is
+            // shortened at its start. A subdivision is never cut or dropped: such a request is refused.
+            if (compareFractions(item.start, spanStart) >= 0) {
+                if (item.slots !== undefined) {
+                    return false;
+                }
+
                 continue;
             }
 
-            if (compareFractions(addFractions(note.start, note.duration), spanStart) > 0) {
-                note.duration = subtractFractions(spanStart, note.start);
+            if (compareFractions(addFractions(item.start, item.duration), spanStart) > 0) {
+                if (item.slots !== undefined) {
+                    return false;
+                }
+
+                item.duration = subtractFractions(spanStart, item.start);
             }
 
-            remaining.push(note);
+            remaining.push(item);
         }
 
-        this.layOutAbsoluteNotes(track, remaining);
+        this.layOutAbsoluteItems(track, remaining);
 
         return true;
     }
@@ -3550,15 +3580,19 @@ export class ScoreBookDataModel {
             return false;
         }
 
-        const notes = this.collectAbsoluteNotes(track);
+        const items = this.collectAbsoluteItems(track);
         let firstResized = -1;
-        for (let index = 0; index < notes.length; index++) {
-            const requested = requestedDurations.get(this.fractionKey(notes[index].start));
-            if (requested === undefined || compareFractions(requested, notes[index].duration) === 0) {
+        for (let index = 0; index < items.length; index++) {
+            const item = items[index];
+            const requested = requestedDurations.get(this.fractionKey(item.start));
+
+            // A subdivision keeps its span: its ratio, not a request, decides how long it lasts.
+            if (item.event === undefined || requested === undefined
+                || compareFractions(requested, item.duration) === 0) {
                 continue;
             }
 
-            notes[index].duration = requested;
+            item.duration = requested;
             if (firstResized < 0) {
                 firstResized = index;
             }
@@ -3569,118 +3603,225 @@ export class ScoreBookDataModel {
         }
 
         const trackLength = reduceFraction(track.measures.length, 1);
-        let previousEnd = addFractions(notes[firstResized].start, notes[firstResized].duration);
+        let previousEnd = addFractions(items[firstResized].start, items[firstResized].duration);
 
-        for (let index = firstResized + 1; index < notes.length; index++) {
-            const note = notes[index];
-            if (compareFractions(note.start, previousEnd) < 0) {
-                note.start = previousEnd;
+        for (let index = firstResized + 1; index < items.length; index++) {
+            const item = items[index];
+            if (compareFractions(item.start, previousEnd) < 0) {
+                item.start = previousEnd;
             }
 
-            const measureIndex = this.measureIndexAt(note.start);
+            const measureIndex = this.measureIndexAt(item.start);
             if (measureIndex >= track.measures.length) {
-                notes.splice(index);
+                items.splice(index);
 
                 break;
             }
 
-            // A note that no longer fits into its measure continues at the start of the next one.
+            // An item that no longer fits into its measure continues at the start of the next one. A
+            // subdivision moves over as a whole, so its slots stay together.
             const measureEnd = reduceFraction(measureIndex + 1, 1);
-            if (compareFractions(addFractions(note.start, note.duration), measureEnd) > 0) {
+            if (compareFractions(addFractions(item.start, item.duration), measureEnd) > 0) {
                 const nextMeasure = measureIndex + 1;
                 if (nextMeasure >= track.measures.length) {
-                    notes.splice(index);
+                    items.splice(index);
 
                     break;
                 }
 
-                note.start = reduceFraction(nextMeasure, 1);
+                item.start = reduceFraction(nextMeasure, 1);
             }
 
-            const remaining = subtractFractions(trackLength, note.start);
+            const remaining = subtractFractions(trackLength, item.start);
             if (remaining.numerator <= 0) {
-                notes.splice(index);
+                items.splice(index);
 
                 break;
             }
 
-            if (compareFractions(note.duration, remaining) > 0) {
-                note.duration = remaining;
+            if (item.event !== undefined && compareFractions(item.duration, remaining) > 0) {
+                item.duration = remaining;
             }
 
-            previousEnd = addFractions(note.start, note.duration);
+            previousEnd = addFractions(item.start, item.duration);
         }
 
-        this.layOutAbsoluteNotes(track, notes);
+        this.layOutAbsoluteItems(track, items);
 
         return true;
     }
 
     /**
-     * Collects a track's notes on its absolute timeline of bar fractions. Rests are left out on
-     * purpose: every layout recomputes them from the gaps between the notes.
+     * Collects a track's items on its absolute timeline of bar fractions: its notes and its
+     * subdivisions. Rests are left out on purpose: every layout recomputes them from the gaps
+     * between the items.
      *
      * @param track The track to inspect.
      *
-     * @returns The notes in track order.
+     * @returns The items in track order.
      */
-    private collectAbsoluteNotes(track: ISbDmTrack): IAbsoluteNoteEvent[] {
-        const notes: IAbsoluteNoteEvent[] = [];
+    private collectAbsoluteItems(track: ISbDmTrack): IAbsoluteTrackItem[] {
+        const items: IAbsoluteTrackItem[] = [];
 
         for (let measureIndex = 0; measureIndex < track.measures.length; measureIndex++) {
-            for (const event of track.measures[measureIndex].events) {
-                if (event.noteStyleId === undefined) {
-                    continue;
-                }
+            for (const projected of MeasureProjection.project(track.measures[measureIndex])) {
+                const item = this.absoluteItemOf(measureIndex, projected);
 
-                notes.push({
-                    start: this.absolutePositionOf(measureIndex, event.start),
-                    duration: { ...event.duration },
-                    event: this.cloneEvent(event),
-                });
+                if (item !== undefined) {
+                    items.push(item);
+                }
             }
         }
 
-        return notes;
+        return items;
     }
 
     /**
-     * Writes an absolute note timeline back into the track, measure by measure. Gaps become rests, a
-     * note reaching past a bar line is cut off there, and notes beyond the track's last measure are
-     * dropped.
+     * Converts one projected item of a measure into a timeline item. A rest has no item: a layout
+     * recreates rests from the gaps between the items.
+     *
+     * @param measureIndex The index of the measure the projected item lies in.
+     * @param projected The projected event or subdivision.
+     *
+     * @returns The timeline item, or undefined when the projected item is a rest.
+     */
+    private absoluteItemOf(measureIndex: number, projected: IProjectedItem): IAbsoluteTrackItem | undefined {
+        if (projected.kind === ProjectedItemKind.Subdivision) {
+            const slots: IMeasureEvent[] = [];
+            const subdivisions: ISubdivisionPlacement[] = [];
+
+            this.collectSlotEvents(projected.items, projected.start, slots);
+            this.collectSubdivisionPlacements(projected, projected.start, subdivisions);
+
+            return {
+                start: this.absolutePositionOf(measureIndex, projected.start),
+                duration: { ...projected.span },
+                slots,
+                subdivisions,
+            };
+        }
+
+        if (projected.event.noteStyleId === undefined) {
+            return undefined;
+        }
+
+        return {
+            start: this.absolutePositionOf(measureIndex, projected.start),
+            duration: { ...projected.event.duration },
+            event: this.cloneEvent(projected.event),
+        };
+    }
+
+    /**
+     * Collects the leaf events of a subdivision subtree as slot events, with their starts relative to
+     * the subdivision's start.
+     *
+     * @param items The projected items to walk, nested subdivisions included.
+     * @param blockStart The subdivision's start within its measure.
+     * @param slots The list the slot events are appended to.
+     */
+    private collectSlotEvents(items: IProjectedItem[], blockStart: IFraction, slots: IMeasureEvent[]): void {
+        for (const item of items) {
+            if (item.kind === ProjectedItemKind.Subdivision) {
+                this.collectSlotEvents(item.items, blockStart, slots);
+
+                continue;
+            }
+
+            slots.push(this.cloneEvent({
+                ...item.event,
+                start: subtractFractions(item.start, blockStart),
+            }));
+        }
+    }
+
+    /**
+     * Collects a subdivision and the subdivisions nested inside it, each with the start of its first
+     * slot relative to the subdivision's start.
+     *
+     * @param projected The projected subdivision to walk.
+     * @param blockStart The subdivision's start within its measure.
+     * @param placements The list the placements are appended to.
+     */
+    private collectSubdivisionPlacements(projected: IProjectedSubdivision, blockStart: IFraction,
+        placements: ISubdivisionPlacement[]): void {
+        placements.push({
+            group: projected.group,
+            start: subtractFractions(projected.start, blockStart),
+        });
+
+        for (const item of projected.items) {
+            if (item.kind === ProjectedItemKind.Subdivision) {
+                this.collectSubdivisionPlacements(item, blockStart, placements);
+            }
+        }
+    }
+
+    /**
+     * Writes an absolute timeline back into the track, measure by measure. Gaps become rests, a note
+     * reaching past a bar line is cut off there, and items beyond the track's last measure are
+     * dropped. A subdivision is written as it stands, with its slots at their relative positions, so
+     * it never leaves its measure and never loses a slot.
      *
      * @param track The track to rewrite.
-     * @param notes The notes to lay out, sorted by their absolute start.
+     * @param items The items to lay out, sorted by their absolute start.
      */
-    private layOutAbsoluteNotes(track: ISbDmTrack, notes: IAbsoluteNoteEvent[]): void {
-        let noteIndex = 0;
+    private layOutAbsoluteItems(track: ISbDmTrack, items: IAbsoluteTrackItem[]): void {
+        let itemIndex = 0;
 
         for (let measureIndex = 0; measureIndex < track.measures.length; measureIndex++) {
             const measure = track.measures[measureIndex];
             const measureStart = reduceFraction(measureIndex, 1);
             const measureEnd = reduceFraction(measureIndex + 1, 1);
             const events: IMeasureEvent[] = [];
+            const placements: ISubdivisionPlacement[] = [];
+            const slotStarts = new Set<string>();
             let cursor = measureStart;
 
-            while (noteIndex < notes.length && compareFractions(notes[noteIndex].start, measureEnd) < 0) {
-                const note = notes[noteIndex];
+            while (itemIndex < items.length && compareFractions(items[itemIndex].start, measureEnd) < 0) {
+                const item = items[itemIndex];
+                const itemStart = subtractFractions(item.start, measureStart);
 
-                if (compareFractions(note.start, cursor) > 0) {
+                if (compareFractions(item.start, cursor) > 0) {
                     events.push({
                         start: subtractFractions(cursor, measureStart),
-                        duration: subtractFractions(note.start, cursor),
+                        duration: subtractFractions(item.start, cursor),
                     });
                 }
 
-                const room = subtractFractions(measureEnd, note.start);
-                const duration = compareFractions(note.duration, room) < 0 ? note.duration : room;
-                events.push({
-                    ...this.cloneEvent(note.event),
-                    start: subtractFractions(note.start, measureStart),
-                    duration: { ...duration },
-                });
-                cursor = addFractions(note.start, duration);
-                noteIndex++;
+                const note = item.event;
+                if (note !== undefined) {
+                    const room = subtractFractions(measureEnd, item.start);
+                    const duration = compareFractions(item.duration, room) < 0 ? item.duration : room;
+                    events.push({
+                        ...this.cloneEvent(note),
+                        start: itemStart,
+                        duration: { ...duration },
+                    });
+                }
+
+                const slots = item.slots;
+                if (slots !== undefined) {
+                    for (const slot of slots) {
+                        const start = addFractions(itemStart, slot.start);
+
+                        slotStarts.add(this.fractionKey(start));
+                        events.push(this.cloneEvent({ ...slot, start }));
+                    }
+                }
+
+                const subdivisions = item.subdivisions;
+                if (subdivisions !== undefined) {
+                    for (const placement of subdivisions) {
+                        placements.push({
+                            group: placement.group,
+                            start: addFractions(item.start, placement.start),
+                        });
+                    }
+                }
+
+                cursor = addFractions(item.start, item.duration);
+                itemIndex++;
             }
 
             if (compareFractions(cursor, measureEnd) < 0) {
@@ -3690,8 +3831,56 @@ export class ScoreBookDataModel {
                 });
             }
 
-            this.setMeasureEvents(measure, this.normalizeMeasureEvents(events), false);
+            // A slot start never merges with a neighbouring rest, and the subdivision records are
+            // rebuilt against the events that came out of that normalisation.
+            const normalized = this.normalizeRests(events, slotStarts);
+
+            this.setMeasureLayout(measure, normalized,
+                this.subdivisionRecordsOf(placements, measureStart, normalized));
         }
+    }
+
+    /**
+     * Builds the subdivision records of a measure from the placements on the absolute timeline.
+     *
+     * @param placements The subdivisions to place, with the absolute start of their first slot.
+     * @param measureStart The absolute start of the measure.
+     * @param events The measure's new events.
+     *
+     * @returns The subdivisions whose first slot still exists.
+     */
+    private subdivisionRecordsOf(placements: ISubdivisionPlacement[], measureStart: IFraction,
+        events: IMeasureEvent[]): ISubdivision[] {
+        const subdivisions: ISubdivision[] = [];
+
+        for (const placement of placements) {
+            const start = subtractFractions(placement.start, measureStart);
+            const startIndex = events.findIndex((event) => {
+                return compareFractions(event.start, start) === 0;
+            });
+
+            if (startIndex >= 0) {
+                subdivisions.push({ ...placement.group, startIndex });
+            }
+        }
+
+        return subdivisions;
+    }
+
+    /**
+     * Replaces a measure's events and subdivisions. The timeline layout knows where each subdivision's
+     * first slot ended up, so its records are rebuilt instead of being remapped by start position.
+     *
+     * @param measure The measure to rewrite.
+     * @param events The measure's new events.
+     * @param subdivisions The measure's new subdivisions.
+     */
+    private setMeasureLayout(measure: ISbDmTrackMeasure, events: IMeasureEvent[],
+        subdivisions: ISubdivision[]): void {
+        measure.events.splice(0, measure.events.length, ...events.map((event) => {
+            return this.cloneEvent(event);
+        }));
+        measure.subdivisions.splice(0, measure.subdivisions.length, ...subdivisions);
     }
 
     /**

@@ -133,6 +133,24 @@ const scoreMetrics: IScoreMetrics = {
     stepsPerPulse: 4,
 };
 
+/**
+ * Builds the measure of the reported case: fifteen sixteenths, then a thirty-second rest and a
+ * thirty-second note at the very end of the bar.
+ *
+ * @returns The measure with resolved note events.
+ */
+const buildFullBarEndingInThirtySecond = (): ISbDmTrackMeasure => {
+    const events = [
+        ...Array.from({ length: 15 }, (_, index) => {
+            return event(fraction(index, 16), fraction(1, 16), "1");
+        }),
+        event(fraction(15, 16), fraction(1, 32)),
+        event(fraction(31, 32), fraction(1, 32), "1"),
+    ];
+
+    return buildMeasure(events, []);
+};
+
 describe.sequential("StaffNoteViewer beams", () => {
     let renderResult: RenderResult | null;
 
@@ -460,7 +478,6 @@ describe.sequential("StaffNoteViewer beams", () => {
             { technique: HandTechnique.Open, className: "staff-note-head-open-circle" },
             { technique: HandTechnique.Friction, className: "staff-note-head-friction-svg" },
         ];
-
         techniques.forEach(({ technique, className }) => {
             const measure = buildMeasure([
                 event(fraction(0, 16), fraction(1, 16), "1"),
@@ -480,5 +497,100 @@ describe.sequential("StaffNoteViewer beams", () => {
             expect(result.container.querySelector(`.${className}`)).not.toBeNull();
             result.unmount();
         });
+    });
+
+    it("keeps the flags of a final thirty-second note inside the bar", () => {
+        const measure = buildFullBarEndingInThirtySecond();
+
+        renderResult = render(
+            <StaffNoteViewer
+                isLastBar={false}
+                timeSignature="4/4"
+                scoreMetrics={scoreMetrics}
+                baseSteps={16}
+                measure={measure}
+                barNumber={1}
+                trackId={100}
+            />,
+        );
+
+        const runs = [...renderResult.container.querySelectorAll<HTMLElement>(".staff-note-viewer-run")];
+        expect(runs).toHaveLength(17);
+
+        // The note's onset anchor would sit on the barline, so it is right-aligned to its slot
+        // instead and keeps the width of its flags free there.
+        expect(runs[16].getAttribute("style")).toContain("--note-anchor: calc(100% - 11px)");
+
+        // The sixteenth before the final half step keeps its onset anchor.
+        expect(runs[14].getAttribute("style")).toContain("--note-anchor: 50%");
+    });
+
+    it("reserves the final barline in the last bar", () => {
+        const measure = buildFullBarEndingInThirtySecond();
+
+        renderResult = render(
+            <StaffNoteViewer
+                isLastBar={true}
+                timeSignature="4/4"
+                scoreMetrics={scoreMetrics}
+                baseSteps={16}
+                measure={measure}
+                barNumber={1}
+                trackId={100}
+            />,
+        );
+
+        const runs = [...renderResult.container.querySelectorAll<HTMLElement>(".staff-note-viewer-run")];
+
+        // The final barline is drawn inside the bar, so the note keeps clear of it as well.
+        expect(runs[16].getAttribute("style")).toContain("--note-anchor: calc(100% - 17px)");
+    });
+
+    it("anchors a thirty-second note that does not end the measure at its slot", () => {
+        const measure = buildMeasure([
+            event(fraction(0, 1), fraction(1, 32), "1"),
+            event(fraction(1, 32), fraction(31, 32)),
+        ], []);
+
+        renderResult = render(
+            <StaffNoteViewer
+                isLastBar={false}
+                timeSignature="4/4"
+                scoreMetrics={scoreMetrics}
+                baseSteps={16}
+                measure={measure}
+                barNumber={1}
+                trackId={100}
+            />,
+        );
+
+        const runs = [...renderResult.container.querySelectorAll<HTMLElement>(".staff-note-viewer-run")];
+        expect(runs[0].getAttribute("style")).toContain("--note-anchor: 100%");
+    });
+
+    it("draws a rest inside a subdivision with the value of its subdivision", () => {
+        const measure = buildMeasure([
+            event(fraction(0, 1), fraction(1, 24), "1"),
+            event(fraction(1, 24), fraction(1, 24)),
+            event(fraction(1, 12), fraction(1, 24), "1"),
+            event(fraction(1, 8), fraction(7, 8)),
+        ], [{ startIndex: 0, actual: 3, normal: 2, isTuplet: true }]);
+
+        renderResult = render(
+            <StaffNoteViewer
+                isLastBar={false}
+                timeSignature="4/4"
+                scoreMetrics={scoreMetrics}
+                baseSteps={16}
+                measure={measure}
+                barNumber={1}
+                trackId={100}
+            />,
+        );
+
+        // The slot's duration matches no value, so the rest is drawn with the value its subdivision
+        // stands for — the same one the toolbars mark for a selected slot.
+        const restSymbol = renderResult.container.querySelector(".staff-note-viewer-rest-symbol");
+        expect(restSymbol?.getAttribute("style")).toContain("--rest-show-eighth: inline");
     });
 });

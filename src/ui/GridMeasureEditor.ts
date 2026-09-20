@@ -15,6 +15,7 @@ import { requisitions } from "../supplement/Requisitions.js";
 import { modelEventAt } from "../core/MeasureProjection.js";
 import { MeasureEditor, type IAddressedEvent } from "./MeasureEditor.js";
 import { SelectionGranularity, type ISelectionEntry } from "./SelectionSerializer.js";
+import { selectionEventTargets } from "./selection-ranges.js";
 
 /** Identifies a cell in the grid view using zero-based step indexing. */
 export interface IGridEditorPosition {
@@ -486,6 +487,15 @@ export class GridMeasureEditor extends MeasureEditor {
     protected override addressedEventsOf(entry: ISelectionEntry): IAddressedEvent[] {
         const { target } = entry;
 
+        // A track, a whole measure or a track piece addresses every event it covers, so a length
+        // applies to all of them at once.
+        if (target.granularity === SelectionGranularity.Track || target.granularity === SelectionGranularity.Measure
+            || target.granularity === SelectionGranularity.TrackPiece) {
+            const arrangement = this.dataModel.arrangement;
+
+            return arrangement ? selectionEventTargets(arrangement, [entry]) : [];
+        }
+
         if (target.granularity === SelectionGranularity.Note) {
             const start = target.start ?? target.event.start;
             const event = modelEventAt(target.measure, start);
@@ -494,10 +504,6 @@ export class GridMeasureEditor extends MeasureEditor {
             }
 
             return [this.addressedEventOf(event.start, target.measure)];
-        }
-
-        if (target.granularity !== SelectionGranularity.NoteGroup) {
-            return [];
         }
 
         const addressed: IAddressedEvent[] = [];

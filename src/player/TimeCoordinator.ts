@@ -92,6 +92,22 @@ export class TimeCoordinator {
     }
 
     /**
+     * Computes the number of base-grid steps in one pulse. Notation rules need it to tell a ternary
+     * pulse (three equal steps, drawn as eighths) from a binary one.
+     *
+     * @param timeParams The time parameters to read the pulse and the step resolution from.
+     *
+     * @returns The number of steps in one pulse.
+     */
+    public static stepsPerPulseOf(timeParams: Readonly<ITimeParamsBase>): number {
+        const [pulseFrequency, pulseResolution] = timeParams.pulse.split("/").map((str) => {
+            return Number(str);
+        });
+
+        return timeParams.stepResolution * pulseFrequency / pulseResolution;
+    }
+
+    /**
      * Converting is currently extremely easy, but will become more complicated with polyrhythms
      * and tempo changes.
      *
@@ -135,11 +151,8 @@ export class TimeCoordinator {
     }
 
     private computeMetrics(): IScoreMetrics {
-        const { timeSignature, tempo, pulse, stepResolution } = this.timeParams;
+        const { timeSignature, tempo, stepResolution } = this.timeParams;
         const [beatsPerBar, beatUnit] = timeSignature.split("/").map((str) => {
-            return Number(str);
-        });
-        const [pulseFrequency, pulseResolution] = pulse.split("/").map((str) => {
             return Number(str);
         });
 
@@ -150,7 +163,7 @@ export class TimeCoordinator {
             throw new Error(`Incompatible time grid: ${timeSignature} with step resolution ${stepResolution}`);
         }
 
-        const stepsPerPulse = stepResolution * pulseFrequency / pulseResolution;
+        const stepsPerPulse = TimeCoordinator.stepsPerPulseOf(this.timeParams);
         const secondsPerPulse = 60 / tempo;
 
         // And produce our actually useful values.

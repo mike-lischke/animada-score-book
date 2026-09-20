@@ -16,19 +16,46 @@ test.beforeEach(async ({ page }) => {
 /**
  * Builds a packed v3 arrangement with the given track instruments and steps.
  *
- * @param tracks The track definitions with per-step note style and articulation data.
+ * @param tracks The track definitions with per-step note style and articulation data, or with an
+ *               explicit event list for measures that need lengths the step raster cannot express.
  *
  * @returns A JSON-stringified packed arrangement snapshot ready for addInitScript.
  */
 const buildPackedArrangement = (tracks: Array<{
     instrumentId: string;
-    steps: Array<{ noteStyleId?: string; articulation?: { damping: number; accent: boolean; ghost: boolean; }; }>;
+    steps?: Array<{ noteStyleId?: string; articulation?: { damping: number; accent: boolean; ghost: boolean; }; }>;
+    events?: Array<{
+        start: [number, number];
+        duration: [number, number];
+        noteStyleId?: string;
+        articulation?: { damping: number; accent: boolean; ghost: boolean; };
+    }>;
 }>): string => {
     const snapshot: IArrangementSnapshot = {
         version: 4,
         title: "Decoration Test",
         timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4", stepResolution: 16 },
         tracks: tracks.map((track, trackIndex) => {
+            const events = track.events
+                ? track.events.map((event) => {
+                    return {
+                        start: { numerator: event.start[0], denominator: event.start[1] },
+                        duration: { numerator: event.duration[0], denominator: event.duration[1] },
+                        noteStyleId: event.noteStyleId,
+                        articulation: event.articulation ? { ...event.articulation } : undefined,
+                    };
+                })
+                : Array.from({ length: 16 }, (_, index) => {
+                    const stepData = track.steps?.at(index);
+
+                    return {
+                        start: { numerator: index, denominator: 16 },
+                        duration: { numerator: 1, denominator: 16 },
+                        noteStyleId: stepData?.noteStyleId,
+                        articulation: stepData?.articulation ? { ...stepData.articulation } : undefined,
+                    };
+                });
+
             return {
                 id: trackIndex + 1,
                 instrumentId: track.instrumentId,
@@ -40,16 +67,7 @@ const buildPackedArrangement = (tracks: Array<{
                         stepResolution: 16,
                         beatGroups: [4, 4, 4, 4],
                     },
-                    events: Array.from({ length: 16 }, (_, index) => {
-                        const stepData = track.steps.at(index);
-
-                        return {
-                            start: { numerator: index, denominator: 16 },
-                            duration: { numerator: 1, denominator: 16 },
-                            noteStyleId: stepData?.noteStyleId,
-                            articulation: stepData?.articulation ? { ...stepData.articulation } : undefined,
-                        };
-                    }),
+                    events,
                     subdivisions: [],
                 }],
             };
@@ -424,5 +442,79 @@ test.describe("Note decorations", () => {
         // But rimshot cross SHOULD be present.
         const rimshotCross = page.locator(".staff-note-head-rimshot-cross-svg").first();
         await expect(rimshotCross).toBeVisible();
+    });
+
+    test("keeps the augmentation dot clear of cross and triangle heads", async ({ page }) => {
+        const ghost = { damping: 0, accent: false, ghost: true };
+        // Dotted quarters carry no flags, so the sprite draws nothing but the dot.
+        const packed = buildPackedArrangement([
+            {
+                instrumentId: "2", // Tamborim – cross heads
+                events: [
+                    { start: [0, 16], duration: [6, 16], noteStyleId: "1" },
+                    { start: [6, 16], duration: [6, 16], noteStyleId: "1", articulation: ghost },
+                ],
+            },
+            {
+                instrumentId: "1", // Chocalho – triangle heads
+                events: [
+                    { start: [0, 16], duration: [6, 16], noteStyleId: "1" },
+                    { start: [6, 16], duration: [6, 16], noteStyleId: "2", articulation: ghost },
+                ],
+            },
+        ]);
+
+        await page.addInitScript((snapshotPacked: string) => {
+            const sessionId = "e2e-deco-dot";
+            window.history.replaceState({ ...(window.history.state ?? {}), sessionId }, "");
+            window.sessionStorage.setItem("asb-session-id", sessionId);
+            window.localStorage.setItem(`asb-ui-settings-session-${sessionId}`, JSON.stringify({
+                currentScore: snapshotPacked,
+            }));
+        }, packed);
+
+        await page.goto("/");
+
+        const trackViewToggle = page.locator("input.trackViewModeToggle").first();
+        await expect(trackViewToggle).toBeVisible();
+        if (!await trackViewToggle.isChecked()) {
+            await trackViewToggle.check({ force: true });
+        }
+
+        await expect(page.locator(".staff-note-head").first()).toBeVisible();
+
+        const heads = await page.evaluate(() => {
+            return [...document.querySelectorAll<HTMLElement>(".staff-note-head")].map((head) => {
+                const paren = head.querySelector<HTMLElement>(".staff-note-head-ghost-paren");
+                const dot = head.querySelector<HTMLElement>(".staff-note-head-dot");
+                const symbol = head.querySelector<SVGElement>(".staff-note-viewer-note-symbol");
+
+                return {
+                    className: head.className,
+                    dotOffset: dot === null
+                        ? null
+                        : Math.round(dot.getBoundingClientRect().left - head.getBoundingClientRect().left),
+                    parenLeft: paren === null ? null : getComputedStyle(paren).left,
+                    spriteDot: symbol?.getAttribute("style")?.includes("--note-show-dot: inline") ?? false,
+                };
+            });
+        });
+
+        // A head that is centred on the stem covers the dot's place, so these heads hide the sprite's
+        // dot and draw their own beside their ink; a ghost's closing parenthesis makes room for it.
+        expect(heads[0].className).toContain("cross");
+        expect(heads[0].className).toContain("staff-note-head-dotted");
+        expect(heads[0].dotOffset).toBe(16);
+        expect(heads[0].spriteDot).toBe(false);
+        expect(heads[0].parenLeft).toBeNull();
+
+        expect(heads[1].dotOffset).toBe(16);
+        expect(heads[1].parenLeft).toBe("20px");
+
+        expect(heads[2].className).toContain("triangle");
+        expect(heads[2].dotOffset).toBe(21);
+        expect(heads[2].spriteDot).toBe(false);
+
+        expect(heads[3].parenLeft).toBe("26px");
     });
 });

@@ -105,6 +105,34 @@ export class MeasureProjection {
         return MeasureProjection.buildItems(measure.events, 0, measure.events.length, tree);
     }
 
+    /**
+     * Resolves the nesting depth of the subdivision an event belongs to, counted like the render
+     * tree: a slot of a top-level subdivision has depth 1.
+     *
+     * @param measure The measure the event belongs to.
+     * @param eventIndex The event's index in the measure's `events` list.
+     *
+     * @returns The depth of the innermost subdivision covering the event, or 0 outside any subdivision.
+     */
+    public static subdivisionDepthOf(measure: IMeasureProjectionInput, eventIndex: number): number {
+        return MeasureProjection.depthIn(MeasureProjection.project(measure), eventIndex) ?? 0;
+    }
+
+    private static depthIn(items: IProjectedItem[], eventIndex: number): number | undefined {
+        for (const item of items) {
+            if (item.kind === ProjectedItemKind.Subdivision) {
+                const depth = MeasureProjection.depthIn(item.items, eventIndex);
+                if (depth !== undefined) {
+                    return depth + 1;
+                }
+            } else if (item.eventIndex === eventIndex) {
+                return 0;
+            }
+        }
+
+        return undefined;
+    }
+
     private static buildSubdivisionTree(subdivisions: ISubdivision[], events: IMeasureEvent[],
         stepsPerBar: number): ISubdivisionTreeNode[] {
         const sorted = [...subdivisions].sort((left, right) => {

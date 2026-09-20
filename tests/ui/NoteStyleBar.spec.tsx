@@ -16,7 +16,7 @@ import type { IAudioData } from "../../src/core/types/general.js";
 import { requisitions } from "../../src/supplement/Requisitions.js";
 import { SelectionManager } from "../../src/ui/SelectionManager.js";
 import type { ISelectionEntry } from "../../src/ui/SelectionSerializer.js";
-import { noteEntry } from "../unit-test-helpers.js";
+import { measureEntry, noteEntry } from "../unit-test-helpers.js";
 
 const makeNoteStyle = (id: string, shortDescription: string, description: string): IAudioData => {
     return {
@@ -55,10 +55,20 @@ const makeNoteStyleWithHead = (
     } as unknown as IAudioData;
 };
 
+/** The tracks the stub model holds; a test fills them in through {@link makeDataModel}. */
+const modelTracks: ISbDmTrack[] = [];
+
+/** The arrangement of the stub model. The tracks of a test share it, as they do in a real score. */
+const modelArrangement = { tracks: modelTracks } as unknown as ISbDmArrangement;
+
+/** The stub model the selection manager is bound to; {@link makeDataModel} keeps it in sync. */
+const modelStub = { arrangement: modelArrangement } as unknown as ScoreBookDataModel;
+
 const makeTrack = (id: number, noteStyles: Record<string, IAudioData>): ISbDmTrack => {
     return {
         id,
         instrument: { noteStyles },
+        measures: [],
     } as unknown as ISbDmTrack;
 };
 
@@ -70,7 +80,7 @@ const makeTrackWithNote = (
     styleId: string,
     durationSteps = 1,
 ): ISbDmTrack => {
-    const arrangement = { tracks: [] } as unknown as ISbDmArrangement;
+    const arrangement = modelArrangement;
     const track = {
         id,
         instrument: { id: instrumentId, noteStyles },
@@ -108,12 +118,6 @@ const makeTrackWithNote = (
 
     return track;
 };
-
-/** The tracks the stub model holds; a test fills them in through {@link makeDataModel}. */
-const modelTracks: ISbDmTrack[] = [];
-
-/** The stub model the selection manager is bound to; {@link makeDataModel} keeps it in sync. */
-const modelStub = { arrangement: { tracks: modelTracks } } as unknown as ScoreBookDataModel;
 
 /**
  * Creates the model a toolbar renders.
@@ -368,6 +372,46 @@ describe.sequential("NoteStyleBar", () => {
         const buttons = [...renderResult.container.querySelectorAll<HTMLButtonElement>(".noteStyleButton")];
         expect(buttons).toHaveLength(1);
         expect(buttons[0].disabled).toBe(true);
+    });
+
+    it("disables the note style buttons when whole measures span different instruments", () => {
+        const trackA = makeTrackWithNote(
+            7, 55, { "1": makeNoteStyle("1", "Accent", "Tamborim Accent") }, 7001, "1",
+        );
+        const trackB = makeTrackWithNote(
+            8, 66, { "1": makeNoteStyle("1", "Bass", "Timbau Bass") }, 8001, "1",
+        );
+        const dataModel = makeDataModel([trackA, trackB]);
+
+        selectionManager.replaceSelection([measureEntry(trackA.measures[0]), measureEntry(trackB.measures[0])]);
+
+        renderResult = render(
+            <NoteStyleBar dataModel={dataModel} selectionManager={selectionManager} />,
+        );
+
+        const buttons = [...renderResult.container.querySelectorAll<HTMLButtonElement>(".noteStyleButton")];
+        expect(buttons[0].disabled).toBe(true);
+    });
+
+    it("keeps the note style buttons enabled when whole measures share their instrument", () => {
+        const noteStyles = {
+            "1": makeNoteStyle("1", "Accent", "Tamborim Accent"),
+            "2": makeNoteStyle("2", "Ghost", "Tamborim Ghost Note"),
+        };
+        const trackA = makeTrackWithNote(7, 55, noteStyles, 7001, "1");
+        const trackB = makeTrackWithNote(8, 55, noteStyles, 8001, "1");
+        const dataModel = makeDataModel([trackA, trackB]);
+
+        selectionManager.replaceSelection([measureEntry(trackA.measures[0]), measureEntry(trackB.measures[0])]);
+
+        renderResult = render(
+            <NoteStyleBar dataModel={dataModel} selectionManager={selectionManager} />,
+        );
+
+        const buttons = [...renderResult.container.querySelectorAll<HTMLButtonElement>(".noteStyleButton")];
+        expect(buttons.every((button) => {
+            return !button.disabled;
+        })).toBe(true);
     });
 
     it("marks no note style when the cursor sits inside a note's duration", () => {

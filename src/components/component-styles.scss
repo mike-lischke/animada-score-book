@@ -468,10 +468,17 @@
     flex-shrink: 0;
     box-shadow: none;
     border: 1px solid color-mix(in srgb, var(--color-base-content) 30%, transparent);
+    --note-length-icon-fill: var(--color-primary);
 
     &:not(:disabled):hover {
         border-color: var(--color-primary);
         background: color-mix(in srgb, var(--color-primary) 10%, var(--color-base-100));
+    }
+
+    /* The outline dims through the color the button hands to its icon, so the fill follows it with
+       a mix of the same strength. */
+    &:disabled {
+        --note-length-icon-fill: color-mix(in srgb, var(--color-primary) 25%, var(--color-base-100));
     }
 
     .noteLengthIcon {
@@ -483,8 +490,13 @@
             stroke: none;
         }
 
+        .noteLengthIconRing {
+            fill: none;
+            stroke: currentColor;
+        }
+
         .noteLengthIconFill {
-            fill: var(--color-primary);
+            fill: var(--note-length-icon-fill);
             stroke: none;
         }
 
@@ -1375,6 +1387,35 @@
         color: var(--color-base-content);
     }
 
+    /*
+     * The sprite draws the augmentation dot where an oval head leaves room for it, which a head
+     * centred on the stem covers. These heads hide the sprite's dot and draw their own beside their
+     * ink instead, starting where the oval head's dot starts.
+     */
+    .staff-note-head-dot {
+        position: absolute;
+        left: calc(50% + 2.3px);
+        bottom: 25.6px;
+        width: 3.7px;
+        height: 3.7px;
+        border-radius: 50%;
+        background: var(--color-base-content);
+        pointer-events: none;
+    }
+
+    &.triangle .staff-note-head-dot {
+        left: calc(50% + 8.2px);
+    }
+
+    &.diamond .staff-note-head-dot {
+        left: calc(50% + 9px);
+    }
+
+    /* The cross ends at x = 1.5 px plus its round stroke caps, so its dot moves a little only. */
+    &.cross .staff-note-head-dot {
+        left: calc(50% + 3.9px);
+    }
+
     /* ---- Square (filled, 14×14 px) ---- */
     &.square::after {
         width: 14px;
@@ -1657,6 +1698,23 @@
     &.ghost-note.cross::before {
         left: -7px;
         bottom: 22px;
+    }
+
+    /* A dotted note needs room for the augmentation dot before the closing parenthesis. */
+    &.staff-note-head-dotted.ghost-note .staff-note-head-ghost-paren {
+        left: 22px;
+    }
+
+    &.staff-note-head-dotted.ghost-note.triangle .staff-note-head-ghost-paren {
+        left: 26px;
+    }
+
+    &.staff-note-head-dotted.ghost-note.diamond .staff-note-head-ghost-paren {
+        left: 26px;
+    }
+
+    &.staff-note-head-dotted.ghost-note.cross .staff-note-head-ghost-paren {
+        left: 20px;
     }
 
     /* ---- Accent: > above the note head ---- */

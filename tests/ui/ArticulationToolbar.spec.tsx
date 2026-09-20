@@ -37,6 +37,7 @@ const makeTrack = (id: number, instrumentId: number, noteStyles: Record<string, 
     return {
         id,
         instrument: { id: instrumentId, noteStyles },
+        measures: [],
     } as unknown as ISbDmTrack;
 };
 
@@ -148,10 +149,10 @@ describe.sequential("ArticulationToolbar", () => {
     });
 
     it("marks the accent and enables damping for a surdo-like voice", () => {
-        const track = makeTrack(7, 55, {
+        const track = makeTrackWithNote(7, 55, {
             "1": makeNoteStyle("1", true, Damping.Open, false),
             "2": makeNoteStyle("2", false, Damping.Muted, false),
-        });
+        }, "1");
         const dataModel = makeDataModel([track]);
         selectionManager.selectTracks([7]);
 
@@ -169,6 +170,51 @@ describe.sequential("ArticulationToolbar", () => {
         expect(byTooltip("Accent")!.classList.contains("du-btn-primary")).toBe(true);
         expect(byTooltip("Damped")!.disabled).toBe(false);
         expect(byTooltip("Ghost")!.disabled).toBe(true);
+    });
+
+    it("marks no articulation when a whole track mixes accented and plain notes", () => {
+        const track = makeTrack(7, 55, {
+            "1": makeNoteStyle("1", true, Damping.Open, false),
+            "2": makeNoteStyle("2", false, Damping.Open, false),
+        });
+        const events = [0, 1].map((index) => {
+            return {
+                start: { numerator: index, denominator: 16 },
+                duration: { numerator: 1, denominator: 16 },
+                noteStyleId: index === 0 ? "1" : "2",
+            };
+        });
+        const measure = {
+            number: 1,
+            meter: { stepResolution: 16 },
+            subdivisions: [],
+            track,
+            events,
+            noteEvents: events.map((event, index) => {
+                return {
+                    id: 9001 + index,
+                    start: event.start,
+                    duration: event.duration,
+                    audioData: { id: event.noteStyleId },
+                };
+            }),
+        } as unknown as ISbDmTrackMeasure;
+        track.measures.push(measure);
+
+        const dataModel = makeDataModel([track]);
+        selectionManager.selectTracks([7]);
+
+        renderResult = render(
+            <ArticulationToolbar dataModel={dataModel} selectionManager={selectionManager} />,
+        );
+
+        const buttons = [...renderResult.container.querySelectorAll<HTMLButtonElement>(".articulationButton")];
+        const marked = buttons.filter((button) => {
+            return button.classList.contains("du-btn-primary");
+        });
+
+        // Half of the track is accented, so no articulation is the shared state and none is marked.
+        expect(marked).toHaveLength(0);
     });
 
     it("enables ghost but not damping for a tamborim-like voice", () => {

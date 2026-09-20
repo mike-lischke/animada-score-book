@@ -15,7 +15,7 @@ import {
     MeasureProjection, ProjectedItemKind, type IProjectedEvent, type IProjectedItem,
 } from "../../../core/MeasureProjection.js";
 import type { IFraction, IAudioData } from "../../../core/types/general.js";
-import { noteValueForUnits, type INoteValue } from "../../../core/rest-notation.js";
+import { noteValueForEvent, type INoteValue } from "../../../core/rest-notation.js";
 import type { IScoreMetrics } from "../../../player/TimeCoordinator.js";
 import { addFractions, compareFractions, subtractFractions } from "../../../core/serialisation/numeric-functions.js";
 import { ScoreElementKind, type ScoreElementRegistry } from "../../../ui/ScoreElementRegistry.js";
@@ -105,6 +105,18 @@ interface ITupletNoteBounds {
     firstStart?: IFraction;
     lastStart?: IFraction;
 }
+
+/**
+ * Width the flags occupy right of a notehead, in px. The sprite's flag paths reach x = 58.6 of its
+ * 60 units, which the symbol renders 25 px wide, less the flag shift of 2.4 units.
+ */
+const noteFlagWidth = 11;
+
+/**
+ * Width the final barline occupies at the right edge of the last bar, in px. Mirrors the rule of
+ * `.staff-note-viewer-final-barline` in component-styles.
+ */
+const finalBarlineWidth = 6;
 
 export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
     private tupletIdSequence = 0;
@@ -254,18 +266,10 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
         let beamCount = 0;
 
         if (audioData) {
-            if (depth > 0) {
-                // A slot of a plain subdivision can hold a length the grid cannot address — a 2:1 split
-                // of a step holds thirty-seconds — and must keep the beams of that length.
-                glyph = this.subdivisionSlotGlyph(event.duration) ?? this.subdivisionGlyph(depth);
-            } else {
-                const lengthSteps = event.duration.denominator > 0
-                    ? (event.duration.numerator * stepsPerBar) / event.duration.denominator
-                    : 0;
-
-                glyph = this.getStandaloneNoteGlyph(lengthSteps, stepsPerBar, stepsPerPulse, event.duration)
-                    ?? { length: NoteLength.Sixteenth, dotted: false };
-            }
+            // A slot of a plain subdivision can hold a length the grid cannot address — a 2:1 split
+            // of a step holds thirty-seconds — and must keep the beams of that length.
+            glyph = noteValueForEvent(event.duration, depth, stepsPerBar, stepsPerPulse)
+                ?? { length: NoteLength.Sixteenth, dotted: false };
 
             beamCount = this.glyphBeamCount(glyph.length);
         }
@@ -373,10 +377,7 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
             total = addFractions(total, node.duration);
         }
 
-        const lengthSteps = total.denominator > 0
-            ? (total.numerator * stepsPerBar) / total.denominator
-            : 0;
-        const glyph = this.getStandaloneNoteGlyph(lengthSteps, stepsPerBar, stepsPerPulse, total);
+        const glyph = noteValueForEvent(total, 0, stepsPerBar, stepsPerPulse);
 
         return glyph !== undefined && !glyph.dotted;
     }
@@ -606,14 +607,18 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
      * @param centerLine The centre line index ((maxNoteLine + 1) / 2), used to compute per-note vertical offsets.
      * @param restLineOffset Vertical offset in px for whole/half rests so they sit on the centre line.
      * @param containerSpan The total span of the current flex container as a fraction of the whole bar.
+     * @param atMeasureEnd Whether the current container ends with the measure.
      *
      * @returns List of VNodes representing the rendered items at this level.
      */
     private renderItems(nodes: IStaffTreeNode[], beamSpans: Map<number, IBeamInfo>,
-        keyPrefix: string, centerLine: number, restLineOffset: number, containerSpan = 1): ComponentChild[] {
-        const { scoreMetrics, measure, barNumber, trackId, scoreElementRegistry } = this.props;
+        keyPrefix: string, centerLine: number, restLineOffset: number, containerSpan = 1,
+        atMeasureEnd = true): ComponentChild[] {
+        const { scoreMetrics, measure, barNumber, trackId, isLastBar, scoreElementRegistry } = this.props;
 
         return nodes.map((node, index) => {
+            const isMeasureEnd = atMeasureEnd && index === nodes.length - 1;
+
             if (node.kind === StaffNodeKind.Subdivision) {
                 const spanFraction = node.span.numerator / node.span.denominator;
 
@@ -630,7 +635,7 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                         }}
                     >
                         {this.renderItems(node.children, beamSpans, `${keyPrefix}${index}-`, centerLine,
-                            restLineOffset, spanFraction)}
+                            restLineOffset, spanFraction, isMeasureEnd)}
                     </div>
                 );
             }
@@ -647,24 +652,35 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                 ? (node.duration.denominator / (2 * node.duration.numerator * scoreMetrics.stepsPerBar)) * 100
                 : 50;
 
+            const beamInfo = beamSpans.get(node.eventIndex);
+            const hasBeam = beamInfo !== undefined;
+
+            // A standalone flagged note ending the measure has its onset before the barline but its
+            // flags behind it, because such a note is shorter than half a grid step and its anchor
+            // therefore sits at the end of its slot (100 %). It is drawn right-aligned to that slot
+            // instead, so its flags end where the slot ends and stay inside the bar. The last bar
+            // additionally keeps clear of the final barline, which sits inside its right edge.
+            const endsMeasureWithFlags = isMeasureEnd && !hasBeam && node.noteStyle !== undefined
+                && anchorPercent >= 100;
+            const anchor = endsMeasureWithFlags
+                ? `calc(100% - ${noteFlagWidth + (isLastBar ? finalBarlineWidth : 0)}px)`
+                : `${anchorPercent}%`;
+
             const slotStyle = {
                 flex: `${grow} 1 0`,
                 minWidth: 0,
-                "--note-anchor": `${anchorPercent}%`,
+                "--note-anchor": anchor,
             } as CSSProperties;
             const stepIndex = Math.floor(
                 (node.start.numerator * scoreMetrics.stepsPerBar) / node.start.denominator,
             );
 
             if (node.noteStyle !== undefined) {
-                const beamInfo = beamSpans.get(node.eventIndex);
-
                 // Compute vertical offset for this note's staff line.
                 const effectiveNoteLine = node.noteLine ?? 1;
                 const lineOffset = (effectiveNoteLine - centerLine) * 10; // 10px = line spacing
                 const translateY = `translateY(calc(-18px + ${lineOffset}px))`;
 
-                const hasBeam = beamInfo !== undefined;
                 const headType = node.displayType;
                 const isNonOval = headType !== NoteDisplayType.Oval;
 
@@ -673,8 +689,18 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                     headWrapperClasses.push(this.headTypeClassName(headType));
                 }
 
+                if (node.glyph.dotted) {
+                    headWrapperClasses.push("staff-note-head-dotted");
+                }
+
                 const decoClasses = this.resolveDecorationClasses(node.noteStyle, node.articulation);
                 headWrapperClasses.push(...decoClasses);
+
+                // Non-oval heads are drawn in CSS and hide the sprite's head, so they draw the
+                // augmentation dot themselves as well.
+                const dotElement = isNonOval && node.glyph.dotted
+                    ? <span className="staff-note-head-dot" />
+                    : null;
 
                 const needsCssStem = !hasBeam && node.glyph.length !== NoteLength.Whole;
 
@@ -705,12 +731,13 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                                     transform: translateY,
                                 }}
                                 headType={headType}
-                                dotted={node.glyph.dotted}
+                                dotted={!isNonOval && node.glyph.dotted}
                                 diamondOpen={node.diamondOpen}
                                 flagCount={hasBeam ? 0 : undefined}
                                 hideStem={true}
                                 alt=""
                             />
+                            {dotElement}
                             {needsCssStem ? (
                                 <span
                                     className="staff-note-head-stem"
@@ -729,11 +756,8 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                 );
             }
 
-            const lengthSteps = node.duration.denominator > 0
-                ? (node.duration.numerator * scoreMetrics.stepsPerBar) / node.duration.denominator
-                : 1;
-            const restGlyph = this.getStandaloneNoteGlyph(lengthSteps, scoreMetrics.stepsPerBar,
-                scoreMetrics.stepsPerPulse, node.duration)
+            const restGlyph = noteValueForEvent(node.duration, node.depth, scoreMetrics.stepsPerBar,
+                scoreMetrics.stepsPerPulse)
                 ?? { length: NoteLength.Sixteenth, dotted: false };
             const isWholeOrHalf = restGlyph.length === NoteLength.Whole || restGlyph.length === NoteLength.Half;
 
@@ -909,67 +933,6 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
         }
 
         return 0;
-    }
-
-    /**
-     * Resolves the glyph of a subdivision slot from the length the slot actually has.
-     *
-     * @param duration The slot's duration as a fraction of the bar.
-     *
-     * @returns The glyph, or undefined when the length is no single note value — the slots of a
-     *          tuplet are such lengths, and keep the glyph their nesting depth gives them.
-     */
-    private subdivisionSlotGlyph(duration: IFraction): INoteValue | undefined {
-        if (duration.numerator <= 0 || duration.denominator <= 0) {
-            return undefined;
-        }
-
-        return noteValueForUnits((duration.numerator * 32) / duration.denominator);
-    }
-
-    /**
-     * Resolves the glyph for a note inside a subdivision. Without real note lengths the first
-     * nesting level uses an eighth note, and each further level halves the value (sixteenth,
-     * thirty-second), so subdivision notes are always beamed.
-     *
-     * @param depth The subdivision nesting depth (1 for notes in a top-level subdivision).
-     *
-     * @returns The glyph for the note.
-     */
-    private subdivisionGlyph(depth: number): INoteValue {
-        if (depth <= 1) {
-            return { length: NoteLength.Eighth, dotted: false };
-        }
-
-        if (depth === 2) {
-            return { length: NoteLength.Sixteenth, dotted: false };
-        }
-
-        return { length: NoteLength.ThirtySecond, dotted: false };
-    }
-
-    private getStandaloneNoteGlyph(lengthSteps: number, stepsPerBar: number, stepsPerPulse: number,
-        duration: IFraction): INoteValue | undefined {
-        if (stepsPerBar <= 0) {
-            return undefined;
-        }
-
-        if (stepsPerPulse > 0 && stepsPerPulse % 3 === 0 && lengthSteps * 3 === stepsPerPulse
-            && duration.numerator * stepsPerBar === duration.denominator) {
-            return { length: NoteLength.Eighth, dotted: false };
-        }
-
-        if (duration.denominator > 0 && duration.numerator * 12 === duration.denominator) {
-            return { length: NoteLength.Eighth, dotted: false };
-        }
-
-        // Compute note value from the actual duration fraction, not from the
-        // rounded lengthSteps (which loses sub-step precision for subdivision notes).
-        const units = duration.denominator > 0
-            ? (duration.numerator * 32) / duration.denominator
-            : (lengthSteps * 32) / stepsPerBar;
-
-        return noteValueForUnits(units);
     }
 
     private getTupletRestIcon(effectiveStepsPerPulse: number): NoteLength {
