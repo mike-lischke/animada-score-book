@@ -1800,6 +1800,18 @@
             color: var(--color-primary) !important;
         }
 
+        /* Absolutely positioned text decorations: opening paren is ::before, closing paren and
+           damped plus are child spans and therefore need their own colour override. */
+        .staff-note-head-ghost-paren,
+        .staff-note-head-damped-plus {
+            color: var(--color-primary) !important;
+        }
+
+        /* The augmentation dot of CSS-drawn heads is a filled circle, so it needs a background override. */
+        .staff-note-head-dot {
+            background: var(--color-primary) !important;
+        }
+
         .staff-note-head-cross-svg,
         .staff-note-head-press-roll-svg,
         .staff-note-head-rimshot-cross-svg {

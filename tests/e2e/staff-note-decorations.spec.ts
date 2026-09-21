@@ -3,7 +3,7 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import { expect, test } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 
 import { stringifyPackedArrangement } from "../../src/core/serialisation/snapshot-packing.js";
 import type { IArrangementSnapshot } from "../../src/core/types/general.js";
@@ -75,6 +75,78 @@ const buildPackedArrangement = (tracks: Array<{
     };
 
     return stringifyPackedArrangement(snapshot);
+};
+
+/** The session details a test seeds before the app loads. */
+interface ISessionSeed {
+    /** The packed arrangement snapshot stored as the session's current score. */
+    packed: string;
+
+    /** The session id the arrangement is stored under. */
+    sessionId: string;
+}
+
+/**
+ * Seeds a session with a packed arrangement and switches the arrangement view to staff mode.
+ *
+ * @param page The page to prepare.
+ * @param seed The arrangement snapshot and session id to load.
+ */
+const openStaffArrangement = async (page: Page, seed: ISessionSeed): Promise<void> => {
+    await page.addInitScript((initSeed: ISessionSeed) => {
+        window.history.replaceState({ ...(window.history.state ?? {}), sessionId: initSeed.sessionId }, "");
+        window.sessionStorage.setItem("asb-session-id", initSeed.sessionId);
+        window.localStorage.setItem(`asb-ui-settings-session-${initSeed.sessionId}`, JSON.stringify({
+            currentScore: initSeed.packed,
+        }));
+    }, seed);
+
+    await page.goto("/");
+
+    const trackViewToggle = page.locator("input.trackViewModeToggle").first();
+    await expect(trackViewToggle).toBeVisible();
+    if (!await trackViewToggle.isChecked()) {
+        await trackViewToggle.check({ force: true });
+    }
+
+    await expect(page.locator(".staff-measure-track-row").first()).toBeVisible();
+};
+
+/**
+ * Selects a note with a mouse click on its note head. The head is centred on the note's onset, while
+ * beams and selection overlays are drawn with `pointer-events: none`, so the click has to be placed
+ * by coordinate rather than on the elements the renderer paints on top.
+ *
+ * @param page The page holding the staff view.
+ * @param head The note head to click.
+ */
+const clickNoteHead = async (page: Page, head: Locator): Promise<void> => {
+    const box = await head.boundingBox();
+    if (!box) {
+        throw new Error("Note head has no bounding box.");
+    }
+
+    await page.mouse.click(box.x + (box.width / 2), box.y + (box.height / 2));
+};
+
+/**
+ * Resolves the theme's primary colour, which selection highlighting is drawn with, to a computed
+ * `rgb()` value, so the tests do not hardcode a theme colour.
+ *
+ * @param page The page holding the staff view.
+ *
+ * @returns The primary colour as a computed CSS colour value.
+ */
+const primaryColor = (page: Page): Promise<string> => {
+    return page.evaluate(() => {
+        const probe = document.createElement("span");
+        probe.style.color = "var(--color-primary)";
+        document.body.appendChild(probe);
+        const color = getComputedStyle(probe).color;
+        probe.remove();
+
+        return color;
+    });
 };
 
 test.describe("Note head types", () => {
@@ -516,5 +588,78 @@ test.describe("Note decorations", () => {
         expect(heads[2].spriteDot).toBe(false);
 
         expect(heads[3].parenLeft).toBe("26px");
+    });
+});
+
+test.describe("Decoration colouring while selected", () => {
+    test("colours the closing parenthesis of a ghost note", async ({ page }) => {
+        const packed = buildPackedArrangement([{
+            instrumentId: "5", // Caixa
+            steps: [
+                {}, {}, {}, {},
+                { noteStyleId: "2", articulation: { damping: 0, accent: false, ghost: true } },
+            ],
+        }]);
+
+        await openStaffArrangement(page, { packed, sessionId: "e2e-deco-selected-ghost" });
+
+        const head = page.locator(".staff-measure-track-row .staff-note-head.ghost-note").first();
+        await expect(head).toBeVisible();
+        await clickNoteHead(page, head);
+        await expect(page.locator(".staff-note-viewer-run.note-selected")).toHaveCount(1);
+
+        // The opening parenthesis is a ::before on the head and was always coloured. The closing one
+        // is a child span and needs its own colour, otherwise the pair is highlighted asymmetrically.
+        const primary = await primaryColor(page);
+        const closingParen = page.locator(".staff-note-viewer-run.note-selected .staff-note-head-ghost-paren");
+        await expect(closingParen).toHaveCSS("color", primary);
+    });
+
+    test("colours the plus sign of a damped note", async ({ page }) => {
+        const packed = buildPackedArrangement([{
+            instrumentId: "7", // High Surdo
+            steps: [
+                {}, {}, {}, {},
+                { noteStyleId: "2", articulation: { damping: 1, accent: false, ghost: false } },
+            ],
+        }]);
+
+        await openStaffArrangement(page, { packed, sessionId: "e2e-deco-selected-damped" });
+
+        const head = page.locator(".staff-measure-track-row .staff-note-head:has(.staff-note-head-damped-plus)")
+            .first();
+        await expect(head).toBeVisible();
+        await clickNoteHead(page, head);
+        await expect(page.locator(".staff-note-viewer-run.note-selected")).toHaveCount(1);
+
+        const plus = page.locator(".staff-note-viewer-run.note-selected .staff-note-head-damped-plus");
+        await expect(plus).toHaveText("+");
+
+        const primary = await primaryColor(page);
+        await expect(plus).toHaveCSS("color", primary);
+    });
+
+    test("colours the dot of a dotted note", async ({ page }) => {
+        const packed = buildPackedArrangement([{
+            instrumentId: "2", // Tamborim – cross heads draw the augmentation dot themselves
+            events: [
+                { start: [0, 16], duration: [4, 16] },
+                { start: [4, 16], duration: [6, 16], noteStyleId: "1" },
+            ],
+        }]);
+
+        await openStaffArrangement(page, { packed, sessionId: "e2e-deco-selected-dot" });
+
+        const head = page.locator(".staff-measure-track-row .staff-note-head.staff-note-head-dotted").first();
+        await expect(head).toHaveClass(/cross/);
+        await expect(head).toBeVisible();
+        await clickNoteHead(page, head);
+        await expect(page.locator(".staff-note-viewer-run.note-selected")).toHaveCount(1);
+
+        // The dot is a filled circle painted with the head's ink colour, so the selection has to
+        // override its background instead of its text colour.
+        const primary = await primaryColor(page);
+        const dot = page.locator(".staff-note-viewer-run.note-selected .staff-note-head-dot");
+        await expect(dot).toHaveCSS("background-color", primary);
     });
 });
