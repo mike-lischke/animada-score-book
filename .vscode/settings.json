@@ -18,6 +18,7 @@
         "npx vite": true,
         "git merge": true,
         "git commit": true,
-        "git rev-parse": true
+        "git rev-parse": true,
+        "mysql": true
     },
 }

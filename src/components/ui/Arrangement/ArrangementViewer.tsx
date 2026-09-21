@@ -30,6 +30,9 @@ import { BarActionKind, BarActionStrip } from "./BarActionStrip.js";
 import { TrackControls } from "./TrackControls.js";
 import { TrackEditSidebar } from "./TrackEditSidebar.js";
 
+/** Tolerance in px when telling a scroll the auto-follow wrote from a scroll the user caused. */
+const autoScrollTolerance = 1;
+
 export interface IArrangementViewerProps extends ICommonUIProperties {
     arrangementPlayer: ArrangementPlayer;
     dataModel: ScoreBookDataModel;
@@ -45,8 +48,6 @@ interface IArrangementViewerState {
     autoFollowIsOn: boolean;
     viewerZoom: number;
     trackViewMode: "grid" | "staff";
-
-    userMightBeTakingControl: boolean;
 }
 
 export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArrangementViewerState> {
@@ -71,6 +72,9 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
     private stopAutoFollowTimeoutId?: ReturnType<typeof setTimeout>;
     private scrollAnimationFrameId = 0;
 
+    /** Offset the auto-follow scrolled to last, to tell its own scrolling from the user's. */
+    private autoScrollLeft = -1;
+
     // Used in auto follow mode to indicate the last pulse we were on, so that we can determine when to scroll.
     private lastPulse = 0;
 
@@ -94,7 +98,6 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
             trackPlayerCount: props.arrangementPlayer.trackPlayers.size,
             autoFollowIsOn: true,
             trackViewMode: settings.viewSettings?.arrangementViewSettings?.displayMode ?? "grid",
-            userMightBeTakingControl: false
         };
 
         this.resizeObserver = new ResizeObserver(this.handleResize);
@@ -103,7 +106,7 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
 
     public override componentDidMount(): void {
         const { arrangementPlayer, selectionManager } = this.props;
-        const { autoFollowIsOn, viewerZoom, trackViewMode } = this.state;
+        const { viewerZoom, trackViewMode } = this.state;
 
         selectionManager.setEventContainer(this.arrangementViewerRef.current!, this.scoreElementRegistry);
 
@@ -134,10 +137,9 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         setTimeout(this.handleResize, 0);
         this.resizeObserver.observe(this.viewerRef.current!);
 
-        // If desired, turn on auto-follow like so.
-        if (autoFollowIsOn) {
-            arrangementPlayer.animationEngine.connect(this.autoFollow);
-        }
+        // The animation always runs while playing: it moves the play beam. Scrolling to keep the beam
+        // in view is what auto-follow adds, and what a manual scroll of the viewer turns off.
+        arrangementPlayer.animationEngine.connect(this.autoFollow);
 
         this.autoFollowTransitionDurationMs = 50;
         this.trackViewerContainerRef.current!.style.zoom = `${viewerZoom}%`;
@@ -146,15 +148,11 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
 
     public override componentDidUpdate(prevProps: IArrangementViewerProps, prevState: IArrangementViewerState): void {
         const { arrangementPlayer, selectionManager } = this.props;
-        const { autoFollowIsOn, viewerZoom, trackViewMode } = this.state;
+        const { viewerZoom, trackViewMode } = this.state;
 
         if (prevProps.arrangementPlayer !== arrangementPlayer) {
             prevProps.arrangementPlayer.animationEngine.disconnect(this.autoFollow);
-
-            if (autoFollowIsOn) {
-                arrangementPlayer.animationEngine.connect(this.autoFollow);
-            }
-
+            arrangementPlayer.animationEngine.connect(this.autoFollow);
             this.autoFollow(0);
         }
 
@@ -194,7 +192,7 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
 
     public override render(): JSX.Element {
         const { arrangementPlayer, dataModel, selectionManager, inEditMode } = this.props;
-        const { autoFollowIsOn, trackViewMode, viewerZoom } = this.state;
+        const { trackViewMode, viewerZoom } = this.state;
 
         const arrangement = dataModel.arrangement!;
         const metrics = arrangementPlayer.scoreMetrics;
@@ -308,8 +306,7 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
                             innerRef={this.viewerRef}
                             orientation={Orientation.TopDown}
                             crossAlignment={ChildAlignment.Start}
-                            onWheel={autoFollowIsOn ? this.handleWheel : undefined}
-                            onScroll={this.handleTrackViewerScroll}
+                            onScroll={this.handleViewerScrolled}
                         >
                             {barActionStrip}
                             <Container
@@ -409,27 +406,36 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
     private autoFollow = (realTime: RealTime) => {
         if (this.viewerRef.current && this.playBeamRef.current && this.viewerContentHostRef.current) {
             const { arrangementPlayer } = this.props;
-            const { trackViewMode } = this.state;
+            const { autoFollowIsOn, trackViewMode } = this.state;
 
             const viewer = this.viewerRef.current;
             const contentHost = this.viewerContentHostRef.current;
 
             const contentWidth = contentHost.scrollWidth;
-            const clientWidth = viewer.clientWidth;
-            const maxScroll = Math.max(0, contentWidth - clientWidth);
 
             const metrics = arrangementPlayer.scoreMetrics;
             const prefixWidthPixels = trackViewMode === "staff" ? this.measureStaffPrefixWidthPx() : 0;
             const musicalContentWidth = Math.max(0, contentWidth - prefixWidthPixels);
             const barWidthPixels = metrics.bars > 0 ? musicalContentWidth / metrics.bars : 0;
-            const stepWidthPixels = barWidthPixels / metrics.stepsPerBar;
-            const pulseWidthPixels = stepWidthPixels * metrics.stepsPerPulse;
 
-            // Update play beam continuously.
+            // Update play beam continuously. The beam is moved with a transform, never with `left`:
+            // `left` is a layout property and made the browser lay out the scroller on every frame
+            // (measured ≈120 layouts/s on a 79-bar score), the transform leaves layout untouched.
             const normalizedPosition = arrangementPlayer.convertToLoopProgress(realTime);
             const totalProgress = normalizedPosition * metrics.bars;
             const position = Math.floor(prefixWidthPixels + (totalProgress * barWidthPixels));
-            this.playBeamRef.current.style.left = `${position}px`;
+            this.playBeamRef.current.style.transform = `translate3d(${position}px, 0, 0)`;
+
+            // Auto-follow keeps the beam inside the viewport. Once the user scrolls the viewer himself,
+            // the viewer stays where he put it and only the beam keeps moving.
+            if (!autoFollowIsOn) {
+                return;
+            }
+
+            const clientWidth = viewer.clientWidth;
+            const maxScroll = Math.max(0, contentWidth - clientWidth);
+            const stepWidthPixels = barWidthPixels / metrics.stepsPerBar;
+            const pulseWidthPixels = stepWidthPixels * metrics.stepsPerPulse;
 
             // Half-bar splits use beat-level granularity so odd time signatures snap musically.
             // Even meters split symmetrically (2+2, 3+3 for 6/8), odd meters asymmetrically
@@ -459,7 +465,9 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
                     snappedScroll = Math.floor(position / pulseWidthPixels) * pulseWidthPixels;
                 }
 
-                viewer.scrollLeft = clampValue(snappedScroll, 0, maxScroll);
+                const target = clampValue(snappedScroll, 0, maxScroll);
+                this.autoScrollLeft = target;
+                viewer.scrollLeft = target;
             }
         }
     };
@@ -516,12 +524,6 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         return Promise.resolve(true);
     };
 
-    private handleWheel = (event: WheelEvent) => {
-        if (event.deltaX > 6) {
-            this.setState({ autoFollowIsOn: false });
-        }
-    };
-
     private handleSettingsChanged = (settings: IUISettings): Promise<boolean> => {
         const { viewerZoom, trackViewMode } = this.state;
 
@@ -556,6 +558,32 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         this.setState({ trackViewMode: newTrackViewMode });
 
         return Promise.resolve(true);
+    };
+
+    private handleViewerScrolled = () => {
+        this.stopAutoFollowOnUserScroll();
+        this.handleTrackViewerScroll();
+    };
+
+    /**
+     * Stops auto-follow when the viewer was scrolled by the user. The auto-follow's own scrolling lands on the
+     * offset it just wrote, so any other offset means the user took over — by wheel, trackpad or finger swipe
+     * (touch devices report a plain scroll event, no wheel event).
+     */
+    private stopAutoFollowOnUserScroll = () => {
+        const { autoFollowIsOn } = this.state;
+        if (!autoFollowIsOn) {
+            return;
+        }
+
+        const host = this.viewerRef.current;
+        if (!host) {
+            return;
+        }
+
+        if (Math.abs(host.scrollLeft - this.autoScrollLeft) > autoScrollTolerance) {
+            this.setState({ autoFollowIsOn: false });
+        }
     };
 
     private handleTrackViewerScroll = () => {
