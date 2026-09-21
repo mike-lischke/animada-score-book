@@ -3,7 +3,8 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import type { IFraction, IRect } from "../core/types/general.js";
+import { compareFractions } from "../core/serialisation/numeric-functions.js";
+import type { IFraction, IMeasureEvent, IRect } from "../core/types/general.js";
 import { requisitions } from "../supplement/Requisitions.js";
 import type { SelectionManager } from "./SelectionManager.js";
 import {
@@ -19,6 +20,21 @@ const selectionOverlayClass = "selection-overlay";
 const selectionCursorClass = "selection-cursor";
 const noteSelectedClass = "note-selected";
 const staffNoteRunClass = "staff-note-viewer-run";
+
+/** Where an arrow key moves the cursor: the address to select, its measure, and the element it came from. */
+interface IArrowMove {
+    /** 1-based measure the cursor moves into. */
+    bar: number;
+
+    /** The note address to select. */
+    noteTarget: ISelectionTarget;
+
+    /** Position inside the measure the cursor moves to, as a fraction of the measure. */
+    position?: IFraction;
+
+    /** The rendered element of the target, when the move was resolved from one. */
+    element?: HTMLElement;
+}
 const formElementNames = new Set(["BUTTON", "INPUT", "SELECT", "TEXTAREA"]);
 
 /** The start of a measure as a bar fraction. */
@@ -93,6 +109,7 @@ export class SelectionView {
         requisitions.register("selectionChanged", this.handleSelectionChanged);
         requisitions.register("editModeChanged", this.handleEditModeChanged);
         requisitions.register("trackChanged", this.handleTrackChanged);
+        requisitions.register("staffWindowChanged", this.handleStaffWindowChanged);
         eventContainer.addEventListener("pointerdown", this.handlePointerDown);
         document.addEventListener("keydown", this.handleKeyDown);
         document.addEventListener("keyup", this.handleKeyUp);
@@ -105,6 +122,7 @@ export class SelectionView {
         requisitions.unregister("selectionChanged", this.handleSelectionChanged);
         requisitions.unregister("editModeChanged", this.handleEditModeChanged);
         requisitions.unregister("trackChanged", this.handleTrackChanged);
+        requisitions.unregister("staffWindowChanged", this.handleStaffWindowChanged);
 
         if (this.selectionRefreshFrame !== undefined) {
             cancelAnimationFrame(this.selectionRefreshFrame);
@@ -310,42 +328,133 @@ export class SelectionView {
             return false;
         }
 
-        const noteElement = this.findNoteElements(entry).at(0);
-        if (!noteElement) {
-            return false;
-        }
-
-        const isStaffMode = noteElement.classList.contains(staffNoteRunClass);
-        const target = isStaffMode
-            ? this.findStaffArrowTarget(noteElement, event.key)
-            : this.findArrowTarget(noteElement, event.key);
-
-        if (!target) {
-            return false;
-        }
-
-        const location = this.scoreElementRegistry?.getLocation(target);
-        if (location?.step === undefined) {
-            return false;
-        }
-
-        const noteTarget = this.noteTargetOf(target, location);
-        if (noteTarget === undefined) {
+        const move = this.arrowKeyTarget(entry, event.key);
+        if (move === undefined) {
             return false;
         }
 
         this.manager.selectSingleNote({
             granularity: SelectionGranularity.Note,
-            target: noteTarget,
+            target: move.noteTarget,
         });
 
-        // Keep the cursor visible: scroll the nearest scroll hosts so the newly selected
-        // element stays inside the viewport (horizontally across measures, vertically across tracks).
-        target.scrollIntoView({ block: "nearest", inline: "nearest" });
+        // Bring the newly selected element into view. The staff view renders only a window of measures and decides
+        // the horizontal scroll itself, from the measure the cursor moved into: scrolling the element into view
+        // horizontally would leave the previous measure filling the viewport when the element is a measure's first
+        // note. So the request comes first and the element scroll only fixes up what a position cannot describe,
+        // which is the vertical axis across tracks.
+        void requisitions.execute("measureVisibilityRequested", { bar: move.bar, position: move.position });
+        move.element?.scrollIntoView({ block: "nearest", inline: "nearest" });
 
         event.preventDefault();
 
         return true;
+    }
+
+    /**
+     * Resolves the note an arrow key moves the cursor to. A measure the staff view did not render has no element, so
+     * the move is resolved from the model in that case — the target measure may lie anywhere in the score.
+     *
+     * @param entry The single selected note.
+     * @param key The arrow key that was pressed.
+     *
+     * @returns The address to select and the measure it lies in, or undefined when the cursor cannot move.
+     */
+    private arrowKeyTarget(entry: ISelectionEntry, key: string): IArrowMove | undefined {
+        const noteElement = this.findNoteElements(entry).at(0);
+        if (noteElement === undefined) {
+            return this.arrowMoveFromModel(entry, key);
+        }
+
+        const isStaffMode = noteElement.classList.contains(staffNoteRunClass);
+        const target = isStaffMode
+            ? this.findStaffArrowTarget(noteElement, key)
+            : this.findArrowTarget(noteElement, key);
+
+        if (target === undefined) {
+            return isStaffMode ? this.arrowMoveFromModel(entry, key) : undefined;
+        }
+
+        const location = this.scoreElementRegistry?.getLocation(target);
+        if (location?.step === undefined) {
+            return undefined;
+        }
+
+        const noteTarget = this.noteTargetOf(target, location);
+        if (noteTarget === undefined) {
+            return undefined;
+        }
+
+        return { bar: location.bar, noteTarget, position: location.start, element: target };
+    }
+
+    /**
+     * Resolves an arrow-key move from the model. The steps mirror what the cursor does over rendered runs: a
+     * horizontal key moves on by one event of the measure, and only a measure's last (or first) event steps into
+     * the neighbouring measure. The measure a staff address belongs to is the only horizontal information it
+     * carries (ADR-0005), so a step beyond the measure has to be resolved from the model's measure order. Vertical
+     * moves need the rows of the measure, which only the rendering knows.
+     *
+     * @param entry The single selected note.
+     * @param key The arrow key that was pressed.
+     *
+     * @returns The address to select and the measure it lies in, or undefined when there is no such note.
+     */
+    private arrowMoveFromModel(entry: ISelectionEntry, key: string): IArrowMove | undefined {
+        if (!this.isStaffView()) {
+            return undefined;
+        }
+
+        const direction = key === "ArrowLeft" ? -1 : key === "ArrowRight" ? 1 : 0;
+        const { target } = entry;
+        if (direction === 0 || target.granularity !== SelectionGranularity.Note) {
+            return undefined;
+        }
+
+        const { measure } = target;
+        let targetMeasure = measure;
+        let event: IMeasureEvent | undefined;
+
+        // The measure's events tile it without gaps, so the neighbouring event is the next note or rest of the
+        // same measure — the step the cursor takes over rendered runs as well. The cursor's own event is found by
+        // the address itself, which is a position in the measure (ADR-0005), not by object identity alone: an undo
+        // may well have replaced the events the selection still addresses.
+        const start = target.start ?? target.event.start;
+        const index = measure.events.findIndex((candidate) => {
+            return candidate === target.event || compareFractions(candidate.start, start) === 0;
+        });
+        const stepIndex = index + direction;
+        if (index !== -1 && stepIndex >= 0 && stepIndex < measure.events.length) {
+            event = measure.events[stepIndex];
+        } else {
+            const bar = measure.number + direction;
+            if (bar < 1 || bar > measure.track.measures.length) {
+                return undefined;
+            }
+
+            targetMeasure = measure.track.measures[bar - 1];
+            event = direction > 0 ? targetMeasure.events.at(0) : targetMeasure.events.at(-1);
+        }
+
+        if (event === undefined) {
+            return undefined;
+        }
+
+        return {
+            bar: targetMeasure.number,
+            noteTarget: {
+                granularity: SelectionGranularity.Note,
+                measure: targetMeasure,
+                event,
+                start: event.start,
+            },
+            position: event.start,
+        };
+    }
+
+    /** @returns True when the viewer currently renders the staff view. */
+    private isStaffView(): boolean {
+        return this.eventContainer.querySelector(".staff-measure-viewer") !== null;
     }
 
     private findStaffArrowTarget(noteElement: HTMLElement, key: string): HTMLElement | undefined {
@@ -674,6 +783,19 @@ export class SelectionView {
     }
 
     private handleSelectionChanged = (_delta: ISelectionDelta): Promise<boolean> => {
+        this.updateTrackViewerOverlays();
+
+        return Promise.resolve(true);
+    };
+
+    /**
+     * The staff view renders a window of measures, so measures arrive and leave while scrolling. Their
+     * decoration is redone in the same task in which they were mounted, which is what keeps the overlay from
+     * trailing behind the measures.
+     *
+     * @returns A promise that resolves when the decoration was redrawn.
+     */
+    private handleStaffWindowChanged = (): Promise<boolean> => {
         this.updateTrackViewerOverlays();
 
         return Promise.resolve(true);

@@ -900,6 +900,9 @@
     align-items: center;
     gap: 4px;
     pointer-events: none;
+
+    /* `left` is the center of the bar column, so the group has to center itself on it. */
+    transform: translateX(-50%);
 }
 
 .bar-action-button {
@@ -1001,6 +1004,12 @@
 .polyrhythm-viewer .polyrhythm-notes-wrapper {
     display: flex;
     width: 100%;
+}
+
+/* Keeps the scrollable width of the staff view stable while only a window of measures is rendered. */
+.staff-measure-spacer {
+    flex: 0 0 auto;
+    position: relative;
 }
 
 /* StaffMeasureViewer: one column per measure, laid out horizontally */

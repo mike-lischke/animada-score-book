@@ -583,6 +583,12 @@ export interface ISbDmArrangement extends ISbDmCommon {
     /** Per-measure section labels, keyed by 1-based measure number. */
     measureLabels: Record<number, string>;
 
+    /**
+     * Column widths set for individual measures, keyed by 1-based measure number, in px at 100% zoom.
+     * In-memory only: a measure without an entry is laid out with the default width of the view.
+     */
+    measureWidths?: Map<number, number>;
+
     /** The main playback and record volume of the arrangement (0-100%). */
     mainVolume: number;
 

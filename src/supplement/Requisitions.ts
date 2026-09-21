@@ -5,6 +5,7 @@
 
 import type { IUISettings } from "../core/AppStorage.js";
 import type { INoteValue } from "../core/rest-notation.js";
+import type { IFraction } from "../core/types/general.js";
 import type { Articulation } from "../core/articulation.js";
 import type { ISbDmScore, ISbDmScoreFolder, ISbDmTrack, ScoreBookChangeReason } from "../core/ScoreBookDataModel.js";
 import type { PlayerPlayState } from "../player/ArrangementPlayer.js";
@@ -21,6 +22,15 @@ export interface ISubdivisionCreationRequest {
     normal: number;
 }
 
+/** Payload for a request to bring a measure into view. */
+export interface IMeasureVisibilityRequest {
+    /** 1-based measure number to show. */
+    bar: number;
+
+    /** Position inside the measure that has to be visible, as a fraction of the measure. */
+    position?: IFraction;
+}
+
 /** A generic type to extract the (single) callback parameter type from the callback map. */
 export type IRequisitionCallbackValues<K extends keyof IRequestTypeMap> = Parameters<IRequestTypeMap[K]>[0];
 
@@ -28,6 +38,9 @@ export type IRequisitionCallbackValues<K extends keyof IRequestTypeMap> = Parame
 export interface IRequestTypeMap {
     "settingsChanged": (settings: IUISettings) => Promise<boolean>;
     "trackViewModeToggled": (mode: "grid" | "staff") => Promise<boolean>;
+
+    /** The set of measures the staff view renders changed, so decoration of rendered measures has to be redone. */
+    "staffWindowChanged": SimpleCallback;
 
     "playRangeChanged": (range?: { from: number; to: number; }) => Promise<boolean>;
     "animationStateChanged": (state: PlayerPlayState) => Promise<boolean>;
@@ -45,6 +58,9 @@ export interface IRequestTypeMap {
 
     "selectionChanged": (delta: ISelectionDelta) => Promise<boolean>;
     "selectionDeleteRequested": SimpleCallback;
+
+    /** Brings the given measure into the viewport, even when it is not rendered at the moment. */
+    "measureVisibilityRequested": (request: IMeasureVisibilityRequest) => Promise<boolean>;
     "selectionRectChanged": (data: ISelectionRectChange) => Promise<boolean>;
     "errorLogChanged": SimpleCallback;
 

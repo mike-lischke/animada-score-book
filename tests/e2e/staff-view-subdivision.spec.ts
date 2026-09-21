@@ -6,7 +6,7 @@
 import { expect, test } from "@playwright/test";
 
 import { stringifyPackedArrangement } from "../../src/core/serialisation/snapshot-packing.js";
-import { routeApi } from "./e2e-test-helpers.js";
+import { findStaffMeasure, routeApi } from "./e2e-test-helpers.js";
 
 test.beforeEach(async ({ page }) => {
     await routeApi(page);
@@ -26,14 +26,15 @@ test.describe("Staff view subdivision rendering", () => {
 
         await expect(page.locator(".staff-measure-track-row").first()).toBeVisible();
 
-        const barResults = await page.evaluate(() => {
-            const inspectBar = (barNumber: number) => {
-                const viewer = document.querySelectorAll(".staff-measure-viewer")[barNumber - 1];
+        const inspectBar = async (barNumber: number) => {
+            const measure = await findStaffMeasure(page, barNumber);
+
+            return measure.evaluate((viewer) => {
                 const runs = Array.from(viewer.querySelectorAll(
                     ".staff-measure-track-row .staff-note-viewer-runs > .staff-note-viewer-run",
                 ));
 
-                return runs.map((run, index) => {
+                return runs.map((run) => {
                     const noteSymbol = run.querySelector<SVGElement>(".staff-note-viewer-note-symbol");
                     const restSymbol = run.querySelector<HTMLElement>(".staff-note-viewer-rest-symbol");
 
@@ -42,22 +43,20 @@ test.describe("Staff view subdivision rendering", () => {
                         hasRest: restSymbol !== null,
                     };
                 });
-            };
+            });
+        };
 
-            return {
-                bar2: inspectBar(2),
-                bar4: inspectBar(4),
-            };
-        });
+        const bar2 = await inspectBar(2);
+        const bar4 = await inspectBar(4);
 
-        expect(barResults.bar2.length).toBeGreaterThan(0);
-        expect(barResults.bar4.length).toBeGreaterThan(0);
+        expect(bar2.length).toBeGreaterThan(0);
+        expect(bar4.length).toBeGreaterThan(0);
         // Bar 2 (with 6:8 subdivision) must render notes.
-        expect(barResults.bar2.some((run) => {
+        expect(bar2.some((run) => {
             return run.noteValue !== null;
         })).toBeTruthy();
         // Bar 4: just verify it renders at least something.
-        expect(barResults.bar4.some((run) => {
+        expect(bar4.some((run) => {
             return run.noteValue !== null || run.hasRest;
         })).toBeTruthy();
     });

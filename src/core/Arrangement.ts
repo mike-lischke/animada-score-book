@@ -36,6 +36,9 @@ export class Arrangement implements ISbDmArrangement {
     /** Per-measure section labels, keyed by 1-based measure number. */
     public measureLabels: Record<number, string> = {};
 
+    /** Column widths of individual measures, keyed by 1-based measure number. Not part of a snapshot yet. */
+    public readonly measureWidths = new Map<number, number>();
+
     public mainVolume = 100;
     public loop = false;
     public useMetronome = false;

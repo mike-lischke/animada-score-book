@@ -358,7 +358,7 @@ export class StaffMeasureViewer extends UIComponent<IStaffMeasureViewerProps, IS
 
     public override render(): ComponentChild {
         const { barNumber, arrangement, arrangementPlayer, inEditMode,
-            dataModel, ownLabel, inheritedLabel, scoreElementRegistry } = this.props;
+            dataModel, ownLabel, inheritedLabel, scoreElementRegistry, style } = this.props;
         const { tracks } = this.state;
         const label = ownLabel ?? inheritedLabel;
         const isInherited = ownLabel === undefined && inheritedLabel !== undefined;
@@ -370,6 +370,7 @@ export class StaffMeasureViewer extends UIComponent<IStaffMeasureViewerProps, IS
         return (
             <div
                 className="staff-measure-viewer"
+                style={style}
                 ref={scoreElementRegistry?.createRef({
                     kind: ScoreElementKind.BarContainer,
                     bar: barNumber,

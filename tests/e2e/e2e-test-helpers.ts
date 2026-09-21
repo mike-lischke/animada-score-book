@@ -3,10 +3,52 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import { expect, type Page } from "@playwright/test";
+import { expect, type Locator, type Page } from "@playwright/test";
 
 const normalizeWhitespace = (value: string): string => {
     return value.trim().replace(/\s+/g, " ");
+};
+
+/**
+ * Scrolls the staff viewer until the given measure is rendered. The staff view renders only the measures around
+ * the viewport, so a test that inspects a measure has to bring it into that window first.
+ *
+ * @param page The page under test.
+ * @param barNumber The 1-based measure number that has to be rendered.
+ */
+export const ensureStaffBarRendered = async (page: Page, barNumber: number): Promise<void> => {
+    await expect.poll(async () => {
+        return page.evaluate((bar) => {
+            const host = document.querySelector<HTMLElement>("#trackViewerHost");
+            const viewers = Array.from(document.querySelectorAll<HTMLElement>(".staff-measure-viewer"));
+            const rendered = viewers.some((viewer) => {
+                return viewer.querySelector(".staff-measure-number")?.textContent === String(bar);
+            });
+            if (rendered || !host || viewers.length === 0) {
+                return rendered;
+            }
+
+            // Measure columns share their width, so the offset of an unknown measure follows from a rendered one.
+            const first = Number(viewers[0].querySelector(".staff-measure-number")?.textContent ?? "0");
+            host.scrollLeft = viewers[0].offsetLeft + ((bar - first) * viewers[0].offsetWidth);
+
+            return false;
+        }, barNumber);
+    }, { message: `measure ${barNumber} should be rendered in the staff view` }).toBe(true);
+};
+
+/**
+ * @param page The page under test.
+ * @param barNumber The 1-based measure number to locate.
+ *
+ * @returns The rendered staff measure of the given measure number.
+ */
+export const findStaffMeasure = async (page: Page, barNumber: number): Promise<Locator> => {
+    await ensureStaffBarRendered(page, barNumber);
+
+    return page.locator(".staff-measure-viewer").filter({
+        has: page.locator(".staff-measure-number", { hasText: new RegExp(`^${barNumber}$`) }),
+    }).first();
 };
 
 export const beijaFlorTitle = "Beija Flor 2004  -  Bossa 1 (H-Break)";
