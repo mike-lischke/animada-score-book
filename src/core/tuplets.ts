@@ -8,6 +8,12 @@ import type { IMeterSnapshot } from "./types/general.js";
 import { primeFactors } from "./utils.js";
 
 /**
+ * The number of tuplets that may enclose each other. The staff draws one bracket above the notes and
+ * one below them, so a third level would have nowhere to go.
+ */
+export const maxTupletLevels = 2;
+
+/**
  * Resolves the natural subdivision basis of a meter. Binary meters use {2}, ternary meters use
  * {3}, and irregular meters have an empty basis.
  *

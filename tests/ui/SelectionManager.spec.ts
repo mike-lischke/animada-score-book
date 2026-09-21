@@ -14,7 +14,7 @@ import type { IFraction, Mutable } from "../../src/core/types/general.js";
 import { requisitions } from "../../src/supplement/Requisitions.js";
 import { SelectionManager } from "../../src/ui/SelectionManager.js";
 import {
-    SelectionGranularity, type ISelectionDelta, type ISelectionEntry
+    SelectionGranularity, SelectionMode, type ISelectionDelta, type ISelectionEntry
 } from "../../src/ui/SelectionSerializer.js";
 
 const makeArrangement = (tracks: ISbDmTrack[]): ISbDmArrangement => {
@@ -221,6 +221,90 @@ describe.sequential("SelectionManager (class)", () => {
 
         expect(manager.currentSelection.size).toBe(3);
         expect([...manager.currentSelection.values()]).toEqual(entries);
+    });
+});
+
+describe.sequential("SelectionManager note groups", () => {
+    /**
+     * Builds a measure holding five sixteenths, which is what the group fixtures address.
+     *
+     * @returns The measure to build groups in.
+     */
+    const makeGroupMeasure = (): ISbDmTrackMeasure => {
+        return {
+            id: 1,
+            type: SbDmEntityType.TrackMeasure,
+            track: { id: 9, measures: [] } as unknown as ISbDmTrack,
+            number: 1,
+            meter: { beats: 4, beatUnits: 4, stepResolution: 16, beatGroups: [4, 4, 4, 4] },
+            events: [0, 1, 2, 3, 4].map((index) => {
+                return {
+                    start: { numerator: index, denominator: 16 },
+                    duration: { numerator: 1, denominator: 16 },
+                };
+            }),
+            subdivisions: [],
+            noteEvents: [],
+        } as unknown as ISbDmTrackMeasure;
+    };
+
+    it("replaces a narrower group when the group covering it is picked", () => {
+        const measure = makeGroupMeasure();
+        const beamGroup: ISelectionEntry = {
+            granularity: SelectionGranularity.NoteGroup,
+            target: {
+                granularity: SelectionGranularity.NoteGroup,
+                measure,
+                events: measure.events.slice(0, 3),
+            },
+        };
+        const tupletGroup: ISelectionEntry = {
+            granularity: SelectionGranularity.NoteGroup,
+            target: { granularity: SelectionGranularity.NoteGroup, measure, events: [...measure.events] },
+        };
+
+        const removed: ISelectionEntry[] = [];
+        const spy = (delta: ISelectionDelta): Promise<boolean> => {
+            removed.push(...delta.removed);
+
+            return Promise.resolve(true);
+        };
+
+        const manager = new SelectionManager();
+        requisitions.register("selectionChanged", spy);
+
+        manager.selectNotes([beamGroup]);
+        manager.selectionMode = SelectionMode.Add;
+        manager.selectNotes([tupletGroup]);
+        requisitions.unregister("selectionChanged", spy);
+
+        // Both groups cover the same events in part, so the one picked last is the one that counts.
+        expect([...manager.currentSelection.values()]).toEqual([tupletGroup]);
+        expect(removed).toEqual([beamGroup]);
+    });
+
+    it("replaces the covering group when a narrower group is picked", () => {
+        const measure = makeGroupMeasure();
+        const beamGroup: ISelectionEntry = {
+            granularity: SelectionGranularity.NoteGroup,
+            target: {
+                granularity: SelectionGranularity.NoteGroup,
+                measure,
+                events: measure.events.slice(0, 3),
+            },
+        };
+        const tupletGroup: ISelectionEntry = {
+            granularity: SelectionGranularity.NoteGroup,
+            target: { granularity: SelectionGranularity.NoteGroup, measure, events: [...measure.events] },
+        };
+
+        const manager = new SelectionManager();
+
+        manager.selectNotes([tupletGroup]);
+        manager.selectionMode = SelectionMode.Add;
+        manager.selectNotes([beamGroup]);
+
+        expect([...manager.currentSelection.values()]).toEqual([beamGroup]);
     });
 });
 

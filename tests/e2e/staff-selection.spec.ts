@@ -3,11 +3,56 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import { expect, test } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 
+import { stringifyPackedArrangement } from "../../src/core/serialisation/snapshot-packing.js";
 import { routeApi } from "./e2e-test-helpers.js";
 
 const bolero3Url = "/?t=Bolero%203&a2=6-8.50.1.3-8.8.319ihbrp-4UX1WbY5oS";
+
+/**
+ * Clicks the centre of an element. Beams and tuplet markers are drawn with `pointer-events: none`,
+ * so they can only be hit by coordinate.
+ *
+ * @param page The page to click in.
+ * @param locator The element to click.
+ */
+const clickCenter = async (page: Page, locator: Locator): Promise<void> => {
+    const box = await locator.boundingBox();
+    if (!box) {
+        throw new Error("Element has no bounding box.");
+    }
+
+    await page.mouse.click(box.x + (box.width / 2), box.y + (box.height / 2));
+};
+
+/**
+ * Counts the noteheads the selection overlays cover.
+ *
+ * @param page The page to inspect.
+ *
+ * @returns The number of covered noteheads.
+ */
+const selectedNoteCount = async (page: Page): Promise<number> => {
+    return page.evaluate(() => {
+        const overlays = [...document.querySelectorAll<HTMLElement>(".selection-overlay")].map((element) => {
+            return element.getBoundingClientRect();
+        });
+        const noteheads = [...document.querySelectorAll<HTMLElement>(
+            ".staff-note-viewer-note-run .note-image",
+        )].map((element) => {
+            return element.getBoundingClientRect();
+        });
+
+        return noteheads.filter((notehead) => {
+            const center = notehead.left + (notehead.width / 2);
+
+            return overlays.some((overlay) => {
+                return overlay.left <= center && center <= overlay.right;
+            });
+        }).length;
+    });
+};
 
 test.beforeEach(async ({ page }) => {
     await routeApi(page);
@@ -137,6 +182,220 @@ test.describe("Staff view selection", () => {
         // A selection overlay should appear.
         const overlay = page.locator(".selection-overlay").first();
         await expect(overlay).toBeVisible();
+
+        // The click means the whole tuplet, so the overlays together span its slots and not just the
+        // one run that happens to sit under the cursor.
+        const overlayWidth = await page.evaluate(() => {
+            return [...document.querySelectorAll<HTMLElement>(".selection-overlay")]
+                .reduce((total, element) => {
+                    return total + element.getBoundingClientRect().width;
+                }, 0);
+        });
+        const runWidth = await page.evaluate(() => {
+            return document.querySelector<HTMLElement>(".staff-note-viewer-run")?.getBoundingClientRect().width ?? 0;
+        });
+
+        expect(overlayWidth).toBeGreaterThan(runWidth * 1.5);
+    });
+
+    test("clicking a beam group whose notes start off the grid selects the whole group", async ({ page }) => {
+        // A 32nd rest opens the bar, so every following note starts between two grid steps. The old
+        // step-based group search dropped such notes and left the row without a group at all.
+        const snapshot = {
+            version: 4,
+            title: "E2E Off-Grid Beam Group",
+            timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4", stepResolution: 16 },
+            tracks: [{
+                id: 200,
+                instrumentId: "0",
+                measures: [{
+                    number: 1,
+                    meter: { beats: 4, beatUnits: 4, stepResolution: 16, beatGroups: [4, 4, 4, 4] },
+                    events: [
+                        { start: { numerator: 0, denominator: 1 }, duration: { numerator: 1, denominator: 32 } },
+                        ...[0, 1, 2, 3].map((index) => {
+                            return {
+                                start: { numerator: 1 + (index * 2), denominator: 32 },
+                                duration: { numerator: 1, denominator: 16 },
+                                noteStyleId: "1",
+                            };
+                        }),
+                        { start: { numerator: 9, denominator: 32 }, duration: { numerator: 23, denominator: 32 } },
+                    ],
+                    subdivisions: [],
+                }],
+            }],
+        };
+
+        await page.addInitScript((packed: string) => {
+            const sessionId = "e2e-off-grid-beam";
+            window.history.replaceState({ ...(window.history.state ?? {}), sessionId }, "");
+            window.sessionStorage.setItem("asb-session-id", sessionId);
+            window.localStorage.setItem(`asb-ui-settings-session-${sessionId}`, JSON.stringify({
+                currentScore: packed,
+                viewSettings: { arrangementViewSettings: { displayMode: "staff" } },
+            }));
+        }, stringifyPackedArrangement(snapshot));
+        await page.goto("/");
+        await expect(page.locator(".staff-measure-track-row").first()).toBeVisible();
+
+        const beam = page.locator(".staff-note-viewer-beam").first();
+        await expect(beam).toBeVisible();
+
+        const box = await beam.boundingBox();
+        if (!box) {
+            test.fail(true, "Could not get beam bounding box");
+
+            return;
+        }
+
+        await page.mouse.click(box.x + (box.width / 2), box.y + (box.height / 2));
+
+        // The beam connects four sixteenths, so the selection spans all four runs and not just the one
+        // whose segment was clicked.
+        const overlayWidth = await page.evaluate(() => {
+            return [...document.querySelectorAll<HTMLElement>(".selection-overlay")]
+                .reduce((total, element) => {
+                    return total + element.getBoundingClientRect().width;
+                }, 0);
+        });
+        const runWidth = await page.evaluate(() => {
+            return document.querySelector<HTMLElement>(".staff-note-viewer-run")?.getBoundingClientRect().width ?? 0;
+        });
+
+        expect(overlayWidth).toBeGreaterThan(runWidth * 2);
+    });
+
+    test("clicking a nested tuplet's marker selects the tuplet the marker belongs to", async ({ page }) => {
+        // A triplet over a quarter whose first slot holds another triplet. The inner marker is drawn
+        // below the notes and the outer one above, so a click addresses the tuplet whose marker sits
+        // under the cursor instead of the row as a whole.
+        const innerSlot = { numerator: 1, denominator: 36 };
+        const outerSlot = { numerator: 1, denominator: 12 };
+        const snapshot = {
+            version: 4,
+            title: "E2E Nested Tuplets",
+            timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4", stepResolution: 16 },
+            tracks: [{
+                id: 300,
+                instrumentId: "0",
+                measures: [{
+                    number: 1,
+                    meter: { beats: 4, beatUnits: 4, stepResolution: 16, beatGroups: [4, 4, 4, 4] },
+                    events: [
+                        { start: { numerator: 0, denominator: 1 }, duration: innerSlot, noteStyleId: "1" },
+                        { start: { numerator: 1, denominator: 36 }, duration: innerSlot, noteStyleId: "1" },
+                        { start: { numerator: 2, denominator: 36 }, duration: innerSlot, noteStyleId: "1" },
+                        { start: { numerator: 1, denominator: 12 }, duration: outerSlot, noteStyleId: "1" },
+                        { start: { numerator: 1, denominator: 9 }, duration: outerSlot, noteStyleId: "1" },
+                        { start: { numerator: 1, denominator: 4 }, duration: { numerator: 3, denominator: 4 } },
+                    ],
+                    subdivisions: [
+                        { startIndex: 0, actual: 3, normal: 4, isTuplet: true },
+                        { startIndex: 0, actual: 3, normal: 1, isTuplet: true },
+                    ],
+                }],
+            }],
+        };
+
+        await page.addInitScript((packed: string) => {
+            const sessionId = "e2e-nested-tuplets";
+            window.history.replaceState({ ...(window.history.state ?? {}), sessionId }, "");
+            window.sessionStorage.setItem("asb-session-id", sessionId);
+            window.localStorage.setItem(`asb-ui-settings-session-${sessionId}`, JSON.stringify({
+                currentScore: packed,
+                viewSettings: { arrangementViewSettings: { displayMode: "staff" } },
+            }));
+        }, stringifyPackedArrangement(snapshot));
+        await page.goto("/");
+        await expect(page.locator(".staff-measure-track-row").first()).toBeVisible();
+
+        const innerNumber = page.locator(".staff-note-viewer-tuplet-below .staff-note-viewer-tuplet-text").first();
+        await expect(innerNumber).toBeVisible();
+
+        // The digit sits below the notes, where it cannot collide with a notehead.
+        await clickCenter(page, innerNumber);
+
+        // Selects the inner triplet (three slots) and neither the row as a whole nor the outer tuplet
+        // with its five events.
+        expect(await selectedNoteCount(page)).toBe(3);
+    });
+
+    test("dragging a rect across group markers selects the notes of those groups", async ({ page }) => {
+        // Two beamed groups of four sixteenths, separated by quarter rests.
+        const sixteenth = { numerator: 1, denominator: 16 };
+        const snapshot = {
+            version: 4,
+            title: "E2E Two Beam Groups",
+            timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4", stepResolution: 16 },
+            tracks: [{
+                id: 400,
+                instrumentId: "0",
+                measures: [{
+                    number: 1,
+                    meter: { beats: 4, beatUnits: 4, stepResolution: 16, beatGroups: [4, 4, 4, 4] },
+                    events: [
+                        ...[0, 1, 2, 3].map((step) => {
+                            return {
+                                start: { numerator: step, denominator: 16 },
+                                duration: sixteenth,
+                                noteStyleId: "1",
+                            };
+                        }),
+                        { start: { numerator: 4, denominator: 16 }, duration: { numerator: 1, denominator: 4 } },
+                        ...[8, 9, 10, 11].map((step) => {
+                            return {
+                                start: { numerator: step, denominator: 16 },
+                                duration: sixteenth,
+                                noteStyleId: "1",
+                            };
+                        }),
+                        { start: { numerator: 12, denominator: 16 }, duration: { numerator: 1, denominator: 4 } },
+                    ],
+                    subdivisions: [],
+                }],
+            }],
+        };
+
+        await page.addInitScript((packed: string) => {
+            const sessionId = "e2e-two-beam-groups";
+            window.history.replaceState({ ...(window.history.state ?? {}), sessionId }, "");
+            window.sessionStorage.setItem("asb-session-id", sessionId);
+            window.localStorage.setItem(`asb-ui-settings-session-${sessionId}`, JSON.stringify({
+                currentScore: packed,
+                viewSettings: { arrangementViewSettings: { displayMode: "staff" } },
+            }));
+        }, stringifyPackedArrangement(snapshot));
+        await page.goto("/");
+        await expect(page.locator(".staff-measure-track-row").first()).toBeVisible();
+
+        // Drag through the beam band alone: it lies above the noteheads and above the part of a stem
+        // a click addresses, so the rectangle meets markers and no notes.
+        const band = await page.evaluate(() => {
+            const beams = [...document.querySelectorAll<HTMLElement>(".staff-note-viewer-beam")];
+            const first = beams[0].getBoundingClientRect();
+            const last = beams[beams.length - 1].getBoundingClientRect();
+            let top = first.top;
+            let bottom = first.bottom;
+
+            for (const element of beams) {
+                const rect = element.getBoundingClientRect();
+                top = Math.min(top, rect.top);
+                bottom = Math.max(bottom, rect.bottom);
+            }
+
+            return { left: first.left, top: top + 1, right: last.right, bottom: bottom - 1 };
+        });
+
+        await page.mouse.move(band.left, band.top);
+        await page.mouse.down();
+        await page.mouse.move(band.right, band.bottom, { steps: 10 });
+        await page.mouse.up();
+
+        // The rectangle addresses two groups of the track, which is an area selection, so it resolves
+        // at note granularity: the eight notes are selected and no group overlay is painted.
+        await expect(page.locator(".staff-note-viewer-run.note-selected")).toHaveCount(8);
+        await expect(page.locator(".selection-overlay")).toHaveCount(0);
     });
 
     test("dragging a selection rect across notes selects them individually", async ({ page }) => {

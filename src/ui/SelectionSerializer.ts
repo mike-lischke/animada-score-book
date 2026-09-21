@@ -404,6 +404,36 @@ export class SelectionSerializer {
     }
 
     /**
+     * Returns the innermost subdivision that covers a position inside a measure.
+     *
+     * @param measure The measure to scan.
+     * @param start The position as a fraction of the measure.
+     *
+     * @returns The covering subdivision, or undefined when the position is not subdivided.
+     */
+    public static subdivisionAt(measure: ISbDmTrackMeasure, start: IFraction): ISubdivision | undefined {
+        let found: ISubdivision | undefined;
+        let foundStart: IFraction | undefined;
+
+        for (const subdivision of measure.subdivisions) {
+            const first = measure.events.at(subdivision.startIndex);
+            const last = measure.events.at(subdivision.startIndex + subdivision.actual - 1);
+            if (first === undefined || last === undefined) {
+                continue;
+            }
+
+            const end = addFractions(last.start, last.duration);
+            const covers = compareFractions(first.start, start) <= 0 && compareFractions(start, end) < 0;
+            if (covers && (foundStart === undefined || compareFractions(first.start, foundStart) > 0)) {
+                found = subdivision;
+                foundStart = first.start;
+            }
+        }
+
+        return found;
+    }
+
+    /**
      * Resolves the model objects an entry addresses.
      *
      * @param arrangement The arrangement the entry refers to.
@@ -528,35 +558,5 @@ export class SelectionSerializer {
 
             return compareFractions(startEvent.start, event.start) === 0;
         });
-    }
-
-    /**
-     * Returns the innermost subdivision that covers a position inside a measure.
-     *
-     * @param measure The measure to scan.
-     * @param start The position as a fraction of the measure.
-     *
-     * @returns The covering subdivision, or undefined when the position is not subdivided.
-     */
-    private static subdivisionAt(measure: ISbDmTrackMeasure, start: IFraction): ISubdivision | undefined {
-        let found: ISubdivision | undefined;
-        let foundStart: IFraction | undefined;
-
-        for (const subdivision of measure.subdivisions) {
-            const first = measure.events.at(subdivision.startIndex);
-            const last = measure.events.at(subdivision.startIndex + subdivision.actual - 1);
-            if (first === undefined || last === undefined) {
-                continue;
-            }
-
-            const end = addFractions(last.start, last.duration);
-            const covers = compareFractions(first.start, start) <= 0 && compareFractions(start, end) < 0;
-            if (covers && (foundStart === undefined || compareFractions(first.start, foundStart) > 0)) {
-                found = subdivision;
-                foundStart = first.start;
-            }
-        }
-
-        return found;
     }
 }

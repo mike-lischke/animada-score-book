@@ -12,6 +12,7 @@ import { SelectionGranularity, type ISelectionTarget } from "./SelectionSerializ
 export enum ScoreElementKind {
     GridCell,
     StaffRun,
+    StaffTupletLabel,
     BarContainer,
     TrackRow,
 }

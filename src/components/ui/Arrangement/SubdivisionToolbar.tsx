@@ -5,10 +5,12 @@
 
 import type { ComponentChild } from "preact";
 
+import { MeasureProjection } from "../../../core/MeasureProjection.js";
 import { NoteLength, noteLengthDenominator } from "../../../core/rest-notation.js";
 import { addFractions, compareFractions, subtractFractions } from "../../../core/serialisation/numeric-functions.js";
 import type { IFraction } from "../../../core/types/general.js";
 import { requisitions } from "../../../supplement/Requisitions.js";
+import { maxTupletLevels } from "../../../core/tuplets.js";
 import type { SelectionManager } from "../../../ui/SelectionManager.js";
 import {
     addressesNoteCells, SelectionGranularity, SelectionSerializer, type INoteCellTarget, type ISelectionEntry,
@@ -230,7 +232,51 @@ export class SubdivisionToolbar extends UIComponent<ISubdivisionToolbarProps, IS
             canCreate = this.isSingleTrackNoteSelection(entries);
         }
 
+        if (canCreate) {
+            canCreate = this.shareTupletLevel(entries);
+        }
+
         this.setState({ canCreate, maxSlots: this.getMaxSlots(entries) });
+    }
+
+    /**
+     * Checks whether the selection holds notes that share their tuplet level and whether one more
+     * tuplet fits around them. A note that already sits inside the second level cannot take a third
+     * one, because the staff has no room left for another bracket.
+     *
+     * @param entries The selection entries to inspect.
+     *
+     * @returns True when every addressed event shares a level that can take another tuplet.
+     */
+    private shareTupletLevel(entries: ISelectionEntry[]): boolean {
+        let level: number | undefined;
+
+        for (const entry of entries) {
+            const { target } = entry;
+            if (!addressesNoteCells(target)) {
+                continue;
+            }
+
+            const events = target.granularity === SelectionGranularity.Note ? [target.event] : target.events;
+
+            for (const event of events) {
+                const index = target.measure.events.findIndex((candidate) => {
+                    return compareFractions(candidate.start, event.start) === 0;
+                });
+                if (index < 0) {
+                    return false;
+                }
+
+                const depth = MeasureProjection.tupletDepthOf(target.measure, index);
+                if (level === undefined) {
+                    level = depth;
+                } else if (level !== depth) {
+                    return false;
+                }
+            }
+        }
+
+        return level !== undefined && level < maxTupletLevels;
     }
 
     private handleCreate(option: ISubdivisionOption): void {

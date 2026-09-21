@@ -14,7 +14,7 @@ import {
 } from "./serialisation/numeric-functions.js";
 import { stringifyPackedArrangement } from "./serialisation/snapshot-packing.js";
 import { decomposeRestSpan } from "./rest-notation.js";
-import { computeIsTuplet } from "./tuplets.js";
+import { computeIsTuplet, maxTupletLevels } from "./tuplets.js";
 
 import { requisitions } from "../supplement/Requisitions.js";
 import type { IScoreDBEntry, ISoundLibFsNode } from "./DatabaseTypes.js";
@@ -1481,6 +1481,14 @@ export class ScoreBookDataModel {
 
         const span = subtractFractions(end, start);
         if (span.numerator <= 0) {
+            return false;
+        }
+
+        // A tuplet needs a bracket above and one below its notes, so the second level is the limit.
+        const firstIndex = measure.events.findIndex((event) => {
+            return compareFractions(event.start, start) === 0;
+        });
+        if (firstIndex >= 0 && MeasureProjection.tupletDepthOf(measure, firstIndex) >= maxTupletLevels) {
             return false;
         }
 

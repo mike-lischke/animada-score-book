@@ -25,3 +25,4 @@ hard to infer from code alone.
 | ADR-0005 | accepted | Give the grid view and the staff view their own measure editor | measure editing, note entry, note length change, delete and style changes, cursor movement, editor boundaries, grid vs. staff behaviour |
 | ADR-0006 | accepted | Address notes by fractions and render sub-step notes as a synthetic grid subdivision | note entry, note length change, subdivisions, note addressing, grid vs. staff behaviour, step resolution |
 | ADR-0007 | proposed | Treat a subdivision as one atomic block on the track timeline | note length change, dotting, subdivisions, track ripple, space making, note addressing |
+| ADR-0008 | accepted | Derive the note groups of a measure from its composition | score rendering, selection, hit testing, beams, tuplets, subdivisions, staff view |

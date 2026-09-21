@@ -8,8 +8,8 @@ import {
     ScoreBookChangeReason, type ISbDmTrackMeasure, type ScoreBookDataModel,
 } from "../core/ScoreBookDataModel.js";
 import { modelEventAt } from "../core/MeasureProjection.js";
-import { compareFractions, formatFraction } from "../core/serialisation/numeric-functions.js";
-import type { IFraction } from "../core/types/general.js";
+import { addFractions, compareFractions, formatFraction } from "../core/serialisation/numeric-functions.js";
+import type { IFraction, IMeasureEvent } from "../core/types/general.js";
 import type { PlayerPlayState } from "../player/ArrangementPlayer.js";
 import { requisitions } from "../supplement/Requisitions.js";
 import {
@@ -18,6 +18,19 @@ import {
 } from "./SelectionSerializer.js";
 import type { ScoreElementRegistry } from "./ScoreElementRegistry.js";
 import { SelectionView } from "./SelectionView.js";
+
+/**
+ * Returns the end of a list of measure events, which is the end of its last event.
+ *
+ * @param events The events to measure.
+ *
+ * @returns The end of the events' span.
+ */
+const endOfEvents = (events: IMeasureEvent[]): IFraction => {
+    const last = events[events.length - 1];
+
+    return addFractions(last.start, last.duration);
+};
 
 /**
  * Manages selections across tracks and publishes selection changes.
@@ -426,8 +439,7 @@ export class SelectionManager {
                 this.currentSelection.delete(key);
                 removed.push(entry);
             } else {
-                this.currentSelection.set(key, entry);
-                added.push(entry);
+                this.addEntry(entry, added, removed);
             }
         };
 
@@ -442,10 +454,8 @@ export class SelectionManager {
 
             case SelectionMode.Add: {
                 for (const entry of incoming) {
-                    const key = this.entryKey(entry);
-                    if (!this.currentSelection.has(key)) {
-                        this.currentSelection.set(key, entry);
-                        added.push(entry);
+                    if (!this.currentSelection.has(this.entryKey(entry))) {
+                        this.addEntry(entry, added, removed);
                     }
                 }
 
@@ -464,6 +474,57 @@ export class SelectionManager {
         }
 
         this.schedulePersist();
+    }
+
+    /**
+     * Adds an entry that is not selected yet. A note group replaces the selected group it covers or
+     * is covered by, so a selection never holds a group together with a nesting one.
+     *
+     * @param entry The entry to add.
+     * @param added Collects the entries that enter the selection.
+     * @param removed Collects the entries that leave the selection.
+     */
+    private addEntry(entry: ISelectionEntry, added: ISelectionEntry[], removed: ISelectionEntry[]): void {
+        this.dropNestingGroups(entry, removed);
+        this.currentSelection.set(this.entryKey(entry), entry);
+        added.push(entry);
+    }
+
+    /**
+     * Removes the selected note groups that nest with an entry about to be applied. Groups of one
+     * track overlap only when one covers the other, and the group a user picks is the group they
+     * mean, so picking a group replaces the group it covers or is covered by.
+     *
+     * @param incoming The entry that is about to be applied.
+     * @param removed Collects the entries that leave the selection.
+     */
+    private dropNestingGroups(incoming: ISelectionEntry, removed: ISelectionEntry[]): void {
+        const { target } = incoming;
+        if (target.granularity !== SelectionGranularity.NoteGroup) {
+            return;
+        }
+
+        const incomingStart = target.events[0].start;
+        const incomingEnd = endOfEvents(target.events);
+
+        for (const [key, entry] of [...this.currentSelection]) {
+            const other = entry.target;
+            if (other.granularity !== SelectionGranularity.NoteGroup || other.measure !== target.measure) {
+                continue;
+            }
+
+            const otherStart = other.events[0].start;
+            const otherEnd = endOfEvents(other.events);
+            const incomingCovers = compareFractions(incomingStart, otherStart) <= 0
+                && compareFractions(otherEnd, incomingEnd) <= 0;
+            const otherCovers = compareFractions(otherStart, incomingStart) <= 0
+                && compareFractions(incomingEnd, otherEnd) <= 0;
+
+            if (incomingCovers || otherCovers) {
+                this.currentSelection.delete(key);
+                removed.push(entry);
+            }
+        }
     }
 
     /**
@@ -513,8 +574,13 @@ export class SelectionManager {
             }
 
             case SelectionGranularity.NoteGroup: {
+                // The span identifies the group: groups nest, so two of them can start at the same
+                // event and only the end tells them apart.
+                const { events } = target;
+                const last = events[events.length - 1];
+
                 return `noteGroup:${target.measure.number}:${target.measure.track.id}:`
-                    + formatFraction(target.events[0].start);
+                    + `${formatFraction(events[0].start)}-${formatFraction(addFractions(last.start, last.duration))}`;
             }
 
             case SelectionGranularity.Note: {

@@ -1154,6 +1154,26 @@ describe.sequential("ScoreBookDataModel track actions", () => {
         expect(measure.events[3]).toMatchObject({ start: { numerator: 1, denominator: 8 } });
     });
 
+    it("createSubdivision refuses a third tuplet level", () => {
+        const instruments = [createInstrument("0", 0, 0)];
+        model.startNewArrangement(instruments);
+        const track = model.arrangement!.tracks[0];
+
+        // A triplet over a quarter and, inside it, a triplet over two of its slots: the second level.
+        expect(model.createSubdivision(track.id, 1, { numerator: 0, denominator: 1 },
+            { numerator: 1, denominator: 4 }, 3, 2)).toBe(true);
+        expect(model.createSubdivision(track.id, 1, { numerator: 0, denominator: 1 },
+            { numerator: 1, denominator: 6 }, 3, 2)).toBe(true);
+
+        mutatedCalls = 0;
+        const created = model.createSubdivision(track.id, 1, { numerator: 0, denominator: 1 },
+            { numerator: 1, denominator: 9 }, 3, 2);
+
+        // The staff draws one bracket above and one below the notes, so a third level is refused.
+        expect(created).toBe(false);
+        expect(mutatedCalls).toBe(0);
+    });
+
     it("createSubdivision rejects invalid note or step counts", () => {
         const instruments = [createInstrument("0", 0, 0)];
         model.startNewArrangement(instruments);

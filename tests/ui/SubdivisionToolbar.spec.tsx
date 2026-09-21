@@ -8,9 +8,10 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { SubdivisionToolbar } from "../../src/components/ui/Arrangement/SubdivisionToolbar.js";
 import type { ISbDmArrangement, ISbDmTrack, ISbDmTrackMeasure } from "../../src/core/ScoreBookDataModel.js";
+import { ScoreBookDataModel } from "../../src/core/ScoreBookDataModel.js";
 import type { IFraction } from "../../src/core/types/general.js";
 import { SelectionManager } from "../../src/ui/SelectionManager.js";
-import { noteEntry, runEntry } from "../unit-test-helpers.js";
+import { createInstrument, noteEntry, runEntry } from "../unit-test-helpers.js";
 
 const triggerButton = (container: Element): HTMLButtonElement => {
     return container.querySelector<HTMLButtonElement>("button")!;
@@ -63,6 +64,56 @@ describe.sequential("SubdivisionToolbar", () => {
         renderResult?.unmount();
         cleanup();
         renderResult = null;
+    });
+
+    it("enables the dropdown for a note inside one tuplet but not inside a nested one", () => {
+        const model = new ScoreBookDataModel();
+        model.startNewArrangement([createInstrument("0", 0, 0)]);
+        const track = model.arrangement!.tracks[0];
+
+        // A triplet over a quarter and, inside it, a triplet over two of its slots: the second level.
+        model.createSubdivision(track.id, 1, { numerator: 0, denominator: 1 },
+            { numerator: 1, denominator: 4 }, 3, 2);
+        const measure = track.measures[0];
+        selectionManager.replaceSelection([noteEntry(measure, { numerator: 1, denominator: 12 })]);
+
+        renderResult = render(
+            <SubdivisionToolbar selectionManager={selectionManager} />,
+        );
+
+        expect(triggerButton(renderResult.container).disabled).toBe(false);
+
+        model.createSubdivision(track.id, 1, { numerator: 0, denominator: 1 },
+            { numerator: 1, denominator: 6 }, 3, 2);
+        selectionManager.replaceSelection([noteEntry(measure, { numerator: 1, denominator: 18 })]);
+        renderResult.rerender(
+            <SubdivisionToolbar selectionManager={selectionManager} />,
+        );
+
+        // A note in the second level has no room for another bracket.
+        expect(triggerButton(renderResult.container).disabled).toBe(true);
+    });
+
+    it("disables the dropdown when the selection mixes tuplet levels", () => {
+        const model = new ScoreBookDataModel();
+        model.startNewArrangement([createInstrument("0", 0, 0)]);
+        const track = model.arrangement!.tracks[0];
+        model.createSubdivision(track.id, 1, { numerator: 0, denominator: 1 },
+            { numerator: 1, denominator: 4 }, 3, 2);
+        const measure = track.measures[0];
+
+        // One slot of the triplet and one note outside it: the levels differ.
+        selectionManager.replaceSelection([
+            noteEntry(measure, { numerator: 0, denominator: 1 }),
+            noteEntry(measure, { numerator: 1, denominator: 2 }),
+            noteEntry(measure, { numerator: 3, denominator: 4 }),
+        ]);
+
+        renderResult = render(
+            <SubdivisionToolbar selectionManager={selectionManager} />,
+        );
+
+        expect(triggerButton(renderResult.container).disabled).toBe(true);
     });
 
     it("renders a disabled creation dropdown when nothing is selected", () => {
