@@ -19,7 +19,8 @@ import type { IFraction, IAudioData, ISubdivision } from "../../../core/types/ge
 import { beamCountOf, fallbackNoteValue, noteValueForEvent, type INoteValue }
     from "../../../core/rest-notation.js";
 import type { IScoreMetrics } from "../../../player/TimeCoordinator.js";
-import { addFractions, compareFractions, subtractFractions } from "../../../core/serialisation/numeric-functions.js";
+import { addFractions, compareFractions, divideFraction, subtractFractions }
+    from "../../../core/serialisation/numeric-functions.js";
 import { ScoreElementKind, type ScoreElementRegistry } from "../../../ui/ScoreElementRegistry.js";
 import { NoteImage, NoteKind, NoteLength } from "../framework/NoteImage.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
@@ -107,9 +108,12 @@ interface ITupletLabel {
     placement: "above" | "below";
 }
 
-interface ITupletNoteBounds {
-    firstStart?: IFraction;
-    lastStart?: IFraction;
+interface ITupletBounds {
+    /** Drawn position of the first child, as a fraction of the whole bar. */
+    firstAnchor?: IFraction;
+
+    /** Drawn position of the last child, as a fraction of the whole bar. */
+    lastAnchor?: IFraction;
 }
 
 /**
@@ -133,13 +137,11 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
             this.classFromProperty(isLastBar, "last-bar"),
         ]);
 
-        const { stepsPerBar } = scoreMetrics;
-
         const items = MeasureProjection.project(measure);
         const nodes = this.mergeRestsWithinPulses(this.buildNodes(items, scoreMetrics), scoreMetrics);
 
         const beamSpans = this.computeBeamSpans(nodes, scoreMetrics);
-        const tupletLabels = this.computeTupletLabels(nodes, stepsPerBar);
+        const tupletLabels = this.computeTupletLabels(nodes, scoreMetrics.stepsPerBar);
 
         const hasAnyNote = nodes.some((node) => {
             return this.nodeHasAnyNote(node);
@@ -452,8 +454,9 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
     }
 
     /**
-     * Computes bracket/number labels for tuplet groups. Markers span from the first to the last
-     * sounding notehead, so they sit exactly over the notes they group.
+     * Computes bracket/number labels for tuplet groups. A marker spans from the first to the last
+     * child of the group, its rests included, so it covers the whole group and not only its
+     * sounding notes.
      *
      * @param nodes The nodes to process.
      * @param stepsPerBar The number of base-grid steps in a bar (for the half-step notehead offset).
@@ -468,14 +471,13 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
             for (const item of items) {
                 if (item.kind === StaffNodeKind.Subdivision) {
                     if (item.isTuplet) {
-                        const bounds = this.tupletNoteBounds(item);
-                        if (bounds.firstStart !== undefined && bounds.lastStart !== undefined) {
-                            const left = addFractions(bounds.firstStart, halfStep);
-                            const width = subtractFractions(bounds.lastStart, bounds.firstStart);
+                        const bounds = this.tupletBounds(item, halfStep);
+                        if (bounds.firstAnchor !== undefined && bounds.lastAnchor !== undefined) {
+                            const width = subtractFractions(bounds.lastAnchor, bounds.firstAnchor);
 
                             labels.push({
                                 group: item.group,
-                                leftPercent: (left.numerator / left.denominator) * 100,
+                                leftPercent: (bounds.firstAnchor.numerator / bounds.firstAnchor.denominator) * 100,
                                 widthPercent: (width.numerator / width.denominator) * 100,
                                 text: item.actual.toString(),
                                 bracket: this.tupletNeedsBracket(item, items),
@@ -497,29 +499,33 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
     }
 
     /**
-     * Finds the first and last sounding note starts within a subdivision's subtree.
+     * Finds the drawn positions of the first and last child within a subdivision's subtree, which is
+     * where the bracket has to reach. A notehead is drawn half a grid step behind its onset, a rest
+     * sits centred in its slot. Rests are children too: a group that starts or ends with one still
+     * has to be bracketed over its full extent.
      *
      * @param node The subdivision to inspect.
+     * @param halfStep Half a base-grid step, the offset a notehead is drawn at behind its onset.
      *
-     * @returns The first and last note start fractions, or undefined when the subtree has no notes.
+     * @returns The first and last child position, or undefined when the subtree has no child.
      */
-    private tupletNoteBounds(node: IStaffSubdivisionNode): ITupletNoteBounds {
-        let firstStart: IFraction | undefined;
-        let lastStart: IFraction | undefined;
+    private tupletBounds(node: IStaffSubdivisionNode, halfStep: IFraction): ITupletBounds {
+        let firstAnchor: IFraction | undefined;
+        let lastAnchor: IFraction | undefined;
 
         const walk = (items: IStaffTreeNode[]): void => {
             for (const item of items) {
                 if (item.kind === StaffNodeKind.Note) {
-                    if (item.noteStyle === undefined) {
-                        continue;
+                    const anchor = item.noteStyle !== undefined
+                        ? addFractions(item.start, halfStep)
+                        : addFractions(item.start, divideFraction(item.duration, 2));
+
+                    if (firstAnchor === undefined || compareFractions(anchor, firstAnchor) < 0) {
+                        firstAnchor = anchor;
                     }
 
-                    if (firstStart === undefined || compareFractions(item.start, firstStart) < 0) {
-                        firstStart = item.start;
-                    }
-
-                    if (lastStart === undefined || compareFractions(item.start, lastStart) > 0) {
-                        lastStart = item.start;
+                    if (lastAnchor === undefined || compareFractions(anchor, lastAnchor) > 0) {
+                        lastAnchor = anchor;
                     }
                 } else {
                     walk(item.children);
@@ -529,7 +535,7 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
 
         walk(node.children);
 
-        return { firstStart, lastStart };
+        return { firstAnchor, lastAnchor };
     }
 
     private tupletNeedsBracket(node: IStaffSubdivisionNode, siblings: IStaffTreeNode[]): boolean {
@@ -677,6 +683,10 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
 
                 const needsCssStem = !hasBeam && node.glyph.length !== NoteLength.Whole;
 
+                // The head wrapper keeps its place in the run while the notehead is drawn at the note's
+                // staff line. Everything drawn around the head reads that line from this variable.
+                const headStyle = { "--note-line-offset": `${lineOffset}px` } as CSSProperties;
+
                 const runDivProps: Record<string, unknown> = {
                     key: `${keyPrefix}note-${index}`,
                     className: "staff-note-viewer-run staff-note-viewer-note-run",
@@ -694,7 +704,7 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
 
                 return (
                     <div {...runDivProps}>
-                        <span className={headWrapperClasses.join(" ")}>
+                        <span className={headWrapperClasses.join(" ")} style={headStyle}>
                             <NoteImage
                                 className="staff-note-viewer-note-symbol"
                                 kind={NoteKind.Note}
@@ -711,12 +721,7 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                                 alt=""
                             />
                             {dotElement}
-                            {needsCssStem ? (
-                                <span
-                                    className="staff-note-head-stem"
-                                    style={{ height: `calc(33px + ${lineOffset}px)` }}
-                                />
-                            ) : null}
+                            {needsCssStem ? <span className="staff-note-head-stem" /> : null}
                             {this.renderNoteDecorations(node.noteStyle, node.articulation)}
                             {headType === NoteDisplayType.Cross ? this.renderCrossHead() : null}
                         </span>

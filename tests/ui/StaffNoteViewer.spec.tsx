@@ -236,6 +236,47 @@ describe.sequential("StaffNoteViewer beams", () => {
         expect(widthPercent).toBeCloseTo(33.333, 3);
     });
 
+    it("brackets a tuplet over its rests, not only over its notes", () => {
+        const events = [
+            ...Array.from({ length: 8 }, (_, index) => {
+                return event(fraction(index, 16), fraction(1, 16), "1");
+            }),
+            event(fraction(1, 2), fraction(1, 6)),
+            event(fraction(2, 3), fraction(1, 6), "1"),
+            event(fraction(5, 6), fraction(1, 6)),
+        ];
+
+        const measure = buildMeasure(events, [
+            { startIndex: 8, actual: 3, normal: 8, isTuplet: true },
+        ]);
+
+        renderResult = render(
+            <StaffNoteViewer
+                isLastBar={true}
+                timeSignature="4/4"
+                scoreMetrics={scoreMetrics}
+                baseSteps={16}
+                measure={measure}
+                barNumber={1}
+                trackId={100}
+            />,
+        );
+
+        const bracket = renderResult.container.querySelector<HTMLElement>(".staff-note-viewer-tuplet-bracket");
+        expect(bracket).not.toBeNull();
+        if (!bracket) {
+            return;
+        }
+
+        // The 3:8 group holds a single note between two rests. The bracket has to span the whole
+        // group — from the first rest's position to the last rest's — and not only the note. A rest
+        // sits centred in its slot, so the bracket runs from 7/12 to 11/12.
+        const leftPercent = parseFloat(bracket.style.left);
+        const widthPercent = parseFloat(bracket.style.width);
+        expect(leftPercent).toBeCloseTo(58.333, 3);
+        expect(widthPercent).toBeCloseTo(33.333, 3);
+    });
+
     it("beams a pair of thirty-seconds outside a subdivision", () => {
         const measure = buildMeasure([
             event(fraction(0, 1), fraction(1, 32), "1"),

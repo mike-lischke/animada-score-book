@@ -152,6 +152,95 @@ test.describe("Staff view multi-line rendering", () => {
         expect(positions[3]).toBe("calc(50% + 46.5px)");
     });
 
+    test("draws stems of equal length for notes on different staff lines", async ({ page }) => {
+        // Four eighths on the four lines of the 4-Bell Agogo, each followed by a rest so that they
+        // stay unbeamed and are drawn with a flag on a stem of their own.
+        const snapshot = {
+            version: 4,
+            title: "E2E Stem Length",
+            timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4", stepResolution: 16 },
+            tracks: [{
+                id: 100,
+                instrumentId: "a",
+                measures: [{
+                    number: 1,
+                    meter: { beats: 4, beatUnits: 4, stepResolution: 16, beatGroups: [4, 4, 4, 4] },
+                    events: [
+                        // One eighth per pulse, alternating with a rest, from the lowest to the highest line.
+                        ...[1, 2, 3, 4].flatMap((noteStyleId, index) => {
+                            return [
+                                {
+                                    start: { numerator: index * 4, denominator: 16 },
+                                    duration: { numerator: 2, denominator: 16 },
+                                    noteStyleId: noteStyleId.toString(),
+                                },
+                                {
+                                    start: { numerator: (index * 4) + 2, denominator: 16 },
+                                    duration: { numerator: 2, denominator: 16 },
+                                },
+                            ];
+                        }),
+                    ],
+                    subdivisions: [],
+                }],
+            }],
+        };
+
+        await page.addInitScript((packed: string) => {
+            const sessionId = "e2e-staff-stem-length";
+            window.history.replaceState({ ...(window.history.state ?? {}), sessionId }, "");
+            window.sessionStorage.setItem("asb-session-id", sessionId);
+            window.localStorage.setItem(`asb-ui-settings-session-${sessionId}`, JSON.stringify({
+                currentScore: packed,
+                viewSettings: { arrangementViewSettings: { displayMode: "staff" } },
+            }));
+        }, stringifyPackedArrangement(snapshot));
+
+        await page.goto("/");
+        await expect(page.locator("#trackViewerHost")).toBeVisible();
+        await expect(page.locator(".staff-measure-track-row").first()).toBeVisible();
+
+        const stems = await page.evaluate(() => {
+            const row = document.querySelector(".staff-measure-track-row");
+            const runs = [...(row?.querySelectorAll(".staff-note-viewer-note-run") ?? [])];
+
+            return runs.map((run) => {
+                const head = run.querySelector<HTMLElement>(".staff-note-head");
+                const stem = run.querySelector<HTMLElement>(".staff-note-head-stem");
+                if (!head || !stem) {
+                    return null;
+                }
+
+                const stemRect = stem.getBoundingClientRect();
+                const headRect = head.getBoundingClientRect();
+
+                return {
+                    lineOffset: getComputedStyle(head).getPropertyValue("--note-line-offset").trim(),
+                    height: Math.round(stemRect.height),
+                    top: Math.round((stemRect.top - headRect.top) * 10) / 10,
+                };
+            });
+        });
+
+        // A stem is a rigid part of its notehead: it keeps its length on every line and moves with
+        // the head instead of reaching up to a fixed height above the row.
+        expect(stems.map((stem) => {
+            return stem?.height;
+        })).toEqual([33, 33, 33, 33]);
+
+        const tops = stems.map((stem) => {
+            return stem?.top ?? 0;
+        });
+        expect(tops[1] - tops[0]).toBeCloseTo(-10, 1);
+        expect(tops[2] - tops[0]).toBeCloseTo(-20, 1);
+        expect(tops[3] - tops[0]).toBeCloseTo(-30, 1);
+
+        // The four notes sit on the four lines of the 4-bell agogo, lowest first.
+        expect(stems.map((stem) => {
+            return stem?.lineOffset;
+        })).toEqual(["15px", "5px", "-5px", "-15px"]);
+    });
+
     test("staff prefix viewer renders matching lines for multi-line instruments", async ({ page }) => {
         const snapshot = buildSnapshot("a", "E2E Prefix Lines");
 

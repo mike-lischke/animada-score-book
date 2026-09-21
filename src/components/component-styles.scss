@@ -1458,21 +1458,22 @@
         position: absolute;
         left: 50%;
         width: 2px;
+        height: 33px;
         background: var(--color-base-content);
         transform: translateX(-50%);
-        top: -6px;
+        top: calc(-6px + var(--note-line-offset, 0px));
         pointer-events: none;
         z-index: 1;
     }
 
     /* Per-head-type stem adjustments (non-beamed CSS stem). */
     &.square .staff-note-head-stem {
-        top: -6px;
+        top: calc(-6px + var(--note-line-offset, 0px));
         left: calc(50% - 1px);
     }
 
     &.cross .staff-note-head-stem {
-        top: -8px;
+        top: calc(-8px + var(--note-line-offset, 0px));
     }
 
     .staff-note-head-thumb-svg,

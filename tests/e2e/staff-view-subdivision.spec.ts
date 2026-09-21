@@ -243,4 +243,92 @@ test.describe("Staff view subdivision rendering", () => {
         const distinctValues = new Set(noteValues);
         expect(distinctValues.size).toBeGreaterThanOrEqual(2);
     });
+
+    test("spans the tuplet bracket over the rests of the group", async ({ page }) => {
+        // Eight sixteenth notes, then a 3:8 tuplet over the second half of the bar whose slots are a
+        // rest, a note and a rest again. The bracket has to reach the outer rests, not only the note.
+        const snapshot = {
+            version: 4,
+            title: "E2E Tuplet With Rests",
+            timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4", stepResolution: 16 },
+            tracks: [{
+                id: 102,
+                instrumentId: "0",
+                measures: [{
+                    number: 1,
+                    meter: { beats: 4, beatUnits: 4, stepResolution: 16, beatGroups: [4, 4, 4, 4] },
+                    events: [
+                        ...Array.from({ length: 8 }, (_, index) => {
+                            return {
+                                start: { numerator: index, denominator: 16 },
+                                duration: { numerator: 1, denominator: 16 },
+                                noteStyleId: "1",
+                            };
+                        }),
+                        { start: { numerator: 1, denominator: 2 }, duration: { numerator: 1, denominator: 6 } },
+                        {
+                            start: { numerator: 2, denominator: 3 },
+                            duration: { numerator: 1, denominator: 6 },
+                            noteStyleId: "1",
+                        },
+                        { start: { numerator: 5, denominator: 6 }, duration: { numerator: 1, denominator: 6 } },
+                    ],
+                    subdivisions: [
+                        { startIndex: 8, actual: 3, normal: 8, isTuplet: true },
+                    ],
+                }],
+            }],
+        };
+
+        await page.addInitScript((snapshotPacked: string) => {
+            const sessionId = "e2e-tuplet-rests";
+            window.history.replaceState({ ...(window.history.state ?? {}), sessionId }, "");
+            window.sessionStorage.setItem("asb-session-id", sessionId);
+            window.localStorage.setItem(`asb-ui-settings-session-${sessionId}`, JSON.stringify({
+                currentScore: snapshotPacked,
+            }));
+        }, stringifyPackedArrangement(snapshot));
+
+        await page.goto("/");
+        await expect(page.locator("#trackViewerHost")).toBeVisible();
+
+        const trackViewToggle = page.locator("input.trackViewModeToggle").first();
+        await expect(trackViewToggle).toBeVisible();
+        if (!await trackViewToggle.isChecked()) {
+            await trackViewToggle.check({ force: true });
+        }
+
+        await expect(page.locator(".staff-note-viewer-tuplet-bracket").first()).toBeVisible();
+
+        // A bracket tick sits on the glyph of the slot it marks, so both ends have to land on the
+        // centre of an outer rest.
+        const offsets = await page.evaluate(() => {
+            const bracket = document.querySelector<HTMLElement>(".staff-note-viewer-tuplet-bracket");
+            const rests = [...document.querySelectorAll<HTMLElement>(".staff-note-viewer-rest-symbol")];
+            if (!bracket || rests.length !== 2) {
+                return null;
+            }
+
+            const bracketRect = bracket.getBoundingClientRect();
+            const centerOf = (element: HTMLElement) => {
+                const rect = element.getBoundingClientRect();
+
+                return rect.left + (rect.width / 2);
+            };
+
+            return {
+                left: bracketRect.left - centerOf(rests[0]),
+                right: bracketRect.right - centerOf(rests[1]),
+            };
+        });
+
+        if (!offsets) {
+            test.fail(true, "The bar does not hold a tuplet bracket and two rests");
+
+            return;
+        }
+
+        expect(Math.abs(offsets.left)).toBeLessThan(2);
+        expect(Math.abs(offsets.right)).toBeLessThan(2);
+    });
 });
