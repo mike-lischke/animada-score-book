@@ -321,7 +321,7 @@ test.describe("Staff view selection", () => {
         expect(await selectedNoteCount(page)).toBe(3);
     });
 
-    test("dragging a rect across group markers selects the notes of those groups", async ({ page }) => {
+    test("dragging a rect across group markers selects those groups", async ({ page }) => {
         // Two beamed groups of four sixteenths, separated by quarter rests.
         const sixteenth = { numerator: 1, denominator: 16 };
         const snapshot = {
@@ -392,10 +392,10 @@ test.describe("Staff view selection", () => {
         await page.mouse.move(band.right, band.bottom, { steps: 10 });
         await page.mouse.up();
 
-        // The rectangle addresses two groups of the track, which is an area selection, so it resolves
-        // at note granularity: the eight notes are selected and no group overlay is painted.
-        await expect(page.locator(".staff-note-viewer-run.note-selected")).toHaveCount(8);
-        await expect(page.locator(".selection-overlay")).toHaveCount(0);
+        // The rectangle covers markers of both groups and no notes, so each group becomes a selection of
+        // its own: one overlay per group, and no note-level highlight.
+        await expect(page.locator(".selection-overlay")).toHaveCount(2);
+        await expect(page.locator(".staff-note-viewer-run.note-selected")).toHaveCount(0);
     });
 
     test("dragging a selection rect across notes selects them individually", async ({ page }) => {

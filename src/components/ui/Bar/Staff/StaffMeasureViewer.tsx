@@ -309,7 +309,10 @@ export class StaffMeasureViewer extends UIComponent<IStaffMeasureViewerProps, IS
         // not just the events the marker happens to cover. Which events form a group is a rule of the
         // measure, so the groups come from the model and the markers only tell which groups were hit.
         // Markers are drawn beside the note band, so the groups are applied after the rows: a row
-        // whose bounds reject the click must still give up its group. Notes keep priority.
+        // whose bounds reject the click must still give up its group. Every group the rectangle covers
+        // is selected as the group it is — a rectangle over markers alone does not contain the notes
+        // those groups cover, so resolving it at note granularity would select what the user did not
+        // touch. Notes keep priority.
         for (const [trackId, groups] of groupHits) {
             const measure = arrangement.tracks.find((track) => {
                 return track.id === trackId;
@@ -322,18 +325,8 @@ export class StaffMeasureViewer extends UIComponent<IStaffMeasureViewerProps, IS
                 continue;
             }
 
-            if (groups.length === 1) {
-                noteEntries.push(this.noteGroupEntry(measure, groups[0]));
-
-                continue;
-            }
-
-            // A selection that addresses several groups of one track addresses an area rather than a
-            // group, so it resolves at the finer granularity of notes under those groups.
             for (const group of groups) {
-                for (const index of group.eventIndexes) {
-                    noteEntries.push(this.eventEntry(measure, measure.events[index]));
-                }
+                noteEntries.push(this.noteGroupEntry(measure, group));
             }
         }
 
@@ -420,7 +413,8 @@ export class StaffMeasureViewer extends UIComponent<IStaffMeasureViewerProps, IS
     /**
      * Resolves the note groups the markers under the selection rectangle address, per track. A click
      * resolves to the group of the marker it touched; a rectangle that touches markers of several
-     * groups of one track is an area selection, which the caller resolves at note granularity.
+     * groups resolves to all of them, because the rectangle covers markers and not the notes those
+     * groups hold.
      *
      * @param bar The bar element the hit test runs on.
      * @param rect The selection rectangle in viewport coordinates.

@@ -10,6 +10,8 @@ hard to infer from code alone.
 - Status is `proposed`, `accepted`, `deprecated`, or `superseded by ADR-NNNN`.
 - Do not rewrite accepted decisions to change history.
   Create a new ADR and mark the old one as superseded.
+- A partial replacement names the ADR and the part it replaces in the new ADR
+  (`Supersedes:`); the replaced ADR keeps its status and its text.
 - Do not create ADRs for ordinary fixes, local refactorings, or implementation
   details.
 - Keep ADRs concise: normally 200–400 words.
@@ -27,3 +29,4 @@ hard to infer from code alone.
 | ADR-0007 | proposed | Treat a subdivision as one atomic block on the track timeline | note length change, dotting, subdivisions, track ripple, space making, note addressing |
 | ADR-0008 | accepted | Derive the note groups of a measure from its composition | score rendering, selection, hit testing, beams, tuplets, subdivisions, staff view |
 | ADR-0009 | accepted | Make measure widths data and render only a window of measures in the staff view | score rendering, staff view, measure layout, measure widths, scrolling, selection decoration |
+| ADR-0010 | accepted | Select the note groups a selection rectangle covers instead of their notes | staff view, selection, hit testing, note groups, beams, tuplets, drag selection |
