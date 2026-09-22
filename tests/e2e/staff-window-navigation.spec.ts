@@ -34,6 +34,18 @@ interface ISelectionState {
     measureOffset: number;
 }
 
+/** The vertical geometry of the staff view, which has to survive a window that moves. */
+interface IStaffGeometry {
+    /** Height of the scrollable staff content. */
+    contentHeight: number;
+
+    /** Height of the mixer panel beside the viewer, which stretches to the height of the viewer. */
+    controlsHeight: number;
+
+    /** Distance between the minimap's top edge and the viewport's top edge. */
+    minimapTop: number;
+}
+
 test.beforeEach(async ({ page }) => {
     await routeApi(page);
 });
@@ -142,6 +154,23 @@ const selectionState = (page: Page): Promise<ISelectionState> => {
     });
 };
 
+/**
+ * @param page The page to read the geometry from.
+ *
+ * @returns The vertical geometry of the staff view.
+ */
+const staffGeometry = (page: Page): Promise<IStaffGeometry> => {
+    return page.evaluate(() => {
+        const minimap = document.querySelector<HTMLElement>(".minimap");
+
+        return {
+            contentHeight: document.getElementById("trackViewerContentHost")?.offsetHeight ?? -1,
+            controlsHeight: document.querySelector<HTMLElement>(".trackControlsList")?.offsetHeight ?? -1,
+            minimapTop: Math.round(minimap?.getBoundingClientRect().top ?? -1),
+        };
+    });
+};
+
 // The score has eight measures with four events each, and the viewer renders only a window of them, so the measure
 // the cursor was left in can be gone from the DOM entirely.
 test("navigation steps through the events of a measure that is not rendered", async ({ page }) => {
@@ -181,4 +210,22 @@ test("navigation steps over a measure boundary and anchors that measure in the v
         headVisible: true,
         measureOffset: visibilityMarginPx,
     });
+});
+
+// The staff prefix column is taller than a measure column, because its rows start below the head room a measure
+// reserves for its number and label. A window that leaves measure 1 behind therefore has to keep the prefix
+// mounted: dropping it would shrink the staff content while scrolling, and the minimap below the viewer would
+// move up with it.
+test("the staff content keeps its height while the window leaves the prefix behind", async ({ page }) => {
+    await openScore(page);
+
+    await expect(page.locator(".staff-prefix-viewer")).toHaveCount(1);
+    const before = await staffGeometry(page);
+
+    await scrollAway(page);
+
+    // The window has moved past measure 1, which is no longer rendered as a column of its own.
+    await expect(page.locator(".staff-measure-number", { hasText: /^1$/ })).toHaveCount(0);
+
+    expect(await staffGeometry(page)).toEqual(before);
 });

@@ -302,10 +302,14 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
                 }
             }
 
-            // The prefix belongs to the leading spacer, which is exactly as wide as the prefix column.
-            const prefix = staffWindow.first === 1
-                ? <StaffPrefixViewer arrangement={arrangement} timeSignature={arrangement.timeParams.timeSignature} />
-                : null;
+            // The prefix belongs to the leading spacer, which starts at the left edge of the content. It stays
+            // mounted when the window has moved past measure 1, where it sits off-screen to the left: the prefix
+            // column is taller than a measure column, because its rows start below the measure head room, so
+            // dropping it would shrink the height of the content while scrolling and push everything below the
+            // viewer — the minimap in particular — upwards.
+            const prefix = (
+                <StaffPrefixViewer arrangement={arrangement} timeSignature={arrangement.timeParams.timeSignature} />
+            );
 
             return (
                 <>
