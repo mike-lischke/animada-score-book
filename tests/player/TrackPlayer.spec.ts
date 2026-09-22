@@ -108,7 +108,6 @@ const makeTrack = (opts?: {
         removeTrack: vi.fn(),
         duplicateTrack: vi.fn(),
         applyArrangementSnapshot: vi.fn(),
-        measureLabels: {}
     };
 
     const track: Mutable<ISbDmTrack> & { _notes: ISbDmNoteEvent[]; } = {

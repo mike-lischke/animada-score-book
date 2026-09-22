@@ -7,15 +7,12 @@ import { describe, expect, it } from "vitest";
 
 import {
     isPackedArrangement, packArrangementSnapshot, stringifyPackedArrangement, tryParsePackedArrangement,
-    unpackArrangementSnapshot
+    unpackArrangementSnapshot, type IPackedArrangement
 } from "../../../src/core/serialisation/snapshot-packing.js";
-import {
-    unpackLegacyArrangement, type ILegacyPackedArrangement
-} from "../../../src/core/serialisation/migration/legacy-packing.js";
 import type { IArrangementSnapshot } from "../../../src/core/types/general.js";
 
 const sampleSnapshot: IArrangementSnapshot = {
-    version: 4,
+    version: 5,
     title: "Sample",
     timeParams: { timeSignature: "4/4", tempo: 120, length: 2, pulse: "4n", stepResolution: 16 },
     tracks: [
@@ -120,27 +117,35 @@ describe("CompactSnapshot", () => {
         expect(restored).toEqual(sampleSnapshot);
     });
 
-    it("normalizes null parentSubdivisionId from legacy packed JSON", () => {
-        const packedWithNullParent: ILegacyPackedArrangement = {
-            v: 2,
-            t: "Tuplet Null Parent",
-            p: ["6/8", 50, 1, "3/8", 8],
-            k: [[
-                1,
-                "3",
-                [[
-                    1,
-                    [6, 8, 6, [3, 3]],
-                    ["1", "1", "1", "1", "1", "1", "1", "1"],
-                    [[496, 1, 1, 3, 1]],
-                ]],
-            ]],
-        };
+    it("rejects packed content of an older schema version", () => {
+        const packed: IPackedArrangement = { ...packArrangementSnapshot(sampleSnapshot), v: 4 };
 
-        const restored = unpackLegacyArrangement(packedWithNullParent);
+        expect(() => {
+            unpackArrangementSnapshot(packed);
+        }).toThrowError("Unsupported snapshot schema version: 4");
+    });
 
-        expect(restored.tracks[0]?.measures[0]?.subdivisions[0]?.parentSubdivisionId).toBe(1);
-        expect(restored.tracks[0]?.measures[0]?.subdivisions[0]?.isTuplet).toBe(false);
+    it("carries extension chunks through a round-trip", () => {
+        const extensions = { measureWidths: { 3: 2000 }, someLaterChunk: [1, 2, 3] };
+        const withExtensions: IArrangementSnapshot = { ...sampleSnapshot, extensions };
+
+        const packed = packArrangementSnapshot(withExtensions);
+
+        expect(packed.c).toEqual(extensions);
+        expect(unpackArrangementSnapshot(packed).extensions).toEqual(extensions);
+    });
+
+    it("omits the chunk container while no feature stores anything", () => {
+        const packed = packArrangementSnapshot(sampleSnapshot);
+
+        expect(packed.c).toBeUndefined();
+        expect(unpackArrangementSnapshot(packed).extensions).toBeUndefined();
+    });
+
+    it("treats an empty chunk container as no extensions", () => {
+        const packed: IPackedArrangement = { ...packArrangementSnapshot(sampleSnapshot), c: {} };
+
+        expect(unpackArrangementSnapshot(packed).extensions).toBeUndefined();
     });
 
     it("preserves scoreId through pack → stringify → parse → unpack round-trip", () => {

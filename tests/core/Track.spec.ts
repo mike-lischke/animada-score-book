@@ -9,7 +9,7 @@ import { Arrangement } from "../../src/core/Arrangement.js";
 import { TimeParams } from "../../src/core/TimeParams.js";
 import { Track } from "../../src/core/Track.js";
 import { ArrangementMigrator } from "../../src/core/serialisation/migration/ArrangementMigrator.js";
-import type { ILegacyArrangementSnapshot } from "../../src/core/serialisation/migration/legacy-snapshot-types.js";
+import type { IBananaDrumSnapshot } from "../../src/core/serialisation/migration/BananaDrumMigrator.js";
 import type { IAudioData } from "../../src/core/types/general.js";
 import { getNewId } from "../../src/core/utils.js";
 import { createInstrument, hydrateMeasureEvents } from "../unit-test-helpers.js";
@@ -41,8 +41,7 @@ describe("Track", () => {
 
         instrument.noteStyles[noteStyle.id] = noteStyle;
 
-        const snapshot: ILegacyArrangementSnapshot = {
-            version: 1,
+        const snapshot: IBananaDrumSnapshot = {
             timeParams: { timeSignature: "4/4", tempo: 120, length: 2, pulse: "1/4", stepResolution: 16 },
             tracks: [{
                 id: 100,
@@ -123,8 +122,7 @@ describe("Track", () => {
         // expected non-grid measure events.
         const notes = Array.from<string>({ length: 16 }).fill("0");
         notes[0] = noteStyle.id;
-        const snapshot: ILegacyArrangementSnapshot = {
-            version: 1,
+        const snapshot: IBananaDrumSnapshot = {
             timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4", stepResolution: 16 },
             tracks: [{
                 id: 100,
@@ -187,8 +185,7 @@ describe("Track", () => {
         notes[0] = noteStyle.id;
         notes[4] = noteStyle.id;
 
-        const snapshot: ILegacyArrangementSnapshot = {
-            version: 1,
+        const snapshot: IBananaDrumSnapshot = {
             timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4", stepResolution: 16 },
             tracks: [{
                 id: 100,

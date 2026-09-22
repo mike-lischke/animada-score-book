@@ -6,6 +6,7 @@
 import { expect, test } from "@playwright/test";
 
 import { stringifyPackedArrangement } from "../../src/core/serialisation/snapshot-packing.js";
+import { arrangementSnapshotVersion } from "../../src/core/serialisation/snapshots.js";
 import { routeApi } from "./e2e-test-helpers.js";
 
 test.beforeEach(async ({ page }) => {
@@ -17,7 +18,7 @@ test.describe("Staff view two-step note", () => {
         // A single 4/4 bar, 16th grid. A press-roll note of two grid steps in duration,
         // flanked by single-step notes. The remaining steps are a single rest.
         const snapshot = {
-            version: 4,
+            version: arrangementSnapshotVersion,
             title: "E2E Two-Step Note",
             timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4", stepResolution: 16 },
             tracks: [{

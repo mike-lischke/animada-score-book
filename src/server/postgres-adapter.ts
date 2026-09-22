@@ -75,6 +75,13 @@ export class PostgresAdapter implements IDatabaseAdapter {
         return this.pool !== undefined;
     }
 
+    public async dropAllTables(): Promise<void> {
+        // Re-creating the schema is the shortest way to drop everything it holds — tables, views and
+        // sequences — no matter which foreign keys are between them.
+        await this.execute("DROP SCHEMA IF EXISTS public CASCADE");
+        await this.execute("CREATE SCHEMA public");
+    }
+
     public async ping(): Promise<boolean> {
         const pool = this.getPoolOrThrow();
         const result = await pool.query("SELECT 1 AS result");

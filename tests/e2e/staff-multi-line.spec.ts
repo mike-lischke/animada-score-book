@@ -6,6 +6,7 @@
 import { expect, test } from "@playwright/test";
 
 import { stringifyPackedArrangement } from "../../src/core/serialisation/snapshot-packing.js";
+import { arrangementSnapshotVersion } from "../../src/core/serialisation/snapshots.js";
 import { routeApi } from "./e2e-test-helpers.js";
 
 test.beforeEach(async ({ page }) => {
@@ -23,7 +24,7 @@ test.beforeEach(async ({ page }) => {
  */
 const buildSnapshot = (instrumentId: string, title: string, noteStyleId = "1") => {
     return {
-        version: 4,
+        version: arrangementSnapshotVersion,
         title,
         timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4", stepResolution: 16 },
         tracks: [{
@@ -156,7 +157,7 @@ test.describe("Staff view multi-line rendering", () => {
         // Four eighths on the four lines of the 4-Bell Agogo, each followed by a rest so that they
         // stay unbeamed and are drawn with a flag on a stem of their own.
         const snapshot = {
-            version: 4,
+            version: arrangementSnapshotVersion,
             title: "E2E Stem Length",
             timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4", stepResolution: 16 },
             tracks: [{

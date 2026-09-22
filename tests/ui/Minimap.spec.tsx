@@ -155,7 +155,6 @@ const makeArrangement = (barCount: number, trackCount: number): ISbDmArrangement
         removeTrack: vi.fn(),
         duplicateTrack: vi.fn(),
         applyArrangementSnapshot: vi.fn(),
-        measureLabels: {},
     };
 
     // Add tracks after arrangement is created

@@ -6,6 +6,7 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
 import { stringifyPackedArrangement } from "../../src/core/serialisation/snapshot-packing.js";
+import { arrangementSnapshotVersion } from "../../src/core/serialisation/snapshots.js";
 import { routeApi } from "./e2e-test-helpers.js";
 
 const bolero3Url = "/?t=Bolero%203&a2=6-8.50.1.3-8.8.319ihbrp-4UX1WbY5oS";
@@ -202,7 +203,7 @@ test.describe("Staff view selection", () => {
         // A 32nd rest opens the bar, so every following note starts between two grid steps. The old
         // step-based group search dropped such notes and left the row without a group at all.
         const snapshot = {
-            version: 4,
+            version: arrangementSnapshotVersion,
             title: "E2E Off-Grid Beam Group",
             timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4", stepResolution: 16 },
             tracks: [{
@@ -273,7 +274,7 @@ test.describe("Staff view selection", () => {
         const innerSlot = { numerator: 1, denominator: 36 };
         const outerSlot = { numerator: 1, denominator: 12 };
         const snapshot = {
-            version: 4,
+            version: arrangementSnapshotVersion,
             title: "E2E Nested Tuplets",
             timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4", stepResolution: 16 },
             tracks: [{
@@ -325,7 +326,7 @@ test.describe("Staff view selection", () => {
         // Two beamed groups of four sixteenths, separated by quarter rests.
         const sixteenth = { numerator: 1, denominator: 16 };
         const snapshot = {
-            version: 4,
+            version: arrangementSnapshotVersion,
             title: "E2E Two Beam Groups",
             timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4", stepResolution: 16 },
             tracks: [{

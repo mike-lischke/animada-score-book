@@ -6,11 +6,12 @@
 import { expect, test, type Page } from "@playwright/test";
 
 import { stringifyPackedArrangement } from "../../src/core/serialisation/snapshot-packing.js";
+import { arrangementSnapshotVersion } from "../../src/core/serialisation/snapshots.js";
 import { routeApi } from "./e2e-test-helpers.js";
 
 /** Four quarter notes, so the dot has a value on the current grid to stretch. */
 const snapshot = {
-    version: 4,
+    version: arrangementSnapshotVersion,
     title: "E2E Dotted Notes",
     timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4", stepResolution: 16 },
     tracks: [{

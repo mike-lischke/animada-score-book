@@ -6,6 +6,7 @@
 import { expect, test } from "@playwright/test";
 
 import { stringifyPackedArrangement } from "../../src/core/serialisation/snapshot-packing.js";
+import { arrangementSnapshotVersion } from "../../src/core/serialisation/snapshots.js";
 import { findStaffMeasure, routeApi } from "./e2e-test-helpers.js";
 
 test.beforeEach(async ({ page }) => {
@@ -63,7 +64,7 @@ test.describe("Staff view subdivision rendering", () => {
 
     test("renders 32nd notes split from a single grid step", async ({ page }) => {
         const subdivisionSnapshot = {
-            version: 4,
+            version: arrangementSnapshotVersion,
             title: "E2E Staff Subdivision",
             timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4", stepResolution: 16 },
             tracks: [{
@@ -136,7 +137,7 @@ test.describe("Staff view subdivision rendering", () => {
 
     test("renders mixed full-bar note lengths down to 32nd correctly", async ({ page }) => {
         const mixedLengthsSnapshot = {
-            version: 4,
+            version: arrangementSnapshotVersion,
             title: "E2E Staff Mixed Lengths",
             timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4", stepResolution: 32 },
             tracks: [{
@@ -247,7 +248,7 @@ test.describe("Staff view subdivision rendering", () => {
         // Eight sixteenth notes, then a 3:8 tuplet over the second half of the bar whose slots are a
         // rest, a note and a rest again. The bracket has to reach the outer rests, not only the note.
         const snapshot = {
-            version: 4,
+            version: arrangementSnapshotVersion,
             title: "E2E Tuplet With Rests",
             timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4", stepResolution: 16 },
             tracks: [{

@@ -11,6 +11,8 @@
  * Determines the effective database name (branch-specific for feature branches, base name for main),
  * creates the database if needed, and applies all pending migrations in timestamp order.
  * Called once at server startup before the adapter is initialised.
+ *
+ * Schema only — the seed data is owned by `Router.seedIfExists`.
  */
 
 import { execSync } from "node:child_process";
@@ -22,7 +24,6 @@ import type { IDatabaseConfig } from "../src/server/database.js";
 import { DatabaseEngine } from "../src/server/database.js";
 
 const migrationsDir = resolve(process.cwd(), "migrations");
-const seedPath = resolve(process.cwd(), "build", "seed.sql");
 
 export interface IMigrationRow {
     filename: string;
@@ -359,19 +360,4 @@ const applyMigrations = async (pool: IMigrationPool, engine: string): Promise<vo
     }
 
     console.log("All migrations applied successfully.");
-
-    // Apply seed data if this is a fresh database (no folders yet).
-    if (existsSync(seedPath)) {
-        const folderResult = await pool.query("SELECT COUNT(*) AS cnt FROM folders");
-        const folderRows = extractRows<{ cnt: number; }>(folderResult);
-        const rowCount = folderRows[0]?.cnt ?? 0;
-
-        if (rowCount === 0) {
-            console.log("Fresh database detected — applying seed data...");
-            const seedSql = readFileSync(seedPath, "utf-8");
-            await pool.query(seedSql);
-
-            console.log("Seed data applied.");
-        }
-    }
 };

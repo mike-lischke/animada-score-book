@@ -40,18 +40,9 @@ const main = (): void => {
                         `Backend initialised: ${engine} @ ${host}:${port}/${database}`,
                     );
 
-                    // Load seed only if tables are empty (avoid duplicates).
-                    // Seed data is also applied by the migration runner for fresh DBs;
-                    // this is a safety net for the anonymous user seed.
-                    return auth.adapter.query<{ cnt: number; }>(
-                        "SELECT COUNT(*) AS cnt FROM folders",
-                    ).then((rows) => {
-                        if ((rows[0]?.cnt ?? 0) === 0) {
-                            return router.seedIfExists(auth.adapter);
-                        }
-
-                        return undefined;
-                    }).then(() => {
+                    // Both seeding steps are idempotent — the seed data lands only in an empty
+                    // database, the anonymous user only when it is missing.
+                    return router.seedIfExists(auth.adapter).then(() => {
                         return router.seedAnonymousUser(auth.adapter);
                     });
                 });

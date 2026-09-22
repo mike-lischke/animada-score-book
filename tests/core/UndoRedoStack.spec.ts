@@ -53,7 +53,6 @@ const makeArrangement = (title: string): ISbDmArrangement => {
         removeTrack: vi.fn(),
         duplicateTrack: vi.fn(),
         applyArrangementSnapshot: vi.fn(),
-        measureLabels: {},
     };
 };
 

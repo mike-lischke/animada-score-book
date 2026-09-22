@@ -6,6 +6,7 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
 import { stringifyPackedArrangement } from "../../src/core/serialisation/snapshot-packing.js";
+import { arrangementSnapshotVersion } from "../../src/core/serialisation/snapshots.js";
 import type { IArrangementSnapshot } from "../../src/core/types/general.js";
 import { routeApi } from "./e2e-test-helpers.js";
 
@@ -32,7 +33,7 @@ const buildPackedArrangement = (tracks: Array<{
     }>;
 }>): string => {
     const snapshot: IArrangementSnapshot = {
-        version: 4,
+        version: arrangementSnapshotVersion,
         title: "Decoration Test",
         timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4", stepResolution: 16 },
         tracks: tracks.map((track, trackIndex) => {

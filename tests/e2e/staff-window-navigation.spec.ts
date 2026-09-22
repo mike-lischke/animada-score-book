@@ -6,6 +6,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
 import { stringifyPackedArrangement } from "../../src/core/serialisation/snapshot-packing.js";
+import { arrangementSnapshotVersion } from "../../src/core/serialisation/snapshots.js";
 import { routeApi } from "./e2e-test-helpers.js";
 
 const barCount = 8;
@@ -72,7 +73,7 @@ const openScore = async (page: Page): Promise<void> => {
     });
 
     const snapshot = {
-        version: 4,
+        version: arrangementSnapshotVersion,
         title: "E2E Staff Window Navigation",
         timeParams: { timeSignature: "4/4", tempo: 120, length: barCount, pulse: "1/4", stepResolution: 16 },
         tracks: [{ id: 210, instrumentId: "0", measures }],

@@ -58,6 +58,20 @@ export interface ITimeParamsBase {
     stepResolution: number;
 }
 
+/**
+ * Optional, feature-owned data of an arrangement snapshot, keyed by chunk name.
+ *
+ * A chunk carries everything one feature needs beyond the core of a snapshot (version, time params,
+ * tracks). Chunk names are camelCase and name the feature rather than the stored shape. A feature owns
+ * its chunk end to end: it keeps the data in a model field, writes the chunk in `toSnapshot()` and reads
+ * it back in `applyArrangementSnapshot()`, so adding one never touches the core and removing one is a
+ * matter of deleting those three places.
+ *
+ * A chunk is never required to read a snapshot, which is why a missing or unknown chunk is ignored.
+ * Keys are dropped on load, so chunks travel only between builds that both know them.
+ */
+export type IArrangementExtensions = Record<string, unknown>;
+
 export interface IArrangementSnapshot {
     version: number;
     title?: string;
@@ -67,8 +81,8 @@ export interface IArrangementSnapshot {
     /** The database score ID, if this arrangement is backed by a DB score. */
     scoreId?: number;
 
-    /** Optional per-measure section labels, keyed by 1-based measure number. */
-    measureLabels?: Record<number, string>;
+    /** Feature-owned extension data, keyed by chunk name. See {@link IArrangementExtensions}. */
+    extensions?: IArrangementExtensions;
 }
 
 export interface ITrackSnapshot {

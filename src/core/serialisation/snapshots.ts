@@ -8,7 +8,7 @@ import type { IArrangementSnapshot, ITrackMeasureSnapshot, ITrackSnapshot } from
 
 /** Current internal arrangement snapshot schema version. */
 
-export const arrangementSnapshotVersion = 4;
+export const arrangementSnapshotVersion = 5;
 
 export const isNaturalNumber = (value: unknown): value is number => {
     return typeof value === "number" && Number.isInteger(value) && value >= 1;
@@ -26,10 +26,6 @@ export const getArrangementSnapshot = (arrangementView: Readonly<ISbDmArrangemen
 
     if (arrangementView.id >= 10000) {
         snapshot.scoreId = arrangementView.id;
-    }
-
-    if (Object.keys(arrangementView.measureLabels).length > 0) {
-        snapshot.measureLabels = { ...arrangementView.measureLabels };
     }
 
     return snapshot;

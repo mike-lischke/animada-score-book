@@ -81,12 +81,6 @@ export interface IStaffMeasureViewerProps extends ICommonUIProperties {
     dataModel: ScoreBookDataModel;
     scoreElementRegistry?: ScoreElementRegistry;
 
-    /** Label explicitly set for this measure. */
-    ownLabel?: string;
-
-    /** Most-recent label from an earlier measure; shown dimmed when no ownLabel is set. */
-    inheritedLabel?: string;
-
     /**
      * If given, render only these tracks (in this order) instead of all tracks of the arrangement.
      * Used by the print feature to limit output to the user's selection.
@@ -351,14 +345,8 @@ export class StaffMeasureViewer extends UIComponent<IStaffMeasureViewerProps, IS
 
     public override render(): ComponentChild {
         const { barNumber, arrangement, arrangementPlayer, inEditMode,
-            dataModel, ownLabel, inheritedLabel, scoreElementRegistry, style } = this.props;
+            dataModel, scoreElementRegistry, style } = this.props;
         const { tracks } = this.state;
-        const label = ownLabel ?? inheritedLabel;
-        const isInherited = ownLabel === undefined && inheritedLabel !== undefined;
-        let labelContent: ComponentChild = undefined;
-        if (label !== undefined) {
-            labelContent = <div className={`staff-measure-label${isInherited ? " inherited" : ""}`}>{label}</div>;
-        }
 
         return (
             <div
@@ -371,7 +359,6 @@ export class StaffMeasureViewer extends UIComponent<IStaffMeasureViewerProps, IS
                 })}
             >
                 <div className="staff-measure-number">{barNumber}</div>
-                {labelContent}
                 {tracks.map((track) => {
                     const trackPlayer = arrangementPlayer.trackPlayers.get(track);
                     if (!trackPlayer) {

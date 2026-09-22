@@ -229,7 +229,6 @@ export class PrintView extends UIComponent<IPrintViewProps> {
 
     private renderStaffMeasure(barNumber: number, tracks: ISbDmTrack[]): ComponentChild {
         const { arrangement, arrangementPlayer, dataModel, selectionManager } = this.props;
-        const ownLabel = arrangement.measureLabels[barNumber] as string | undefined;
 
         return (
             <StaffMeasureViewer
@@ -240,7 +239,6 @@ export class PrintView extends UIComponent<IPrintViewProps> {
                 inEditMode={false}
                 selectionManager={selectionManager}
                 dataModel={dataModel}
-                ownLabel={ownLabel}
                 tracks={tracks}
             />
         );

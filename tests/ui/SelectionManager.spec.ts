@@ -42,7 +42,6 @@ const makeArrangement = (tracks: ISbDmTrack[]): ISbDmArrangement => {
         loop: false,
         useMetronome: false,
         countIn: false,
-        measureLabels: {},
     };
 
     return arrangement;

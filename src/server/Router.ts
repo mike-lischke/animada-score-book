@@ -10,6 +10,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { type IncomingMessage, type ServerResponse } from "node:http";
 import { resolve } from "node:path";
 
+import { runMigrations } from "../../build/migration.js";
 import { convertErrorToString } from "../core/utils.js";
 import { Auth } from "./Auth.js";
 import { DatabaseEngine, type IDatabaseAdapter, type IDatabaseConfig } from "./database.js";
@@ -288,19 +289,56 @@ export class Router {
     };
 
     /**
-     * Imports seed.sql if it exists.
+     * Imports build/seed.sql into the given database, unless it already holds data.
+     *
+     * The emptiness check lives here, which makes the import idempotent and safe to trigger from any
+     * code path — including a database reset, where the seed data has to come back.
      *
      * @param targetAdapter The adapter to execute the seed SQL against.
      */
     public async seedIfExists(targetAdapter: IDatabaseAdapter): Promise<void> {
         const seedPath = resolve(process.cwd(), "build", "seed.sql");
 
-        if (existsSync(seedPath)) {
-            const seedSql = readFileSync(seedPath, "utf-8");
-
-            await targetAdapter.executeMultiple(seedSql);
-            console.log("Seed data imported from build/seed.sql");
+        if (!existsSync(seedPath)) {
+            return;
         }
+
+        const rows = await targetAdapter.query<{ cnt: number; }>(
+            "SELECT COUNT(*) AS cnt FROM folders",
+        );
+
+        if ((rows[0]?.cnt ?? 0) > 0) {
+            return;
+        }
+
+        const seedSql = readFileSync(seedPath, "utf-8");
+
+        await targetAdapter.executeMultiple(seedSql);
+        console.log("Seed data imported from build/seed.sql");
+    };
+
+    /**
+     * Drops every table of the configured database and rebuilds the schema through the migration
+     * pipeline, so the result is identical to a freshly installed backend: the migrations create the
+     * whole schema, then the seed data and the anonymous system user are applied.
+     *
+     * @param adapter An adapter that is already initialised on the configured database.
+     *
+     * @returns The adapter that serves the rebuilt database.
+     */
+    public async resetDatabase(adapter: IDatabaseAdapter): Promise<IDatabaseAdapter> {
+        await adapter.dropAllTables();
+
+        this.config.database.database = await runMigrations(this.config.database);
+        await adapter.shutdown();
+
+        const freshAdapter = this.createAdapter();
+
+        await freshAdapter.initialize(this.config.database);
+        await this.seedIfExists(freshAdapter);
+        await this.seedAnonymousUser(freshAdapter);
+
+        return freshAdapter;
     };
 
     /**
@@ -401,16 +439,8 @@ export class Router {
                     `Backend initialised via health check: ${engine} @ ${host}:${port}/${database}`,
                 );
 
-                // Run the same seeding as normal startup (idempotent — seed only if empty,
-                // anonymous user only if missing).
-                const rows = await this.auth.adapter.query<{ cnt: number; }>(
-                    "SELECT COUNT(*) AS cnt FROM folders",
-                );
-
-                if ((rows[0]?.cnt ?? 0) === 0) {
-                    await this.seedIfExists(this.auth.adapter);
-                }
-
+                // Run the same seeding as normal startup (both steps are idempotent).
+                await this.seedIfExists(this.auth.adapter);
                 await this.seedAnonymousUser(this.auth.adapter);
 
                 // Fall through to the normal health path below (pool is now ready).
@@ -539,28 +569,13 @@ export class Router {
                 return;
             }
 
-            // If overwrite is requested, drop existing tables first.
+            // If overwrite is requested, drop every table and rebuild the schema from the migrations.
             if (body.overwrite) {
                 try {
                     await newAdapter.initialize(this.config.database);
-                    await newAdapter.execute("DROP TABLE IF EXISTS entity_groups");
-                    await newAdapter.execute("DROP TABLE IF EXISTS permissions");
-                    await newAdapter.execute("DROP TABLE IF EXISTS user_groups");
-                    await newAdapter.execute("DROP TABLE IF EXISTS login_audit");
-                    await newAdapter.execute("DROP TABLE IF EXISTS `groups`");
-                    await newAdapter.execute("DROP TABLE IF EXISTS users");
-                    await newAdapter.execute("DROP TABLE IF EXISTS instrument_images");
-                    await newAdapter.execute("DROP TABLE IF EXISTS instruments");
-                    await newAdapter.execute("DROP TABLE IF EXISTS scores");
-                    await newAdapter.execute("DROP TABLE IF EXISTS folders");
-                    await newAdapter.execute("DROP TABLE IF EXISTS features");
-                    await newAdapter.execute("DROP TABLE IF EXISTS schema_version");
-                    await newAdapter.shutdown();
-                    const freshAdapter = this.createAdapter();
 
-                    await freshAdapter.initialize(this.config.database);
-                    await this.seedIfExists(freshAdapter);
-                    await this.seedAnonymousUser(freshAdapter);
+                    const freshAdapter = await this.resetDatabase(newAdapter);
+
                     await this.auth.adapter.shutdown();
                     this.auth.adapter = freshAdapter;
                     this.ctx.sendJson(res, { success: true });
@@ -576,15 +591,8 @@ export class Router {
 
             await newAdapter.initialize(this.config.database);
 
-            // Only load seed if tables are empty.
-            const existing = await newAdapter.query<{ cnt: number; }>(
-                "SELECT COUNT(*) AS cnt FROM folders",
-            );
-
-            if ((existing[0]?.cnt ?? 0) === 0) {
-                await this.seedIfExists(newAdapter);
-            }
-
+            // Both seeding steps are idempotent: the seed data lands only in an empty database.
+            await this.seedIfExists(newAdapter);
             await this.seedAnonymousUser(newAdapter);
         } catch (e) {
             console.error("Database initialisation failed:", convertErrorToString(e));

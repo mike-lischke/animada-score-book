@@ -860,38 +860,12 @@ export class App extends UIComponent<{}, IAppState> {
                 return;
             }
 
-            const confirmed = await this.confirmDialogRef.current?.show(
-                "This will delete all scores, folders, users and groups.\n"
-                + "The database tables will be recreated from scratch.",
-                { accept: "Reset Database", refuse: "Cancel" },
-                "Reset Database",
-                ["This cannot be undone. Make sure to export your scores if you want to keep them."],
-            );
-
-            if (confirmed !== DialogResponseClosure.Accept) {
-                return;
-            }
-
             // Skip login when there are no users (e.g., schema broken,
             // users table missing). The backend allows emergency reset without auth.
-            if (health.hasUsers) {
-                await this.setStatePromise({ phase: AppPhase.Login });
-                const loggedIn = await this.loginDialogRef.current?.show(true);
+            await this.resetBackend(health.hasUsers);
 
-                if (!loggedIn) {
-                    return;
-                }
-            }
-
-            const ok = await this.dataModel.resetDatabase();
-
-            if (!ok) {
-                // Reset failed — restart the health check so the setup dialog can show the error.
-                return this.checkBackendThenInitialize();
-            }
-
-            // Restart the health check — the backend is now fresh.
-            return this.checkBackendThenInitialize();
+            // resetBackend restarts the boot sequence itself; this health report is stale now.
+            return;
         }
 
         if (!health.hasUsers) {
@@ -1230,6 +1204,41 @@ export class App extends UIComponent<{}, IAppState> {
         });
     };
 
+    /**
+     * Runs the destructive backend reset: confirmation, a login when the backend demands one, then the
+     * reset itself. The backend drops every table and rebuilds the schema, so the boot sequence has to
+     * run again afterwards — the fresh database holds neither users nor scores any more.
+     *
+     * @param requiresLogin Whether the reset needs an admin session at the backend.
+     */
+    private async resetBackend(requiresLogin: boolean): Promise<void> {
+        const confirmed = await this.confirmDialogRef.current?.show(
+            "This will delete all scores, folders, users and groups.\n"
+            + "The database tables will be recreated from scratch.",
+            { accept: "Reset Database", refuse: "Cancel" },
+            "Reset Database",
+            ["This cannot be undone. Make sure you export your scores if you want to keep them."],
+        );
+
+        if (confirmed !== DialogResponseClosure.Accept) {
+            return;
+        }
+
+        if (requiresLogin) {
+            await this.setStatePromise({ phase: AppPhase.Login });
+
+            const loggedIn = await this.loginDialogRef.current?.show(true);
+            if (!loggedIn) {
+                return;
+            }
+        }
+
+        await this.dataModel.resetDatabase();
+
+        // Restart the boot sequence; the health check reports the result of the reset.
+        await this.checkBackendThenInitialize();
+    }
+
     private buildUserMenuItems(): IDropdownItem[] {
         const { user, activeGroup } = this.dataModel;
         const items: IDropdownItem[] = [];
@@ -1258,7 +1267,9 @@ export class App extends UIComponent<{}, IAppState> {
                 label: "Reset Backend",
                 icon: <Icon src={UIIcon.Server} />,
                 onClick: () => {
-                    void this.backendSetupDialogRef.current?.show({ mode: "admin" });
+                    // The menu only shows for admins, so the backend accepts the reset without a
+                    // further login.
+                    void this.resetBackend(false);
                 },
             });
         } else if (user) {

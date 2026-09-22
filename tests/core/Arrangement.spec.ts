@@ -443,20 +443,6 @@ describe("Arrangement", () => {
         expect(track.measures[2].events[0].noteStyleId).toBeUndefined();
     });
 
-    it("insertBars and deleteBar shift measure labels", () => {
-        const instrument = createInstrument("0", 0, 0);
-        const arrangement = Arrangement.emptyArrangementWithInstruments([instrument], { length: 3 });
-        arrangement.measureLabels = { 2: "Section A", 3: "Section B" };
-
-        arrangement.insertBars(3, 1, true, false);
-
-        expect(arrangement.measureLabels).toEqual({ 2: "Section A", 4: "Section B" });
-
-        arrangement.deleteBar(1);
-
-        expect(arrangement.measureLabels).toEqual({ 1: "Section A", 3: "Section B" });
-    });
-
     it("deleteBar keeps at least one bar in the arrangement", () => {
         const instrument = createInstrument("0", 0, 0);
         const arrangement = Arrangement.emptyArrangementWithInstruments([instrument], { length: 1 });

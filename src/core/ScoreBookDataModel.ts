@@ -580,9 +580,6 @@ export interface ISbDmArrangement extends ISbDmCommon {
     timeParams: ISbDmTimeParams;
     tracks: ISbDmTrack[];
 
-    /** Per-measure section labels, keyed by 1-based measure number. */
-    measureLabels: Record<number, string>;
-
     /**
      * Column widths set for individual measures, keyed by 1-based measure number, in px at 100% zoom.
      * In-memory only: a measure without an entry is laid out with the default width of the view.

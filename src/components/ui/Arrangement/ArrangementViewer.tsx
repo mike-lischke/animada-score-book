@@ -279,27 +279,19 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
             const trailingWidth = Math.max(0, MeasureLayout.totalWidth(offsets) - (offsets[staffWindow.last] ?? 0));
 
             const measures: ComponentChild[] = [];
-            let lastLabel = this.labelBefore(staffWindow.first);
             for (let bar = staffWindow.first; bar <= staffWindow.last; bar++) {
-                const ownLabel = arrangement.measureLabels[bar] as string | undefined;
                 measures.push(
                     <StaffMeasureViewer
                         key={bar}
                         barNumber={bar}
                         {...barViewerProps}
                         scoreElementRegistry={this.scoreElementRegistry}
-                        ownLabel={ownLabel}
-                        inheritedLabel={ownLabel === undefined ? lastLabel : undefined}
                         style={{
                             flex: `0 0 ${MeasureLayout.widthOf(bar, arrangement.measureWidths)}px`,
                             minWidth: 0,
                         }}
                     />,
                 );
-
-                if (ownLabel !== undefined) {
-                    lastLabel = ownLabel;
-                }
             }
 
             // The prefix belongs to the leading spacer, which starts at the left edge of the content. It stays
@@ -773,27 +765,6 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
 
         return centers;
     };
-
-    /**
-     * @param bar A 1-based measure number.
-     *
-     * @returns The most recent section label set before the given measure, if any.
-     */
-    private labelBefore(bar: number): string | undefined {
-        const labels = this.props.dataModel.arrangement?.measureLabels;
-        let result: string | undefined;
-        let latest = 0;
-
-        for (const [key, label] of Object.entries(labels ?? {})) {
-            const number = Number(key);
-            if (number < bar && number > latest) {
-                latest = number;
-                result = label;
-            }
-        }
-
-        return result;
-    }
 
     /**
      * @param scrollLeft The scrollLeft of the viewer, at 100% zoom.

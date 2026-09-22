@@ -12,10 +12,9 @@ import {
     ScoreBookDataModel, type ISbDmArrangement, type ISbDmInstrument
 } from "../../src/core/ScoreBookDataModel.js";
 import { ArrangementMigrator } from "../../src/core/serialisation/migration/ArrangementMigrator.js";
-import type {
-    ILegacyArrangementSnapshot, ILegacyArrangementSnapshotV3
-} from "../../src/core/serialisation/migration/legacy-snapshot-types.js";
-import { migrateV3ToV4 } from "../../src/core/serialisation/migration/v3-to-v4.js";
+import {
+    BananaDrumMigrator, type IBananaDrumPolyrhythmSnapshot, type IBananaDrumSnapshot
+} from "../../src/core/serialisation/migration/BananaDrumMigrator.js";
 import { TimeParams } from "../../src/core/TimeParams.js";
 import { Track } from "../../src/core/Track.js";
 import type { IAudioData } from "../../src/core/types/general.js";
@@ -65,6 +64,35 @@ const createRealtimeProvider = (): IRealtimeProvider => {
     };
 };
 
+/**
+ * Builds a one-bar share-link arrangement with a single track.
+ *
+ * @param stepResolution The step resolution of the arrangement.
+ * @param notes The note style id of every note of the flattened track, "0" standing for a rest.
+ * @param polyrhythms The polyrhythms laid over these notes.
+ *
+ * @returns The share-link arrangement.
+ */
+const shareLink = (stepResolution: number, notes: string[],
+    polyrhythms: IBananaDrumPolyrhythmSnapshot[]): IBananaDrumSnapshot => {
+    return {
+        timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4", stepResolution },
+        tracks: [{ id: 100, instrumentId: "1", notes, polyrhythms }],
+    };
+};
+
+/**
+ * @param length The number of notes to produce.
+ * @param hitIndices The indices of the notes that sound; every other note is a rest.
+ *
+ * @returns The note style id of every note.
+ */
+const notesWithHits = (length: number, hitIndices: number[]): string[] => {
+    return Array.from({ length }, (element, index) => {
+        return hitIndices.includes(index) ? "1" : "0";
+    });
+};
+
 describe.sequential("Polyrhythm UI Integration", () => {
     afterEach(() => {
         cleanup();
@@ -73,8 +101,7 @@ describe.sequential("Polyrhythm UI Integration", () => {
     it("renders existing polyrhythms in bar view", () => {
         const instrument = createInstrumentWithNoteStyle("1", 0, 0);
 
-        const snapshot: ILegacyArrangementSnapshot = {
-            version: 1,
+        const snapshot: IBananaDrumSnapshot = {
             title: "Display",
             timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4", stepResolution: 16 },
             tracks: [{
@@ -101,8 +128,7 @@ describe.sequential("Polyrhythm UI Integration", () => {
     it("plays polyrhythm note events through TrackPlayer", () => {
         const instrument = createInstrumentWithNoteStyle("0", 0, 0);
 
-        const snapshot: ILegacyArrangementSnapshot = {
-            version: 1,
+        const snapshot: IBananaDrumSnapshot = {
             title: "Playback",
             timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4", stepResolution: 16 },
             tracks: [{
@@ -144,31 +170,11 @@ describe.sequential("Polyrhythm UI Integration", () => {
     it("renders a subdivision note over grid rests without overflowing its container", () => {
         const instrument = createInstrumentWithNoteStyle("1", 0, 0);
 
-        const snapshot: ILegacyArrangementSnapshotV3 = {
-            version: 2,
-            timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4", stepResolution: 16 },
-            tracks: [{
-                id: 100,
-                instrumentId: "1",
-                measures: [{
-                    number: 1,
-                    meter: { beats: 4, beatUnits: 4, stepResolution: 16, beatGroups: [4, 4, 4, 4] },
-                    steps: [
-                        { index: 0 },
-                        { index: 1 },
-                        { index: 2, noteStyleId: "1" },
-                        ...Array.from({ length: 14 }, (element, index) => {
-                            return { index: index + 3 };
-                        }),
-                    ],
-                    subdivisions: [{ id: 1, startStep: 0, actual: 3, normal: 2, isTuplet: true }],
-                }],
-            }],
-        };
+        const snapshot = shareLink(16, notesWithHits(17, [2]), [{ id: 1, start: 0, end: 1, length: 3 }]);
 
         const arrangement = new Arrangement();
         arrangement.timeParams = new TimeParams("4/4", 120, 1, "1/4", 16);
-        arrangement.applyArrangementSnapshot(migrateV3ToV4(snapshot), [instrument]);
+        arrangement.applyArrangementSnapshot(BananaDrumMigrator.toSnapshot(snapshot, []), [instrument]);
 
         const track = arrangement.tracks[0] as Track;
         const dataModel = new TestScoreBookDataModel(arrangement, [instrument]);
@@ -186,30 +192,11 @@ describe.sequential("Polyrhythm UI Integration", () => {
     it("renders each subdivision note as a single slot cell", () => {
         const instrument = createInstrumentWithNoteStyle("1", 0, 0);
 
-        const snapshot: ILegacyArrangementSnapshotV3 = {
-            version: 2,
-            timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4", stepResolution: 16 },
-            tracks: [{
-                id: 100,
-                instrumentId: "1",
-                measures: [{
-                    number: 1,
-                    meter: { beats: 4, beatUnits: 4, stepResolution: 16, beatGroups: [4, 4, 4, 4] },
-                    steps: [
-                        { index: 0, noteStyleId: "1" },
-                        { index: 1, noteStyleId: "1" },
-                        ...Array.from({ length: 13 }, (element, index) => {
-                            return { index: index + 2 };
-                        }),
-                    ],
-                    subdivisions: [{ id: 1, startStep: 0, actual: 2, normal: 3, isTuplet: false }],
-                }],
-            }],
-        };
+        const snapshot = shareLink(16, notesWithHits(15, [0, 1]), [{ id: 1, start: 0, end: 2, length: 2 }]);
 
         const arrangement = new Arrangement();
         arrangement.timeParams = new TimeParams("4/4", 120, 1, "1/4", 16);
-        arrangement.applyArrangementSnapshot(migrateV3ToV4(snapshot), [instrument]);
+        arrangement.applyArrangementSnapshot(BananaDrumMigrator.toSnapshot(snapshot, []), [instrument]);
 
         const track = arrangement.tracks[0] as Track;
         const dataModel = new TestScoreBookDataModel(arrangement, [instrument]);
@@ -234,34 +221,11 @@ describe.sequential("Polyrhythm UI Integration", () => {
     it("keeps subdivision slot step indices within the subdivision's grid range", () => {
         const instrument = createInstrumentWithNoteStyle("1", 0, 0);
 
-        const snapshot: ILegacyArrangementSnapshotV3 = {
-            version: 2,
-            timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4", stepResolution: 16 },
-            tracks: [{
-                id: 100,
-                instrumentId: "1",
-                measures: [{
-                    number: 1,
-                    meter: { beats: 4, beatUnits: 4, stepResolution: 16, beatGroups: [4, 4, 4, 4] },
-                    steps: [
-                        { index: 0 },
-                        { index: 1 },
-                        { index: 2 },
-                        { index: 3, noteStyleId: "1" },
-                        { index: 4, noteStyleId: "1" },
-                        { index: 5, noteStyleId: "1" },
-                        ...Array.from({ length: 11 }, (element, index) => {
-                            return { index: index + 6 };
-                        }),
-                    ],
-                    subdivisions: [{ id: 1, startStep: 3, actual: 2, normal: 1, isTuplet: false }],
-                }],
-            }],
-        };
+        const snapshot = shareLink(16, notesWithHits(17, [3, 4, 5]), [{ id: 1, start: 3, end: 3, length: 2 }]);
 
         const arrangement = new Arrangement();
         arrangement.timeParams = new TimeParams("4/4", 120, 1, "1/4", 16);
-        arrangement.applyArrangementSnapshot(migrateV3ToV4(snapshot), [instrument]);
+        arrangement.applyArrangementSnapshot(BananaDrumMigrator.toSnapshot(snapshot, []), [instrument]);
 
         const track = arrangement.tracks[0] as Track;
         const dataModel = new TestScoreBookDataModel(arrangement, [instrument]);
@@ -297,33 +261,11 @@ describe.sequential("Polyrhythm UI Integration", () => {
     it("keeps a cleared subdivision slot individually selectable", () => {
         const instrument = createInstrumentWithNoteStyle("1", 0, 0);
 
-        const snapshot: ILegacyArrangementSnapshotV3 = {
-            version: 2,
-            timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4", stepResolution: 16 },
-            tracks: [{
-                id: 100,
-                instrumentId: "1",
-                measures: [{
-                    number: 1,
-                    meter: { beats: 4, beatUnits: 4, stepResolution: 16, beatGroups: [4, 4, 4, 4] },
-                    steps: [
-                        { index: 0 },
-                        { index: 1 },
-                        { index: 2 },
-                        { index: 3, noteStyleId: "1" },
-                        { index: 4, noteStyleId: "1" },
-                        ...Array.from({ length: 12 }, (element, index) => {
-                            return { index: index + 5 };
-                        }),
-                    ],
-                    subdivisions: [{ id: 1, startStep: 3, actual: 2, normal: 1, isTuplet: false }],
-                }],
-            }],
-        };
+        const snapshot = shareLink(16, notesWithHits(17, [3, 4]), [{ id: 1, start: 3, end: 3, length: 2 }]);
 
         const arrangement = new Arrangement();
         arrangement.timeParams = new TimeParams("4/4", 120, 1, "1/4", 16);
-        arrangement.applyArrangementSnapshot(migrateV3ToV4(snapshot), [instrument]);
+        arrangement.applyArrangementSnapshot(BananaDrumMigrator.toSnapshot(snapshot, []), [instrument]);
 
         const track = arrangement.tracks[0] as Track;
         const dataModel = new TestScoreBookDataModel(arrangement, [instrument]);

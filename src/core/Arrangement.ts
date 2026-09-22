@@ -33,9 +33,6 @@ export class Arrangement implements ISbDmArrangement {
 
     public timeParams!: ITimeParams;
 
-    /** Per-measure section labels, keyed by 1-based measure number. */
-    public measureLabels: Record<number, string> = {};
-
     /** Column widths of individual measures, keyed by 1-based measure number. Not part of a snapshot yet. */
     public readonly measureWidths = new Map<number, number>();
 
@@ -140,9 +137,6 @@ export class Arrangement implements ISbDmArrangement {
                     }),
                 };
             }),
-            measureLabels: Object.keys(this.measureLabels).length > 0
-                ? { ...this.measureLabels }
-                : undefined,
             scoreId: this.id >= 10000 ? this.id : undefined,
         };
     }
@@ -255,7 +249,6 @@ export class Arrangement implements ISbDmArrangement {
         }
 
         this.timeParams.length += count;
-        this.shiftMeasureLabels(atIndex + 1, count);
         void requisitions.execute("arrangementChanged", this.id);
     }
 
@@ -274,7 +267,6 @@ export class Arrangement implements ISbDmArrangement {
         }
 
         this.timeParams.length -= 1;
-        this.removeMeasureLabel(barNumber);
         void requisitions.execute("arrangementChanged", this.id);
     }
 
@@ -303,7 +295,6 @@ export class Arrangement implements ISbDmArrangement {
         }
 
         this.timeParams.length += 1;
-        this.shiftMeasureLabels(barNumber + 1, 1);
         void requisitions.execute("arrangementChanged", this.id);
     }
 
@@ -335,10 +326,6 @@ export class Arrangement implements ISbDmArrangement {
         if (arrangementSnapshot.scoreId !== undefined) {
             this.id = arrangementSnapshot.scoreId;
         }
-
-        this.measureLabels = arrangementSnapshot.measureLabels
-            ? { ...arrangementSnapshot.measureLabels }
-            : {};
 
         // Rebuild the track list in snapshot order. Reusing addTrack here would re-sort by instrument
         // displayOrder, which is unstable when several tracks share the same instrument — a restored
@@ -421,46 +408,5 @@ export class Arrangement implements ISbDmArrangement {
 
     private getTrackMeasureId(track: Track, measureNumber: number): number {
         return (track.id * 100) + measureNumber;
-    }
-
-    /**
-     * Shifts section labels starting at the given bar by the given delta. Labels that would move below
-     * bar 1 are dropped.
-     *
-     * @param fromBar The 1-based bar from which labels are shifted.
-     * @param delta The number of bars to shift by (positive or negative).
-     */
-    private shiftMeasureLabels(fromBar: number, delta: number): void {
-        const shifted: Record<number, string> = {};
-
-        for (const [barString, label] of Object.entries(this.measureLabels)) {
-            const bar = Number(barString);
-            const newBar = bar >= fromBar ? bar + delta : bar;
-            if (newBar >= 1) {
-                shifted[newBar] = label;
-            }
-        }
-
-        this.measureLabels = shifted;
-    }
-
-    /**
-     * Removes the section label of the given bar and shifts later labels down by one.
-     *
-     * @param barNumber The 1-based bar whose label is removed.
-     */
-    private removeMeasureLabel(barNumber: number): void {
-        const shifted: Record<number, string> = {};
-
-        for (const [barString, label] of Object.entries(this.measureLabels)) {
-            const bar = Number(barString);
-            if (bar === barNumber) {
-                continue;
-            }
-
-            shifted[bar > barNumber ? bar - 1 : bar] = label;
-        }
-
-        this.measureLabels = shifted;
     }
 };

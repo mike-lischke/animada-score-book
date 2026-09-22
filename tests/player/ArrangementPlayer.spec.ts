@@ -244,7 +244,6 @@ const makeArrangement = (trackCount: number): ISbDmArrangement => {
         loop: false,
         useMetronome: false,
         countIn: false,
-        measureLabels: {},
     };
 
     tracks.forEach((t) => {

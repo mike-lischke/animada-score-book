@@ -4,8 +4,8 @@
  */
 
 import type {
-    IArrangementSnapshot, IMeasureEvent, IMeterSnapshot, ISubdivision, ITimeParamsBase, ITrackMeasureSnapshot,
-    ITrackSnapshot
+    IArrangementExtensions, IArrangementSnapshot, IMeasureEvent, IMeterSnapshot, ISubdivision, ITimeParamsBase,
+    ITrackMeasureSnapshot, ITrackSnapshot
 } from "../types/general.js";
 import { addFractions } from "./numeric-functions.js";
 import { arrangementSnapshotVersion, isNaturalNumber } from "./snapshots.js";
@@ -20,13 +20,14 @@ import { arrangementSnapshotVersion, isNaturalNumber } from "./snapshots.js";
  *
  * Layout:
  * ```text
- * { v, t?, p, k, l? }
+ * { v, t?, p, k, s?, c? }
  *   v          schema version (matches IArrangementSnapshot.version)
  *   t          optional title
  *   p          packed time params:  [timeSignature, tempo, length, pulse, stepResolution]
  *   k          tracks: [ [id, instrumentId, measures], ... ]
  *     measure: [ number, meter, events, subdivisions ]
- *   l          optional measure labels: { measureNumber: label, ... }
+ *   s          optional database score ID
+ *   c          optional extension chunks, keyed by chunk name
  * ```
  */
 export interface IPackedArrangement {
@@ -34,10 +35,10 @@ export interface IPackedArrangement {
     t?: string;
     p: PackedTimeParams;
     k: PackedTrack[];
-    /** Per-measure section labels, keyed by 1-based measure number (as string after JSON round-trip). */
-    l?: Record<number, string>;
     /** Optional database score ID, carried through round-trips. */
     s?: number;
+    /** Extension chunks of the features that have something to store. See {@link IArrangementExtensions}. */
+    c?: IArrangementExtensions;
 }
 
 export type PackedTimeParams = [
@@ -101,12 +102,12 @@ export const packArrangementSnapshot = (snapshot: IArrangementSnapshot): IPacked
         packed.t = snapshot.title;
     }
 
-    if (snapshot.measureLabels && Object.keys(snapshot.measureLabels).length > 0) {
-        packed.l = { ...snapshot.measureLabels };
-    }
-
     if (snapshot.scoreId !== undefined) {
         packed.s = snapshot.scoreId;
+    }
+
+    if (snapshot.extensions && Object.keys(snapshot.extensions).length > 0) {
+        packed.c = { ...snapshot.extensions };
     }
 
     return packed;
@@ -124,6 +125,10 @@ export const unpackArrangementSnapshot = (packed: IPackedArrangement): IArrangem
         throw new Error("Invalid packed arrangement: missing or non-numeric version");
     }
 
+    if (packed.v !== arrangementSnapshotVersion) {
+        throw new Error(`Unsupported snapshot schema version: ${packed.v}`);
+    }
+
     const snapshot: IArrangementSnapshot = {
         version: packed.v,
         timeParams: unpackTimeParams(packed.p),
@@ -134,17 +139,12 @@ export const unpackArrangementSnapshot = (packed: IPackedArrangement): IArrangem
         snapshot.title = packed.t;
     }
 
-    if (packed.l !== undefined) {
-        // JSON round-trips object keys as strings; convert back to numbers.
-        snapshot.measureLabels = Object.fromEntries(
-            Object.entries(packed.l).map(([k, v]) => {
-                return [Number(k), v];
-            }),
-        );
-    }
-
     if (packed.s !== undefined) {
         snapshot.scoreId = packed.s;
+    }
+
+    if (packed.c !== undefined && Object.keys(packed.c).length > 0) {
+        snapshot.extensions = { ...packed.c };
     }
 
     return snapshot;

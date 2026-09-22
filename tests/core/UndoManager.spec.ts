@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ScoreBookDataModel, type ISbDmArrangement } from "../../src/core/ScoreBookDataModel.js";
 import { ArrangementMigrator } from "../../src/core/serialisation/migration/ArrangementMigrator.js";
+import { arrangementSnapshotVersion } from "../../src/core/serialisation/snapshots.js";
 import type { IArrangementSnapshot } from "../../src/core/types/general.js";
 import { UndoManager } from "../../src/core/UndoManager.js";
 import { requisitions } from "../../src/supplement/Requisitions.js";
@@ -51,7 +52,7 @@ vi.mock("../../src/core/UndoRedoStack.js", () => {
         public canRedo = false;
         public topics = { canUndo: new TestPublisher(), canRedo: new TestPublisher() };
         public currentState: IArrangementSnapshot = {
-            version: 2,
+            version: arrangementSnapshotVersion,
             title: "Snapshot",
             timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4", stepResolution: 8 },
             tracks: [],
@@ -96,7 +97,7 @@ const undoRedo = (await import("../../src/core/UndoRedoStack.js")) as unknown as
 
 describe("UndoManager", () => {
     const snapshot: IArrangementSnapshot = {
-        version: 2,
+        version: arrangementSnapshotVersion,
         title: "Initial",
         timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4", stepResolution: 8 },
         tracks: []

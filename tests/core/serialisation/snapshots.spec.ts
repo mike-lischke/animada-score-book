@@ -9,13 +9,13 @@ import { Arrangement } from "../../../src/core/Arrangement.js";
 import type { ISbDmInstrument } from "../../../src/core/ScoreBookDataModel.js";
 import { ArrangementMigrator } from "../../../src/core/serialisation/migration/ArrangementMigrator.js";
 import { stringifyPackedArrangement } from "../../../src/core/serialisation/snapshot-packing.js";
-import { getArrangementSnapshot } from "../../../src/core/serialisation/snapshots.js";
-import type { ILegacyArrangementSnapshot } from "../../../src/core/serialisation/migration/legacy-snapshot-types.js";
+import { getArrangementSnapshot, arrangementSnapshotVersion } from "../../../src/core/serialisation/snapshots.js";
+import type { IBananaDrumSnapshot } from "../../../src/core/serialisation/migration/BananaDrumMigrator.js";
 import type { IArrangementSnapshot, IAudioData, Mutable } from "../../../src/core/types/general.js";
 import { createInstrument } from "../../unit-test-helpers.js";
 
 describe("snapshots", () => {
-    it("writes arrangement snapshots as version 4 with tuplets instead of polyrhythms", () => {
+    it("writes arrangement snapshots at the current version with tuplets instead of polyrhythms", () => {
         const instrument = createInstrument("0", 0, 0);
         const noteStyle = {
             id: "1",
@@ -26,8 +26,7 @@ describe("snapshots", () => {
 
         (instrument as Mutable<ISbDmInstrument>).noteStyles = { "1": noteStyle };
 
-        const sourceSnapshot: ILegacyArrangementSnapshot = {
-            version: 1,
+        const sourceSnapshot: IBananaDrumSnapshot = {
             title: "Source",
             timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4", stepResolution: 8 },
             tracks: [{
@@ -57,7 +56,7 @@ describe("snapshots", () => {
 
         const snapshot = getArrangementSnapshot(arrangement);
 
-        expect(snapshot.version).toBe(4);
+        expect(snapshot.version).toBe(arrangementSnapshotVersion);
         const track = snapshot.tracks[0];
         expect("measures" in track).toBe(true);
         if ("measures" in track) {
@@ -94,7 +93,7 @@ describe("snapshots", () => {
     it("ArrangementMigrator preserves scoreId from snapshot", () => {
         const instrument = createInstrument("0", 0, 0);
         const snapshot: IArrangementSnapshot = {
-            version: 2,
+            version: arrangementSnapshotVersion,
             title: "Scored",
             scoreId: 12345,
             timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4", stepResolution: 8 },
@@ -121,7 +120,7 @@ describe("snapshots", () => {
         expect(snapshot.tracks[0].measures[0].events[0].noteStyleId).toBe("1");
     });
 
-    it("loads a packed v4 string through the migrator entry point", () => {
+    it("loads a packed string through the migrator entry point", () => {
         const instrument = createInstrument("0", 0, 0);
         const arrangement = Arrangement.emptyArrangement([instrument]);
         arrangement.tracks[0].measures[0].events[0].noteStyleId = "1";

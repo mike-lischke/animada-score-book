@@ -1054,24 +1054,6 @@
     opacity: 0.1;
 }
 
-.staff-measure-label {
-    position: absolute;
-    top: 3px;
-    left: 50%;
-    z-index: 1;
-    max-width: calc(100% - 16px);
-    transform: translateX(-50%);
-    font-size: 11px;
-    color: var(--color-base-content);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-
-    &.inherited {
-        opacity: 0.35;
-    }
-}
-
 .staff-prefix-row {
     min-height: var(--note-height);
     margin: 0;

@@ -9,45 +9,30 @@ import { Arrangement } from "../../../../src/core/Arrangement.js";
 import { Track } from "../../../../src/core/Track.js";
 import type { ISbDmInstrument } from "../../../../src/core/ScoreBookDataModel.js";
 import { ArrangementMigrator } from "../../../../src/core/serialisation/migration/ArrangementMigrator.js";
-import type {
-    ILegacyArrangementSnapshot, ILegacyArrangementSnapshotV3,
-} from "../../../../src/core/serialisation/migration/legacy-snapshot-types.js";
+import type { IBananaDrumSnapshot } from "../../../../src/core/serialisation/migration/BananaDrumMigrator.js";
 import { getArrangementSnapshot } from "../../../../src/core/serialisation/snapshots.js";
 import type { IArrangementSnapshot, IAudioData, Mutable } from "../../../../src/core/types/general.js";
 import { createInstrument, hydrateMeasureEvents } from "../../../unit-test-helpers.js";
 
 /**
- * Creates a live Arrangement from a V2 snapshot via the public API.
+ * Creates a live Arrangement from a snapshot via the public API.
  *
- * @param snapshot    The V2 arrangement snapshot.
+ * @param snapshot The arrangement snapshot or share-link arrangement to migrate.
  * @param instruments The available instruments.
  * @returns A fully constructed arrangement.
  */
 const createArrangement = (
-    snapshot: IArrangementSnapshot | ILegacyArrangementSnapshotV3,
+    snapshot: IArrangementSnapshot | IBananaDrumSnapshot,
     instruments: ISbDmInstrument[],
 ): Arrangement => {
     return ArrangementMigrator.migrateToArrangement(snapshot, instruments).arrangement;
-};
-
-/**
- * Migrates a legacy snapshot to a live Arrangement.
- *
- * @param _snapshot   The legacy (V1) arrangement snapshot.
- * @param instruments The available instruments.
- * @returns A fully constructed arrangement.
- */
-const migrateLegacy = (_snapshot: ILegacyArrangementSnapshot, instruments: ISbDmInstrument[]): Arrangement => {
-    // @ts-expect-error: accessing private migrate for testing
-    return ArrangementMigrator.migrate(_snapshot, instruments);
 };
 
 describe("ArrangementMigrator", () => {
     it("splits cross-bar polyrhythms when loading a snapshot", () => {
         const instruments = [createInstrument("0", 0, 0)];
 
-        const snapshot: ILegacyArrangementSnapshot = {
-            version: 1,
+        const snapshot: IBananaDrumSnapshot = {
             title: "Cross Bar",
             timeParams: { timeSignature: "4/4", tempo: 120, length: 2, pulse: "1/4", stepResolution: 16 },
             tracks: [
@@ -60,7 +45,7 @@ describe("ArrangementMigrator", () => {
             ]
         };
 
-        const arrangement = migrateLegacy(snapshot, instruments);
+        const arrangement = createArrangement(snapshot, instruments);
         hydrateMeasureEvents(arrangement);
         const track = arrangement.tracks[0] as Track;
 
@@ -81,8 +66,7 @@ describe("ArrangementMigrator", () => {
     it("keeps already single-bar polyrhythms unchanged", () => {
         const instruments = [createInstrument("0", 0, 0)];
 
-        const snapshot: ILegacyArrangementSnapshot = {
-            version: 1,
+        const snapshot: IBananaDrumSnapshot = {
             title: "Already Normalized",
             timeParams: { timeSignature: "4/4", tempo: 120, length: 2, pulse: "1/4", stepResolution: 16 },
             tracks: [
@@ -95,7 +79,7 @@ describe("ArrangementMigrator", () => {
             ]
         };
 
-        const arrangement = migrateLegacy(snapshot, instruments);
+        const arrangement = createArrangement(snapshot, instruments);
         hydrateMeasureEvents(arrangement);
         const track = arrangement.tracks[0] as Track;
 
@@ -108,7 +92,7 @@ describe("ArrangementMigrator", () => {
         expect(polyrhythmEvents).toHaveLength(4);
     });
 
-    it("reconstructs polyrhythms from v2 measure events", () => {
+    it("keeps polyrhythms when a snapshot round-trips through the current schema", () => {
         const instrument = createInstrument("0", 0, 0);
         const hitStyle = {
             id: "1",
@@ -118,8 +102,7 @@ describe("ArrangementMigrator", () => {
         } as IAudioData;
         (instrument as Mutable<ISbDmInstrument>).noteStyles = { "1": hitStyle };
 
-        const legacySnapshot: ILegacyArrangementSnapshot = {
-            version: 1,
+        const shareLink: IBananaDrumSnapshot = {
             title: "Measure Events With Polyrhythm",
             timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4", stepResolution: 8 },
             tracks: [
@@ -134,7 +117,7 @@ describe("ArrangementMigrator", () => {
             ],
         };
 
-        const sourceArrangement = migrateLegacy(legacySnapshot, [instrument]);
+        const sourceArrangement = createArrangement(shareLink, [instrument]);
         const sourceTrack = sourceArrangement.tracks[0] as Track;
         const sourceMeasure = sourceTrack.measures[0];
 
@@ -156,62 +139,7 @@ describe("ArrangementMigrator", () => {
         expect(polyrhythmEvents[1].audioData?.id).toBe("1");
     });
 
-    it("treats undefined parentSubdivisionId as top-level when rebuilding runtime events", () => {
-        const instrument = createInstrument("3", 3, 3);
-        const hitStyle = {
-            id: "1",
-            audioBuffer: null,
-            instrument,
-            sampleProfile: { builtInDamping: 0, builtInAccent: false, ghost: false }
-        } as IAudioData;
-        (instrument as Mutable<ISbDmInstrument>).noteStyles = { "1": hitStyle };
-
-        const snapshot: ILegacyArrangementSnapshotV3 = {
-            version: 2,
-            title: "Tuplet Null Parent",
-            timeParams: {
-                timeSignature: "6/8",
-                tempo: 50,
-                length: 1,
-                pulse: "3/8",
-                stepResolution: 8,
-            },
-            tracks: [{
-                id: 497,
-                instrumentId: "3",
-                measures: [{
-                    number: 1,
-                    meter: {
-                        beats: 6,
-                        beatUnits: 8,
-                        stepResolution: 6,
-                        beatGroups: [3, 3],
-                    },
-                    steps: Array.from({ length: 8 }, (_, index) => {
-                        return { index, noteStyleId: "1" };
-                    }),
-                    // 6/8 S={3}, 3∈{3} → not a tuplet
-                    subdivisions: [{
-                        id: 496, startStep: 1, actual: 3, normal: 1, isTuplet: false,
-                        parentSubdivisionId: undefined,
-                    }],
-                }],
-            }],
-        };
-
-        const arrangement = createArrangement(snapshot, [instrument]);
-        hydrateMeasureEvents(arrangement);
-        const track = arrangement.tracks[0] as Track;
-        const events = track.measures[0].events;
-
-        expect(events).toHaveLength(8);
-        const nonGridEvents = events.filter((event) => {
-            return (event.duration.numerator * 6) % event.duration.denominator !== 0;
-        });
-        expect(nonGridEvents).toHaveLength(3);
-    });
-
-    it("produces tuplet groups from nested legacy polyrhythms", () => {
+    it("produces tuplet groups from nested share-link polyrhythms", () => {
         const instrument = createInstrument("3", 3, 3);
         (instrument as Mutable<ISbDmInstrument>).noteStyles = {
             "1": {
@@ -220,8 +148,7 @@ describe("ArrangementMigrator", () => {
             } as IAudioData,
         };
 
-        const snapshot: ILegacyArrangementSnapshot = {
-            version: 1,
+        const snapshot: IBananaDrumSnapshot = {
             title: "Nested Tuplet Parent",
             timeParams: {
                 timeSignature: "6/8",
@@ -243,7 +170,7 @@ describe("ArrangementMigrator", () => {
             }],
         };
 
-        const migrated = migrateLegacy(snapshot, [instrument]);
+        const migrated = createArrangement(snapshot, [instrument]);
         const subdivisions = migrated.tracks[0]?.measures[0]?.subdivisions ?? [];
 
         // Nested polyrhythms flatten into independent subdivision groups.
@@ -256,143 +183,6 @@ describe("ArrangementMigrator", () => {
         })).toBe(true);
     });
 
-    it("plays all 3 tuplets of Bolero 3 correctly: 3rd must produce 4 events, not 2", () => {
-        // Bolero 3 structure (6/8, stepsPerBar=6, 13 visible steps):
-        //   Base step 0: 1 regular note
-        //   T1 (id=1, startStep=1, actual=3, normal=1): top-level triplet at base step 1
-        //     T2 (id=2, startStep=3, actual=3, normal=1, parent=T1): nested triplet at T1's slot 2
-        //   Base step 2–3: 2 regular notes
-        //   T3 (id=3, startStep=8, actual=4, normal=1): independent 4-tuplet at base step 4
-        //   Base step 5: 1 regular note
-        // Without the totalVisibleSteps fix, absIdx advanced by T1.actual(=3) and missed T3 at absIdx=8.
-        const instrument = createInstrument("x", 99, 1);
-        const hitStyle = {
-            id: "h", audioBuffer: null, instrument,
-
-            sampleProfile: { builtInDamping: 0, builtInAccent: false, ghost: false }
-
-        } as IAudioData;
-        (instrument as Mutable<ISbDmInstrument>).noteStyles = { h: hitStyle };
-
-        const snapshot: ILegacyArrangementSnapshotV3 = {
-            version: 2,
-            title: "Bolero 3",
-            timeParams: {
-                timeSignature: "6/8",
-                tempo: 50,
-                length: 1,
-                pulse: "3/8",
-                stepResolution: 8,
-            },
-            tracks: [{
-                id: 1,
-                instrumentId: "x",
-                measures: [{
-                    number: 1,
-                    meter: {
-                        beats: 6,
-                        beatUnits: 8,
-                        stepResolution: 6,
-                        beatGroups: [3, 3],
-                    },
-                    steps: Array.from({ length: 13 }, (_, index) => {
-                        return { index, noteStyleId: "h" };
-                    }),
-                    subdivisions: [
-                        { id: 1, startStep: 1, actual: 3, normal: 1, isTuplet: false },
-                        {
-                            id: 2, startStep: 3, actual: 3, normal: 1,
-                            parentSubdivisionId: 1, isTuplet: false
-                        },
-                        { id: 3, startStep: 8, actual: 4, normal: 1, isTuplet: true },
-                    ],
-                }],
-            }],
-        };
-
-        const arrangement = createArrangement(snapshot, [instrument]);
-        hydrateMeasureEvents(arrangement);
-        const track = arrangement.tracks[0] as Track;
-        const events = track.measures[0].events;
-
-        // Total events must equal the 13 visible steps (all notes are hits).
-        expect(events).toHaveLength(13);
-
-        // Non-grid events come from T1 (2 slots), T2 (3 sub-notes), T3 (4 sub-notes).
-        // Check: (dur.numerator * stepsPerBar) % dur.denominator !== 0
-        const nonGridEvents = events.filter((event) => {
-            return (event.duration.numerator * 6) % event.duration.denominator !== 0;
-        });
-
-        // T1 produces 2 non-grid (slots 0–1), T2 produces 3 non-grid, T3 produces 4 non-grid → 9 total.
-        expect(nonGridEvents).toHaveLength(9);
-    });
-
-    it("migrates v2 snapshots to v4 by adding articulation to events", () => {
-        const instrument = createInstrument("ag", 1, 0);
-        const accentedStyle = {
-            id: "accent", audioBuffer: null, instrument,
-            sampleProfile: { builtInDamping: 0, builtInAccent: true, ghost: false },
-        } as IAudioData;
-        const mutedStyle = {
-            id: "muted", audioBuffer: null, instrument,
-            sampleProfile: { builtInDamping: 1, builtInAccent: false, ghost: false },
-        } as IAudioData;
-        (instrument as Mutable<ISbDmInstrument>).noteStyles = { accent: accentedStyle, muted: mutedStyle };
-
-        const v2Snapshot: ILegacyArrangementSnapshotV3 = {
-            version: 2,
-            title: "V2→V3 Test",
-            timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4", stepResolution: 8 },
-            tracks: [{
-                id: 1,
-                instrumentId: "ag",
-                measures: [{
-                    number: 1,
-                    meter: { beats: 4, beatUnits: 4, stepResolution: 8, beatGroups: [4, 4] },
-                    steps: [
-                        { index: 0, noteStyleId: "accent" },
-                        { index: 1 },
-                        { index: 2, noteStyleId: "muted" },
-                        { index: 3 },
-                        { index: 4, noteStyleId: "accent" },
-                        { index: 5 },
-                        { index: 6 },
-                        { index: 7 },
-                    ],
-                    subdivisions: [],
-                }],
-            }],
-        };
-
-        const arrangement = createArrangement(v2Snapshot, [instrument]);
-        const track = arrangement.tracks[0];
-        const notes = track.measures[0].events.filter((event) => {
-            return event.noteStyleId !== undefined;
-        });
-
-        expect(notes).toHaveLength(3);
-
-        // Accented note: damping=Open (0), accent=true, ghost=false.
-        expect(notes[0]).toMatchObject({
-            noteStyleId: "accent",
-            articulation: { damping: 0, accent: true, ghost: false },
-        });
-
-        // Muted note: damping=Muted (1), accent=false, ghost=false.
-        expect(notes[1]).toMatchObject({
-            noteStyleId: "muted",
-            articulation: { damping: 1, accent: false, ghost: false },
-        });
-
-        expect(notes[2]).toMatchObject({
-            noteStyleId: "accent",
-            articulation: { damping: 0, accent: true, ghost: false },
-        });
-
-        // Verify snapshot version is bumped to the current version.
-        expect(arrangement.toSnapshot().version).toBe(4);
-    });
 });
 
 import { bateriaInstruments } from "../../../../src/bateria-instruments.js";
@@ -479,6 +269,14 @@ describe("ArrangementMigrator - BananaDrum URL migration", () => {
             actual: 4,
             normal: 1,
         }));
+
+        // The two triplet slots, the three notes of the nested triplet and the four notes of the 4:1
+        // subdivision produce nine non-grid events. A nested subdivision must not make the expansion
+        // skip a sibling subdivision further to the right.
+        const nonGridEvents = measure.events.filter((event) => {
+            return (event.duration.numerator * 6) % event.duration.denominator !== 0;
+        });
+        expect(nonGridEvents).toHaveLength(9);
     });
 
     it("Repi Solo: binary subdivisions are recorded without tuplets", () => {

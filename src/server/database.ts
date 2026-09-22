@@ -54,6 +54,12 @@ export interface IDatabaseAdapter {
     initialize(config: IDatabaseConfig): Promise<void>;
 
     /**
+     * Drops every table of the connected database, whatever references what. Used by the destructive
+     * database reset, which re-creates the whole schema afterwards.
+     */
+    dropAllTables(): Promise<void>;
+
+    /**
      * @returns Whether the adapter has been initialised.
      */
     isInitialized(): boolean;
