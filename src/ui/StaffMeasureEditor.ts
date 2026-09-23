@@ -6,9 +6,10 @@
 import type { ISbDmTrackMeasure } from "../core/ScoreBookDataModel.js";
 import type { INoteValue } from "../core/rest-notation.js";
 import { addFractions, compareFractions, subtractFractions } from "../core/serialisation/numeric-functions.js";
-import type { IAudioData, IFraction, IMeasureEvent } from "../core/types/general.js";
-import { requisitions } from "../supplement/Requisitions.js";
-import { MeasureEditor, type IAddressedEvent } from "./MeasureEditor.js";
+import { EditEntryMode, type IAudioData, type IFraction, type IMeasureEvent } from "../core/types/general.js";
+import { requisitions, type ISubdivisionCreationRequest } from "../supplement/Requisitions.js";
+import { MeasureEditor, type IAddressedEvent, type IMeasurePosition } from "./MeasureEditor.js";
+import { ScoreElementKind } from "./ScoreElementRegistry.js";
 import { SelectionGranularity, type ISelectionEntry } from "./SelectionSerializer.js";
 import { selectionEventTargets } from "./selection-ranges.js";
 
@@ -18,18 +19,8 @@ const barLine: IFraction = { numerator: 1, denominator: 1 };
 /** The start of a measure as a bar fraction. */
 const barStart: IFraction = { numerator: 0, denominator: 1 };
 
-/**
- * Identifies a position in the staff view: the exact fraction of the measure the addressed run
- * starts at. The staff has no raster, so a position carries no step index (ADR-0005).
- */
-export interface IStaffEditorPosition {
-    bar: number;
-    trackId: number;
-    start: IFraction;
-}
-
 /** A written element in the staff view: where it starts, how long it is and which sound was applied. */
-export interface IInsertedStaffEvent extends IStaffEditorPosition {
+export interface IInsertedStaffEvent extends IMeasurePosition {
     duration: IFraction;
 
     /** The applied sound, or undefined for a rest. */
@@ -48,18 +39,20 @@ interface IInsertionTarget {
     measure: ISbDmTrackMeasure;
 
     /** The position the element starts at, which is the next measure's start when it moved over. */
-    position: IStaffEditorPosition;
+    position: IMeasurePosition;
 
     /** The element's length, which is shortened in the track's last measure. */
     duration: IFraction;
 }
 
 /**
- * Handles the edits of the staff view without rendering or listening to DOM events. It addresses
- * positions as exact fractions instead of cells, and it makes room by shifting the following notes
- * instead of shortening the written one (ADR-0003, ADR-0005).
+ * Owns the staff view: free positions addressed as exact fractions, the space making that shifts the
+ * following notes instead of shortening the written one (ADR-0003, ADR-0005) and the input that works
+ * on them. Cursor movement follows the rendered runs, so the staff needs no note action menu.
  */
 export class StaffMeasureEditor extends MeasureEditor {
+    protected override readonly cursorElementClass = ".staff-note-viewer-run";
+    protected override readonly cursorElementKind = ScoreElementKind.StaffRun;
     /**
      * Checks whether a note starts at the given position. A rest run holds no note, so it is filled
      * by an insertion rather than a style change.
@@ -68,7 +61,7 @@ export class StaffMeasureEditor extends MeasureEditor {
      *
      * @returns True when the position starts a note.
      */
-    public hasNoteAt(position: IStaffEditorPosition): boolean {
+    public hasNoteAt(position: IMeasurePosition): boolean {
         return this.hasNoteStartAt(position.trackId, position.bar, position.start);
     }
 
@@ -80,7 +73,7 @@ export class StaffMeasureEditor extends MeasureEditor {
      *
      * @returns The measure and the event starting there, or undefined when none starts there.
      */
-    public eventAddressAt(position: IStaffEditorPosition): IStaffEventAddress | undefined {
+    public eventAddressAt(position: IMeasurePosition): IStaffEventAddress | undefined {
         const measure = this.resolveMeasure(position.trackId, position.bar);
         const event = this.eventAt(position);
         if (measure === undefined || event === undefined) {
@@ -98,7 +91,7 @@ export class StaffMeasureEditor extends MeasureEditor {
      *
      * @returns True when the position is a subdivision slot.
      */
-    public isSubdivisionSlot(position: IStaffEditorPosition): boolean {
+    public isSubdivisionSlot(position: IMeasurePosition): boolean {
         return this.dataModel.isSubdivisionSlot(position.trackId, position.bar, position.start);
     }
 
@@ -111,7 +104,7 @@ export class StaffMeasureEditor extends MeasureEditor {
      *
      * @returns The duration as a fraction of the bar, or undefined when the value is invalid.
      */
-    public noteValueDuration(value: INoteValue, position: IStaffEditorPosition): IFraction | undefined {
+    public noteValueDuration(value: INoteValue, position: IMeasurePosition): IFraction | undefined {
         const measure = this.resolveMeasure(position.trackId, position.bar);
 
         return measure === undefined ? undefined : this.noteValueDurationFor(value, measure);
@@ -126,7 +119,7 @@ export class StaffMeasureEditor extends MeasureEditor {
      *
      * @returns The selected audio data, or undefined when the edit was invalid.
      */
-    public setNote(position: IStaffEditorPosition, noteStyleId: string): IAudioData | undefined {
+    public setNote(position: IMeasurePosition, noteStyleId: string): IAudioData | undefined {
         const style = this.noteStyleOf(position.trackId, noteStyleId);
         const event = this.eventAt(position);
         if (style === undefined || event === undefined) {
@@ -148,7 +141,7 @@ export class StaffMeasureEditor extends MeasureEditor {
      *
      * @returns True when the measure changed.
      */
-    public setRest(position: IStaffEditorPosition, duration: IFraction): boolean {
+    public setRest(position: IMeasurePosition, duration: IFraction): boolean {
         const measure = this.resolveMeasure(position.trackId, position.bar);
         const event = this.eventAt(position);
         if (measure === undefined || event === undefined) {
@@ -173,7 +166,7 @@ export class StaffMeasureEditor extends MeasureEditor {
      *
      * @returns The written note, or undefined when the edit was invalid.
      */
-    public insertNoteWithShift(position: IStaffEditorPosition, duration: IFraction,
+    public insertNoteWithShift(position: IMeasurePosition, duration: IFraction,
         noteStyleId: string): IInsertedStaffEvent | undefined {
         return this.insertEventWithShift(position, duration, noteStyleId);
     }
@@ -187,7 +180,7 @@ export class StaffMeasureEditor extends MeasureEditor {
      *
      * @returns The written rest, or undefined when the edit was invalid.
      */
-    public insertRestWithShift(position: IStaffEditorPosition,
+    public insertRestWithShift(position: IMeasurePosition,
         duration: IFraction): IInsertedStaffEvent | undefined {
         return this.insertEventWithShift(position, duration, undefined);
     }
@@ -199,7 +192,7 @@ export class StaffMeasureEditor extends MeasureEditor {
      *
      * @returns True when the content changed.
      */
-    public clearNote(position: IStaffEditorPosition): boolean {
+    public clearNote(position: IMeasurePosition): boolean {
         const event = this.eventAt(position);
         if (event === undefined) {
             return false;
@@ -222,7 +215,7 @@ export class StaffMeasureEditor extends MeasureEditor {
      *
      * @returns True when the event was removed.
      */
-    public deleteEventWithShift(position: IStaffEditorPosition): boolean {
+    public deleteEventWithShift(position: IMeasurePosition): boolean {
         return this.dataModel.deleteEventWithShift(position.trackId, position.bar, position.start);
     }
 
@@ -257,6 +250,200 @@ export class StaffMeasureEditor extends MeasureEditor {
         }
 
         return this.dataModel.createSubdivision(measure.track.id, measure.number, start, end, actual, steps, events);
+    }
+
+    /**
+     * Removes the element the cursor addresses. The insert mode takes the element together with its
+     * length, so the content behind it moves up; the overwrite mode turns the selection into rests.
+     *
+     * @returns True when content changed.
+     */
+    public override deleteForward(): boolean {
+        const cursor = this.cursor;
+        const usesCursor = cursor !== undefined && this.entryMode === EditEntryMode.Insert
+            && this.selectionManager.currentSelection.size <= 1;
+        if (!usesCursor) {
+            return this.deleteSelection();
+        }
+
+        // The element leaves no rest behind. Where shifting is impossible — a track holding
+        // subdivisions — it is cleared to a rest instead, so Delete never does nothing silently.
+        if (!this.deleteEventWithShift(cursor) && !this.clearNote(cursor)) {
+            return false;
+        }
+
+        this.selectCursorAt(cursor);
+
+        return true;
+    }
+
+    /**
+     * Removes the element before the cursor and pulls the following content to the left by its length.
+     *
+     * @returns True when content changed.
+     */
+    protected override deleteContentBeforeCursor(): boolean {
+        const cursor = this.cursor;
+
+        // Backspace removes the element before the cursor, so a selection of several elements has no
+        // target of its own.
+        if (cursor === undefined || this.selectionManager.currentSelection.size > 1) {
+            return false;
+        }
+
+        const run = this.elementAt(cursor);
+        const previousRun = run === undefined ? undefined : this.findPreviousRun(run);
+        const previousPosition = previousRun === undefined ? undefined : this.positionAt(previousRun);
+        if (previousPosition === undefined) {
+            return false;
+        }
+
+        // The element leaves no rest behind. Where shifting is impossible — a track holding
+        // subdivisions — it is cleared to a rest instead, so Backspace never does nothing silently.
+        if (!this.deleteEventWithShift(previousPosition) && !this.clearNote(previousPosition)) {
+            return false;
+        }
+
+        this.selectCursorAt(previousPosition);
+
+        return true;
+    }
+
+    /**
+     * Creates a subdivision over the events the selection addresses. The staff has no raster, so the
+     * selection itself is the span the subdivision replaces.
+     *
+     * @param request The requested subdivision size.
+     *
+     * @returns True when the subdivision was created.
+     */
+    protected override createRequestedSubdivision(request: ISubdivisionCreationRequest): boolean {
+        return this.editMode && this.createSubdivisionForSelection(this.selectionEntries(), request.actual);
+    }
+
+    /**
+     * Writes a note at the cursor. The overwrite mode only changes the style of a run that already holds
+     * a note, while the insert mode writes the selected length and moves the content behind it to the
+     * right. A subdivision slot keeps its own duration in both modes, because a tuplet's slots cannot
+     * give way (ADR-0003).
+     *
+     * @param noteStyleId The selected instrument note-style id.
+     *
+     * @returns True when the edit was applied.
+     */
+    protected override writeNoteAtCursor(noteStyleId: string): boolean {
+        const cursor = this.cursor;
+        if (cursor === undefined) {
+            return false;
+        }
+
+        const style = this.resolveNoteStyle(this.getNoteStyles(cursor.trackId), noteStyleId);
+        if (style === undefined) {
+            return false;
+        }
+
+        const existingNote = this.entryMode === EditEntryMode.Overwrite && this.hasNoteAt(cursor);
+        if (existingNote || this.isSubdivisionSlot(cursor)) {
+            this.playNote(this.setNote(cursor, style.id));
+            this.focusInput();
+
+            return true;
+        }
+
+        const duration = this.noteValueDuration(this.noteValue, cursor);
+        const inserted = duration === undefined ? undefined : this.insertNoteWithShift(cursor, duration, style.id);
+        this.playNote(inserted?.style);
+        if (inserted !== undefined) {
+            this.advanceStaffCursor(inserted);
+        }
+
+        this.focusInput();
+
+        return true;
+    }
+
+    /**
+     * Writes a rest of the selected length at the cursor. A subdivision slot keeps its own duration and
+     * cannot give way, so both modes replace it. Every other position follows the entry mode: the
+     * overwrite mode replaces the addressed element like a delete does, and the insert mode makes room
+     * by shifting.
+     *
+     * @returns True when the edit was applied.
+     */
+    protected override writeRestAtCursor(): boolean {
+        const cursor = this.cursor;
+        if (cursor === undefined) {
+            return false;
+        }
+
+        const duration = this.noteValueDuration(this.noteValue, cursor);
+        if (duration === undefined) {
+            return false;
+        }
+
+        if (this.entryMode === EditEntryMode.Overwrite || this.isSubdivisionSlot(cursor)) {
+            // A track that cannot shift — it holds subdivisions — only clears the element, so the rest
+            // then keeps the length of the element it replaces.
+            return this.setRest(cursor, duration) || this.clearNote(cursor);
+        }
+
+        const inserted = this.insertRestWithShift(cursor, duration);
+        if (inserted === undefined) {
+            return false;
+        }
+
+        this.advanceStaffCursor(inserted);
+        this.focusInput();
+
+        return true;
+    }
+
+    /**
+     * Resolves the duration of a note value at the cursor.
+     *
+     * @param value The note value to resolve.
+     *
+     * @returns The duration as a fraction of the bar, or undefined when the value is invalid.
+     */
+    protected override noteLengthAtCursor(value: INoteValue): IFraction | undefined {
+        const cursor = this.cursor;
+
+        return cursor === undefined ? undefined : this.noteValueDuration(value, cursor);
+    }
+
+    /**
+     * Checks whether a selection entry places the cursor. The staff also makes a clicked run — which the
+     * hit test reports as a track piece — the cursor.
+     *
+     * @param entry The entry to inspect.
+     *
+     * @returns True when the entry places the cursor.
+     */
+    protected override isCursorEntry(entry: ISelectionEntry): boolean {
+        return entry.granularity === SelectionGranularity.Note
+            || entry.granularity === SelectionGranularity.TrackPiece;
+    }
+
+    /**
+     * Applies the adopted note value to the selection: the staff resizes the addressed events and ripples
+     * the following ones (ADR-0003). Only the overwrite mode changes existing content; the insert mode
+     * uses the value for the next entry.
+     *
+     * @returns True when the selection changed.
+     */
+    protected override resizeSelectionForLengthChange(): boolean {
+        if (!this.editMode || this.entryMode !== EditEntryMode.Overwrite) {
+            return false;
+        }
+
+        const entries = this.selectionEntries();
+        if (!this.resizeSelection(entries, this.noteValue)) {
+            return false;
+        }
+
+        this.selectionManager.replaceSelection(this.refreshSelection(entries));
+
+        return true;
     }
 
     /**
@@ -343,7 +530,7 @@ export class StaffMeasureEditor extends MeasureEditor {
      *
      * @returns The resolved target, or undefined when nothing fits.
      */
-    private insertionTargetFor(position: IStaffEditorPosition, duration: IFraction): IInsertionTarget | undefined {
+    private insertionTargetFor(position: IMeasurePosition, duration: IFraction): IInsertionTarget | undefined {
         const measure = this.resolveMeasure(position.trackId, position.bar);
         if (measure === undefined) {
             return undefined;
@@ -381,7 +568,7 @@ export class StaffMeasureEditor extends MeasureEditor {
      *
      * @returns The written element, or undefined when the edit was invalid.
      */
-    private insertEventWithShift(position: IStaffEditorPosition, duration: IFraction,
+    private insertEventWithShift(position: IMeasurePosition, duration: IFraction,
         noteStyleId?: string): IInsertedStaffEvent | undefined {
         const style = noteStyleId === undefined ? undefined : this.noteStyleOf(position.trackId, noteStyleId);
         if (noteStyleId !== undefined && style === undefined) {
@@ -418,7 +605,7 @@ export class StaffMeasureEditor extends MeasureEditor {
      *
      * @returns The event starting there, or undefined when no event starts at the position.
      */
-    private eventAt(position: IStaffEditorPosition): IMeasureEvent | undefined {
+    private eventAt(position: IMeasurePosition): IMeasureEvent | undefined {
         const measure = this.resolveMeasure(position.trackId, position.bar);
 
         return measure?.events.find((candidate) => {
@@ -436,5 +623,82 @@ export class StaffMeasureEditor extends MeasureEditor {
      */
     private addressedEventOf(start: IFraction, measure: ISbDmTrackMeasure): IAddressedEvent {
         return { trackId: measure.track.id, bar: measure.number, start: { ...start } };
+    }
+
+    /**
+     * Moves the cursor behind a written element: to the exact position after it, or to the start of the
+     * following measure when the element ends at the bar line. The position is kept even when nothing
+     * starts there, so a further entry cannot pile up at the same spot.
+     *
+     * @param inserted The element that was written.
+     */
+    private advanceStaffCursor(inserted: IInsertedStaffEvent): void {
+        const end = addFractions(inserted.start, inserted.duration);
+        const next = compareFractions(end, barLine) < 0
+            ? { bar: inserted.bar, trackId: inserted.trackId, start: end }
+            : { bar: inserted.bar + 1, trackId: inserted.trackId, start: barStart };
+
+        this.cursor = next;
+        this.selectStaffCursorFromModel(next);
+    }
+
+    /**
+     * Selects the element an exact staff position addresses. The entry is resolved from the model,
+     * because the view has not re-rendered an edited measure when an entry advances the cursor.
+     *
+     * @param position The exact staff position to select.
+     */
+    private selectStaffCursorFromModel(position: IMeasurePosition): void {
+        const address = this.eventAddressAt(position);
+        if (address === undefined) {
+            return;
+        }
+
+        this.selectionManager.selectSingleNote({
+            granularity: SelectionGranularity.Note,
+            target: {
+                granularity: SelectionGranularity.Note,
+                measure: address.measure,
+                event: address.event,
+                start: { ...position.start },
+            },
+        });
+    }
+
+    private findPreviousRun(run: HTMLElement): HTMLElement | undefined {
+        const row = run.closest<HTMLElement>(".staff-measure-track-row");
+        const rowLocation = row === null ? undefined : this.scoreElementRegistry.getLocation(row);
+        if (row === null || rowLocation === undefined) {
+            return undefined;
+        }
+
+        const runs = this.getRuns(row);
+        const runIndex = runs.indexOf(run);
+        if (runIndex > 0) {
+            return runs[runIndex - 1];
+        }
+
+        const rows = this.scoreElementRegistry.findElements(ScoreElementKind.TrackRow, undefined, rowLocation.trackId)
+            .filter((candidate) => {
+                return candidate.classList.contains("staff-measure-track-row");
+            }).sort((left, right) => {
+                return (this.scoreElementRegistry.getLocation(left)?.bar ?? 0)
+                    - (this.scoreElementRegistry.getLocation(right)?.bar ?? 0);
+            });
+        const rowIndex = rows.indexOf(row);
+        if (rowIndex <= 0) {
+            return undefined;
+        }
+
+        return this.getRuns(rows[rowIndex - 1]).at(-1);
+    }
+
+    private getRuns(row: HTMLElement): HTMLElement[] {
+        return [...row.querySelectorAll<HTMLElement>(".staff-note-viewer-run")]
+            .filter((run) => {
+                return run.querySelector(
+                    ".staff-note-viewer-note-symbol, .staff-note-viewer-rest-symbol",
+                ) !== null;
+            });
     }
 }

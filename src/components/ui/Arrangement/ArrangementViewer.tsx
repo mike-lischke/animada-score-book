@@ -16,6 +16,7 @@ import { requisitions, type IMeasureVisibilityRequest } from "../../../supplemen
 import type { SelectionManager } from "../../../ui/SelectionManager.js";
 import { GridMeasureEditor } from "../../../ui/GridMeasureEditor.js";
 import { StaffMeasureEditor } from "../../../ui/StaffMeasureEditor.js";
+import type { IMeasureEditorInput } from "../../../ui/MeasureEditor.js";
 import { ScoreElementKind, ScoreElementRegistry } from "../../../ui/ScoreElementRegistry.js";
 import { TrackViewerInputController } from "../../../ui/TrackViewerInputController.js";
 import { GridMeasureViewer } from "../Bar/Grid/GridMeasureViewer.js";
@@ -91,6 +92,8 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
     private barActionStripRef = createRef<BarActionStrip>();
     private gridRadialMenuRef = createRef<RadialMenu>();
     private trackViewerInputController?: TrackViewerInputController;
+    private gridEditor?: GridMeasureEditor;
+    private staffEditor?: StaffMeasureEditor;
     private readonly scoreElementRegistry = new ScoreElementRegistry();
 
     //private animationEngine?: AnimationEngine;
@@ -140,8 +143,8 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
     }
 
     public override componentDidMount(): void {
-        const { arrangementPlayer, selectionManager } = this.props;
-        const { viewerZoom, trackViewMode } = this.state;
+        const { arrangementPlayer, dataModel, selectionManager } = this.props;
+        const { viewerZoom } = this.state;
 
         selectionManager.setEventContainer(this.arrangementViewerRef.current!, this.scoreElementRegistry);
 
@@ -153,17 +156,23 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         const contentHost = this.viewerContentHostRef.current!;
         contentHost.tabIndex = -1;
         contentHost.style.outline = "none";
-        const { dataModel, inEditMode, entryMode } = this.props;
-        const gridEditor = new GridMeasureEditor(dataModel);
-        const staffEditor = new StaffMeasureEditor(dataModel);
-        this.trackViewerInputController = new TrackViewerInputController(
-            contentHost, this.gridRadialMenuRef.current!, selectionManager, this.scoreElementRegistry,
-        );
-        this.trackViewerInputController.setEditors(gridEditor, staffEditor);
-        this.trackViewerInputController.editMode = inEditMode;
-        this.trackViewerInputController.entryMode = entryMode;
-        this.trackViewerInputController.viewMode = trackViewMode;
+
+        // Both editors share the input environment; only the grid offers a note action menu.
+        const editorInput: IMeasureEditorInput = {
+            eventContainer: contentHost,
+            selectionManager,
+            scoreElementRegistry: this.scoreElementRegistry,
+        };
+        this.gridEditor = new GridMeasureEditor(dataModel, {
+            ...editorInput,
+            noteActionMenu: this.gridRadialMenuRef.current ?? undefined,
+        });
+        this.staffEditor = new StaffMeasureEditor(dataModel, editorInput);
+
+        this.trackViewerInputController = new TrackViewerInputController(contentHost);
         this.trackViewerInputController.attach();
+        this.activateViewEditor();
+        this.applyEditState();
 
         requisitions.register("settingsChanged", this.handleSettingsChanged);
         requisitions.register("trackViewModeToggled", this.handleTrackViewModeToggled);
@@ -196,17 +205,14 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         }
 
         if (prevState.trackViewMode !== trackViewMode) {
-            // View mode switched — newly mounted components need the current selection state.
-            this.trackViewerInputController!.viewMode = trackViewMode;
+            // View mode switched — the input follows the new view, and its newly mounted components
+            // need the current selection state.
+            this.activateViewEditor();
             selectionManager.republishSelection();
         }
 
-        if (prevProps.inEditMode !== inEditMode) {
-            this.trackViewerInputController!.editMode = inEditMode;
-        }
-
-        if (prevProps.entryMode !== entryMode) {
-            this.trackViewerInputController!.entryMode = entryMode;
+        if (prevProps.inEditMode !== inEditMode || prevProps.entryMode !== entryMode) {
+            this.applyEditState();
         }
 
         this.trackViewerContainerRef.current!.style.zoom = `${viewerZoom}%`;
@@ -400,6 +406,33 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
                 <RadialMenu ref={this.gridRadialMenuRef} />
             </>
         );
+    }
+
+    /**
+     * Reports the app's edit state to the editors, which gate their input on it.
+     */
+    private applyEditState(): void {
+        const { inEditMode, entryMode } = this.props;
+
+        for (const editor of [this.gridEditor, this.staffEditor]) {
+            if (editor !== undefined) {
+                editor.editMode = inEditMode;
+                editor.entryMode = entryMode;
+            }
+        }
+    }
+
+    /**
+     * Hands input to the editor of the view the user works in, so the input controller never branches
+     * on the view mode itself.
+     */
+    private activateViewEditor(): void {
+        const { trackViewMode } = this.state;
+        const editor = trackViewMode === "staff" ? this.staffEditor : this.gridEditor;
+
+        if (editor !== undefined) {
+            this.trackViewerInputController!.activeEditor = editor;
+        }
     }
 
     private handleBarAction = (barNumber: number, action: BarActionKind): void => {

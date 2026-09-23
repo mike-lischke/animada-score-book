@@ -6,18 +6,20 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { Arrangement } from "../../src/core/Arrangement.js";
-import { MeasureProjection, ProjectedItemKind } from "../../src/core/MeasureProjection.js";
+import { MeasureProjection, ProjectedItemKind, modelEventAt } from "../../src/core/MeasureProjection.js";
 import { NoteLength } from "../../src/core/rest-notation.js";
 import { ScoreBookDataModel, type ISbDmTrackMeasure } from "../../src/core/ScoreBookDataModel.js";
 import { addFractions, compareFractions } from "../../src/core/serialisation/numeric-functions.js";
 import type { IAudioData } from "../../src/core/types/general.js";
 import { requisitions } from "../../src/supplement/Requisitions.js";
+import type { IRadialMenuItem, IRadialMenuHost } from "../../src/components/ui/framework/RadialMenu.js";
 import { GridMeasureEditor } from "../../src/ui/GridMeasureEditor.js";
+import type { IMeasureEditorInput } from "../../src/ui/MeasureEditor.js";
+import { ScoreElementKind } from "../../src/ui/ScoreElementRegistry.js";
 import { SelectionGranularity, SelectionSerializer, type ISelectionEntry } from "../../src/ui/SelectionSerializer.js";
 import {
-    createInstrument, hydrateMeasureEvents, measureEntry, noteEntry, noteGroupEntry, noteValue, setCellNote,
-    trackEntry,
-    trackPieceEntry,
+    createEditorInput, createGridEditor, createInstrument, hydrateMeasureEvents, measureEntry, noteEntry,
+    noteGroupEntry, noteValue, setCellNote, trackEntry, trackPieceEntry,
 } from "../unit-test-helpers.js";
 
 /**
@@ -59,7 +61,7 @@ describe.sequential("GridMeasureEditor clearSelection", () => {
         vi.restoreAllMocks();
         model = new ScoreBookDataModel();
         model.startNewArrangement([createInstrument("0", 0, 0), createInstrument("1", 1, 1)]);
-        editor = new GridMeasureEditor(model);
+        editor = createGridEditor(model);
         mutatedCalls = 0;
         requisitions.register("arrangementMutated", mutationSpy);
     });
@@ -181,7 +183,7 @@ describe.sequential("GridMeasureEditor setSelectionNoteStyle", () => {
         vi.restoreAllMocks();
         model = new ScoreBookDataModel();
         model.startNewArrangement([createInstrument("0", 0, 0), createInstrument("1", 1, 1)]);
-        editor = new GridMeasureEditor(model);
+        editor = createGridEditor(model);
         mutatedCalls = 0;
         requisitions.register("arrangementMutated", mutationSpy);
     });
@@ -277,7 +279,7 @@ describe.sequential("GridMeasureEditor note length entry", () => {
         vi.restoreAllMocks();
         model = new ScoreBookDataModel();
         model.startNewArrangement([createInstrument("0", 0, 0)]);
-        editor = new GridMeasureEditor(model);
+        editor = createGridEditor(model);
     });
 
     it("resolves the duration of every note length on the current meter", () => {
@@ -381,7 +383,7 @@ describe.sequential("GridMeasureEditor subdivision editing", () => {
         vi.restoreAllMocks();
         model = new ScoreBookDataModel();
         model.startNewArrangement([createInstrument("0", 0, 0)]);
-        editor = new GridMeasureEditor(model);
+        editor = createGridEditor(model);
         mutatedCalls = 0;
         requisitions.register("arrangementMutated", mutationSpy);
     });
@@ -390,10 +392,10 @@ describe.sequential("GridMeasureEditor subdivision editing", () => {
         requisitions.unregister("arrangementMutated", mutationSpy);
     });
 
-    it("createSubdivision creates a triplet over the given range", () => {
+    it("creates a triplet over the given range", () => {
         const track = model.arrangement!.tracks[0];
 
-        const created = editor.createSubdivision(track.id, 1,
+        const created = model.createSubdivision(track.id, 1,
             { numerator: 0, denominator: 1 }, { numerator: 1, denominator: 8 }, 3, 2);
 
         expect(created).toBe(true);
@@ -404,7 +406,7 @@ describe.sequential("GridMeasureEditor subdivision editing", () => {
     it("creates a nested subdivision within the selected parent slot", () => {
         const track = model.arrangement!.tracks[0];
         const measure = track.measures[0];
-        editor.createSubdivision(track.id, 1,
+        model.createSubdivision(track.id, 1,
             { numerator: 0, denominator: 1 }, { numerator: 3, denominator: 16 }, 4, 3);
 
         const parentSlotStart = { ...measure.events[1].start };
@@ -431,7 +433,7 @@ describe.sequential("GridMeasureEditor subdivision editing", () => {
     it("preserves nested subdivision rendering when an inner slot changes", () => {
         const track = model.arrangement!.tracks[0];
         const measure = track.measures[0];
-        editor.createSubdivision(track.id, 1,
+        model.createSubdivision(track.id, 1,
             { numerator: 0, denominator: 1 }, { numerator: 1, denominator: 2 }, 3, 8);
         const parentSlotStart = { ...measure.events[1].start };
         editor.createSubdivisionAtCursor({
@@ -483,7 +485,7 @@ describe.sequential("GridMeasureEditor subdivision editing", () => {
     it("deletes a fully selected empty subdivision", () => {
         const track = model.arrangement!.tracks[0];
         const measure = track.measures[0];
-        editor.createSubdivision(track.id, 1,
+        model.createSubdivision(track.id, 1,
             { numerator: 0, denominator: 1 }, { numerator: 1, denominator: 8 }, 3, 2);
 
         const entries: ISelectionEntry[] = [0, 1, 2].map((index) => {
@@ -511,7 +513,7 @@ describe.sequential("GridMeasureEditor subdivision editing", () => {
     it("does not delete an empty subdivision when only part is selected", () => {
         const track = model.arrangement!.tracks[0];
         const measure = track.measures[0];
-        editor.createSubdivision(track.id, 1,
+        model.createSubdivision(track.id, 1,
             { numerator: 0, denominator: 1 }, { numerator: 1, denominator: 8 }, 3, 2);
 
         const deleted = editor.deleteEmptySubdivisionsForSelection([{
@@ -549,7 +551,7 @@ describe.sequential("GridMeasureEditor subdivision editing", () => {
 
     it("deleteSubdivisionAt removes the subdivision at a step position", () => {
         const track = model.arrangement!.tracks[0];
-        editor.createSubdivision(track.id, 1,
+        model.createSubdivision(track.id, 1,
             { numerator: 0, denominator: 1 }, { numerator: 1, denominator: 8 }, 3, 2);
         mutatedCalls = 0;
 
@@ -562,7 +564,7 @@ describe.sequential("GridMeasureEditor subdivision editing", () => {
 
     it("deleteSubdivisionAt honours an exact subdivision-slot start", () => {
         const track = model.arrangement!.tracks[0];
-        editor.createSubdivision(track.id, 1,
+        model.createSubdivision(track.id, 1,
             { numerator: 0, denominator: 1 }, { numerator: 1, denominator: 8 }, 3, 2);
         mutatedCalls = 0;
 
@@ -572,5 +574,138 @@ describe.sequential("GridMeasureEditor subdivision editing", () => {
 
         expect(deleted).toBe(true);
         expect(track.measures[0].subdivisions).toHaveLength(0);
+    });
+});
+
+describe.sequential("GridMeasureEditor input", () => {
+    let model: ScoreBookDataModel;
+    let editor: GridMeasureEditor;
+    let input: IMeasureEditorInput;
+    let trackId: number;
+
+    beforeEach(() => {
+        vi.restoreAllMocks();
+        model = new ScoreBookDataModel();
+        model.startNewArrangement([createInstrument("0", 0, 0)]);
+        trackId = model.arrangement!.tracks[0].id;
+        model.arrangement!.tracks[0].instrument.noteStyles["1"] = { id: "1" } as IAudioData;
+        model.arrangement!.tracks[0].instrument.noteStyles["2"] = { id: "2" } as IAudioData;
+        input = createEditorInput(model);
+        editor = new GridMeasureEditor(model, input);
+        editor.editMode = true;
+    });
+
+    /**
+     * Builds the rendered measure row the way the grid renderer registers it: one cell per step.
+     *
+     * @returns The row element, holding its cells in step order.
+     */
+    const renderRow = (): HTMLElement => {
+        const measure = model.arrangement!.tracks[0].measures[0];
+        const stepsPerBar = measure.meter.stepResolution;
+        const row = document.createElement("div");
+        row.className = "grid-measure-row";
+        input.scoreElementRegistry.createRef({
+            kind: ScoreElementKind.TrackRow, bar: 1, trackId, measure,
+        })(row);
+
+        for (let step = 0; step < stepsPerBar; step++) {
+            const start = { numerator: step, denominator: stepsPerBar };
+            const cell = document.createElement("div");
+            cell.className = "note-viewer";
+            row.append(cell);
+            input.scoreElementRegistry.createRef({
+                kind: ScoreElementKind.GridCell, bar: 1, trackId, step, start, measure,
+            }, modelEventAt(measure, start))(cell);
+        }
+
+        return row;
+    };
+
+    it("writes the selected length at the cell a hit test addressed", () => {
+        const measure = model.arrangement!.tracks[0].measures[0];
+        const cells = [...renderRow().querySelectorAll<HTMLElement>(".note-viewer")];
+
+        expect(editor.hitTest(cells[2])).toBe(true);
+        editor.setNoteLength(noteValue(NoteLength.Quarter));
+
+        expect(editor.enterNote("1")).toBe(true);
+        expect(noteAtStep(measure, 2)).toBe("1");
+        expect(noteAtStep(measure, 5)).toBe("1");
+        expect(noteAtStep(measure, 6)).toBeUndefined();
+    });
+
+    it("follows a selection change to place the cursor", () => {
+        const measure = model.arrangement!.tracks[0].measures[0];
+
+        editor.cursorFromSelection({
+            added: [noteEntry(measure, { numerator: 1, denominator: 16 })],
+            removed: [],
+        });
+        editor.setNoteLength(noteValue(NoteLength.Quarter));
+        editor.enterNote("1");
+
+        expect(noteAtStep(measure, 1)).toBe("1");
+        expect(noteAtStep(measure, 4)).toBe("1");
+        expect(noteAtStep(measure, 5)).toBeUndefined();
+    });
+
+    it("drops the cursor when the selection is cleared", () => {
+        const measure = model.arrangement!.tracks[0].measures[0];
+        editor.cursorFromSelection({ added: [noteEntry(measure, { numerator: 1, denominator: 16 })], removed: [] });
+
+        editor.cursorFromSelection({ added: [], removed: [] });
+        editor.setNoteLength(noteValue(NoteLength.Quarter));
+
+        // Without a cursor no cell is addressed, so nothing is written.
+        expect(editor.enterNote("1")).toBe(false);
+        expect(noteAtStep(measure, 1)).toBeUndefined();
+    });
+
+    it("removes the note of the cell before the cursor", () => {
+        const measure = model.arrangement!.tracks[0].measures[0];
+        setCellNote(model, trackId, 1, 2, "1");
+        setCellNote(model, trackId, 1, 3, "1");
+        const cells = [...renderRow().querySelectorAll<HTMLElement>(".note-viewer")];
+
+        expect(editor.hitTest(cells[3])).toBe(true);
+        expect(editor.deleteBackward()).toBe(true);
+
+        expect(noteAtStep(measure, 2)).toBeUndefined();
+        expect(noteAtStep(measure, 3)).toBe("1");
+    });
+
+    it("opens the note action menu for the addressed cell and writes the picked style", () => {
+        const measure = model.arrangement!.tracks[0].measures[0];
+        setCellNote(model, trackId, 1, 2, "1");
+        const opened: IRadialMenuItem[][] = [];
+        const menu: IRadialMenuHost = {
+            open: (anchorRect, placement, items) => {
+                opened.push(items);
+            },
+        };
+        editor = new GridMeasureEditor(model, { ...input, noteActionMenu: menu });
+        editor.editMode = true;
+        const cells = [...renderRow().querySelectorAll<HTMLElement>(".note-viewer")];
+
+        expect(editor.hasNoteActionMenu).toBe(true);
+        expect(editor.hitTest(cells[2])).toBe(true);
+        editor.openNoteActionMenu();
+
+        expect(opened).toHaveLength(1);
+        expect(opened[0].map((item) => {
+            return item.id;
+        })).toEqual(["1", "2"]);
+
+        opened[0][1].onClick?.();
+
+        expect(noteAtStep(measure, 2)).toBe("2");
+    });
+
+    it("rejects a hit test outside the edit mode", () => {
+        const cells = [...renderRow().querySelectorAll<HTMLElement>(".note-viewer")];
+        editor.editMode = false;
+
+        expect(editor.hitTest(cells[2])).toBe(false);
     });
 });

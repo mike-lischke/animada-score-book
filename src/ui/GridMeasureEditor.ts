@@ -3,6 +3,10 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
+import { h } from "preact";
+
+import type { IRadialMenuItem } from "../components/ui/framework/RadialMenu.js";
+import { NoteStyleSymbolViewer } from "../components/ui/Note/NoteStyleSymbolViewer.js";
 import type {
     ISbDmArrangement, ISbDmNoteEvent, ISbDmTrack, ISbDmTrackMeasure, ITiming,
 } from "../core/ScoreBookDataModel.js";
@@ -11,10 +15,12 @@ import {
     addFractions, compareFractions, reduceFraction, subtractFractions,
 } from "../core/serialisation/numeric-functions.js";
 import type { IAudioData, IFraction } from "../core/types/general.js";
-import { requisitions } from "../supplement/Requisitions.js";
 import { modelEventAt } from "../core/MeasureProjection.js";
-import { MeasureEditor, type IAddressedEvent } from "./MeasureEditor.js";
-import { SelectionGranularity, type ISelectionEntry } from "./SelectionSerializer.js";
+import type { ISubdivisionCreationRequest } from "../supplement/Requisitions.js";
+import { requisitions } from "../supplement/Requisitions.js";
+import { MeasureEditor, type IAddressedEvent, type IMeasurePosition } from "./MeasureEditor.js";
+import { ScoreElementKind } from "./ScoreElementRegistry.js";
+import { SelectionGranularity, SelectionSerializer, type ISelectionEntry } from "./SelectionSerializer.js";
 import { selectionEventTargets } from "./selection-ranges.js";
 
 /** Identifies a cell in the grid view using zero-based step indexing. */
@@ -50,11 +56,14 @@ interface ISubdivisionRange {
 }
 
 /**
- * Handles the edits of the grid view without rendering or listening to DOM events. On top of the
- * shared edits it owns the raster: cells, subdivision slots and the space making that follows fixed
- * steps (ADR-0003, ADR-0005).
+ * Owns the grid view: the raster with its cells and subdivision slots, the space making that follows
+ * fixed steps (ADR-0003) and the input that works on them. Cursor movement follows the rendered
+ * cells, and the view's note action menu lives here, next to the edits its items perform (ADR-0005).
  */
 export class GridMeasureEditor extends MeasureEditor {
+    protected override readonly cursorElementClass = ".note-viewer";
+    protected override readonly cursorElementKind = ScoreElementKind.GridCell;
+
     /**
      * Applies a note style to a grid cell. A cell covers one grid step, so a style written into an
      * empty cell takes that step's length. A cell that addresses a position inside a step — a slot of
@@ -230,23 +239,6 @@ export class GridMeasureEditor extends MeasureEditor {
     }
 
     /**
-     * Creates a subdivision over an exact fractional range of one track.
-     *
-     * @param trackId The track containing the measure.
-     * @param bar The one-based measure number.
-     * @param start The exact start position of the subdivision (inclusive).
-     * @param end The exact end position of the subdivision (exclusive).
-     * @param actual The number of equal slots the subdivision contains.
-     * @param normal The number of grid steps the subdivision replaces.
-     *
-     * @returns True when the subdivision was created.
-     */
-    public createSubdivision(trackId: number, bar: number, start: IFraction, end: IFraction,
-        actual: number, normal: number): boolean {
-        return this.dataModel.createSubdivision(trackId, bar, start, end, actual, normal);
-    }
-
-    /**
      * Creates a subdivision starting at the given cursor position. A subdivision-slot cursor
      * always creates a child that replaces exactly one parent slot.
      *
@@ -391,6 +383,194 @@ export class GridMeasureEditor extends MeasureEditor {
         }
 
         return undefined;
+    }
+
+    /**
+     * Removes the content before the cursor: the note of the previous cell, or the subdivision the
+     * cursor's cell sits in when that subdivision is still empty.
+     *
+     * @returns True when content changed.
+     */
+    protected override deleteContentBeforeCursor(): boolean {
+        const cursor = this.cursor;
+        if (cursor === undefined) {
+            return false;
+        }
+
+        const cell = this.elementAt(cursor);
+        const previousCell = cell === undefined ? undefined : this.findPreviousCell(cell);
+        const previousPosition = previousCell === undefined ? undefined : this.positionAt(previousCell);
+        if (previousPosition === undefined) {
+            return false;
+        }
+
+        const position = this.gridPositionOf(cursor);
+        if (this.hasEmptySubdivisionAt(position)) {
+            this.deleteSubdivisionAt(position);
+        } else {
+            this.clearNote(this.gridPositionOf(previousPosition));
+        }
+
+        this.selectCursorAt(previousPosition);
+
+        return true;
+    }
+
+    /**
+     * Creates a subdivision. A selection of several cells spans the subdivision; a single cell at the
+     * cursor starts it, replacing the steps the request names (ADR-0007).
+     *
+     * @param request The requested subdivision size.
+     *
+     * @returns True when the subdivision was created.
+     */
+    protected override createRequestedSubdivision(request: ISubdivisionCreationRequest): boolean {
+        if (!this.editMode) {
+            return false;
+        }
+
+        const entries = this.selectionEntries();
+        if (this.isMultiCellSelection(entries)) {
+            return this.createSubdivisionForSelection(entries, request.actual);
+        }
+
+        const cursor = this.cursor;
+
+        return cursor !== undefined
+            && this.createSubdivisionAtCursor(this.gridPositionOf(cursor), request.actual, request.normal);
+    }
+
+    /**
+     * Resolves the note styles the action menu shows. The items are built here, so a click goes
+     * straight to the edit it performs.
+     *
+     * @returns The menu items, one per note style of the addressed instrument.
+     */
+    protected override noteActionItems(): IRadialMenuItem[] {
+        const cursor = this.cursor;
+        if (cursor === undefined) {
+            return [];
+        }
+
+        return this.getNoteStyles(cursor.trackId).map((style, index) => {
+            const name = style.symbol?.shortDescription ?? style.id;
+            const tooltip = style.symbol?.description ?? name;
+
+            return {
+                id: style.id,
+                label: name,
+                tooltip: `${tooltip} (${index + 1})`,
+                icon: h(NoteStyleSymbolViewer, { noteStyle: style, "data-tooltip": "inherit" }),
+                onClick: () => {
+                    this.applyNoteActionStyle(style.id);
+                },
+            };
+        });
+    }
+
+    /**
+     * Writes the style the menu picked into the addressed cell, which keeps that cell's length, and
+     * moves the cursor behind it.
+     *
+     * @param noteStyleId The picked note-style id.
+     *
+     * @returns True when the edit was applied.
+     */
+    protected override applyNoteActionStyle(noteStyleId: string): boolean {
+        const cursor = this.cursor;
+        if (cursor === undefined) {
+            return false;
+        }
+
+        const applied = this.setNote(this.gridPositionOf(cursor), noteStyleId);
+
+        this.playNote(applied);
+        this.advanceCursor();
+        this.focusInput();
+
+        return applied !== undefined;
+    }
+
+    /**
+     * Writes a note at the cursor. A subdivision slot keeps its own duration and is only restyled;
+     * every other cell writes the selected length, shortened to the free space before the next note
+     * (ADR-0003).
+     *
+     * @param noteStyleId The selected instrument note-style id.
+     *
+     * @returns True when the edit was applied.
+     */
+    protected override writeNoteAtCursor(noteStyleId: string): boolean {
+        const cursor = this.cursor;
+        if (cursor === undefined) {
+            return false;
+        }
+
+        const position = this.gridPositionOf(cursor);
+        const style = this.resolveNoteStyle(this.getNoteStyles(position.trackId), noteStyleId);
+        if (style === undefined) {
+            return false;
+        }
+
+        const applied = this.isSubdivisionSlot(position)
+            ? this.setNote(position, style.id)
+            : this.insertSelectedLength(position, style.id);
+        this.playNote(applied);
+        this.advanceCursor();
+        this.focusInput();
+
+        return true;
+    }
+
+    /**
+     * Turns the addressed cell into a rest. A cell covers one grid step, so there is no length to apply.
+     *
+     * @returns True when the edit was applied.
+     */
+    protected override writeRestAtCursor(): boolean {
+        const cursor = this.cursor;
+        if (cursor === undefined || !this.clearNote(this.gridPositionOf(cursor))) {
+            return false;
+        }
+
+        this.advanceCursor();
+        this.focusInput();
+
+        return true;
+    }
+
+    /**
+     * Resolves the duration of a note value at the cursor.
+     *
+     * @param value The note value to resolve.
+     *
+     * @returns The duration as a fraction of the bar, or undefined when the grid cannot address the value.
+     */
+    protected override noteLengthAtCursor(value: INoteValue): IFraction | undefined {
+        const cursor = this.cursor;
+
+        return cursor === undefined ? undefined : this.noteValueDuration(value, this.gridPositionOf(cursor));
+    }
+
+    /**
+     * Checks whether a selection entry places the cursor. The grid addresses cells, so only a note does.
+     *
+     * @param entry The entry to inspect.
+     *
+     * @returns True when the entry places the cursor.
+     */
+    protected override isCursorEntry(entry: ISelectionEntry): boolean {
+        return entry.granularity === SelectionGranularity.Note;
+    }
+
+    /**
+     * The grid never resizes existing content when the note value changes: the value applies to the
+     * next entry, which shortens itself to the free space before the next note (ADR-0003).
+     *
+     * @returns False, because no selection changes.
+     */
+    protected override resizeSelectionForLengthChange(): boolean {
+        return false;
     }
 
     /**
@@ -558,5 +738,124 @@ export class GridMeasureEditor extends MeasureEditor {
             end: reduceFraction(maxStep + 1, stepsPerBar),
             spanSteps,
         };
+    }
+
+    /**
+     * Writes the selected length into a cell, shortened to the free space before the next note.
+     *
+     * @param position The cell to write to.
+     * @param noteStyleId The selected instrument note-style id.
+     *
+     * @returns The selected audio data, or undefined when nothing fits.
+     */
+    private insertSelectedLength(position: IGridEditorPosition, noteStyleId: string): IAudioData | undefined {
+        const duration = this.noteValueDuration(this.noteValue, position);
+        const insertion = duration === undefined ? undefined : this.resolveNoteInsertion(position, duration);
+
+        return insertion === undefined
+            ? undefined
+            : this.insertNote(insertion.position, insertion.duration, noteStyleId);
+    }
+
+    /**
+     * Describes a cursor position the way the grid addresses a cell. The raster needs the step the
+     * exact position falls on, which the grid derives from the measure here (ADR-0006).
+     *
+     * @param position The fraction position to describe.
+     *
+     * @returns The grid position addressing the same element.
+     */
+    private gridPositionOf(position: IMeasurePosition): IGridEditorPosition {
+        const measure = this.resolveMeasure(position.trackId, position.bar);
+        const step = measure === undefined ? 0 : SelectionSerializer.cellOf(position.start, measure);
+
+        return { bar: position.bar, trackId: position.trackId, step, start: { ...position.start } };
+    }
+
+    /**
+     * Moves the cursor behind the written cell: to the next cell of the measure, or to the first cell
+     * of the following measure of the track.
+     */
+    private advanceCursor(): void {
+        const cursor = this.cursor;
+        const cell = cursor === undefined ? undefined : this.elementAt(cursor);
+        const nextCell = cell === undefined ? undefined : this.findNextCell(cell);
+        const position = nextCell === undefined ? undefined : this.positionAt(nextCell);
+        if (position !== undefined) {
+            this.selectCursorAt(position);
+        }
+    }
+
+    private findNextCell(cell: HTMLElement): HTMLElement | undefined {
+        const row = cell.closest<HTMLElement>(".grid-measure-row");
+        const rowLocation = row === null ? undefined : this.scoreElementRegistry.getLocation(row);
+        if (row === null || rowLocation === undefined) {
+            return undefined;
+        }
+
+        const cells = this.getCells(rowLocation.bar, rowLocation.trackId);
+        const cellIndex = cells.indexOf(cell);
+        if (cellIndex + 1 < cells.length) {
+            return cells[cellIndex + 1];
+        }
+
+        const rows = this.getTrackRows(rowLocation.trackId);
+        rows.sort((left, right) => {
+            return (this.scoreElementRegistry.getLocation(left)?.bar ?? 0)
+                - (this.scoreElementRegistry.getLocation(right)?.bar ?? 0);
+        });
+        const rowIndex = rows.indexOf(row);
+        if (rowIndex < 0 || rowIndex + 1 >= rows.length) {
+            return undefined;
+        }
+
+        const nextRowLocation = this.scoreElementRegistry.getLocation(rows[rowIndex + 1]);
+
+        return nextRowLocation === undefined
+            ? undefined
+            : this.getCells(nextRowLocation.bar, nextRowLocation.trackId).at(0);
+    }
+
+    private findPreviousCell(cell: HTMLElement): HTMLElement | undefined {
+        const row = cell.closest<HTMLElement>(".grid-measure-row");
+        const rowLocation = row === null ? undefined : this.scoreElementRegistry.getLocation(row);
+        if (row === null || rowLocation === undefined) {
+            return undefined;
+        }
+
+        const cells = this.getCells(rowLocation.bar, rowLocation.trackId);
+        const cellIndex = cells.indexOf(cell);
+        if (cellIndex > 0) {
+            return cells[cellIndex - 1];
+        }
+
+        const rows = this.getTrackRows(rowLocation.trackId);
+        rows.sort((left, right) => {
+            return (this.scoreElementRegistry.getLocation(left)?.bar ?? 0)
+                - (this.scoreElementRegistry.getLocation(right)?.bar ?? 0);
+        });
+        const rowIndex = rows.indexOf(row);
+        if (rowIndex <= 0) {
+            return undefined;
+        }
+
+        const previousRowLocation = this.scoreElementRegistry.getLocation(rows[rowIndex - 1]);
+        const previousCells = previousRowLocation === undefined
+            ? []
+            : this.getCells(previousRowLocation.bar, previousRowLocation.trackId);
+
+        return previousCells[previousCells.length - 1];
+    }
+
+    private getTrackRows(trackId: number): HTMLElement[] {
+        return this.scoreElementRegistry.findElements(ScoreElementKind.TrackRow)
+            .filter((row) => {
+                return row.classList.contains("grid-measure-row")
+                    && this.scoreElementRegistry.getLocation(row)?.trackId === trackId;
+            });
+    }
+
+    private getCells(bar: number, trackId: number): HTMLElement[] {
+        return this.scoreElementRegistry.findElements(ScoreElementKind.GridCell, bar, trackId);
     }
 }

@@ -46,6 +46,16 @@ export interface IRadialMenuOptions {
     clockwise?: boolean;
 }
 
+/**
+ * The part of the radial menu a consumer drives: showing a fan of items anchored at a rectangle.
+ * Consumers that only open the menu depend on this instead of the component, so they stay free of
+ * rendering concerns.
+ */
+export interface IRadialMenuHost {
+    open(anchorRect: DOMRect, placement: ComponentPlacement, items: IRadialMenuItem[], radius: number,
+        options?: IRadialMenuOptions): void;
+}
+
 export class RadialMenu extends UIComponent<IRadialMenuProps, IRadialMenuState> {
     public static readonly defaultButtonSize = 48;
 

@@ -31,3 +31,4 @@ hard to infer from code alone.
 | ADR-0009 | accepted | Make measure widths data and render only a window of measures in the staff view | score rendering, staff view, measure layout, measure widths, scrolling, selection decoration |
 | ADR-0010 | accepted | Select the note groups a selection rectangle covers instead of their notes | staff view, selection, hit testing, note groups, beams, tuplets, drag selection |
 | ADR-0011 | accepted | Give note entry an insert and an overwrite mode | note entry, note length change, measure editing, delete, grid vs. staff behaviour, subdivision slots, entry toolbars |
+| ADR-0012 | accepted | Execute the input through the active measure editor | measure editing, note entry, note length change, delete, cursor movement, input handling, editor boundaries, grid vs. staff behaviour |

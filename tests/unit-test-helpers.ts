@@ -11,8 +11,13 @@ import {
 import { addFractions, reduceFraction } from "../src/core/serialisation/numeric-functions.js";
 import { NoteLength, type INoteValue } from "../src/core/rest-notation.js";
 import type { IFraction, IMeasureEvent, ITrackSnapshot } from "../src/core/types/general.js";
+import { GridMeasureEditor } from "../src/ui/GridMeasureEditor.js";
+import type { IMeasureEditorInput } from "../src/ui/MeasureEditor.js";
+import { ScoreElementRegistry } from "../src/ui/ScoreElementRegistry.js";
+import { SelectionManager } from "../src/ui/SelectionManager.js";
 import { SelectionGranularity, SelectionSerializer, type ISelectionEntry }
     from "../src/ui/SelectionSerializer.js";
+import { StaffMeasureEditor } from "../src/ui/StaffMeasureEditor.js";
 import { TimeCoordinator } from "../src/player/TimeCoordinator.js";
 import { TrackPlayer } from "../src/player/TrackPlayer.js";
 
@@ -275,4 +280,42 @@ export const emptyMeasureTrack = (id: number, instrumentId: string, stepsPerBar 
             subdivisions: [],
         }],
     };
+};
+
+/**
+ * Builds the collaborators a measure editor needs. The tests address their selection entries
+ * themselves, so the manager only supplies the shared selection state.
+ *
+ * @param model The model the editor edits.
+ *
+ * @returns The input of the editor.
+ */
+export const createEditorInput = (model: ScoreBookDataModel): IMeasureEditorInput => {
+    return {
+        eventContainer: document.createElement("div"),
+        selectionManager: new SelectionManager(model),
+        scoreElementRegistry: new ScoreElementRegistry(),
+    };
+};
+
+/**
+ * Creates a grid measure editor for a model.
+ *
+ * @param model The model the editor edits.
+ *
+ * @returns The editor.
+ */
+export const createGridEditor = (model: ScoreBookDataModel): GridMeasureEditor => {
+    return new GridMeasureEditor(model, createEditorInput(model));
+};
+
+/**
+ * Creates a staff measure editor for a model.
+ *
+ * @param model The model the editor edits.
+ *
+ * @returns The editor.
+ */
+export const createStaffEditor = (model: ScoreBookDataModel): StaffMeasureEditor => {
+    return new StaffMeasureEditor(model, createEditorInput(model));
 };
