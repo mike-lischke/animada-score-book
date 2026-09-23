@@ -4,7 +4,7 @@
  */
 
 import { act, cleanup, fireEvent, render, type RenderResult } from "@testing-library/preact";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { NoteStyleBar } from "../../src/components/ui/Arrangement/NoteStyleBar.js";
 import {
@@ -13,6 +13,7 @@ import {
     type ScoreBookDataModel,
 } from "../../src/core/ScoreBookDataModel.js";
 import type { IAudioData } from "../../src/core/types/general.js";
+import { EditEntryMode } from "../../src/core/types/general.js";
 import { requisitions } from "../../src/supplement/Requisitions.js";
 import { SelectionManager } from "../../src/ui/SelectionManager.js";
 import type { ISelectionEntry } from "../../src/ui/SelectionSerializer.js";
@@ -160,6 +161,7 @@ describe.sequential("NoteStyleBar", () => {
         renderResult?.unmount();
         cleanup();
         renderResult = null;
+        vi.restoreAllMocks();
     });
 
     it("matches snapshot with minimal props", () => {
@@ -352,6 +354,151 @@ describe.sequential("NoteStyleBar", () => {
         );
 
         expect(renderResult.container.querySelectorAll(".noteStyleButton.du-btn-primary")).toHaveLength(0);
+    });
+
+    it("marks the style of the selection when the view switches to overwrite", async () => {
+        const noteStyles = {
+            "1": makeNoteStyle("1", "Accent", "Tamborim Accent"),
+            "2": makeNoteStyle("2", "Ghost", "Tamborim Ghost Note"),
+        };
+        const track = makeTrackWithNote(7, 55, noteStyles, 7001, "1");
+        const dataModel = makeDataModel([track]);
+
+        selectionManager.replaceSelection([noteEntryOf(track)]);
+
+        renderResult = render(
+            <NoteStyleBar dataModel={dataModel} selectionManager={selectionManager} entryMode={EditEntryMode.Insert} />,
+        );
+
+        expect(renderResult.container.querySelectorAll(".noteStyleBar button.du-btn-primary")).toHaveLength(0);
+
+        await act(() => {
+            renderResult!.rerender(
+                <NoteStyleBar
+                    dataModel={dataModel}
+                    selectionManager={selectionManager}
+                    entryMode={EditEntryMode.Overwrite}
+                />,
+            );
+        });
+
+        const marked = renderResult.container.querySelector(".noteStyleButton.du-btn-primary");
+
+        expect(marked?.getAttribute("data-tooltip")).toBe("Tamborim Accent (1)");
+    });
+
+    it("keeps every button unmarked in insert mode", async () => {
+        const noteStyles = {
+            "1": makeNoteStyle("1", "Accent", "Tamborim Accent"),
+            "2": makeNoteStyle("2", "Ghost", "Tamborim Ghost Note"),
+        };
+        const track = makeTrackWithNote(7, 55, noteStyles, 7001, "1");
+        const dataModel = makeDataModel([track]);
+
+        selectionManager.replaceSelection([noteEntryOf(track)]);
+
+        renderResult = render(
+            <NoteStyleBar dataModel={dataModel} selectionManager={selectionManager} entryMode={EditEntryMode.Insert} />,
+        );
+
+        // An entry names the style it writes, so insert mode holds no style the bar could show.
+        expect(renderResult.container.querySelectorAll(".noteStyleBar button.du-btn-primary")).toHaveLength(0);
+
+        // A selection that moves does not mark either, the selection is only the insertion point.
+        await act(() => {
+            selectionManager.replaceSelection([noteEntry(track.measures[0],
+                track.measures[0].events[1].start)]);
+        });
+
+        expect(renderResult.container.querySelectorAll(".noteStyleBar button.du-btn-primary")).toHaveLength(0);
+    });
+
+    it("drops the overwrite mark when the view switches to insert mode", async () => {
+        const noteStyles = {
+            "1": makeNoteStyle("1", "Accent", "Tamborim Accent"),
+        };
+        const track = makeTrackWithNote(7, 55, noteStyles, 7001, "1");
+        const dataModel = makeDataModel([track]);
+
+        selectionManager.replaceSelection([noteEntryOf(track)]);
+
+        renderResult = render(
+            <NoteStyleBar
+                dataModel={dataModel}
+                selectionManager={selectionManager}
+                entryMode={EditEntryMode.Overwrite}
+            />,
+        );
+
+        expect(renderResult.container.querySelectorAll(".noteStyleButton.du-btn-primary")).toHaveLength(1);
+
+        await act(() => {
+            renderResult!.rerender(
+                <NoteStyleBar
+                    dataModel={dataModel}
+                    selectionManager={selectionManager}
+                    entryMode={EditEntryMode.Insert}
+                />,
+            );
+        });
+
+        expect(renderResult.container.querySelectorAll(".noteStyleBar button.du-btn-primary")).toHaveLength(0);
+    });
+
+    it("leads the bar with the rest button", () => {
+        const noteStyles = { "1": makeNoteStyle("1", "Accent", "Tamborim Accent") };
+        const dataModel = makeDataModel([makeTrackWithNote(7, 55, noteStyles, 7001, "1")]);
+        selectionManager.selectTracks([7]);
+
+        renderResult = render(
+            <NoteStyleBar dataModel={dataModel} selectionManager={selectionManager} />,
+        );
+
+        const buttons = renderResult.container.querySelectorAll(".noteStyleBar button");
+        expect(buttons[0].classList.contains("noteStyleRestButton")).toBe(true);
+        expect(buttons[0].getAttribute("data-tooltip")).toBe("Rest (0)");
+        expect(buttons[1].classList.contains("noteStyleButton")).toBe(true);
+    });
+
+    it("marks the rest button when the selection holds rests only", () => {
+        const noteStyles = { "1": makeNoteStyle("1", "Accent", "Tamborim Accent") };
+        const track = makeTrackWithNote(7, 55, noteStyles, 7001, "1");
+        const dataModel = makeDataModel([track]);
+        const rest = track.measures[0].events[1];
+
+        selectionManager.replaceSelection([noteEntry(track.measures[0], rest.start)]);
+
+        renderResult = render(
+            <NoteStyleBar dataModel={dataModel} selectionManager={selectionManager} />,
+        );
+
+        expect(renderResult.container.querySelectorAll(".noteStyleRestButton.du-btn-primary")).toHaveLength(1);
+        expect(renderResult.container.querySelectorAll(".noteStyleButton.du-btn-primary")).toHaveLength(0);
+    });
+
+    it("requests a rest entry when the rest button is clicked", () => {
+        const noteStyles = { "1": makeNoteStyle("1", "Accent", "Tamborim Accent") };
+        const dataModel = makeDataModel([makeTrackWithNote(7, 55, noteStyles, 7001, "1")]);
+        selectionManager.selectTracks([7]);
+
+        let requested = 0;
+        const handler = (): Promise<boolean> => {
+            requested++;
+
+            return Promise.resolve(true);
+        };
+
+        requisitions.register("restEntryRequested", handler);
+
+        renderResult = render(
+            <NoteStyleBar dataModel={dataModel} selectionManager={selectionManager} />,
+        );
+
+        fireEvent.click(renderResult.container.querySelector(".noteStyleRestButton")!);
+
+        expect(requested).toBe(1);
+
+        requisitions.unregister("restEntryRequested", handler);
     });
 
     it("disables the note style buttons when selected tracks use different instruments", () => {

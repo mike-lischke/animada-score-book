@@ -15,6 +15,9 @@ import { selectionEventTargets } from "./selection-ranges.js";
 /** The bar line as a bar fraction. */
 const barLine: IFraction = { numerator: 1, denominator: 1 };
 
+/** The start of a measure as a bar fraction. */
+const barStart: IFraction = { numerator: 0, denominator: 1 };
+
 /**
  * Identifies a position in the staff view: the exact fraction of the measure the addressed run
  * starts at. The staff has no raster, so a position carries no step index (ADR-0005).
@@ -25,10 +28,30 @@ export interface IStaffEditorPosition {
     start: IFraction;
 }
 
-/** A written note in the staff view: where it starts, how long it is and which sound was applied. */
-export interface IInsertedStaffNote extends IStaffEditorPosition {
+/** A written element in the staff view: where it starts, how long it is and which sound was applied. */
+export interface IInsertedStaffEvent extends IStaffEditorPosition {
     duration: IFraction;
-    style: IAudioData;
+
+    /** The applied sound, or undefined for a rest. */
+    style?: IAudioData;
+}
+
+/** The element an exact staff position addresses in the model: the event and its measure. */
+export interface IStaffEventAddress {
+    measure: ISbDmTrackMeasure;
+
+    event: IMeasureEvent;
+}
+
+/** Where an element is written: the measure it goes into, the position it starts at and its length. */
+interface IInsertionTarget {
+    measure: ISbDmTrackMeasure;
+
+    /** The position the element starts at, which is the next measure's start when it moved over. */
+    position: IStaffEditorPosition;
+
+    /** The element's length, which is shortened in the track's last measure. */
+    duration: IFraction;
 }
 
 /**
@@ -47,6 +70,24 @@ export class StaffMeasureEditor extends MeasureEditor {
      */
     public hasNoteAt(position: IStaffEditorPosition): boolean {
         return this.hasNoteStartAt(position.trackId, position.bar, position.start);
+    }
+
+    /**
+     * Resolves the element an exact staff position addresses in the model. An insert needs this for
+     * its following cursor, because the view has not re-rendered the shifted content yet.
+     *
+     * @param position The exact staff position to address.
+     *
+     * @returns The measure and the event starting there, or undefined when none starts there.
+     */
+    public eventAddressAt(position: IStaffEditorPosition): IStaffEventAddress | undefined {
+        const measure = this.resolveMeasure(position.trackId, position.bar);
+        const event = this.eventAt(position);
+        if (measure === undefined || event === undefined) {
+            return undefined;
+        }
+
+        return { measure, event };
     }
 
     /**
@@ -98,11 +139,33 @@ export class StaffMeasureEditor extends MeasureEditor {
     }
 
     /**
-     * Writes a note of the given duration at the given position. The note keeps the requested length
-     * and the following notes give way: the insertion fills the free space before the next note, and
-     * the note is then grown to its requested length, which ripples the following notes to the right.
-     * Where shifting is impossible — a track holding subdivisions, or no room left — the shortened
-     * note remains (ADR-0003).
+     * Replaces the element at the given position with a rest of the requested duration. The content
+     * behind it moves by the length difference, so the rest takes the selected length and the rest
+     * of the measure follows. A track holding subdivisions cannot shift, so nothing changes there.
+     *
+     * @param position The position of the element to replace.
+     * @param duration The rest's duration as a fraction of the bar.
+     *
+     * @returns True when the measure changed.
+     */
+    public setRest(position: IStaffEditorPosition, duration: IFraction): boolean {
+        const measure = this.resolveMeasure(position.trackId, position.bar);
+        const event = this.eventAt(position);
+        if (measure === undefined || event === undefined) {
+            return false;
+        }
+
+        return this.dataModel.insertEventsWithShift([{
+            measure,
+            from: event,
+            to: event,
+            events: [{ start: { ...barStart }, duration: { ...duration } }],
+        }]).length > 0;
+    }
+
+    /**
+     * Writes a note of the given duration at the given position and makes room for it; see
+     * {@link insertEventWithShift}.
      *
      * @param position The position marking the note start.
      * @param duration The requested note duration.
@@ -111,28 +174,22 @@ export class StaffMeasureEditor extends MeasureEditor {
      * @returns The written note, or undefined when the edit was invalid.
      */
     public insertNoteWithShift(position: IStaffEditorPosition, duration: IFraction,
-        noteStyleId: string): IInsertedStaffNote | undefined {
-        const style = this.noteStyleOf(position.trackId, noteStyleId);
-        const fitting = this.fitIntoFreeSpace(position, duration);
-        if (style === undefined || fitting === undefined) {
-            return undefined;
-        }
+        noteStyleId: string): IInsertedStaffEvent | undefined {
+        return this.insertEventWithShift(position, duration, noteStyleId);
+    }
 
-        const written = this.dataModel.setNoteAt(position.trackId, position.bar, position.start, fitting, noteStyleId);
-        if (!written) {
-            return undefined;
-        }
-
-        const shifted = compareFractions(fitting, duration) < 0
-            && this.dataModel.resizeNote(position.trackId, position.bar, position.start, duration);
-
-        return {
-            bar: position.bar,
-            trackId: position.trackId,
-            start: { ...position.start },
-            duration: shifted ? { ...duration } : fitting,
-            style,
-        };
+    /**
+     * Writes a rest of the given duration at the given position and makes room for it; see
+     * {@link insertEventWithShift}.
+     *
+     * @param position The position marking the rest start.
+     * @param duration The requested rest duration.
+     *
+     * @returns The written rest, or undefined when the edit was invalid.
+     */
+    public insertRestWithShift(position: IStaffEditorPosition,
+        duration: IFraction): IInsertedStaffEvent | undefined {
+        return this.insertEventWithShift(position, duration, undefined);
     }
 
     /**
@@ -276,26 +333,82 @@ export class StaffMeasureEditor extends MeasureEditor {
     }
 
     /**
-     * Shortens a requested duration so that the insertion fits before the next note and inside the
-     * measure. The following notes move afterwards, when the note grows to its full length.
+     * Resolves where an element of the given duration is written. An element that would cross the bar
+     * line moves to the start of the next measure, which the arrangement adds when it lies behind the
+     * last one and the user allows the arrangement to grow. Where no measure follows, the element is
+     * shortened to the room that is left, since nothing follows it there.
      *
-     * @param position The position marking the note start.
-     * @param duration The requested note duration.
+     * @param position The position marking the element start.
+     * @param duration The requested duration.
      *
-     * @returns The duration the insertion can take, or undefined when nothing fits.
+     * @returns The resolved target, or undefined when nothing fits.
      */
-    private fitIntoFreeSpace(position: IStaffEditorPosition, duration: IFraction): IFraction | undefined {
-        const room = subtractFractions(barLine, position.start);
-        const requested = compareFractions(duration, room) < 0 ? duration : room;
-        if (requested.numerator <= 0) {
+    private insertionTargetFor(position: IStaffEditorPosition, duration: IFraction): IInsertionTarget | undefined {
+        const measure = this.resolveMeasure(position.trackId, position.bar);
+        if (measure === undefined) {
             return undefined;
         }
 
-        const nextNote = this.nextNoteStart(position.trackId, position.bar, position.start,
-            addFractions(position.start, requested));
-        const available = nextNote === undefined ? requested : subtractFractions(nextNote, position.start);
+        const room = subtractFractions(barLine, position.start);
+        if (compareFractions(duration, room) <= 0) {
+            return { measure, position, duration };
+        }
 
-        return available.numerator > 0 ? available : undefined;
+        const nextBar = position.bar + 1;
+        this.dataModel.ensureBarAvailable(nextBar);
+
+        const nextMeasure = this.resolveMeasure(position.trackId, nextBar);
+        if (nextMeasure !== undefined) {
+            return {
+                measure: nextMeasure,
+                position: { bar: nextBar, trackId: position.trackId, start: { ...barStart } },
+                duration,
+            };
+        }
+
+        return room.numerator > 0 ? { measure, position, duration: room } : undefined;
+    }
+
+    /**
+     * Writes an element of the given duration at the given position and makes room for it: the content
+     * from that position on moves to the right by the element's length, so nothing is shortened or
+     * overwritten. The space the insertion takes is notated as rests where the content gives way, and a
+     * subdivision is pushed as one block (ADR-0003).
+     *
+     * @param position The position marking the element start.
+     * @param duration The requested duration.
+     * @param noteStyleId The selected instrument note-style id, or undefined to write a rest.
+     *
+     * @returns The written element, or undefined when the edit was invalid.
+     */
+    private insertEventWithShift(position: IStaffEditorPosition, duration: IFraction,
+        noteStyleId?: string): IInsertedStaffEvent | undefined {
+        const style = noteStyleId === undefined ? undefined : this.noteStyleOf(position.trackId, noteStyleId);
+        if (noteStyleId !== undefined && style === undefined) {
+            return undefined;
+        }
+
+        const target = this.insertionTargetFor(position, duration);
+        if (target === undefined) {
+            return undefined;
+        }
+
+        const inserted = this.dataModel.insertEventsAt([{
+            measure: target.measure,
+            start: target.position.start,
+            events: [{ start: { ...barStart }, duration: { ...target.duration }, noteStyleId }],
+        }]);
+        if (inserted.length === 0) {
+            return undefined;
+        }
+
+        return {
+            bar: target.position.bar,
+            trackId: target.position.trackId,
+            start: { ...target.position.start },
+            duration: { ...target.duration },
+            style,
+        };
     }
 
     /**

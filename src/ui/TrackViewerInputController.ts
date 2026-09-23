@@ -3,26 +3,28 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
+import { h } from "preact";
+
 import { NoteStyleSymbolViewer } from "../components/ui/Note/NoteStyleSymbolViewer.js";
-import { ComponentPlacement } from "../components/ui/framework/UIComponent.js";
 import { RadialMenu, type IRadialMenuItem } from "../components/ui/framework/RadialMenu.js";
-import { AudioBufferPlayer } from "../player/AudioBufferPlayer.js";
-import { getSharedAudioContext } from "../core/audio-context.js";
-import { NoteLength, type INoteValue } from "../core/rest-notation.js";
+import { ComponentPlacement } from "../components/ui/framework/UIComponent.js";
+import { AppStorage } from "../core/AppStorage.js";
 import { Articulation, articulationOf, resolveNoteStyleForArticulation } from "../core/articulation.js";
+import { getSharedAudioContext } from "../core/audio-context.js";
+import { defaultEntryValue, NoteLength, type INoteValue } from "../core/rest-notation.js";
 import { addFractions, compareFractions } from "../core/serialisation/numeric-functions.js";
-import type { IAudioData, IFraction } from "../core/types/general.js";
+import { EditEntryMode, type IAudioData, type IFraction } from "../core/types/general.js";
+import { AudioBufferPlayer } from "../player/AudioBufferPlayer.js";
+import { requisitions, type ISubdivisionCreationRequest } from "../supplement/Requisitions.js";
 import { GridMeasureEditor, type IGridEditorPosition } from "./GridMeasureEditor.js";
 import { MeasureEditor } from "./MeasureEditor.js";
-import { StaffMeasureEditor, type IInsertedStaffNote, type IStaffEditorPosition } from "./StaffMeasureEditor.js";
 import { ScoreElementKind, type ScoreElementRegistry } from "./ScoreElementRegistry.js";
-import {
-    addressesNoteCells, SelectionGranularity, SelectionSerializer, type ISelectionDelta, type ISelectionEntry,
-    type ISelectionTarget,
-} from "./SelectionSerializer.js";
 import type { SelectionManager } from "./SelectionManager.js";
-import { requisitions, type ISubdivisionCreationRequest } from "../supplement/Requisitions.js";
-import { h } from "preact";
+import {
+    addressesNoteCells, SelectionGranularity, SelectionSerializer, type INoteTarget, type ISelectionDelta,
+    type ISelectionEntry, type ISelectionTarget,
+} from "./SelectionSerializer.js";
+import { StaffMeasureEditor, type IInsertedStaffEvent, type IStaffEditorPosition } from "./StaffMeasureEditor.js";
 
 const noteLengthShortcuts = [
     NoteLength.Whole,
@@ -56,7 +58,12 @@ export class TrackViewerInputController {
     private longPressPointerId?: number;
     private longPressTarget?: HTMLElement;
     private currentPosition?: ICursorPosition;
-    private noteValue: INoteValue = { length: NoteLength.Quarter, dotted: false };
+    private currentEntryMode: EditEntryMode = EditEntryMode.Insert;
+
+    /** The note value the next entry uses, starting from the user's last choice. */
+    private noteValue: INoteValue;
+
+    /** The articulation the next entry uses, starting from the user's last choice. */
     private articulation?: Articulation;
 
     public constructor(
@@ -65,6 +72,44 @@ export class TrackViewerInputController {
         private readonly selectionManager: SelectionManager,
         private readonly scoreElementRegistry: ScoreElementRegistry,
     ) {
+        const settings = AppStorage.loadUISettings();
+
+        this.noteValue = settings?.entryNoteValue ?? defaultEntryValue;
+        this.articulation = settings?.entryArticulation;
+    }
+
+    /**
+     * How note entry makes room for a new event. The app resolves the mode and reports overwrite
+     * whenever the grid view is active.
+     *
+     * @returns The mode the entries use.
+     */
+    public get entryMode(): EditEntryMode {
+        return this.currentEntryMode;
+    }
+
+    /**
+     * Switches how entries make room. Entering the overwrite mode adopts the values of the current
+     * selection, which is what the toolbars show; returning to insert mode restores the values the
+     * user chose for the next entry.
+     */
+    public set entryMode(mode: EditEntryMode) {
+        if (this.currentEntryMode === mode) {
+            return;
+        }
+
+        this.currentEntryMode = mode;
+
+        if (mode === EditEntryMode.Overwrite) {
+            this.adoptCursorArticulation();
+
+            return;
+        }
+
+        const settings = AppStorage.loadUISettings();
+
+        this.noteValue = settings?.entryNoteValue ?? defaultEntryValue;
+        this.articulation = settings?.entryArticulation;
     }
 
     public attach(): void {
@@ -77,6 +122,7 @@ export class TrackViewerInputController {
         requisitions.register("selectionChanged", this.handleSelectionChanged);
         requisitions.register("selectionDeleteRequested", this.handleSelectionDeleteRequested);
         requisitions.register("noteEntryRequested", this.handleNoteEntryRequested);
+        requisitions.register("restEntryRequested", this.handleRestEntryRequested);
         requisitions.register("subdivisionCreationRequested", this.handleSubdivisionCreationRequested);
         requisitions.register("noteLengthChanged", this.handleNoteLengthChanged);
         requisitions.register("articulationChanged", this.handleArticulationChanged);
@@ -92,6 +138,7 @@ export class TrackViewerInputController {
         requisitions.unregister("selectionChanged", this.handleSelectionChanged);
         requisitions.unregister("selectionDeleteRequested", this.handleSelectionDeleteRequested);
         requisitions.unregister("noteEntryRequested", this.handleNoteEntryRequested);
+        requisitions.unregister("restEntryRequested", this.handleRestEntryRequested);
         requisitions.unregister("subdivisionCreationRequested", this.handleSubdivisionCreationRequested);
         requisitions.unregister("noteLengthChanged", this.handleNoteLengthChanged);
         requisitions.unregister("articulationChanged", this.handleArticulationChanged);
@@ -313,6 +360,14 @@ export class TrackViewerInputController {
         }
 
         if (!event.altKey && !event.metaKey && !event.ctrlKey && !event.shiftKey) {
+            if (event.key === "0") {
+                if (this.enterRest()) {
+                    event.preventDefault();
+                }
+
+                return;
+            }
+
             const styles = this.noteStylesAtCursor();
             if (shortcutIndex >= 0 && shortcutIndex < styles.length) {
                 this.enterNote(styles[shortcutIndex].id);
@@ -326,11 +381,55 @@ export class TrackViewerInputController {
     private handleDelete(event: KeyboardEvent): void {
         const handled = event.key === "Backspace"
             ? this.deleteBeforeCursor()
-            : this.deleteSelection();
+            : this.deleteForward();
 
         if (handled) {
             event.preventDefault();
         }
+    }
+
+    /**
+     * Deletes the content the delete key addresses. The insert mode removes the element at the
+     * cursor together with its length, so the content behind it moves up; the overwrite mode turns
+     * the selection into rests instead.
+     *
+     * @returns True when content changed.
+     */
+    private deleteForward(): boolean {
+        const position = this.currentPosition;
+        const isMultiSelection = this.selectionManager.currentSelection.size > 1;
+        const cursor = !isMultiSelection && this.entryMode === EditEntryMode.Insert && this.viewMode === "staff"
+            && position !== undefined && !("step" in position)
+            ? position
+            : undefined;
+
+        return cursor === undefined ? this.deleteSelection() : this.deleteAtStaffCursor(cursor);
+    }
+
+    /**
+     * Removes the staff element the cursor addresses and pulls the following content up by its
+     * length. Where shifting is impossible — a track holding subdivisions — the element becomes a
+     * rest instead, so Delete never does nothing silently.
+     *
+     * @param position The position of the element to remove.
+     *
+     * @returns True when content changed.
+     */
+    private deleteAtStaffCursor(position: IStaffEditorPosition): boolean {
+        const editor = this.staffEditor;
+        if (editor === undefined) {
+            return false;
+        }
+
+        // The element leaves no rest behind. Where shifting is impossible — a track holding
+        // subdivisions — it is cleared to a rest instead, so Delete never does nothing silently.
+        if (!editor.deleteEventWithShift(position) && !editor.clearNote(position)) {
+            return false;
+        }
+
+        this.selectStaffCursor(position);
+
+        return true;
     }
 
     private handleSelectionDeleteRequested = (): Promise<boolean> => {
@@ -339,9 +438,9 @@ export class TrackViewerInputController {
             return Promise.resolve(false);
         }
 
-        // Removing a whole empty subdivision is a subdivision edit, so it belongs to the grid editor
-        // even when the selection was made in the staff view.
-        if (this.gridEditor?.deleteEmptySubdivisionsForSelection(entries)) {
+        // An empty subdivision the selection covers completely is a model edit: it addresses the block
+        // by track, measure and start, so both views delete it the same way.
+        if (this.currentEditor()?.deleteEmptySubdivisionsForSelection(entries)) {
             this.selectionManager.clearSelection();
 
             return Promise.resolve(true);
@@ -448,12 +547,22 @@ export class TrackViewerInputController {
         return Promise.resolve(this.enterNote(noteStyleId));
     };
 
+    private handleRestEntryRequested = (): Promise<boolean> => {
+        if (!this.editMode) {
+            return Promise.resolve(false);
+        }
+
+        return Promise.resolve(this.enterRest());
+    };
+
     private handleNoteLengthChanged = (value: INoteValue): Promise<boolean> => {
         this.noteValue = value;
 
-        // Duration changes only exist in the staff view; the grid works with fixed steps.
+        // Duration changes only exist in the staff view, and the insert mode uses the length for the
+        // next entry, so existing content is only resized where the entry overwrites it.
         const editor = this.staffEditor;
-        if (this.editMode && this.viewMode === "staff" && editor !== undefined) {
+        if (this.editMode && this.viewMode === "staff" && this.entryMode === EditEntryMode.Overwrite
+            && editor !== undefined) {
             const entries = [...this.selectionManager.currentSelection.values()];
 
             if (editor.resizeSelection(entries, value)) {
@@ -466,6 +575,17 @@ export class TrackViewerInputController {
 
     private handleArticulationChanged = (articulation: Articulation): Promise<boolean> => {
         this.articulation = articulation;
+
+        // Overwrite mode changes what is selected: every addressed note takes its own style's variant
+        // of the articulation. Insert mode only sets the value the next entry uses.
+        if (this.editMode && this.entryMode === EditEntryMode.Overwrite) {
+            const editor = this.currentEditor();
+            const entries = [...this.selectionManager.currentSelection.values()];
+
+            if (editor?.setSelectionArticulation(entries, articulation)) {
+                this.selectionManager.replaceSelection(editor.refreshSelection(entries));
+            }
+        }
 
         return Promise.resolve(true);
     };
@@ -499,10 +619,22 @@ export class TrackViewerInputController {
 
     private enterNote(noteStyleId: string): boolean {
         const entries = [...this.selectionManager.currentSelection.values()];
-        if (this.isMultiCellSelection(entries)) {
-            return this.enterNoteForSelection(noteStyleId, entries);
-        }
 
+        // Insert mode always writes at the cursor, which makes the content behind it give way. Only
+        // the overwrite mode changes the elements a selection addresses.
+        return this.entryMode === EditEntryMode.Overwrite && this.isMultiCellSelection(entries)
+            ? this.enterNoteForSelection(noteStyleId, entries)
+            : this.enterNoteAtCursor(noteStyleId);
+    }
+
+    /**
+     * Writes a note of the given style at the cursor.
+     *
+     * @param noteStyleId The selected instrument note-style id.
+     *
+     * @returns True when the edit was applied.
+     */
+    private enterNoteAtCursor(noteStyleId: string): boolean {
         const position = this.currentPosition;
         if (position === undefined) {
             return false;
@@ -511,6 +643,56 @@ export class TrackViewerInputController {
         return "step" in position
             ? this.enterGridNote(position, noteStyleId)
             : this.enterStaffNote(position, noteStyleId);
+    }
+
+    /**
+     * Writes a rest. A selection of several elements has no cursor of its own, so it replaces what is
+     * selected — the same edit a delete performs. The grid otherwise clears the addressed cell; the
+     * staff writes a rest of the selected length, which replaces content in the overwrite mode and
+     * makes room in the insert mode.
+     *
+     * @returns True when the edit was applied.
+     */
+    private enterRest(): boolean {
+        const entries = [...this.selectionManager.currentSelection.values()];
+
+        // Replacing a multi-element selection is an overwrite edit; the insert mode writes at the cursor.
+        const replacesSelection = this.entryMode === EditEntryMode.Overwrite && entries.length > 1;
+
+        return replacesSelection ? this.deleteSelection() : this.enterRestAtCursor();
+    }
+
+    /**
+     * Turns the addressed cell or run into a rest.
+     *
+     * @returns True when the edit was applied.
+     */
+    private enterRestAtCursor(): boolean {
+        const position = this.currentPosition;
+        if (position === undefined) {
+            return false;
+        }
+
+        return "step" in position ? this.enterGridRest(position) : this.enterStaffRest(position);
+    }
+
+    /**
+     * Turns a grid cell into a rest. A cell covers one grid step, so there is no length to apply.
+     *
+     * @param position The grid cell to clear.
+     *
+     * @returns True when the edit was applied.
+     */
+    private enterGridRest(position: IGridEditorPosition): boolean {
+        const editor = this.gridEditor;
+        if (!editor?.clearNote(position)) {
+            return false;
+        }
+
+        this.advanceCursorForPosition(position);
+        this.eventContainer.focus({ preventScroll: true });
+
+        return true;
     }
 
     /**
@@ -553,9 +735,10 @@ export class TrackViewerInputController {
     }
 
     /**
-     * Writes a note in the staff view. A run holding a note or addressing a subdivision slot keeps
-     * its own duration and only changes its style; a rest run is filled with the selected length,
-     * which shifts the following notes (ADR-0003).
+     * Writes a note in the staff view. The overwrite mode only changes the style of a run that already
+     * holds a note, while the insert mode writes the selected length and moves the content behind it to
+     * the right. A subdivision slot keeps its own duration in both modes, because a tuplet's slots
+     * cannot give way (ADR-0003).
      *
      * @param position The staff position to write to.
      * @param noteStyleId The selected instrument note-style id.
@@ -573,7 +756,8 @@ export class TrackViewerInputController {
             return false;
         }
 
-        if (editor.hasNoteAt(position) || editor.isSubdivisionSlot(position)) {
+        const existingNote = this.entryMode === EditEntryMode.Overwrite && editor.hasNoteAt(position);
+        if (existingNote || editor.isSubdivisionSlot(position)) {
             this.playNote(editor.setNote(position, style.id), editor.getMainVolume());
 
             return true;
@@ -589,6 +773,44 @@ export class TrackViewerInputController {
             this.advanceStaffCursor(inserted);
         }
 
+        this.eventContainer.focus({ preventScroll: true });
+
+        return true;
+    }
+
+    /**
+     * Writes a rest of the selected length at the cursor. A subdivision slot keeps its own duration
+     * and cannot give way, so both modes replace it. Every other position follows the entry mode: the
+     * overwrite mode replaces the addressed element like a delete does, and the insert mode makes room
+     * by shifting.
+     *
+     * @param position The staff position to write to.
+     *
+     * @returns True when the edit was applied.
+     */
+    private enterStaffRest(position: IStaffEditorPosition): boolean {
+        const editor = this.staffEditor;
+        if (editor === undefined) {
+            return false;
+        }
+
+        const duration = editor.noteValueDuration(this.noteValue, position);
+        if (duration === undefined) {
+            return false;
+        }
+
+        if (this.entryMode === EditEntryMode.Overwrite || editor.isSubdivisionSlot(position)) {
+            // A track that cannot shift — it holds subdivisions — only clears the element, so the
+            // rest then keeps the length of the element it replaces.
+            return editor.setRest(position, duration) || editor.clearNote(position);
+        }
+
+        const inserted = editor.insertRestWithShift(position, duration);
+        if (inserted === undefined) {
+            return false;
+        }
+
+        this.advanceStaffCursor(inserted);
         this.eventContainer.focus({ preventScroll: true });
 
         return true;
@@ -674,18 +896,46 @@ export class TrackViewerInputController {
         if (isCursorEntry) {
             this.setCursorFromEntry(added);
 
+            // The articulation of the addressed event only configures the next entry in overwrite
+            // mode; in insert mode the toolbar keeps the articulation the user chose.
             const { target } = added;
-            if (target.granularity === SelectionGranularity.Note) {
-                const noteIndex = target.measure.events.indexOf(target.event);
-                const noteEvent = noteIndex < 0 ? undefined : target.measure.noteEvents.at(noteIndex);
-                const style = noteEvent?.audioData;
-
-                this.articulation = style === undefined ? undefined : articulationOf(style);
+            if (this.entryMode === EditEntryMode.Overwrite && target.granularity === SelectionGranularity.Note) {
+                this.articulation = this.articulationOfTarget(target);
             }
         }
 
         return Promise.resolve(true);
     };
+
+    /**
+     * Adopts the articulation of the element the cursor addresses, so the overwrite mode writes what
+     * the articulation bar shows after a mode switch.
+     */
+    private adoptCursorArticulation(): void {
+        const entries = [...this.selectionManager.currentSelection.values()];
+        const only = entries.length === 1 ? entries[0] : undefined;
+
+        if (only?.granularity !== SelectionGranularity.Note || only.target.granularity !== SelectionGranularity.Note) {
+            return;
+        }
+
+        this.articulation = this.articulationOfTarget(only.target);
+    }
+
+    /**
+     * Resolves the articulation of the note event a target addresses.
+     *
+     * @param target The note target to look up.
+     *
+     * @returns The articulation, or undefined for a plain note and for an event without a style.
+     */
+    private articulationOfTarget(target: INoteTarget): Articulation | undefined {
+        const noteIndex = target.measure.events.indexOf(target.event);
+        const noteEvent = noteIndex < 0 ? undefined : target.measure.noteEvents.at(noteIndex);
+        const style = noteEvent?.audioData;
+
+        return style === undefined ? undefined : articulationOf(style);
+    }
 
     /**
      * Derives the cursor from the entry that was just selected. The grid cursor is the addressed
@@ -734,20 +984,43 @@ export class TrackViewerInputController {
     }
 
     /**
-     * Moves the staff cursor behind a written note: to the exact position after it, or to the start
-     * of the following bar when the note ends at the bar line.
+     * Moves the staff cursor behind a written element: to the exact position after it, or to the
+     * start of the following bar when the element ends at the bar line. The position is kept even
+     * when nothing starts there, so a further entry cannot pile up at the same spot.
      *
-     * @param inserted The note that was written.
+     * @param inserted The element that was written.
      */
-    private advanceStaffCursor(inserted: IInsertedStaffNote): void {
+    private advanceStaffCursor(inserted: IInsertedStaffEvent): void {
         const end = addFractions(inserted.start, inserted.duration);
         const next = compareFractions(end, barLine) < 0
             ? { bar: inserted.bar, trackId: inserted.trackId, start: end }
             : { bar: inserted.bar + 1, trackId: inserted.trackId, start: measureStart };
 
-        if (this.getStaffRunForPosition(next) !== undefined) {
-            this.selectStaffCursor(next);
+        this.currentPosition = next;
+        this.selectStaffCursorFromModel(next);
+    }
+
+    /**
+     * Selects the element an exact staff position addresses. The entry is resolved from the model,
+     * because the view has not re-rendered an edited measure when an entry advances the cursor.
+     *
+     * @param position The exact staff position to select.
+     */
+    private selectStaffCursorFromModel(position: IStaffEditorPosition): void {
+        const address = this.staffEditor?.eventAddressAt(position);
+        if (address === undefined) {
+            return;
         }
+
+        this.selectionManager.selectSingleNote({
+            granularity: SelectionGranularity.Note,
+            target: {
+                granularity: SelectionGranularity.Note,
+                measure: address.measure,
+                event: address.event,
+                start: { ...position.start },
+            },
+        });
     }
 
     private advanceCursor(cell: HTMLElement): void {

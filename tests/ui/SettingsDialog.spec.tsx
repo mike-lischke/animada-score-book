@@ -179,17 +179,33 @@ describe.sequential("SettingsDialog (class)", () => {
         expect(document.body.querySelector(".form-card")).toBeTruthy();
         expect(document.body.querySelector("#settings-button-cancel")).toBeTruthy();
         expect(document.body.querySelector("#settings-button-save")).toBeTruthy();
+        expect(document.body.querySelector("#autoExtendOnOverflow")).toBeTruthy();
     });
 
-    it("matches snapshot for default rendering", () => {
+    it("matches a snapshot of the offered settings", async () => {
         let nextId = 1;
         vi.spyOn(utils, "getNewId").mockImplementation(() => {
             return nextId++;
         });
 
-        renderResult = render(<TestableSettingsDialog />);
+        const dialogRef = createRef<SettingsDialog>();
+        const Wrapper: FunctionComponent = () => {
+            return <TestableSettingsDialog ref={dialogRef} />;
+        };
 
-        // Dialog now renders via Portal into document.body.
-        expect(document.body.firstElementChild).toMatchSnapshot();
+        renderResult = render(<Wrapper />);
+        dialogRef.current?.open();
+
+        // The settings only exist while the dialog is open. Their labels are what a new setting changes,
+        // and they stay readable, unlike the whole dialog markup of the portal.
+        await waitFor(() => {
+            expect(document.body.querySelector("#settingsDialog")).toBeTruthy();
+        });
+
+        const labels = [...document.body.querySelectorAll("#settingsDialog .form-row-label")];
+
+        expect(labels.map((label) => {
+            return label.textContent;
+        })).toMatchSnapshot();
     });
 });

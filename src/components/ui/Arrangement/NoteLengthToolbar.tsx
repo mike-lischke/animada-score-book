@@ -6,11 +6,13 @@
 import type { ComponentChild } from "preact";
 
 import type { ISbDmTrackMeasure, ScoreBookDataModel } from "../../../core/ScoreBookDataModel.js";
+import { AppStorage } from "../../../core/AppStorage.js";
 import { MeasureProjection } from "../../../core/MeasureProjection.js";
 import {
-    NoteLength, noteLengthDenominator, noteValueForEvent, noteValueFraction, type INoteValue,
+    defaultEntryValue, NoteLength, noteLengthDenominator, noteValueForEvent, noteValueFraction, type INoteValue,
 } from "../../../core/rest-notation.js";
 import { reduceFraction } from "../../../core/serialisation/numeric-functions.js";
+import { EditEntryMode } from "../../../core/types/general.js";
 import { TimeCoordinator } from "../../../player/TimeCoordinator.js";
 import { requisitions } from "../../../supplement/Requisitions.js";
 import type { SelectionManager } from "../../../ui/SelectionManager.js";
@@ -25,6 +27,12 @@ import { ChildAlignment, Orientation } from "../framework/ui-types.js";
 export interface INoteLengthToolbarProps extends ICommonUIProperties {
     dataModel: ScoreBookDataModel;
     selectionManager: SelectionManager;
+
+    /**
+     * The entry mode the view works in. In insert mode the length configures the next entry instead
+     * of changing selected events, so the mark follows the chosen value.
+     */
+    entryMode?: EditEntryMode;
 }
 
 interface INoteLengthOption {
@@ -34,7 +42,7 @@ interface INoteLengthOption {
 }
 
 interface INoteLengthToolbarState {
-    /** Whether the selection holds an event the model can give a new length. */
+    /** Whether the lengths can be applied: a selection that takes a new length, or the cursor to enter at. */
     canResize: boolean;
 
     /** The value the buttons apply: the one the selection shares, otherwise the last chosen one. */
@@ -115,10 +123,29 @@ export class NoteLengthToolbar extends UIComponent<INoteLengthToolbarProps, INot
     public constructor(props: INoteLengthToolbarProps) {
         super(props);
 
+        const entryValue = AppStorage.loadUISettings()?.entryNoteValue ?? defaultEntryValue;
+        const marksChosenValue = props.entryMode === EditEntryMode.Insert;
+
         this.state = {
             canResize: false,
-            activeValue: { length: NoteLength.Quarter, dotted: false },
+            activeValue: entryValue,
+            markedLength: marksChosenValue ? entryValue.length : undefined,
+            markedDotted: marksChosenValue ? entryValue.dotted : undefined,
         };
+    }
+
+    public override componentDidUpdate(previousProps: INoteLengthToolbarProps): void {
+        const { entryMode } = this.props;
+
+        // Switching the mode switches where the mark comes from: the events the selection addresses in
+        // the overwrite mode, the value the next entry uses in insert mode.
+        if (previousProps.entryMode !== entryMode) {
+            this.refreshState(false);
+
+            if (entryMode === EditEntryMode.Insert) {
+                this.restoreStoredValue();
+            }
+        }
     }
 
     public override componentDidMount(): void {
@@ -137,11 +164,11 @@ export class NoteLengthToolbar extends UIComponent<INoteLengthToolbarProps, INot
     }
 
     public override render(): ComponentChild {
-        const { canResize, markedLength, markedDotted, activeValue } = this.state;
+        const { markedLength, markedDotted, activeValue } = this.state;
 
         const lengthButtons = noteLengthOptions.map((option) => {
             const value: INoteValue = { length: option.length, dotted: activeValue.dotted };
-            const disabled = !canResize || !this.isAvailable(value);
+            const disabled = this.isDisabled(value);
 
             return (
                 <Button
@@ -166,7 +193,7 @@ export class NoteLengthToolbar extends UIComponent<INoteLengthToolbarProps, INot
             <Button
                 className="noteDotButton"
                 isDefault={markedDotted === true}
-                disabled={!canResize || !this.isAvailable(toggledValue)}
+                disabled={this.isDisabled(toggledValue)}
                 data-tooltip="Dotted (Alt/Cmd+.)"
                 onClick={() => {
                     this.toggleDots();
@@ -210,6 +237,26 @@ export class NoteLengthToolbar extends UIComponent<INoteLengthToolbarProps, INot
     };
 
     /**
+     * Resolves whether a length button is disabled. In insert mode the length only configures the next
+     * entry, which needs no cursor, so the meter alone decides; in overwrite mode the click has to be
+     * able to change the addressed events.
+     *
+     * @param value The value the button carries.
+     *
+     * @returns True when the button cannot be used.
+     */
+    private isDisabled(value: INoteValue): boolean {
+        const { entryMode } = this.props;
+        const { canResize } = this.state;
+
+        if (entryMode === EditEntryMode.Insert) {
+            return !this.isAvailable(value);
+        }
+
+        return !canResize || !this.isAvailable(value);
+    }
+
+    /**
      * Re-reads the marked length after a content change. It deliberately does not announce a length
      * on the bus, since a content change must never resize the selection.
      *
@@ -222,14 +269,17 @@ export class NoteLengthToolbar extends UIComponent<INoteLengthToolbarProps, INot
     };
 
     private handleNoteLengthChanged = (value: INoteValue): Promise<boolean> => {
-        // The announcement is a request: only the model decides whether the value applies. With a
-        // selection the mark is therefore taken from the events, and without one the value is the
-        // one the next note is entered with.
-        if (this.props.selectionManager.currentSelection.size === 0) {
+        const { entryMode, selectionManager } = this.props;
+
+        // The announcement is a request: only the model decides whether the value applies. In insert
+        // mode it configures the next entry, so the mark follows it; otherwise the mark is taken from
+        // the events, and without a selection the value is the one the next note is entered with.
+        if (entryMode === EditEntryMode.Insert || selectionManager.currentSelection.size === 0) {
+            AppStorage.saveSetting("entryNoteValue", value);
             this.setState({
                 activeValue: value,
-                markedLength: undefined,
-                markedDotted: undefined,
+                markedLength: value.length,
+                markedDotted: value.dotted,
             });
         } else {
             this.refreshState(false);
@@ -245,8 +295,17 @@ export class NoteLengthToolbar extends UIComponent<INoteLengthToolbarProps, INot
      * @param announceValue Whether the resolved value is published on the {@link requisitions} bus.
      */
     private refreshState(announceValue: boolean): void {
-        const { selectionManager } = this.props;
+        const { selectionManager, entryMode } = this.props;
         const entries = [...selectionManager.currentSelection.values()];
+
+        // In insert mode the length is the value chosen for the next entry: neither the selection nor
+        // a length change moves the mark, so only the buttons' availability follows.
+        if (entryMode === EditEntryMode.Insert) {
+            this.setState({ canResize: selectionManager.hasSelection });
+
+            return;
+        }
+
         const shared = this.resolveSharedValue(entries);
         const { activeValue } = this.state;
 
@@ -506,8 +565,26 @@ export class NoteLengthToolbar extends UIComponent<INoteLengthToolbarProps, INot
         );
     }
 
+    /**
+     * Marks the stored entry value, which is the one the next entry uses. The overwrite mode takes its
+     * value from the selection, so returning to insert mode has to restore the chosen one.
+     */
+    private restoreStoredValue(): void {
+        const value = AppStorage.loadUISettings()?.entryNoteValue ?? defaultEntryValue;
+
+        this.setState({
+            activeValue: value,
+            markedLength: value.length,
+            markedDotted: value.dotted,
+        });
+    }
+
     private selectLength(length: NoteLength): void {
-        void requisitions.execute("noteLengthChanged", { length, dotted: this.state.activeValue.dotted });
+        const { activeValue } = this.state;
+        const value: INoteValue = { length, dotted: activeValue.dotted };
+
+        AppStorage.saveSetting("entryNoteValue", value);
+        void requisitions.execute("noteLengthChanged", value);
     }
 
     /**
@@ -516,8 +593,10 @@ export class NoteLengthToolbar extends UIComponent<INoteLengthToolbarProps, INot
      */
     private toggleDots(): void {
         const { activeValue } = this.state;
+        const value: INoteValue = { length: activeValue.length, dotted: !activeValue.dotted };
 
-        void requisitions.execute("noteLengthChanged", { length: activeValue.length, dotted: !activeValue.dotted });
+        AppStorage.saveSetting("entryNoteValue", value);
+        void requisitions.execute("noteLengthChanged", value);
     }
 
     /**

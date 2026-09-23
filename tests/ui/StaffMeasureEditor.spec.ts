@@ -6,12 +6,36 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { Arrangement } from "../../src/core/Arrangement.js";
+import { Articulation } from "../../src/core/articulation.js";
 import { NoteLength } from "../../src/core/rest-notation.js";
-import { ScoreBookDataModel, type ISbDmTrackMeasure } from "../../src/core/ScoreBookDataModel.js";
+import {
+    Damping, ExcitationMode, NoteDisplayType, ScoreBookDataModel, StickTechnique, type ISbDmTrackMeasure,
+} from "../../src/core/ScoreBookDataModel.js";
 import { addFractions, compareFractions } from "../../src/core/serialisation/numeric-functions.js";
 import type { IAudioData, IFraction, IMeasureEvent } from "../../src/core/types/general.js";
 import { StaffMeasureEditor, type IStaffEditorPosition } from "../../src/ui/StaffMeasureEditor.js";
 import { createInstrument, hydrateMeasureEvents, noteValue, runEntry } from "../unit-test-helpers.js";
+
+/**
+ * Builds a note style of one voice, so an accent variant can be found for it.
+ *
+ * @param id The style id.
+ * @param accent Whether the style carries an accent.
+ *
+ * @returns The note style.
+ */
+const makeNoteStyle = (id: string, accent: boolean): IAudioData => {
+    return {
+        id,
+        characteristics: {
+            excitationMode: ExcitationMode.Struck,
+            stickTechnique: StickTechnique.Normal,
+            mainDisplayType: NoteDisplayType.Oval,
+        },
+        sampleProfile: { builtInDamping: Damping.Open, builtInAccent: accent, ghost: false },
+        audioBuffer: null,
+    } as unknown as IAudioData;
+};
 
 /**
  * Replaces the events of the first measure and re-derives the note events from them.
@@ -100,13 +124,45 @@ describe.sequential("StaffMeasureEditor", () => {
 
         const inserted = editor.insertNoteWithShift(position, { numerator: 1, denominator: 2 }, "1");
 
-        // The rest run only offers a quarter, so the written note is grown to the requested half
-        // afterwards, which moves the following note behind it instead of cutting the request.
+        // The written note keeps the requested length, and everything behind it gives way by it, so the
+        // note behind the rest lands on the third beat instead of being cut.
         expect(inserted?.duration).toEqual({ numerator: 1, denominator: 2 });
         expect(durationAt(measure, { numerator: 0, denominator: 1 })).toEqual({ numerator: 1, denominator: 2 });
         expect(styleAt(measure, { numerator: 0, denominator: 1 })).toBe("1");
+        expect(styleAt(measure, { numerator: 1, denominator: 2 })).toBeUndefined();
+        expect(styleAt(measure, { numerator: 3, denominator: 4 })).toBe("2");
+        expect(durationAt(measure, { numerator: 3, denominator: 4 })).toEqual({ numerator: 1, denominator: 4 });
+    });
+
+    it("writes a rest of the selected length and shifts the following note", () => {
+        setEvents(model, [
+            { start: { numerator: 0, denominator: 1 }, duration: { numerator: 1, denominator: 4 }, noteStyleId: "1" },
+            { start: { numerator: 1, denominator: 4 }, duration: { numerator: 3, denominator: 4 } },
+        ]);
+
+        const inserted = editor.insertRestWithShift(position, { numerator: 1, denominator: 2 });
+
+        // The rest takes the first half of the bar, so the note behind it starts on the third beat.
+        expect(inserted?.duration).toEqual({ numerator: 1, denominator: 2 });
+        expect(styleAt(measure, { numerator: 0, denominator: 1 })).toBeUndefined();
+        expect(styleAt(measure, { numerator: 1, denominator: 2 })).toBe("1");
+        expect(durationAt(measure, { numerator: 1, denominator: 2 })).toEqual({ numerator: 1, denominator: 4 });
+    });
+
+    it("replaces the addressed element with a rest and shifts the following note", () => {
+        setEvents(model, [
+            { start: { numerator: 0, denominator: 1 }, duration: { numerator: 1, denominator: 4 }, noteStyleId: "1" },
+            { start: { numerator: 1, denominator: 4 }, duration: { numerator: 1, denominator: 4 }, noteStyleId: "2" },
+            { start: { numerator: 1, denominator: 2 }, duration: { numerator: 1, denominator: 2 } },
+        ]);
+
+        expect(editor.setRest(position, { numerator: 1, denominator: 2 })).toBe(true);
+
+        // The rest is twice as long as the note it replaced, so the note behind it gives way by a quarter.
+        expect(styleAt(measure, { numerator: 0, denominator: 1 })).toBeUndefined();
+        expect(durationAt(measure, { numerator: 0, denominator: 1 })).toEqual({ numerator: 1, denominator: 2 });
         expect(styleAt(measure, { numerator: 1, denominator: 2 })).toBe("2");
-        expect(styleAt(measure, { numerator: 3, denominator: 4 })).toBeUndefined();
+        expect(durationAt(measure, { numerator: 1, denominator: 2 })).toEqual({ numerator: 1, denominator: 4 });
     });
 
     it("keeps the addressed duration when only the style changes", () => {
@@ -120,6 +176,86 @@ describe.sequential("StaffMeasureEditor", () => {
 
         expect(style?.id).toBe("2");
         expect(durationAt(measure, { numerator: 0, denominator: 1 })).toEqual({ numerator: 1, denominator: 2 });
+    });
+
+    it("applies an articulation to the addressed note and keeps its duration", () => {
+        const noteStyles = model.arrangement!.tracks[0].instrument.noteStyles;
+        noteStyles["1"] = makeNoteStyle("1", false);
+        noteStyles["2"] = makeNoteStyle("2", true);
+
+        setEvents(model, [
+            { start: { numerator: 0, denominator: 1 }, duration: { numerator: 1, denominator: 4 }, noteStyleId: "1" },
+            { start: { numerator: 1, denominator: 4 }, duration: { numerator: 1, denominator: 4 }, noteStyleId: "1" },
+            { start: { numerator: 1, denominator: 2 }, duration: { numerator: 1, denominator: 2 } },
+        ]);
+
+        const changed = editor.setSelectionArticulation([runEntry(measure, measure.events[0])], Articulation.Accent);
+
+        expect(changed).toBe(true);
+        expect(styleAt(measure, { numerator: 0, denominator: 1 })).toBe("2");
+        expect(durationAt(measure, { numerator: 0, denominator: 1 })).toEqual({ numerator: 1, denominator: 4 });
+        expect(styleAt(measure, { numerator: 1, denominator: 4 })).toBe("1");
+    });
+
+    it("leaves notes alone when the instrument offers no variant for the articulation", () => {
+        const noteStyles = model.arrangement!.tracks[0].instrument.noteStyles;
+        noteStyles["1"] = makeNoteStyle("1", false);
+        noteStyles["2"] = makeNoteStyle("2", false);
+
+        setEvents(model, [
+            { start: { numerator: 0, denominator: 1 }, duration: { numerator: 1, denominator: 4 }, noteStyleId: "1" },
+            { start: { numerator: 1, denominator: 4 }, duration: { numerator: 3, denominator: 4 } },
+        ]);
+
+        const changed = editor.setSelectionArticulation([runEntry(measure, measure.events[0])], Articulation.Accent);
+
+        expect(changed).toBe(false);
+        expect(styleAt(measure, { numerator: 0, denominator: 1 })).toBe("1");
+    });
+
+    it("resolves the element an exact position addresses in the model", () => {
+        setEvents(model, [
+            { start: { numerator: 0, denominator: 1 }, duration: { numerator: 1, denominator: 4 }, noteStyleId: "1" },
+            { start: { numerator: 1, denominator: 4 }, duration: { numerator: 3, denominator: 4 } },
+        ]);
+
+        const address = editor.eventAddressAt({ bar: 1, trackId, start: { numerator: 1, denominator: 4 } });
+
+        expect(address?.measure.number).toBe(1);
+        expect(address?.event.start).toEqual({ numerator: 1, denominator: 4 });
+
+        // A position inside an event addresses no element of its own.
+        expect(editor.eventAddressAt({ bar: 1, trackId, start: { numerator: 1, denominator: 8 } })).toBeUndefined();
+    });
+
+    it("deletes an empty subdivision whose slots the selection covers", () => {
+        setEvents(model, [
+            { start: { numerator: 0, denominator: 1 }, duration: { numerator: 1, denominator: 4 } },
+            { start: { numerator: 1, denominator: 4 }, duration: { numerator: 3, denominator: 4 } },
+        ]);
+        model.createSubdivision(trackId, 1, { numerator: 0, denominator: 1 }, { numerator: 1, denominator: 4 },
+            3, 4);
+        const measure = model.arrangement!.tracks[0].measures[0];
+        const slots = [0, 1, 2].map((index) => {
+            return runEntry(measure, measure.events[index]);
+        });
+
+        // The edit addresses the model, so the staff view deletes the same block the grid view would.
+        expect(editor.deleteEmptySubdivisionsForSelection(slots)).toBe(true);
+        expect(measure.subdivisions).toHaveLength(0);
+    });
+
+    it("keeps a subdivision whose slots are not all selected", () => {
+        setEvents(model, [
+            { start: { numerator: 0, denominator: 1 }, duration: { numerator: 1, denominator: 4 } },
+            { start: { numerator: 1, denominator: 4 }, duration: { numerator: 3, denominator: 4 } },
+        ]);
+        model.createSubdivision(trackId, 1, { numerator: 0, denominator: 1 }, { numerator: 1, denominator: 4 },
+            3, 4);
+        const measure = model.arrangement!.tracks[0].measures[0];
+
+        expect(editor.deleteEmptySubdivisionsForSelection([runEntry(measure, measure.events[0])])).toBe(false);
+        expect(measure.subdivisions).toHaveLength(1);
     });
 
     it("clears the run the position addresses", () => {

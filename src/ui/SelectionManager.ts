@@ -4,6 +4,7 @@
 */
 
 import { AppStorage } from "../core/AppStorage.js";
+import { EditEntryMode } from "../core/types/general.js";
 import {
     ScoreBookChangeReason, type ISbDmTrackMeasure, type ScoreBookDataModel,
 } from "../core/ScoreBookDataModel.js";
@@ -81,6 +82,12 @@ export class SelectionManager {
     /** Edit mode as last published on `editModeChanged`, used to initialise new selection views. */
     private editMode = false;
 
+    /**
+     * Entry mode as last published on `editEntryModeChanged`, used to initialise new selection views. The
+     * persisted value is the start value, because the app only announces a mode the user switched to.
+     */
+    private entryMode = AppStorage.loadUISettings()?.entryMode ?? EditEntryMode.Insert;
+
     /** Owned view — handles pointer events, rect drawing, and DOM updates. Created lazily when the container is set. */
     private view?: SelectionView;
 
@@ -90,6 +97,7 @@ export class SelectionManager {
         requisitions.register("scoreBookLoaded", this.handleScoreBookLoaded);
         requisitions.register("arrangementReverted", this.handleArrangementReverted);
         requisitions.register("editModeChanged", this.handleEditModeChanged);
+        requisitions.register("editEntryModeChanged", this.handleEntryModeChanged);
     }
 
     public get selectionMode(): SelectionMode {
@@ -106,6 +114,7 @@ export class SelectionManager {
 
     public dispose(): void {
         requisitions.unregister("editModeChanged", this.handleEditModeChanged);
+        requisitions.unregister("editEntryModeChanged", this.handleEntryModeChanged);
 
         if (this.view) {
             this.view.dispose();
@@ -125,7 +134,7 @@ export class SelectionManager {
             this.view.dispose();
         }
 
-        this.view = new SelectionView(this, container, scoreElementRegistry, this.editMode);
+        this.view = new SelectionView(this, container, scoreElementRegistry, this.editMode, this.entryMode);
     }
 
     /**
@@ -224,11 +233,28 @@ export class SelectionManager {
      * Runs a hit-test at the click position and applies the result using the current {@link selectionMode}.
      *
      * @param clickRect A tiny rect at the click position.
+     * @param cursorOnly True in insert mode, where a click only places the cursor instead of selecting.
      */
-    public endSelection(clickRect: DOMRect): void {
+    public endSelection(clickRect: DOMRect, cursorOnly = false): void {
         this.previousEntries = [];
 
-        const entries = this.resolveEntries(clickRect);
+        const rawEntries = this.collectEntries(clickRect);
+
+        // Insert mode draws no selection: a click places the cursor on the addressed note, and a click
+        // that addresses a coarser element leaves the cursor where it is.
+        if (cursorOnly) {
+            const cursor = SelectionManager.cursorEntryOf(rawEntries);
+            if (cursor === undefined) {
+                return;
+            }
+
+            this.replaceSelection([cursor]);
+            this.publishPlayRange();
+
+            return;
+        }
+
+        const entries = this.resolveRawEntries(rawEntries);
 
         if (entries.length === 0) {
             if (this.currentSelectionMode === SelectionMode.New) {
@@ -246,10 +272,11 @@ export class SelectionManager {
         }
 
         if (this.currentSelectionMode === SelectionMode.New) {
-            this.internalClearSelection();
+            this.replaceSelection(entries);
+        } else {
+            this.applySelection(entries);
         }
 
-        this.applySelection(entries);
         this.publishPlayRange();
     }
 
@@ -421,6 +448,20 @@ export class SelectionManager {
 
         void requisitions.execute("selectionChanged", { added: entries, removed });
         this.schedulePersist();
+    }
+
+    /**
+     * Picks the note the cursor can take from hit-test entries. The cursor addresses one note, so the
+     * coarser granularities a hit test offers (track, measure, track piece) are dropped.
+     *
+     * @param entries The hit-test entries to pick from.
+     *
+     * @returns The addressed note, or undefined when the entries hold none.
+     */
+    private static cursorEntryOf(entries: ISelectionEntry[]): ISelectionEntry | undefined {
+        return entries.find((entry) => {
+            return entry.granularity === SelectionGranularity.Note;
+        });
     }
 
     /**
@@ -638,11 +679,33 @@ export class SelectionManager {
      * @returns The resolved entries, possibly empty.
      */
     private resolveEntries(rect: DOMRect): ISelectionEntry[] {
+        return this.resolveRawEntries(this.collectEntries(rect));
+    }
+
+    /**
+     * Runs every registered hit tester for the given rectangle.
+     *
+     * @param rect The selection rectangle in viewport coordinates.
+     *
+     * @returns All entries the hit testers reported.
+     */
+    private collectEntries(rect: DOMRect): ISelectionEntry[] {
         const rawEntries: ISelectionEntry[] = [];
         for (const tester of this.hitTesters) {
             rawEntries.push(...tester.hitTest(rect));
         }
 
+        return rawEntries;
+    }
+
+    /**
+     * Resolves raw hit-test entries to the level the selection takes.
+     *
+     * @param rawEntries The entries the hit testers reported.
+     *
+     * @returns The resolved entries, possibly empty.
+     */
+    private resolveRawEntries(rawEntries: ISelectionEntry[]): ISelectionEntry[] {
         const trackEntries = rawEntries.filter((entry) => {
             return entry.granularity === SelectionGranularity.Track;
         });
@@ -874,19 +937,30 @@ export class SelectionManager {
     }
 
     /**
+     * The current selection in the form the history stores it.
+     *
+     * @returns The serialised selection, or undefined when nothing is selected.
+     */
+    public get serialisedSelection(): string | undefined {
+        const entries = [...this.currentSelection.values()];
+
+        return entries.length === 0 ? undefined : JSON.stringify(SelectionSerializer.serialise(entries));
+    }
+
+    /**
      * Serialises the current selection and writes it to localStorage via AppStorage.
      * An empty or cleared selection removes the stored state.
      */
     private persistSelection(): void {
-        const entries = [...this.currentSelection.values()];
+        const state = this.serialisedSelection;
 
         const settings = AppStorage.loadUISettings() ?? {};
         const viewSettings = settings.viewSettings ?? {};
 
-        if (entries.length > 0) {
-            viewSettings.selectionState = JSON.stringify(SelectionSerializer.serialise(entries));
-        } else {
+        if (state === undefined) {
             delete viewSettings.selectionState;
+        } else {
+            viewSettings.selectionState = state;
         }
 
         settings.viewSettings = viewSettings;
@@ -898,9 +972,21 @@ export class SelectionManager {
      * Called when the scorebook finishes loading so the arrangement and DOM are ready.
      */
     private restorePersistedSelection(): void {
-        const arrangement = this.dataModel?.arrangement;
         const state = AppStorage.loadUISettings()?.viewSettings?.selectionState;
-        if (!arrangement || !state) {
+        if (state !== undefined) {
+            this.applySerialisedSelection(state);
+        }
+    }
+
+    /**
+     * Resolves a serialised selection against the current arrangement and applies it whole, so the
+     * cursor lands where the selection was made. Entries whose element no longer exists are dropped.
+     *
+     * @param state The serialised selection state.
+     */
+    private applySerialisedSelection(state: string): void {
+        const arrangement = this.dataModel?.arrangement;
+        if (!arrangement) {
             return;
         }
 
@@ -915,15 +1001,7 @@ export class SelectionManager {
             return;
         }
 
-        const entries = SelectionSerializer.deserialise(arrangement, stored);
-        const removed = [...this.currentSelection.values()];
-        this.currentSelection.clear();
-        for (const entry of entries) {
-            this.currentSelection.set(this.entryKey(entry), entry);
-        }
-
-        void requisitions.execute("selectionChanged", { added: entries, removed });
-        this.publishPlayRange();
+        this.replaceSelection(SelectionSerializer.deserialise(arrangement, stored));
     }
 
     /**
@@ -973,12 +1051,32 @@ export class SelectionManager {
     };
 
     /**
-     * Reacts to an undo/redo by re-resolving the selection against the current arrangement.
+     * Remembers the entry mode for newly created selection views.
+     *
+     * @param mode The entry mode announced by the app.
      *
      * @returns A resolved promise to satisfy the requisition handler signature.
      */
-    private handleArrangementReverted = (): Promise<boolean> => {
+    private handleEntryModeChanged = (mode: EditEntryMode): Promise<boolean> => {
+        this.entryMode = mode;
+
+        return Promise.resolve(true);
+    };
+
+    /**
+     * Reacts to an undo/redo by re-resolving the selection against the current arrangement and
+     * restoring the cursor the restored state was last edited in.
+     *
+     * @param selectionState The serialised selection of the restored history state, if it has one.
+     *
+     * @returns A resolved promise to satisfy the requisition handler signature.
+     */
+    private handleArrangementReverted = (selectionState?: string): Promise<boolean> => {
         this.reResolveSelection();
+
+        if (selectionState !== undefined) {
+            this.applySerialisedSelection(selectionState);
+        }
 
         return Promise.resolve(true);
     };

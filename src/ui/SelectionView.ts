@@ -4,6 +4,7 @@
  */
 
 import { compareFractions } from "../core/serialisation/numeric-functions.js";
+import { EditEntryMode } from "../core/types/general.js";
 import type { IFraction, IMeasureEvent, IRect } from "../core/types/general.js";
 import { requisitions } from "../supplement/Requisitions.js";
 import type { SelectionManager } from "./SelectionManager.js";
@@ -11,7 +12,7 @@ import {
     ScoreElementKind, type IScoreElementLocation, type ScoreElementRegistry,
 } from "./ScoreElementRegistry.js";
 import {
-    addressesNoteCells, SelectionGranularity, SelectionMode, SelectionSerializer, type ISelectionDelta,
+    addressesNoteCells, SelectionGranularity, SelectionMode, SelectionSerializer,
     type ISelectionEntry, type ISelectionTarget, type ISerialisedSelectionEntry,
 } from "./SelectionSerializer.js";
 
@@ -82,6 +83,7 @@ export class SelectionView {
     private autoScrollDX = 0;
     private autoScrollDY = 0;
     private editMode: boolean;
+    private entryMode: EditEntryMode;
     private selectionDeleteButtonCreated = false;
     private selectionRefreshFrame?: number;
 
@@ -101,13 +103,17 @@ export class SelectionView {
      * @param scoreElementRegistry The registry of rendered score elements, if available.
      * @param editMode The edit mode as remembered by the manager. The view cannot subscribe early
      *                 enough to receive the requisition that announced the current state.
+     * @param entryMode The entry mode as remembered by the manager, for the same reason.
      */
     public constructor(private manager: SelectionManager, private eventContainer: HTMLElement,
-        private readonly scoreElementRegistry?: ScoreElementRegistry, editMode = false) {
+        private readonly scoreElementRegistry?: ScoreElementRegistry, editMode = false,
+        entryMode = EditEntryMode.Overwrite) {
         this.editMode = editMode;
+        this.entryMode = entryMode;
 
         requisitions.register("selectionChanged", this.handleSelectionChanged);
         requisitions.register("editModeChanged", this.handleEditModeChanged);
+        requisitions.register("editEntryModeChanged", this.handleEntryModeChanged);
         requisitions.register("trackChanged", this.handleTrackChanged);
         requisitions.register("staffWindowChanged", this.handleStaffWindowChanged);
         eventContainer.addEventListener("pointerdown", this.handlePointerDown);
@@ -121,6 +127,7 @@ export class SelectionView {
         document.removeEventListener("keydown", this.handleKeyDown);
         requisitions.unregister("selectionChanged", this.handleSelectionChanged);
         requisitions.unregister("editModeChanged", this.handleEditModeChanged);
+        requisitions.unregister("editEntryModeChanged", this.handleEntryModeChanged);
         requisitions.unregister("trackChanged", this.handleTrackChanged);
         requisitions.unregister("staffWindowChanged", this.handleStaffWindowChanged);
 
@@ -183,7 +190,10 @@ export class SelectionView {
             this.verticalScrollHost.addEventListener("scroll", this.handleScroll, { passive: true });
         }
 
-        this.createRectElement(event.clientX, event.clientY);
+        // Insert mode has no selection to draw, so the pointer only places the cursor when it is released.
+        if (!this.showsCursorOnly) {
+            this.createRectElement(event.clientX, event.clientY);
+        }
 
         event.preventDefault();
     };
@@ -224,7 +234,7 @@ export class SelectionView {
             const half = 2;
             const clickRect = new DOMRect(this.startX - half, this.startY - half,
                 (half * 2) + 1, (half * 2) + 1);
-            this.manager.endSelection(clickRect);
+            this.manager.endSelection(clickRect, this.showsCursorOnly);
         }
 
         if (this.isDragging) {
@@ -300,7 +310,10 @@ export class SelectionView {
         if (event.key === "Escape" && this.isDragging) {
             this.cancelDrag();
         } else {
-            this.manager.selectionMode = this.selectionModeFromEvent(event);
+            // Insert mode never accumulates a selection, so modifier keys select nothing.
+            this.manager.selectionMode = this.showsCursorOnly
+                ? SelectionMode.New
+                : this.selectionModeFromEvent(event);
         }
     };
 
@@ -455,6 +468,14 @@ export class SelectionView {
     /** @returns True when the viewer currently renders the staff view. */
     private isStaffView(): boolean {
         return this.eventContainer.querySelector(".staff-measure-viewer") !== null;
+    }
+
+    /**
+     * @returns True while the staff view runs in insert mode. The cursor is then the only decoration and
+     *          nothing can be selected; in the grid view overwrite is always in effect.
+     */
+    private get showsCursorOnly(): boolean {
+        return this.editMode && this.entryMode === EditEntryMode.Insert && this.isStaffView();
     }
 
     private findStaffArrowTarget(noteElement: HTMLElement, key: string): HTMLElement | undefined {
@@ -782,7 +803,7 @@ export class SelectionView {
         }
     }
 
-    private handleSelectionChanged = (_delta: ISelectionDelta): Promise<boolean> => {
+    private handleSelectionChanged = (): Promise<boolean> => {
         this.updateTrackViewerOverlays();
 
         return Promise.resolve(true);
@@ -831,6 +852,13 @@ export class SelectionView {
             this.selectionDeleteButtonCreated = false;
         }
 
+        this.updateTrackViewerOverlays();
+
+        return Promise.resolve(true);
+    };
+
+    private handleEntryModeChanged = (mode: EditEntryMode): Promise<boolean> => {
+        this.entryMode = mode;
         this.updateTrackViewerOverlays();
 
         return Promise.resolve(true);
@@ -932,8 +960,6 @@ export class SelectionView {
         this.renderMeasureOverlays(contentHost, overlayContainer, containerRect, measureEntries);
     }
 
-    // ---- Note overlays (grid + staff) ------------------------------------------------
-
     /**
      * Renders selection decoration for note and note-group entries.
      *
@@ -981,6 +1007,12 @@ export class SelectionView {
             if (rect) {
                 this.positionSelectionCursor(cursor, containerRect, rect, isStaffMode ? -4 : 0);
             }
+        }
+
+        // Insert mode decorates nothing but the cursor: the addressed element marks where the next entry
+        // lands, it is not selected.
+        if (this.showsCursorOnly) {
+            return;
         }
 
         // Single notes in staff mode: apply CSS class for head/stem colouring.
@@ -1434,8 +1466,6 @@ export class SelectionView {
         return symbolRect.left + 1;
     }
 
-    // ---- Track-piece overlays --------------------------------------------------------
-
     /**
      * Renders merged overlays for track-piece selections. Within each bar consecutive
      * track rows are merged vertically; the resulting per-bar groups are then merged
@@ -1555,8 +1585,6 @@ export class SelectionView {
             this.createMergedOverlay(overlayContainer, containerRect, group.elements, 0, 0);
         }
     }
-
-    // ---- Whole-track overlays --------------------------------------------------------
 
     /**
      * Renders merged overlays for whole-track selections. Tracks that are visually

@@ -6,9 +6,11 @@
 import type { ComponentChild } from "preact";
 
 import { Articulation, articulationOf, availableArticulations } from "../../../core/articulation.js";
+import { AppStorage } from "../../../core/AppStorage.js";
 import type { ISbDmTrack, ISbDmTrackMeasure, ScoreBookDataModel } from "../../../core/ScoreBookDataModel.js";
 import { compareFractions } from "../../../core/serialisation/numeric-functions.js";
 import type { IAudioData, IFraction } from "../../../core/types/general.js";
+import { EditEntryMode } from "../../../core/types/general.js";
 import { requisitions } from "../../../supplement/Requisitions.js";
 import type { SelectionManager } from "../../../ui/SelectionManager.js";
 import { SelectionSerializer, type ISelectionEntry } from "../../../ui/SelectionSerializer.js";
@@ -22,6 +24,12 @@ import { ChildAlignment, Orientation } from "../framework/ui-types.js";
 export interface IArticulationToolbarProps extends ICommonUIProperties {
     dataModel: ScoreBookDataModel;
     selectionManager: SelectionManager;
+
+    /**
+     * The entry mode the view works in. In insert mode the bar keeps the chosen articulation, since the
+     * selection there is merely the insertion point.
+     */
+    entryMode?: EditEntryMode;
 }
 
 interface IArticulationToolbarState {
@@ -53,6 +61,7 @@ export class ArticulationToolbar extends UIComponent<IArticulationToolbarProps, 
 
         this.state = {
             canEnter: false,
+            activeArticulation: AppStorage.loadUISettings()?.entryArticulation,
             available: new Set(),
         };
     }
@@ -66,6 +75,20 @@ export class ArticulationToolbar extends UIComponent<IArticulationToolbarProps, 
     public override componentWillUnmount(): void {
         requisitions.unregister("selectionChanged", this.handleSelectionChanged);
         requisitions.unregister("arrangementReverted", this.handleArrangementReverted);
+    }
+
+    public override componentDidUpdate(previousProps: IArticulationToolbarProps): void {
+        const { entryMode } = this.props;
+
+        // Switching the mode switches where the mark comes from: the events the selection addresses in
+        // the overwrite mode, the articulation the next entry uses in insert mode.
+        if (previousProps.entryMode !== entryMode) {
+            this.refreshState();
+
+            if (entryMode === EditEntryMode.Insert) {
+                this.restoreStoredArticulation();
+            }
+        }
     }
 
     public override render(): ComponentChild {
@@ -119,7 +142,8 @@ export class ArticulationToolbar extends UIComponent<IArticulationToolbarProps, 
     };
 
     private refreshState(): void {
-        const { selectionManager } = this.props;
+        const { selectionManager, entryMode } = this.props;
+        const { activeArticulation: chosenArticulation } = this.state;
 
         const entries = [...selectionManager.currentSelection.values()];
         const tracks = this.resolveSelectedTracks(entries);
@@ -134,20 +158,40 @@ export class ArticulationToolbar extends UIComponent<IArticulationToolbarProps, 
             });
 
         // The mark follows the selection: it is dropped as soon as the addressed events do not share
-        // one style. The buttons still show the styles of the selected instrument's reference style.
+        // one style. Insert mode keeps the articulation the user chose. The availability still comes
+        // from the reference style of the addressed instrument.
+        const markedArticulation = markedStyle === undefined ? undefined : articulationOf(markedStyle);
+        const activeArticulation = entryMode === EditEntryMode.Insert
+            ? chosenArticulation
+            : markedArticulation;
         const buttonStyle = markedStyle ?? noteStyleList.at(0);
-        const activeArticulation = markedStyle === undefined
-            ? undefined
-            : articulationOf(markedStyle);
         const available = buttonStyle === undefined
             ? new Set<Articulation>()
             : availableArticulations(noteStyles, buttonStyle.id);
 
         this.setState({
-            canEnter: this.canEnterNotes(tracks),
+            canEnter: this.canEnterArticulation(tracks, entryMode),
             activeArticulation,
             available,
         });
+    }
+
+    /**
+     * Checks whether the buttons can be used. The overwrite mode needs a selection it can change; in
+     * insert mode the choice only sets the value the next entry uses, which needs neither a cursor nor
+     * a selection.
+     *
+     * @param tracks The distinct selected tracks.
+     * @param entryMode The entry mode the view works in.
+     *
+     * @returns True when the toolbar buttons can be used.
+     */
+    private canEnterArticulation(tracks: ISbDmTrack[], entryMode?: EditEntryMode): boolean {
+        if (entryMode === EditEntryMode.Insert) {
+            return true;
+        }
+
+        return this.canEnterNotes(tracks);
     }
 
     /**
@@ -273,8 +317,17 @@ export class ArticulationToolbar extends UIComponent<IArticulationToolbarProps, 
         return noteEvent?.audioData?.id;
     }
 
+    /**
+     * Marks the stored articulation, which is the one the next entry uses. The overwrite mode takes its
+     * mark from the selection, so returning to insert mode has to restore the chosen articulation.
+     */
+    private restoreStoredArticulation(): void {
+        this.setState({ activeArticulation: AppStorage.loadUISettings()?.entryArticulation });
+    }
+
     private selectArticulation(articulation: Articulation): void {
         this.setState({ activeArticulation: articulation });
+        AppStorage.saveSetting("entryArticulation", articulation);
         void requisitions.execute("articulationChanged", articulation);
     }
 

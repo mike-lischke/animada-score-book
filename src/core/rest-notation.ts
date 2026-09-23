@@ -162,6 +162,9 @@ export const noteValueForEvent = (duration: IFraction, depth: number, stepsPerBa
 /** The note value an event is drawn with when its exact duration matches no single value. */
 export const fallbackNoteValue: INoteValue = { length: NoteLength.Sixteenth, dotted: false };
 
+/** The note value the next entry uses until the user chooses another one. */
+export const defaultEntryValue: INoteValue = { length: NoteLength.Quarter, dotted: false };
+
 /**
  * Returns the number of beam strokes a note value is drawn with.
  *

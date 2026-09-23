@@ -8,6 +8,7 @@ import { createRef, type ComponentChild, type JSX } from "preact";
 import { AppStorage, type IUISettings } from "../../../core/AppStorage.js";
 import { MeasureLayout, staffPrefixWidth, type IMeasureRange } from "../../../core/MeasureLayout.js";
 import type { RealTime, ScoreBookDataModel } from "../../../core/ScoreBookDataModel.js";
+import type { EditEntryMode } from "../../../core/types/general.js";
 import { clampValue } from "../../../core/utils.js";
 import type { ArrangementPlayer } from "../../../player/ArrangementPlayer.js";
 import type { PlayerPlayState } from "../../../player/ArrangementPlayer.js";
@@ -60,6 +61,9 @@ export interface IArrangementViewerProps extends ICommonUIProperties {
     dataModel: ScoreBookDataModel;
     selectionManager: SelectionManager;
     inEditMode: boolean;
+
+    /** How note entry makes room. The app reports overwrite while the grid view is active. */
+    entryMode: EditEntryMode;
 }
 
 interface IArrangementViewerState {
@@ -149,13 +153,15 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         const contentHost = this.viewerContentHostRef.current!;
         contentHost.tabIndex = -1;
         contentHost.style.outline = "none";
-        const gridEditor = new GridMeasureEditor(this.props.dataModel);
-        const staffEditor = new StaffMeasureEditor(this.props.dataModel);
+        const { dataModel, inEditMode, entryMode } = this.props;
+        const gridEditor = new GridMeasureEditor(dataModel);
+        const staffEditor = new StaffMeasureEditor(dataModel);
         this.trackViewerInputController = new TrackViewerInputController(
             contentHost, this.gridRadialMenuRef.current!, selectionManager, this.scoreElementRegistry,
         );
         this.trackViewerInputController.setEditors(gridEditor, staffEditor);
-        this.trackViewerInputController.editMode = this.props.inEditMode;
+        this.trackViewerInputController.editMode = inEditMode;
+        this.trackViewerInputController.entryMode = entryMode;
         this.trackViewerInputController.viewMode = trackViewMode;
         this.trackViewerInputController.attach();
 
@@ -180,7 +186,7 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
     }
 
     public override componentDidUpdate(prevProps: IArrangementViewerProps, prevState: IArrangementViewerState): void {
-        const { arrangementPlayer, selectionManager } = this.props;
+        const { arrangementPlayer, selectionManager, inEditMode, entryMode } = this.props;
         const { viewerZoom, trackViewMode } = this.state;
 
         if (prevProps.arrangementPlayer !== arrangementPlayer) {
@@ -195,8 +201,12 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
             selectionManager.republishSelection();
         }
 
-        if (prevProps.inEditMode !== this.props.inEditMode) {
-            this.trackViewerInputController!.editMode = this.props.inEditMode;
+        if (prevProps.inEditMode !== inEditMode) {
+            this.trackViewerInputController!.editMode = inEditMode;
+        }
+
+        if (prevProps.entryMode !== entryMode) {
+            this.trackViewerInputController!.entryMode = entryMode;
         }
 
         this.trackViewerContainerRef.current!.style.zoom = `${viewerZoom}%`;

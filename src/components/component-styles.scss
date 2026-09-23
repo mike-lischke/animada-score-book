@@ -86,7 +86,8 @@
     gap: 4px;
 }
 
-.noteStyleButton {
+.noteStyleButton,
+.noteStyleRestButton {
     height: 40px;
     width: 40px;
     min-width: 40px;
@@ -113,6 +114,14 @@
         color: var(--color-base-content);
         --note-style-icon-hole: color-mix(in srgb, var(--color-primary) 25%, var(--color-base-100));
     }
+}
+
+/* The rest button draws a quarter rest from the rest sprite, which holds every value on a
+   staff-sized canvas. At the button's height the glyph is centered, so nothing is cropped. */
+.noteStyleRestIcon {
+    display: block;
+    width: 20px;
+    height: 40px;
 }
 
 .note-style-icon {
@@ -417,6 +426,35 @@
 
     li a {
         white-space: nowrap;
+    }
+}
+
+/* The entry mode button stands on its own, directly left of the tuplet button. */
+.entryModeGooey {
+    margin-left: 4px;
+}
+
+.entryModeButton {
+    height: 40px;
+    width: 40px;
+    min-width: 40px;
+    padding: 0;
+    border-radius: 50%;
+    background-color: var(--color-base-100);
+    flex-shrink: 0;
+    box-shadow: none;
+    border: 1px solid color-mix(in srgb, var(--color-base-content) 30%, transparent);
+
+    &:not(:has(input:disabled)):hover {
+        border-color: var(--color-primary);
+        background: color-mix(in srgb, var(--color-primary) 10%, var(--color-base-100));
+    }
+
+    /* The mark shows that overwrite, the mode that replaces content, is in effect. */
+    &.du-btn-primary {
+        border-color: var(--color-primary);
+        background-color: color-mix(in srgb, var(--color-primary) 25%, var(--color-base-100));
+        color: var(--color-base-content);
     }
 }
 

@@ -49,14 +49,6 @@ interface ISubdivisionRange {
     spanSteps: number;
 }
 
-interface IEmptySubdivisionCandidate {
-    trackId: number;
-    bar: number;
-    start: IFraction;
-    startIndex: number;
-    actual: number;
-}
-
 /**
  * Handles the edits of the grid view without rendering or listening to DOM events. On top of the
  * shared edits it owns the raster: cells, subdivision slots and the space making that follows fixed
@@ -143,9 +135,10 @@ export class GridMeasureEditor extends MeasureEditor {
     }
 
     /**
-     * Moves a note that does not fit at the current position to the next bar. When a following note
-     * is in the way, the note is shortened to the free space before that note, so a rest between two
-     * notes can always be filled. In the final bar the note is shortened to the available space.
+     * Moves a note that does not fit at the current position to the next bar, which the arrangement
+     * adds when that bar is behind the last one. When a following note is in the way, the note is
+     * shortened to the free space before that note, so a rest between two notes can always be filled.
+     * Where no bar follows, the note is shortened to the available space.
      *
      * The staff view uses {@link StaffMeasureEditor.insertNoteWithShift} instead, which keeps the
      * requested length and shifts following notes.
@@ -166,6 +159,8 @@ export class GridMeasureEditor extends MeasureEditor {
         if (compareFractions(addFractions(start, duration), barEnd) <= 0) {
             return this.limitInsertion(position, start, duration);
         }
+
+        this.dataModel.ensureBarAvailable(position.bar + 1);
 
         if (position.bar < cell.track.measures.length) {
             const nextPosition = { bar: position.bar + 1, trackId: position.trackId, step: 0 };
@@ -338,83 +333,6 @@ export class GridMeasureEditor extends MeasureEditor {
 
         return start !== undefined
             && this.dataModel.hasEmptySubdivisionAt(position.trackId, position.bar, start);
-    }
-
-    /**
-     * Deletes selected subdivisions when the selection covers complete groups of rest slots.
-     *
-     * @param entries The current selection entries.
-     *
-     * @returns True when at least one complete empty subdivision was deleted.
-     */
-    public deleteEmptySubdivisionsForSelection(entries: ISelectionEntry[]): boolean {
-        if (entries.length === 0) {
-            return false;
-        }
-
-        const candidates = new Map<string, IEmptySubdivisionCandidate>();
-        for (const entry of entries) {
-            const target = entry.target;
-            if (target.granularity !== SelectionGranularity.Note) {
-                return false;
-            }
-
-            const { measure } = target;
-            const cellStart = target.start ?? target.event.start;
-            const eventIndex = measure.events.findIndex((event) => {
-                return compareFractions(event.start, cellStart) === 0;
-            });
-            const subdivision = measure.subdivisions.find((candidate) => {
-                return eventIndex >= candidate.startIndex
-                    && eventIndex < candidate.startIndex + candidate.actual;
-            });
-            if (!subdivision
-                || measure.events.slice(subdivision.startIndex, subdivision.startIndex + subdivision.actual)
-                    .some((event) => {
-                        return event.noteStyleId !== undefined;
-                    })) {
-                return false;
-            }
-
-            const key = `${measure.track.id}:${measure.number}:${subdivision.startIndex}`;
-            candidates.set(key, {
-                trackId: measure.track.id,
-                bar: measure.number,
-                start: { ...measure.events[subdivision.startIndex].start },
-                startIndex: subdivision.startIndex,
-                actual: subdivision.actual,
-            });
-        }
-
-        for (const candidate of candidates.values()) {
-            const measure = this.resolveMeasure(candidate.trackId, candidate.bar);
-            if (!measure) {
-                return false;
-            }
-
-            const complete = measure.events
-                .slice(candidate.startIndex, candidate.startIndex + candidate.actual)
-                .every((event) => {
-                    return entries.some((entry) => {
-                        const target = entry.target;
-
-                        return target.granularity === SelectionGranularity.Note
-                            && target.measure === measure
-                            && compareFractions(target.start ?? target.event.start, event.start) === 0;
-                    });
-                });
-            if (!complete) {
-                return false;
-            }
-        }
-
-        let deleted = false;
-        for (const candidate of candidates.values()) {
-            deleted = this.dataModel.deleteSubdivisionAt(candidate.trackId, candidate.bar, candidate.start)
-                || deleted;
-        }
-
-        return deleted;
     }
 
     /**

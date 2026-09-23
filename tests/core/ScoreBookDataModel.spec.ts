@@ -5,6 +5,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { AppStorage } from "../../src/core/AppStorage.js";
 import { ScoreBookDataModel, type ISbDmTrackMeasure } from "../../src/core/ScoreBookDataModel.js";
 import { reduceFraction } from "../../src/core/serialisation/numeric-functions.js";
 import type { IFraction } from "../../src/core/types/general.js";
@@ -623,6 +624,165 @@ describe.sequential("ScoreBookDataModel track actions", () => {
         expect(noteSteps(track.measures[0])).toEqual([0, 4, 8, 12, 13, 14, 15]);
     });
 
+    it("insertEventsAt inserts an element and moves the content behind it", () => {
+        const instrument = createInstrument("0", 0, 0);
+        model.startNewArrangement([instrument], { length: 2 });
+        const track = model.arrangement!.tracks[0];
+
+        for (const step of [0, 4, 8, 12]) {
+            setCellNote(model, track.id, 1, step, "1");
+        }
+
+        mutatedCalls = 0;
+        const changed = model.insertEventsAt([{
+            measure: track.measures[0],
+            start: stepStart(4),
+            events: [{
+                start: { numerator: 0, denominator: 1 }, duration: { numerator: 1, denominator: 4 },
+                noteStyleId: "2",
+            }],
+        }]);
+
+        expect(changed).toEqual([track.id]);
+        expect(noteSpans(track.measures[0])).toEqual(["0/1+1/16", "1/4+1/4", "1/2+1/16", "3/4+1/16"]);
+        expect(noteSpans(track.measures[1])).toEqual(["0/1+1/16"]);
+        expect(mutatedCalls).toBe(1);
+    });
+
+    it("insertEventsAt pushes a subdivision block as a whole", () => {
+        const instrument = createInstrument("0", 0, 0);
+        model.startNewArrangement([instrument], { length: 2 });
+        const track = model.arrangement!.tracks[0];
+
+        model.createSubdivision(track.id, 1, { numerator: 1, denominator: 4 }, { numerator: 1, denominator: 2 },
+            3, 4);
+
+        model.insertEventsAt([{
+            measure: track.measures[0],
+            start: { numerator: 0, denominator: 1 },
+            events: [{
+                start: { numerator: 0, denominator: 1 }, duration: stepDuration, noteStyleId: "2",
+            }],
+        }]);
+
+        // The block keeps its three slots and moves behind the inserted note.
+        const subdivision = track.measures[0].subdivisions[0];
+        expect(subdivision).toBeDefined();
+        expect(track.measures[0].events[subdivision.startIndex].start).toEqual({
+            numerator: 5, denominator: 16,
+        });
+        expect(noteSpans(track.measures[0])).toEqual(["0/1+1/16"]);
+    });
+
+    it("insertEventsAt moves a subdivision block into the next measure", () => {
+        const instrument = createInstrument("0", 0, 0);
+        model.startNewArrangement([instrument], { length: 2 });
+        const track = model.arrangement!.tracks[0];
+
+        model.createSubdivision(track.id, 1, { numerator: 3, denominator: 4 }, { numerator: 1, denominator: 1 },
+            3, 4);
+
+        model.insertEventsAt([{
+            measure: track.measures[0],
+            start: { numerator: 3, denominator: 4 },
+            events: [{
+                start: { numerator: 0, denominator: 1 }, duration: stepDuration, noteStyleId: "2",
+            }],
+        }]);
+
+        expect(track.measures[0].subdivisions).toEqual([]);
+        expect(noteSpans(track.measures[0])).toEqual(["3/4+1/16"]);
+
+        const moved = track.measures[1].subdivisions[0];
+        expect(moved).toBeDefined();
+        expect(track.measures[1].events[moved.startIndex].start).toEqual({ numerator: 0, denominator: 1 });
+    });
+
+    it("deleteEventWithShift removes an event in front of a subdivision", () => {
+        const instrument = createInstrument("0", 0, 0);
+        model.startNewArrangement([instrument], { length: 1 });
+        const track = model.arrangement!.tracks[0];
+
+        setCellNote(model, track.id, 1, 0, "1");
+        model.createSubdivision(track.id, 1, { numerator: 1, denominator: 4 }, { numerator: 1, denominator: 2 },
+            3, 4);
+
+        expect(model.deleteEventWithShift(track.id, 1, { numerator: 0, denominator: 1 })).toBe(true);
+        expect(noteSpans(track.measures[0])).toEqual([]);
+    });
+
+    it("insertEventsAt moves an element that overshoots the bar line into a new bar", () => {
+        const instrument = createInstrument("0", 0, 0);
+        model.startNewArrangement([instrument]);
+        const track = model.arrangement!.tracks[0];
+
+        model.insertEventsAt([{
+            measure: track.measures[0],
+            start: stepStart(15),
+            events: [{
+                start: { numerator: 0, denominator: 1 }, duration: { numerator: 1, denominator: 4 },
+                noteStyleId: "2",
+            }],
+        }]);
+
+        expect(model.arrangement!.timeParams.length).toBe(2);
+        expect(track.measures).toHaveLength(2);
+        expect(noteSpans(track.measures[0])).toEqual([]);
+        expect(noteSpans(track.measures[1])).toEqual(["0/1+1/4"]);
+    });
+
+    it("insertEventsAt grows the arrangement instead of dropping pushed content", () => {
+        const instrument = createInstrument("0", 0, 0);
+        model.startNewArrangement([instrument]);
+        const track = model.arrangement!.tracks[0];
+
+        setCellNote(model, track.id, 1, 12, "1");
+
+        model.insertEventsAt([{
+            measure: track.measures[0],
+            start: stepStart(0),
+            events: [{
+                start: { numerator: 0, denominator: 1 }, duration: { numerator: 1, denominator: 2 },
+                noteStyleId: "2",
+            }],
+        }]);
+
+        expect(model.arrangement!.timeParams.length).toBe(2);
+        expect(noteSpans(track.measures[0])).toEqual(["0/1+1/2"]);
+        expect(noteSpans(track.measures[1])).toEqual(["1/4+1/16"]);
+    });
+
+    it("setNoteAt adds the bar the write addresses", () => {
+        const instrument = createInstrument("0", 0, 0);
+        model.startNewArrangement([instrument]);
+        const track = model.arrangement!.tracks[0];
+
+        expect(model.setNoteAt(track.id, 2, stepStart(0), stepDuration, "1")).toBe(true);
+        expect(model.arrangement!.timeParams.length).toBe(2);
+        expect(noteSpans(track.measures[1])).toEqual(["0/1+1/16"]);
+    });
+
+    it("keeps the content inside the last bar when growing is switched off", () => {
+        vi.spyOn(AppStorage, "loadUISettings").mockReturnValue({ autoExtendOnOverflow: false });
+        const instrument = createInstrument("0", 0, 0);
+        model.startNewArrangement([instrument]);
+        const track = model.arrangement!.tracks[0];
+
+        setCellNote(model, track.id, 1, 12, "1");
+
+        model.insertEventsAt([{
+            measure: track.measures[0],
+            start: stepStart(0),
+            events: [{
+                start: { numerator: 0, denominator: 1 }, duration: { numerator: 1, denominator: 2 },
+                noteStyleId: "2",
+            }],
+        }]);
+
+        expect(model.arrangement!.timeParams.length).toBe(1);
+        expect(noteSpans(track.measures[0])).toEqual(["0/1+1/2"]);
+    });
+
     it("insertEventsWithShift skips tracks that contain subdivisions", () => {
         const instrument = createInstrument("0", 0, 0);
         model.startNewArrangement([instrument], { length: 2 });
@@ -963,7 +1123,7 @@ describe.sequential("ScoreBookDataModel track actions", () => {
         ]);
     });
 
-    it("deleteEventWithShift skips tracks that contain subdivisions", () => {
+    it("deleteEventWithShift reports no change for the closing rest behind a subdivision", () => {
         model.startNewArrangement([createInstrument("0", 0, 0)]);
         const track = model.arrangement!.tracks[0];
         model.createSubdivision(track.id, 1, { numerator: 0, denominator: 1 }, { numerator: 1, denominator: 4 },
@@ -971,8 +1131,59 @@ describe.sequential("ScoreBookDataModel track actions", () => {
 
         mutatedCalls = 0;
 
+        // The rest is pulled left and notated again at the same place, so nothing changed at all.
         expect(model.deleteEventWithShift(track.id, 1, { numerator: 1, denominator: 4 })).toBe(false);
         expect(mutatedCalls).toBe(0);
+        expect(eventList(track.measures[0])).toEqual([
+            "0/1+1/12:-",
+            "1/12+1/12:-",
+            "1/6+1/12:-",
+            "1/4+3/4:-",
+        ]);
+    });
+
+    it("deleteEventWithShift moves a subdivision block up when an event in front of it goes", () => {
+        model.startNewArrangement([createInstrument("0", 0, 0)]);
+        const track = model.arrangement!.tracks[0];
+        const measure = track.measures[0];
+
+        measure.events.splice(0, measure.events.length,
+            { start: { numerator: 0, denominator: 1 }, duration: { numerator: 1, denominator: 4 } },
+            { start: { numerator: 1, denominator: 4 }, duration: { numerator: 1, denominator: 4 } },
+            { start: { numerator: 1, denominator: 2 }, duration: { numerator: 1, denominator: 2 }, noteStyleId: "1" },
+        );
+        model.createSubdivision(track.id, 1, { numerator: 1, denominator: 4 }, { numerator: 1, denominator: 2 }, 3, 4);
+
+        mutatedCalls = 0;
+
+        expect(model.deleteEventWithShift(track.id, 1, { numerator: 0, denominator: 1 })).toBe(true);
+        expect(mutatedCalls).toBe(1);
+        expect(eventList(measure)).toEqual([
+            "0/1+1/12:-",
+            "1/12+1/12:-",
+            "1/6+1/12:-",
+            "1/4+1/2:1",
+            "3/4+1/4:-",
+        ]);
+    });
+
+    it("deleteEventWithShift refuses a slot inside a subdivision", () => {
+        model.startNewArrangement([createInstrument("0", 0, 0)]);
+        const track = model.arrangement!.tracks[0];
+        model.createSubdivision(track.id, 1, { numerator: 0, denominator: 1 }, { numerator: 1, denominator: 4 },
+            3, 4);
+
+        mutatedCalls = 0;
+
+        // A slot cannot give way, so its deletion is refused and the controller clears it instead.
+        expect(model.deleteEventWithShift(track.id, 1, { numerator: 1, denominator: 12 })).toBe(false);
+        expect(mutatedCalls).toBe(0);
+        expect(eventList(track.measures[0])).toEqual([
+            "0/1+1/12:-",
+            "1/12+1/12:-",
+            "1/6+1/12:-",
+            "1/4+3/4:-",
+        ]);
     });
 
     it("clearAllTracks clears every track and fires arrangementMutated once", () => {
@@ -1132,6 +1343,52 @@ describe.sequential("ScoreBookDataModel track actions", () => {
         expect(measure.events[0].duration).toEqual({ numerator: 1, denominator: 16 });
         expect(measure.events[1].noteStyleId).toBeUndefined();
         expect(measure.events[1].duration).toEqual({ numerator: 1, denominator: 16 });
+    });
+
+    it("setNoteStyles writes single events and fires arrangementMutated once", () => {
+        const instrument = createInstrument("0", 0, 0);
+        model.startNewArrangement([instrument]);
+        const track = model.arrangement!.tracks[0];
+        const measure = track.measures[0];
+
+        measure.events.splice(0, measure.events.length,
+            { start: { numerator: 0, denominator: 16 }, duration: { numerator: 1, denominator: 16 }, noteStyleId: "1" },
+            { start: { numerator: 1, denominator: 16 }, duration: { numerator: 1, denominator: 16 }, noteStyleId: "1" },
+            { start: { numerator: 1, denominator: 8 }, duration: { numerator: 7, denominator: 8 } },
+        );
+        mutatedCalls = 0;
+
+        const changed = model.setNoteStyles([{
+            trackId: track.id,
+            bar: 1,
+            start: { numerator: 1, denominator: 16 },
+            noteStyleId: "2",
+        }]);
+
+        expect(changed).toBe(true);
+        expect(mutatedCalls).toBe(1);
+        expect(measure.events[0].noteStyleId).toBe("1");
+        expect(measure.events[1].noteStyleId).toBe("2");
+        expect(measure.events[1].duration).toEqual({ numerator: 1, denominator: 16 });
+        expect(measure.events[2].noteStyleId).toBeUndefined();
+    });
+
+    it("setNoteStyles ignores assignments for unknown events", () => {
+        const instrument = createInstrument("0", 0, 0);
+        model.startNewArrangement([instrument]);
+        const track = model.arrangement!.tracks[0];
+
+        mutatedCalls = 0;
+
+        const changed = model.setNoteStyles([{
+            trackId: track.id,
+            bar: 1,
+            start: { numerator: 5, denominator: 16 },
+            noteStyleId: "2",
+        }]);
+
+        expect(changed).toBe(false);
+        expect(mutatedCalls).toBe(0);
     });
 
     it("createSubdivision creates a triplet of rest slots and fires arrangementMutated", () => {

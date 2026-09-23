@@ -18,31 +18,36 @@ export interface ISwapProperties extends ICommonUIProperties {
 
     /** Optional controlled state for the swap input. */
     isOn?: boolean;
+
+    /** Marks the swap as active, which highlights it the way a default button is highlighted. */
+    isMarked?: boolean;
 }
 
 export class Swap extends UIComponent<ISwapProperties> {
     public override render(): ComponentChild {
-        const { id, offContent, onContent, onChange, isOn } = this.props;
+        const { id, offContent, onContent, onChange, isOn, disabled, isMarked } = this.props;
 
         const className = this.generateFinalClassName([
             "btn",
             "du-btn",
             "du-swap",
-            "du-swap-rotate"
+            "du-swap-rotate",
+            this.classFromProperty(isMarked, "du-btn-primary"),
         ]);
 
         return (
-            <label className={className}>
+            <label className={className} {...this.dataAttributes}>
                 <input
                     type="checkbox"
                     id={id}
                     checked={isOn}
+                    disabled={disabled}
                     onChange={(event) => {
                         onChange?.(event.currentTarget.checked);
                     }}
                 />
-                <span className="du-swap-off fill-current">{offContent}</span>
-                <span className="du-swap-on fill-current">{onContent}</span>
+                <span className="du-swap-off fill-current" data-tooltip="inherit">{offContent}</span>
+                <span className="du-swap-on fill-current" data-tooltip="inherit">{onContent}</span>
             </label>
         );
     }

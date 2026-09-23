@@ -5,7 +5,7 @@
 
 import type { IUISettings } from "../core/AppStorage.js";
 import type { INoteValue } from "../core/rest-notation.js";
-import type { IFraction } from "../core/types/general.js";
+import type { IFraction, EditEntryMode } from "../core/types/general.js";
 import type { Articulation } from "../core/articulation.js";
 import type { ISbDmScore, ISbDmScoreFolder, ISbDmTrack, ScoreBookChangeReason } from "../core/ScoreBookDataModel.js";
 import type { PlayerPlayState } from "../player/ArrangementPlayer.js";
@@ -81,10 +81,20 @@ export interface IRequestTypeMap {
 
     "editModeChanged": (enabled: boolean) => Promise<boolean>;
 
+    /**
+     * The entry mode that is in effect. Posted by the entry mode button and applied by the app; it is
+     * also the channel through which listeners learn the mode. The grid view offers no insert mode, so
+     * the mode only ever changes while the staff view is active.
+     */
+    "editEntryModeChanged": (mode: EditEntryMode) => Promise<boolean>;
+
     "insertTrackRequested": (track: ISbDmTrack) => Promise<boolean>;
 
     /** Fired by the articulation bar to enter a note of the given style at the current cursor position. */
     "noteEntryRequested": (noteStyleId: string) => Promise<boolean>;
+
+    /** Fired by the note style bar to enter a rest at the current cursor position. */
+    "restEntryRequested": SimpleCallback;
 
     /** Fired by the subdivision toolbar to create a subdivision at the cursor or selection. */
     "subdivisionCreationRequested": (request: ISubdivisionCreationRequest) => Promise<boolean>;
@@ -101,8 +111,11 @@ export interface IRequestTypeMap {
      */
     "arrangementMutated": SimpleCallback;
 
-    /** Fired by UndoManager after an undo/redo navigation, so the selection can be re-validated. */
-    "arrangementReverted": SimpleCallback;
+    /**
+     * Fired by UndoManager after an undo/redo navigation, so the selection can be re-validated and the
+     * cursor restored. The selection state is the one the restored arrangement was last edited in.
+     */
+    "arrangementReverted": (selectionState?: string) => Promise<boolean>;
 }
 
 type CallbackType = IRequestTypeMap[keyof IRequestTypeMap];

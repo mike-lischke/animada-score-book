@@ -29,6 +29,7 @@ import { ArrangementPlayControls } from "./components/ui/Arrangement/Arrangement
 import { ArrangementTitle } from "./components/ui/Arrangement/ArrangementTitle.js";
 import { ArrangementViewer } from "./components/ui/Arrangement/ArrangementViewer.js";
 import { ArticulationToolbar } from "./components/ui/Arrangement/ArticulationToolbar.js";
+import { EntryModeButton } from "./components/ui/Arrangement/EntryModeButton.js";
 import { NoteLengthToolbar } from "./components/ui/Arrangement/NoteLengthToolbar.js";
 import { NoteStyleBar } from "./components/ui/Arrangement/NoteStyleBar.js";
 import { SubdivisionToolbar } from "./components/ui/Arrangement/SubdivisionToolbar.js";
@@ -57,7 +58,7 @@ import {
 import { ArrangementMigrator } from "./core/serialisation/migration/ArrangementMigrator.js";
 import { stringifyPackedArrangement, tryParsePackedArrangement } from "./core/serialisation/snapshot-packing.js";
 import { mixerStepIndex, tutorialSteps } from "./core/TutorialSteps.js";
-import type { IArrangementSnapshot } from "./core/types/general.js";
+import { EditEntryMode, type IArrangementSnapshot } from "./core/types/general.js";
 import { SelectionGranularity } from "./ui/SelectionSerializer.js";
 import { UndoManager } from "./core/UndoManager.js";
 import { convertErrorToString } from "./core/utils.js";
@@ -107,6 +108,12 @@ interface IAppState {
 
     /** The active arrangement view mode (grid or staff notation). */
     trackViewMode: "grid" | "staff";
+
+    /**
+     * The entry mode the staff view was last set to. The grid view always works with overwrite, so the
+     * mode that is in effect is derived from the view mode instead of being stored.
+     */
+    preferredEntryMode: EditEntryMode;
 
     /** Token for the active score lock, if editing. */
     lockToken?: string;
@@ -174,6 +181,7 @@ export class App extends UIComponent<{}, IAppState> {
             sidebarOpen: false,
             headerCollapsed: false,
             trackViewMode: AppStorage.loadUISettings()?.viewSettings?.arrangementViewSettings?.displayMode ?? "grid",
+            preferredEntryMode: AppStorage.loadUISettings()?.entryMode ?? EditEntryMode.Insert,
             printing: false,
             instrumentEditorEnabled: false,
             backendUnreachable: false,
@@ -202,24 +210,26 @@ export class App extends UIComponent<{}, IAppState> {
         requisitions.register("timeParamsChanged", this.handleTimeParamsChange);
         requisitions.register("undoStackChanged", this.handleUndoStackChanged);
         requisitions.register("trackViewModeToggled", this.handleTrackViewModeToggled);
+        requisitions.register("editEntryModeChanged", this.handleEntryModeChanged);
 
         void this.checkBackendThenInitialize();
     }
 
     public override shouldComponentUpdate(nextProps: {}, nextState: IAppState): boolean {
         const { editMode, sidebarOpen, phase, headerCollapsed, trackViewMode, printing, backendUnreachable,
-            startupError } = this.state;
+            startupError, preferredEntryMode } = this.state;
 
         return editMode !== nextState.editMode
             || sidebarOpen !== nextState.sidebarOpen || phase !== nextState.phase
             || headerCollapsed !== nextState.headerCollapsed
             || trackViewMode !== nextState.trackViewMode
+            || preferredEntryMode !== nextState.preferredEntryMode
             || printing !== nextState.printing
             || backendUnreachable !== nextState.backendUnreachable
             || startupError !== nextState.startupError;
     }
 
-    public override componentDidUpdate(_prevProps: {}, prevState: IAppState): void {
+    public override componentDidUpdate(prevProps: {}, prevState: IAppState): void {
         const { phase } = this.state;
 
         if (prevState.phase !== AppPhase.Running && phase === AppPhase.Running) {
@@ -244,11 +254,13 @@ export class App extends UIComponent<{}, IAppState> {
         requisitions.unregister("arrangementMutated", this.handleArrangementMutated);
         requisitions.unregister("undoStackChanged", this.handleUndoStackChanged);
         requisitions.unregister("trackViewModeToggled", this.handleTrackViewModeToggled);
+        requisitions.unregister("editEntryModeChanged", this.handleEntryModeChanged);
     }
 
     public render() {
         const { phase, editMode, sidebarOpen, headerCollapsed, trackViewMode, instrumentEditorEnabled,
-            printing, printOptions, backendUnreachable, startupError } = this.state;
+            printing, printOptions, backendUnreachable, startupError, preferredEntryMode } = this.state;
+        const entryMode = this.effectiveEntryMode(trackViewMode, preferredEntryMode);
         const isRunning = phase === AppPhase.Running;
         const headerClassName = `rounded-3xl shadow-md border border-base-200/70 gap-4`
             + (headerCollapsed ? " collapsed" : "");
@@ -532,6 +544,10 @@ export class App extends UIComponent<{}, IAppState> {
                                                         <Separator
                                                             style={{ marginLeft: "16px", height: "50%" }}
                                                         />
+                                                        <EntryModeButton
+                                                            entryMode={entryMode}
+                                                            locked={trackViewMode !== "staff"}
+                                                        />
                                                         <SubdivisionToolbar
                                                             selectionManager={this.selectionManager}
                                                         />
@@ -543,6 +559,7 @@ export class App extends UIComponent<{}, IAppState> {
                                                                 <NoteLengthToolbar
                                                                     dataModel={this.dataModel}
                                                                     selectionManager={this.selectionManager}
+                                                                    entryMode={entryMode}
                                                                 />
                                                             </>
                                                         )}
@@ -552,6 +569,7 @@ export class App extends UIComponent<{}, IAppState> {
                                                         <ArticulationToolbar
                                                             dataModel={this.dataModel}
                                                             selectionManager={this.selectionManager}
+                                                            entryMode={entryMode}
                                                         />
                                                         <Separator
                                                             style={{ marginLeft: "16px", height: "50%" }}
@@ -560,6 +578,7 @@ export class App extends UIComponent<{}, IAppState> {
                                                             dataModel={this.dataModel}
                                                             selectionManager={this.selectionManager}
                                                             trackViewMode={trackViewMode}
+                                                            entryMode={entryMode}
                                                         />
                                                     </>)}
                                             </Container>
@@ -581,6 +600,7 @@ export class App extends UIComponent<{}, IAppState> {
                                             dataModel={this.dataModel}
                                             selectionManager={this.selectionManager}
                                             inEditMode={editMode}
+                                            entryMode={entryMode}
                                         />}
                                     </div>
                                 </Container>
@@ -1404,6 +1424,26 @@ export class App extends UIComponent<{}, IAppState> {
         return Promise.resolve(true);
     };
 
+    private handleEntryModeChanged = (mode: EditEntryMode): Promise<boolean> => {
+        AppStorage.saveSetting("entryMode", mode);
+        this.setState({ preferredEntryMode: mode });
+
+        return Promise.resolve(true);
+    };
+
+    /**
+     * Resolves the entry mode the button shows. The grid view always works with overwrite, so it never
+     * offers insert.
+     *
+     * @param viewMode The active view mode.
+     * @param preferred The mode the staff view was last set to.
+     *
+     * @returns The entry mode in effect.
+     */
+    private effectiveEntryMode(viewMode: "grid" | "staff", preferred: EditEntryMode): EditEntryMode {
+        return viewMode === "staff" ? preferred : EditEntryMode.Overwrite;
+    }
+
     private handleSystemThemeChange = (): void => {
         if (this.selectedThemePreference === "Auto") {
             this.applyThemePreference("Auto");
@@ -1666,9 +1706,21 @@ export class App extends UIComponent<{}, IAppState> {
         return true;
     };
 
+    /**
+     * Creates the undo manager for the current arrangement. It remembers the selection of every edit,
+     * so an undo puts the cursor back where the undone edit was made.
+     *
+     * @returns The undo manager to use.
+     */
+    private createUndoManager(): UndoManager {
+        return new UndoManager(this.dataModel, () => {
+            return this.selectionManager.serialisedSelection;
+        });
+    }
+
     private initAppState(): void {
         this.undoManager?.dispose();
-        this.undoManager = new UndoManager(this.dataModel);
+        this.undoManager = this.createUndoManager();
         this.arrangementPlayer = new ArrangementPlayer(this.dataModel);
     }
 
@@ -1708,7 +1760,7 @@ export class App extends UIComponent<{}, IAppState> {
         }
 
         this.undoManager?.dispose();
-        this.undoManager = new UndoManager(this.dataModel);
+        this.undoManager = this.createUndoManager();
         this.arrangementPlayer = new ArrangementPlayer(this.dataModel);
 
         if (arrangement.title) {
@@ -2083,7 +2135,7 @@ export class App extends UIComponent<{}, IAppState> {
         const arrangement = this.dataModel.startNewArrangement(instruments, options);
 
         this.undoManager?.dispose();
-        this.undoManager = new UndoManager(this.dataModel);
+        this.undoManager = this.createUndoManager();
         this.arrangementPlayer = new ArrangementPlayer(this.dataModel);
 
         if (arrangement.title) {

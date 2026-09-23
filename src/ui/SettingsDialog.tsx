@@ -199,6 +199,25 @@ export class SettingsDialog extends UIComponent<{}, ISettingsDialogState> {
                         mainAlignment={ChildAlignment.SpaceBetween}
                         crossAlignment={ChildAlignment.Center}
                     >
+                        <span className="form-row-label">Add a bar when notes run past the last one</span>
+                        <Checkbox
+                            id="autoExtendOnOverflow"
+                            checked={currentSettings.autoExtendOnOverflow ?? true}
+                            onChange={(checked) => {
+                                currentSettings.autoExtendOnOverflow = checked;
+                                this.setState({ currentSettings }, () => {
+                                    this.temporarySettingsChange();
+                                });
+                            }}
+                        />
+                    </Container>
+
+                    <Container
+                        className="form-row"
+                        orientation={Orientation.LeftToRight}
+                        mainAlignment={ChildAlignment.SpaceBetween}
+                        crossAlignment={ChildAlignment.Center}
+                    >
                         <span className="form-row-label">Show permission indicator</span>
                         <Checkbox
                             id="showPermMatrix"

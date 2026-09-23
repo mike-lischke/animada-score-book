@@ -69,15 +69,6 @@ interface ISubdivisionPlacement {
     start: IFraction;
 }
 
-/** A measure's events split at its bar line. */
-interface IMeasureOverflow {
-    /** The events that stay in the measure, ending at the bar line. */
-    kept: IMeasureEvent[];
-
-    /** The events that stick out of the measure, positioned relative to the bar line. */
-    overflow: IMeasureEvent[];
-}
-
 export type RealTime = number;
 
 /** The start of a measure as a bar fraction. */
@@ -748,6 +739,21 @@ export interface IFractionRangeReplacement {
     shiftedStartIndex: number;
 }
 
+/** A note style for a single event: where the event sits and the style it takes. */
+export interface INoteStyleAssignment {
+    /** The track containing the event. */
+    trackId: number;
+
+    /** The one-based measure number. */
+    bar: number;
+
+    /** Exact start of the event within its measure. */
+    start: IFraction;
+
+    /** The instrument note-style id to write. */
+    noteStyleId: string;
+}
+
 /**
  * An insert target for {@link ScoreBookDataModel.insertEventsWithShift}: a run of measure events
  * replaced by other events, moving everything behind the run by the length difference.
@@ -763,6 +769,21 @@ export interface IMeasureInsert {
     to: IMeasureEvent;
 
     /** Events to insert in the run's place, positioned relative to the run's start. */
+    events: IMeasureEvent[];
+}
+
+/**
+ * An insert target for {@link ScoreBookDataModel.insertEventsAt}: events added at a position, moving
+ * everything behind that position to the right by their length.
+ */
+export interface IMeasureInsertion {
+    /** The measure the events are inserted into. */
+    measure: ISbDmTrackMeasure;
+
+    /** The exact insertion position within the measure. */
+    start: IFraction;
+
+    /** Events to insert, positioned relative to {@link start}. */
     events: IMeasureEvent[];
 }
 
@@ -1086,13 +1107,8 @@ export class ScoreBookDataModel {
      */
     public setNoteAt(trackId: number, bar: number, start: IFraction, duration: IFraction,
         noteStyleId?: string): boolean {
-        const arrangement = this.arrangement;
-        const track = arrangement?.tracks.find((candidate) => {
-            return candidate.id === trackId;
-        });
-
-        const measure = track?.measures[bar - 1];
-        if (!track || !measure) {
+        const measure = this.measureForEdit(trackId, bar);
+        if (!measure) {
             return false;
         }
 
@@ -1106,7 +1122,7 @@ export class ScoreBookDataModel {
         }
 
         if (changed) {
-            void requisitions.execute("trackChanged", track.id);
+            void requisitions.execute("trackChanged", measure.track.id);
             void requisitions.execute("arrangementMutated", undefined);
         }
 
@@ -1192,13 +1208,12 @@ export class ScoreBookDataModel {
 
     /**
      * Replaces runs of measure events with runs of new events, moving everything behind a run by the
-     * length difference between the two. Content that no longer fits into its measure is cut off at
-     * the bar line and continues at the start of the next measure, where the check runs again; the
-     * excess of the last measure is dropped.
+     * length difference between the two. A run that only covers part of a subdivision is refused: a
+     * subdivision is never cut. Content pushed past the track's last measure is dropped, a
+     * subdivision that no longer fits into its measure continues at the start of the next one.
      *
-     * Everything works on the measure's event list and on bar fractions, so the staff view — which
-     * has no grid — needs no step arithmetic. Tracks with subdivisions are skipped: their slots do
-     * not take part in length changes yet.
+     * Everything works on the track's absolute timeline and on bar fractions, so the staff view —
+     * which has no grid — needs no step arithmetic.
      *
      * @param insertions The replacements to apply.
      *
@@ -1208,68 +1223,88 @@ export class ScoreBookDataModel {
         const changed = new Set<number>();
 
         for (const insertion of insertions) {
-            const measure = insertion.measure;
+            const { measure } = insertion;
             const track = measure.track;
-            if (this.hasSubdivisions(track)) {
+            const measureIndex = measure.number - 1;
+            const runStart = this.absolutePositionOf(measureIndex, insertion.from.start);
+            const runEnd = this.absolutePositionOf(measureIndex,
+                addFractions(insertion.to.start, insertion.to.duration));
+            const items = this.collectAbsoluteItems(track);
+            if (!this.runCoversItems(items, runStart, runEnd)) {
                 continue;
             }
 
-            const first = measure.events.findIndex((event) => {
-                return compareFractions(event.start, insertion.from.start) === 0;
-            });
-            const last = measure.events.findIndex((event) => {
-                return compareFractions(event.start, insertion.to.start) === 0;
-            });
-            if (first < 0 || last < first) {
-                continue;
+            const before = ScoreBookDataModel.timelineSignature(items);
+            const added = this.absoluteItemsOf(insertion.events, runStart);
+            const delta = subtractFractions(this.totalLengthOf(added), subtractFractions(runEnd, runStart));
+            const first = this.indexOfItemBehind(items, runStart);
+            const last = this.indexOfItemBehind(items, runEnd);
+
+            // Everything behind the run gives way by the length difference between the two.
+            for (let index = last; index < items.length; index++) {
+                items[index].start = addFractions(items[index].start, delta);
             }
 
-            const runStart = measure.events[first].start;
-            const lastEvent = measure.events[last];
-            const runLength = subtractFractions(addFractions(lastEvent.start, lastEvent.duration), runStart);
-            const insertedLength = insertion.events.reduce((length, event) => {
-                return addFractions(length, event.duration);
-            }, { numerator: 0, denominator: 1 });
-            const delta = subtractFractions(insertedLength, runLength);
+            items.splice(first, last - first, ...added);
+            this.settleTimelineItems(track, items, this.endOfItemBefore(items, first), first);
 
-            const replaced: IMeasureEvent[] = [
-                ...measure.events.slice(0, first),
-                ...insertion.events.map((event) => {
-                    const placed = this.cloneEvent(event);
-                    placed.start = addFractions(runStart, event.start);
-
-                    return placed;
-                }),
-                ...measure.events.slice(last + 1).map((event) => {
-                    const moved = this.cloneEvent(event);
-                    moved.start = addFractions(moved.start, delta);
-
-                    return moved;
-                }),
-            ];
-
-            this.setMeasureEvents(measure, this.normalizeMeasureEvents(this.padMeasureEnd(replaced)));
-            this.carryOverflow(track, measure.number - 1);
-            changed.add(track.id);
+            // Removing the closing rest of a track recreates the very same rest, which is no change.
+            if (before !== ScoreBookDataModel.timelineSignature(this.collectAbsoluteItems(track))) {
+                changed.add(track.id);
+            }
         }
 
-        if (changed.size > 0) {
-            for (const trackId of changed) {
-                void requisitions.execute("trackChanged", trackId);
+        this.announceTrackEdits(changed);
+
+        return [...changed];
+    }
+
+    /**
+     * Inserts events at an exact position of a measure and moves everything from that position on to
+     * the right by the inserted length, so an insertion never shortens what is already there. The
+     * space it takes is notated as rests where the content gives way, a following subdivision is
+     * pushed as one block, and content pushed past the track's last measure is dropped.
+     *
+     * @param insertions The insertions to apply.
+     *
+     * @returns The ids of the tracks whose content changed.
+     */
+    public insertEventsAt(insertions: IMeasureInsertion[]): number[] {
+        const changed = new Set<number>();
+
+        for (const insertion of insertions) {
+            const { measure } = insertion;
+            const track = measure.track;
+            const start = this.absolutePositionOf(measure.number - 1, insertion.start);
+            const added = this.absoluteItemsOf(insertion.events, start);
+            const length = this.totalLengthOf(added);
+
+            const items = this.collectAbsoluteItems(track);
+            const before = ScoreBookDataModel.timelineSignature(items);
+            const fromIndex = this.indexOfItemBehind(items, start);
+
+            // Everything from the insertion position on gives way by the inserted length.
+            for (let index = fromIndex; index < items.length; index++) {
+                items[index].start = addFractions(items[index].start, length);
             }
 
-            void requisitions.execute("arrangementMutated", undefined);
+            items.splice(fromIndex, 0, ...added);
+            this.settleTimelineItems(track, items, this.endOfItemBefore(items, fromIndex), fromIndex);
+
+            if (before !== ScoreBookDataModel.timelineSignature(this.collectAbsoluteItems(track))) {
+                changed.add(track.id);
+            }
         }
+
+        this.announceTrackEdits(changed);
 
         return [...changed];
     }
 
     /**
      * Removes one event from a measure and pulls everything behind it to the left by the removed
-     * length, so a rest takes no time either. Content that no longer fits into its measure is cut
-     * off at the bar line and continues at the start of the next measure; the tail of the track is
-     * filled with a rest, so every measure keeps tiling its meter. Tracks with subdivisions are
-     * skipped: their slots do not take part in length changes yet.
+     * length, so a rest takes no time either. The space that opens up is notated as rests, so every
+     * measure keeps tiling its meter. An event that would cut a subdivision is not removed.
      *
      * @param trackId The track containing the event.
      * @param bar The one-based measure number.
@@ -1278,18 +1313,15 @@ export class ScoreBookDataModel {
      * @returns True when the event was removed.
      */
     public deleteEventWithShift(trackId: number, bar: number, start: IFraction): boolean {
-        const track = this.trackById(trackId);
-        if (!track || this.hasSubdivisions(track)) {
+        const measure = this.trackById(trackId)?.measures.at(bar - 1);
+        const event = measure?.events.find((candidate) => {
+            return compareFractions(candidate.start, start) === 0;
+        });
+        if (measure === undefined || event === undefined) {
             return false;
         }
 
-        if (!this.setEventSpan(track, bar, start)) {
-            return false;
-        }
-
-        this.announceTrackEdit(track);
-
-        return true;
+        return this.insertEventsWithShift([{ measure, from: event, to: event, events: [] }]).length > 0;
     }
 
     /**
@@ -1403,6 +1435,74 @@ export class ScoreBookDataModel {
         }
 
         return changed;
+    }
+
+    /**
+     * Gives single events a note style in one edit. Fires one arrangementMutated event (a single undo
+     * step) and one trackChanged event per affected track. Assignments referencing a missing track,
+     * measure or event are ignored.
+     *
+     * @param assignments The events to write and the style each one takes.
+     *
+     * @returns True when at least one event changed.
+     */
+    public setNoteStyles(assignments: INoteStyleAssignment[]): boolean {
+        const arrangement = this.arrangement;
+        if (!arrangement) {
+            return false;
+        }
+
+        const affectedTracks = new Set<number>();
+        const measures = new Map<ISbDmTrackMeasure, IMeasureEvent[]>();
+        let changed = false;
+
+        for (const assignment of assignments) {
+            const track = arrangement.tracks.find((candidate) => {
+                return candidate.id === assignment.trackId;
+            });
+            const measure = track?.measures[assignment.bar - 1];
+            if (!track || !measure) {
+                continue;
+            }
+
+            let events = measures.get(measure);
+            if (events === undefined) {
+                events = measure.events.map((event) => {
+                    return this.cloneEvent(event);
+                });
+                measures.set(measure, events);
+            }
+
+            const event = events.find((candidate) => {
+                return compareFractions(candidate.start, assignment.start) === 0;
+            });
+            if (event === undefined) {
+                continue;
+            }
+
+            if (event.noteStyleId !== assignment.noteStyleId || event.articulation !== undefined) {
+                event.noteStyleId = assignment.noteStyleId;
+                event.articulation = undefined;
+                changed = true;
+                affectedTracks.add(track.id);
+            }
+        }
+
+        if (!changed) {
+            return false;
+        }
+
+        for (const [measure, events] of measures) {
+            this.setMeasureEvents(measure, events);
+        }
+
+        for (const trackId of affectedTracks) {
+            void requisitions.execute("trackChanged", trackId);
+        }
+
+        void requisitions.execute("arrangementMutated", undefined);
+
+        return true;
     }
 
     /**
@@ -1703,6 +1803,34 @@ export class ScoreBookDataModel {
 
         arrangement.timeParams.length = length;
         void requisitions.execute("arrangementMutated", undefined);
+
+        return true;
+    }
+
+    /**
+     * Makes a bar available for an edit. A bar behind the last one extends the arrangement by empty
+     * measures, which the user can switch off; without that an edit reaching there has no place.
+     *
+     * @param bar The one-based bar an edit wants to write to.
+     *
+     * @returns True when the bar exists after the call.
+     */
+    public ensureBarAvailable(bar: number): boolean {
+        const arrangement = this.arrangement;
+        if (!arrangement) {
+            return false;
+        }
+
+        if (bar <= arrangement.timeParams.length) {
+            return true;
+        }
+
+        if (!this.extendsOnOverflow()) {
+            return false;
+        }
+
+        (arrangement as Arrangement).insertBars(arrangement.timeParams.length,
+            bar - arrangement.timeParams.length, false, false);
 
         return true;
     }
@@ -2798,6 +2926,18 @@ export class ScoreBookDataModel {
     }
 
     /**
+     * Describes a track's timeline as a string, so the state before and after a rebuild can be compared
+     * to find out whether anything changed at all.
+     *
+     * @param items The timeline items to describe.
+     *
+     * @returns The description of the timeline.
+     */
+    private static timelineSignature(items: IAbsoluteTrackItem[]): string {
+        return JSON.stringify(items);
+    }
+
+    /**
      * Clears all note content from a measure, leaving a single whole rest.
      *
      * @param measure The measure to clear.
@@ -3461,12 +3601,6 @@ export class ScoreBookDataModel {
         return Math.floor(absolute.numerator / absolute.denominator);
     }
 
-    private hasSubdivisions(track: ISbDmTrack): boolean {
-        return track.measures.some((measure) => {
-            return measure.subdivisions.length > 0;
-        });
-    }
-
     /**
      * Announces a finished change of one track: the viewers recompute their structure and the undo
      * manager stores one step.
@@ -3474,7 +3608,24 @@ export class ScoreBookDataModel {
      * @param track The track whose content changed.
      */
     private announceTrackEdit(track: ISbDmTrack): void {
-        void requisitions.execute("trackChanged", track.id);
+        this.announceTrackEdits(new Set([track.id]));
+    }
+
+    /**
+     * Announces finished changes of several tracks as one edit: the viewers recompute their structure
+     * and the undo manager stores one step.
+     *
+     * @param trackIds The ids of the tracks whose content changed.
+     */
+    private announceTrackEdits(trackIds: Set<number>): void {
+        if (trackIds.size === 0) {
+            return;
+        }
+
+        for (const trackId of trackIds) {
+            void requisitions.execute("trackChanged", trackId);
+        }
+
         void requisitions.execute("arrangementMutated", undefined);
     }
 
@@ -3489,6 +3640,38 @@ export class ScoreBookDataModel {
         return this.arrangement?.tracks.find((candidate) => {
             return candidate.id === trackId;
         });
+    }
+
+    /**
+     * Resolves the measure a write addresses. A bar behind the last one is asked for, which adds it
+     * when the user allows the arrangement to grow.
+     *
+     * @param trackId The track containing the measure.
+     * @param bar The one-based measure number.
+     *
+     * @returns The measure, or undefined when there is none and none was added.
+     */
+    private measureForEdit(trackId: number, bar: number): ISbDmTrackMeasure | undefined {
+        const track = this.trackById(trackId);
+        if (track === undefined) {
+            return undefined;
+        }
+
+        if (track.measures.at(bar - 1) === undefined) {
+            this.ensureBarAvailable(bar);
+        }
+
+        return track.measures.at(bar - 1);
+    }
+
+    /**
+     * Whether content that reaches behind the last measure extends the arrangement. The setting is
+     * read per edit, so changing it takes effect without a reload.
+     *
+     * @returns True when overflow adds measures.
+     */
+    private extendsOnOverflow(): boolean {
+        return AppStorage.loadUISettings()?.autoExtendOnOverflow ?? true;
     }
 
     /**
@@ -3613,37 +3796,54 @@ export class ScoreBookDataModel {
             return false;
         }
 
-        const trackLength = reduceFraction(track.measures.length, 1);
-        let previousEnd = addFractions(items[firstResized].start, items[firstResized].duration);
+        const resized = items[firstResized];
+        this.settleTimelineItems(track, items, addFractions(resized.start, resized.duration), firstResized + 1);
 
-        for (let index = firstResized + 1; index < items.length; index++) {
+        return true;
+    }
+
+    /**
+     * Lays out a track's timeline behind a change. An item that overlaps its predecessor moves up, an
+     * item that no longer fits into its measure continues at the start of the next one — a subdivision
+     * as a whole, so its slots stay together — and what is left beyond the track's last measure is
+     * dropped.
+     *
+     * @param track The track to lay out.
+     * @param items The track's items, sorted by their start.
+     * @param previousEnd The absolute end of the content the items follow.
+     * @param fromIndex The index of the first item to check.
+     */
+    private settleTimelineItems(track: ISbDmTrack, items: IAbsoluteTrackItem[], previousEnd: IFraction,
+        fromIndex: number): void {
+        for (let index = fromIndex; index < items.length; index++) {
             const item = items[index];
             if (compareFractions(item.start, previousEnd) < 0) {
                 item.start = previousEnd;
             }
 
+            // An item that reaches behind the last measure grows the arrangement; with that switched
+            // off it has no place and is dropped.
             const measureIndex = this.measureIndexAt(item.start);
-            if (measureIndex >= track.measures.length) {
+            if (!this.ensureBarAvailable(measureIndex + 1)) {
                 items.splice(index);
 
                 break;
             }
 
-            // An item that no longer fits into its measure continues at the start of the next one. A
-            // subdivision moves over as a whole, so its slots stay together.
+            // An item that no longer fits into its measure continues at the start of the next one.
+            // A subdivision moves over as a whole, so its slots stay together.
             const measureEnd = reduceFraction(measureIndex + 1, 1);
             if (compareFractions(addFractions(item.start, item.duration), measureEnd) > 0) {
-                const nextMeasure = measureIndex + 1;
-                if (nextMeasure >= track.measures.length) {
+                if (!this.ensureBarAvailable(measureIndex + 2)) {
                     items.splice(index);
 
                     break;
                 }
 
-                item.start = reduceFraction(nextMeasure, 1);
+                item.start = measureEnd;
             }
 
-            const remaining = subtractFractions(trackLength, item.start);
+            const remaining = subtractFractions(reduceFraction(track.measures.length, 1), item.start);
             if (remaining.numerator <= 0) {
                 items.splice(index);
 
@@ -3658,8 +3858,6 @@ export class ScoreBookDataModel {
         }
 
         this.layOutAbsoluteItems(track, items);
-
-        return true;
     }
 
     /**
@@ -3721,6 +3919,86 @@ export class ScoreBookDataModel {
             duration: { ...projected.event.duration },
             event: this.cloneEvent(projected.event),
         };
+    }
+
+    /**
+     * Converts events into timeline items, placed at the given absolute position.
+     *
+     * @param events The events to place, positioned relative to the given position.
+     * @param start The absolute position of the first event.
+     *
+     * @returns The items, in the order of the events.
+     */
+    private absoluteItemsOf(events: IMeasureEvent[], start: IFraction): IAbsoluteTrackItem[] {
+        return events.map((event) => {
+            return {
+                start: addFractions(start, event.start),
+                duration: { ...event.duration },
+                event: this.cloneEvent(event),
+            };
+        });
+    }
+
+    /**
+     * Finds the first timeline item that starts at or behind the given position.
+     *
+     * @param items The track's items, sorted by their start.
+     * @param start The absolute position to look for.
+     *
+     * @returns The index of the first such item, or the item count when all of them start before it.
+     */
+    private indexOfItemBehind(items: IAbsoluteTrackItem[], start: IFraction): number {
+        const index = items.findIndex((item) => {
+            return compareFractions(item.start, start) >= 0;
+        });
+
+        return index < 0 ? items.length : index;
+    }
+
+    /**
+     * Resolves the end of the item in front of the given index.
+     *
+     * @param items The track's items, sorted by their start.
+     * @param index The index whose predecessor is looked up.
+     *
+     * @returns The absolute end of that item, or the start of the track when there is none.
+     */
+    private endOfItemBefore(items: IAbsoluteTrackItem[], index: number): IFraction {
+        const previous = index > 0 ? items.at(index - 1) : undefined;
+
+        return previous === undefined ? { ...barStart } : addFractions(previous.start, previous.duration);
+    }
+
+    /**
+     * Sums up the length of a run of items.
+     *
+     * @param items The items to sum up.
+     *
+     * @returns The total length as a fraction of a bar.
+     */
+    private totalLengthOf(items: IAbsoluteTrackItem[]): IFraction {
+        return items.reduce((length, item) => {
+            return addFractions(length, item.duration);
+        }, { ...barStart });
+    }
+
+    /**
+     * Checks whether a run may replace the given items: every item the run overlaps has to be covered
+     * by it, so a subdivision is never cut in half.
+     *
+     * @param items The track's items.
+     * @param start The absolute start of the run.
+     * @param end The absolute end of the run.
+     *
+     * @returns True when the run may be applied.
+     */
+    private runCoversItems(items: IAbsoluteTrackItem[], start: IFraction, end: IFraction): boolean {
+        return items.every((item) => {
+            const itemEnd = addFractions(item.start, item.duration);
+            const overlaps = compareFractions(item.start, end) < 0 && compareFractions(itemEnd, start) > 0;
+
+            return !overlaps || (compareFractions(item.start, start) >= 0 && compareFractions(itemEnd, end) <= 0);
+        });
     }
 
     /**
@@ -3902,107 +4180,8 @@ export class ScoreBookDataModel {
      *
      * @returns The events, padded with a trailing rest when they end before the bar line.
      */
-    private padMeasureEnd(events: IMeasureEvent[]): IMeasureEvent[] {
-        const end = events.reduce((position, event) => {
-            return addFractions(position, event.duration);
-        }, { numerator: 0, denominator: 1 });
-
-        if (compareFractions(end, barLine) >= 0) {
-            return events;
-        }
-
-        return [...events, { start: end, duration: subtractFractions(barLine, end) }];
-    }
-
-    /**
-     * Keeps a measure's rests renderable: adjacent rests are combined and every rest is decomposed
-     * into standard note values, so the staff view can draw it with a single glyph.
-     *
-     * @param events The measure's events, in display order.
-     *
-     * @returns The events with combined and decomposed rests.
-     */
     private normalizeMeasureEvents(events: IMeasureEvent[]): IMeasureEvent[] {
         return this.normalizeRests(events, new Set());
-    }
-
-    /**
-     * Splits a measure's events at its bar line: the head of an event crossing the line stays in the
-     * measure, its tail moves, and everything starting behind the line moves as it is.
-     *
-     * @param events The measure's events, in display order.
-     *
-     * @returns The events that stay and the events that stick out.
-     */
-    private splitAtBarLine(events: IMeasureEvent[]): IMeasureOverflow {
-        const kept: IMeasureEvent[] = [];
-        const overflow: IMeasureEvent[] = [];
-
-        for (const event of events) {
-            const eventEnd = addFractions(event.start, event.duration);
-
-            if (compareFractions(event.start, barLine) >= 0) {
-                const moved = this.cloneEvent(event);
-                moved.start = subtractFractions(event.start, barLine);
-                overflow.push(moved);
-
-                continue;
-            }
-
-            if (compareFractions(eventEnd, barLine) > 0) {
-                const head = this.cloneEvent(event);
-                head.duration = subtractFractions(barLine, event.start);
-                kept.push(head);
-
-                const tail = this.cloneEvent(event);
-                tail.start = { numerator: 0, denominator: 1 };
-                tail.duration = subtractFractions(eventEnd, barLine);
-                overflow.push(tail);
-
-                continue;
-            }
-
-            kept.push(this.cloneEvent(event));
-        }
-
-        return { kept, overflow };
-    }
-
-    /**
-     * Moves the content that does not fit into a measure to the start of the next measure, pushing
-     * that measure's events behind it, and repeats the check there.
-     *
-     * @param track The track to edit.
-     * @param fromMeasure The index of the measure to start the check at.
-     */
-    private carryOverflow(track: ISbDmTrack, fromMeasure: number): void {
-        for (let index = fromMeasure; index < track.measures.length; index++) {
-            const measure = track.measures[index];
-            const { kept, overflow } = this.splitAtBarLine(measure.events);
-            if (overflow.length === 0) {
-                return;
-            }
-
-            this.setMeasureEvents(measure, this.normalizeMeasureEvents(kept));
-
-            if (index + 1 >= track.measures.length) {
-                // The excess of the last measure is dropped.
-                return;
-            }
-
-            const next = track.measures[index + 1];
-            const spillLength = overflow.reduce((length, event) => {
-                return addFractions(length, event.duration);
-            }, { numerator: 0, denominator: 1 });
-            const shifted = next.events.map((event) => {
-                const moved = this.cloneEvent(event);
-                moved.start = addFractions(moved.start, spillLength);
-
-                return moved;
-            });
-
-            this.setMeasureEvents(next, this.normalizeMeasureEvents([...overflow, ...shifted]));
-        }
     }
 
     /**

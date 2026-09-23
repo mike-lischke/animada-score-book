@@ -9,6 +9,7 @@ import { Articulation, articulationOf, voiceKey } from "../../../core/articulati
 import type { ISbDmTrack, ScoreBookDataModel } from "../../../core/ScoreBookDataModel.js";
 import { compareFractions } from "../../../core/serialisation/numeric-functions.js";
 import type { IAudioData } from "../../../core/types/general.js";
+import { EditEntryMode } from "../../../core/types/general.js";
 import { requisitions } from "../../../supplement/Requisitions.js";
 import type { SelectionManager } from "../../../ui/SelectionManager.js";
 import { SelectionGranularity, type ISelectionEntry } from "../../../ui/SelectionSerializer.js";
@@ -20,6 +21,7 @@ import { Button } from "../framework/Button.js";
 import { Container } from "../framework/Container.js";
 import { Dropdown, type IDropdownItem } from "../framework/Dropdown.js";
 import { GooeyGroup } from "../framework/GooeyGroup.js";
+import { NoteImage, NoteKind, NoteLength } from "../framework/NoteImage.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
 import { ChildAlignment, Orientation } from "../framework/ui-types.js";
 
@@ -29,12 +31,27 @@ export interface INoteStyleBarProps extends ICommonUIProperties {
 
     /** The active view mode; determines whether grid symbols or staff note heads are shown. */
     trackViewMode?: "grid" | "staff";
+
+    /**
+     * The entry mode the view works in. Insert mode marks nothing, because an entry names the style
+     * it writes; the selection there is merely the insertion point.
+     */
+    entryMode?: EditEntryMode;
 }
 
 interface INoteStyleBarState {
     noteStyles: IAudioData[];
-    markedStyleId?: string;
+    markedStyle?: IMarkedStyle;
     canEnter: boolean;
+}
+
+/** What the current selection shares: a note style, rests only, or nothing when it mixes. */
+interface IMarkedStyle {
+    /** The shared note style id, or undefined when every addressed event is a rest. */
+    noteStyleId?: string;
+
+    /** True when every addressed event is a rest. */
+    isRest: boolean;
 }
 
 /** A note style voice shown in the toolbar, with the representative's 0-based position and all member ids. */
@@ -64,18 +81,29 @@ export class NoteStyleBar extends UIComponent<INoteStyleBarProps, INoteStyleBarS
         this.refreshFromSelection();
     }
 
+    public override componentDidUpdate(previousProps: INoteStyleBarProps): void {
+        const { entryMode } = this.props;
+
+        // Switching the mode switches where the mark comes from: the selection in overwrite mode, and
+        // no mark at all in insert mode.
+        if (previousProps.entryMode !== entryMode) {
+            this.refreshFromSelection();
+        }
+    }
+
     public override componentWillUnmount(): void {
         requisitions.unregister("selectionChanged", this.handleSelectionChanged);
         requisitions.unregister("arrangementReverted", this.handleArrangementReverted);
     }
 
     public override render(): ComponentChild {
-        const { noteStyles, markedStyleId, canEnter } = this.state;
+        const { noteStyles, markedStyle, canEnter } = this.state;
         const { trackViewMode = "grid" } = this.props;
 
+        const restButton = this.renderRestButton(markedStyle, canEnter);
         const controls = trackViewMode === "staff"
-            ? this.renderStaffControls(noteStyles, markedStyleId, canEnter)
-            : this.renderGridControls(noteStyles, markedStyleId, canEnter);
+            ? this.renderStaffControls(noteStyles, markedStyle?.noteStyleId, canEnter)
+            : this.renderGridControls(noteStyles, markedStyle?.noteStyleId, canEnter);
 
         return (
             <Container
@@ -89,9 +117,40 @@ export class NoteStyleBar extends UIComponent<INoteStyleBarProps, INoteStyleBarS
                     background="var(--color-base-200)"
                     style={{ flex: 1, minWidth: 0, overflowX: "auto" }}
                 >
+                    {restButton}
                     {controls}
                 </GooeyGroup>
             </Container>
+        );
+    }
+
+    /**
+     * Renders the rest button, which leads the bar: it enters a rest at the cursor instead of a note
+     * style. The button is marked while the selection holds rests only.
+     *
+     * @param markedStyle The style the selection shares, if any.
+     * @param canEnter Whether note entry is currently possible.
+     *
+     * @returns The rest button node.
+     */
+    private renderRestButton(markedStyle: IMarkedStyle | undefined, canEnter: boolean): ComponentChild {
+        return (
+            <Button
+                className="noteStyleRestButton"
+                isDefault={markedStyle?.isRest === true}
+                disabled={!canEnter}
+                data-tooltip="Rest (0)"
+                onClick={() => {
+                    void requisitions.execute("restEntryRequested", undefined);
+                }}
+            >
+                <NoteImage
+                    className="noteStyleRestIcon"
+                    kind={NoteKind.Rest}
+                    value={NoteLength.Quarter}
+                    alt=""
+                />
+            </Button>
         );
     }
 
@@ -324,14 +383,22 @@ export class NoteStyleBar extends UIComponent<INoteStyleBarProps, INoteStyleBarS
     };
 
     private refreshFromSelection(): void {
-        const { selectionManager } = this.props;
+        const { selectionManager, entryMode } = this.props;
 
         const entries = [...selectionManager.currentSelection.values()];
         const tracks = this.resolveSelectedTracks(entries);
         const noteStyles = this.resolveNoteStyles(tracks);
-        const markedStyleId = this.resolveMarkedStyleId(tracks, entries);
+        const canEnter = this.shareInstrument(tracks);
 
-        this.setState({ noteStyles, markedStyleId, canEnter: this.shareInstrument(tracks) });
+        // Insert mode holds no style of its own: an entry names the style it writes, so no button is
+        // marked and the mark of the overwrite mode is dropped.
+        if (entryMode === EditEntryMode.Insert) {
+            this.setState({ noteStyles, markedStyle: undefined, canEnter });
+
+            return;
+        }
+
+        this.setState({ noteStyles, markedStyle: this.resolveMarkedStyle(tracks, entries), canEnter });
     }
 
     /**
@@ -392,14 +459,15 @@ export class NoteStyleBar extends UIComponent<INoteStyleBarProps, INoteStyleBarS
     }
 
     /**
-     * Determines the note style shared by all currently selected notes across all selected tracks.
+     * Determines the style the currently selected notes share. Every addressed event has to carry the
+     * same style, and a selection of rests marks the rest instead of a style.
      *
      * @param tracks The distinct selected tracks.
      * @param entries All current selection entries.
      *
-     * @returns The common note style id, or undefined when no single style is shared.
+     * @returns The shared style, or undefined when the selection shares none.
      */
-    private resolveMarkedStyleId(tracks: ISbDmTrack[], entries: ISelectionEntry[]): string | undefined {
+    private resolveMarkedStyle(tracks: ISbDmTrack[], entries: ISelectionEntry[]): IMarkedStyle | undefined {
         const noteEntries = entries.filter((entry) => {
             return entry.granularity === SelectionGranularity.Note;
         });
@@ -418,7 +486,7 @@ export class NoteStyleBar extends UIComponent<INoteStyleBarProps, INoteStyleBarS
             return this.noteStyleIdOf(entry) === firstStyleId;
         });
 
-        return allMatch ? firstStyleId : undefined;
+        return allMatch ? { noteStyleId: firstStyleId, isRest: firstStyleId === undefined } : undefined;
     }
 
     private noteStyleIdOf(entry: ISelectionEntry): string | undefined {

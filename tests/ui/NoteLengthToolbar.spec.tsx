@@ -3,13 +3,15 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import { cleanup, fireEvent, render, type RenderResult } from "@testing-library/preact";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { act, cleanup, fireEvent, render, type RenderResult } from "@testing-library/preact";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { NoteLengthToolbar } from "../../src/components/ui/Arrangement/NoteLengthToolbar.js";
+import { AppStorage } from "../../src/core/AppStorage.js";
 import type { ISbDmArrangement, ISbDmTrack, ISbDmTrackMeasure, ScoreBookDataModel }
     from "../../src/core/ScoreBookDataModel.js";
 import { NoteLength, type INoteValue } from "../../src/core/rest-notation.js";
+import { EditEntryMode } from "../../src/core/types/general.js";
 import type { IMeasureEvent } from "../../src/core/types/general.js";
 import { requisitions } from "../../src/supplement/Requisitions.js";
 import { SelectionManager } from "../../src/ui/SelectionManager.js";
@@ -168,6 +170,62 @@ describe.sequential("NoteLengthToolbar", () => {
         renderResult?.unmount();
         cleanup();
         renderResult = null;
+        vi.restoreAllMocks();
+    });
+
+    it("defaults to a quarter note in insert mode and marks it", () => {
+        renderResult = render(
+            <NoteLengthToolbar
+                dataModel={makeDataModel(32, 32)}
+                selectionManager={selectionManager}
+                entryMode={EditEntryMode.Insert}
+            />,
+        );
+
+        const marked = renderResult.container.querySelector(".noteLengthButton.du-btn-primary");
+        expect(marked?.getAttribute("data-tooltip")).toBe("Quarter note (Alt/Cmd+3)");
+    });
+
+    it("restores the stored value in insert mode", () => {
+        vi.spyOn(AppStorage, "loadUISettings").mockReturnValue({
+            entryNoteValue: { length: NoteLength.Eighth, dotted: true },
+        });
+
+        renderResult = render(
+            <NoteLengthToolbar
+                dataModel={makeDataModel(32, 32)}
+                selectionManager={selectionManager}
+                entryMode={EditEntryMode.Insert}
+            />,
+        );
+
+        const marked = renderResult.container.querySelector(".noteLengthButton.du-btn-primary");
+        expect(marked?.getAttribute("data-tooltip")).toBe("Eighth note (Alt/Cmd+4)");
+        expect(renderResult.container.querySelector(".noteDotButton.du-btn-primary")).not.toBeNull();
+    });
+
+    it("stores the chosen length and dot", () => {
+        const saveSpy = vi.spyOn(AppStorage, "saveSetting").mockImplementation(() => {
+            // Keep the test out of localStorage.
+        });
+        selectSingleNote(selectionManager);
+
+        renderResult = render(
+            <NoteLengthToolbar
+                dataModel={makeDataModel(32, 32)}
+                selectionManager={selectionManager}
+                entryMode={EditEntryMode.Insert}
+            />,
+        );
+
+        const buttons = renderResult.container.querySelectorAll(".noteLengthButton");
+        fireEvent.click(buttons[3]);
+
+        expect(saveSpy).toHaveBeenCalledWith("entryNoteValue", noteValue(NoteLength.Eighth));
+
+        fireEvent.click(renderResult.container.querySelector(".noteDotButton")!);
+
+        expect(saveSpy).toHaveBeenCalledWith("entryNoteValue", { length: NoteLength.Eighth, dotted: true });
     });
 
     it("renders one button per standard note length", () => {
@@ -382,6 +440,165 @@ describe.sequential("NoteLengthToolbar", () => {
         const dot = renderResult.container.querySelector<HTMLButtonElement>(".noteDotButton");
 
         expect(dot?.disabled).toBe(true);
+    });
+
+    it("keeps the lengths usable in insert mode without a selection", () => {
+        renderResult = render(
+            <NoteLengthToolbar
+                dataModel={makeDataModel(32, 32)}
+                selectionManager={selectionManager}
+                entryMode={EditEntryMode.Insert}
+            />,
+        );
+
+        // The length only configures the next entry, which needs no cursor to be placed first.
+        const buttons = [...renderResult.container.querySelectorAll<HTMLButtonElement>(".noteLengthButton")];
+
+        expect(buttons.every((button) => {
+            return !button.disabled;
+        })).toBe(true);
+    });
+
+    it("does not follow the selection in insert mode", async () => {
+        const dataModel = makeDataModelWithNotes(32, 16, [{ start: 0, duration: 4 }, { start: 4, duration: 2 }]);
+        const measure = dataModel.arrangement!.tracks[0].measures[0];
+
+        selectionManager.replaceSelection([noteEntry(measure, { numerator: 0, denominator: 16 })]);
+
+        renderResult = render(
+            <NoteLengthToolbar
+                dataModel={dataModel}
+                selectionManager={selectionManager}
+                entryMode={EditEntryMode.Insert}
+            />,
+        );
+
+        const buttons = renderResult.container.querySelectorAll(".noteLengthButton");
+        fireEvent.click(buttons[3]);
+
+        // The cursor only marks where the entry goes, so moving it leaves the chosen value alone.
+        await act(() => {
+            selectionManager.replaceSelection([noteEntry(measure, { numerator: 4, denominator: 16 })]);
+        });
+
+        expect(renderResult.container.querySelector(".noteLengthButton.du-btn-primary")).toBe(buttons[3]);
+    });
+
+    it("marks the value of the selection when the view switches to overwrite", async () => {
+        const dataModel = makeDataModelWithNotes(32, 16, [{ start: 0, duration: 8 }]);
+        const measure = dataModel.arrangement!.tracks[0].measures[0];
+
+        selectionManager.replaceSelection([noteEntry(measure, { numerator: 0, denominator: 16 })]);
+
+        renderResult = render(
+            <NoteLengthToolbar
+                dataModel={dataModel}
+                selectionManager={selectionManager}
+                entryMode={EditEntryMode.Insert}
+            />,
+        );
+
+        const marked = () => {
+            const button = renderResult!.container.querySelector(".noteLengthButton.du-btn-primary");
+
+            return button?.getAttribute("data-tooltip");
+        };
+
+        // Insert mode marks the value the next entry uses.
+        expect(marked()).toBe("Quarter note (Alt/Cmd+3)");
+
+        await act(() => {
+            renderResult!.rerender(
+                <NoteLengthToolbar
+                    dataModel={dataModel}
+                    selectionManager={selectionManager}
+                    entryMode={EditEntryMode.Overwrite}
+                />,
+            );
+        });
+
+        // The selection carries a half note, so the overwrite mode marks that value.
+        expect(marked()).toBe("Half note (Alt/Cmd+2)");
+    });
+
+    it("restores the chosen length when the view returns to insert mode", async () => {
+        vi.spyOn(AppStorage, "loadUISettings").mockReturnValue({
+            entryNoteValue: { length: NoteLength.Eighth, dotted: false },
+        });
+
+        const dataModel = makeDataModelWithNotes(32, 16, [{ start: 0, duration: 8 }]);
+        const measure = dataModel.arrangement!.tracks[0].measures[0];
+
+        selectionManager.replaceSelection([noteEntry(measure, { numerator: 0, denominator: 16 })]);
+
+        renderResult = render(
+            <NoteLengthToolbar
+                dataModel={dataModel}
+                selectionManager={selectionManager}
+                entryMode={EditEntryMode.Overwrite}
+            />,
+        );
+
+        const marked = () => {
+            const button = renderResult!.container.querySelector(".noteLengthButton.du-btn-primary");
+
+            return button?.getAttribute("data-tooltip");
+        };
+
+        expect(marked()).toBe("Half note (Alt/Cmd+2)");
+
+        await act(() => {
+            renderResult!.rerender(
+                <NoteLengthToolbar
+                    dataModel={dataModel}
+                    selectionManager={selectionManager}
+                    entryMode={EditEntryMode.Insert}
+                />,
+            );
+        });
+
+        expect(marked()).toBe("Eighth note (Alt/Cmd+4)");
+    });
+
+    it("keeps the chosen length in insert mode, where it configures the next entry", () => {
+        const dataModel = makeDataModel(32, 32);
+        selectSingleNote(selectionManager);
+
+        renderResult = render(
+            <NoteLengthToolbar
+                dataModel={dataModel}
+                selectionManager={selectionManager}
+                entryMode={EditEntryMode.Insert}
+            />,
+        );
+
+        const buttons = renderResult.container.querySelectorAll(".noteLengthButton");
+        fireEvent.click(buttons[3]);
+
+        const marked = renderResult.container.querySelector(".noteLengthButton.du-btn-primary");
+        expect(marked).toBe(buttons[3]);
+    });
+
+    it("takes the mark from the events in overwrite mode", () => {
+        const dataModel = makeDataModel(32, 32);
+        selectSingleNote(selectionManager);
+
+        renderResult = render(
+            <NoteLengthToolbar
+                dataModel={dataModel}
+                selectionManager={selectionManager}
+                entryMode={EditEntryMode.Overwrite}
+            />,
+        );
+
+        const buttons = renderResult.container.querySelectorAll(".noteLengthButton");
+        fireEvent.click(buttons[3]);
+
+        // The stub model cannot resize the addressed event, so the mark stays on what the events carry
+        // instead of following the click.
+        const marked = renderResult.container.querySelector(".noteLengthButton.du-btn-primary");
+        expect(marked).not.toBeNull();
+        expect(marked).not.toBe(buttons[3]);
     });
 
     it("fires noteLengthChanged when a button is clicked", () => {

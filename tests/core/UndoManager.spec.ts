@@ -51,13 +51,21 @@ vi.mock("../../src/core/UndoRedoStack.js", () => {
         public canUndo = false;
         public canRedo = false;
         public topics = { canUndo: new TestPublisher(), canRedo: new TestPublisher() };
+        public selection?: string;
+        public futureSelection?: string;
         public currentState: IArrangementSnapshot = {
             version: arrangementSnapshotVersion,
             title: "Snapshot",
             timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4", stepResolution: 8 },
             tracks: [],
         };
-        public recordSnapshot = vi.fn(() => {
+
+        public get currentSelection(): string | undefined {
+            return this.selection;
+        }
+
+        public recordSnapshot = vi.fn((selection?: string) => {
+            this.selection = selection;
             this.canUndo = true;
             this.topics.canUndo.publish();
         });
@@ -85,6 +93,8 @@ interface UndoRedoMock {
         instance?: {
             canUndo: boolean;
             canRedo: boolean;
+            selection?: string;
+            futureSelection?: string;
             recordSnapshot: ReturnType<typeof vi.fn>;
             goBack: ReturnType<typeof vi.fn>;
             goForward: ReturnType<typeof vi.fn>;
@@ -108,9 +118,14 @@ describe("UndoManager", () => {
     const dm = new TestScoreBookDataModel(arrangement);
 
     let manager: UndoManager;
+    let selectionState: string | undefined;
+
     beforeEach(() => {
         requisitions.unregister("arrangementMutated");
-        manager = new UndoManager(dm);
+        selectionState = undefined;
+        manager = new UndoManager(dm, () => {
+            return selectionState;
+        });
 
         // reset mocks
         vi.clearAllMocks();
@@ -176,5 +191,33 @@ describe("UndoManager", () => {
         expect(stack5!.reset).toHaveBeenCalled();
         // eslint-disable-next-line @typescript-eslint/unbound-method
         expect(arrangement.applyArrangementSnapshot).toHaveBeenCalled();
+    });
+
+    it("records the selection state an edit was made in", () => {
+        selectionState = "[{\"granularity\":4}]";
+
+        dm.setTitle("Selection Title");
+
+        expect(undoRedo.stackRef.instance!.recordSnapshot).toHaveBeenCalledWith("[{\"granularity\":4}]");
+    });
+
+    it("reports the selection state of the restored state when undoing", () => {
+        const reverted: Array<string | undefined> = [];
+        const handler = (state?: string): Promise<boolean> => {
+            reverted.push(state);
+
+            return Promise.resolve(true);
+        };
+
+        requisitions.register("arrangementReverted", handler);
+
+        const stack = undoRedo.stackRef.instance!;
+        stack.canUndo = true;
+        stack.selection = "[{\"granularity\":4}]";
+
+        manager.undo();
+        requisitions.unregister("arrangementReverted", handler);
+
+        expect(reverted).toEqual(["[{\"granularity\":4}]"]);
     });
 });

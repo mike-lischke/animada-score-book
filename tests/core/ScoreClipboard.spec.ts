@@ -233,6 +233,54 @@ describe("ScoreClipboard", () => {
         expect(noteAtStep(second, 2)).toBeUndefined();
     });
 
+    it("shifts the following notes in a target that holds a subdivision", () => {
+        model.startNewArrangement([instrumentA(), instrumentA()], { length: 2 });
+        const [source, target] = model.arrangement!.tracks;
+
+        // Source: two 16th notes followed by a quarter note.
+        model.setNoteAt(source.id, 1, { numerator: 0, denominator: 16 }, { numerator: 1, denominator: 16 }, "1");
+        model.setNoteAt(source.id, 1, { numerator: 1, denominator: 16 }, { numerator: 1, denominator: 16 }, "1");
+        model.setNoteAt(source.id, 1, { numerator: 2, denominator: 16 }, { numerator: 1, denominator: 4 }, "1");
+
+        // Target: two 16th notes, a subdivision over the third quarter and four 16th notes at the end.
+        setCellNote(model, target.id, 1, 0, "2");
+        setCellNote(model, target.id, 1, 1, "2");
+        model.createSubdivision(target.id, 1, { numerator: 1, denominator: 2 }, { numerator: 3, denominator: 4 },
+            3, 4);
+
+        for (let step = 12; step < 16; step++) {
+            setCellNote(model, target.id, 1, step, "2");
+        }
+
+        hydrateMeasureEvents(model.arrangement! as Arrangement);
+
+        const sourceMeasure = source.measures[0];
+        clipboard.copy(sourceMeasure.events.slice(0, 3).map((event) => {
+            return runEntry(sourceMeasure, event);
+        }));
+
+        const targetMeasure = target.measures[0];
+        const result = clipboard.paste([
+            runEntry(targetMeasure, targetMeasure.events[0]),
+            runEntry(targetMeasure, targetMeasure.events[1]),
+        ], { overflowMode: PasteOverflowMode.Shift });
+
+        expect(result.kind).toBe(PasteResultKind.Success);
+
+        // The phrase replaced the two 16th notes and everything behind it moved a quarter to the right;
+        // the subdivision keeps its three slots.
+        const first = target.measures[0];
+        expect(noteAtStep(first, 0)).toBe("1");
+        expect(noteAtStep(first, 1)).toBe("1");
+        expect(noteAtStep(first, 2)).toBe("1");
+
+        const subdivision = first.subdivisions[0];
+        expect(first.events[subdivision.startIndex].start).toEqual({ numerator: 3, denominator: 4 });
+
+        // The four 16th notes that followed the subdivision flow into the next measure.
+        expect(noteAtStep(target.measures[1], 0)).toBe("2");
+    });
+
     it("tiles a copied note across a selected note group", () => {
         const instruments = [instrumentA()];
         model.startNewArrangement(instruments);

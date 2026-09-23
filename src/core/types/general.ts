@@ -142,3 +142,12 @@ export interface ISubdivision {
     /** Whether this subdivision is a true tuplet (asymmetric ratio). */
     isTuplet: boolean;
 }
+
+/**
+ * How entering an event makes room for it. Insert pushes the content behind the entry position, overwrite
+ * keeps the content where it is and replaces or shortens it.
+ */
+export enum EditEntryMode {
+    Insert,
+    Overwrite,
+}

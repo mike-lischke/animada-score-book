@@ -1,3 +1,11 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
-exports[`SettingsDialog (class) > matches snapshot for default rendering 1`] = `<div />`;
+exports[`SettingsDialog (class) > matches a snapshot of the offered settings 1`] = `
+[
+  "Color theme",
+  "Track viewer zoom",
+  "Add a bar when notes run past the last one",
+  "Show permission indicator",
+  "Show tutorial on startup",
+]
+`;

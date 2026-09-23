@@ -3,15 +3,18 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import { cleanup, render, type RenderResult } from "@testing-library/preact";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { act, cleanup, fireEvent, render, type RenderResult } from "@testing-library/preact";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ArticulationToolbar } from "../../src/components/ui/Arrangement/ArticulationToolbar.js";
+import { Articulation } from "../../src/core/articulation.js";
+import { AppStorage } from "../../src/core/AppStorage.js";
 import {
     Damping, ExcitationMode, NoteDisplayType, StickTechnique,
     type ISbDmArrangement, type ISbDmTrack, type ISbDmTrackMeasure, type ScoreBookDataModel,
 } from "../../src/core/ScoreBookDataModel.js";
 import type { IAudioData } from "../../src/core/types/general.js";
+import { EditEntryMode } from "../../src/core/types/general.js";
 import { SelectionManager } from "../../src/ui/SelectionManager.js";
 import { noteEntry, trackEntry } from "../unit-test-helpers.js";
 
@@ -114,6 +117,144 @@ describe.sequential("ArticulationToolbar", () => {
         renderResult?.unmount();
         cleanup();
         renderResult = null;
+        vi.restoreAllMocks();
+    });
+
+    it("keeps the chosen articulation in insert mode", async () => {
+        const track = makeTrackWithNote(7, 55, {
+            "1": makeNoteStyle("1", true, Damping.Open, false),
+            "2": makeNoteStyle("2", false, Damping.Muted, false),
+        }, "1");
+        const dataModel = makeDataModel([track]);
+
+        selectionManager.replaceSelection([noteEntry(track.measures[0], { numerator: 0, denominator: 16 })]);
+
+        renderResult = render(
+            <ArticulationToolbar
+                dataModel={dataModel}
+                selectionManager={selectionManager}
+                entryMode={EditEntryMode.Insert}
+            />,
+        );
+
+        // The selection is only the insertion point, so its accent is not marked.
+        const buttons = [...renderResult.container.querySelectorAll<HTMLButtonElement>(".articulationButton")];
+        expect(renderResult.container.querySelectorAll(".articulationButton.du-btn-primary")).toHaveLength(0);
+
+        fireEvent.click(buttons[1]);
+        expect(buttons[1].classList.contains("du-btn-primary")).toBe(true);
+
+        // A selection that carries no articulation of its own does not drop the chosen one.
+        await act(() => {
+            selectionManager.clearSelection();
+            selectionManager.selectTracks([7]);
+        });
+
+        expect(buttons[1].classList.contains("du-btn-primary")).toBe(true);
+    });
+
+    it("marks the articulation of the selection when the view switches to overwrite", async () => {
+        const track = makeTrackWithNote(7, 55, {
+            "1": makeNoteStyle("1", true, Damping.Open, false),
+            "2": makeNoteStyle("2", false, Damping.Muted, false),
+        }, "1");
+        const dataModel = makeDataModel([track]);
+
+        selectionManager.replaceSelection([noteEntry(track.measures[0], { numerator: 0, denominator: 16 })]);
+
+        renderResult = render(
+            <ArticulationToolbar
+                dataModel={dataModel}
+                selectionManager={selectionManager}
+                entryMode={EditEntryMode.Insert}
+            />,
+        );
+
+        // Insert mode marks what the next entry uses, not what the cursor addresses.
+        expect(renderResult.container.querySelectorAll(".articulationButton.du-btn-primary")).toHaveLength(0);
+
+        await act(() => {
+            renderResult!.rerender(
+                <ArticulationToolbar
+                    dataModel={dataModel}
+                    selectionManager={selectionManager}
+                    entryMode={EditEntryMode.Overwrite}
+                />,
+            );
+        });
+
+        const buttons = [...renderResult.container.querySelectorAll<HTMLButtonElement>(".articulationButton")];
+        const accent = buttons.find((button) => {
+            return button.getAttribute("data-tooltip") === "Accent";
+        });
+
+        expect(accent?.classList.contains("du-btn-primary")).toBe(true);
+    });
+
+    it("restores the stored articulation when the view returns to insert mode", async () => {
+        vi.spyOn(AppStorage, "loadUISettings").mockReturnValue({ entryArticulation: Articulation.Ghost });
+
+        const track = makeTrackWithNote(7, 55, {
+            "1": makeNoteStyle("1", true, Damping.Open, false),
+            "2": makeNoteStyle("2", false, Damping.Open, true),
+        }, "1");
+        const dataModel = makeDataModel([track]);
+
+        selectionManager.replaceSelection([noteEntry(track.measures[0], { numerator: 0, denominator: 16 })]);
+
+        renderResult = render(
+            <ArticulationToolbar
+                dataModel={dataModel}
+                selectionManager={selectionManager}
+                entryMode={EditEntryMode.Overwrite}
+            />,
+        );
+
+        const marked = () => {
+            return renderResult!.container.querySelector(".articulationButton.du-btn-primary")
+                ?.getAttribute("data-tooltip");
+        };
+
+        // The selection carries an accent, which the overwrite mode marks.
+        expect(marked()).toBe("Accent");
+
+        await act(() => {
+            renderResult!.rerender(
+                <ArticulationToolbar
+                    dataModel={dataModel}
+                    selectionManager={selectionManager}
+                    entryMode={EditEntryMode.Insert}
+                />,
+            );
+        });
+
+        expect(marked()).toBe("Ghost");
+    });
+
+    it("restores the stored articulation and stores a new choice", () => {
+        vi.spyOn(AppStorage, "loadUISettings").mockReturnValue({ entryArticulation: Articulation.Ghost });
+        const saveSpy = vi.spyOn(AppStorage, "saveSetting").mockImplementation(() => {
+            // Keep the test out of localStorage.
+        });
+
+        const track = makeTrack(7, 55, { "1": makeNoteStyle("1", true, Damping.Open, false) });
+        const dataModel = makeDataModel([track]);
+        selectionManager.selectTracks([7]);
+
+        renderResult = render(
+            <ArticulationToolbar
+                dataModel={dataModel}
+                selectionManager={selectionManager}
+                entryMode={EditEntryMode.Insert}
+            />,
+        );
+
+        const buttons = [...renderResult.container.querySelectorAll<HTMLButtonElement>(".articulationButton")];
+        expect(buttons[2].classList.contains("du-btn-primary")).toBe(true);
+
+        fireEvent.click(buttons[0]);
+
+        expect(saveSpy).toHaveBeenCalledWith("entryArticulation", Articulation.Accent);
     });
 
     it("renders three articulation buttons", () => {
@@ -146,6 +287,34 @@ describe.sequential("ArticulationToolbar", () => {
         expect(buttons.every((button) => {
             return button.disabled;
         })).toBe(true);
+    });
+
+    it("keeps the articulations usable in insert mode without a selection", () => {
+        const track = makeTrack(7, 55, {
+            "1": makeNoteStyle("1", true, Damping.Open, false),
+            "2": makeNoteStyle("2", false, Damping.Muted, false),
+        });
+        const dataModel = makeDataModel([track]);
+
+        renderResult = render(
+            <ArticulationToolbar
+                dataModel={dataModel}
+                selectionManager={selectionManager}
+                entryMode={EditEntryMode.Insert}
+            />,
+        );
+
+        // The choice only configures the next entry, so it shows the last known instrument's variants.
+        const buttons = [...renderResult.container.querySelectorAll<HTMLButtonElement>(".articulationButton")];
+        const byTooltip = (tooltip: string) => {
+            return buttons.find((button) => {
+                return button.getAttribute("data-tooltip") === tooltip;
+            });
+        };
+
+        expect(byTooltip("Accent")!.disabled).toBe(false);
+        expect(byTooltip("Damped")!.disabled).toBe(false);
+        expect(byTooltip("Ghost")!.disabled).toBe(true);
     });
 
     it("marks the accent and enables damping for a surdo-like voice", () => {

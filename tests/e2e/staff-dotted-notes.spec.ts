@@ -7,6 +7,7 @@ import { expect, test, type Page } from "@playwright/test";
 
 import { stringifyPackedArrangement } from "../../src/core/serialisation/snapshot-packing.js";
 import { arrangementSnapshotVersion } from "../../src/core/serialisation/snapshots.js";
+import { EditEntryMode } from "../../src/core/types/general.js";
 import { routeApi } from "./e2e-test-helpers.js";
 
 /** Four quarter notes, so the dot has a value on the current grid to stretch. */
@@ -51,15 +52,16 @@ const growOf = (page: Page, index: number): Promise<string> => {
 
 test.beforeEach(async ({ page }) => {
     await routeApi(page);
-    await page.addInitScript((packed: string) => {
+    await page.addInitScript((data: { packed: string; entryMode: number; }) => {
         const sessionId = "e2e-dotted-notes";
         window.history.replaceState({ ...(window.history.state ?? {}), sessionId }, "");
         window.sessionStorage.setItem("asb-session-id", sessionId);
         window.localStorage.setItem(`asb-ui-settings-session-${sessionId}`, JSON.stringify({
-            currentScore: packed,
+            currentScore: data.packed,
+            entryMode: data.entryMode,
             viewSettings: { arrangementViewSettings: { displayMode: "staff" } },
         }));
-    }, stringifyPackedArrangement(snapshot));
+    }, { packed: stringifyPackedArrangement(snapshot), entryMode: EditEntryMode.Overwrite });
 
     await page.goto("/");
     await expect(page.locator("#trackViewerHost")).toBeVisible();

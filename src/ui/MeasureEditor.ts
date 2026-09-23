@@ -4,13 +4,14 @@
  */
 
 import type {
-    IEventResizeRequest, ISbDmTrack, ISbDmTrackMeasure, ScoreBookDataModel,
+    IEventResizeRequest, INoteStyleAssignment, ISbDmTrack, ISbDmTrackMeasure, ScoreBookDataModel,
 } from "../core/ScoreBookDataModel.js";
+import { Articulation, resolveNoteStyleForArticulation } from "../core/articulation.js";
 import { modelEventAt } from "../core/MeasureProjection.js";
 import { noteValueFraction, type INoteValue } from "../core/rest-notation.js";
 import { compareFractions, reduceFraction } from "../core/serialisation/numeric-functions.js";
 import type { IAudioData, IFraction, IMeasureEvent } from "../core/types/general.js";
-import { selectionToClearRanges } from "./selection-ranges.js";
+import { selectionEventsOf, selectionToClearRanges } from "./selection-ranges.js";
 import { SelectionGranularity, SelectionSerializer, type ISelectionEntry } from "./SelectionSerializer.js";
 
 /** The bar line as a bar fraction. */
@@ -21,6 +22,15 @@ export interface IAddressedEvent {
     trackId: number;
     bar: number;
     start: IFraction;
+}
+
+/** A subdivision a selection covers completely, as the deletion needs to address it. */
+interface IEmptySubdivisionCandidate {
+    trackId: number;
+    bar: number;
+    start: IFraction;
+    startIndex: number;
+    actual: number;
 }
 
 /**
@@ -84,6 +94,134 @@ export abstract class MeasureEditor {
         }
 
         return this.dataModel.setNoteStyleRanges(ranges, noteStyleId);
+    }
+
+    /**
+     * Applies an articulation to the notes the selection addresses. Each note keeps its own voice and
+     * takes that voice's variant of the articulation, so the change lands on the matching sample. Notes
+     * without a style, and those whose instrument offers no such variant, are left alone.
+     *
+     * @param entries The selection entries to change.
+     * @param articulation The articulation to apply.
+     *
+     * @returns True when at least one note changed.
+     */
+    public setSelectionArticulation(entries: ISelectionEntry[], articulation: Articulation): boolean {
+        const arrangement = this.dataModel.arrangement;
+        if (!arrangement) {
+            return false;
+        }
+
+        const assignments: INoteStyleAssignment[] = [];
+
+        for (const covered of selectionEventsOf(arrangement, entries)) {
+            const track = arrangement.tracks.find((candidate) => {
+                return candidate.id === covered.measure.track.id;
+            });
+            if (track === undefined) {
+                continue;
+            }
+
+            const noteStyles = track.instrument.noteStyles;
+            for (const index of covered.indexes) {
+                const event = covered.measure.events[index];
+                if (event.noteStyleId === undefined) {
+                    continue;
+                }
+
+                const styleId = resolveNoteStyleForArticulation(noteStyles, event.noteStyleId, articulation);
+                if (styleId !== undefined && styleId !== event.noteStyleId) {
+                    assignments.push({
+                        trackId: track.id,
+                        bar: covered.measure.number,
+                        start: event.start,
+                        noteStyleId: styleId,
+                    });
+                }
+            }
+        }
+
+        return assignments.length > 0 && this.dataModel.setNoteStyles(assignments);
+    }
+
+    /**
+     * Deletes the subdivisions the selection covers completely, provided none of their slots holds a
+     * note. A tuplet that still holds content is left alone, so a selection of slots never destroys
+     * written notes. The edits address the model by track, measure and exact start, so they work the
+     * same in both views.
+     *
+     * @param entries The selection entries to delete.
+     *
+     * @returns True when at least one complete empty subdivision was deleted.
+     */
+    public deleteEmptySubdivisionsForSelection(entries: ISelectionEntry[]): boolean {
+        if (entries.length === 0) {
+            return false;
+        }
+
+        const candidates = new Map<string, IEmptySubdivisionCandidate>();
+        for (const entry of entries) {
+            const target = entry.target;
+            if (target.granularity !== SelectionGranularity.Note) {
+                return false;
+            }
+
+            const { measure } = target;
+            const cellStart = target.start ?? target.event.start;
+            const eventIndex = measure.events.findIndex((event) => {
+                return compareFractions(event.start, cellStart) === 0;
+            });
+            const subdivision = measure.subdivisions.find((candidate) => {
+                return eventIndex >= candidate.startIndex
+                    && eventIndex < candidate.startIndex + candidate.actual;
+            });
+            if (!subdivision
+                || measure.events.slice(subdivision.startIndex, subdivision.startIndex + subdivision.actual)
+                    .some((event) => {
+                        return event.noteStyleId !== undefined;
+                    })) {
+                return false;
+            }
+
+            const key = `${measure.track.id}:${measure.number}:${subdivision.startIndex}`;
+            candidates.set(key, {
+                trackId: measure.track.id,
+                bar: measure.number,
+                start: { ...measure.events[subdivision.startIndex].start },
+                startIndex: subdivision.startIndex,
+                actual: subdivision.actual,
+            });
+        }
+
+        for (const candidate of candidates.values()) {
+            const measure = this.resolveMeasure(candidate.trackId, candidate.bar);
+            if (!measure) {
+                return false;
+            }
+
+            const complete = measure.events
+                .slice(candidate.startIndex, candidate.startIndex + candidate.actual)
+                .every((event) => {
+                    return entries.some((entry) => {
+                        const target = entry.target;
+
+                        return target.granularity === SelectionGranularity.Note
+                            && target.measure === measure
+                            && compareFractions(target.start ?? target.event.start, event.start) === 0;
+                    });
+                });
+            if (!complete) {
+                return false;
+            }
+        }
+
+        let deleted = false;
+        for (const candidate of candidates.values()) {
+            deleted = this.dataModel.deleteSubdivisionAt(candidate.trackId, candidate.bar, candidate.start)
+                || deleted;
+        }
+
+        return deleted;
     }
 
     /**

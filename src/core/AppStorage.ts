@@ -4,6 +4,9 @@
 */
 
 import { uuid } from "../string-helpers.js";
+import type { Articulation } from "./articulation.js";
+import type { INoteValue } from "./rest-notation.js";
+import type { EditEntryMode } from "./types/general.js";
 
 export interface IArrangementViewSettings {
     /** The scroll position of the arrangement in its viewer. */
@@ -87,6 +90,24 @@ export interface IUISettings {
 
     /** Whether edit mode was active when the app was last closed. */
     editMode?: boolean;
+
+    /**
+     * The entry mode to start the staff view with. It is remembered across view mode switches and sessions;
+     * the grid view always enters with overwrite.
+     */
+    entryMode?: EditEntryMode;
+
+    /**
+     * Whether content that reaches behind the last bar adds a bar instead of being dropped. Defaults to
+     * true.
+     */
+    autoExtendOnOverflow?: boolean;
+
+    /** The note value the next entry uses, as last chosen. Defaults to a quarter note. */
+    entryNoteValue?: INoteValue;
+
+    /** The articulation the next entry uses, as last chosen; undefined means plain notes. */
+    entryArticulation?: Articulation;
 }
 
 /**

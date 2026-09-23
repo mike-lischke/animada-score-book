@@ -1452,8 +1452,9 @@ export class ScoreClipboard {
             return undefined;
         }
 
-        const targetTrack = addressed[0].measure.track;
-        if (this.trackHasSubdivisions(targetTrack) || sourceTrack.measures.some((measure) => {
+        // A subdivision source keeps its records, which only the replace path rebuilds; the shifted
+        // insertion carries plain events.
+        if (sourceTrack.measures.some((measure) => {
             return measure.subdivisions.length > 0;
         })) {
             return undefined;
@@ -1474,6 +1475,13 @@ export class ScoreClipboard {
             return undefined;
         }
 
+        // A run that covers a subdivision only partly would lose slots, so the addressed ranges are
+        // replaced instead of shifted.
+        if (this.cutsSubdivision(first.measure, first.event.start,
+            addFractions(last.event.start, last.event.duration))) {
+            return undefined;
+        }
+
         const { events: sourceEvents } = this.flattenSourceEvents(sourceTrack);
         const offset = subtractFractions(first.start, first.event.start);
 
@@ -1491,15 +1499,21 @@ export class ScoreClipboard {
     }
 
     /**
-     * Checks whether a track contains subdivisions, which do not take part in length changes yet.
+     * Checks whether replacing a run would cut a subdivision: one the run covers only partly would
+     * lose the slots that stick out of it.
      *
-     * @param track The track to inspect.
+     * @param measure The target measure.
+     * @param start The exact start of the run within the measure.
+     * @param end The exact end of the run within the measure.
      *
-     * @returns True when any measure of the track has a subdivision.
+     * @returns True when a subdivision would be cut.
      */
-    private trackHasSubdivisions(track: ISbDmTrack): boolean {
-        return track.measures.some((measure) => {
-            return measure.subdivisions.length > 0;
+    private cutsSubdivision(measure: ISbDmTrackMeasure, start: IFraction, end: IFraction): boolean {
+        return this.topLevelSubdivisionSpans(measure).some((span) => {
+            const overlaps = compareFractions(span.start, end) < 0 && compareFractions(span.end, start) > 0;
+            const covered = compareFractions(span.start, start) >= 0 && compareFractions(span.end, end) <= 0;
+
+            return overlaps && !covered;
         });
     }
 

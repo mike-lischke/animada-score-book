@@ -29,3 +29,13 @@
 .btn:disabled > svg {
     color: color-mix(in srgb, var(--color-base-content) 25%, var(--color-base-100));
 }
+
+/* A swap is a label that carries its state in a nested input, so daisyUI's `.btn:disabled` never
+   matches it. Pointer events stay enabled, because the label is what carries the tooltip. */
+.btn:has(input:disabled) {
+    cursor: not-allowed;
+
+    svg {
+        color: color-mix(in srgb, var(--color-base-content) 25%, var(--color-base-100));
+    }
+}

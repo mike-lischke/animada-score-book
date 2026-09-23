@@ -10,12 +10,13 @@ import {
     SbDmEntityType, type ISbDmArrangement, type ISbDmNoteEvent, type ISbDmTrack,
     type ISbDmTrackMeasure, type ScoreBookDataModel,
 } from "../../src/core/ScoreBookDataModel.js";
-import type { IFraction, Mutable } from "../../src/core/types/general.js";
+import type { IFraction, IMeasureEvent, Mutable } from "../../src/core/types/general.js";
 import { requisitions } from "../../src/supplement/Requisitions.js";
 import { SelectionManager } from "../../src/ui/SelectionManager.js";
 import {
     SelectionGranularity, SelectionMode, type ISelectionDelta, type ISelectionEntry
 } from "../../src/ui/SelectionSerializer.js";
+import { measureEntry, trackEntry } from "../unit-test-helpers.js";
 
 const makeArrangement = (tracks: ISbDmTrack[]): ISbDmArrangement => {
     const arrangement: ISbDmArrangement = {
@@ -134,6 +135,20 @@ const cellEntry = (note: Mutable<ISbDmNoteEvent>, start: IFraction): ISelectionE
     };
 };
 
+/**
+ * Builds a tiny rect at the origin, standing in for the click position a hit test runs on.
+ *
+ * @returns The click rect.
+ */
+const clickRect = (): DOMRect => {
+    return {
+        x: 0, y: 0, width: 1, height: 1, left: 0, top: 0, right: 1, bottom: 1,
+        toJSON: () => {
+            return {};
+        },
+    } as DOMRect;
+};
+
 describe.sequential("SelectionManager (class)", () => {
     let manager: SelectionManager;
     let track: ISbDmTrack;
@@ -220,6 +235,33 @@ describe.sequential("SelectionManager (class)", () => {
 
         expect(manager.currentSelection.size).toBe(3);
         expect([...manager.currentSelection.values()]).toEqual(entries);
+    });
+
+    it("places the cursor on the addressed note when a click only places a cursor", () => {
+        const cursor = cellEntry(noteA, { numerator: 0, denominator: 1 });
+        manager.registerHitTester({
+            hitTest: () => {
+                return [trackEntry(track), measureEntry(noteA.measure), cursor];
+            },
+        });
+
+        manager.endSelection(clickRect(), true);
+
+        expect([...manager.currentSelection.values()]).toEqual([cursor]);
+    });
+
+    it("leaves the cursor alone when a click that only places a cursor addresses no note", () => {
+        const cursor = cellEntry(noteA, { numerator: 0, denominator: 1 });
+        manager.replaceSelection([cursor]);
+        manager.registerHitTester({
+            hitTest: () => {
+                return [measureEntry(noteA.measure)];
+            },
+        });
+
+        manager.endSelection(clickRect(), true);
+
+        expect([...manager.currentSelection.values()]).toEqual([cursor]);
     });
 });
 
@@ -308,7 +350,15 @@ describe.sequential("SelectionManager note groups", () => {
 });
 
 describe.sequential("SelectionManager re-validation after undo/redo", () => {
-    it("keeps selections whose measure content survived an undo and drops the others", () => {
+    /**
+     * Builds an arrangement with one track of two measures, each holding a single event.
+     *
+     * @returns The arrangement, its track and the two measures.
+     */
+    const makeUndoFixture = (): {
+        arrangement: ISbDmArrangement; track: ISbDmTrack; measure1: ISbDmTrackMeasure;
+        measure2: ISbDmTrackMeasure; measure2Events: IMeasureEvent[];
+    } => {
         const arrangement = makeArrangement([] as ISbDmTrack[]);
 
         const measure1 = {
@@ -340,6 +390,11 @@ describe.sequential("SelectionManager re-validation after undo/redo", () => {
         (measure2 as Mutable<ISbDmTrackMeasure>).track = track;
         arrangement.tracks.push(track);
 
+        return { arrangement, track, measure1, measure2, measure2Events };
+    };
+
+    it("keeps selections whose measure content survived an undo and drops the others", () => {
+        const { arrangement, measure1, measure2, measure2Events } = makeUndoFixture();
         const manager = new SelectionManager({ arrangement } as unknown as ScoreBookDataModel);
 
         manager.selectNotes([
@@ -360,5 +415,30 @@ describe.sequential("SelectionManager re-validation after undo/redo", () => {
 
         expect(manager.isCellSelected(measure1, { numerator: 0, denominator: 1 })).toBe(true);
         expect(manager.isCellSelected(measure2, { numerator: 0, denominator: 1 })).toBe(false);
+    });
+
+    it("restores the selection an undo reports", () => {
+        const { arrangement, measure1, measure2 } = makeUndoFixture();
+        const manager = new SelectionManager({ arrangement } as unknown as ScoreBookDataModel);
+        const trackId = arrangement.tracks[0].id;
+
+        manager.selectNotes([{
+            granularity: SelectionGranularity.Note,
+            target: { granularity: SelectionGranularity.Note, measure: measure1, event: measure1.events[0] },
+        }]);
+
+        // The undone edit was made with the second measure selected, so the cursor returns there.
+        const reported = JSON.stringify([{
+            granularity: SelectionGranularity.Note,
+            bar: 2,
+            trackId,
+            start: { numerator: 0, denominator: 1 },
+            end: { numerator: 1, denominator: 4 },
+        }]);
+
+        void requisitions.execute("arrangementReverted", reported);
+
+        expect(manager.isCellSelected(measure1, { numerator: 0, denominator: 1 })).toBe(false);
+        expect(manager.isCellSelected(measure2, { numerator: 0, denominator: 1 })).toBe(true);
     });
 });
