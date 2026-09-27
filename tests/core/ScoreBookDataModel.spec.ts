@@ -1015,6 +1015,59 @@ describe.sequential("ScoreBookDataModel track actions", () => {
         expect(eventList(track.measures[0])).toEqual(["0/1+1/1:-"]);
     });
 
+    it("splits the only rest of a measure into the requested part", () => {
+        model.startNewArrangement([createInstrument("0", 0, 0)]);
+        const track = model.arrangement!.tracks[0];
+
+        // Nothing gives way behind the measure's only rest, so the request shapes the notation: the rest
+        // takes a half and the space behind it becomes the second half rest.
+        mutatedCalls = 0;
+        const changed = model.resizeEvents(track.id, [{
+            bar: 1, start: { numerator: 0, denominator: 1 }, duration: { numerator: 1, denominator: 2 },
+        }]);
+
+        expect(changed).toBe(true);
+        expect(mutatedCalls).toBe(1);
+        expect(eventList(track.measures[0])).toEqual(["0/1+1/2:-", "1/2+1/2:-"]);
+
+        // A part of the split is resized on its own: the rest of the measure keeps its structure.
+        expect(model.resizeEvents(track.id, [{
+            bar: 1, start: { numerator: 0, denominator: 1 }, duration: { numerator: 1, denominator: 4 },
+        }])).toBe(true);
+        expect(eventList(track.measures[0])).toEqual(["0/1+1/4:-", "1/4+1/4:-", "1/2+1/2:-"]);
+    });
+
+    it("keeps a split rest when a later layout rewrites the track", () => {
+        model.startNewArrangement([createInstrument("0", 0, 0)]);
+        const track = model.arrangement!.tracks[0];
+        model.ensureBarAvailable(2);
+
+        model.resizeEvents(track.id, [{
+            bar: 1, start: { numerator: 0, denominator: 1 }, duration: { numerator: 1, denominator: 2 },
+        }]);
+
+        // An edit in another measure lays the whole track out again, which keeps the split.
+        expect(model.resizeEvents(track.id, [{
+            bar: 2, start: { numerator: 0, denominator: 1 }, duration: { numerator: 1, denominator: 4 },
+        }])).toBe(true);
+
+        expect(eventList(track.measures[0])).toEqual(["0/1+1/2:-", "1/2+1/2:-"]);
+    });
+
+    it("joins the split rests again when the addressed rest takes the whole measure", () => {
+        model.startNewArrangement([createInstrument("0", 0, 0)]);
+        const track = model.arrangement!.tracks[0];
+        model.resizeEvents(track.id, [{
+            bar: 1, start: { numerator: 0, denominator: 1 }, duration: { numerator: 1, denominator: 2 },
+        }]);
+
+        expect(model.resizeEvents(track.id, [{
+            bar: 1, start: { numerator: 0, denominator: 1 }, duration: { numerator: 1, denominator: 1 },
+        }])).toBe(true);
+
+        expect(eventList(track.measures[0])).toEqual(["0/1+1/1:-"]);
+    });
+
     it("resizes a note whose start sits between two grid steps", () => {
         model.startNewArrangement([createInstrument("0", 0, 0)]);
         const track = model.arrangement!.tracks[0];

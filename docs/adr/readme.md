@@ -32,3 +32,4 @@ hard to infer from code alone.
 | ADR-0010 | accepted | Select the note groups a selection rectangle covers instead of their notes | staff view, selection, hit testing, note groups, beams, tuplets, drag selection |
 | ADR-0011 | accepted | Give note entry an insert and an overwrite mode | note entry, note length change, measure editing, delete, grid vs. staff behaviour, subdivision slots, entry toolbars |
 | ADR-0012 | accepted | Execute the input through the active measure editor | measure editing, note entry, note length change, delete, cursor movement, input handling, editor boundaries, grid vs. staff behaviour |
+| ADR-0013 | accepted | Keep the rest structure a measure holds instead of deriving it anew | rest length change, rests, measure layout, notation, staff view, whole-measure rest, gaps between events |

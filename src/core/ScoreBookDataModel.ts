@@ -3678,7 +3678,8 @@ export class ScoreBookDataModel {
      * Gives the event at the given position a new length and moves the content behind it by the
      * difference, so a rest takes the time it is given. A missing length removes the event. Content
      * that no longer fits into its measure continues at the start of the next one and the tail of the
-     * track becomes rests.
+     * track becomes rests. Where no content gives way — a rest is only the gap between the items — the
+     * request shapes the measure's rests instead, so a rest in a silence keeps the length it is given.
      *
      * @param track The track containing the event.
      * @param bar The one-based measure number.
@@ -3692,7 +3693,7 @@ export class ScoreBookDataModel {
         const event = measure?.events.find((candidate) => {
             return compareFractions(candidate.start, start) === 0;
         });
-        if (event === undefined) {
+        if (measure === undefined || event === undefined) {
             return false;
         }
 
@@ -3707,9 +3708,11 @@ export class ScoreBookDataModel {
         const spanStart = this.absolutePositionOf(bar - 1, start);
         const spanEnd = addFractions(spanStart, event.duration);
         const delta = subtractFractions(duration, event.duration);
+        const items = this.collectAbsoluteItems(track);
+        const before = ScoreBookDataModel.timelineSignature(items);
         const remaining: IAbsoluteTrackItem[] = [];
 
-        for (const item of this.collectAbsoluteItems(track)) {
+        for (const item of items) {
             if (compareFractions(item.start, spanEnd) >= 0) {
                 item.start = addFractions(item.start, delta);
                 remaining.push(item);
@@ -3740,7 +3743,58 @@ export class ScoreBookDataModel {
 
         this.layOutAbsoluteItems(track, remaining);
 
-        return true;
+        // The layout derives rests from the gaps, so the addressed rest keeps the requested length only
+        // where the gap behind it happens to match: shape the measure's rests to the request.
+        const shaped = this.shapeAddressedRest(measure, start, duration);
+
+        return shaped || before !== ScoreBookDataModel.timelineSignature(this.collectAbsoluteItems(track));
+    }
+
+    /**
+     * Gives the addressed rest the requested length in the measure's notated rests. The rests the span
+     * covers give way, an event the span ends in keeps its tail as a rest, and everything outside the
+     * span stays as it stands. Content behind the rest has already given way in the layout, so this only
+     * shapes the notation.
+     *
+     * @param measure The measure to reshape.
+     * @param start The start of the addressed rest within the measure.
+     * @param duration The length the addressed rest takes.
+     *
+     * @returns True when the measure's rests changed.
+     */
+    private shapeAddressedRest(measure: ISbDmTrackMeasure, start: IFraction, duration: IFraction): boolean {
+        // A removal leaves no rest behind, so there is no length to shape.
+        if (duration.numerator <= 0) {
+            return false;
+        }
+
+        const end = addFractions(start, duration);
+        const events: IMeasureEvent[] = [];
+
+        for (const event of measure.events) {
+            const eventEnd = addFractions(event.start, event.duration);
+
+            if (compareFractions(eventEnd, start) <= 0 || compareFractions(event.start, end) >= 0) {
+                events.push(event);
+
+                continue;
+            }
+
+            if (compareFractions(event.start, start) < 0) {
+                events.push({ start: { ...event.start }, duration: subtractFractions(start, event.start) });
+            }
+
+            if (compareFractions(end, eventEnd) < 0) {
+                events.push({ start: { ...end }, duration: subtractFractions(eventEnd, end) });
+            }
+        }
+
+        events.push({ start: { ...start }, duration: { ...duration } });
+        events.sort((left, right) => {
+            return compareFractions(left.start, right.start);
+        });
+
+        return this.setMeasureEvents(measure, events);
     }
 
     /**
@@ -4050,7 +4104,9 @@ export class ScoreBookDataModel {
      * Writes an absolute timeline back into the track, measure by measure. Gaps become rests, a note
      * reaching past a bar line is cut off there, and items beyond the track's last measure are
      * dropped. A subdivision is written as it stands, with its slots at their relative positions, so
-     * it never leaves its measure and never loses a slot.
+     * it never leaves its measure and never loses a slot. A gap is split into the rests the measure
+     * already held when they still cover the gap, so a rest structure the user shaped survives the
+     * layout.
      *
      * @param track The track to rewrite.
      * @param items The items to lay out, sorted by their absolute start.
@@ -4064,7 +4120,8 @@ export class ScoreBookDataModel {
             const measureEnd = reduceFraction(measureIndex + 1, 1);
             const events: IMeasureEvent[] = [];
             const placements: ISubdivisionPlacement[] = [];
-            const slotStarts = new Set<string>();
+            const protectedStarts = new Set<string>();
+            const slotStarts = this.subdivisionSlotStarts(measure);
             let cursor = measureStart;
 
             while (itemIndex < items.length && compareFractions(items[itemIndex].start, measureEnd) < 0) {
@@ -4072,10 +4129,8 @@ export class ScoreBookDataModel {
                 const itemStart = subtractFractions(item.start, measureStart);
 
                 if (compareFractions(item.start, cursor) > 0) {
-                    events.push({
-                        start: subtractFractions(cursor, measureStart),
-                        duration: subtractFractions(item.start, cursor),
-                    });
+                    events.push(...this.gapRests(measure, subtractFractions(cursor, measureStart), itemStart,
+                        slotStarts, protectedStarts));
                 }
 
                 const note = item.event;
@@ -4094,7 +4149,7 @@ export class ScoreBookDataModel {
                     for (const slot of slots) {
                         const start = addFractions(itemStart, slot.start);
 
-                        slotStarts.add(this.fractionKey(start));
+                        protectedStarts.add(this.fractionKey(start));
                         events.push(this.cloneEvent({ ...slot, start }));
                     }
                 }
@@ -4114,19 +4169,98 @@ export class ScoreBookDataModel {
             }
 
             if (compareFractions(cursor, measureEnd) < 0) {
-                events.push({
-                    start: subtractFractions(cursor, measureStart),
-                    duration: subtractFractions(measureEnd, cursor),
-                });
+                events.push(...this.gapRests(measure, subtractFractions(cursor, measureStart), barLength,
+                    slotStarts, protectedStarts));
             }
 
-            // A slot start never merges with a neighbouring rest, and the subdivision records are
+            // A protected start never merges with a neighbouring rest, and the subdivision records are
             // rebuilt against the events that came out of that normalisation.
-            const normalized = this.normalizeRests(events, slotStarts);
+            const normalized = this.normalizeRests(events, protectedStarts);
 
             this.setMeasureLayout(measure, normalized,
                 this.subdivisionRecordsOf(placements, measureStart, normalized));
         }
+    }
+
+    /**
+     * Splits a gap of a measure into rest events. The rests the measure already held decide the split as
+     * long as they cover the gap exactly — the structure the user shaped — while any other gap is
+     * derived from its length alone.
+     *
+     * @param measure The measure whose rests supply the structure.
+     * @param gapStart Start of the gap within the measure.
+     * @param gapEnd End of the gap within the measure.
+     * @param slotStarts The measure's subdivision slot starts, which are no rest structure of their own.
+     * @param protectedStarts The set the kept structure is registered in, so the merge keeps it.
+     *
+     * @returns The rest events filling the gap.
+     */
+    private gapRests(measure: ISbDmTrackMeasure, gapStart: IFraction, gapEnd: IFraction,
+        slotStarts: Set<string>, protectedStarts?: Set<string>): IMeasureEvent[] {
+        const kept = this.keptRestStructure(measure, gapStart, gapEnd, slotStarts);
+        if (kept !== undefined) {
+            for (const rest of kept) {
+                protectedStarts?.add(this.fractionKey(rest.start));
+            }
+
+            return kept;
+        }
+
+        const rests: IMeasureEvent[] = [];
+        let position = { ...gapStart };
+        for (const part of decomposeRestSpan(subtractFractions(gapEnd, gapStart))) {
+            rests.push({ start: position, duration: { ...part } });
+            position = addFractions(position, part);
+        }
+
+        return rests;
+    }
+
+    /**
+     * Returns the measure's own rests when they cover the gap exactly and differ from the split the gap
+     * would derive on its own — the structure the user shaped, which a layout has to keep. A structure
+     * that is the derived split needs no protection, so the merge may still combine it with the rests
+     * around it.
+     *
+     * @param measure The measure whose rests supply the structure.
+     * @param gapStart Start of the gap within the measure.
+     * @param gapEnd End of the gap within the measure.
+     * @param slotStarts The measure's subdivision slot starts, which are no rest structure of their own.
+     *
+     * @returns The rests covering the gap, or undefined when the gap derives its own rests.
+     */
+    private keptRestStructure(measure: ISbDmTrackMeasure, gapStart: IFraction, gapEnd: IFraction,
+        slotStarts: Set<string>): IMeasureEvent[] | undefined {
+        const held = measure.events.filter((event) => {
+            return event.noteStyleId === undefined
+                && compareFractions(event.start, gapStart) >= 0
+                && compareFractions(addFractions(event.start, event.duration), gapEnd) <= 0
+                && !slotStarts.has(this.fractionKey(event.start));
+        });
+
+        let position = { ...gapStart };
+        for (const rest of held) {
+            if (compareFractions(rest.start, position) !== 0) {
+                return undefined;
+            }
+
+            position = addFractions(rest.start, rest.duration);
+        }
+
+        if (compareFractions(position, gapEnd) !== 0) {
+            return undefined;
+        }
+
+        const derived = decomposeRestSpan(subtractFractions(gapEnd, gapStart));
+        const isDerived = derived.length === held.length && derived.every((part, index) => {
+            return compareFractions(part, held[index].duration) === 0;
+        });
+
+        return isDerived
+            ? undefined
+            : held.map((rest) => {
+                return this.cloneEvent(rest);
+            });
     }
 
     /**

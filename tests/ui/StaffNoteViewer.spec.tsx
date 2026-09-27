@@ -406,7 +406,9 @@ describe.sequential("StaffNoteViewer beams", () => {
         ]);
     });
 
-    it("merges two eighth rests in one pulse into a quarter rest", () => {
+    it("draws adjacent rests in one pulse as the measure holds them", () => {
+        // The rests a measure holds are its structure, so the viewer draws them one by one instead of
+        // merging them into a rest of their combined length.
         const measure = buildMeasure([
             event(fraction(0, 16), fraction(1, 8)),
             event(fraction(2, 16), fraction(1, 8)),
@@ -428,18 +430,15 @@ describe.sequential("StaffNoteViewer beams", () => {
         const runs = [
             ...renderResult.container.querySelectorAll<HTMLElement>(".staff-note-viewer-run"),
         ];
-        expect(runs).toHaveLength(2);
+        expect(runs).toHaveLength(3);
 
         const restRuns = runs.filter((run) => {
             return !run.classList.contains("staff-note-viewer-note-run");
         });
-        expect(restRuns).toHaveLength(1);
-
-        // The merged rest spans one pulse, so its slot anchor halves from an eighth's 25% to 12.5%.
-        expect(restRuns[0].getAttribute("style")).toContain("--note-anchor: 12.5%");
+        expect(restRuns).toHaveLength(2);
     });
 
-    it("registers the whole-measure rest as a staff run", () => {
+    it("registers the whole-measure rest as a selectable staff run", () => {
         const measure = buildMeasure([
             event(fraction(0, 1), fraction(1, 1)),
         ], []);
@@ -460,13 +459,80 @@ describe.sequential("StaffNoteViewer beams", () => {
 
         const runs = registry.findElements(ScoreElementKind.StaffRun, 1, 100);
         expect(runs).toHaveLength(1);
-        expect(registry.getLocation(runs[0])).toEqual({
+
+        const location = registry.getLocation(runs[0]);
+        expect(location).toMatchObject({
             kind: ScoreElementKind.StaffRun,
             bar: 1,
             trackId: 100,
             step: 0,
             start: { numerator: 0, denominator: 1 },
         });
+        expect(location?.measure).toBe(measure);
+
+        // The run addresses the rest it draws, so a hit test selects the rest instead of the bar.
+        expect(registry.getTarget(runs[0])).toBe(measure.events[0]);
+    });
+
+    it("draws the slots of a subdivision whose slots hold rests only", () => {
+        // A bar that holds nothing but a subdivision of rests is not collapsed into one whole rest:
+        // its slots are the structure the user edited, so they stay visible (and addressable).
+        const measure = buildMeasure([
+            event(fraction(0, 1), fraction(1, 3)),
+            event(fraction(1, 3), fraction(1, 3)),
+            event(fraction(2, 3), fraction(1, 3)),
+        ], [{ startIndex: 0, actual: 3, normal: 16, isTuplet: true }]);
+
+        renderResult = render(
+            <StaffNoteViewer
+                isLastBar={true}
+                timeSignature="4/4"
+                scoreMetrics={scoreMetrics}
+                baseSteps={16}
+                measure={measure}
+                barNumber={1}
+                trackId={100}
+            />,
+        );
+
+        const runs = [...renderResult.container.querySelectorAll<HTMLElement>(".staff-note-viewer-run")];
+        expect(runs).toHaveLength(3);
+        expect(runs.every((run) => {
+            return run.querySelector(".staff-note-viewer-rest-symbol") !== null;
+        })).toBe(true);
+    });
+
+    it("draws a measure whose rests the user split as the parts they are", () => {
+        // Two half rests in a silent bar stay two half rests: the model holds the split, so the viewer
+        // must not collapse it into a whole-measure rest again.
+        const measure = buildMeasure([
+            event(fraction(0, 1), fraction(1, 2)),
+            event(fraction(1, 2), fraction(1, 2)),
+        ], []);
+
+        renderResult = render(
+            <StaffNoteViewer
+                isLastBar={true}
+                timeSignature="4/4"
+                scoreMetrics={scoreMetrics}
+                baseSteps={16}
+                measure={measure}
+                barNumber={1}
+                trackId={100}
+            />,
+        );
+
+        const runs = [...renderResult.container.querySelectorAll<HTMLElement>(".staff-note-viewer-run")];
+        expect(runs).toHaveLength(2);
+        expect(runs.every((run) => {
+            return run.querySelector(".staff-note-viewer-rest-symbol") !== null;
+        })).toBe(true);
+
+        // Each part keeps half the bar, so the two rests read as halves of the same length.
+        const widths = runs.map((run) => {
+            return run.style.flex.split(" ")[0];
+        });
+        expect(widths[0]).toBe(widths[1]);
     });
 
     it("shows ghost parentheses from the note style's sample profile", () => {

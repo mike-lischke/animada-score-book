@@ -12,7 +12,7 @@ import {
     type INoteArticulation,
 } from "../../../core/ScoreBookDataModel.js";
 import {
-    MeasureProjection, NoteGroupKind, ProjectedItemKind, pulseIndexOf, pulseLengthAt,
+    MeasureProjection, NoteGroupKind, ProjectedItemKind, pulseLengthAt,
     type INotationGrid, type IProjectedEvent, type IProjectedItem,
 } from "../../../core/MeasureProjection.js";
 import type { IFraction, IAudioData, ISubdivision } from "../../../core/types/general.js";
@@ -138,7 +138,7 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
         ]);
 
         const items = MeasureProjection.project(measure);
-        const nodes = this.mergeRestsWithinPulses(this.buildNodes(items, scoreMetrics), scoreMetrics);
+        const nodes = this.buildNodes(items, scoreMetrics);
 
         const beamSpans = this.computeBeamSpans(nodes, scoreMetrics);
         const tupletLabels = this.computeTupletLabels(nodes, scoreMetrics.stepsPerBar);
@@ -147,6 +147,14 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
             return this.nodeHasAnyNote(node);
         });
 
+        // A subdivision is a structure of its own, so its slots stay visible even when they hold rests
+        // only, and so are rests the user split. Only a measure holding nothing but one rest covering
+        // the bar becomes a single whole-measure rest.
+        const hasAnySubdivision = nodes.some((node) => {
+            return node.kind === StaffNodeKind.Subdivision;
+        });
+        const usesWholeBarRest = !hasAnyNote && !hasAnySubdivision && measure.events.length <= 1;
+
         const centerLine = (maxNoteLine + 1) / 2;
 
         // Whole and half rests sit on the centre line (odd count) or the line just below it (even count).
@@ -154,9 +162,9 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
         const restLineOffset = (restNoteLine - centerLine) * 10;
 
         const runs =
-            hasAnyNote
-                ? this.renderItems(nodes, beamSpans, "", centerLine, restLineOffset)
-                : [this.renderWholeBarRestSlot(restLineOffset, barNumber, trackId, scoreElementRegistry)];
+            usesWholeBarRest
+                ? [this.renderWholeBarRestSlot(restLineOffset, barNumber, trackId, measure, scoreElementRegistry)]
+                : this.renderItems(nodes, beamSpans, "", centerLine, restLineOffset);
 
         // Render staff lines. For a single line, render the centred middle line as before.
         // For multiple lines, render N lines symmetrically around the vertical centre.
@@ -300,81 +308,6 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                 ? articulationFromSampleProfile(audioData.sampleProfile)
                 : undefined),
         };
-    }
-
-    /**
-     * Merges consecutive rests that share a pulse into a single rest when their combined duration
-     * is a plain (non-dotted) note value. Two eighth rests in one pulse become a quarter rest, for
-     * example. Rest groups never cross a pulse boundary or a subdivision boundary.
-     *
-     * @param nodes The staff tree to merge rests in.
-     * @param grid The timing of the arrangement.
-     *
-     * @returns The staff tree with adjacent same-pulse rests merged.
-     */
-    private mergeRestsWithinPulses(nodes: IStaffTreeNode[], grid: INotationGrid): IStaffTreeNode[] {
-        const result: IStaffTreeNode[] = [];
-        let restGroup: IStaffNoteNode[] = [];
-
-        const flush = (): void => {
-            if (restGroup.length > 1 && this.isPlainRestGroup(restGroup, grid)) {
-                let total: IFraction = { numerator: 0, denominator: 1 };
-
-                for (const node of restGroup) {
-                    total = addFractions(total, node.duration);
-                }
-
-                result.push({ ...restGroup[0], duration: total });
-                restGroup = [];
-
-                return;
-            }
-
-            result.push(...restGroup);
-            restGroup = [];
-        };
-
-        for (const node of nodes) {
-            if (node.kind === StaffNodeKind.Note && node.noteStyle === undefined) {
-                const previousRest = restGroup.at(-1);
-
-                if (previousRest !== undefined
-                    && pulseIndexOf(previousRest.start, grid) !== pulseIndexOf(node.start, grid)) {
-                    flush();
-                }
-
-                restGroup.push(node);
-
-                continue;
-            }
-
-            flush();
-            result.push(node);
-        }
-
-        flush();
-
-        return result;
-    }
-
-    /**
-     * Checks whether a group of rests sums to a plain (non-dotted) rest value.
-     *
-     * @param group The rest nodes to evaluate.
-     * @param grid The timing of the arrangement.
-     *
-     * @returns True when the combined duration maps to a non-dotted rest glyph.
-     */
-    private isPlainRestGroup(group: IStaffNoteNode[], grid: INotationGrid): boolean {
-        let total: IFraction = { numerator: 0, denominator: 1 };
-
-        for (const node of group) {
-            total = addFractions(total, node.duration);
-        }
-
-        const glyph = noteValueForEvent(total, 0, grid.stepsPerBar, pulseLengthAt(group[0].start, grid));
-
-        return glyph !== undefined && !glyph.dotted;
     }
 
     /**
@@ -852,17 +785,19 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
     }
 
     /**
-     * Renders the whole-measure rest shown when a measure contains no sounding notes.
+     * Renders the whole-measure rest of a measure that holds rests only. The run carries the measure's
+     * first event, so the rest is selectable and addressable like any other run.
      *
      * @param restLineOffset Vertical offset in px so the rest sits on the centre line.
      * @param barNumber The one-based measure number of this viewer.
      * @param trackId The track identity of this viewer.
+     * @param measure The measure the rest stands for.
      * @param scoreElementRegistry The registry to register the rest run in.
      *
      * @returns The whole-measure rest run.
      */
     private renderWholeBarRestSlot(restLineOffset: number, barNumber: number, trackId: number,
-        scoreElementRegistry?: ScoreElementRegistry): VNode {
+        measure: ISbDmTrackMeasure, scoreElementRegistry?: ScoreElementRegistry): VNode {
         return (
             <div
                 key="rest-whole-bar"
@@ -874,7 +809,8 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                     trackId,
                     step: 0,
                     start: { numerator: 0, denominator: 1 },
-                })}
+                    measure,
+                }, measure.events[0])}
             >
                 <NoteImage
                     className="staff-note-viewer-rest-symbol"
