@@ -490,4 +490,36 @@ describe("Arrangement", () => {
 
         expect(Object.fromEntries(arrangement.measureWidths)).toEqual({ 2: 2000, 3: 2000, 4: 3000 });
     });
+
+    it("insertBars gives every copied bar the width of the bar it copies", () => {
+        const instrument = createInstrument("0", 0, 0);
+        const arrangement = Arrangement.emptyArrangementWithInstruments([instrument], { length: 3 });
+        arrangement.measureWidths.set(2, 2000);
+        arrangement.measureWidths.set(3, 3000);
+
+        arrangement.insertBars(2, 2, false, true);
+
+        expect(Object.fromEntries(arrangement.measureWidths)).toEqual({ 2: 2000, 3: 2000, 4: 2000, 5: 3000 });
+    });
+
+    it("insertBars copies the width of the bar in front when inserting before it", () => {
+        const instrument = createInstrument("0", 0, 0);
+        const arrangement = Arrangement.emptyArrangementWithInstruments([instrument], { length: 3 });
+        arrangement.measureWidths.set(2, 2000);
+        arrangement.measureWidths.set(3, 3000);
+
+        arrangement.insertBars(3, 1, true, true);
+
+        expect(Object.fromEntries(arrangement.measureWidths)).toEqual({ 2: 2000, 3: 2000, 4: 3000 });
+    });
+
+    it("insertBars leaves copied bars at the default width when the bar they copy has none", () => {
+        const instrument = createInstrument("0", 0, 0);
+        const arrangement = Arrangement.emptyArrangementWithInstruments([instrument], { length: 2 });
+        arrangement.measureWidths.set(2, 4000);
+
+        arrangement.insertBars(1, 1, false, true);
+
+        expect(Object.fromEntries(arrangement.measureWidths)).toEqual({ 3: 4000 });
+    });
 });

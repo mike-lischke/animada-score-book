@@ -245,7 +245,8 @@ export class Arrangement implements ISbDmArrangement {
 
     /**
      * Inserts a number of bars before or after the given bar. When copyContent is set, the content
-     * of the bar preceding the insertion point is copied into each new bar.
+     * of the bar preceding the insertion point is copied into each new bar, and each new bar takes
+     * that bar's width as well.
      *
      * @param barNumber The 1-based bar the new bars are inserted relative to.
      * @param count The number of bars to insert.
@@ -265,7 +266,18 @@ export class Arrangement implements ISbDmArrangement {
         }
 
         this.timeParams.length += count;
+
+        // The new bars hold the content of the bar they were made from, so they take its width too. The source
+        // bar is the one right in front of them, which the shift below leaves where it is.
+        const sourceWidth = copyContent ? this.measureWidths.get(atIndex) : undefined;
         this.shiftMeasureWidths(atIndex + 1, count);
+
+        if (sourceWidth !== undefined) {
+            for (let i = 1; i <= count; i++) {
+                this.measureWidths.set(atIndex + i, sourceWidth);
+            }
+        }
+
         void requisitions.execute("arrangementChanged", this.id);
     }
 
