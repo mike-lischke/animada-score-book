@@ -25,9 +25,9 @@ Checking → Setup → AdminSetup → Login → Running
 
 | Directory | Purpose |
 |-----------|---------|
-| `src/core/` | Domain model: `ScoreBookDataModel` (central data), `Arrangement`, `Track`, `Instrument`, `TimeParams`, `edit.ts` (single edit dispatcher with discriminated unions), `UndoManager`/`UndoRedoStack` |
+| `src/core/` | Domain model: `ScoreBookDataModel` (central data, every mutation), `Arrangement`, `Track`, `Instrument`, `TimeParams`, `MeasureLayout`, `MeasureProjection`, `ScoreClipboard`, `UndoManager`/`UndoRedoStack` |
 | `src/core/serialisation/` | Snapshot serialization, packing for URL/localStorage, `ArrangementMigrator` (legacy v1/v2 + BananaDrum import) |
-| `src/core/types/` | Core domain types: `general.ts` (IAudioData, IArrangementSnapshot, IFraction, etc.), `edit_commands.ts` (discriminated union of all edit commands) |
+| `src/core/types/` | Core domain types: `general.ts` (`IAudioData`, `IArrangementSnapshot`, `IFraction`, `IArrangementExtensions`, etc.), `clipboard.ts` (clipboard content kinds) |
 | `src/player/` | Audio playback engine (Web Audio API): `ArrangementPlayer` orchestrates `TrackPlayer`s + `Metronome` via `TimeCoordinator` (score-time ↔ real-time math) |
 | `src/supplement/` | Utilities: `Requisitions` (typed pub/sub event bus — all cross-component communication), `EscapeStack`, `Stack`, `Semaphore`, `MP3Export` |
 | `src/components/ui/` | Feature components: `Arrangement/`, `Bar/` (Grid + Staff views), `Note/`, `Track/`, `Minimap/`, `GuideRail/`, `InstrumentBrowser/`, `NotificationCenter/`, `Statusbar/`, `Print/`, `composites/` |
@@ -39,7 +39,7 @@ Checking → Setup → AdminSetup → Login → Running
 ### Data Flow
 
 - **Single source of truth:** `ScoreBookDataModel` holds `arrangement`, `instruments`, `user`, and `scoreBookTree`.
-- **All mutations** go through `edit.ts` → `UndoManager.edit(command)` — every edit is a discriminated union `EditCommand`.
+- **All mutations** are methods on `ScoreBookDataModel` (or on the model objects they delegate to) that fire the `arrangementMutated` requisition **once per edit**. `UndoManager` listens for it and records one snapshot, which is what makes one edit one undo step; a multi-frame gesture updates the layout per frame and fires the requisition once when it ends.
 - **Cross-component communication** uses `Requisitions` (typed pub/sub): components `register`/`unregister` for topics like `settingsChanged`, `playbackStateChanged`, `selectionChanged`, `authChanged`, `backendDisconnected`.
 - **Persistence:** `AppStorage` (localStorage/sessionStorage) for UI settings; backend API for scores/users/groups.
 
