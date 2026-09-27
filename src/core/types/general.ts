@@ -67,8 +67,8 @@ export interface ITimeParamsBase {
  * it back in `applyArrangementSnapshot()`, so adding one never touches the core and removing one is a
  * matter of deleting those three places.
  *
- * A chunk is never required to read a snapshot, which is why a missing or unknown chunk is ignored.
- * Keys are dropped on load, so chunks travel only between builds that both know them.
+ * A chunk is never required to read a snapshot, which is why a missing or unknown chunk is ignored. An unknown
+ * chunk is kept and written back verbatim, so a save through a build that does not understand it never loses it.
  */
 export type IArrangementExtensions = Record<string, unknown>;
 

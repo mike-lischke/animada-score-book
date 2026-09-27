@@ -7,6 +7,7 @@ import type { ComponentChild } from "preact";
 
 import type { ISbDmArrangement, ISbDmTrack, ISbDmTrackMeasure, ScoreBookDataModel }
     from "../../../../core/ScoreBookDataModel.js";
+import { MeasureLayout } from "../../../../core/MeasureLayout.js";
 import type { ArrangementPlayer } from "../../../../player/ArrangementPlayer.js";
 import {
     MeasureProjection, NoteGroupKind, type INoteGroup, type INotationGrid,
@@ -348,6 +349,18 @@ export class StaffMeasureViewer extends UIComponent<IStaffMeasureViewerProps, IS
             dataModel, scoreElementRegistry, style } = this.props;
         const { tracks } = this.state;
 
+        // The barline closing the column is the resize handle, so it exists only where resizing is allowed.
+        let resizeHandle: ComponentChild = null;
+        if (inEditMode) {
+            resizeHandle = (
+                <div
+                    className="staff-measure-resize-handle"
+                    onPointerDown={this.handleResizePointerDown}
+                    onDblClick={this.handleResizeDoubleClick}
+                />
+            );
+        }
+
         return (
             <div
                 className="staff-measure-viewer"
@@ -379,9 +392,73 @@ export class StaffMeasureViewer extends UIComponent<IStaffMeasureViewerProps, IS
                         />
                     );
                 })}
+                {resizeHandle}
             </div>
         );
     }
+
+    /**
+     * Starts a resize of this measure. The gesture follows the pointer on the window rather than on the
+     * handle, so it keeps working while the column is re-laid out under the pointer, and it ends with a
+     * single undo step.
+     *
+     * @param event The pointer event on the barline.
+     */
+    private handleResizePointerDown = (event: PointerEvent): void => {
+        const { barNumber, dataModel } = this.props;
+        const arrangement = dataModel.arrangement;
+        const widths = arrangement?.measureWidths;
+        if (!arrangement || !widths || event.button !== 0) {
+            return;
+        }
+
+        event.preventDefault();
+        // The gesture is a resize, not a selection: keeping it from the selection view also keeps the pointer
+        // capture there from retargeting the double click that resets the width.
+        event.stopPropagation();
+
+        const handle = event.currentTarget as HTMLElement;
+        const zoom = handle.currentCSSZoom || 1;
+        const startClientX = event.clientX;
+        const startWidth = MeasureLayout.widthOf(barNumber, widths);
+        const startStored = widths.get(barNumber);
+
+        const handlePointerMove = (moveEvent: PointerEvent): void => {
+            dataModel.setMeasureWidth(barNumber, startWidth + ((moveEvent.clientX - startClientX) / zoom));
+        };
+
+        const handlePointerUp = (): void => {
+            window.removeEventListener("pointermove", handlePointerMove);
+            window.removeEventListener("pointerup", handlePointerUp);
+
+            if (widths.get(barNumber) !== startStored) {
+                dataModel.commitMeasureWidths();
+            }
+        };
+
+        window.addEventListener("pointermove", handlePointerMove);
+        window.addEventListener("pointerup", handlePointerUp);
+    };
+
+    /**
+     * Resets this measure's width with a double click on its barline: a modified double click restores the
+     * default width, an unmodified one shrinks the measure to the floor its content and controls set.
+     *
+     * @param event The double click on the barline.
+     */
+    private handleResizeDoubleClick = (event: MouseEvent): void => {
+        const { barNumber, dataModel } = this.props;
+        const arrangement = dataModel.arrangement;
+        if (!arrangement) {
+            return;
+        }
+
+        const modified = event.altKey || event.ctrlKey || event.metaKey || event.shiftKey;
+        const width = modified ? undefined : MeasureLayout.minimumWidthOfMeasure(arrangement, barNumber);
+        if (dataModel.setMeasureWidth(barNumber, width)) {
+            dataModel.commitMeasureWidths();
+        }
+    };
 
     private maxNoteLineForTrack(trackId: number): number {
         const { arrangement } = this.props;

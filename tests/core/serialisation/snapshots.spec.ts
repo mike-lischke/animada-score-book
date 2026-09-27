@@ -120,6 +120,51 @@ describe("snapshots", () => {
         expect(snapshot.tracks[0].measures[0].events[0].noteStyleId).toBe("1");
     });
 
+    it("keeps unknown extension chunks through a snapshot round trip", () => {
+        const instrument = createInstrument("0", 0, 0);
+        const arrangement = Arrangement.emptyArrangement([instrument]);
+
+        arrangement.applyArrangementSnapshot({
+            version: arrangementSnapshotVersion,
+            title: "Foreign chunks",
+            timeParams: { timeSignature: "4/4", tempo: 120, length: 2, pulse: "1/4", stepResolution: 8 },
+            tracks: [],
+            extensions: { laterFeature: { nested: [1, 2, 3] }, measureWidths: { 1: 1000 } },
+        }, [instrument]);
+
+        expect([...arrangement.measureWidths]).toEqual([[1, 1000]]);
+
+        const snapshot = arrangement.toSnapshot();
+        expect(snapshot.extensions).toEqual({
+            laterFeature: { nested: [1, 2, 3] },
+            measureWidths: { 1: 1000 },
+        });
+    });
+
+    it("drops measure widths for bars the arrangement does not have", () => {
+        const instrument = createInstrument("0", 0, 0);
+        const arrangement = Arrangement.emptyArrangement([instrument]);
+
+        arrangement.applyArrangementSnapshot({
+            version: arrangementSnapshotVersion,
+            timeParams: { timeSignature: "4/4", tempo: 120, length: 2, pulse: "1/4", stepResolution: 8 },
+            tracks: [],
+            extensions: { measureWidths: { 2: 2000, 5: 500, 0: 900 } },
+        }, [instrument]);
+
+        expect([...arrangement.measureWidths]).toEqual([[2, 2000]]);
+    });
+
+    it("reports measure widths through the undo snapshot as well", () => {
+        const instrument = createInstrument("0", 0, 0);
+        const arrangement = Arrangement.emptyArrangement([instrument]);
+        arrangement.measureWidths.set(1, 1500);
+
+        const snapshot = getArrangementSnapshot(arrangement);
+
+        expect(snapshot.extensions).toEqual({ measureWidths: { 1: 1500 } });
+    });
+
     it("loads a packed string through the migrator entry point", () => {
         const instrument = createInstrument("0", 0, 0);
         const arrangement = Arrangement.emptyArrangement([instrument]);

@@ -6,9 +6,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AppStorage } from "../../src/core/AppStorage.js";
+import { MeasureLayout } from "../../src/core/MeasureLayout.js";
 import { ScoreBookDataModel, type ISbDmTrackMeasure } from "../../src/core/ScoreBookDataModel.js";
 import { reduceFraction } from "../../src/core/serialisation/numeric-functions.js";
-import type { IFraction } from "../../src/core/types/general.js";
+import type { IFraction, IMeasureEvent } from "../../src/core/types/general.js";
 import { requisitions } from "../../src/supplement/Requisitions.js";
 import { createInstrument, setCellNote } from "../unit-test-helpers.js";
 
@@ -1553,5 +1554,117 @@ describe.sequential("ScoreBookDataModel track actions", () => {
         expect(mutatedCalls).toBe(1);
         expect(measure.subdivisions).toHaveLength(0);
         expect(measure.events).toHaveLength(3);
+    });
+});
+
+/**
+ * Builds sixteen sixteenth notes tiling one bar of the test arrangement.
+ *
+ * @returns The measure's events.
+ */
+const sixteenthNotes = (): IMeasureEvent[] => {
+    return Array.from({ length: 16 }, (_, index) => {
+        return {
+            start: { numerator: index, denominator: 16 },
+            duration: { numerator: 1, denominator: 16 },
+            noteStyleId: "1",
+        };
+    });
+};
+
+describe.sequential("ScoreBookDataModel measure widths", () => {
+    let model: ScoreBookDataModel;
+    let widths: Map<number, number>;
+    let mutatedCalls: number;
+    let changedCalls: number;
+
+    const mutatedSpy = (): Promise<boolean> => {
+        mutatedCalls++;
+
+        return Promise.resolve(true);
+    };
+
+    const changedSpy = (): Promise<boolean> => {
+        changedCalls++;
+
+        return Promise.resolve(true);
+    };
+
+    beforeEach(() => {
+        vi.restoreAllMocks();
+        model = new ScoreBookDataModel();
+        mutatedCalls = 0;
+        changedCalls = 0;
+        model.startNewArrangement([createInstrument("0", 0, 0)]);
+        widths = model.arrangement!.measureWidths!;
+        requisitions.register("arrangementMutated", mutatedSpy);
+        requisitions.register("arrangementChanged", changedSpy);
+    });
+
+    afterEach(() => {
+        requisitions.unregister("arrangementMutated", mutatedSpy);
+        requisitions.unregister("arrangementChanged", changedSpy);
+    });
+
+    it("stores a width and refreshes the layout without recording an undo step", () => {
+        expect(model.setMeasureWidth(1, 2000)).toBe(true);
+        expect(widths.get(1)).toBe(2000);
+        expect(changedCalls).toBe(1);
+        expect(mutatedCalls).toBe(0);
+    });
+
+    it("raises a width below the floor to the smallest width the measure fits in", () => {
+        const floor = MeasureLayout.minimumWidthOfMeasure(model.arrangement!, 1);
+
+        expect(model.setMeasureWidth(1, floor - 100)).toBe(true);
+        expect(widths.get(1)).toBe(floor);
+    });
+
+    it("restores the default width when the width is undefined", () => {
+        model.setMeasureWidth(1, 2000);
+
+        expect(model.setMeasureWidth(1, undefined)).toBe(true);
+        expect(widths.has(1)).toBe(false);
+    });
+
+    it("stores no width for a measure at its default width", () => {
+        expect(model.setMeasureWidth(1, MeasureLayout.defaultWidth())).toBe(false);
+        expect(widths.size).toBe(0);
+    });
+
+    it("ignores a measure the arrangement does not have", () => {
+        expect(model.setMeasureWidth(5, 2000)).toBe(false);
+        expect(widths.size).toBe(0);
+    });
+
+    it("records the whole gesture as one undo step", () => {
+        model.setMeasureWidth(1, 2000);
+        model.setMeasureWidth(1, 2100);
+        model.commitMeasureWidths();
+
+        expect(mutatedCalls).toBe(1);
+    });
+
+    it("widens a measure whose edit packs it tighter than its width, as the same undo step", () => {
+        const track = model.arrangement!.tracks[0];
+        const floor = MeasureLayout.minimumWidthOfMeasure(model.arrangement!, 1);
+        expect(model.setMeasureWidth(1, floor)).toBe(true);
+        expect(widths.get(1)).toBe(floor);
+
+        const before = mutatedCalls;
+        model.replaceMeasureContent([{ trackId: track.id, bar: 1, events: sixteenthNotes(), subdivisions: [] }]);
+
+        const widened = MeasureLayout.minimumWidthOfMeasure(model.arrangement!, 1);
+        expect(widened).toBeGreaterThan(floor);
+        expect(widths.get(1)).toBe(widened);
+        expect(mutatedCalls - before).toBe(1);
+    });
+
+    it("leaves a measure without a width at its default width", () => {
+        const track = model.arrangement!.tracks[0];
+
+        model.replaceMeasureContent([{ trackId: track.id, bar: 1, events: sixteenthNotes(), subdivisions: [] }]);
+
+        expect(widths.size).toBe(0);
     });
 });

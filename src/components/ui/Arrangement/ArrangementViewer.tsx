@@ -120,6 +120,9 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
     // Initialize to -2 so that the first update happens at pulse 0.
     private targetPulse = -2;
 
+    /** Real time the play head was last placed at, so it can be placed again while playback is paused. */
+    private lastRealTime: RealTime = 0;
+
     // The value set for the left-transition in CSS. We want to use the same value in JS to determine how long the
     // auto-follow transition should be.
     private autoFollowTransitionDurationMs: number;
@@ -192,6 +195,9 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         this.trackViewerContainerRef.current!.style.zoom = `${viewerZoom}%`;
         this.updateStaffWindow();
         this.handleTrackViewerScroll();
+
+        // The beam starts at the first measure, which the staff view draws behind its prefix.
+        this.autoFollow(this.lastRealTime);
     }
 
     public override componentDidUpdate(prevProps: IArrangementViewerProps, prevState: IArrangementViewerState): void {
@@ -204,7 +210,8 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
             this.autoFollow(0);
         }
 
-        if (prevState.trackViewMode !== trackViewMode) {
+        const viewModeChanged = prevState.trackViewMode !== trackViewMode;
+        if (viewModeChanged) {
             // View mode switched — the input follows the new view, and its newly mounted components
             // need the current selection state.
             this.activateViewEditor();
@@ -215,9 +222,20 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
             this.applyEditState();
         }
 
+        const geometryWasDirty = this.staffGeometryDirty;
+
         this.trackViewerContainerRef.current!.style.zoom = `${viewerZoom}%`;
         this.updateStaffWindow();
         this.handleTrackViewerScroll();
+
+        // The measure columns move under the play head — a view switch lays them out differently, a resize changes
+        // them — so the beam is placed again for the view that is shown, also while playback is paused. A view
+        // switch auto-follows too, because the new layout may push the beam out of the viewport.
+        if (viewModeChanged) {
+            this.autoFollow(this.lastRealTime);
+        } else if (geometryWasDirty) {
+            this.placePlayBeam(this.playheadColumnAt(this.lastRealTime));
+        }
 
         // The window's measures are mounted by now. Every listener that decorates rendered measures — the
         // selection overlay in particular — has to know that measures it may address have arrived, because a
@@ -548,70 +566,99 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
      * @param realTime The current real time within the arrangement, provided by the animation engine.
      */
     private autoFollow = (realTime: RealTime) => {
-        if (this.viewerRef.current && this.playBeamRef.current && this.viewerContentHostRef.current) {
-            const { arrangementPlayer } = this.props;
-            const { autoFollowIsOn, trackViewMode } = this.state;
+        // Remembered, so the beam can be placed again after a view switch or a resize, when the animation
+        // engine does not run.
+        this.lastRealTime = realTime;
 
-            const viewer = this.viewerRef.current;
+        const column = this.playheadColumnAt(realTime);
+        this.placePlayBeam(column);
 
-            // Both views place the beam in layout px at 100% zoom. The grid view lays its measures out in equal
-            // columns and derives the column width from the rendered content. The staff view knows the width of
-            // every measure — a measure can carry a width of its own — so it addresses a position by the measure
-            // the play head falls into plus the fraction inside that measure.
-            const metrics = arrangementPlayer.scoreMetrics;
-            const totalProgress = arrangementPlayer.convertToLoopProgress(realTime) * metrics.bars;
-            const column = this.playheadColumn(totalProgress);
-            const positionInColumn = column.progress * column.width;
-            const position = Math.floor(column.start + positionInColumn);
+        const { autoFollowIsOn, trackViewMode } = this.state;
+        const viewer = this.viewerRef.current;
+        if (column === undefined || !viewer || !autoFollowIsOn) {
+            return;
+        }
 
-            // Update play beam continuously. The beam is moved with a transform, never with `left`:
-            // `left` is a layout property and made the browser lay out the scroller on every frame
-            // (measured ≈120 layouts/s on a 79-bar score), the transform leaves layout untouched.
-            this.playBeamRef.current.style.transform = `translate3d(${position}px, 0, 0)`;
+        const { arrangementPlayer } = this.props;
+        const metrics = arrangementPlayer.scoreMetrics;
+        const positionInColumn = column.progress * column.width;
+        const position = Math.floor(column.start + positionInColumn);
 
-            // Auto-follow keeps the beam inside the viewport. Once the user scrolls the viewer himself,
-            // the viewer stays where he put it and only the beam keeps moving.
-            if (!autoFollowIsOn) {
-                return;
+        // Auto-follow keeps the beam inside the viewport. Once the user scrolls the viewer himself,
+        // the viewer stays where he put it and only the beam keeps moving.
+        const clientWidth = viewer.clientWidth;
+        const maxScroll = Math.max(0, column.contentWidth - clientWidth);
+        const pulseWidthPixels = (column.width / metrics.stepsPerBar) * metrics.stepsPerPulse;
+
+        // Half-bar splits use beat-level granularity so odd time signatures snap musically.
+        // Even meters split symmetrically (2+2, 3+3 for 6/8), odd meters asymmetrically
+        // using ceil+floor: 3+2 for 5/4, 4+3 for 7/8, 2+1 for 3/4.
+        const beatWidthPixels = column.width / metrics.beatsPerBar;
+        const firstHalfWidth = Math.ceil(metrics.beatsPerBar / 2) * beatWidthPixels;
+        const secondHalfWidth = Math.floor(metrics.beatsPerBar / 2) * beatWidthPixels;
+
+        const rightPartialBarStart = trackViewMode === "staff"
+            ? this.getRightPartialMeasureStart(viewer.scrollLeft, clientWidth)
+            : this.getRightPartialBarStart(viewer.scrollLeft, clientWidth, column.width);
+        const reachedRightPartialBar = position >= rightPartialBarStart;
+
+        if (position < viewer.scrollLeft || position > viewer.scrollLeft + clientWidth || reachedRightPartialBar) {
+            let snappedScroll: number;
+
+            if (column.width <= clientWidth) {
+                // The whole measure fits: snap to the start of its column.
+                snappedScroll = column.start;
+            } else if (secondHalfWidth <= clientWidth) {
+                // At least the smaller half fits: snap within each measure to the two half-sections.
+                snappedScroll = positionInColumn < firstHalfWidth ? column.start : column.start + firstHalfWidth;
+            } else {
+                // Not enough space for a half-measure: snap to pulse boundaries.
+                const pulses = Math.floor(positionInColumn / pulseWidthPixels);
+                snappedScroll = column.start + (pulses * pulseWidthPixels);
             }
 
-            const clientWidth = viewer.clientWidth;
-            const maxScroll = Math.max(0, column.contentWidth - clientWidth);
-            const pulseWidthPixels = (column.width / metrics.stepsPerBar) * metrics.stepsPerPulse;
-
-            // Half-bar splits use beat-level granularity so odd time signatures snap musically.
-            // Even meters split symmetrically (2+2, 3+3 for 6/8), odd meters asymmetrically
-            // using ceil+floor: 3+2 for 5/4, 4+3 for 7/8, 2+1 for 3/4.
-            const beatWidthPixels = column.width / metrics.beatsPerBar;
-            const firstHalfWidth = Math.ceil(metrics.beatsPerBar / 2) * beatWidthPixels;
-            const secondHalfWidth = Math.floor(metrics.beatsPerBar / 2) * beatWidthPixels;
-
-            const rightPartialBarStart = trackViewMode === "staff"
-                ? this.getRightPartialMeasureStart(viewer.scrollLeft, clientWidth)
-                : this.getRightPartialBarStart(viewer.scrollLeft, clientWidth, column.width);
-            const reachedRightPartialBar = position >= rightPartialBarStart;
-
-            if (position < viewer.scrollLeft || position > viewer.scrollLeft + clientWidth || reachedRightPartialBar) {
-                let snappedScroll: number;
-
-                if (column.width <= clientWidth) {
-                    // The whole measure fits: snap to the start of its column.
-                    snappedScroll = column.start;
-                } else if (secondHalfWidth <= clientWidth) {
-                    // At least the smaller half fits: snap within each measure to the two half-sections.
-                    snappedScroll = positionInColumn < firstHalfWidth ? column.start : column.start + firstHalfWidth;
-                } else {
-                    // Not enough space for a half-measure: snap to pulse boundaries.
-                    const pulses = Math.floor(positionInColumn / pulseWidthPixels);
-                    snappedScroll = column.start + (pulses * pulseWidthPixels);
-                }
-
-                const target = clampValue(Math.floor(snappedScroll), 0, maxScroll);
-                this.autoScrollLeft = target;
-                viewer.scrollLeft = target;
-            }
+            const target = clampValue(Math.floor(snappedScroll), 0, maxScroll);
+            this.autoScrollLeft = target;
+            viewer.scrollLeft = target;
         }
     };
+
+    /**
+     * @param realTime The current real time within the arrangement.
+     *
+     * @returns The measure column the play head is in for that time, or undefined when the viewer is not
+     *          mounted yet. Both views place the beam in layout px at 100% zoom: the grid view lays its
+     *          measures out in equal columns and derives the column width from the rendered content, the staff
+     *          view knows the width of every measure — a measure can carry a width of its own — so it
+     *          addresses a position by the measure the play head falls into plus the fraction inside it.
+     */
+    private playheadColumnAt(realTime: RealTime): IPlayheadColumn | undefined {
+        if (!this.viewerContentHostRef.current || !this.playBeamRef.current) {
+            return undefined;
+        }
+
+        const { arrangementPlayer } = this.props;
+        const metrics = arrangementPlayer.scoreMetrics;
+        const totalProgress = arrangementPlayer.convertToLoopProgress(realTime) * metrics.bars;
+
+        return this.playheadColumn(totalProgress);
+    }
+
+    /**
+     * Places the play beam on a measure column. The beam is moved with a transform, never with `left`:
+     * `left` is a layout property and made the browser lay out the scroller on every frame (measured
+     * ≈120 layouts/s on a 79-bar score), the transform leaves layout untouched.
+     *
+     * @param column The column to place the beam on, or undefined when the viewer is not mounted.
+     */
+    private placePlayBeam(column: IPlayheadColumn | undefined): void {
+        const beam = this.playBeamRef.current;
+        if (beam === null || column === undefined) {
+            return;
+        }
+
+        beam.style.transform = `translate3d(${Math.floor(column.start + (column.progress * column.width))}px, 0, 0)`;
+    }
 
     /**
      * Resolves the measure column the play head is in.
@@ -759,6 +806,9 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         this.staffColumns = MeasureLayout.columns(barCount, dataModel.arrangement?.measureWidths);
         this.staffOffsets = MeasureLayout.offsets(this.staffColumns, staffPrefixWidth);
         this.staffGeometryDirty = false;
+
+        // The bar action strip is centred on the measure columns, so it follows the new geometry.
+        this.barActionStripRef.current?.layout();
     }
 
     /**

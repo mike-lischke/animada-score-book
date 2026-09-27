@@ -32,6 +32,13 @@ export interface IClipboardMeasure {
     subdivisions: ISubdivision[];
 
     /**
+     * The source measure's column width in px at 100% zoom, or undefined when it had the default width. Only a
+     * copied whole measure carries a width: a piece or an event range is content, and the measure it lands in
+     * takes the width its own content needs.
+     */
+    width?: number;
+
+    /**
      * Set when the copied range mixes subdivided and non-subdivided events. Such content cannot be
      * pasted unambiguously and is rejected as too complex.
      */

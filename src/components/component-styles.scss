@@ -1064,6 +1064,18 @@
     border-right: 2px solid var(--color-base-300);
     padding: 24px 8px 0 8px;
     position: relative;
+
+    /* The barline closing the column is the resize handle: an invisible strip centred on the border. */
+    .staff-measure-resize-handle {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        right: -3px;
+        width: 8px;
+        cursor: col-resize;
+        touch-action: none;
+        z-index: 3;
+    }
 }
 
 /* Staff-mode measures use the same per-measure min-width as grid-mode measures so the

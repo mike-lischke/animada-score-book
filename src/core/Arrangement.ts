@@ -3,6 +3,7 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
+import { MeasureLayout } from "./MeasureLayout.js";
 import { requisitions } from "../supplement/Requisitions.js";
 import {
     SbDmEntityType, type ISbDmArrangement, type ISbDmInstrument, type ISbDmTrack,
@@ -10,9 +11,11 @@ import {
 } from "./ScoreBookDataModel.js";
 import { TimeParams } from "./TimeParams.js";
 import { Track } from "./Track.js";
-import type { IArrangementSnapshot, ITimeParams, ITrackSnapshot } from "./types/general.js";
+import type { IArrangementExtensions, IArrangementSnapshot, ITimeParams, ITrackSnapshot } from "./types/general.js";
 import { getNewId } from "./utils.js";
-import { arrangementSnapshotVersion } from "./serialisation/snapshots.js";
+import {
+    applyArrangementExtensions, arrangementSnapshotVersion, collectArrangementExtensions,
+} from "./serialisation/snapshots.js";
 
 /** Initial title and timing options for creating a new arrangement. */
 export interface IArrangementCreationOptions {
@@ -33,8 +36,14 @@ export class Arrangement implements ISbDmArrangement {
 
     public timeParams!: ITimeParams;
 
-    /** Column widths of individual measures, keyed by 1-based measure number. Not part of a snapshot yet. */
+    /** Column widths of individual measures, keyed by 1-based measure number, in px at 100% zoom. */
     public readonly measureWidths = new Map<number, number>();
+
+    /**
+     * Extension chunks of other features or newer builds, kept verbatim so that writing a snapshot never
+     * drops data this build does not understand. See {@link IArrangementExtensions}.
+     */
+    public foreignExtensions: IArrangementExtensions = {};
 
     public mainVolume = 100;
     public loop = false;
@@ -104,7 +113,7 @@ export class Arrangement implements ISbDmArrangement {
      * @returns An arrangement snapshot reflecting the current state.
      */
     public toSnapshot(): IArrangementSnapshot {
-        return {
+        const snapshot: IArrangementSnapshot = {
             version: arrangementSnapshotVersion,
             title: this.titleString,
             timeParams: {
@@ -139,6 +148,13 @@ export class Arrangement implements ISbDmArrangement {
             }),
             scoreId: this.id >= 10000 ? this.id : undefined,
         };
+
+        const extensions = collectArrangementExtensions(this);
+        if (extensions !== undefined) {
+            snapshot.extensions = extensions;
+        }
+
+        return snapshot;
     }
 
     /**
@@ -249,6 +265,7 @@ export class Arrangement implements ISbDmArrangement {
         }
 
         this.timeParams.length += count;
+        this.shiftMeasureWidths(atIndex + 1, count);
         void requisitions.execute("arrangementChanged", this.id);
     }
 
@@ -267,6 +284,8 @@ export class Arrangement implements ISbDmArrangement {
         }
 
         this.timeParams.length -= 1;
+        this.measureWidths.delete(barNumber);
+        this.shiftMeasureWidths(barNumber + 1, -1);
         void requisitions.execute("arrangementChanged", this.id);
     }
 
@@ -295,6 +314,14 @@ export class Arrangement implements ISbDmArrangement {
         }
 
         this.timeParams.length += 1;
+
+        // The copy takes the width of its original, so the duplicate looks like the bar it was made from.
+        const width = this.measureWidths.get(barNumber);
+        this.shiftMeasureWidths(barNumber + 1, 1);
+        if (width !== undefined) {
+            this.measureWidths.set(barNumber + 1, width);
+        }
+
         void requisitions.execute("arrangementChanged", this.id);
     }
 
@@ -321,6 +348,9 @@ export class Arrangement implements ISbDmArrangement {
         // applyTimeParams is redundant when loading Animada Score Book, since we just created the Arrangement with the
         // same TPs. However, applying the full snapshot is required for Undo/Redo.
         this.applyTimeParams(arrangementSnapshot);
+
+        // The bar count is known only after the time params, so the width chunk is filtered against it here.
+        applyArrangementExtensions(this, arrangementSnapshot);
         this.title = arrangementSnapshot.title ?? "Untitled Arrangement";
 
         if (arrangementSnapshot.scoreId !== undefined) {
@@ -355,8 +385,47 @@ export class Arrangement implements ISbDmArrangement {
         }
 
         this.tracks.splice(0, this.tracks.length, ...restoredTracks);
+        this.clampMeasureWidths();
         void requisitions.execute("arrangementChanged", this.id);
     };
+
+    /**
+     * Moves the widths of the measures from a 1-based number onwards by a delta, so a width stays with the
+     * measure it belongs to when bars are inserted or removed.
+     *
+     * @param fromBar The first measure whose width moves.
+     * @param delta The number of measures it moves by.
+     */
+    private shiftMeasureWidths(fromBar: number, delta: number): void {
+        if (delta === 0 || this.measureWidths.size === 0) {
+            return;
+        }
+
+        const moved = [...this.measureWidths].filter(([bar]) => {
+            return bar >= fromBar;
+        });
+
+        for (const [bar] of moved) {
+            this.measureWidths.delete(bar);
+        }
+
+        for (const [bar, width] of moved) {
+            this.measureWidths.set(bar + delta, width);
+        }
+    }
+
+    /**
+     * Raises every stored measure width to its floor, so a stored value can never squeeze a measure below
+     * what its events need.
+     */
+    private clampMeasureWidths(): void {
+        for (const [bar, width] of [...this.measureWidths]) {
+            const floor = MeasureLayout.minimumWidthOfMeasure(this, bar);
+            if (width < floor) {
+                this.measureWidths.set(bar, floor);
+            }
+        }
+    }
 
     /**
      * Apply all timeParams without checking if they've changed. TP does this check and won't publish redundantly

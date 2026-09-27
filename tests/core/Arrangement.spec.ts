@@ -456,4 +456,38 @@ describe("Arrangement", () => {
         expect(track.measures).toHaveLength(1);
         expect(track.measures[0].events[0].noteStyleId).toBe("1");
     });
+
+    it("insertBars takes the widths of the bars behind the insertion point along", () => {
+        const instrument = createInstrument("0", 0, 0);
+        const arrangement = Arrangement.emptyArrangementWithInstruments([instrument], { length: 3 });
+        arrangement.measureWidths.set(1, 1000);
+        arrangement.measureWidths.set(3, 3000);
+
+        arrangement.insertBars(2, 1, false, false);
+
+        expect(Object.fromEntries(arrangement.measureWidths)).toEqual({ 1: 1000, 4: 3000 });
+    });
+
+    it("deleteBar drops the width of the removed bar and shifts the rest down", () => {
+        const instrument = createInstrument("0", 0, 0);
+        const arrangement = Arrangement.emptyArrangementWithInstruments([instrument], { length: 3 });
+        arrangement.measureWidths.set(1, 1000);
+        arrangement.measureWidths.set(2, 2000);
+        arrangement.measureWidths.set(3, 3000);
+
+        arrangement.deleteBar(2);
+
+        expect(Object.fromEntries(arrangement.measureWidths)).toEqual({ 1: 1000, 2: 3000 });
+    });
+
+    it("duplicateBar gives the copy the width of its original", () => {
+        const instrument = createInstrument("0", 0, 0);
+        const arrangement = Arrangement.emptyArrangementWithInstruments([instrument], { length: 3 });
+        arrangement.measureWidths.set(2, 2000);
+        arrangement.measureWidths.set(3, 3000);
+
+        arrangement.duplicateBar(2);
+
+        expect(Object.fromEntries(arrangement.measureWidths)).toEqual({ 2: 2000, 3: 2000, 4: 3000 });
+    });
 });

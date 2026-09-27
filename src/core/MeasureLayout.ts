@@ -3,6 +3,8 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
+import type { ISbDmArrangement } from "./ScoreBookDataModel.js";
+import { subtractFractions } from "./serialisation/numeric-functions.js";
 import { clampValue } from "./utils.js";
 
 /**
@@ -25,6 +27,22 @@ const defaultStepsPerMeasure = 16;
 
 /** Width of the staff prefix column (clef and time signature) in px at 100% zoom. Mirrors `.staff-prefix-viewer`. */
 export const staffPrefixWidth = 48;
+
+/** Width an event keeps at least, in px at 100% zoom: a notehead plus the room for its stem and flags. */
+export const minEventWidth = 25;
+
+/** Distance two adjacent event anchors keep at least, in px at 100% zoom, so noteheads do not collide. */
+export const minEventGap = 12;
+
+/** Horizontal insets of a staff measure column — its padding plus the closing barline — in px at 100% zoom. */
+export const staffMeasureInsets = 18;
+
+/**
+ * Width of the bar action strip — five 48 px buttons with 4 px gaps — in px at 100% zoom. Mirrors
+ * `.bar-action-button` and `.bar-action-group` in component-styles: the strip is centred on the measure, so the
+ * measure has to be at least this wide for the strip to fit.
+ */
+export const barActionStripWidth = (5 * 48) + (4 * 4);
 
 /** A half-open range of 1-based measure numbers. */
 export interface IMeasureRange {
@@ -181,5 +199,51 @@ export class MeasureLayout {
         const maxScroll = Math.max(0, MeasureLayout.totalWidth(offsets) - clientWidth);
 
         return clampValue(Math.floor(Math.max(anchor, followPoint)), 0, maxScroll);
+    }
+
+    /**
+     * Resolves the smallest column width a measure of an arrangement still draws in.
+     *
+     * The staff lays its events out proportionally, so both quantities that have to hold scale with the
+     * column: an event's slot is its duration fraction of the column, and the distance between two anchors is
+     * the fraction between their starts. Two requirements follow — every event's slot holds its symbol
+     * ({@link minEventWidth}), and two neighbouring symbols keep their air (`minEventWidth + minEventGap`).
+     * Because the events tile the measure, the neighbouring rule dominates every event but the last one, whose
+     * symbol is bounded by its own slot. The widest track decides.
+     *
+     * The measure also carries the bar action strip, which is centred on it and therefore has to fit inside it
+     * ({@link barActionStripWidth}).
+     *
+     * @param arrangement The arrangement the measure belongs to.
+     * @param bar The 1-based measure number.
+     *
+     * @returns The smallest column width in px at 100% zoom, the column insets included.
+     */
+    public static minimumWidthOfMeasure(arrangement: Readonly<ISbDmArrangement>, bar: number): number {
+        let shortestDuration = Number.POSITIVE_INFINITY;
+        let tightestGap = Number.POSITIVE_INFINITY;
+
+        for (const track of arrangement.tracks) {
+            const events = track.measures[bar - 1].events;
+
+            for (let index = 0; index < events.length; index++) {
+                const duration = events[index].duration;
+                if (duration.denominator > 0 && duration.numerator > 0) {
+                    shortestDuration = Math.min(shortestDuration, duration.numerator / duration.denominator);
+                }
+
+                const gap = index > 0 ? subtractFractions(events[index].start, events[index - 1].start) : undefined;
+                if (gap !== undefined && gap.denominator > 0 && gap.numerator > 0) {
+                    tightestGap = Math.min(tightestGap, gap.numerator / gap.denominator);
+                }
+            }
+        }
+
+        const contentWidth = Math.max(
+            Number.isFinite(shortestDuration) ? minEventWidth / shortestDuration : 0,
+            Number.isFinite(tightestGap) ? (minEventWidth + minEventGap) / tightestGap : 0,
+        );
+
+        return Math.max(Math.ceil(contentWidth) + staffMeasureInsets, barActionStripWidth);
     }
 }

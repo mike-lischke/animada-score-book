@@ -305,7 +305,7 @@ export class ScoreClipboard {
             tracks.push({
                 instrumentTypeId: track.instrument.typeId,
                 measures: track.measures.map((measure) => {
-                    return this.captureMeasure(measure);
+                    return this.captureMeasure(measure, true);
                 }),
             });
         }
@@ -323,7 +323,7 @@ export class ScoreClipboard {
         const tracks = arrangement.tracks.map((track) => {
             return {
                 instrumentTypeId: track.instrument.typeId,
-                measures: this.captureMeasures(track, bars),
+                measures: this.captureMeasures(track, bars, true),
             };
         });
 
@@ -1949,6 +1949,8 @@ export class ScoreClipboard {
 
     private applyMeasurePaste(targets: IMeasureTarget[], content: IClipboardContent): IPasteResult {
         const replacements: IMeasureReplace[] = [];
+        // A width belongs to one bar, so only a copied measure may carry one.
+        const transfersWidth = content.kind === ClipboardContentKind.Measure;
 
         for (let trackIndex = 0; trackIndex < targets.length; trackIndex++) {
             const target = targets[trackIndex];
@@ -1964,6 +1966,12 @@ export class ScoreClipboard {
                 const sourceMeasure = sourceMeasures[barIndex % sourceMeasures.length];
                 if (!this.meterMatches(sourceMeasure.meter, measure.meter)) {
                     return { kind: PasteResultKind.MeterMismatch };
+                }
+
+                // The width is written before the content, so it is part of the paste's single undo step and the
+                // content can still raise it to its floor.
+                if (transfersWidth) {
+                    this.dataModel.setMeasureWidth(target.bars[barIndex], sourceMeasure.width);
                 }
 
                 replacements.push({
@@ -2019,21 +2027,21 @@ export class ScoreClipboard {
         return inserted.length > 0 ? { kind: PasteResultKind.Success } : result;
     }
 
-    private captureMeasures(track: ISbDmTrack, bars: number[]): IClipboardMeasure[] {
+    private captureMeasures(track: ISbDmTrack, bars: number[], withWidth = false): IClipboardMeasure[] {
         const measures: IClipboardMeasure[] = [];
 
         for (const bar of bars) {
             const measure = track.measures.at(bar - 1);
             if (measure) {
-                measures.push(this.captureMeasure(measure));
+                measures.push(this.captureMeasure(measure, withWidth));
             }
         }
 
         return measures;
     }
 
-    private captureMeasure(measure: ISbDmTrackMeasure): IClipboardMeasure {
-        return {
+    private captureMeasure(measure: ISbDmTrackMeasure, withWidth = false): IClipboardMeasure {
+        const captured: IClipboardMeasure = {
             meter: this.copyMeter(measure.meter),
             events: measure.events.map((event) => {
                 return this.cloneEvent(event);
@@ -2042,6 +2050,12 @@ export class ScoreClipboard {
                 return { ...subdivision };
             }),
         };
+
+        if (withWidth) {
+            captured.width = this.dataModel.arrangement?.measureWidths?.get(measure.number);
+        }
+
+        return captured;
     }
 
     private cloneEvent(event: IMeasureEvent): IMeasureEvent {

@@ -535,6 +535,45 @@ describe("ScoreClipboard", () => {
         expect(noteAtStep(track.measures[0], 5)).toBeUndefined();
     });
 
+    it("carries a copied measure's width into the pasted measure", () => {
+        model.startNewArrangement([instrumentA()], { length: 2 });
+        const track = model.arrangement!.tracks[0];
+        setCellNote(model, track.id, 1, 0, "1");
+        model.setMeasureWidth(1, 2000);
+
+        clipboard.copy([measureEntry(track.measures[0])]);
+        const result = clipboard.paste([measureEntry(track.measures[1])]);
+
+        expect(result.kind).toBe(PasteResultKind.Success);
+        expect(noteAtStep(track.measures[1], 0)).toBe("1");
+        expect(model.arrangement!.measureWidths!.get(2)).toBe(2000);
+    });
+
+    it("resets the pasted measure's width when the copied measure had the default width", () => {
+        model.startNewArrangement([instrumentA()], { length: 2 });
+        const track = model.arrangement!.tracks[0];
+        setCellNote(model, track.id, 1, 0, "1");
+        model.setMeasureWidth(2, 2000);
+
+        clipboard.copy([measureEntry(track.measures[0])]);
+        clipboard.paste([measureEntry(track.measures[1])]);
+
+        expect(model.arrangement!.measureWidths!.has(2)).toBe(false);
+    });
+
+    it("leaves the target width alone when a piece of a measure is pasted", () => {
+        model.startNewArrangement([instrumentA()], { length: 2 });
+        const track = model.arrangement!.tracks[0];
+        setCellNote(model, track.id, 1, 0, "1");
+        model.setMeasureWidth(1, 2000);
+        model.setMeasureWidth(2, 1500);
+
+        clipboard.copy([trackPieceEntry(track, track.measures[0])]);
+        clipboard.paste([trackPieceEntry(track, track.measures[1])]);
+
+        expect(model.arrangement!.measureWidths!.get(2)).toBe(1500);
+    });
+
     it("rejects pasting a track piece into a different instrument", () => {
         model.startNewArrangement([instrumentA(), instrumentB()]);
         const trackA = model.arrangement!.tracks.find((track) => {

@@ -19,9 +19,10 @@ import { computeIsTuplet, maxTupletLevels } from "./tuplets.js";
 import { requisitions } from "../supplement/Requisitions.js";
 import type { IScoreDBEntry, ISoundLibFsNode } from "./DatabaseTypes.js";
 import { Instrument } from "./Instrument.js";
+import { MeasureLayout } from "./MeasureLayout.js";
 import type {
-    IArrangementSnapshot, IAudioData, IFraction, IMeasureEvent, IMeterSnapshot, IArticulationSymbol,
-    ISubdivision, Mutable
+    IArrangementExtensions, IArrangementSnapshot, IAudioData, IFraction, IMeasureEvent, IMeterSnapshot,
+    IArticulationSymbol, ISubdivision, Mutable
 } from "./types/general.js";
 import { getNewId } from "./utils.js";
 
@@ -573,9 +574,15 @@ export interface ISbDmArrangement extends ISbDmCommon {
 
     /**
      * Column widths set for individual measures, keyed by 1-based measure number, in px at 100% zoom.
-     * In-memory only: a measure without an entry is laid out with the default width of the view.
+     * A measure without an entry is laid out with the default width of the view.
      */
     measureWidths?: Map<number, number>;
+
+    /**
+     * Extension chunks of other features or newer builds, kept verbatim so that writing a snapshot never
+     * drops data this build does not understand. See {@link IArrangementExtensions}.
+     */
+    foreignExtensions?: IArrangementExtensions;
 
     /** The main playback and record volume of the arrangement (0-100%). */
     mainVolume: number;
@@ -957,6 +964,53 @@ export class ScoreBookDataModel {
     }
 
     /**
+     * Sets the column width of a measure, or restores its default width when the width is undefined. The
+     * width is raised to the measure's floor — the smallest width its events still fit in — so no resize can
+     * squeeze a measure below its content.
+     *
+     * Only the layout is refreshed here. {@link commitMeasureWidths} records the change as an undo step, which
+     * lets a drag update the width on every frame and still produce exactly one step.
+     *
+     * @param bar The 1-based measure number.
+     * @param width The column width in px at 100% zoom, or undefined to restore the default width.
+     *
+     * @returns True when the stored width changed.
+     */
+    public setMeasureWidth(bar: number, width?: number): boolean {
+        const arrangement = this.arrangement;
+        const widths = arrangement?.measureWidths;
+        if (!arrangement || !widths || bar < 1 || bar > arrangement.timeParams.length) {
+            return false;
+        }
+
+        const floor = MeasureLayout.minimumWidthOfMeasure(arrangement, bar);
+        const clamped = width === undefined ? undefined : Math.max(Math.ceil(width), floor);
+        // A width equal to the default is the default, so it is not stored and a reset needs no value.
+        const next = clamped === MeasureLayout.defaultWidth() ? undefined : clamped;
+        if (next === widths.get(bar)) {
+            return false;
+        }
+
+        if (next === undefined) {
+            widths.delete(bar);
+        } else {
+            widths.set(bar, next);
+        }
+
+        void requisitions.execute("arrangementChanged", arrangement.id);
+
+        return true;
+    }
+
+    /**
+     * Records the measure widths as one undo step, which ends a resize gesture that {@link setMeasureWidth}
+     * updated frame by frame.
+     */
+    public commitMeasureWidths(): void {
+        void requisitions.execute("arrangementMutated", undefined);
+    }
+
+    /**
      * Adds a new track for the given instrument to the arrangement.
      *
      * @param instrument The instrument to add a track for.
@@ -1122,8 +1176,7 @@ export class ScoreBookDataModel {
         }
 
         if (changed) {
-            void requisitions.execute("trackChanged", measure.track.id);
-            void requisitions.execute("arrangementMutated", undefined);
+            this.announceTrackEdit(measure.track);
         }
 
         return changed;
@@ -1377,11 +1430,7 @@ export class ScoreBookDataModel {
         }
 
         if (changed) {
-            for (const trackId of affectedTracks) {
-                void requisitions.execute("trackChanged", trackId);
-            }
-
-            void requisitions.execute("arrangementMutated", undefined);
+            this.announceTrackEdits(affectedTracks);
         }
 
         return changed;
@@ -1427,11 +1476,7 @@ export class ScoreBookDataModel {
         }
 
         if (changed) {
-            for (const trackId of affectedTracks) {
-                void requisitions.execute("trackChanged", trackId);
-            }
-
-            void requisitions.execute("arrangementMutated", undefined);
+            this.announceTrackEdits(affectedTracks);
         }
 
         return changed;
@@ -1496,11 +1541,7 @@ export class ScoreBookDataModel {
             this.setMeasureEvents(measure, events);
         }
 
-        for (const trackId of affectedTracks) {
-            void requisitions.execute("trackChanged", trackId);
-        }
-
-        void requisitions.execute("arrangementMutated", undefined);
+        this.announceTrackEdits(affectedTracks);
 
         return true;
     }
@@ -1544,11 +1585,7 @@ export class ScoreBookDataModel {
         }
 
         if (changed) {
-            for (const trackId of affectedTracks) {
-                void requisitions.execute("trackChanged", trackId);
-            }
-
-            void requisitions.execute("arrangementMutated", undefined);
+            this.announceTrackEdits(affectedTracks);
         }
 
         return changed;
@@ -1631,8 +1668,7 @@ export class ScoreBookDataModel {
         measure.subdivisions.splice(0, measure.subdivisions.length, ...remappedSubdivisions);
         measure.subdivisions.push({ ...subdivision, startIndex: shiftedStartIndex });
 
-        void requisitions.execute("trackChanged", trackId);
-        void requisitions.execute("arrangementMutated", undefined);
+        this.announceTrackEdit(track);
 
         return true;
     }
@@ -1699,8 +1735,7 @@ export class ScoreBookDataModel {
         }));
         measure.subdivisions.splice(0, measure.subdivisions.length, ...remappedSubdivisions);
 
-        void requisitions.execute("trackChanged", trackId);
-        void requisitions.execute("arrangementMutated", undefined);
+        this.announceTrackEdit(track);
 
         return true;
     }
@@ -1873,6 +1908,8 @@ export class ScoreBookDataModel {
         }
 
         (arrangement as Arrangement).insertBars(barNumber, count, before, copyContent);
+        // A copied bar can need more room than the default width.
+        this.widenMeasuresToFloor();
         void requisitions.execute("arrangementMutated", undefined);
     }
 
@@ -1922,6 +1959,7 @@ export class ScoreBookDataModel {
         }
 
         (arrangement as Arrangement).duplicateBar(barNumber);
+        this.widenMeasuresToFloor();
         void requisitions.execute("arrangementMutated", undefined);
     }
 
@@ -3622,11 +3660,48 @@ export class ScoreBookDataModel {
             return;
         }
 
+        // A measure packed tighter than its width follows its content, in the same edit rather than its own step.
+        this.widenMeasuresToFloor();
+
         for (const trackId of trackIds) {
             void requisitions.execute("trackChanged", trackId);
         }
 
         void requisitions.execute("arrangementMutated", undefined);
+    }
+
+    /**
+     * Raises every measure width to the floor its content and controls need, so an edit that packs a measure
+     * more tightly widens it instead of squeezing its notes together.
+     */
+    private widenMeasuresToFloor(): void {
+        const arrangement = this.arrangement;
+        const widths = arrangement?.measureWidths;
+        if (!arrangement || !widths) {
+            return;
+        }
+
+        let widened = false;
+        for (let bar = 1; bar <= arrangement.timeParams.length; bar++) {
+            const floor = MeasureLayout.minimumWidthOfMeasure(arrangement, bar);
+            if (MeasureLayout.widthOf(bar, widths) >= floor) {
+                continue;
+            }
+
+            // A width equal to the default is the default, so it is not stored, just as `setMeasureWidth` does.
+            if (floor === MeasureLayout.defaultWidth()) {
+                widths.delete(bar);
+            } else {
+                widths.set(bar, floor);
+            }
+
+            widened = true;
+        }
+
+        if (widened) {
+            // The staff geometry follows the widths, so the viewer has to lay its columns out again.
+            void requisitions.execute("arrangementChanged", arrangement.id);
+        }
     }
 
     /**

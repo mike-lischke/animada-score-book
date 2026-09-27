@@ -4,11 +4,16 @@
  */
 
 import type { ISbDmArrangement, ISbDmTrack } from "../ScoreBookDataModel.js";
-import type { IArrangementSnapshot, ITrackMeasureSnapshot, ITrackSnapshot } from "../types/general.js";
+import type {
+    IArrangementExtensions, IArrangementSnapshot, ITrackMeasureSnapshot, ITrackSnapshot,
+} from "../types/general.js";
 
 /** Current internal arrangement snapshot schema version. */
 
 export const arrangementSnapshotVersion = 5;
+
+/** Chunk name under which an arrangement stores the column widths of individual measures. */
+const measureWidthsChunk = "measureWidths";
 
 export const isNaturalNumber = (value: unknown): value is number => {
     return typeof value === "number" && Number.isInteger(value) && value >= 1;
@@ -28,7 +33,68 @@ export const getArrangementSnapshot = (arrangementView: Readonly<ISbDmArrangemen
         snapshot.scoreId = arrangementView.id;
     }
 
+    const extensions = collectArrangementExtensions(arrangementView);
+    if (extensions !== undefined) {
+        snapshot.extensions = extensions;
+    }
+
     return snapshot;
+};
+
+/**
+ * Collects the extension chunks of an arrangement: the chunk this build owns, plus the foreign chunks
+ * kept verbatim, so writing a snapshot never drops data this build does not understand.
+ *
+ * @param arrangementView The arrangement to collect the chunks of.
+ *
+ * @returns The chunks, or undefined when the arrangement has none.
+ */
+export const collectArrangementExtensions = (
+    arrangementView: Readonly<ISbDmArrangement>,
+): IArrangementExtensions | undefined => {
+    const chunks: IArrangementExtensions = { ...arrangementView.foreignExtensions };
+
+    const widths = arrangementView.measureWidths;
+    if (widths !== undefined && widths.size > 0) {
+        chunks[measureWidthsChunk] = Object.fromEntries(widths);
+    }
+
+    return Object.keys(chunks).length > 0 ? chunks : undefined;
+};
+
+/**
+ * Applies an arrangement snapshot's extension chunks. The chunks this build knows are read into their model
+ * fields; the ones it does not know are kept verbatim, so the next snapshot writes them back unchanged. The
+ * width chunk is filtered against the arrangement's bar count, so the time parameters have to be applied first.
+ *
+ * @param arrangementView The arrangement to apply the chunks to.
+ * @param snapshot The snapshot whose chunks to apply.
+ */
+export const applyArrangementExtensions = (arrangementView: ISbDmArrangement,
+    snapshot: IArrangementSnapshot): void => {
+    const { [measureWidthsChunk]: widthChunk, ...foreign } = snapshot.extensions ?? {};
+
+    arrangementView.foreignExtensions = foreign;
+
+    const widths = arrangementView.measureWidths;
+    if (widths === undefined) {
+        return;
+    }
+
+    widths.clear();
+
+    if (typeof widthChunk !== "object" || widthChunk === null) {
+        return;
+    }
+
+    const bars = arrangementView.timeParams.length;
+    for (const [bar, width] of Object.entries(widthChunk)) {
+        const barNumber = Number(bar);
+        if (Number.isInteger(barNumber) && barNumber >= 1 && barNumber <= bars
+            && typeof width === "number" && Number.isFinite(width) && width > 0) {
+            widths.set(barNumber, width);
+        }
+    }
 };
 
 const getTrackSnapshot = (track: ISbDmTrack): ITrackSnapshot => {

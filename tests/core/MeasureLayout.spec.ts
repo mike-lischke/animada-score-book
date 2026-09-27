@@ -7,7 +7,38 @@ import { readFileSync } from "node:fs";
 
 import { describe, expect, it } from "vitest";
 
-import { MeasureLayout, noteHeightPx } from "../../src/core/MeasureLayout.js";
+import {
+    MeasureLayout, barActionStripWidth, minEventGap, minEventWidth, noteHeightPx, staffMeasureInsets,
+} from "../../src/core/MeasureLayout.js";
+import type { ISbDmArrangement } from "../../src/core/ScoreBookDataModel.js";
+import type { IMeasureEvent } from "../../src/core/types/general.js";
+
+/**
+ * Builds a measure's events as `count` equal events tiling the whole bar.
+ *
+ * @param count The number of events.
+ *
+ * @returns The measure's events.
+ */
+const equalTiles = (count: number): IMeasureEvent[] => {
+    return Array.from({ length: count }, (_, index) => {
+        return {
+            start: { numerator: index, denominator: count },
+            duration: { numerator: 1, denominator: count },
+        };
+    });
+};
+
+/**
+ * Wraps events into the smallest arrangement one measure needs.
+ *
+ * @param events The events of the measure.
+ *
+ * @returns An arrangement whose first track holds one measure with those events.
+ */
+const arrangementOf = (events: IMeasureEvent[]): ISbDmArrangement => {
+    return { tracks: [{ measures: [{ events }] }] } as unknown as ISbDmArrangement;
+};
 
 describe("MeasureLayout", () => {
     it("gives every measure the default width when no width is set", () => {
@@ -113,5 +144,39 @@ describe("MeasureLayout and the stylesheet constants it mirrors", () => {
 
         expect(componentStyles).toContain("--steps-per-bar: 16");
         expect(MeasureLayout.defaultWidth()).toBe(16 * noteHeightPx);
+    });
+});
+
+describe("MeasureLayout.minimumWidthOfMeasure", () => {
+    it("gives a measure of sixteenths the room its symbols and the air between them need", () => {
+        expect(MeasureLayout.minimumWidthOfMeasure(arrangementOf(equalTiles(16)), 1))
+            .toBe((16 * (minEventWidth + minEventGap)) + staffMeasureInsets);
+    });
+
+    it("keeps a measure wide enough for the bar action strip", () => {
+        // A single whole rest needs 43 px, which the strip's own width overrides.
+        expect(MeasureLayout.minimumWidthOfMeasure(arrangementOf(equalTiles(1)), 1))
+            .toBe(barActionStripWidth);
+    });
+
+    it("lets the tightest slot of the measure decide", () => {
+        const events: IMeasureEvent[] = [
+            { start: { numerator: 0, denominator: 1 }, duration: { numerator: 1, denominator: 32 } },
+            { start: { numerator: 1, denominator: 32 }, duration: { numerator: 1, denominator: 32 } },
+            { start: { numerator: 1, denominator: 16 }, duration: { numerator: 15, denominator: 16 } },
+        ];
+
+        // The 32nd pair sets the floor; the whole-bar rest behind it asks for far less.
+        expect(MeasureLayout.minimumWidthOfMeasure(arrangementOf(events), 1))
+            .toBe((32 * (minEventWidth + minEventGap)) + staffMeasureInsets);
+    });
+
+    it("lets the widest track decide", () => {
+        const arrangement = {
+            tracks: [{ measures: [{ events: equalTiles(4) }] }, { measures: [{ events: equalTiles(8) }] }],
+        } as unknown as ISbDmArrangement;
+
+        expect(MeasureLayout.minimumWidthOfMeasure(arrangement, 1))
+            .toBe((8 * (minEventWidth + minEventGap)) + staffMeasureInsets);
     });
 });
