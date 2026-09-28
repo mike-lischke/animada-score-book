@@ -1,0 +1,103 @@
+{
+    "version": 1,
+    "fonts": [
+        {
+            "id": "bravura",
+            "name": "Bravura",
+            "file": "Bravura.woff2",
+            "format": "woff2",
+            "metadata": "Bravura-metadata.json",
+            "version": "1.482",
+            "copyright": "Copyright © 2015, Steinberg Media Technologies GmbH, with Reserved Font Name \"Bravura\".",
+            "license": {
+                "spdx": "OFL-1.1",
+                "file": "Bravura-OFL.txt"
+            },
+            "source": "https://github.com/steinbergmedia/bravura",
+            "default": true
+        },
+        {
+            "id": "eugene",
+            "name": "Eugene",
+            "file": "Eugene.otf",
+            "format": "opentype",
+            "metadata": "Eugene-metadata.json",
+            "version": "1.44",
+            "copyright": "Copyright (c) 2026, Mikko Patama, with Reserved Font Name Eugene.",
+            "license": {
+                "spdx": "OFL-1.1",
+                "file": "Eugene-LICENSE.txt"
+            },
+            "source": "https://github.com/mikkopatama/eugenefont"
+        },
+        {
+            "id": "gootville",
+            "name": "Gootville",
+            "file": "Gootville.otf",
+            "format": "opentype",
+            "metadata": "Gootville-metadata.json",
+            "version": "1.3",
+            "license": {
+                "spdx": "OFL-1.1",
+                "file": "Gootville-readme.txt"
+            },
+            "source": "https://github.com/musescore/MuseScore/tree/master/fonts/gootville"
+        },
+        {
+            "id": "leipzig",
+            "name": "Leipzig",
+            "file": "Leipzig.woff2",
+            "format": "woff2",
+            "metadata": "Leipzig-metadata.json",
+            "version": "5.2.102",
+            "copyright": "Copyright (c) 2014, Etienne Darbellay, Jean-Francois Marti and Laurent Pugin, with Reserved Font Name \"Leipzig\".",
+            "license": {
+                "spdx": "OFL-1.1",
+                "file": "Leipzig-LICENSE.txt"
+            },
+            "source": "https://github.com/rism-digital/leipzig"
+        },
+        {
+            "id": "leland",
+            "name": "Leland",
+            "file": "Leland.otf",
+            "format": "opentype",
+            "metadata": "Leland-metadata.json",
+            "version": "0.80",
+            "copyright": "Copyright (c) 2025, MuseScore BVBA, with Reserved Font Name \"Leland\".",
+            "license": {
+                "spdx": "OFL-1.1",
+                "file": "Leland-LICENSE.txt"
+            },
+            "source": "https://github.com/MuseScoreFonts/Leland"
+        },
+        {
+            "id": "petaluma",
+            "name": "Petaluma",
+            "file": "Petaluma.woff2",
+            "format": "woff2",
+            "metadata": "Petaluma-metadata.json",
+            "version": "1.065",
+            "copyright": "Copyright © 2018, Steinberg Media Technologies GmbH, with Reserved Font Name \"Petaluma\".",
+            "license": {
+                "spdx": "OFL-1.1",
+                "file": "Petaluma-OFL.txt"
+            },
+            "source": "https://github.com/steinbergmedia/petaluma"
+        },
+        {
+            "id": "sebastian",
+            "name": "Sebastian",
+            "file": "Sebastian.otf",
+            "format": "opentype",
+            "metadata": "Sebastian-metadata.json",
+            "version": "1.35",
+            "copyright": "Copyright (c) 2021, Florian Kretlow and Ben Byram-Wigfield, with Reserved Font Name \"Sebastian\".",
+            "license": {
+                "spdx": "OFL-1.1",
+                "file": "Sebastian-OFL.txt"
+            },
+            "source": "https://github.com/fkretlow/sebastian"
+        }
+    ]
+}
