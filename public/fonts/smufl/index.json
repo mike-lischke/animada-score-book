@@ -14,7 +14,7 @@
                 "file": "Bravura-OFL.txt"
             },
             "source": "https://github.com/steinbergmedia/bravura",
-            "default": true
+            "isDefault": true
         },
         {
             "id": "eugene",

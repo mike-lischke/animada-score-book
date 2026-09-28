@@ -67,6 +67,7 @@
         "Serialised",
         "Sete",
         "Shekere",
+        "Smufl",
         "spacebar",
         "stylesheet",
         "Surdo",
@@ -86,6 +87,7 @@
         "Whippies"
     ],
     "ignoreWords": [
+        "Artic",
         "Dreieck",
         "Handzeichen",
         "Lischke",
@@ -101,6 +103,7 @@
         "dashoffset",
         "fieldset",
         "folderid",
+        "glyphnames",
         "ihbrp",
         "imageurl",
         "instrumentid",
