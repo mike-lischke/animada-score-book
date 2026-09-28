@@ -1136,25 +1136,15 @@
     align-items: center;
     justify-content: center;
     width: 20px;
-    font-family: "Petaluma Script", "Fairytale", serif;
-    font-size: 16px;
-    font-weight: 400;
-    line-height: 1;
 
     flex-shrink: 0;
 }
 
-.staff-prefix-time-signature .top,
-.staff-prefix-time-signature .bottom {
+/* Masks the staff line behind a digit, so the line does not run through the glyph. */
+.staff-prefix-time-signature-half {
     display: block;
     background: var(--color-base-100);
     padding: 0 1px;
-}
-
-.staff-prefix-common-time {
-    display: block;
-    width: 20px;
-    height: 36px;
 }
 
 /* StaffMeasureTrackRow: one track's note row within a staff measure column. */

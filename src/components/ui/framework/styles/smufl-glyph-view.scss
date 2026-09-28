@@ -1,0 +1,15 @@
+/*
+ * Copyright (c) Mike Lischke. All rights reserved.
+ * Licensed under the MIT License. See License.txt in the project root for license information.
+ */
+
+/* A music font glyph, drawn as SVG text so that its baseline is an explicit coordinate. The font
+ * family is published by the SmuflFontLoader. */
+.smufl-glyph-view {
+    display: block;
+    fill: currentColor;
+    font-family: var(--music-font-family);
+
+    /* A glyph may reach beyond the box it is laid out in, so nothing may be clipped. */
+    overflow: visible;
+}

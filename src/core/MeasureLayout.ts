@@ -22,6 +22,9 @@ import { clampValue } from "./utils.js";
 /** Note height in px at 100% zoom. Mirrors `--note-height` in App.scss, which a test asserts. */
 export const noteHeightPx = 80;
 
+/** Height of one staff space in px at 100% zoom. Four of them make a SMuFL em. */
+export const staffSpacePx = 10;
+
 /** Steps a measure is laid out for when it carries no width of its own. Mirrors `--steps-per-bar` in CSS. */
 const defaultStepsPerMeasure = 16;
 

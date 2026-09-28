@@ -167,6 +167,40 @@ export class SmuflFonts {
         return { index: { version, fonts }, errors: [] };
     }
 
+    /**
+     * Resolves the font the score uses until the user picks another one.
+     *
+     * @param index The font catalogue.
+     *
+     * @returns The entry marked as the default, or the first one when none is marked.
+     */
+    public static defaultEntry(index: ISmuflFontIndex): ISmuflFontIndexEntry | undefined {
+        return index.fonts.find((entry) => {
+            return entry.isDefault;
+        }) ?? index.fonts[0];
+    }
+
+    /**
+     * Builds the CSS font family list for a font. The default font follows as the fallback, because no
+     * SMuFL font covers every symbol the score draws: CSS then resolves a missing glyph per character.
+     *
+     * @param index The font catalogue, which provides the fallback.
+     * @param entry The font to draw with.
+     *
+     * @returns The `font-family` value to use.
+     */
+    public static familyStack(index: ISmuflFontIndex, entry: ISmuflFontIndexEntry): string {
+        const fallback = SmuflFonts.defaultEntry(index);
+        const names = [entry.name];
+        if (fallback !== undefined && fallback.id !== entry.id) {
+            names.push(fallback.name);
+        }
+
+        return names.map((name) => {
+            return `"${name}"`;
+        }).join(", ");
+    }
+
     private static readEntry(value: unknown, path: string, ids: Set<string>,
         errors: string[]): ISmuflFontIndexEntry {
         if (!isJsonObject(value)) {

@@ -8,7 +8,9 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { SmuflFonts, SmuflFontStatus } from "../../src/core/smufl/SmuflFonts.js";
+import {
+    SmuflFonts, SmuflFontStatus, type ISmuflFontIndex, type ISmuflFontIndexEntry,
+} from "../../src/core/smufl/SmuflFonts.js";
 import { SmuflFontVerifier } from "../../src/core/smufl/SmuflFontVerifier.js";
 import { SmuflGlyphs, SmuflGlyphFamily } from "../../src/core/smufl/SmuflGlyphs.js";
 
@@ -99,5 +101,71 @@ describe("SmuflFonts catalogue", () => {
         for (const font of catalogue.fonts) {
             expect(font.status === SmuflFontStatus.Limited, font.id).toBe(font.gaps.length > 0);
         }
+    });
+});
+
+/**
+ * @returns The catalogue the app ships.
+ */
+const readIndex = (): ISmuflFontIndex => {
+    const raw: unknown = JSON.parse(readFileSync(join(fontFolder, "index.json"), "utf8"));
+    const index = SmuflFonts.readIndex(raw).index;
+    if (index === undefined) {
+        throw new Error("the font catalogue could not be read");
+    }
+
+    return index;
+};
+
+/**
+ * @param index The catalogue to look in.
+ * @param id The id of the font to resolve.
+ *
+ * @returns The catalogue entry of the font.
+ */
+const fontEntry = (index: ISmuflFontIndex, id: string): ISmuflFontIndexEntry => {
+    const entry = index.fonts.find((candidate) => {
+        return candidate.id === id;
+    });
+
+    if (entry === undefined) {
+        throw new Error(`the catalogue has no font "${id}"`);
+    }
+
+    return entry;
+};
+
+describe("SmuflFonts family stack", () => {
+    it("names the default font on its own", () => {
+        const index = readIndex();
+        const entry = SmuflFonts.defaultEntry(index);
+
+        expect(entry?.id).toBe("bravura");
+        expect(entry === undefined ? "" : SmuflFonts.familyStack(index, entry)).toBe("\"Bravura\"");
+    });
+
+    it("appends the default font as the fallback of every other font", () => {
+        const index = readIndex();
+
+        expect(SmuflFonts.familyStack(index, fontEntry(index, "leipzig"))).toBe("\"Leipzig\", \"Bravura\"");
+    });
+});
+
+describe("SmuflGlyphs time signature digits", () => {
+    it("maps every digit to the glyph of its codepoint", () => {
+        const digits = "0123456789";
+
+        for (const digit of digits) {
+            const glyph = SmuflGlyphs.timeSignatureDigit(digit);
+            expect(glyph, digit).toBeDefined();
+            expect(SmuflGlyphs.definition(glyph!).codepoint, digit).toBe(0xE080 + Number(digit));
+        }
+    });
+
+    it("rejects anything that is not a single digit", () => {
+        expect(SmuflGlyphs.timeSignatureDigit("")).toBeUndefined();
+        expect(SmuflGlyphs.timeSignatureDigit("12")).toBeUndefined();
+        expect(SmuflGlyphs.timeSignatureDigit("/")).toBeUndefined();
+        expect(SmuflGlyphs.timeSignatureDigit("x")).toBeUndefined();
     });
 });

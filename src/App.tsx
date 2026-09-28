@@ -57,6 +57,7 @@ import {
 } from "./core/ScoreClipboard.js";
 import { ArrangementMigrator } from "./core/serialisation/migration/ArrangementMigrator.js";
 import { stringifyPackedArrangement, tryParsePackedArrangement } from "./core/serialisation/snapshot-packing.js";
+import { SmuflFontLoader } from "./core/smufl/SmuflFontLoader.js";
 import { mixerStepIndex, tutorialSteps } from "./core/TutorialSteps.js";
 import { EditEntryMode, type IArrangementSnapshot } from "./core/types/general.js";
 import { SelectionGranularity } from "./ui/SelectionSerializer.js";
@@ -154,6 +155,7 @@ export class App extends UIComponent<{}, IAppState> {
 
     private dataModel = new ScoreBookDataModel();
     private scoreClipboard = new ScoreClipboard(this.dataModel);
+    private smuflFontLoader = new SmuflFontLoader();
 
     private selectionManager: SelectionManager;
     private arrangementPlayer?: ArrangementPlayer;
@@ -1080,7 +1082,8 @@ export class App extends UIComponent<{}, IAppState> {
     };
 
     private async initializeApp(): Promise<void> {
-        await this.dataModel.initialize();
+        // The score is drawn with the music font from its first paint on, so the font loads next to the data.
+        await Promise.all([this.dataModel.initialize(), this.smuflFontLoader.initialize()]);
 
         const params = new URL(window.location.href).searchParams;
         const hasBananaDrum = params.has("a") || params.has("a2");

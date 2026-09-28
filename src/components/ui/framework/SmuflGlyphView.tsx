@@ -1,0 +1,69 @@
+/*
+ * Copyright (c) Mike Lischke. All rights reserved.
+ * Licensed under the MIT License. See License.txt in the project root for license information.
+ */
+
+import { type ComponentChild } from "preact";
+
+import { SmuflGlyphs, type SmuflGlyph } from "../../../core/smufl/SmuflGlyphs.js";
+import { UIComponent, type ICommonUIProperties } from "./UIComponent.js";
+
+export interface ISmuflGlyphViewProperties extends ICommonUIProperties {
+    /** The glyph to draw. */
+    glyph: SmuflGlyph;
+
+    /** The size of one staff space, in px. A SMuFL font puts four staff spaces into one em. */
+    staffSpace: number;
+
+    /** Width of the drawing box, in staff spaces. */
+    width?: number;
+
+    /** Height of the drawing box, in staff spaces. */
+    height?: number;
+}
+
+/**
+ * Draws one SMuFL glyph as a character of the score's music font.
+ *
+ * The character goes into an SVG `<text>` element, because that element takes the baseline as an
+ * explicit coordinate. SMuFL centres a glyph on its own baseline, so placing the baseline places the
+ * glyph; HTML text would leave that to the font's ascent and descent. The glyph itself stays a font
+ * character — nothing is converted to paths — and because the box is sized in staff spaces, the
+ * browser's line layout never sees the font metrics either.
+ *
+ * The font comes from the `--music-font-family` CSS variable, so this component does not need to know
+ * which font is active, and the family list keeps the catalogue's fallback for uncovered glyphs.
+ */
+export class SmuflGlyphView extends UIComponent<ISmuflGlyphViewProperties> {
+    public static override defaultProps = {
+        width: 2,
+        height: 2,
+    };
+
+    public override render(): ComponentChild {
+        const { id, title, alt, style, className, glyph, staffSpace, width = 2, height = 2 } = this.props;
+
+        const character = String.fromCodePoint(SmuflGlyphs.definition(glyph).codepoint);
+        const mergedClassName = this.generateFinalClassName(["smufl-glyph-view", className]);
+        const boxWidth = staffSpace * width;
+        const boxHeight = staffSpace * height;
+
+        return (
+            <svg
+                id={id}
+                title={title}
+                className={mergedClassName}
+                style={style}
+                width={boxWidth}
+                height={boxHeight}
+                viewBox={`0 0 ${boxWidth} ${boxHeight}`}
+                aria-label={alt}
+                aria-hidden={alt === undefined}
+            >
+                <text x={boxWidth / 2} y={boxHeight / 2} fontSize={staffSpace * 4} textAnchor="middle">
+                    {character}
+                </text>
+            </svg>
+        );
+    }
+}

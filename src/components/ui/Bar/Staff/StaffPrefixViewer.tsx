@@ -5,10 +5,12 @@
 
 import type { ComponentChild } from "preact";
 
+import { staffSpacePx } from "../../../../core/MeasureLayout.js";
 import type { ISbDmArrangement, ISbDmTrack } from "../../../../core/ScoreBookDataModel.js";
-import { Image, PredefinedImage } from "../../framework/Image.js";
-import { UIComponent, type ICommonUIProperties } from "../../framework/UIComponent.js";
+import { SmuflGlyphs, SmuflGlyph } from "../../../../core/smufl/SmuflGlyphs.js";
 import { Container } from "../../framework/Container.js";
+import { SmuflGlyphView } from "../../framework/SmuflGlyphView.js";
+import { UIComponent, type ICommonUIProperties } from "../../framework/UIComponent.js";
 import { ChildAlignment, Orientation } from "../../framework/ui-types.js";
 
 export interface IStaffPrefixViewerProps extends ICommonUIProperties {
@@ -26,8 +28,11 @@ export interface IStaffPrefixViewerProps extends ICommonUIProperties {
 export class StaffPrefixViewer extends UIComponent<IStaffPrefixViewerProps> {
     public override render(): ComponentChild {
         const { arrangement, timeSignature, tracks: tracksOverride } = this.props;
-        const [beatsPerBar, beatUnit] = timeSignature.split("/");
         const tracks = tracksOverride ?? arrangement.tracks;
+
+        const rows = tracks.map((track) => {
+            return this.renderTrackRow(track, timeSignature);
+        });
 
         return (
             <Container
@@ -35,55 +40,78 @@ export class StaffPrefixViewer extends UIComponent<IStaffPrefixViewerProps> {
                 orientation={Orientation.TopDown}
                 crossAlignment={ChildAlignment.Stretch}
             >
-                {tracks.map((track) => {
-                    const maxNoteLine = Math.max(1, ...Object.values(track.instrument.noteStyles).map((ns) => {
-                        return ns.noteLine ?? 1;
-                    }));
-                    const centerLine = (maxNoteLine + 1) / 2;
-
-                    // Render staff lines matching those in StaffNoteViewer.
-                    const staffLines: ComponentChild[] = [];
-                    for (let i = 1; i <= maxNoteLine; i++) {
-                        const offset = ((i - centerLine) * 10) + 12; // 10px = line spacing, +12px = prefix-row shift
-                        staffLines.push(
-                            <div
-                                key={`prefix-line-${i}`}
-                                className="staff-note-viewer-line"
-                                style={{ top: `calc(50% + ${offset}px)` }}
-                            />,
-                        );
-                    }
-
-                    return (
-                        <Container
-                            key={track.id}
-                            orientation={Orientation.LeftToRight}
-                            crossAlignment={ChildAlignment.Center}
-                            className="staff-prefix-row"
-                            aria-hidden
-                        >
-                            {staffLines}
-                            <div className="staff-prefix-clef" />
-                            <div className="staff-prefix-time-signature">
-                                {timeSignature === "4/4"
-                                    ? (
-                                        <Image
-                                            className="staff-prefix-common-time"
-                                            src={PredefinedImage.CommonTime}
-                                            alt="Common time"
-                                        />
-                                    )
-                                    : (
-                                        <>
-                                            <span className="top">{beatsPerBar}</span>
-                                            <span className="bottom">{beatUnit}</span>
-                                        </>
-                                    )}
-                            </div>
-                        </Container>
-                    );
-                })}
+                {rows}
             </Container>
         );
+    }
+
+    private renderTrackRow(track: ISbDmTrack, timeSignature: string): ComponentChild {
+        const maxNoteLine = Math.max(1, ...Object.values(track.instrument.noteStyles).map((noteStyle) => {
+            return noteStyle.noteLine ?? 1;
+        }));
+        const centerLine = (maxNoteLine + 1) / 2;
+        const staffLines: ComponentChild[] = [];
+
+        // The staff lines match those of the note viewer, shifted down by the prefix row's offset.
+        for (let i = 1; i <= maxNoteLine; i++) {
+            const offset = ((i - centerLine) * staffSpacePx) + 12;
+            staffLines.push(
+                <div key={`prefix-line-${i}`} className="staff-note-viewer-line"
+                    style={{ top: `calc(50% + ${offset}px)` }} />,
+            );
+        }
+
+        return (
+            <Container
+                key={track.id}
+                orientation={Orientation.LeftToRight}
+                crossAlignment={ChildAlignment.Center}
+                className="staff-prefix-row"
+                aria-hidden
+            >
+                {staffLines}
+                <div className="staff-prefix-clef" />
+                {this.renderTimeSignature(timeSignature)}
+            </Container>
+        );
+    }
+
+    /**
+     * Renders the time signature. A 4/4 is the common time glyph; every other signature stacks a row of
+     * digits above a row of digits. A SMuFL digit is centred on its own baseline and two staff spaces
+     * tall, so two stacked boxes of two staff spaces make up exactly the height of a staff.
+     *
+     * @param timeSignature The signature to draw, e.g. "4/4".
+     *
+     * @returns The time signature markup.
+     */
+    private renderTimeSignature(timeSignature: string): ComponentChild {
+        if (timeSignature === "4/4") {
+            return (
+                <div className="staff-prefix-time-signature">
+                    <SmuflGlyphView glyph={SmuflGlyph.TimeSigCommon} staffSpace={staffSpacePx} />
+                </div>
+            );
+        }
+
+        const [beatsPerBar, beatUnit] = timeSignature.split("/");
+
+        return (
+            <div className="staff-prefix-time-signature">
+                <span className="staff-prefix-time-signature-half">{this.renderDigits(beatsPerBar)}</span>
+                <span className="staff-prefix-time-signature-half">{this.renderDigits(beatUnit)}</span>
+            </div>
+        );
+    }
+
+    private renderDigits(digits: string): ComponentChild[] {
+        return [...digits].map((digit, position) => {
+            const glyph = SmuflGlyphs.timeSignatureDigit(digit);
+            if (glyph === undefined) {
+                return null;
+            }
+
+            return <SmuflGlyphView key={`${digit}-${position}`} glyph={glyph} staffSpace={staffSpacePx} />;
+        });
     }
 }

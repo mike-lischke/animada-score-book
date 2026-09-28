@@ -201,6 +201,20 @@ export class SmuflGlyphs {
         [SmuflGlyph.Repeat2Bars]: { family: SmuflGlyphFamily.MeasureRepeat, codepoint: 0xE501 },
     };
 
+    /** The time signature digits, so a plain digit can be turned into its glyph. */
+    private static readonly timeSignatureDigits: Readonly<Record<string, SmuflGlyph>> = {
+        "0": SmuflGlyph.TimeSig0,
+        "1": SmuflGlyph.TimeSig1,
+        "2": SmuflGlyph.TimeSig2,
+        "3": SmuflGlyph.TimeSig3,
+        "4": SmuflGlyph.TimeSig4,
+        "5": SmuflGlyph.TimeSig5,
+        "6": SmuflGlyph.TimeSig6,
+        "7": SmuflGlyph.TimeSig7,
+        "8": SmuflGlyph.TimeSig8,
+        "9": SmuflGlyph.TimeSig9,
+    };
+
     /**
      * Looks up what a font has to provide for a glyph.
      *
@@ -210,6 +224,17 @@ export class SmuflGlyphs {
      */
     public static definition(glyph: SmuflGlyph): ISmuflGlyphDefinition {
         return SmuflGlyphs.definitions[glyph];
+    }
+
+    /**
+     * Maps a time signature digit to its glyph.
+     *
+     * @param digit The digit to map, "0" to "9".
+     *
+     * @returns The matching glyph, or undefined for anything that is not a single digit.
+     */
+    public static timeSignatureDigit(digit: string): SmuflGlyph | undefined {
+        return SmuflGlyphs.timeSignatureDigits[digit];
     }
 
     /**
