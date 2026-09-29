@@ -20,6 +20,12 @@ export interface ISmuflGlyphViewProperties extends ICommonUIProperties {
 
     /** Height of the drawing box, in staff spaces. */
     height?: number;
+
+    /**
+     * The CSS family list to draw with. Omitted means the font the score uses, which is what every
+     * symbol in the app draws with; a font picker passes its own list to preview a font.
+     */
+    fontFamily?: string;
 }
 
 /**
@@ -42,11 +48,13 @@ export class SmuflGlyphView extends UIComponent<ISmuflGlyphViewProperties> {
 
     public override render(): ComponentChild {
         const { id, title, alt, style, className, glyph, staffSpace, width = 2, height = 2 } = this.props;
+        const { fontFamily } = this.props;
 
         const character = String.fromCodePoint(SmuflGlyphs.definition(glyph).codepoint);
         const mergedClassName = this.generateFinalClassName(["smufl-glyph-view", className]);
         const boxWidth = staffSpace * width;
         const boxHeight = staffSpace * height;
+        const glyphStyle = fontFamily === undefined ? undefined : { fontFamily };
 
         return (
             <svg
@@ -60,7 +68,13 @@ export class SmuflGlyphView extends UIComponent<ISmuflGlyphViewProperties> {
                 aria-label={alt}
                 aria-hidden={alt === undefined}
             >
-                <text x={boxWidth / 2} y={boxHeight / 2} fontSize={staffSpace * 4} textAnchor="middle">
+                <text
+                    x={boxWidth / 2}
+                    y={boxHeight / 2}
+                    fontSize={staffSpace * 4}
+                    textAnchor="middle"
+                    style={glyphStyle}
+                >
                     {character}
                 </text>
             </svg>

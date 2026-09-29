@@ -3,6 +3,7 @@
 exports[`SettingsDialog (class) > matches a snapshot of the offered settings 1`] = `
 [
   "Color theme",
+  "Music font",
   "Track viewer zoom",
   "Add a bar when notes run past the last one",
   "Show permission indicator",

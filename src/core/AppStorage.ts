@@ -60,6 +60,12 @@ export interface IUISettings {
     theme?: string;
 
     /**
+     * The SMuFL font the score is drawn with, as last chosen. Missing means the font catalogue's
+     * own default.
+     */
+    musicFont?: string;
+
+    /**
      * The score the user has currently opened - stored as snapshot.
      */
     currentScore?: string;

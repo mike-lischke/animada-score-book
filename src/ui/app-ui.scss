@@ -419,6 +419,83 @@
         margin-left: 8px;
         padding: 0 12px;
     }
+
+    .music-font-dropdown {
+        .dropdown-popup {
+            width: 15rem;
+
+            /* A fixed name column keeps every sample at the same distance from the left edge. */
+            li > a {
+                grid-template-columns: 4.5rem max-content;
+            }
+        }
+    }
+
+    .music-font-sample {
+        position: relative;
+        display: flex;
+        align-items: center;
+
+        /* The sample is decoration: it may not take the click that picks the font. */
+        pointer-events: none;
+
+        /* Explicit size guards against the generic `.du-dropdown svg` 32px override. */
+        .music-font-sample-staff {
+            position: absolute;
+            inset: 0;
+        }
+
+        .music-font-sample-staff line {
+            stroke: color-mix(in srgb, currentColor 45%, transparent);
+            stroke-width: 1;
+        }
+
+        .smufl-glyph-view {
+            width: 18px;
+            height: 18px;
+        }
+    }
+
+    .music-font-info {
+        margin-left: 6px;
+    }
+
+    .music-font-info-button {
+        width: 22px;
+        height: 22px;
+        min-height: 22px;
+        padding: 0;
+
+        font-size: 12px;
+        font-weight: 700;
+        line-height: 1;
+    }
+}
+
+/*
+ * The font details popup lives in a portal, so it is not a descendant of the settings dialog.
+ */
+#musicFontInfo {
+    gap: 8px;
+    max-width: 340px;
+
+    .music-font-info-content {
+        gap: 6px;
+    }
+
+    .music-font-info-row {
+        gap: 8px;
+    }
+
+    .music-font-info-label {
+        flex: 0 0 72px;
+        opacity: 0.7;
+    }
+
+    .music-font-info-value {
+        flex: 1 1 auto;
+        overflow-wrap: anywhere;
+    }
 }
 
 #backendSetupDialog {

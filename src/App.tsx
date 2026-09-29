@@ -612,7 +612,7 @@ export class App extends UIComponent<{}, IAppState> {
                         </Container>
                         <TooltipProvider />
                         <ValueDialog ref={this.valueDialogRef} />
-                        <SettingsDialog ref={this.settingsDialogRef} />
+                        <SettingsDialog ref={this.settingsDialogRef} fontLoader={this.smuflFontLoader} />
                         <TutorialWizard
                             ref={this.tutorialWizardRef}
                             steps={tutorialSteps}
@@ -1083,7 +1083,11 @@ export class App extends UIComponent<{}, IAppState> {
 
     private async initializeApp(): Promise<void> {
         // The score is drawn with the music font from its first paint on, so the font loads next to the data.
-        await Promise.all([this.dataModel.initialize(), this.smuflFontLoader.initialize()]);
+        const musicFont = AppStorage.loadUISettings()?.musicFont;
+        await Promise.all([
+            this.dataModel.initialize(),
+            this.smuflFontLoader.initialize({ fontId: musicFont }),
+        ]);
 
         const params = new URL(window.location.href).searchParams;
         const hasBananaDrum = params.has("a") || params.has("a2");
