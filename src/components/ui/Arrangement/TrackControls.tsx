@@ -15,7 +15,6 @@ import { Button } from "../framework/Button.js";
 import { UIIcon } from "../framework/UIIcon.js";
 import { Container } from "../framework/Container.js";
 import { Icon } from "../framework/Icon.js";
-import { NoteImage, NoteLength } from "../framework/NoteImage.js";
 import { SplitSlider } from "../framework/SplitSlider.js";
 import { CheckState, Toggle } from "../framework/Toggle.js";
 import { ChildAlignment, Orientation } from "../framework/ui-types.js";
@@ -195,13 +194,10 @@ export class TrackControls extends UIComponent<ITrackControlsProperties, ITrackC
                             mainAlignment={ChildAlignment.SpaceBetween}
                         >
                             <div className="trackViewModeGridIcon" aria-label="Show grid view" />
-                            <NoteImage
-                                className="trackViewModeStaffIcon"
-                                value={NoteLength.Quarter}
-                                width={12}
-                                height={18}
-                                alt="Show staff view"
-                            />
+                            <div className="trackViewModeStaffIcon" aria-label="Show staff view">
+                                <span className="trackViewModeStaffIconHead" />
+                                <span className="trackViewModeStaffIconStem" />
+                            </div>
                         </Container>
                     </Container>
                 </Container>

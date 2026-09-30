@@ -116,6 +116,20 @@ describe("ScoreSymbols", () => {
         expect(ScoreSymbols.flag(NoteLength.ThirtySecond)).toBe(ScoreSymbol.FlagThirtySecond);
     });
 
+    it("states the ink box of a symbol as the length a drawing sizes its box with", () => {
+        // A glyph's box is what the selected font states for it.
+        expect(ScoreSymbols.inkBox(ScoreSymbol.NoteheadBlack)).toEqual({
+            width: "var(--glyph-ink-width-noteheadblack)",
+            height: "var(--glyph-ink-height-noteheadblack)",
+        });
+
+        // A path states its own box, in staff spaces, so it scales with the font.
+        expect(ScoreSymbols.inkBox(ScoreSymbol.NoteheadSquare)).toEqual({
+            width: "calc(var(--staff-space) * 1.4)",
+            height: "calc(var(--staff-space) * 1.4)",
+        });
+    });
+
     it("hangs flags and the marks beside a note on the left edge of their box", () => {
         const leftAnchored = [
             ScoreSymbol.FlagEighth,

@@ -17,7 +17,7 @@ import {
     type INotationGrid, type IProjectedEvent, type IProjectedItem,
 } from "../../../core/MeasureProjection.js";
 import { staffSpacePx } from "../../../core/MeasureLayout.js";
-import { glyphInkVariablePrefix, stemEndVariablePrefix } from "../../../core/smufl/SmuflFontLoader.js";
+import { stemEndVariablePrefix } from "../../../core/smufl/SmuflFontLoader.js";
 import type { IFraction, IAudioData, ISubdivision } from "../../../core/types/general.js";
 import { beamCountOf, fallbackNoteValue, noteValueForEvent, NoteLength, type INoteValue }
     from "../../../core/rest-notation.js";
@@ -25,7 +25,6 @@ import type { IScoreMetrics } from "../../../player/TimeCoordinator.js";
 import { addFractions, compareFractions, divideFraction, subtractFractions }
     from "../../../core/serialisation/numeric-functions.js";
 import { ScoreElementKind, type ScoreElementRegistry } from "../../../ui/ScoreElementRegistry.js";
-import { NoteImage } from "../framework/NoteImage.js";
 import { ScoreSymbolView } from "../framework/ScoreSymbolView.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
 
@@ -127,12 +126,6 @@ const finalBarlineWidth = "var(--final-barline-width)";
 
 /** Width the flags occupy right of a notehead, which the stylesheet owns for the same reason. */
 const noteFlagWidth = "var(--note-flag-width)";
-
-/** The ink box of a symbol, as the CSS lengths the drawing around it is placed by. */
-interface ISymbolBox {
-    width: string;
-    height: string;
-}
 
 export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
     public override render(): ComponentChild {
@@ -612,7 +605,7 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                 headWrapperClasses.push(...decoClasses);
 
                 const headSymbol = ScoreSymbols.notehead(headType, node.glyph.length);
-                const headBox = this.symbolBox(headSymbol);
+                const headBox = ScoreSymbols.inkBox(headSymbol);
                 const flagSymbol = hasBeam ? undefined : ScoreSymbols.flag(node.glyph.length);
 
                 const flagElement = flagSymbol === undefined
@@ -690,7 +683,7 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                 ?? { length: NoteLength.Sixteenth, dotted: false };
             const isWholeOrHalf = restGlyph.length === NoteLength.Whole || restGlyph.length === NoteLength.Half;
             const restSymbol = ScoreSymbols.rest(restGlyph.length);
-            const restBox = this.symbolBox(restSymbol);
+            const restBox = ScoreSymbols.inkBox(restSymbol);
 
             // A whole or half rest sits on the line below the one the notes are drawn on, which is the line
             // they hang from or sit on.
@@ -791,31 +784,6 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
     }
 
     /**
-     * @param symbol The symbol whose ink box is wanted.
-     *
-     * @returns The box the symbol's ink occupies, as the CSS lengths a drawing sizes it by: the box the
-     * font states for a glyph, and the box the catalogue states for a path of the score's own.
-     */
-    private symbolBox(symbol: ScoreSymbol): ISymbolBox {
-        const definition = ScoreSymbols.definition(symbol);
-        if (definition.source === ScoreSymbolSource.OwnPath) {
-            const { width, height } = definition.path;
-
-            return {
-                width: `calc(var(--staff-space) * ${width})`,
-                height: `calc(var(--staff-space) * ${height})`,
-            };
-        }
-
-        const glyphName = definition.glyph.toLowerCase();
-
-        return {
-            width: `var(${glyphInkVariablePrefix}width-${glyphName})`,
-            height: `var(${glyphInkVariablePrefix}height-${glyphName})`,
-        };
-    }
-
-    /**
      * Renders the parentheses a ghost note is wrapped in. They hang on the head's ink box, so they fit any
      * head shape without an offset tuned to one of them.
      *
@@ -879,7 +847,7 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
     private renderWholeBarRestSlot(restLineOffset: number, barNumber: number, trackId: number,
         measure: ISbDmTrackMeasure, scoreElementRegistry?: ScoreElementRegistry): VNode {
         const restStyle = {
-            "--rest-ink-width": this.symbolBox(ScoreSymbol.RestWhole).width,
+            "--rest-ink-width": ScoreSymbols.inkBox(ScoreSymbol.RestWhole).width,
             "--rest-line-offset": `${restLineOffset}px`,
         } as CSSProperties;
 
@@ -1111,17 +1079,8 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
 
                 case HandTechnique.Slap: {
                     nodes.push(
-                        <svg key="slap-cross" className="staff-note-head-slap-svg"
-                            width={10} height={10}
-                            viewBox="0 0 14 14"
-                            aria-hidden="true"
-                            style={{
-                                stroke: "var(--color-base-100)",
-                                strokeWidth: 3,
-                                strokeLinecap: "round",
-                            }}>
-                            <use href={`#${this.registerDecorationCross()}`} />
-                        </svg>,
+                        <ScoreSymbolView key="slap-cross" className="staff-note-head-slap-svg"
+                            symbol={ScoreSymbol.TechniqueCross} staffSpace={staffSpacePx} />,
                     );
                     break;
                 }
@@ -1134,31 +1093,17 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
 
         if (characteristics.excitationMode === ExcitationMode.Struck && "stickTechnique" in characteristics
             && characteristics.stickTechnique === StickTechnique.PressRoll) {
-            NoteImage.registerSymbol("press-roll", "0 0 14 35",
-                `<line x1="11" y1="6" x2="3" y2="11" />` +
-                `<line x1="11" y1="11" x2="3" y2="16" />` +
-                `<line x1="11" y1="16" x2="3" y2="21" />`,
-            );
-
             nodes.push(
-                <svg key="press-roll" className="staff-note-head-press-roll-svg"
-                    width={14} height={35}
-                    aria-hidden="true"
-                    style={{ stroke: "var(--color-base-content)", strokeWidth: 2.5, strokeLinecap: "round" }}>
-                    <use href="#symbol-press-roll" />
-                </svg>,
+                <ScoreSymbolView key="press-roll" className="staff-note-head-press-roll-svg"
+                    symbol={ScoreSymbol.PressRollStrokes} staffSpace={staffSpacePx} />,
             );
         }
 
         if (characteristics.excitationMode === ExcitationMode.Struck && "stickTechnique" in characteristics
             && characteristics.stickTechnique === StickTechnique.RimShot) {
             nodes.push(
-                <svg key="rimshot-cross" className="staff-note-head-rimshot-cross-svg"
-                    width={8} height={8}
-                    aria-hidden="true"
-                    style={{ stroke: "var(--color-base-content)", strokeWidth: 2.5, strokeLinecap: "round" }}>
-                    <use href={`#${this.registerDecorationCross()}`} />
-                </svg>,
+                <ScoreSymbolView key="rimshot-cross" className="staff-note-head-rimshot-cross-svg"
+                    symbol={ScoreSymbol.RimShotCross} staffSpace={staffSpacePx} />,
             );
         }
 
@@ -1179,19 +1124,6 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                 viewBox={`0 0 ${width} ${height}`} aria-hidden="true">
                 {content}
             </svg>
-        );
-    }
-
-    /**
-     * Registers the cross a technique draws on top of a head (slap, rimshot), which is a wider armed cross
-     * than the note head's own and therefore a symbol of its own.
-     *
-     * @returns The id of the registered symbol.
-     */
-    private registerDecorationCross(): string {
-        return NoteImage.registerSymbol("decoration-cross", "0 0 14 14",
-            `<line x1="2" y1="2" x2="12" y2="12" />` +
-            `<line x1="12" y1="2" x2="2" y2="12" />`,
         );
     }
 

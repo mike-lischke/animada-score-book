@@ -68,6 +68,11 @@ export enum ScoreSymbol {
     GhostParenthesisLeft,
     GhostParenthesisRight,
     Accent,
+
+    /** The marks a play technique draws over the head: the slap and rimshot cross, the buzz roll. */
+    TechniqueCross,
+    RimShotCross,
+    PressRollStrokes,
 }
 
 /** What draws a symbol. */
@@ -81,17 +86,18 @@ export enum ScoreSymbolSource {
 
 /**
  * How a glyph sits in the box it is drawn into. Both kinds state the glyph's ink, which is centred on
- * the box's centre line vertically; only the horizontal edge differs.
+ * the box's centre line vertically; only the horizontal edge differs. The values name the edge, because
+ * a drawing turns the anchor into the CSS class that places the ink.
  */
 export enum GlyphAnchor {
     /** Centred in the box, which is how a clef, a time signature or a rest sits. */
-    Centre,
+    Centre = "centre",
 
     /** Starting on the box's left edge, which is how a glyph a stem ends in is hung on that stem. */
-    LeftEdge,
+    LeftEdge = "left-edge",
 
     /** Ending on the box's right edge, which is how a notehead meets its stem. */
-    RightEdge,
+    RightEdge = "right-edge",
 }
 
 /** How an own path is inked. */
@@ -144,6 +150,13 @@ export interface ISymbolBox {
     width: string;
     height: string;
 }
+
+/**
+ * The prefix a glyph's ink box is published under: `--glyph-ink-`, the edge, and the glyph's name in
+ * lower case, e.g. `--glyph-ink-width-noteheadblack`. A music font publishes the box of the ink it
+ * draws a glyph with, so a drawing places the ink and not the box its advance width decides.
+ */
+export const glyphInkVariablePrefix = "--glyph-ink-";
 
 /** The vocabulary of notation symbols the score draws, and what draws each of them. */
 export class ScoreSymbols {
@@ -349,6 +362,44 @@ export class ScoreSymbols {
             glyph: SmuflGlyph.ArticAccentAbove,
             anchor: GlyphAnchor.LeftEdge,
         },
+
+        // The cross a slap or a rimshot draws over the head. Both are the same 14 x 14 design, scaled into
+        // the space a head leaves for the technique that plays it.
+        [ScoreSymbol.TechniqueCross]: {
+            source: ScoreSymbolSource.OwnPath,
+            path: {
+                width: 1,
+                height: 1,
+                data: "M0.143 0.143 L0.857 0.857 M0.857 0.143 L0.143 0.857",
+                ink: OwnPathInk.Stroked,
+                strokeWidth: 0.214,
+                roundEnds: true,
+            },
+        },
+        [ScoreSymbol.RimShotCross]: {
+            source: ScoreSymbolSource.OwnPath,
+            path: {
+                width: 0.8,
+                height: 0.8,
+                data: "M0.114 0.114 L0.686 0.686 M0.686 0.114 L0.114 0.686",
+                ink: OwnPathInk.Stroked,
+                strokeWidth: 0.143,
+                roundEnds: true,
+            },
+        },
+
+        // The three slashes a buzz roll draws along the stem.
+        [ScoreSymbol.PressRollStrokes]: {
+            source: ScoreSymbolSource.OwnPath,
+            path: {
+                width: 1.4,
+                height: 3.5,
+                data: "M1.1 0.6 L0.3 1.1 M1.1 1.1 L0.3 1.6 M1.1 1.6 L0.3 2.1",
+                ink: OwnPathInk.Stroked,
+                strokeWidth: 0.25,
+                roundEnds: true,
+            },
+        },
     };
 
     /** The symbol a time signature digit is drawn with. */
@@ -374,6 +425,31 @@ export class ScoreSymbols {
      */
     public static definition(symbol: ScoreSymbol): IScoreSymbolDefinition {
         return ScoreSymbols.definitions[symbol];
+    }
+
+    /**
+     * @param symbol The symbol whose ink box is wanted.
+     *
+     * @returns The box the symbol's ink occupies, as the CSS lengths a drawing sizes the box around the ink
+     * with: the box the font states for a glyph, and the box the path itself states for a path of the score.
+     */
+    public static inkBox(symbol: ScoreSymbol): ISymbolBox {
+        const definition = ScoreSymbols.definition(symbol);
+        if (definition.source === ScoreSymbolSource.OwnPath) {
+            const { width, height } = definition.path;
+
+            return {
+                width: `calc(var(--staff-space) * ${width})`,
+                height: `calc(var(--staff-space) * ${height})`,
+            };
+        }
+
+        const glyphName = definition.glyph.toLowerCase();
+
+        return {
+            width: `var(${glyphInkVariablePrefix}width-${glyphName})`,
+            height: `var(${glyphInkVariablePrefix}height-${glyphName})`,
+        };
     }
 
     /**

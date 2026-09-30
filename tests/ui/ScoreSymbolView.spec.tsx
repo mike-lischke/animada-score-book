@@ -11,8 +11,8 @@ import { ScoreSymbol } from "../../src/core/ScoreSymbols.js";
 
 const staffSpace = 10;
 
-const renderSymbol = (symbol: ScoreSymbol): RenderResult => {
-    return render(<ScoreSymbolView symbol={symbol} staffSpace={staffSpace} />);
+const renderSymbol = (symbol: ScoreSymbol, inkBox = false): RenderResult => {
+    return render(<ScoreSymbolView symbol={symbol} staffSpace={staffSpace} inkBox={inkBox} />);
 };
 
 /**
@@ -40,6 +40,21 @@ describe("ScoreSymbolView", () => {
 
         expect(text?.textContent).toBe(String.fromCodePoint(0xE0A4));
         expect(svgOf(result).classList.contains("smufl-glyph-view")).toBe(true);
+    });
+
+    it("sizes itself to the ink box of its symbol, which hangs the glyph on its anchor", () => {
+        const result = renderSymbol(ScoreSymbol.NoteheadBlack, true);
+        const box = result.container.firstElementChild as HTMLElement;
+        const glyph = svgOf(result);
+
+        expect(box.classList.contains("score-symbol-view-ink-box")).toBe(true);
+        expect(box.classList.contains("score-symbol-view-right-edge")).toBe(true);
+        expect(box.style.width).toBe("var(--glyph-ink-width-noteheadblack)");
+        expect(box.style.height).toBe("var(--glyph-ink-height-noteheadblack)");
+
+        // The glyph box stays with the view; only the ink box around it carries the caller's class.
+        expect(glyph.classList.contains("score-symbol-view")).toBe(true);
+        expect(glyph.classList.contains("score-symbol-view-ink-box")).toBe(false);
     });
 
     it("ends a notehead on the right edge of its box, which is where its stem sits", () => {

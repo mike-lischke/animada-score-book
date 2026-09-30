@@ -606,7 +606,7 @@ describe.sequential("NoteStyleBar", () => {
         // Line spacing is 7px, centered in the 24px icon: lines at 8.5 and 15.5.
         expect(itemIcons[0].querySelector<HTMLElement>(".note-style-line-icon-head")!.style.top).toBe("15.5px");
         expect(itemIcons[1].querySelector<HTMLElement>(".note-style-line-icon-head")!.style.top).toBe("8.5px");
-        expect(itemIcons[0].querySelectorAll(".note-style-line-icon-note-image")).toHaveLength(1);
+        expect(itemIcons[0].querySelectorAll(".note-style-line-icon-head .score-symbol-view")).toHaveLength(1);
     });
 
     it("keeps distinct note heads as separate buttons in staff mode", () => {
@@ -754,11 +754,11 @@ describe.sequential("NoteStyleBar", () => {
         );
 
         const pressRollIcon = renderResult.container.querySelector(".note-style-icon.press-roll")!;
-        expect(pressRollIcon.querySelectorAll(".note-style-icon-head")).toHaveLength(0);
+        expect(pressRollIcon.querySelectorAll(".score-symbol-view")).toHaveLength(0);
         expect(pressRollIcon.querySelectorAll(".note-style-icon-press-roll line")).toHaveLength(3);
 
         const rimshotIcon = renderResult.container.querySelector(".note-style-icon.rimshot")!;
-        expect(rimshotIcon.querySelectorAll(".note-style-icon-head.oval")).toHaveLength(1);
+        expect(rimshotIcon.querySelectorAll(".score-symbol-view-ink-box")).toHaveLength(1);
         expect(rimshotIcon.querySelectorAll(".note-style-icon-rimshot-cross")).toHaveLength(1);
     });
 

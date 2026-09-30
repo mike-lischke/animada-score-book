@@ -7,6 +7,8 @@ import type { ComponentChild } from "preact";
 
 import { Articulation, articulationOf, voiceKey } from "../../../core/articulation.js";
 import type { ISbDmTrack, ScoreBookDataModel } from "../../../core/ScoreBookDataModel.js";
+import { staffSpacePx } from "../../../core/MeasureLayout.js";
+import { ScoreSymbol } from "../../../core/ScoreSymbols.js";
 import { compareFractions } from "../../../core/serialisation/numeric-functions.js";
 import type { IAudioData } from "../../../core/types/general.js";
 import { EditEntryMode } from "../../../core/types/general.js";
@@ -21,7 +23,7 @@ import { Button } from "../framework/Button.js";
 import { Container } from "../framework/Container.js";
 import { Dropdown, type IDropdownItem } from "../framework/Dropdown.js";
 import { GooeyGroup } from "../framework/GooeyGroup.js";
-import { NoteImage, NoteKind, NoteLength } from "../framework/NoteImage.js";
+import { ScoreSymbolView } from "../framework/ScoreSymbolView.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
 import { ChildAlignment, Orientation } from "../framework/ui-types.js";
 
@@ -144,11 +146,11 @@ export class NoteStyleBar extends UIComponent<INoteStyleBarProps, INoteStyleBarS
                     void requisitions.execute("restEntryRequested", undefined);
                 }}
             >
-                <NoteImage
+                <ScoreSymbolView
                     className="noteStyleRestIcon"
-                    kind={NoteKind.Rest}
-                    value={NoteLength.Quarter}
-                    alt=""
+                    symbol={ScoreSymbol.RestQuarter}
+                    staffSpace={staffSpacePx}
+                    inkBox
                 />
             </Button>
         );

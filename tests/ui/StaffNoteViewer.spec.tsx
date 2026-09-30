@@ -629,13 +629,14 @@ describe.sequential("StaffNoteViewer beams", () => {
         );
 
         const headCross = renderResult.container.querySelector(".staff-note-head-symbol path");
-        const slapCross = renderResult.container.querySelector(".staff-note-head-slap-svg use");
+        const slapCross = renderResult.container.querySelector(".staff-note-head-slap-svg path");
 
-        // The head's cross is the catalogue's own path, while a technique draws a registered symbol
-        // of its own, so neither can decide the geometry of the other.
+        // The head's cross is the catalogue's own path, while a technique draws a symbol of its own,
+        // so neither can decide the geometry of the other.
         expect(headCross).not.toBeNull();
         expect(headCross?.getAttribute("d")).toContain("M0.1 0.1");
         expect(slapCross).not.toBeNull();
+        expect(slapCross?.getAttribute("d")).not.toBe(headCross?.getAttribute("d"));
     });
 
     it("states the staff's line count for the closing barline", () => {

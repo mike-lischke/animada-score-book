@@ -116,12 +116,10 @@
     }
 }
 
-/* The rest button draws a quarter rest from the rest sprite, which holds every value on a
-   staff-sized canvas. At the button's height the glyph is centered, so nothing is cropped. */
+/* The rest button draws the quarter rest of the symbol catalogue. */
 .noteStyleRestIcon {
     display: block;
-    width: 20px;
-    height: 40px;
+    pointer-events: none;
 }
 
 .note-style-icon {
@@ -135,7 +133,7 @@
         height: 22px;
         transform: scale(0.75);
 
-        .note-style-icon-head {
+        .score-symbol-view-ink-box {
             position: absolute;
             left: 0;
             top: 9px;
@@ -153,76 +151,9 @@
     }
 }
 
-.note-style-icon-head {
-    display: block;
-    background: currentColor;
+/* The head of the icon is the head the score draws it with, so the box stays with the view. */
+.note-style-icon-head-symbol {
     pointer-events: none;
-
-    &.oval {
-        width: 16px;
-        height: 13px;
-        background: transparent;
-        position: relative;
-        overflow: hidden;
-
-        .note-style-icon-note-image {
-            position: absolute;
-            left: 0;
-            top: -41px;
-        }
-    }
-
-    &.square {
-        width: 12px;
-        height: 12px;
-    }
-
-    &.diamond {
-        width: 11px;
-        height: 11px;
-        transform: rotate(45deg);
-
-        &.hollow {
-            background: transparent;
-            border: 2px solid currentColor;
-        }
-    }
-
-    &.triangle {
-        width: 0;
-        height: 0;
-        background: transparent;
-        border-left: 7px solid transparent;
-        border-right: 7px solid transparent;
-        border-bottom: 12px solid currentColor;
-    }
-
-    &.cross {
-        position: relative;
-        width: 12px;
-        height: 12px;
-        background: transparent;
-
-        &::before,
-        &::after {
-            content: "";
-            position: absolute;
-            left: 50%;
-            top: 50%;
-            width: 2px;
-            height: 12px;
-            background: currentColor;
-            border-radius: 1px;
-        }
-
-        &::before {
-            transform: translate(-50%, -50%) rotate(45deg);
-        }
-
-        &::after {
-            transform: translate(-50%, -50%) rotate(-45deg);
-        }
-    }
 }
 
 /* Technique decorations overlaid on or next to the head. */
@@ -384,19 +315,8 @@
     .note-style-line-icon-head {
         position: absolute;
         left: 50%;
-        width: 16px;
-        height: 13px;
-        overflow: hidden;
         transform: translate(-50%, -50%) scale(0.7);
         pointer-events: none;
-
-        .note-style-line-icon-note-image {
-            position: absolute;
-            left: 0;
-            top: -41px;
-            width: 28px;
-            height: 56px;
-        }
     }
 }
 
@@ -821,6 +741,36 @@
         height: 8px;
         flex: 0 0 auto;
         border: 1px dashed currentColor;
+    }
+
+    /* The note stands for the staff view the way the dashed square stands for the grid, so it is drawn
+       with the same means. */
+    .trackViewModeStaffIcon {
+        position: relative;
+        width: 12px;
+        height: 18px;
+        flex: 0 0 auto;
+        color: inherit;
+    }
+
+    .trackViewModeStaffIconHead {
+        position: absolute;
+        left: 0;
+        bottom: 0;
+        width: 7px;
+        height: 5px;
+        border-radius: 50%;
+        background: currentColor;
+        transform: rotate(-20deg);
+    }
+
+    .trackViewModeStaffIconStem {
+        position: absolute;
+        right: 5px;
+        top: 0;
+        width: 1px;
+        height: 14px;
+        background: currentColor;
     }
 
     .trackViewModeToggle {
@@ -1540,7 +1490,6 @@
         left: calc(100% - var(--staff-space) * 0.7);
         top: calc(50% - var(--stem-tip, 35px));
         pointer-events: none;
-        overflow: visible;
     }
 
     /* ---- Scraped: zigzag along the stem, above the head ---- */
@@ -1620,11 +1569,9 @@
         pointer-events: none;
     }
 
-    /* ---- Slap: white cross drawn on top of the filled head ---- */
+    /* ---- Slap: cross in the colour of the head's background, drawn on top of the filled head ---- */
     .staff-note-head-slap-svg {
-        width: 10px;
-        height: 10px;
-        overflow: visible;
+        color: var(--color-base-100);
     }
 
     /* ---- Hand + Cross → hollow square around the cross (body) ---- */
@@ -1791,7 +1738,7 @@
 
         .staff-note-head-press-roll-svg,
         .staff-note-head-rimshot-cross-svg {
-            stroke: var(--color-primary) !important;
+            color: var(--color-primary) !important;
         }
 
         .staff-note-head-stem {

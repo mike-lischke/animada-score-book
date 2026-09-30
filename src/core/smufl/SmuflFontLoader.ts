@@ -15,7 +15,7 @@
  */
 
 import { staffSpacePx } from "../MeasureLayout.js";
-import { ScoreSymbols } from "../ScoreSymbols.js";
+import { glyphInkVariablePrefix, ScoreSymbols } from "../ScoreSymbols.js";
 import {
     SmuflFontMetrics, type ISmuflEngravingDefaults, type ISmuflFontMetrics,
     type ISmuflGlyphMetrics
@@ -57,13 +57,6 @@ const engravingVariables: ReadonlyArray<readonly [keyof ISmuflEngravingDefaults,
  * far above the baseline the stem ends.
  */
 export const stemAnchorVariablePrefix = "--stem-anchor-";
-
-/**
- * The prefix the ink box of a drawn glyph is published under: `--glyph-ink-`, the edge, and the glyph's
- * name in lower case, e.g. `--glyph-ink-width-noteheadblack`. The box is what the font draws, in px, so
- * the symbols around a glyph are placed by the ink and not by a box the drawing picked.
- */
-export const glyphInkVariablePrefix = "--glyph-ink-";
 
 /**
  * The prefix a glyph's stem end is published under: `--stem-end-` and the glyph's name in lower case,
