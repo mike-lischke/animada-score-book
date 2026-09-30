@@ -16,7 +16,8 @@ import { SmuflFontStatus } from "../src/core/smufl/SmuflFonts.js";
 import { SmuflFontVerifier } from "../src/core/smufl/SmuflFontVerifier.js";
 
 const fontFolder = fileURLToPath(new URL("../public/fonts/smufl/", import.meta.url));
-const report = SmuflFontVerifier.verifyIndex(fontFolder);
+const metadataFolder = fileURLToPath(new URL("../build/smufl/", import.meta.url));
+const report = SmuflFontVerifier.verifyIndex(fontFolder, metadataFolder);
 const unusable = report.fonts.filter((font) => {
     return font.status === SmuflFontStatus.Invalid;
 });

@@ -1086,7 +1086,11 @@
     flex-shrink: 0;
     width: 48px;
     margin: 0 -8px 0 8px;
-    padding-top: 43.5px;
+    padding-top: 44px;
+
+    /* The prefix rows sit twenty px lower than the note rows they belong to, so the line their staffs are
+       drawn around is twenty px higher in them. */
+    --staff-centre: 12px;
 }
 
 .staff-measure-number {
@@ -1116,7 +1120,7 @@
     top: 50%;
     left: 0;
     right: 0;
-    border-top: 1px solid var(--color-base-300);
+    border-top: var(--staff-line-thickness, 1px) solid var(--color-base-300);
     transform: translateY(-50%);
     z-index: -1;
 }
@@ -1168,7 +1172,34 @@
 .staff-note-viewer {
     --staff-note-prefix-width: 58px;
     --staff-note-symbol-width: 25px;
-    --staff-barline-height: calc(var(--note-height) * 0.2);
+
+    /* The line the notes are drawn around sits this far below the middle of the row; the space above it
+       holds stems, beams and tuplet brackets. */
+    --staff-centre: 32px;
+
+    /* A final barline joins the outer staff lines. A staff of one line has no outer lines and gets a stub of
+       one space above and below its line. */
+    --staff-barline-height: max((var(--staff-line-count, 1) - 1) * var(--staff-space), var(--staff-space) * 2);
+
+    /* Room the flags of a measure-final note need, from the sprite's own flag paths. */
+    --note-flag-width: 11px;
+
+    /*
+     * Where an up-stem ends: this far above its note's staff line. It is the outer edge of the beam
+     * for a beamed note and the same height for an unbeamed one, so both kinds of stem end on one
+     * line. A stem is one octave (three and a half staff spaces) long by convention.
+     */
+    --stem-tip: calc(var(--staff-space) * 3.5);
+
+    /* How a stem sits on its note's anchor, in whole pixels so that both stem edges are on the pixel grid:
+       a stem of an odd thickness covers the px left of the anchor, a thicker one reaches past it. */
+    --stem-half-width: round(up, var(--stem-thickness, 2px) / 2, 1px);
+
+    /* How far the stem's right edge reaches past the anchor: where a head's ink ends and a beam end stops. */
+    --stem-right-edge: calc(var(--stem-thickness, 2px) - var(--stem-half-width, 1px));
+
+    /* Wide a final barline is: a thin and a thick stroke, separated. */
+    --final-barline-width: calc(var(--barline-thin-thickness, 2px) + var(--barline-separation, 1px) + var(--barline-thick-thickness, 3px));
 
     position: relative;
     width: 100%;
@@ -1180,30 +1211,47 @@
     position: absolute;
     left: 0;
     right: 0;
-    border-top: 1px solid var(--color-base-300);
+
+    /* Centred on the line the notes sit on, which the viewer states; the offset is the line's place in the
+       staff. Whole pixels, so the line lands on the pixel grid. */
+    top: calc(50% + var(--staff-centre, 32px) + var(--staff-line-offset, 0px) - round(nearest, var(--staff-line-thickness, 1px) / 2, 1px));
+    border-top: var(--staff-line-thickness, 1px) solid var(--color-base-300);
     z-index: -1;
 }
 
+/* A stem leaves a head at the height the font states for that head and always on the note's anchor: each head
+   is drawn with its ink ending on the anchor, which is where its stem sits.
+
+   An oval head is the same case. It comes from the sprite, whose own stem is drawn on the anchor and whose
+   flags are placed for exactly that stem position. */
 .staff-note-viewer-custom-stem {
+    --stem-anchor-x: 0px;
+    --stem-anchor-y: var(--stem-anchor-y-noteheadblack, 3px);
+
     position: absolute;
     pointer-events: none;
     z-index: 1;
-    left: calc(var(--note-anchor) - 1px);
-    top: calc(50% - 38px);
-    width: 2px;
+    left: calc(var(--note-anchor) + var(--stem-anchor-x) - var(--stem-half-width, 1px));
+    top: calc(50% - var(--stem-tip, 35px));
+    width: var(--stem-thickness, 2px);
     background: var(--color-base-content);
 }
 
-/* Per-head-type adjustments for beamed custom stems. */
+/* Per-head-type height a beamed stem leaves its head at. */
 .staff-note-viewer-custom-stem--square {
-    /* Square heads (Timbau, Repinique slap) sit lower; pull stem down and left. */
-    top: calc(50% - 38px) !important;
-    left: calc(var(--note-anchor) - 2px) !important;
+    --stem-anchor-y: var(--stem-anchor-y-noteheadsquareblack, 3px);
 }
 
 .staff-note-viewer-custom-stem--cross {
-    /* Cross heads (Tamborim) are small; pull stem down slightly. */
-    top: calc(50% - 38px) !important;
+    --stem-anchor-y: var(--stem-anchor-y-noteheadxblack, 3px);
+}
+
+.staff-note-viewer-custom-stem--diamond {
+    --stem-anchor-y: var(--stem-anchor-y-noteheaddiamondblack, 3px);
+}
+
+.staff-note-viewer-custom-stem--triangle {
+    --stem-anchor-y: var(--stem-anchor-y-noteheadtriangleupblack, 3px);
 }
 
 .staff-note-viewer-prefix {
@@ -1241,9 +1289,9 @@
 
 .staff-note-viewer-final-barline {
     position: absolute;
-    top: calc(50% + 32px);
+    top: calc(50% + var(--staff-centre));
     right: 0;
-    width: 6px;
+    width: var(--final-barline-width);
     height: var(--staff-barline-height);
     pointer-events: none;
     transform: translateY(-50%);
@@ -1259,21 +1307,23 @@
 }
 
 .staff-note-viewer-final-barline::before {
-    right: 4px;
-    width: 2px;
+    right: calc(var(--barline-separation, 1px) + var(--barline-thick-thickness, 3px));
+    width: var(--barline-thin-thickness, 2px);
 }
 
 .staff-note-viewer-final-barline::after {
     right: 0;
-    width: 3px;
+    width: var(--barline-thick-thickness, 3px);
 }
 
 /* Runs: flex row of proportional-width note / rest segments */
 .staff-note-viewer-runs {
     position: absolute;
     inset: 0;
+
+    /* The middle of the run box is the line the staff is drawn around, so it is offset by twice that. */
+    margin-top: calc(var(--staff-centre) * 2);
     display: flex;
-    margin-top: 64px;
 }
 
 .staff-note-viewer-run {
@@ -1292,10 +1342,11 @@
 }
 
 /* Beam stroke attached to a beamed note. Position (top, left/right, width) is set inline by
-   StaffNoteViewer.renderBeamSegments per beam segment (shared vs partial, level 1..3). */
+   StaffNoteViewer.renderBeamSegments per beam segment (shared vs partial, level 1..3). The primary
+   beam sits on the stem tips, its thickness reaching down towards the heads. */
 .staff-note-viewer-beam {
     position: absolute;
-    height: 4px;
+    height: var(--beam-thickness, 4px);
     background: var(--color-base-content);
     pointer-events: none;
     z-index: 2;
@@ -1349,8 +1400,8 @@
 .staff-note-viewer-tuplet-bracket {
     position: absolute;
     height: 9px;
-    border-left: 1.5px solid var(--color-base-content);
-    border-right: 1.5px solid var(--color-base-content);
+    border-left: var(--tuplet-bracket-thickness, 1.5px) solid var(--color-base-content);
+    border-right: var(--tuplet-bracket-thickness, 1.5px) solid var(--color-base-content);
     box-sizing: border-box;
     color: var(--color-base-content);
     z-index: 2;
@@ -1359,14 +1410,14 @@
 
 .staff-note-viewer-tuplet-bracket.staff-note-viewer-tuplet-above {
     top: calc(50% - 24px);
-    border-top: 1.5px solid var(--color-base-content);
+    border-top: var(--tuplet-bracket-thickness, 1.5px) solid var(--color-base-content);
     border-bottom: 0;
 }
 
 .staff-note-viewer-tuplet-bracket.staff-note-viewer-tuplet-below {
     top: calc(50% + 45px);
     border-top: 0;
-    border-bottom: 1.5px solid var(--color-base-content);
+    border-bottom: var(--tuplet-bracket-thickness, 1.5px) solid var(--color-base-content);
 }
 
 .staff-note-viewer-tuplet-bracket > .staff-note-viewer-tuplet-text {
@@ -1399,8 +1450,13 @@
 
     /* Flags in the sprite are drawn for the sprite's own stem, which the staff view hides in favour of
      * the CSS stem above. Shift them left so they attach to that stem instead of overlapping it: the
-     * sprite's view box is 60 units wide and the symbol renders 25 px wide, so 1 px equals 2.4 units. */
-    --note-flag-shift-x: -2.4px;
+     * sprite's view box is 60 units wide and the symbol renders 25 px wide, so 1 px equals 2.4 units.
+     * The head shift below already moves them 0.7 px left, so what is left to shift is 0.3 px. */
+    --note-flag-shift-x: -0.72px;
+
+    /* The sprite's head ink ends 0.7 px right of the sprite's centre, where its own stem is drawn. The
+     * staff view draws the stem on the pixel grid instead, so the head moves onto the stem's edge. */
+    --note-head-shift-x: -0.7px;
 }
 
 /* ---------------------------------------------------------------------------
@@ -1414,102 +1470,108 @@
     flex-shrink: 0;
     margin-left: calc(var(--note-anchor) - var(--staff-note-symbol-width) / 2);
 
-    /* Shared head shape via ::after.  Centre ~27 px above the bottom of the 60 px span. */
+    /*
+     * Shared head shape via ::after. Each head type states the ink box of its glyph, in staff spaces, and
+     * the box is centred on the note's staff line with its right edge on the right edge of the stem.
+     */
     &::after {
         content: "";
         position: absolute;
-        left: 50%;
-        bottom: 20px;
+        top: calc(50% + var(--note-line-offset, 0px));
+        right: calc(50% - var(--stem-right-edge, 0px));
+        transform: translateY(-50%);
         color: var(--color-base-content);
     }
 
     /*
-     * The sprite draws the augmentation dot where an oval head leaves room for it, which a head
-     * centred on the stem covers. These heads hide the sprite's dot and draw their own beside their
-     * ink instead, starting where the oval head's dot starts.
+     * The sprite draws the augmentation dot where an oval head leaves room for it, which a head centred on
+     * the stem covers. These heads hide the sprite's dot and draw their own beside their ink instead, just
+     * right of the anchor that ink ends on.
      */
     .staff-note-head-dot {
         position: absolute;
-        left: calc(50% + 2.3px);
-        bottom: 25.6px;
-        width: 3.7px;
-        height: 3.7px;
+        left: calc(50% + 2px);
+        top: calc(50% + var(--note-line-offset, 0px) + 1px);
+        width: 4px;
+        height: 4px;
         border-radius: 50%;
         background: var(--color-base-content);
         pointer-events: none;
     }
 
-    &.triangle .staff-note-head-dot {
-        left: calc(50% + 8.2px);
-    }
-
-    &.diamond .staff-note-head-dot {
-        left: calc(50% + 9px);
-    }
-
-    /* The cross ends at x = 1.5 px plus its round stroke caps, so its dot moves a little only. */
-    &.cross .staff-note-head-dot {
-        left: calc(50% + 3.9px);
-    }
-
-    /* ---- Square (filled, 14×14 px) ---- */
+    /*
+     * ---- Square (1.4 × 1.4 staff spaces) ----
+     * The square head is a square, not the ink box of noteheadSquareBlack: that box is 1.252 × 1 space, a flat
+     * rectangle, which no longer matches the technique marks drawn inside the head (cross, circles).
+     */
     &.square::after {
-        width: 14px;
-        height: 14px;
+        width: calc(var(--staff-space) * 1.4);
+        height: calc(var(--staff-space) * 1.4);
         background: currentColor;
-        bottom: 22px;
-        transform: translate(-100%, -5%);
     }
 
-    /* ---- Triangle (hollow, equilateral, point up) ---- */
+    /* ---- Triangle up (noteheadTriangleUpBlack: 1.172 × 1 space, pointing up from its base) ---- */
     &.triangle::after {
         width: 0;
         height: 0;
-        border-left: 7px solid transparent;
-        border-right: 7px solid transparent;
-        border-bottom: 14px solid currentColor;
+        border-left: round(nearest, var(--staff-space) * 0.586, 1px) solid transparent;
+        border-right: round(nearest, var(--staff-space) * 0.586, 1px) solid transparent;
+        border-bottom: var(--staff-space) solid currentColor;
         background: transparent;
-        transform: translate(-50%, -5%);
     }
 
-    /* ---- Cross (×, 45°-rotated, 14×14 px, rendered as cached SVG) ---- */
-
+    /* ---- Cross (noteheadXBlack: 1.2 × 1 staff space, rendered as cached SVG) ---- */
     .staff-note-head-cross-svg {
         position: absolute;
-        left: calc(50% - 12.5px);
-        bottom: 22px;
+        top: calc(50% + var(--note-line-offset, 0px));
+        right: calc(50% - var(--stem-right-edge, 0px));
+        width: calc(var(--staff-space) * 1.2);
+        height: var(--staff-space);
+        transform: translateY(-50%);
         pointer-events: none;
     }
 
-    /* ---- Diamond (◆, filled, 11×11 px rotated) ---- */
+    /* ---- Diamond (noteheadDiamondBlack: 0.98 × 1.128 staff spaces) ---- */
     &.diamond::after {
-        width: 11px;
-        height: 11px;
+        width: round(nearest, var(--staff-space) * 0.98, 1px);
+        height: round(nearest, var(--staff-space) * 1.128, 1px);
         background: currentColor;
-        transform: translate(-50%, -5%) rotate(45deg);
+        clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
     }
 
     /* ---- CSS stem for non-oval, non-beamed notes ---- */
     .staff-note-head-stem {
+        --stem-anchor-x: 0px;
+        --stem-anchor-y: var(--stem-anchor-y-noteheadblack, 3px);
+
         position: absolute;
-        left: 50%;
-        width: 2px;
-        height: 33px;
+        left: calc(50% + var(--stem-anchor-x) - var(--stem-half-width, 1px));
+        width: var(--stem-thickness, 2px);
+
+        /* The head is centred on its staff line, thirty px below its top: the stem runs from the tip
+           down to the anchor the font states for that head. */
+        height: calc(var(--stem-tip, 35px) - var(--stem-anchor-y));
         background: var(--color-base-content);
-        transform: translateX(-50%);
-        top: calc(-6px + var(--note-line-offset, 0px));
+        top: calc(30px - var(--stem-tip, 35px) + var(--note-line-offset, 0px));
         pointer-events: none;
         z-index: 1;
     }
 
-    /* Per-head-type stem adjustments (non-beamed CSS stem). */
+    /* Per-head-type height a stem leaves its head at (non-beamed CSS stem). */
     &.square .staff-note-head-stem {
-        top: calc(-6px + var(--note-line-offset, 0px));
-        left: calc(50% - 1px);
+        --stem-anchor-y: var(--stem-anchor-y-noteheadsquareblack, 3px);
     }
 
     &.cross .staff-note-head-stem {
-        top: calc(-8px + var(--note-line-offset, 0px));
+        --stem-anchor-y: var(--stem-anchor-y-noteheadxblack, 3px);
+    }
+
+    &.diamond .staff-note-head-stem {
+        --stem-anchor-y: var(--stem-anchor-y-noteheaddiamondblack, 3px);
+    }
+
+    &.triangle .staff-note-head-stem {
+        --stem-anchor-y: var(--stem-anchor-y-noteheadtriangleupblack, 3px);
     }
 
     .staff-note-head-thumb-svg,
@@ -1517,7 +1579,7 @@
     .staff-note-head-friction-svg {
         position: absolute;
         left: calc(50% - 7px);
-        bottom: 22px;
+        bottom: calc(22px - var(--note-line-offset, 0px));
         fill: none;
         stroke: var(--color-base-100);
         stroke-linecap: round;
@@ -1538,7 +1600,7 @@
     .staff-note-head-open-circle {
         position: absolute;
         left: calc(50% - 7px);
-        bottom: 25.5px;
+        bottom: calc(26px - var(--note-line-offset, 0px));
         width: 8px;
         height: 8px;
         border-radius: 50%;
@@ -1560,13 +1622,13 @@
     .staff-note-head-tap-triangle {
         position: absolute;
         left: calc(50% - 7px);
-        bottom: 20px;
+        bottom: calc(20px - var(--note-line-offset, 0px));
         width: 0;
         height: 0;
         border-left: 4px solid transparent;
         border-right: 4px solid transparent;
         border-bottom: 5px solid var(--color-base-100);
-        transform: translate(-50%, -30%);
+        transform: translate(-50%, -2px);
         pointer-events: none;
     }
 
@@ -1575,7 +1637,7 @@
         content: "";
         position: absolute;
         left: calc(50% - 4px);
-        top: 5px;
+        top: calc(5px + var(--note-line-offset, 0px));
         width: 14px;
         height: 35px;
         pointer-events: none;
@@ -1584,7 +1646,7 @@
     .staff-note-head-press-roll-svg {
         position: absolute;
         left: calc(50% - 7px);
-        top: -2px;
+        top: calc(-2px + var(--note-line-offset, 0px));
         pointer-events: none;
         overflow: visible;
     }
@@ -1594,8 +1656,8 @@
         content: "~";
         position: absolute;
         left: 50%;
-        bottom: 28px;
-        transform: translate(-50%, -5%);
+        bottom: calc(28px - var(--note-line-offset, 0px));
+        transform: translate(-50%, -1px);
         font-size: 16px;
         line-height: 1;
         pointer-events: none;
@@ -1606,10 +1668,10 @@
     .staff-note-head-slap-svg {
         position: absolute;
         left: calc(50% - 7px);
-        bottom: 22px;
+        bottom: calc(25px - var(--note-line-offset, 0px));
         width: 10px;
         height: 10px;
-        transform: translate(-50%, -30%);
+        transform: translateX(-50%);
         pointer-events: none;
         z-index: 1;
         overflow: visible;
@@ -1620,7 +1682,7 @@
         content: "";
         position: absolute;
         left: calc(50% - 7px);
-        bottom: 19px;
+        bottom: calc(19px - var(--note-line-offset, 0px));
         width: 18px;
         height: 18px;
         border: 1.5px solid var(--color-base-content);
@@ -1634,7 +1696,7 @@
         content: "";
         position: absolute;
         left: calc(50% - 12px);
-        bottom: 17px;
+        bottom: calc(17px - var(--note-line-offset, 0px));
         width: 13px;
         height: 1.5px;
         background: var(--color-base-content);
@@ -1645,8 +1707,8 @@
     .staff-note-head-rimshot-cross-svg {
         position: absolute;
         left: calc(50% + 2px);
-        bottom: 34px;
-        transform: translate(0, -5%);
+        bottom: calc(34px - var(--note-line-offset, 0px));
+        transform: translate(0, -1px);
         pointer-events: none;
     }
 
@@ -1655,7 +1717,7 @@
         content: "";
         position: absolute;
         left: calc(50% - 17px);
-        bottom: 12px;
+        bottom: calc(12px - var(--note-line-offset, 0px));
         width: 2px;
         height: 16px;
         background: var(--color-base-content);
@@ -1667,7 +1729,7 @@
         content: "";
         position: absolute;
         left: calc(50% - 7px);
-        bottom: 29px;
+        bottom: calc(29px - var(--note-line-offset, 0px));
         width: 16px;
         height: 1.5px;
         background: var(--color-base-content);
@@ -1680,7 +1742,7 @@
         content: "";
         position: absolute;
         left: calc(50% - 4px);
-        top: 8px;
+        top: calc(8px + var(--note-line-offset, 0px));
         width: 14px;
         height: 22px;
         pointer-events: none;
@@ -1695,7 +1757,7 @@
         content: "(";
         position: absolute;
         left: -8px;
-        bottom: 24px;
+        bottom: calc(24px - var(--note-line-offset, 0px));
         font-size: 16px;
         line-height: 1;
         pointer-events: none;
@@ -1704,7 +1766,7 @@
 
     .staff-note-head-ghost-paren {
         position: absolute;
-        bottom: 24px;
+        bottom: calc(24px - var(--note-line-offset, 0px));
         left: 18px;
         font-size: 16px;
         line-height: 1;
@@ -1717,24 +1779,24 @@
     &.ghost-note.square::before,
     &.ghost-note.diamond::before {
         left: -2px;
-        bottom: 18px;
+        bottom: calc(18px - var(--note-line-offset, 0px));
     }
 
     &.ghost-note.triangle .staff-note-head-ghost-paren,
     &.ghost-note.square .staff-note-head-ghost-paren,
     &.ghost-note.diamond .staff-note-head-ghost-paren {
         left: 20px;
-        bottom: 18px;
+        bottom: calc(18px - var(--note-line-offset, 0px));
     }
 
     &.ghost-note.cross .staff-note-head-ghost-paren {
         left: 15px;
-        bottom: 22px;
+        bottom: calc(22px - var(--note-line-offset, 0px));
     }
 
     &.ghost-note.cross::before {
         left: -7px;
-        bottom: 22px;
+        bottom: calc(22px - var(--note-line-offset, 0px));
     }
 
     /* A dotted note needs room for the augmentation dot before the closing parenthesis. */
@@ -1759,7 +1821,7 @@
     .staff-note-head-damped-plus {
         position: absolute;
         left: calc(50% - 10px);
-        bottom: 35px;
+        bottom: calc(35px - var(--note-line-offset, 0px));
         font-size: 14px;
         line-height: 1;
         pointer-events: none;

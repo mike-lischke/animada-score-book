@@ -59,6 +59,7 @@ const createFontChoice = (id: string, name: string, isDefault = false): ISmuflFo
         file: `${name}.woff2`,
         format: SmuflFontFormat.Woff2,
         metadata: `${name}-metadata.json`,
+        metrics: `${name}-metrics.json`,
         version: "1.0",
         copyright: `Copyright (c) ${name}.`,
         license: { spdx: "OFL-1.1", file: `${name}-OFL.txt` },

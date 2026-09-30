@@ -3,7 +3,7 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import type { ComponentChild } from "preact";
+import type { ComponentChild, CSSProperties } from "preact";
 
 import { staffSpacePx } from "../../../../core/MeasureLayout.js";
 import type { ISbDmArrangement, ISbDmTrack } from "../../../../core/ScoreBookDataModel.js";
@@ -52,12 +52,13 @@ export class StaffPrefixViewer extends UIComponent<IStaffPrefixViewerProps> {
         const centerLine = (maxNoteLine + 1) / 2;
         const staffLines: ComponentChild[] = [];
 
-        // The staff lines match those of the note viewer, shifted down by the prefix row's offset.
+        // The staff lines match those of the note viewer: they are drawn around the line this row's staff
+        // sits on, which the prefix viewer states for its rows.
         for (let i = 1; i <= maxNoteLine; i++) {
-            const offset = ((i - centerLine) * staffSpacePx) + 12;
+            const offset = (i - centerLine) * staffSpacePx;
             staffLines.push(
                 <div key={`prefix-line-${i}`} className="staff-note-viewer-line"
-                    style={{ top: `calc(50% + ${offset}px)` }} />,
+                    style={{ "--staff-line-offset": `${offset}px` } as CSSProperties} />,
             );
         }
 

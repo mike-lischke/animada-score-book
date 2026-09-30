@@ -16,7 +16,10 @@ import { SmuflGlyphs, SmuflGlyphFamily } from "../../src/core/smufl/SmuflGlyphs.
 
 /** Relative to the project root, which is the working directory a test run starts from. */
 const fontFolder = join("public", "fonts", "smufl");
-const catalogue = SmuflFontVerifier.verifyIndex(fontFolder);
+
+/** The fonts' own metadata, which is build input and not part of the app. */
+const metadataFolder = join("build", "smufl");
+const catalogue = SmuflFontVerifier.verifyIndex(fontFolder, metadataFolder);
 
 describe("SmuflGlyphs", () => {
     it("gives every glyph a family and a private use codepoint", () => {

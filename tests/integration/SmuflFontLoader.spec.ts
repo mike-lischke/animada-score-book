@@ -5,6 +5,8 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { SmuflFontMetrics } from "../../src/core/smufl/SmuflFontMetrics.js";
+import { SmuflGlyph } from "../../src/core/smufl/SmuflGlyphs.js";
 import { musicFontFamilyVariable, SmuflFontLoader } from "../../src/core/smufl/SmuflFontLoader.js";
 
 /** A catalogue with a default font and two fonts to pick from. */
@@ -17,6 +19,7 @@ const catalogue = {
             file: "Bravura.woff2",
             format: "woff2",
             metadata: "Bravura-metadata.json",
+            metrics: "Bravura-metrics.json",
             version: "1.482",
             copyright: "Copyright (c) Steinberg.",
             license: { spdx: "OFL-1.1", file: "Bravura-OFL.txt" },
@@ -29,6 +32,7 @@ const catalogue = {
             file: "Leipzig.woff2",
             format: "woff2",
             metadata: "Leipzig-metadata.json",
+            metrics: "Leipzig-metrics.json",
             version: "5.2",
             license: { spdx: "OFL-1.1", file: "Leipzig-LICENSE.txt" },
             source: "https://example.com/leipzig",
@@ -39,11 +43,72 @@ const catalogue = {
             file: "Gootville.otf",
             format: "opentype",
             metadata: "Gootville-metadata.json",
+            metrics: "Gootville-metrics.json",
             version: "1.3",
             license: { spdx: "OFL-1.1", file: "Gootville-readme.txt" },
             source: "https://example.com/gootville",
         },
     ],
+};
+
+/**
+ * @param staffLineThickness The value the fonts are told apart by.
+ *
+ * @returns The engraving defaults a metrics file has to hold.
+ */
+const createEngravingDefaults = (staffLineThickness: number) => {
+    return {
+        staffLineThickness,
+        stemThickness: 0.12,
+        beamThickness: 0.5,
+        beamSpacing: 0.25,
+        legerLineThickness: 0.16,
+        legerLineExtension: 0.4,
+        thinBarlineThickness: 0.16,
+        thickBarlineThickness: 0.5,
+        barlineSeparation: 0.4,
+        bracketThickness: 0.5,
+        tupletBracketThickness: 0.16,
+    };
+};
+
+/**
+ * Builds the metrics of one font. Only Bravura describes a black notehead, which is the glyph the
+ * fallback tests use.
+ *
+ * @param fontName The font the metrics belong to.
+ * @param staffLineThickness The value that tells the fonts apart.
+ * @param restHeight The height the font states for its quarter rest.
+ * @param hasBlackNotehead Whether the font describes a black notehead.
+ *
+ * @returns The metrics file as the generator writes it.
+ */
+const createMetrics = (fontName: string, staffLineThickness: number, restHeight: number,
+    hasBlackNotehead: boolean) => {
+    const glyphs: Record<string, unknown> = {
+        [SmuflGlyph.RestQuarter]: { bBoxNE: [1.08, restHeight], bBoxSW: [0.004, -restHeight] },
+    };
+
+    if (hasBlackNotehead) {
+        glyphs[SmuflGlyph.NoteheadBlack] = {
+            bBoxNE: [1.18, 0.5], bBoxSW: [0, -0.5], stemUpSE: [1.18, 0.168], stemDownNW: [0, -0.168],
+        };
+    }
+
+    return {
+        version: 1,
+        fontName,
+        fontVersion: "1.0",
+        engravingDefaults: createEngravingDefaults(staffLineThickness),
+        glyphs,
+    };
+};
+
+/** The metrics of the three fonts, keyed by the file the loader fetches them from. */
+const metricsByFile: Record<string, unknown> = {
+    "Bravura-metrics.json": createMetrics("Bravura", 0.13, 1.492, true),
+    "Leipzig-metrics.json": createMetrics("Leipzig", 0.08, 1.2, false),
+    "Gootville-metrics.json": createMetrics("Gootville", 0.13, 1.492, false),
 };
 
 /**
@@ -61,13 +126,18 @@ const respondWithBrokenBody = (): void => {
 };
 
 /**
+ * Makes the catalogue URL answer with the given catalogue and every metrics URL with the metrics of
+ * the font that file belongs to.
+ *
  * @param body The parsed catalogue the catalogue URL answers with.
  */
 const respondWithIndex = (body: unknown = catalogue): void => {
-    vi.stubGlobal("fetch", vi.fn(() => {
+    vi.stubGlobal("fetch", vi.fn((url: string) => {
+        const file = url.split("/").pop() ?? "";
+
         return Promise.resolve({
             json: () => {
-                return Promise.resolve(body);
+                return Promise.resolve(metricsByFile[file] ?? body);
             },
         });
     }));
@@ -226,5 +296,61 @@ describe.sequential("SmuflFontLoader", () => {
         await loader.initialize();
 
         expect(loader.choices).toEqual([]);
+    });
+
+    it("publishes the engraving defaults of the drawing font, in px", async () => {
+        respondWithIndex();
+
+        const loader = new SmuflFontLoader();
+        await loader.initialize();
+
+        const style = document.documentElement.style;
+
+        // Bravura draws a staff line 0.13 staff spaces thick, at ten px per staff space, which rounds to
+        // a whole pixel so that the line lands on the pixel grid.
+        expect(style.getPropertyValue("--staff-line-thickness")).toBe("1px");
+        expect(style.getPropertyValue("--stem-thickness")).toBe("1px");
+
+        // The black notehead lets a stem leave it 0.168 spaces above its baseline, 0.59 spaces right
+        // of the head's ink centre.
+        expect(style.getPropertyValue("--stem-anchor-y-noteheadblack")).toBe("2px");
+        expect(style.getPropertyValue("--stem-anchor-x-noteheadblack")).toBe("6px");
+
+        await loader.select("leipzig");
+
+        expect(style.getPropertyValue("--staff-line-thickness")).toBe("1px");
+    });
+
+    it("measures a glyph the drawing font does not describe with the default font's metrics", async () => {
+        respondWithIndex();
+
+        const loader = new SmuflFontLoader();
+        await loader.initialize();
+        await loader.select("leipzig");
+
+        // Leipzig states nothing about a black notehead, so Bravura's box and anchors stand in for it.
+        expect(loader.glyphMetrics(SmuflGlyph.NoteheadBlack)).toEqual({
+            bBoxNE: [1.18, 0.5],
+            bBoxSW: [0, -0.5],
+            stemUpSE: [1.18, 0.168],
+            stemDownNW: [0, -0.168],
+        });
+
+        // The quarter rest is Leipzig's own.
+        expect(loader.glyphMetrics(SmuflGlyph.RestQuarter)).toEqual({
+            bBoxNE: [1.08, 1.2],
+            bBoxSW: [0.004, -1.2],
+        });
+    });
+
+    it("keeps drawing when a metrics file cannot be read", async () => {
+        respondWithIndex();
+
+        const loader = new SmuflFontLoader();
+        await loader.initialize();
+
+        // A metrics file the generator did not write is the same as a font that states nothing.
+        expect(SmuflFontMetrics.read({ version: 99 }).metrics).toBeUndefined();
+        expect(loader.activeId).toBe("bravura");
     });
 });

@@ -19,10 +19,12 @@ import { join } from "node:path";
 
 import { isJsonObject } from "../utils.js";
 import { SmuflFontFile } from "./SmuflFontFile.js";
+import { SmuflFontMetrics } from "./SmuflFontMetrics.js";
 import {
     SmuflFontFormat, SmuflFontGapKind, SmuflFonts, SmuflFontStatus,
     type ISmuflFontGap, type ISmuflFontIndexEntry, type ISmuflFontIndexReport, type ISmuflFontReport,
 } from "./SmuflFonts.js";
+import type { ISmuflFontMetricsResult } from "./SmuflFontMetrics.js";
 import { SmuflGlyphs, SmuflGlyphFamily, type SmuflGlyph } from "./SmuflGlyphs.js";
 
 /** Which glyph of the catalogue a font provides, so coverage and gaps derive from one pass. */
@@ -55,11 +57,12 @@ export class SmuflFontVerifier {
      * Verifies every font of a catalogue.
      *
      * @param fontFolder The folder that holds the index and the font files.
+     * @param metadataFolder The folder that holds the fonts' own SMuFL metadata.
      *
      * @returns The result for the whole catalogue. When the index itself cannot be read, `fonts` is
      * empty and `errors` says why.
      */
-    public static verifyIndex(fontFolder: string): ISmuflFontIndexReport {
+    public static verifyIndex(fontFolder: string, metadataFolder: string): ISmuflFontIndexReport {
         const indexPath = join(fontFolder, "index.json");
         if (!existsSync(indexPath)) {
             return { errors: [`index.json is missing in ${fontFolder}`], fonts: [] };
@@ -80,7 +83,7 @@ export class SmuflFontVerifier {
         return {
             errors: result.errors,
             fonts: result.index.fonts.map((entry) => {
-                return SmuflFontVerifier.verify(fontFolder, entry);
+                return SmuflFontVerifier.verify(fontFolder, metadataFolder, entry);
             }),
         };
     }
@@ -89,11 +92,12 @@ export class SmuflFontVerifier {
      * Verifies one font of a catalogue.
      *
      * @param fontFolder The folder that holds the index and the font files.
+     * @param metadataFolder The folder that holds the fonts' own SMuFL metadata.
      * @param entry The index entry to check.
      *
      * @returns The font's verification result.
      */
-    public static verify(fontFolder: string, entry: ISmuflFontIndexEntry): ISmuflFontReport {
+    public static verify(fontFolder: string, metadataFolder: string, entry: ISmuflFontIndexEntry): ISmuflFontReport {
         const errors: string[] = [];
         const gaps: ISmuflFontGap[] = [];
 
@@ -108,7 +112,8 @@ export class SmuflFontVerifier {
         }
 
         const font = SmuflFontVerifier.readFont(fontFolder, entry, errors);
-        const missingAnchors = SmuflFontVerifier.readMetadata(fontFolder, entry, errors);
+        const missingAnchors = SmuflFontVerifier.readMetadata(metadataFolder, entry, errors);
+        SmuflFontVerifier.readMetrics(fontFolder, entry, errors);
 
         const coverage = SmuflGlyphs.all.map((glyph): IGlyphCoverage => {
             const { codepoint, family } = SmuflGlyphs.definition(glyph);
@@ -196,6 +201,36 @@ export class SmuflFontVerifier {
         return lines.join("\n");
     }
 
+    /**
+     * Reads the metrics the app draws the font with. They are generated from the metadata, so a file
+     * that is missing or unreadable means the score would be drawn with the default font's measures.
+     *
+     * @param fontFolder The folder that holds the index and the font files.
+     * @param entry The index entry to check.
+     * @param errors Collects everything that keeps the font from being used.
+     */
+    private static readMetrics(fontFolder: string, entry: ISmuflFontIndexEntry, errors: string[]): void {
+        const path = join(fontFolder, entry.metrics);
+        if (!existsSync(path)) {
+            errors.push(`metrics: "${entry.metrics}" is missing`);
+
+            return;
+        }
+
+        let read: ISmuflFontMetricsResult;
+        try {
+            read = SmuflFontMetrics.read(JSON.parse(readFileSync(path, "utf8")) as unknown);
+        } catch (error) {
+            errors.push(`metrics: ${(error as Error).message}`);
+
+            return;
+        }
+
+        for (const error of read.errors) {
+            errors.push(`metrics: ${error}`);
+        }
+    }
+
     private static readFont(fontFolder: string, entry: ISmuflFontIndexEntry,
         errors: string[]): SmuflFontFile | undefined {
         const path = join(fontFolder, entry.file);
@@ -219,9 +254,9 @@ export class SmuflFontVerifier {
         }
     }
 
-    private static readMetadata(fontFolder: string, entry: ISmuflFontIndexEntry,
+    private static readMetadata(metadataFolder: string, entry: ISmuflFontIndexEntry,
         errors: string[]): SmuflGlyph[] {
-        const path = join(fontFolder, entry.metadata);
+        const path = join(metadataFolder, entry.metadata);
         if (!existsSync(path)) {
             errors.push(`metadata: "${entry.metadata}" is missing`);
 

@@ -27,6 +27,9 @@
     --bar-decoration-color: rgb(72, 237, 188);
     --selection-background: rgba(79, 195, 247, 0.4);
 
+    /* The SMuFL unit. Mirrors `staffSpacePx` in MeasureLayout.ts, which a test asserts. */
+    --staff-space: 10px;
+
     --note-height: 80px;
 }
 

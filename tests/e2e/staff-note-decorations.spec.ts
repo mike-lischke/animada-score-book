@@ -575,17 +575,19 @@ test.describe("Note decorations", () => {
 
         // A head that is centred on the stem covers the dot's place, so these heads hide the sprite's
         // dot and draw their own beside their ink; a ghost's closing parenthesis makes room for it.
+        // Every head ends its ink on the stem's right edge, so the dot sits at the same distance in all
+        // of them, two px right of the anchor - where the sprite draws its own dot.
         expect(heads[0].className).toContain("cross");
         expect(heads[0].className).toContain("staff-note-head-dotted");
-        expect(heads[0].dotOffset).toBe(16);
+        expect(heads[0].dotOffset).toBe(15);
         expect(heads[0].spriteDot).toBe(false);
         expect(heads[0].parenLeft).toBeNull();
 
-        expect(heads[1].dotOffset).toBe(16);
+        expect(heads[1].dotOffset).toBe(15);
         expect(heads[1].parenLeft).toBe("20px");
 
         expect(heads[2].className).toContain("triangle");
-        expect(heads[2].dotOffset).toBe(21);
+        expect(heads[2].dotOffset).toBe(15);
         expect(heads[2].spriteDot).toBe(false);
 
         expect(heads[3].parenLeft).toBe("26px");

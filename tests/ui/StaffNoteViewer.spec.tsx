@@ -19,6 +19,9 @@ const fraction = (numerator: number, denominator: number): IFraction => {
     return { numerator, denominator };
 };
 
+/** Width of a partial beam: its fixed length plus the stem's right edge, which it ends on. */
+const beamStubWidth = "calc(12px + var(--stem-right-edge, 0px))";
+
 const event = (start: IFraction, duration: IFraction, noteStyleId?: string) => {
     return noteStyleId === undefined
         ? { start, duration }
@@ -32,12 +35,14 @@ const event = (start: IFraction, duration: IFraction, noteStyleId?: string) => {
  * @param subdivisions Subdivision groups annotating the event stream.
  * @param sampleProfile Optional articulation profile for the resolved note style.
  * @param handTechnique Optional hand technique for the resolved note style.
+ * @param displayType Optional note head shape drawn for the note style.
  *
  * @returns The measure with resolved note events.
  */
 const buildMeasure = (events: IMeasureEvent[], subdivisions: ISubdivision[],
     sampleProfile: ISampleProfile = { builtInDamping: Damping.Open, builtInAccent: false, ghost: false },
     handTechnique?: HandTechnique,
+    displayType: NoteDisplayType = NoteDisplayType.Oval,
 ): ISbDmTrackMeasure => {
     const instrument = {
         type: SbDmEntityType.Instrument,
@@ -51,7 +56,7 @@ const buildMeasure = (events: IMeasureEvent[], subdivisions: ISubdivision[],
         instrument,
         characteristics: {
             excitationMode: ExcitationMode.Struck,
-            mainDisplayType: NoteDisplayType.Oval,
+            mainDisplayType: displayType,
             handTechnique,
         },
         sampleProfile,
@@ -195,17 +200,17 @@ describe.sequential("StaffNoteViewer beams", () => {
             expect(beamWidths[index]).toHaveLength(2);
         }
 
-        expect(beamWidths[3]).toEqual(["12px", "12px"]);
-        expect(beamWidths[7]).toEqual(["12px", "12px"]);
+        expect(beamWidths[3]).toEqual([beamStubWidth, beamStubWidth]);
+        expect(beamWidths[7]).toEqual([beamStubWidth, beamStubWidth]);
 
         // The 3:8 slots (events 8 and 12) are eighths; the outer 2:1 slot (event 11) is a
         // sixteenth and the inner 2:1 slots (events 9 and 10) are thirty-seconds. The tuplet
         // group is beamed as one run whose outer beam spans all five notes.
         expect(beamWidths[8]).toEqual(["100%"]);
         expect(beamWidths[9]).toEqual(["100%", "100%", "100%"]);
-        expect(beamWidths[10]).toEqual(["100%", "100%", "12px"]);
-        expect(beamWidths[11]).toEqual(["100%", "12px"]);
-        expect(beamWidths[12]).toEqual(["12px"]);
+        expect(beamWidths[10]).toEqual(["100%", "100%", beamStubWidth]);
+        expect(beamWidths[11]).toEqual(["100%", beamStubWidth]);
+        expect(beamWidths[12]).toEqual([beamStubWidth]);
     });
 
     it("positions the tuplet marker over the first and last noteheads", () => {
@@ -305,7 +310,7 @@ describe.sequential("StaffNoteViewer beams", () => {
 
         // Both notes carry three beam levels: the first bridges to its neighbour, the second stubs back.
         expect(beams[0]).toEqual(["100%", "100%", "100%"]);
-        expect(beams[1]).toEqual(["12px", "12px", "12px"]);
+        expect(beams[1]).toEqual([beamStubWidth, beamStubWidth, beamStubWidth]);
     });
 
     it("beams a pair of dotted thirty-seconds with three beams", () => {
@@ -394,15 +399,15 @@ describe.sequential("StaffNoteViewer beams", () => {
         // The first sixteenth stubs right, the middle eighth bridges the primary beam, and the last
         // sixteenth stubs both its beams left towards the group.
         expect(beams[0]).toEqual([
-            { left: "var(--note-anchor)", width: "100%" },
-            { left: "var(--note-anchor)", width: "12px" },
+            { left: "calc(var(--note-anchor) - var(--stem-half-width, 1px))", width: "100%" },
+            { left: "calc(var(--note-anchor) - var(--stem-half-width, 1px))", width: beamStubWidth },
         ]);
         expect(beams[1]).toEqual([
-            { left: "var(--note-anchor)", width: "100%" },
+            { left: "calc(var(--note-anchor) - var(--stem-half-width, 1px))", width: "100%" },
         ]);
         expect(beams[2]).toEqual([
-            { left: "calc(var(--note-anchor) - 12px)", width: "12px" },
-            { left: "calc(var(--note-anchor) - 12px)", width: "12px" },
+            { left: "calc(var(--note-anchor) - 12px)", width: beamStubWidth },
+            { left: "calc(var(--note-anchor) - 12px)", width: beamStubWidth },
         ]);
     });
 
@@ -606,6 +611,58 @@ describe.sequential("StaffNoteViewer beams", () => {
         });
     });
 
+    it("draws a technique cross as a symbol of its own, not the note head's", () => {
+        const measure = buildMeasure(
+            [event(fraction(0, 16), fraction(1, 16), "1")], [], undefined, HandTechnique.Slap,
+            NoteDisplayType.Cross,
+        );
+
+        renderResult = render(
+            <StaffNoteViewer
+                isLastBar={true}
+                timeSignature="4/4"
+                scoreMetrics={scoreMetrics}
+                baseSteps={16}
+                measure={measure}
+                barNumber={1}
+                trackId={100}
+            />,
+        );
+
+        const headCross = renderResult.container.querySelector(".staff-note-head-cross-svg use");
+        const slapCross = renderResult.container.querySelector(".staff-note-head-slap-svg use");
+
+        // The symbol cache registers a key only once, so sharing one would let whichever cross renders
+        // first decide the geometry of both.
+        expect(headCross).not.toBeNull();
+        expect(slapCross).not.toBeNull();
+        expect(slapCross?.getAttribute("href")).not.toBe(headCross?.getAttribute("href"));
+    });
+
+    it("states the staff's line count for the closing barline", () => {
+        const measure = buildMeasure([
+            event(fraction(0, 16), fraction(1, 16), "1"),
+        ], []);
+
+        renderResult = render(
+            <StaffNoteViewer
+                isLastBar={true}
+                timeSignature="4/4"
+                scoreMetrics={scoreMetrics}
+                baseSteps={16}
+                measure={measure}
+                barNumber={1}
+                trackId={100}
+                maxNoteLine={4}
+            />,
+        );
+
+        const viewer = renderResult.container.querySelector<HTMLElement>(".staff-note-viewer")!;
+
+        // The stylesheet derives the closing barline's height from the count, which the viewer states.
+        expect(viewer.style.getPropertyValue("--staff-line-count")).toBe("4");
+    });
+
     it("keeps the flags of a final thirty-second note inside the bar", () => {
         const measure = buildFullBarEndingInThirtySecond();
 
@@ -626,7 +683,8 @@ describe.sequential("StaffNoteViewer beams", () => {
 
         // The note's onset anchor would sit on the barline, so it is right-aligned to its slot
         // instead and keeps the width of its flags free there.
-        expect(runs[16].getAttribute("style")).toContain("--note-anchor: calc(100% - 11px)");
+        expect(runs[16].getAttribute("style"))
+            .toContain("--note-anchor: calc(100% - var(--note-flag-width))");
 
         // The sixteenth before the final half step keeps its onset anchor.
         expect(runs[14].getAttribute("style")).toContain("--note-anchor: 50%");
@@ -650,7 +708,8 @@ describe.sequential("StaffNoteViewer beams", () => {
         const runs = [...renderResult.container.querySelectorAll<HTMLElement>(".staff-note-viewer-run")];
 
         // The final barline is drawn inside the bar, so the note keeps clear of it as well.
-        expect(runs[16].getAttribute("style")).toContain("--note-anchor: calc(100% - 17px)");
+        expect(runs[16].getAttribute("style"))
+            .toContain("--note-anchor: calc(100% - var(--note-flag-width) - var(--final-barline-width))");
     });
 
     it("anchors a thirty-second note that does not end the measure at its slot", () => {

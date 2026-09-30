@@ -15,6 +15,7 @@ import {
     MeasureProjection, NoteGroupKind, ProjectedItemKind, pulseLengthAt,
     type INotationGrid, type IProjectedEvent, type IProjectedItem,
 } from "../../../core/MeasureProjection.js";
+import { staffSpacePx } from "../../../core/MeasureLayout.js";
 import type { IFraction, IAudioData, ISubdivision } from "../../../core/types/general.js";
 import { beamCountOf, fallbackNoteValue, noteValueForEvent, type INoteValue }
     from "../../../core/rest-notation.js";
@@ -117,16 +118,13 @@ interface ITupletBounds {
 }
 
 /**
- * Width the flags occupy right of a notehead, in px. The sprite's flag paths reach x = 58.6 of its
- * 60 units, which the symbol renders 25 px wide, less the flag shift of 2.4 units.
+ * Width the final barline occupies at the right edge of the last bar. The stylesheet owns it, because
+ * it is what the barline is drawn from.
  */
-const noteFlagWidth = 11;
+const finalBarlineWidth = "var(--final-barline-width)";
 
-/**
- * Width the final barline occupies at the right edge of the last bar, in px. Mirrors the rule of
- * `.staff-note-viewer-final-barline` in component-styles.
- */
-const finalBarlineWidth = 6;
+/** Width the flags occupy right of a notehead, which the stylesheet owns for the same reason. */
+const noteFlagWidth = "var(--note-flag-width)";
 
 export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
     public override render(): ComponentChild {
@@ -159,23 +157,23 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
 
         // Whole and half rests sit on the centre line (odd count) or the line just below it (even count).
         const restNoteLine = Math.ceil(centerLine);
-        const restLineOffset = (restNoteLine - centerLine) * 10;
+        const restLineOffset = (restNoteLine - centerLine) * staffSpacePx;
 
         const runs =
             usesWholeBarRest
                 ? [this.renderWholeBarRestSlot(restLineOffset, barNumber, trackId, measure, scoreElementRegistry)]
                 : this.renderItems(nodes, beamSpans, "", centerLine, restLineOffset);
 
-        // Render staff lines. For a single line, render the centred middle line as before.
-        // For multiple lines, render N lines symmetrically around the vertical centre.
+        // Render the staff lines around the line the notes sit on. The stylesheet states where that line is in
+        // the row, so only the line's place in the staff is computed here.
         const staffLines: ComponentChild[] = [];
         for (let i = 1; i <= maxNoteLine; i++) {
-            const offset = ((i - centerLine) * 10) + 31.5; // 10px = line spacing, +16px = prefix-row shift
+            const offset = (i - centerLine) * staffSpacePx;
             staffLines.push(
                 <div
                     key={`staff-line-${i}`}
                     className="staff-note-viewer-line"
-                    style={{ top: `calc(50% + ${offset}px)` }}
+                    style={{ "--staff-line-offset": `${offset}px` } as CSSProperties}
                 />,
             );
         }
@@ -188,6 +186,7 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                     bar: barNumber,
                     trackId,
                 })}
+                style={{ "--staff-line-count": `${maxNoteLine}` } as CSSProperties}
                 aria-hidden
                 {...this.dataAttributes}
             >
@@ -575,7 +574,7 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
             const endsMeasureWithFlags = isMeasureEnd && !hasBeam && node.noteStyle !== undefined
                 && anchorPercent >= 100;
             const anchor = endsMeasureWithFlags
-                ? `calc(100% - ${noteFlagWidth + (isLastBar ? finalBarlineWidth : 0)}px)`
+                ? `calc(100% - ${noteFlagWidth}${isLastBar ? ` - ${finalBarlineWidth}` : ""})`
                 : `${anchorPercent}%`;
 
             const slotStyle = {
@@ -644,7 +643,7 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                                 value={node.glyph.length}
                                 style={{
                                     flexShrink: 0,
-                                    transform: translateY,
+                                    transform: `translateX(var(--note-head-shift-x, 0px)) ${translateY}`,
                                 }}
                                 headType={headType}
                                 dotted={!isNonOval && node.glyph.dotted}
@@ -709,12 +708,16 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
      * @returns List of VNodes representing the beam segments attached to this note.
      */
     private renderBeamSegments(stepIndex: number, info: IBeamInfo): VNode[] {
-        const beamGap = 6;
-        const primaryTopOffset = 38;
+        // Further beams hang below the primary one in the font's own rhythm: one beam thickness plus
+        // one beam space per level.
+        const beamOffset = "(var(--beam-thickness, 4px) + var(--beam-spacing, 2px))";
+        const halfStem = "var(--stem-half-width, 1px)";
         const partialPixels = 12;
+        const stubWidth = `calc(${partialPixels}px + var(--stem-right-edge, 0px))`;
 
         return info.segments.map((segment) => {
-            const top = `calc(50% - ${primaryTopOffset - ((segment.level - 1) * beamGap)}px)`;
+            // The primary beam sits on the stem tips, which is the height the stems are drawn to.
+            const top = `calc(50% - var(--stem-tip, 35px) + ${segment.level - 1} * ${beamOffset})`;
             const key = `beam-${stepIndex}-${segment.level}-${segment.kind}`;
 
             if (segment.kind === "shared-right") {
@@ -724,7 +727,7 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                         className="staff-note-viewer-beam"
                         style={{
                             top,
-                            left: "var(--note-anchor)",
+                            left: `calc(var(--note-anchor) - ${halfStem})`,
                             width: "100%",
                         }}
                     />
@@ -738,8 +741,8 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                         className="staff-note-viewer-beam"
                         style={{
                             top,
-                            left: "var(--note-anchor)",
-                            width: `${partialPixels}px`,
+                            left: `calc(var(--note-anchor) - ${halfStem})`,
+                            width: stubWidth,
                         }}
                     />
                 );
@@ -753,7 +756,7 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                     style={{
                         top,
                         left: `calc(var(--note-anchor) - ${partialPixels}px)`,
-                        width: `${partialPixels}px`,
+                        width: stubWidth,
                     }}
                 />
             );
@@ -762,10 +765,10 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
 
     /**
      * Renders a CSS stem overlay for beamed notes, replacing the hidden SVG stem.
-     * Spans from the note-head connection point to just above the primary beam.
+     * Spans from the stem anchor of the note's head to just above the primary beam.
      *
      * @param lineOffset Vertical offset in px for this note's staff line relative to the centre line.
-     * @param headType   The note head type, used for per-head-type stem positioning.
+     * @param headType   The note head type, which states where its stem leaves the head.
      *
      * @returns A VNode representing the custom stem.
      */
@@ -778,7 +781,9 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
             <span
                 className={`staff-note-viewer-custom-stem ${headClass}`}
                 style={{
-                    height: `calc(35px + ${lineOffset}px)`,
+                    // The beam sits on the stem tips; the stem ends at the anchor the note's head
+                    // carries, which the stylesheet reads from the font.
+                    height: `calc(var(--stem-tip, 35px) + ${lineOffset}px - var(--stem-anchor-y, 3px))`,
                 }}
             />
         );
@@ -1045,11 +1050,6 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                 }
 
                 case HandTechnique.Slap: {
-                    NoteImage.registerSymbol("cross-head", "0 0 14 14",
-                        `<line x1="2" y1="2" x2="12" y2="12" />` +
-                        `<line x1="12" y1="2" x2="2" y2="12" />`,
-                    );
-
                     nodes.push(
                         <svg key="slap-cross" className="staff-note-head-slap-svg"
                             width={10} height={10}
@@ -1060,7 +1060,7 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                                 strokeWidth: 3,
                                 strokeLinecap: "round",
                             }}>
-                            <use href="#symbol-cross-head" />
+                            <use href={`#${this.registerDecorationCross()}`} />
                         </svg>,
                     );
                     break;
@@ -1092,17 +1092,12 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
 
         if (characteristics.excitationMode === ExcitationMode.Struck && "stickTechnique" in characteristics
             && characteristics.stickTechnique === StickTechnique.RimShot) {
-            NoteImage.registerSymbol("cross-head", "0 0 14 14",
-                `<line x1="2" y1="2" x2="12" y2="12" />` +
-                `<line x1="12" y1="2" x2="2" y2="12" />`,
-            );
-
             nodes.push(
                 <svg key="rimshot-cross" className="staff-note-head-rimshot-cross-svg"
                     width={8} height={8}
                     aria-hidden="true"
                     style={{ stroke: "var(--color-base-content)", strokeWidth: 2.5, strokeLinecap: "round" }}>
-                    <use href="#symbol-cross-head" />
+                    <use href={`#${this.registerDecorationCross()}`} />
                 </svg>,
             );
         }
@@ -1135,28 +1130,42 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
     }
 
     /**
-     * Renders the cross (×) note head as a cached SVG symbol with rounded line caps.
+     * Renders the cross (×) note head as a cached SVG symbol with rounded line caps. The symbol spans the
+     * ink box of the font's cross head (noteheadXBlack, 1.2 × 1 staff spaces), which the stylesheet sizes,
+     * so one symbol unit is one pixel and the arms stay on the pixel grid.
      *
      * @returns An SVG VNode referencing the cached cross symbol.
      */
     private renderCrossHead(): VNode {
-        NoteImage.registerSymbol("cross-head", "0 0 14 14",
-            `<line x1="2" y1="2" x2="12" y2="12" />` +
-            `<line x1="12" y1="2" x2="2" y2="12" />`,
+        NoteImage.registerSymbol("cross-head", "0 0 12 10",
+            `<line x1="1" y1="1" x2="11" y2="9" />` +
+            `<line x1="11" y1="1" x2="1" y2="9" />`,
         );
 
         return (
             <svg className="staff-note-head-cross-svg"
-                width={14} height={14}
                 aria-hidden="true"
                 style={{
                     stroke: "var(--color-base-content)",
-                    strokeWidth: 2.8,
+                    strokeWidth: 2,
                     strokeLinecap: "round",
                     overflow: "visible"
                 }}>
                 <use href="#symbol-cross-head" />
             </svg>
+        );
+    }
+
+    /**
+     * Registers the cross a technique draws on top of a head (slap, rimshot), which is a wider armed cross
+     * than the note head's own and therefore a symbol of its own.
+     *
+     * @returns The id of the registered symbol.
+     */
+    private registerDecorationCross(): string {
+        return NoteImage.registerSymbol("decoration-cross", "0 0 14 14",
+            `<line x1="2" y1="2" x2="12" y2="12" />` +
+            `<line x1="12" y1="2" x2="2" y2="12" />`,
         );
     }
 

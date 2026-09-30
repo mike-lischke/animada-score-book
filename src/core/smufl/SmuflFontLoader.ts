@@ -14,6 +14,12 @@
  * Browser only: without the FontFace API the loader reports itself as unable to draw.
  */
 
+import { staffSpacePx } from "../MeasureLayout.js";
+import {
+    SmuflFontMetrics, type ISmuflEngravingDefaults, type ISmuflFontMetrics,
+    type ISmuflGlyphMetrics
+} from "./SmuflFontMetrics.js";
+import { SmuflGlyphs, type SmuflGlyph } from "./SmuflGlyphs.js";
 import { SmuflFonts, type ISmuflFontIndex, type ISmuflFontIndexEntry } from "./SmuflFonts.js";
 
 /** The CSS variable the drawing components read their font from. */
@@ -24,6 +30,51 @@ const defaultIndexUrl = "/fonts/smufl/index.json";
 
 /** The folder a font file is served from. */
 const fontFolderUrl = "/fonts/smufl/";
+
+/**
+ * The CSS variables the score's geometry reads, and the engraving default each is taken from. The
+ * stylesheets keep their own value as a fallback, for the time before the metrics have arrived.
+ */
+const engravingVariables: ReadonlyArray<readonly [keyof ISmuflEngravingDefaults, string]> = [
+    ["staffLineThickness", "--staff-line-thickness"],
+    ["stemThickness", "--stem-thickness"],
+    ["beamThickness", "--beam-thickness"],
+    ["beamSpacing", "--beam-spacing"],
+    ["legerLineThickness", "--leger-line-thickness"],
+    ["legerLineExtension", "--leger-line-extension"],
+    ["thinBarlineThickness", "--barline-thin-thickness"],
+    ["thickBarlineThickness", "--barline-thick-thickness"],
+    ["barlineSeparation", "--barline-separation"],
+    ["bracketThickness", "--bracket-thickness"],
+    ["tupletBracketThickness", "--tuplet-bracket-thickness"],
+];
+
+/**
+ * The prefix a glyph's stem anchor is published under: `--stem-anchor-` and the glyph's name in
+ * lower case, with `x-` or `y-` in between, e.g. `--stem-anchor-y-noteheadblack`. Both values are
+ * in px and relative to the note's anchor point: `x` is how far right of it the stem sits, `y` how
+ * far above the baseline the stem ends.
+ */
+export const stemAnchorVariablePrefix = "--stem-anchor-";
+
+/**
+ * @param value A thickness or length in staff spaces.
+ *
+ * @returns The value in px, on the pixel grid: a fractional stroke is drawn with anti-aliasing, which
+ * makes the thin lines of a score look fuzzy. A stroke never rounds down to nothing.
+ */
+const lengthToPixels = (value: number): string => {
+    return `${Math.max(1, Math.round(value * staffSpacePx))}px`;
+};
+
+/**
+ * @param value An offset in staff spaces, which may be zero or negative.
+ *
+ * @returns The value in px, rounded to whole pixels for the same reason as `lengthToPixels`.
+ */
+const offsetToPixels = (value: number): string => {
+    return `${Math.round(value * staffSpacePx)}px`;
+};
 
 /** A font the user can pick, with the family list that draws it. */
 export interface ISmuflFontChoice extends ISmuflFontIndexEntry {
@@ -40,12 +91,15 @@ export interface ISmuflFontLoaderOptions {
     indexUrl?: string;
 }
 
-/** Loads the fonts of one catalogue and makes the score's font available to the stylesheets. */
+/** Loads the fonts of one catalogue, with the metrics the score is drawn from. */
 export class SmuflFontLoader {
     private index?: ISmuflFontIndex;
     private active?: ISmuflFontIndexEntry;
     private readonly loaded = new Set<string>();
     private readonly unusable = new Set<string>();
+
+    /** The metrics of every font that has been read, by font id. */
+    private readonly metricsById = new Map<string, ISmuflFontMetrics>();
 
     /** Set while the fonts nothing draws with yet are loading, so they are loaded only once. */
     private preloading?: Promise<void>;
@@ -63,6 +117,25 @@ export class SmuflFontLoader {
     /** @returns The id of the font the score is drawn with, or undefined while none is ready. */
     public get activeId(): string | undefined {
         return this.active?.id;
+    }
+
+    /**
+     * @returns The engraving defaults the score's geometry is drawn from, in px, or undefined while
+     * no font is ready.
+     */
+    public get engravingDefaults(): ISmuflEngravingDefaults | undefined {
+        return this.metricsFor(this.activeId)?.engravingDefaults
+            ?? this.metricsFor(this.defaultId)?.engravingDefaults;
+    }
+
+    /**
+     * @param glyph The glyph to measure.
+     *
+     * @returns What the font states about the glyph, in staff spaces. A glyph the selected font does
+     * not describe is measured with the default font's metrics, the same font that draws it.
+     */
+    public glyphMetrics(glyph: SmuflGlyph): ISmuflGlyphMetrics | undefined {
+        return this.metricsFor(this.activeId)?.glyphs[glyph] ?? this.metricsFor(this.defaultId)?.glyphs[glyph];
     }
 
     /**
@@ -146,13 +219,14 @@ export class SmuflFontLoader {
 
         const fallback = SmuflFonts.defaultEntry(index);
         if (fallback !== undefined) {
-            await this.register(fallback);
+            await Promise.all([this.register(fallback), this.loadMetrics(fallback)]);
         }
 
         if (!await this.register(entry)) {
             return false;
         }
 
+        await this.loadMetrics(entry);
         this.active = entry;
         this.publish();
 
@@ -215,6 +289,85 @@ export class SmuflFontLoader {
         const stack = this.familyStack;
         if (stack !== "") {
             document.documentElement.style.setProperty(musicFontFamilyVariable, stack);
+        }
+
+        this.publishEngravingDefaults();
+    }
+
+    /**
+     * @returns The id of the font the score uses until the user picks another one.
+     */
+    private get defaultId(): string | undefined {
+        const { index } = this;
+
+        return index === undefined ? undefined : SmuflFonts.defaultEntry(index)?.id;
+    }
+
+    /**
+     * @param id The font to look up.
+     *
+     * @returns The font's metrics, when they have been read.
+     */
+    private metricsFor(id?: string): ISmuflFontMetrics | undefined {
+        return id === undefined ? undefined : this.metricsById.get(id);
+    }
+
+    /**
+     * Reads a font's engraved measurements.
+     *
+     * Never throws: a font whose metrics cannot be read is drawn with the default font's measurements,
+     * and the stylesheets keep their own values for as long as nothing was read.
+     *
+     * @param entry The font to read the metrics of.
+     */
+    private async loadMetrics(entry: ISmuflFontIndexEntry): Promise<void> {
+        if (this.metricsById.has(entry.id)) {
+            return;
+        }
+
+        try {
+            const response = await fetch(`${fontFolderUrl}${entry.metrics}`);
+            const raw: unknown = await response.json();
+            const result = SmuflFontMetrics.read(raw);
+            if (result.metrics === undefined) {
+                console.warn(`SmuflFontLoader: ${entry.id}: ${result.errors.join("; ")}`);
+
+                return;
+            }
+
+            this.metricsById.set(entry.id, result.metrics);
+        } catch (error) {
+            console.warn(`SmuflFontLoader: cannot read the metrics of "${entry.id}"`, error);
+        }
+    }
+
+    /** Publishes the engraving defaults in px, which is the unit the stylesheets draw with. */
+    private publishEngravingDefaults(): void {
+        const defaults = this.engravingDefaults;
+        if (defaults === undefined) {
+            return;
+        }
+
+        const style = document.documentElement.style;
+        for (const [key, variable] of engravingVariables) {
+            style.setProperty(variable, lengthToPixels(defaults[key]));
+        }
+
+        // A stem leaves a head where the font says: it sits a stated distance right of the head's
+        // centre and ends a stated distance above its baseline, which differ per head shape.
+        for (const glyph of SmuflGlyphs.stemmedNoteheads) {
+            const metrics = this.glyphMetrics(glyph);
+            const anchor = metrics?.stemUpSE;
+            const bBoxNE = metrics?.bBoxNE;
+            const bBoxSW = metrics?.bBoxSW;
+            if (anchor === undefined || bBoxNE === undefined || bBoxSW === undefined) {
+                continue;
+            }
+
+            const glyphName = glyph.toLowerCase();
+            const inkCentre = (bBoxNE[0] + bBoxSW[0]) / 2;
+            style.setProperty(`${stemAnchorVariablePrefix}x-${glyphName}`, offsetToPixels(anchor[0] - inkCentre));
+            style.setProperty(`${stemAnchorVariablePrefix}y-${glyphName}`, offsetToPixels(anchor[1]));
         }
     }
 }

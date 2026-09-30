@@ -8,7 +8,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 import {
-    MeasureLayout, barActionStripWidth, minEventGap, minEventWidth, noteHeightPx, staffMeasureInsets,
+    MeasureLayout, barActionStripWidth, minEventGap, minEventWidth, noteHeightPx, staffMeasureInsets, staffSpacePx,
 } from "../../src/core/MeasureLayout.js";
 import type { ISbDmArrangement } from "../../src/core/ScoreBookDataModel.js";
 import type { IMeasureEvent } from "../../src/core/types/general.js";
@@ -137,6 +137,12 @@ describe("MeasureLayout and the stylesheet constants it mirrors", () => {
         const appScss = readFileSync("src/App.scss", "utf8");
 
         expect(appScss).toContain(`--note-height: ${noteHeightPx}px`);
+    });
+
+    it("matches the staff space declared in App.scss", () => {
+        const appScss = readFileSync("src/App.scss", "utf8");
+
+        expect(appScss).toContain(`--staff-space: ${staffSpacePx}px`);
     });
 
     it("matches the steps per measure the staff measure viewer is laid out for", () => {

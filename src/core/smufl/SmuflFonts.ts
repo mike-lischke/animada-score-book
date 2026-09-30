@@ -38,8 +38,17 @@ export interface ISmuflFontIndexEntry {
     file: string;
     format: SmuflFontFormat;
 
-    /** The SMuFL metadata JSON, relative to the folder that holds the index. */
+    /**
+     * The SMuFL metadata JSON, relative to the metadata folder the verifier reads. The fonts' own
+     * metadata is 120 KB to 1.2 MB per font, so it is a build input and does not ship.
+     */
     metadata: string;
+
+    /**
+     * The engraved measurements of the font, relative to the folder that holds the index. Written by
+     * `build/generate-smufl-metrics` from the metadata; this is the file the app reads.
+     */
+    metrics: string;
 
     version: string;
     copyright?: string;
@@ -207,8 +216,8 @@ export class SmuflFonts {
             errors.push(`${path}: expected an object`);
 
             return {
-                id: "", name: "", file: "", format: SmuflFontFormat.Woff2, metadata: "", version: "",
-                license: { spdx: "", file: "" }, source: "",
+                id: "", name: "", file: "", format: SmuflFontFormat.Woff2, metadata: "", metrics: "",
+                version: "", license: { spdx: "", file: "" }, source: "",
             };
         }
 
@@ -230,6 +239,7 @@ export class SmuflFonts {
             file: SmuflFonts.readRequiredString(value, "file", path, errors),
             format: format ?? SmuflFontFormat.Woff2,
             metadata: SmuflFonts.readRequiredString(value, "metadata", path, errors),
+            metrics: SmuflFonts.readRequiredString(value, "metrics", path, errors),
             version: SmuflFonts.readRequiredString(value, "version", path, errors),
             copyright: readNonEmptyString(value.copyright),
             license: SmuflFonts.readLicense(value.license, `${path}.license`, errors),

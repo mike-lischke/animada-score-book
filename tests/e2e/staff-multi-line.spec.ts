@@ -96,23 +96,28 @@ test.describe("Staff view multi-line rendering", () => {
         await expect(page.locator("#trackViewerHost")).toBeVisible();
         await expect(page.locator(".staff-measure-track-row").first()).toBeVisible();
 
-        const { lineCount, positions } = await page.evaluate(() => {
+        const { lineCount, offsets, barlineHeight } = await page.evaluate(() => {
             const viewer = document.querySelector(".staff-note-viewer");
             const lines = viewer?.querySelectorAll(".staff-note-viewer-line") ?? [];
+            const barline = viewer?.querySelector(".staff-note-viewer-final-barline");
 
             return {
                 lineCount: lines.length,
-                positions: Array.from(lines).map((l) => {
-                    return (l as HTMLElement).style.top;
+                offsets: Array.from(lines).map((l) => {
+                    return (l as HTMLElement).style.getPropertyValue("--staff-line-offset");
                 }),
+                barlineHeight: barline === null || barline === undefined
+                    ? null
+                    : barline.getBoundingClientRect().height,
             };
         });
 
         expect(lineCount).toBe(2);
-        // Two lines centred: offset = (line - centerLine) * 10 + 31.5
-        // centerLine = 1.5: line 1 → -5+31.5=26.5, line 2 → +5+31.5=36.5
-        expect(positions[0]).toBe("calc(50% + 26.5px)");
-        expect(positions[1]).toBe("calc(50% + 36.5px)");
+        // Half a staff space above and below the line the notes sit on.
+        expect(offsets).toEqual(["-5px", "5px"]);
+
+        // A staff of one space gets the two-space stub, the same as a staff of a single line.
+        expect(barlineHeight).toBe(20);
     });
 
     test("renders four staff lines for a 4-line instrument (4-Bell Agogo)", async ({ page }) => {
@@ -132,25 +137,28 @@ test.describe("Staff view multi-line rendering", () => {
         await expect(page.locator("#trackViewerHost")).toBeVisible();
         await expect(page.locator(".staff-measure-track-row").first()).toBeVisible();
 
-        const { lineCount, positions } = await page.evaluate(() => {
+        const { lineCount, offsets, barlineHeight } = await page.evaluate(() => {
             const viewer = document.querySelector(".staff-note-viewer");
             const lines = viewer?.querySelectorAll(".staff-note-viewer-line") ?? [];
+            const barline = viewer?.querySelector(".staff-note-viewer-final-barline");
 
             return {
                 lineCount: lines.length,
-                positions: Array.from(lines).map((l) => {
-                    return (l as HTMLElement).style.top;
+                offsets: Array.from(lines).map((l) => {
+                    return (l as HTMLElement).style.getPropertyValue("--staff-line-offset");
                 }),
+                barlineHeight: barline === null || barline === undefined
+                    ? null
+                    : barline.getBoundingClientRect().height,
             };
         });
 
         expect(lineCount).toBe(4);
-        // Four lines centred: offset = (line - centerLine) * 10 + 31.5
-        // centerLine = 2.5: lines → 16.5, 26.5, 36.5, 46.5
-        expect(positions[0]).toBe("calc(50% + 16.5px)");
-        expect(positions[1]).toBe("calc(50% + 26.5px)");
-        expect(positions[2]).toBe("calc(50% + 36.5px)");
-        expect(positions[3]).toBe("calc(50% + 46.5px)");
+        // One and a half, half a space above and below the line the notes sit on.
+        expect(offsets).toEqual(["-15px", "-5px", "5px", "15px"]);
+
+        // A staff of three spaces is taller than the stub, so the closing barline spans its outer lines.
+        expect(barlineHeight).toBe(30);
     });
 
     test("draws stems of equal length for notes on different staff lines", async ({ page }) => {
@@ -224,7 +232,8 @@ test.describe("Staff view multi-line rendering", () => {
         });
 
         // A stem is a rigid part of its notehead: it keeps its length on every line and moves with
-        // the head instead of reaching up to a fixed height above the row.
+        // the head instead of reaching up to a fixed height above the row. Its tip sits where a beam
+        // sits, and its length is the distance from there down to the anchor the font states.
         expect(stems.map((stem) => {
             return stem?.height;
         })).toEqual([33, 33, 33, 33]);
@@ -258,13 +267,21 @@ test.describe("Staff view multi-line rendering", () => {
         await page.goto("/");
         await expect(page.locator("#trackViewerHost")).toBeVisible();
 
-        // Prefix row for the 4-line instrument must have matching staff lines.
-        const prefixLineCount = await page.evaluate(() => {
+        // Prefix row for the 4-line instrument must have matching staff lines, and they must sit on the
+        // same pixel as the lines of the note row: both draw around the line the viewer states.
+        const { prefixLineCount, prefixLineTop, noteLineTop } = await page.evaluate(() => {
             const row = document.querySelector(".staff-prefix-row");
+            const prefixLine = row?.querySelector(".staff-note-viewer-line");
+            const noteLine = document.querySelector(".staff-measure-track-row .staff-note-viewer-line");
 
-            return row?.querySelectorAll(".staff-note-viewer-line").length ?? 0;
+            return {
+                prefixLineCount: row?.querySelectorAll(".staff-note-viewer-line").length ?? 0,
+                prefixLineTop: prefixLine?.getBoundingClientRect().top ?? null,
+                noteLineTop: noteLine?.getBoundingClientRect().top ?? null,
+            };
         });
 
         expect(prefixLineCount).toBe(4);
+        expect(prefixLineTop).toBe(noteLineTop);
     });
 });
