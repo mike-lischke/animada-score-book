@@ -7,7 +7,7 @@ import type { ComponentChild } from "preact";
 
 import type { ISbDmArrangement, ISbDmTrack, ISbDmTrackMeasure, ScoreBookDataModel }
     from "../../../../core/ScoreBookDataModel.js";
-import { MeasureLayout } from "../../../../core/MeasureLayout.js";
+import { MeasureLayout, staffSpacePx } from "../../../../core/MeasureLayout.js";
 import type { ArrangementPlayer } from "../../../../player/ArrangementPlayer.js";
 import {
     MeasureProjection, NoteGroupKind, type INoteGroup, type INotationGrid,
@@ -170,11 +170,12 @@ export class StaffMeasureViewer extends UIComponent<IStaffMeasureViewerProps, IS
             });
             const measure = track?.measures[barNumber - 1];
             // Notes are translated vertically per staff line, so the note symbol can extend below the
-            // row. Expand the coarse row bounds by the maximum line spread so noteheads on the lowest
-            // line stay reachable. The fine-grained checks below do the precise hit-testing.
-            const lineSpread = ((this.maxNoteLineForTrack(trackId) - 1) / 2) * 10;
+            // row. Expand the coarse row bounds by the maximum line spread and by the room a note's marks
+            // hang into below its head, so noteheads on the lowest line and a note's accent stay reachable.
+            // The fine-grained checks below do the precise hit-testing.
+            const lineSpread = ((this.maxNoteLineForTrack(trackId) - 1) / 2) * staffSpacePx;
             const expandedTop = rowRect.top - lineSpread;
-            const expandedBottom = rowRect.bottom + lineSpread + 4;
+            const expandedBottom = rowRect.bottom + lineSpread + (staffSpacePx * 2);
 
             if (!rectsIntersect(rect, rowRect.left, expandedTop, rowRect.right, expandedBottom, 0)) {
                 continue;
@@ -195,14 +196,26 @@ export class StaffMeasureViewer extends UIComponent<IStaffMeasureViewerProps, IS
                 let noteHit = false;
                 const isSoundingNote = runLocation.noteId !== undefined;
 
-                // 1. The head's box is the head's ink, and a rest's box is its ink as well, so the symbol
-                //    the run is drawn with is what a click has to hit.
-                const symbol = runEl.querySelector<HTMLElement>(
+                // 1. A note is what it draws: its head, and the marks that hang on the head's wrapper — the
+                //    accent under it, the ghost note's parentheses, its dot. A rest draws its symbol and
+                //    its dot the same way, so a click on any of them addresses the run's event.
+                const wrapper = runEl.querySelector<HTMLElement>(
                     isSoundingNote ? ".staff-note-head" : ".staff-note-viewer-rest-symbol",
                 );
-                if (symbol) {
-                    const sr = symbol.getBoundingClientRect();
-                    noteHit = rectsIntersect(rect, sr.left, sr.top, sr.right, sr.bottom, hitTolerance);
+                const marks = wrapper === null ? [] : [wrapper, ...wrapper.children];
+                for (const mark of marks) {
+                    // A stem reaches up to the beam, which addresses the note group and not the note.
+                    const isStem = mark.classList.contains("staff-note-head-stem")
+                        || mark.classList.contains("staff-note-viewer-custom-stem");
+                    if (isStem) {
+                        continue;
+                    }
+
+                    const mr = mark.getBoundingClientRect();
+                    if (rectsIntersect(rect, mr.left, mr.top, mr.right, mr.bottom, hitTolerance)) {
+                        noteHit = true;
+                        break;
+                    }
                 }
 
                 // 2. Stems carry a note as well, which is what a click beside the head aims at.
@@ -214,8 +227,12 @@ export class StaffMeasureViewer extends UIComponent<IStaffMeasureViewerProps, IS
                         const r = headStem.getBoundingClientRect();
 
                         // The top of a beamed stem is where its beam sits, so that zone falls through to
-                        // the note group check instead.
-                        const reserve = headStem.classList.contains("staff-note-viewer-custom-stem") ? 24 : 0;
+                        // the note group check instead: the beam itself, whose thickness the font states,
+                        // and two staff spaces of slack below it, where a click aims at the beam.
+                        const beam = runEl.querySelector<HTMLElement>(".staff-note-viewer-beam");
+                        const reserve = beam === null
+                            ? 0
+                            : (beam.getBoundingClientRect().bottom - r.top) + (staffSpacePx * 2);
                         noteHit = rectsIntersect(rect, r.left, r.top + reserve, r.right, r.bottom, hitTolerance);
                     }
                 }

@@ -389,6 +389,57 @@ test.describe("Note decorations", () => {
         expect(accentBox.y).toBeGreaterThanOrEqual(headBox.y + headBox.height);
     });
 
+    test("selects the note a mark belongs to", async ({ page }) => {
+        const packed = buildPackedArrangement([{
+            instrumentId: "7", // High Surdo
+            steps: [
+                { noteStyleId: "1", articulation: { damping: 0, accent: true, ghost: false } },
+            ],
+        }]);
+
+        await openStaffArrangement(page, { packed, sessionId: "e2e-mark-hit" });
+
+        // The accent hangs below the head, so a click on it has to address the note as well.
+        const accent = page.locator(".staff-note-head-accent").first();
+        await expect(accent).toBeVisible();
+        await clickNoteHead(page, accent);
+
+        await expect(page.locator(".staff-note-viewer-run.note-selected").first()).toBeVisible();
+    });
+
+    test("covers a group's accents with its selection overlay", async ({ page }) => {
+        const accented = { damping: 0, accent: true, ghost: false };
+        const packed = buildPackedArrangement([{
+            instrumentId: "7", // High Surdo
+            steps: Array.from({ length: 4 }, () => {
+                return { noteStyleId: "1", articulation: accented };
+            }),
+        }]);
+
+        await openStaffArrangement(page, { packed, sessionId: "e2e-group-band" });
+
+        // The four accented sixteenths form one beamed group, which a click on the beam selects.
+        const beam = page.locator(".staff-note-viewer-beam").first();
+        await expect(beam).toBeVisible();
+        await clickNoteHead(page, beam);
+
+        const overlay = page.locator(".selection-overlay").first();
+        await expect(overlay).toBeVisible();
+
+        const overlayBox = await overlay.boundingBox();
+        const accentBox = await page.locator(".staff-note-head-accent").first().boundingBox();
+        if (!overlayBox || !accentBox) {
+            throw new Error("The overlay or the accent mark has no bounding box.");
+        }
+
+        // A glyph's ink sits above its box's centre line, so the accent's ink ends at the box's middle.
+        const accentInkBottom = accentBox.y + (accentBox.height / 2);
+
+        // The band covers the group's notes and the room their marks hang into below the heads.
+        expect(overlayBox.y).toBeLessThanOrEqual(accentBox.y);
+        expect(overlayBox.y + overlayBox.height).toBeGreaterThan(accentInkBottom);
+    });
+
     test("renders rimshot decoration for Repinique rimshot", async ({ page }) => {
         const packed = buildPackedArrangement([{
             instrumentId: "3", // Repinique

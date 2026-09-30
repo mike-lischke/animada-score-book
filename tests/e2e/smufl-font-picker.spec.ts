@@ -128,4 +128,46 @@ test.describe("SMuFL music font", () => {
 
         expect(await timeSignatureFontFamily(page)).toContain("Leipzig");
     });
+
+    test("draws the printed score with the picked font", async ({ page }) => {
+        await openScore(page, "e2e-smufl-print-font");
+
+        await page.locator('[data-tutorial="display-options"]').click();
+        await page.locator("#settingsDialog .music-font-dropdown button").click();
+        await page.locator("#settingsDialog .music-font-dropdown .dropdown-popup li")
+            .filter({ hasText: "Leipzig" }).click();
+        await page.locator("#settings-button-save").click();
+        await expect(page.locator("#settingsDialog")).toBeHidden();
+
+        // Keep the print DOM in place: the browser would tear it down on afterprint.
+        await page.evaluate(() => {
+            window.print = () => {
+                // No-op.
+            };
+        });
+
+        await page.locator("#printButton").click();
+        const dialog = page.locator("#printDialog");
+        await expect(dialog).toBeVisible();
+        await dialog.locator("#print-button-print").click();
+
+        await expect(page.locator(".print-root")).toBeAttached();
+
+        // The printed score draws its symbols with the same font the score on screen uses.
+        await expect.poll(() => {
+            return page.evaluate(() => {
+                const glyph = document.querySelector(".print-root .smufl-glyph-view");
+
+                return glyph === null ? "" : getComputedStyle(glyph).fontFamily;
+            });
+        }).toContain("Leipzig");
+
+        // Printing to a PDF embeds the font, so the pages carry the score's symbols and not a substitute.
+        const pdf = await page.pdf({ format: "A4" });
+        expect(pdf.toString("latin1")).toContain("Leipzig");
+
+        await page.evaluate(() => {
+            window.dispatchEvent(new Event("afterprint"));
+        });
+    });
 });

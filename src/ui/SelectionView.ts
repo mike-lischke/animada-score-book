@@ -4,6 +4,7 @@
  */
 
 import { compareFractions } from "../core/serialisation/numeric-functions.js";
+import { staffSpacePx } from "../core/MeasureLayout.js";
 import { EditEntryMode } from "../core/types/general.js";
 import type { IFraction, IMeasureEvent, IRect } from "../core/types/general.js";
 import { requisitions } from "../supplement/Requisitions.js";
@@ -23,11 +24,11 @@ const noteSelectedClass = "note-selected";
 const staffNoteRunClass = "staff-note-viewer-run";
 
 /**
- * Height, in px, of the box the selection cursor spans in staff mode: the room a note needs for its stem
- * and its head. The cursor marks the note's slot, not the ink the head is drawn with, so it looks the same
- * for every note and every head shape.
+ * Height of the box the selection cursor spans in staff mode, as a multiple of the staff space: the room a
+ * note needs for its stem and its head. The cursor marks the note's slot, not the ink the head is drawn
+ * with, so it looks the same for every note and every head shape.
  */
-const staffNoteBoxHeight = 60;
+const staffNoteBoxHeight = staffSpacePx * 6;
 
 /** Where an arrow key moves the cursor: the address to select, its measure, and the element it came from. */
 interface IArrowMove {
@@ -1053,47 +1054,39 @@ export class SelectionView {
                     continue;
                 }
 
-                // Runs sit at margin-top:64px inside the 80px viewer. Extend the
-                // overlay upward to the viewer top edge (0px) and downward
-                // through the 20px margin-bottom (+2px).
-                const offsetY = -64;
-                const heightOffset = 84;
+                // A group covers the note band of the row its runs live in: a row holds one viewer, whose
+                // height makes up that band, while the runs are only as tall as the line they sit on. The
+                // band reaches below the row by the room a note's marks hang into — its dot, its accent —
+                // so a group whose notes carry marks is still covered by its own band.
+                const row = runs[0].closest<HTMLElement>(".staff-measure-track-row");
+                if (row === null) {
+                    continue;
+                }
+
+                const rowRect = row.getBoundingClientRect();
 
                 // Compute the union rect of all runs (gap-free horizontal coverage).
-                let minTop = Infinity;
-                let maxBottom = -Infinity;
                 let minLeft = Infinity;
                 let maxRight = -Infinity;
 
                 for (const run of runs) {
-                    const r = this.computeElementRect(run, containerRect);
-                    const absTop = r.y + containerRect.top;
-                    const absBottom = absTop + r.height;
+                    const runRect = run.getBoundingClientRect();
 
-                    if (absTop < minTop) {
-                        minTop = absTop;
+                    if (runRect.left < minLeft) {
+                        minLeft = runRect.left;
                     }
 
-                    if (absBottom > maxBottom) {
-                        maxBottom = absBottom;
-                    }
-
-                    const rawRect = run.getBoundingClientRect();
-                    if (rawRect.left < minLeft) {
-                        minLeft = rawRect.left;
-                    }
-
-                    if (rawRect.right > maxRight) {
-                        maxRight = rawRect.right;
+                    if (runRect.right > maxRight) {
+                        maxRight = runRect.right;
                     }
                 }
 
-                // Narrow left edge to the first run's inner content, with 10 px padding
-                // but never beyond the run's own bounding box.
+                // Narrow left edge to the first run's inner content, with a staff space of padding but
+                // never beyond the run's own bounding box.
                 const firstContent = runs[0].querySelector<HTMLElement>(contentSelector);
                 if (firstContent) {
                     const firstRect = firstContent.getBoundingClientRect();
-                    minLeft = Math.max(minLeft, firstRect.left - (10 * this.zoomFactor));
+                    minLeft = Math.max(minLeft, firstRect.left - (staffSpacePx * this.zoomFactor));
                 }
 
                 // Narrow right edge to the last run's inner content.
@@ -1103,15 +1096,18 @@ export class SelectionView {
                     maxRight = lastRect.right + (2 * this.zoomFactor);
                 }
 
-                // Convert viewport-pixel deltas to CSS pixels. offsetY/heightOffset
-                // are CSS pixels and must not be divided.
+                // Convert viewport-pixel deltas to CSS pixels, which the overlay container is laid out in.
                 const z = this.zoomFactor;
+
+                // The band marks the group a little wider than its content, so a group whose notes reach its
+                // edges still reads as marked.
+                const bandWidth = 5;
 
                 this.createOverlay(overlayContainer, {
                     x: (minLeft - containerRect.left) / z,
-                    y: ((minTop - containerRect.top) / z) + offsetY,
-                    width: (maxRight - minLeft) / z,
-                    height: ((maxBottom - minTop) / z) + heightOffset,
+                    y: (rowRect.top - containerRect.top) / z,
+                    width: ((maxRight - minLeft) / z) + bandWidth,
+                    height: (rowRect.height / z) + (staffSpacePx * 2),
                 });
             }
 
