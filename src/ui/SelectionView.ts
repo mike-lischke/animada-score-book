@@ -22,6 +22,13 @@ const selectionCursorClass = "selection-cursor";
 const noteSelectedClass = "note-selected";
 const staffNoteRunClass = "staff-note-viewer-run";
 
+/**
+ * Height, in px, of the box the selection cursor spans in staff mode: the room a note needs for its stem
+ * and its head. The cursor marks the note's slot, not the ink the head is drawn with, so it looks the same
+ * for every note and every head shape.
+ */
+const staffNoteBoxHeight = 60;
+
 /** Where an arrow key moves the cursor: the address to select, its measure, and the element it came from. */
 interface IArrowMove {
     /** 1-based measure the cursor moves into. */
@@ -488,7 +495,7 @@ export class SelectionView {
             return [...rowElement.querySelectorAll<HTMLElement>(".staff-note-viewer-run")]
                 .filter((run) => {
                     return run.querySelector(
-                        ".staff-note-viewer-note-symbol, .staff-note-viewer-rest-symbol",
+                        ".staff-note-head, .staff-note-viewer-rest-symbol",
                     ) !== null;
                 });
         };
@@ -1035,7 +1042,6 @@ export class SelectionView {
             // coverage between adjacent steps but narrow the left/right edges to the
             // inner note-content elements so the overlay hugs the actual note symbols.
             const contentSelector = [
-                ".staff-note-viewer-note-symbol",
                 ".staff-note-head",
                 ".staff-note-viewer-rest-symbol",
             ].join(", ");
@@ -1374,8 +1380,8 @@ export class SelectionView {
     /**
      * Computes the rectangle that should anchor the selection cursor for a single note.
      * In grid mode this is the note cell. In staff mode the horizontal position comes from the
-     * note/rest symbol while the vertical position is corrected to the single-line reference, so
-     * the cursor stays put when notes on different staff lines are selected.
+     * note/rest symbol while the vertical position comes from the note's slot, so the cursor stays
+     * put when notes on different staff lines are selected.
      *
      * @param entry The selection entry identifying the note or group.
      * @param isStaffMode Whether the arrangement is rendered in staff mode.
@@ -1394,9 +1400,7 @@ export class SelectionView {
             return noteElement.getBoundingClientRect();
         }
 
-        const symbol = noteElement.querySelector<HTMLElement>(
-            ".staff-note-viewer-note-symbol, .staff-note-viewer-rest-symbol",
-        );
+        const symbol = this.glyphElement(noteElement);
         if (!symbol) {
             return noteElement.getBoundingClientRect();
         }
@@ -1404,12 +1408,24 @@ export class SelectionView {
         const runRect = noteElement.getBoundingClientRect();
         const symbolRect = symbol.getBoundingClientRect();
 
-        // Anchor the cursor to the run and move it so the cursor matches the single-line note position.
+        // The stem of a note needs room above its line and its head room below it, so the cursor spans that
+        // box instead of the head's ink. Its line is the middle of the run, which the viewer draws its line
+        // on, so the cursor stays put when notes on different staff lines are selected.
+        const lineY = runRect.top + (runRect.height / 2);
         const baseTranslateY = 8;
-        const singleLineTop = runRect.top + ((runRect.height - symbolRect.height) / 2) - baseTranslateY;
-        const glyphLeft = this.staffGlyphLeftEdge(noteElement, symbol);
+        const top = lineY - baseTranslateY - (staffNoteBoxHeight / 2);
 
-        return new DOMRect(glyphLeft, singleLineTop, symbolRect.width, symbolRect.height);
+        return new DOMRect(symbolRect.left, top, symbolRect.width, staffNoteBoxHeight);
+    }
+
+    /**
+     * @param run The staff note or rest run element.
+     *
+     * @returns The element that is drawn at the glyph's place: a note's head, whose box is its ink, or a
+     * rest's symbol.
+     */
+    private glyphElement(run: HTMLElement): HTMLElement | null {
+        return run.querySelector<HTMLElement>(".staff-note-head, .staff-note-viewer-rest-symbol");
     }
 
     /**
@@ -1421,49 +1437,10 @@ export class SelectionView {
      * @returns The glyph centre in viewport pixels.
      */
     private staffRunGlyphCenterX(run: HTMLElement): number {
-        const symbol = run.querySelector<HTMLElement>(
-            ".staff-note-viewer-note-symbol, .staff-note-viewer-rest-symbol",
-        );
+        const symbol = this.glyphElement(run);
         const rect = (symbol ?? run).getBoundingClientRect();
 
         return rect.left + (rect.width / 2);
-    }
-
-    private staffGlyphLeftEdge(run: HTMLElement, symbol: HTMLElement): number {
-        const symbolRect = symbol.getBoundingClientRect();
-
-        if (symbol.classList.contains("staff-note-viewer-rest-symbol")) {
-            // Rests are always centred in their run via CSS, regardless of duration, so the
-            // symbol's own rendered rect (not a duration-derived anchor) gives the true position.
-            return symbolRect.left + 5;
-        }
-
-        const head = run.querySelector<HTMLElement>(".staff-note-head");
-        const headRect = head?.getBoundingClientRect();
-        const centerX = headRect
-            ? headRect.left + (headRect.width / 2)
-            : symbolRect.left + (symbolRect.width / 2);
-
-        if (head?.classList.contains("cross")) {
-            const cross = head.querySelector<HTMLElement>(".staff-note-head-cross-svg");
-
-            return cross ? cross.getBoundingClientRect().left : centerX - 7;
-        }
-
-        if (head?.classList.contains("square")) {
-            return centerX - 14;
-        }
-
-        if (head?.classList.contains("triangle")) {
-            return centerX - 7;
-        }
-
-        if (head?.classList.contains("diamond")) {
-            return centerX - 5.5;
-        }
-
-        // Oval: the head is drawn at the left edge of the note sprite.
-        return symbolRect.left + 1;
     }
 
     /**

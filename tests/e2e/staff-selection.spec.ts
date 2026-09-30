@@ -40,7 +40,7 @@ const selectedNoteCount = async (page: Page): Promise<number> => {
             return element.getBoundingClientRect();
         });
         const noteheads = [...document.querySelectorAll<HTMLElement>(
-            ".staff-note-viewer-note-run .note-image",
+            ".staff-note-viewer-note-run .staff-note-head",
         )].map((element) => {
             return element.getBoundingClientRect();
         });
@@ -79,7 +79,7 @@ test.describe("Staff view selection", () => {
     test("clicking a single note selects it with the note-selected CSS class", async ({ page }) => {
         // Find the first note symbol in the first bar of the first track.
         const firstNote = page.locator(".staff-measure-viewer").first()
-            .locator(".staff-measure-track-row .staff-note-viewer-note-symbol").first();
+            .locator(".staff-measure-track-row .staff-note-head-symbol").first();
 
         await expect(firstNote).toBeVisible();
         await firstNote.click();
@@ -87,6 +87,28 @@ test.describe("Staff view selection", () => {
         // The parent run should have the note-selected class.
         const selectedRun = page.locator(".staff-note-viewer-run.note-selected").first();
         await expect(selectedRun).toBeVisible();
+    });
+
+    test("draws the selection cursor on the note's slot", async ({ page }) => {
+        const firstNote = page.locator(".staff-measure-viewer").first()
+            .locator(".staff-measure-track-row .staff-note-head").first();
+
+        await expect(firstNote).toBeVisible();
+        await firstNote.click();
+
+        const cursor = page.locator(".selection-cursor").first();
+        await expect(cursor).toBeVisible();
+
+        // The cursor spans the note's slot, so it reaches above and below the head's ink.
+        const cursorBox = await cursor.boundingBox();
+        const headBox = await firstNote.boundingBox();
+        if (!cursorBox || !headBox) {
+            throw new Error("The selection cursor or the note head has no bounding box.");
+        }
+
+        expect(cursorBox.height).toBeGreaterThan(headBox.height * 2);
+        expect(cursorBox.y).toBeLessThan(headBox.y);
+        expect(cursorBox.y + cursorBox.height).toBeGreaterThan(headBox.y + headBox.height);
     });
 
     test("clicking a beam selects the beamed note group", async ({ page }) => {
@@ -402,7 +424,7 @@ test.describe("Staff view selection", () => {
     test("dragging a selection rect across notes selects them individually", async ({ page }) => {
         // Find two adjacent note runs.
         const runs = page.locator(
-            ".staff-measure-track-row .staff-note-viewer-run:has(.staff-note-viewer-note-symbol)",
+            ".staff-measure-track-row .staff-note-viewer-run:has(.staff-note-head-symbol)",
         );
         const count = await runs.count();
         if (count < 2) {
@@ -434,7 +456,7 @@ test.describe("Staff view selection", () => {
     test("deselecting by clicking empty space clears all selections", async ({ page }) => {
         // First select a note.
         const firstNote = page.locator(
-            ".staff-measure-track-row .staff-note-viewer-note-symbol",
+            ".staff-measure-track-row .staff-note-head-symbol",
         ).first();
         await expect(firstNote).toBeVisible();
         await firstNote.click();

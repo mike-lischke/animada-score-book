@@ -36,11 +36,11 @@ test.describe("Staff view subdivision rendering", () => {
                 ));
 
                 return runs.map((run) => {
-                    const noteSymbol = run.querySelector<SVGElement>(".staff-note-viewer-note-symbol");
+                    const head = run.querySelector<SVGElement>(".staff-note-head-symbol text");
                     const restSymbol = run.querySelector<HTMLElement>(".staff-note-viewer-rest-symbol");
 
                     return {
-                        noteValue: noteSymbol?.getAttribute("data-note-image-value") ?? null,
+                        head: head?.textContent.codePointAt(0) ?? null,
                         hasRest: restSymbol !== null,
                     };
                 });
@@ -54,11 +54,11 @@ test.describe("Staff view subdivision rendering", () => {
         expect(bar4.length).toBeGreaterThan(0);
         // Bar 2 (with 6:8 subdivision) must render notes.
         expect(bar2.some((run) => {
-            return run.noteValue !== null;
+            return run.head !== null;
         })).toBeTruthy();
         // Bar 4: just verify it renders at least something.
         expect(bar4.some((run) => {
-            return run.noteValue !== null || run.hasRest;
+            return run.head !== null || run.hasRest;
         })).toBeTruthy();
     });
 
@@ -129,7 +129,7 @@ test.describe("Staff view subdivision rendering", () => {
                 return -1;
             }
 
-            return row.querySelectorAll(".staff-note-viewer-note-symbol").length;
+            return row.querySelectorAll(".staff-note-head-symbol").length;
         });
 
         expect(noteCount).toBe(3);
@@ -210,7 +210,7 @@ test.describe("Staff view subdivision rendering", () => {
         await expect(page.locator(".staff-measure-track-row").first()).toBeVisible();
         await expect(
             page.locator(".staff-measure-viewer").first()
-                .locator(".staff-measure-track-row .staff-note-viewer-note-symbol"),
+                .locator(".staff-measure-track-row .staff-note-head-symbol"),
         ).toHaveCount(6);
 
         const runData = await page.evaluate(() => {
@@ -220,11 +220,12 @@ test.describe("Staff view subdivision rendering", () => {
             ));
 
             return runs.map((run) => {
-                const noteSymbol = run.querySelector<SVGElement>(".staff-note-viewer-note-symbol");
-                const noteValue = noteSymbol?.getAttribute("data-note-image-value") ?? null;
+                const head = run.querySelector<SVGElement>(".staff-note-head-symbol text");
+                const flag = run.querySelector<SVGElement>(".staff-note-head-flag text");
 
                 return {
-                    noteValue,
+                    head: head?.textContent.codePointAt(0) ?? null,
+                    flag: flag?.textContent.codePointAt(0) ?? null,
                     beamSegments: run.querySelectorAll(".staff-note-viewer-beam").length,
                 };
             });
@@ -235,13 +236,11 @@ test.describe("Staff view subdivision rendering", () => {
         // The 32nd + 8th pair in the same pulse is rendered as a beamed group.
         expect(runData[2].beamSegments).toBeGreaterThan(0);
 
-        const noteValues = runData.map((run) => {
-            return run.noteValue;
-        }).filter((value): value is string => {
-            return value !== null;
-        });
-        const distinctValues = new Set(noteValues);
-        expect(distinctValues.size).toBeGreaterThanOrEqual(2);
+        // The bar mixes hollow, filled and flagged values, so the symbols have to differ.
+        const rendered = new Set(runData.map((run) => {
+            return `${run.head}-${run.flag}`;
+        }));
+        expect(rendered.size).toBeGreaterThanOrEqual(2);
     });
 
     test("spans the tuplet bracket over the rests of the group", async ({ page }) => {

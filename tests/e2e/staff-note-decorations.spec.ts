@@ -309,11 +309,10 @@ test.describe("Note decorations", () => {
 
         await expect(page.locator(".staff-measure-track-row").first()).toBeVisible();
 
-        // Ghost notes have the ghost-note class for opening paren + a span for closing paren.
-        const ghostNote = page.locator(".staff-note-head.ghost-note").first();
+        // Ghost notes are wrapped in the catalogue's parentheses.
+        const ghostNote = page.locator(".staff-note-head:has(.staff-note-head-paren-left)").first();
         await expect(ghostNote).toBeVisible();
-        const ghostParen = ghostNote.locator(".staff-note-head-ghost-paren");
-        await expect(ghostParen).toBeVisible();
+        await expect(ghostNote.locator(".staff-note-head-paren-right")).toBeVisible();
     });
 
     test("renders damped plus sign for High Surdo muted", async ({ page }) => {
@@ -375,9 +374,19 @@ test.describe("Note decorations", () => {
 
         await expect(page.locator(".staff-measure-track-row").first()).toBeVisible();
 
-        const accentMark = page.locator(".staff-note-viewer-accent").first();
+        const accentMark = page.locator(".staff-note-head-accent text").first();
         await expect(accentMark).toBeVisible();
-        await expect(accentMark).toHaveText(">");
+
+        // The accent is the font's accent above the note at U+E4A0, drawn under the head.
+        await expect(accentMark).toHaveText(String.fromCodePoint(0xE4A0));
+
+        const accentBox = await page.locator(".staff-note-head-accent").first().boundingBox();
+        const headBox = await page.locator(".staff-note-head").first().boundingBox();
+        if (!accentBox || !headBox) {
+            throw new Error("Note head or accent mark has no bounding box.");
+        }
+
+        expect(accentBox.y).toBeGreaterThanOrEqual(headBox.y + headBox.height);
     });
 
     test("renders rimshot decoration for Repinique rimshot", async ({ page }) => {
@@ -511,8 +520,8 @@ test.describe("Note decorations", () => {
         await expect(page.locator(".staff-measure-track-row").first()).toBeVisible();
 
         // Ghost parentheses should NOT be present.
-        const ghostParen = page.locator(".staff-note-head-ghost-paren");
-        await expect(ghostParen).toHaveCount(0);
+        await expect(page.locator(".staff-note-head-paren-left")).toHaveCount(0);
+        await expect(page.locator(".staff-note-head-paren-right")).toHaveCount(0);
 
         // But rimshot cross SHOULD be present.
         const rimshotCross = page.locator(".staff-note-head-rimshot-cross-svg").first();
@@ -521,7 +530,7 @@ test.describe("Note decorations", () => {
 
     test("keeps the augmentation dot clear of cross and triangle heads", async ({ page }) => {
         const ghost = { damping: 0, accent: false, ghost: true };
-        // Dotted quarters carry no flags, so the sprite draws nothing but the dot.
+        // Dotted quarters carry no flags, so these notes draw nothing but head and dot.
         const packed = buildPackedArrangement([
             {
                 instrumentId: "2", // Tamborim – cross heads
@@ -560,39 +569,37 @@ test.describe("Note decorations", () => {
 
         const heads = await page.evaluate(() => {
             return [...document.querySelectorAll<HTMLElement>(".staff-note-head")].map((head) => {
-                const paren = head.querySelector<HTMLElement>(".staff-note-head-ghost-paren");
+                const box = head.getBoundingClientRect();
                 const dot = head.querySelector<HTMLElement>(".staff-note-head-dot");
-                const symbol = head.querySelector<SVGElement>(".staff-note-viewer-note-symbol");
+                const paren = head.querySelector<HTMLElement>(".staff-note-head-paren-right");
+                const dotBox = dot?.getBoundingClientRect();
+                const parenBox = paren?.getBoundingClientRect();
 
                 return {
                     className: head.className,
-                    dotOffset: dot === null
+                    dotGap: dotBox === undefined ? null : Math.round(dotBox.left - box.right),
+                    parenGap: parenBox === undefined || dotBox === undefined
                         ? null
-                        : Math.round(dot.getBoundingClientRect().left - head.getBoundingClientRect().left),
-                    parenLeft: paren === null ? null : getComputedStyle(paren).left,
-                    spriteDot: symbol?.getAttribute("style")?.includes("--note-show-dot: inline") ?? false,
+                        : Math.round(parenBox.right - dotBox.left),
                 };
             });
         });
 
-        // A head that is centred on the stem covers the dot's place, so these heads hide the sprite's
-        // dot and draw their own beside their ink; a ghost's closing parenthesis makes room for it.
-        // Every head ends its ink on the stem's right edge, so the dot sits at the same distance in all
-        // of them, two px right of the anchor - where the sprite draws its own dot.
+        // The dot's ink starts on its box's left edge, a strike beside the head's ink, at the same
+        // distance for every head shape. The closing parenthesis ends on its box's right edge and leaves
+        // room for the dot: both symbols' ink is about 0.4 staff spaces wide, so a gap of 0.8 staff
+        // spaces is the least that keeps them apart.
         expect(heads[0].className).toContain("cross");
-        expect(heads[0].className).toContain("staff-note-head-dotted");
-        expect(heads[0].dotOffset).toBe(15);
-        expect(heads[0].spriteDot).toBe(false);
-        expect(heads[0].parenLeft).toBeNull();
+        expect(heads[0].dotGap).toBe(4);
+        expect(heads[0].parenGap).toBeNull();
 
-        expect(heads[1].dotOffset).toBe(15);
-        expect(heads[1].parenLeft).toBe("20px");
+        expect(heads[1].dotGap).toBe(4);
+        expect(heads[1].parenGap).toBeGreaterThanOrEqual(8);
 
         expect(heads[2].className).toContain("triangle");
-        expect(heads[2].dotOffset).toBe(15);
-        expect(heads[2].spriteDot).toBe(false);
+        expect(heads[2].dotGap).toBe(4);
 
-        expect(heads[3].parenLeft).toBe("26px");
+        expect(heads[3].parenGap).toBeGreaterThanOrEqual(8);
     });
 });
 
@@ -608,7 +615,7 @@ test.describe("Decoration colouring while selected", () => {
 
         await openStaffArrangement(page, { packed, sessionId: "e2e-deco-selected-ghost" });
 
-        const head = page.locator(".staff-measure-track-row .staff-note-head.ghost-note").first();
+        const head = page.locator(".staff-measure-track-row .staff-note-head:has(.staff-note-head-paren-left)").first();
         await expect(head).toBeVisible();
         await clickNoteHead(page, head);
         await expect(page.locator(".staff-note-viewer-run.note-selected")).toHaveCount(1);
@@ -616,7 +623,7 @@ test.describe("Decoration colouring while selected", () => {
         // The opening parenthesis is a ::before on the head and was always coloured. The closing one
         // is a child span and needs its own colour, otherwise the pair is highlighted asymmetrically.
         const primary = await primaryColor(page);
-        const closingParen = page.locator(".staff-note-viewer-run.note-selected .staff-note-head-ghost-paren");
+        const closingParen = page.locator(".staff-note-viewer-run.note-selected .staff-note-head-paren-right");
         await expect(closingParen).toHaveCSS("color", primary);
     });
 
@@ -661,10 +668,9 @@ test.describe("Decoration colouring while selected", () => {
         await clickNoteHead(page, head);
         await expect(page.locator(".staff-note-viewer-run.note-selected")).toHaveCount(1);
 
-        // The dot is a filled circle painted with the head's ink colour, so the selection has to
-        // override its background instead of its text colour.
+        // The dot is a glyph of the music font, so the selection colours it with the head's ink colour.
         const primary = await primaryColor(page);
         const dot = page.locator(".staff-note-viewer-run.note-selected .staff-note-head-dot");
-        await expect(dot).toHaveCSS("background-color", primary);
+        await expect(dot).toHaveCSS("color", primary);
     });
 });

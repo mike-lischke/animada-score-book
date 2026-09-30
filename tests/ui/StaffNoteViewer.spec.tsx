@@ -557,9 +557,8 @@ describe.sequential("StaffNoteViewer beams", () => {
             />,
         );
 
-        const head = renderResult.container.querySelector(".staff-note-head");
-        expect(head?.classList.contains("ghost-note")).toBe(true);
-        expect(renderResult.container.querySelector(".staff-note-head-ghost-paren")).not.toBeNull();
+        expect(renderResult.container.querySelector(".staff-note-head-paren-left")).not.toBeNull();
+        expect(renderResult.container.querySelector(".staff-note-head-paren-right")).not.toBeNull();
     });
 
     it("shows the accent mark from the note style's sample profile", () => {
@@ -579,7 +578,7 @@ describe.sequential("StaffNoteViewer beams", () => {
             />,
         );
 
-        expect(renderResult.container.querySelector(".staff-note-viewer-accent")).not.toBeNull();
+        expect(renderResult.container.querySelector(".staff-note-head-accent")).not.toBeNull();
     });
 
     it("renders icons for every additional hand technique", () => {
@@ -756,7 +755,7 @@ describe.sequential("StaffNoteViewer beams", () => {
 
         // The slot's duration matches no value, so the rest is drawn with the value its subdivision
         // stands for — the same one the toolbars mark for a selected slot.
-        const restSymbol = renderResult.container.querySelector(".staff-note-viewer-rest-symbol");
-        expect(restSymbol?.getAttribute("style")).toContain("--rest-show-eighth: inline");
+        const restSymbol = renderResult.container.querySelector(".staff-note-viewer-rest-symbol text");
+        expect(restSymbol?.textContent).toBe(String.fromCodePoint(0xE4E6));
     });
 });

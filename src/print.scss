@@ -279,10 +279,8 @@
     }
 
     /* Note decorations: force black for print. */
-    .staff-note-head.ghost-note::before,
-    .staff-note-head-ghost-paren,
     .staff-note-head-damped-plus,
-    .staff-note-viewer-accent {
+    .staff-note-head {
         color: #000 !important;
     }
 

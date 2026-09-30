@@ -29,6 +29,9 @@ export interface ISmuflGlyphMetrics {
     /** Where an up-stem leaves the glyph's ink. Missing for a glyph that carries no stem. */
     stemUpSE?: ISmuflPoint;
 
+    /** Where an up-stem ends in a flag's ink. Missing for a glyph that attaches no stem. */
+    stemUpNW?: ISmuflPoint;
+
     /** Where a down-stem leaves the glyph's ink. Missing for a glyph that carries no stem. */
     stemDownNW?: ISmuflPoint;
 }
@@ -129,18 +132,20 @@ const readGlyphMetrics = (value: unknown): ISmuflGlyphMetrics | undefined => {
     const bBoxNE = readPoint(source.bBoxNE);
     const bBoxSW = readPoint(source.bBoxSW);
     const stemUpSE = readPoint(source.stemUpSE);
+    const stemUpNW = readPoint(source.stemUpNW);
     const stemDownNW = readPoint(source.stemDownNW);
 
     // A box is either stated whole or not at all. Without one the anchors still say where a stem
     // attaches, so a glyph the font describes that much is kept.
     if ((bBoxNE === undefined || bBoxSW === undefined)
-        && stemUpSE === undefined && stemDownNW === undefined) {
+        && stemUpSE === undefined && stemUpNW === undefined && stemDownNW === undefined) {
         return undefined;
     }
 
     return {
         ...(bBoxNE === undefined || bBoxSW === undefined ? {} : { bBoxNE, bBoxSW }),
         ...(stemUpSE === undefined ? {} : { stemUpSE }),
+        ...(stemUpNW === undefined ? {} : { stemUpNW }),
         ...(stemDownNW === undefined ? {} : { stemDownNW }),
     };
 };
@@ -183,6 +188,7 @@ export class SmuflFontMetrics {
                 bBoxNE: box?.bBoxNE,
                 bBoxSW: box?.bBoxSW,
                 stemUpSE: glyphAnchors?.stemUpSE,
+                stemUpNW: glyphAnchors?.stemUpNW,
                 stemDownNW: glyphAnchors?.stemDownNW,
             });
 

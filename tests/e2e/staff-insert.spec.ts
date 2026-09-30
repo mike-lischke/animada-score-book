@@ -157,7 +157,7 @@ test.describe("staff insert mode", () => {
         await page.keyboard.press("Delete");
 
         await expect(runs).toHaveCount(13);
-        await expect(runs.nth(4).locator(".staff-note-viewer-note-symbol")).toHaveCount(1);
+        await expect(runs.nth(4).locator(".staff-note-head-symbol")).toHaveCount(1);
 
         await expect.poll(async () => {
             return eventList((await storedTrack(page)).measures[0].events);

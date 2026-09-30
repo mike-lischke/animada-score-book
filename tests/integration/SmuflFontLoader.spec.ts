@@ -80,11 +80,12 @@ const createEngravingDefaults = (staffLineThickness: number) => {
  * @param staffLineThickness The value that tells the fonts apart.
  * @param restHeight The height the font states for its quarter rest.
  * @param hasBlackNotehead Whether the font describes a black notehead.
+ * @param hasFlag Whether the font describes an eighth flag.
  *
  * @returns The metrics file as the generator writes it.
  */
 const createMetrics = (fontName: string, staffLineThickness: number, restHeight: number,
-    hasBlackNotehead: boolean) => {
+    hasBlackNotehead: boolean, hasFlag = true) => {
     const glyphs: Record<string, unknown> = {
         [SmuflGlyph.RestQuarter]: { bBoxNE: [1.08, restHeight], bBoxSW: [0.004, -restHeight] },
     };
@@ -92,6 +93,12 @@ const createMetrics = (fontName: string, staffLineThickness: number, restHeight:
     if (hasBlackNotehead) {
         glyphs[SmuflGlyph.NoteheadBlack] = {
             bBoxNE: [1.18, 0.5], bBoxSW: [0, -0.5], stemUpSE: [1.18, 0.168], stemDownNW: [0, -0.168],
+        };
+    }
+
+    if (hasFlag) {
+        glyphs[SmuflGlyph.Flag8thUp] = {
+            bBoxNE: [1.056, 0.036], bBoxSW: [0, -3.24], stemUpNW: [0, -0.04],
         };
     }
 
@@ -315,6 +322,14 @@ describe.sequential("SmuflFontLoader", () => {
         // of the head's ink centre.
         expect(style.getPropertyValue("--stem-anchor-y-noteheadblack")).toBe("2px");
         expect(style.getPropertyValue("--stem-anchor-x-noteheadblack")).toBe("6px");
+
+        // The ink box of a drawn glyph is what the drawing places the symbols around it by.
+        expect(style.getPropertyValue("--glyph-ink-width-noteheadblack")).toBe("12px");
+        expect(style.getPropertyValue("--glyph-ink-height-noteheadblack")).toBe("10px");
+
+        // A flag states where the stem ends inside its ink, as lengths right of and above it.
+        expect(style.getPropertyValue("--stem-end-x-flag8thup")).toBe("0px");
+        expect(style.getPropertyValue("--stem-end-y-flag8thup")).toBe("0px");
 
         await loader.select("leipzig");
 

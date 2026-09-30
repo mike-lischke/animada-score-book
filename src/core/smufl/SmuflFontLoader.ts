@@ -15,6 +15,7 @@
  */
 
 import { staffSpacePx } from "../MeasureLayout.js";
+import { ScoreSymbols } from "../ScoreSymbols.js";
 import {
     SmuflFontMetrics, type ISmuflEngravingDefaults, type ISmuflFontMetrics,
     type ISmuflGlyphMetrics
@@ -56,6 +57,20 @@ const engravingVariables: ReadonlyArray<readonly [keyof ISmuflEngravingDefaults,
  * far above the baseline the stem ends.
  */
 export const stemAnchorVariablePrefix = "--stem-anchor-";
+
+/**
+ * The prefix the ink box of a drawn glyph is published under: `--glyph-ink-`, the edge, and the glyph's
+ * name in lower case, e.g. `--glyph-ink-width-noteheadblack`. The box is what the font draws, in px, so
+ * the symbols around a glyph are placed by the ink and not by a box the drawing picked.
+ */
+export const glyphInkVariablePrefix = "--glyph-ink-";
+
+/**
+ * The prefix a glyph's stem end is published under: `--stem-end-` and the glyph's name in lower case,
+ * e.g. `--stem-end-y-flag8thup`. A flag hangs on the stem, and the font states where the stem's end
+ * sits in the flag's ink: `x` is how far right of the glyph's origin it sits, `y` how far above it.
+ */
+export const stemEndVariablePrefix = "--stem-end-";
 
 /**
  * @param value A thickness or length in staff spaces.
@@ -368,6 +383,34 @@ export class SmuflFontLoader {
             const inkCentre = (bBoxNE[0] + bBoxSW[0]) / 2;
             style.setProperty(`${stemAnchorVariablePrefix}x-${glyphName}`, offsetToPixels(anchor[0] - inkCentre));
             style.setProperty(`${stemAnchorVariablePrefix}y-${glyphName}`, offsetToPixels(anchor[1]));
+        }
+
+        this.publishGlyphBoxes(style);
+    }
+
+    /**
+     * Publishes what the font states about the glyphs the score draws: the ink box of each of them, and
+     * where the stem ends in a glyph that carries one.
+     *
+     * @param style The style of the document root.
+     */
+    private publishGlyphBoxes(style: CSSStyleDeclaration): void {
+        for (const glyph of ScoreSymbols.drawnGlyphs) {
+            const metrics = this.glyphMetrics(glyph);
+            const glyphName = glyph.toLowerCase();
+            const { bBoxNE, bBoxSW, stemUpNW } = metrics ?? {};
+
+            if (bBoxNE !== undefined && bBoxSW !== undefined) {
+                style.setProperty(`${glyphInkVariablePrefix}width-${glyphName}`,
+                    lengthToPixels(bBoxNE[0] - bBoxSW[0]));
+                style.setProperty(`${glyphInkVariablePrefix}height-${glyphName}`,
+                    lengthToPixels(bBoxNE[1] - bBoxSW[1]));
+            }
+
+            if (stemUpNW !== undefined) {
+                style.setProperty(`${stemEndVariablePrefix}x-${glyphName}`, offsetToPixels(stemUpNW[0]));
+                style.setProperty(`${stemEndVariablePrefix}y-${glyphName}`, offsetToPixels(-stemUpNW[1]));
+            }
         }
     }
 }

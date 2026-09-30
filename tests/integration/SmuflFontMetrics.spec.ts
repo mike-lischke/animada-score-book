@@ -40,6 +40,8 @@ const metadata = {
         [SmuflGlyph.NoteheadBlack]: { stemUpSE: [1.18, 0.168], stemDownNW: [0, -0.168] },
         // A font may state an anchor for a glyph it gives no box for, which still places its stem.
         [SmuflGlyph.NoteheadHalf]: { stemUpSE: [1.18, 0.168] },
+        // A flag states where the stem ends in its ink instead of where a stem leaves a head.
+        [SmuflGlyph.Flag8thUp]: { stemUpNW: [0, -0.04] },
     },
 };
 
@@ -71,7 +73,11 @@ describe.sequential("SmuflFontMetrics", () => {
             SmuflGlyph.NoteheadHalf,
             SmuflGlyph.NoteheadBlack,
             SmuflGlyph.RestQuarter,
+            SmuflGlyph.Flag8thUp,
         ]);
+
+        // A flag carries no box of its own here, but the anchor that places its stem is kept.
+        expect(built.metrics?.glyphs[SmuflGlyph.Flag8thUp]).toEqual({ stemUpNW: [0, -0.04] });
     });
 
     it("reads a version a font states as a number", () => {

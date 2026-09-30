@@ -49,6 +49,25 @@ export enum ScoreSymbol {
     NoteheadTriangle,
     NoteheadCross,
     NoteheadDiamond,
+
+    /** The rests, one per standard value. */
+    RestWhole,
+    RestHalf,
+    RestQuarter,
+    RestEighth,
+    RestSixteenth,
+    RestThirtySecond,
+
+    /** The flags of the unbeamed values, which hang on the end of their stem. */
+    FlagEighth,
+    FlagSixteenth,
+    FlagThirtySecond,
+
+    /** What sits around the notes: the augmentation dot, the ghost note's parentheses, the accent. */
+    AugmentationDot,
+    GhostParenthesisLeft,
+    GhostParenthesisRight,
+    Accent,
 }
 
 /** What draws a symbol. */
@@ -65,8 +84,11 @@ export enum ScoreSymbolSource {
  * the box's centre line vertically; only the horizontal edge differs.
  */
 export enum GlyphAnchor {
-    /** Centred in the box, which is how a clef or a time signature sits. */
+    /** Centred in the box, which is how a clef, a time signature or a rest sits. */
     Centre,
+
+    /** Starting on the box's left edge, which is how a glyph a stem ends in is hung on that stem. */
+    LeftEdge,
 
     /** Ending on the box's right edge, which is how a notehead meets its stem. */
     RightEdge,
@@ -117,12 +139,21 @@ export interface IOwnPathSource {
 /** Where a symbol is drawn from. */
 export type IScoreSymbolDefinition = IMusicFontGlyphSource | IOwnPathSource;
 
+/** The ink box of a symbol, as the CSS lengths a drawing positions it by. */
+export interface ISymbolBox {
+    width: string;
+    height: string;
+}
+
 /** The vocabulary of notation symbols the score draws, and what draws each of them. */
 export class ScoreSymbols {
     /** Every symbol the score draws. A numeric enum lists its names alongside its values, hence the filter. */
     public static readonly all: readonly ScoreSymbol[] = Object.values(ScoreSymbol).filter((value) => {
         return typeof value === "number";
     });
+
+    /** The glyphs the score draws with the music font, so a font publishes the metrics they are read with. */
+    public static readonly drawnGlyphs: readonly SmuflGlyph[];
 
     private static readonly definitions: Readonly<Record<ScoreSymbol, IScoreSymbolDefinition>> = {
         [ScoreSymbol.PercussionClef]: {
@@ -223,12 +254,15 @@ export class ScoreSymbols {
                 ink: OwnPathInk.Filled,
             },
         },
+        // The cross head is a square cross, not the ink box of noteheadXBlack, which is wider than it is
+        // tall: its arms meet in the corners of a square box, so the head reads as an X and not as a
+        // squeezed one.
         [ScoreSymbol.NoteheadCross]: {
             source: ScoreSymbolSource.OwnPath,
             path: {
                 width: 1.2,
-                height: 1,
-                data: "M0.1 0.1 L1.1 0.9 M1.1 0.1 L0.1 0.9",
+                height: 1.2,
+                data: "M0.1 0.1 L1.1 1.1 M1.1 0.1 L0.1 1.1",
                 ink: OwnPathInk.Stroked,
                 strokeWidth: 0.2,
                 roundEnds: true,
@@ -242,6 +276,78 @@ export class ScoreSymbols {
                 data: "M0.49 0 L0.98 0.564 L0.49 1.128 L0 0.564 Z",
                 ink: OwnPathInk.Filled,
             },
+        },
+
+        [ScoreSymbol.RestWhole]: {
+            source: ScoreSymbolSource.MusicFontGlyph,
+            glyph: SmuflGlyph.RestWhole,
+            anchor: GlyphAnchor.Centre,
+        },
+        [ScoreSymbol.RestHalf]: {
+            source: ScoreSymbolSource.MusicFontGlyph,
+            glyph: SmuflGlyph.RestHalf,
+            anchor: GlyphAnchor.Centre,
+        },
+        [ScoreSymbol.RestQuarter]: {
+            source: ScoreSymbolSource.MusicFontGlyph,
+            glyph: SmuflGlyph.RestQuarter,
+            anchor: GlyphAnchor.Centre,
+        },
+        [ScoreSymbol.RestEighth]: {
+            source: ScoreSymbolSource.MusicFontGlyph,
+            glyph: SmuflGlyph.Rest8th,
+            anchor: GlyphAnchor.Centre,
+        },
+        [ScoreSymbol.RestSixteenth]: {
+            source: ScoreSymbolSource.MusicFontGlyph,
+            glyph: SmuflGlyph.Rest16th,
+            anchor: GlyphAnchor.Centre,
+        },
+        [ScoreSymbol.RestThirtySecond]: {
+            source: ScoreSymbolSource.MusicFontGlyph,
+            glyph: SmuflGlyph.Rest32nd,
+            anchor: GlyphAnchor.Centre,
+        },
+
+        [ScoreSymbol.FlagEighth]: {
+            source: ScoreSymbolSource.MusicFontGlyph,
+            glyph: SmuflGlyph.Flag8thUp,
+            anchor: GlyphAnchor.LeftEdge,
+        },
+        [ScoreSymbol.FlagSixteenth]: {
+            source: ScoreSymbolSource.MusicFontGlyph,
+            glyph: SmuflGlyph.Flag16thUp,
+            anchor: GlyphAnchor.LeftEdge,
+        },
+        [ScoreSymbol.FlagThirtySecond]: {
+            source: ScoreSymbolSource.MusicFontGlyph,
+            glyph: SmuflGlyph.Flag32ndUp,
+            anchor: GlyphAnchor.LeftEdge,
+        },
+
+        [ScoreSymbol.AugmentationDot]: {
+            source: ScoreSymbolSource.MusicFontGlyph,
+            glyph: SmuflGlyph.AugmentationDot,
+            anchor: GlyphAnchor.LeftEdge,
+        },
+
+        // Both parentheses end on the right edge of their box, so a drawing places the parenthesis's ink
+        // where it wants it and not a box the font's own side bearings decide.
+        [ScoreSymbol.GhostParenthesisLeft]: {
+            source: ScoreSymbolSource.MusicFontGlyph,
+            glyph: SmuflGlyph.NoteheadParenthesisLeft,
+            anchor: GlyphAnchor.RightEdge,
+        },
+        [ScoreSymbol.GhostParenthesisRight]: {
+            source: ScoreSymbolSource.MusicFontGlyph,
+            glyph: SmuflGlyph.NoteheadParenthesisRight,
+            anchor: GlyphAnchor.RightEdge,
+        },
+
+        [ScoreSymbol.Accent]: {
+            source: ScoreSymbolSource.MusicFontGlyph,
+            glyph: SmuflGlyph.ArticAccentAbove,
+            anchor: GlyphAnchor.LeftEdge,
         },
     };
 
@@ -322,5 +428,79 @@ export class ScoreSymbols {
                 }
             }
         }
+    }
+
+    /**
+     * Names the rest of a note value.
+     *
+     * @param value The rhythmic value of the rest.
+     *
+     * @returns The symbol the rest is drawn with.
+     */
+    public static rest(value: NoteLength): ScoreSymbol {
+        switch (value) {
+            case NoteLength.Whole: {
+                return ScoreSymbol.RestWhole;
+            }
+
+            case NoteLength.Half: {
+                return ScoreSymbol.RestHalf;
+            }
+
+            case NoteLength.Quarter: {
+                return ScoreSymbol.RestQuarter;
+            }
+
+            case NoteLength.Eighth: {
+                return ScoreSymbol.RestEighth;
+            }
+
+            case NoteLength.Sixteenth: {
+                return ScoreSymbol.RestSixteenth;
+            }
+
+            default: {
+                return ScoreSymbol.RestThirtySecond;
+            }
+        }
+    }
+
+    /**
+     * Names the flag of a note value.
+     *
+     * @param value The rhythmic value of the note.
+     *
+     * @returns The symbol the flag is drawn with, or undefined for a value that carries no flag.
+     */
+    public static flag(value: NoteLength): ScoreSymbol | undefined {
+        switch (value) {
+            case NoteLength.Eighth: {
+                return ScoreSymbol.FlagEighth;
+            }
+
+            case NoteLength.Sixteenth: {
+                return ScoreSymbol.FlagSixteenth;
+            }
+
+            case NoteLength.ThirtySecond: {
+                return ScoreSymbol.FlagThirtySecond;
+            }
+
+            default: {
+                return undefined;
+            }
+        }
+    }
+
+    static {
+        // `drawnGlyphs` derives from the definitions, which `member-ordering` places after the public
+        // fields, so it cannot be initialized alongside them.
+        Object.assign(ScoreSymbols, {
+            drawnGlyphs: [...new Set(ScoreSymbols.all.flatMap((symbol) => {
+                const definition = ScoreSymbols.definitions[symbol];
+
+                return definition.source === ScoreSymbolSource.MusicFontGlyph ? [definition.glyph] : [];
+            }))],
+        });
     }
 }

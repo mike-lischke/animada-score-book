@@ -238,7 +238,7 @@ test("widens a shrunk measure when an entry packs it tighter", async ({ page }) 
     }).toBe(barActionStripWidth);
 
     // A quadruplet splits a quarter note into sixteenths, which need more room between their anchors.
-    await page.locator(".staff-measure-track-row .staff-note-viewer-note-symbol").first().click();
+    await page.locator(".staff-measure-track-row .staff-note-head-symbol").first().click();
     await page.locator(".subdivisionToolbar button").click();
     await page.locator(".subdivisionToolbar .du-dropdown li", { hasText: "Quadruplet" }).locator("a")
         .click({ force: true });

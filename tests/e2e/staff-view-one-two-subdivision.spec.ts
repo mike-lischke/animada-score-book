@@ -84,7 +84,7 @@ test.describe("Staff view two-step note", () => {
                 return -1;
             }
 
-            return row.querySelectorAll(".staff-note-viewer-note-symbol").length;
+            return row.querySelectorAll(".staff-note-head-symbol").length;
         });
 
         expect(noteSymbolCount).toBe(3);

@@ -59,6 +59,15 @@ describe("ScoreSymbolView", () => {
         expect(text?.getAttribute("x")).toBe("10");
     });
 
+    it("hangs a flag on the left edge of its box, which is where its stem ends", () => {
+        const result = renderSymbol(ScoreSymbol.FlagEighth);
+        const text = svgOf(result).querySelector("text");
+
+        // The glyph's pen sits at the box's left edge, which is the box's origin.
+        expect(text?.getAttribute("x")).toBe("0");
+        expect(text?.textContent).toBe(String.fromCodePoint(0xE240));
+    });
+
     it("draws an own path in the ink box of its catalogue entry", () => {
         const result = renderSymbol(ScoreSymbol.NoteheadSquare);
         const svg = svgOf(result);

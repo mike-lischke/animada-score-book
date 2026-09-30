@@ -436,7 +436,7 @@ describe.sequential("StaffMeasureEditor input", () => {
             const symbol = document.createElement("span");
             symbol.className = event.noteStyleId === undefined
                 ? "staff-note-viewer-rest-symbol"
-                : "staff-note-viewer-note-symbol";
+                : "staff-note-head";
             run.append(symbol);
             row.append(run);
             input.scoreElementRegistry.createRef({

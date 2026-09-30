@@ -697,7 +697,7 @@ export class StaffMeasureEditor extends MeasureEditor {
         return [...row.querySelectorAll<HTMLElement>(".staff-note-viewer-run")]
             .filter((run) => {
                 return run.querySelector(
-                    ".staff-note-viewer-note-symbol, .staff-note-viewer-rest-symbol",
+                    ".staff-note-head, .staff-note-viewer-rest-symbol",
                 ) !== null;
             });
     }

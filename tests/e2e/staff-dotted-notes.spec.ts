@@ -73,7 +73,7 @@ test.beforeEach(async ({ page }) => {
 test("dots the selected note and takes the dot away again", async ({ page }) => {
     const dot = page.locator(".noteDotButton");
 
-    await page.locator(".staff-measure-track-row .staff-note-viewer-note-symbol").first().click();
+    await page.locator(".staff-measure-track-row .staff-note-head-symbol").first().click();
     await expect(page.locator(".staff-note-viewer-run.note-selected")).toHaveCount(1);
     await expect(page.locator(".noteLengthButton.du-btn-primary")).toHaveCount(1);
     await expect(dot).not.toHaveClass(/du-btn-primary/);

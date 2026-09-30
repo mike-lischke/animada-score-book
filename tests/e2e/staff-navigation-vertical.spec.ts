@@ -104,7 +104,7 @@ test("vertical navigation from a rest picks the note directly below its glyph", 
 
     const selectedX = await page.evaluate(
         glyphCenterX,
-        ".staff-note-viewer-run.note-selected .staff-note-viewer-note-symbol",
+        ".staff-note-viewer-run.note-selected .staff-note-head-symbol",
     );
 
     expect(selectedX).not.toBeNaN();

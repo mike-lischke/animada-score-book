@@ -195,85 +195,28 @@ export class StaffMeasureViewer extends UIComponent<IStaffMeasureViewerProps, IS
                 let noteHit = false;
                 const isSoundingNote = runLocation.noteId !== undefined;
 
-                // 1. Check the .note-image SVG for notehead and stem.
-                const noteImage = runEl.querySelector<HTMLElement>(".note-image");
-                if (noteImage) {
-                    const sr = noteImage.getBoundingClientRect();
-
-                    if (isSoundingNote) {
-                        // Notehead: bottom 29 % of the SVG height (viewBox: 0 0 60 120,
-                        // notehead occupies roughly y=85..120 → 35/120 ≈ 0.29).
-                        const nhTop = sr.bottom - (sr.height * 0.29);
-                        noteHit = rectsIntersect(rect, sr.left, nhTop, sr.right, sr.bottom, hitTolerance);
-
-                        // Stem: only for notes whose stem is inside the SVG (non-beamed).
-                        if (!noteHit && !runEl.querySelector(".staff-note-viewer-custom-stem")) {
-                            const stemHalfW = 4;
-                            const centerX = (sr.left + sr.right) / 2;
-                            noteHit = rectsIntersect(
-                                rect,
-                                centerX - stemHalfW, sr.top + (sr.height * 0.04),
-                                centerX + stemHalfW, sr.bottom - (sr.height * 0.15),
-                                hitTolerance,
-                            );
-                        }
-                    } else {
-                        // Rest: the rest symbol fills most of the SVG; use the full rect.
-                        noteHit = rectsIntersect(rect, sr.left, sr.top, sr.right, sr.bottom, hitTolerance);
-                    }
+                // 1. The head's box is the head's ink, and a rest's box is its ink as well, so the symbol
+                //    the run is drawn with is what a click has to hit.
+                const symbol = runEl.querySelector<HTMLElement>(
+                    isSoundingNote ? ".staff-note-head" : ".staff-note-viewer-rest-symbol",
+                );
+                if (symbol) {
+                    const sr = symbol.getBoundingClientRect();
+                    noteHit = rectsIntersect(rect, sr.left, sr.top, sr.right, sr.bottom, hitTolerance);
                 }
 
-                // 2. CSS stem for non-oval, non-beamed notes.
+                // 2. Stems carry a note as well, which is what a click beside the head aims at.
                 if (!noteHit) {
-                    const headStem = runEl.querySelector<HTMLElement>(".staff-note-head-stem");
+                    const headStem = runEl.querySelector<HTMLElement>(
+                        ".staff-note-head-stem, .staff-note-viewer-custom-stem",
+                    );
                     if (headStem) {
                         const r = headStem.getBoundingClientRect();
-                        noteHit = rectsIntersect(rect, r.left, r.top, r.right, r.bottom, hitTolerance);
-                    }
-                }
 
-                // 3. CSS stem for beamed notes — exclude the beam area at the top
-                //    (max 3 beams: 4 px each + 6 px gaps → 24 px) so that clicks
-                //    in the beam zone fall through to the NoteGroup check.
-                if (!noteHit) {
-                    const customStem = runEl.querySelector<HTMLElement>(".staff-note-viewer-custom-stem");
-                    if (customStem) {
-                        const r = customStem.getBoundingClientRect();
-                        const beamReserve = 24;
-                        noteHit = rectsIntersect(
-                            rect, r.left, r.top + beamReserve, r.right, r.bottom, hitTolerance,
-                        );
-                    }
-                }
-
-                // 4. Non-oval heads: ::after pseudo-elements inside .staff-note-head.
-                //    The head is 14×14 (or 11×11 diamond) at bottom:20px from the wrapper.
-                if (!noteHit) {
-                    const headWrapper = runEl.querySelector<HTMLElement>(".staff-note-head");
-                    if (headWrapper
-                        && (headWrapper.classList.contains("square")
-                            || headWrapper.classList.contains("triangle")
-                            || headWrapper.classList.contains("diamond"))) {
-                        const hw = headWrapper.getBoundingClientRect();
-                        const headHalf = 8;
-                        const centerX = hw.left + (hw.width / 2);
-                        // ::after is at bottom:20px, but getBoundingClientRect excludes
-                        // pseudo-elements. Use the wrapper bottom as anchor and offset.
-                        noteHit = rectsIntersect(
-                            rect,
-                            centerX - headHalf, hw.bottom - 20 - (headHalf * 2),
-                            centerX + headHalf, hw.bottom - 20,
-                            hitTolerance,
-                        );
-                    }
-                }
-
-                // 5. Cross head (separate SVG element).
-                if (!noteHit) {
-                    const crossHead = runEl.querySelector<HTMLElement>(".staff-note-head-cross-svg");
-                    if (crossHead) {
-                        const r = crossHead.getBoundingClientRect();
-                        noteHit = rectsIntersect(rect, r.left, r.top, r.right, r.bottom, hitTolerance);
+                        // The top of a beamed stem is where its beam sits, so that zone falls through to
+                        // the note group check instead.
+                        const reserve = headStem.classList.contains("staff-note-viewer-custom-stem") ? 24 : 0;
+                        noteHit = rectsIntersect(rect, r.left, r.top + reserve, r.right, r.bottom, hitTolerance);
                     }
                 }
 

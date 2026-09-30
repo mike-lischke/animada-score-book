@@ -55,7 +55,7 @@ test.beforeEach(async ({ page }) => {
 });
 
 test("creates a subdivision from the notes selected in the staff view", async ({ page }) => {
-    await page.locator(".staff-measure-track-row .staff-note-viewer-note-symbol").first().click();
+    await page.locator(".staff-measure-track-row .staff-note-head-symbol").first().click();
     const runsBefore = await page.locator(".staff-note-viewer-run").count();
 
     await page.locator(".subdivisionToolbar button").click();
@@ -72,7 +72,7 @@ test("creates a subdivision from the notes selected in the staff view", async ({
 });
 
 test("applies a length to a note beside a subdivision", async ({ page }) => {
-    await page.locator(".staff-measure-track-row .staff-note-viewer-note-symbol").first().click();
+    await page.locator(".staff-measure-track-row .staff-note-head-symbol").first().click();
     await page.locator(".subdivisionToolbar button").click();
     const quadruplet = page.locator(".subdivisionToolbar .du-dropdown li", { hasText: "Quadruplet" }).locator("a");
     await quadruplet.click({ force: true });
@@ -80,7 +80,7 @@ test("applies a length to a note beside a subdivision", async ({ page }) => {
     // The quarter note behind the subdivision is an event of its own, so it takes a new length even
     // though its track holds a subdivision. The marks come from the model, so the dot only lights up
     // when the edit really reached it.
-    const noteSymbols = page.locator(".staff-measure-track-row .staff-note-viewer-note-symbol");
+    const noteSymbols = page.locator(".staff-measure-track-row .staff-note-head-symbol");
     await expect(noteSymbols).toHaveCount(2);
     await noteSymbols.nth(1).click();
     await expect(page.locator(".noteLengthToolbar .noteLengthButton").first()).toBeEnabled();

@@ -79,7 +79,7 @@ test("backspace removes the event before the cursor and pulls the rest left", as
     await page.keyboard.press("Backspace");
 
     // The rest is gone as a whole and everything behind it moved one quarter (four steps) to the left.
-    await expect(runs.nth(4).locator(".staff-note-viewer-note-symbol")).toHaveCount(1);
+    await expect(runs.nth(4).locator(".staff-note-head-symbol")).toHaveCount(1);
     const after = await runs.nth(4).boundingBox();
     expect(before).not.toBeNull();
     expect(after).not.toBeNull();

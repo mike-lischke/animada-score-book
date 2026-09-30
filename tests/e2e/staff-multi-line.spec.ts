@@ -241,9 +241,9 @@ test.describe("Staff view multi-line rendering", () => {
         const tops = stems.map((stem) => {
             return stem?.top ?? 0;
         });
-        expect(tops[1] - tops[0]).toBeCloseTo(-10, 1);
-        expect(tops[2] - tops[0]).toBeCloseTo(-20, 1);
-        expect(tops[3] - tops[0]).toBeCloseTo(-30, 1);
+        expect(tops[1] - tops[0]).toBeCloseTo(0, 1);
+        expect(tops[2] - tops[0]).toBeCloseTo(0, 1);
+        expect(tops[3] - tops[0]).toBeCloseTo(0, 1);
 
         // The four notes sit on the four lines of the 4-bell agogo, lowest first.
         expect(stems.map((stem) => {

@@ -11,20 +11,21 @@ import {
     Damping, ExcitationMode, HandTechnique, NoteDisplayType, StickTechnique,
     type INoteArticulation,
 } from "../../../core/ScoreBookDataModel.js";
-import { ScoreSymbols } from "../../../core/ScoreSymbols.js";
+import { ScoreSymbols, ScoreSymbol, ScoreSymbolSource } from "../../../core/ScoreSymbols.js";
 import {
     MeasureProjection, NoteGroupKind, ProjectedItemKind, pulseLengthAt,
     type INotationGrid, type IProjectedEvent, type IProjectedItem,
 } from "../../../core/MeasureProjection.js";
 import { staffSpacePx } from "../../../core/MeasureLayout.js";
+import { glyphInkVariablePrefix, stemEndVariablePrefix } from "../../../core/smufl/SmuflFontLoader.js";
 import type { IFraction, IAudioData, ISubdivision } from "../../../core/types/general.js";
-import { beamCountOf, fallbackNoteValue, noteValueForEvent, type INoteValue }
+import { beamCountOf, fallbackNoteValue, noteValueForEvent, NoteLength, type INoteValue }
     from "../../../core/rest-notation.js";
 import type { IScoreMetrics } from "../../../player/TimeCoordinator.js";
 import { addFractions, compareFractions, divideFraction, subtractFractions }
     from "../../../core/serialisation/numeric-functions.js";
 import { ScoreElementKind, type ScoreElementRegistry } from "../../../ui/ScoreElementRegistry.js";
-import { NoteImage, NoteKind, NoteLength } from "../framework/NoteImage.js";
+import { NoteImage } from "../framework/NoteImage.js";
 import { ScoreSymbolView } from "../framework/ScoreSymbolView.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
 
@@ -126,6 +127,12 @@ const finalBarlineWidth = "var(--final-barline-width)";
 
 /** Width the flags occupy right of a notehead, which the stylesheet owns for the same reason. */
 const noteFlagWidth = "var(--note-flag-width)";
+
+/** The ink box of a symbol, as the CSS lengths the drawing around it is placed by. */
+interface ISymbolBox {
+    width: string;
+    height: string;
+}
 
 export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
     public override render(): ComponentChild {
@@ -588,7 +595,6 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                 // Compute vertical offset for this note's staff line.
                 const effectiveNoteLine = node.noteLine ?? 1;
                 const lineOffset = (effectiveNoteLine - centerLine) * staffSpacePx;
-                const translateY = `translateY(calc(-18px + ${lineOffset}px))`;
 
                 const headType = node.displayType;
                 const isNonOval = headType !== NoteDisplayType.Oval;
@@ -606,18 +612,42 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                 headWrapperClasses.push(...decoClasses);
 
                 const headSymbol = ScoreSymbols.notehead(headType, node.glyph.length);
+                const headBox = this.symbolBox(headSymbol);
+                const flagSymbol = hasBeam ? undefined : ScoreSymbols.flag(node.glyph.length);
 
-                // The sprite's dot sits where its own oval head leaves room for it. A percussion head is
-                // drawn on its own ink box, so it draws its dot beside that ink instead.
-                const dotElement = isNonOval && node.glyph.dotted
-                    ? <span className="staff-note-head-dot" />
+                const flagElement = flagSymbol === undefined
+                    ? null
+                    : <ScoreSymbolView
+                        className="staff-note-head-flag"
+                        symbol={flagSymbol}
+                        staffSpace={staffSpacePx}
+                    />;
+                const dotElement = node.glyph.dotted
+                    ? <ScoreSymbolView
+                        className="staff-note-head-dot"
+                        symbol={ScoreSymbol.AugmentationDot}
+                        staffSpace={staffSpacePx}
+                    />
+                    : null;
+                const accentElement = node.articulation?.accent
+                    ? <ScoreSymbolView
+                        className="staff-note-head-accent"
+                        symbol={ScoreSymbol.Accent}
+                        staffSpace={staffSpacePx}
+                    />
                     : null;
 
                 const needsCssStem = !hasBeam && node.glyph.length !== NoteLength.Whole;
 
-                // The head wrapper keeps its place in the run while the notehead is drawn at the note's
-                // staff line. Everything drawn around the head reads that line from this variable.
-                const headStyle = { "--note-line-offset": `${lineOffset}px` } as CSSProperties;
+                // The head wrapper is the head's ink box: its right edge sits on the note's anchor and its
+                // centre on the note's staff line, so every decoration below is placed by the box the font
+                // draws the head in instead of an offset tuned to one head shape.
+                const headStyle = {
+                    "--head-ink-width": headBox.width,
+                    "--head-ink-height": headBox.height,
+                    "--note-line-offset": `${lineOffset}px`,
+                    ...(flagSymbol === undefined ? {} : this.flagStemVariables(flagSymbol)),
+                } as CSSProperties;
 
                 const runDivProps: Record<string, unknown> = {
                     key: `${keyPrefix}note-${index}`,
@@ -642,32 +672,15 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                                 symbol={headSymbol}
                                 staffSpace={staffSpacePx}
                             />
-                            {/* The sprite draws what a head does not: the flags of an unbeamed note and the
-                                augmentation dot. It also keeps the box the head wrapper and the decorations
-                                around it are laid out by. */}
-                            <NoteImage
-                                className="staff-note-viewer-note-symbol"
-                                kind={NoteKind.Note}
-                                value={node.glyph.length}
-                                style={{
-                                    flexShrink: 0,
-                                    transform: `translateX(var(--note-head-shift-x, 0px)) ${translateY}`,
-                                }}
-                                dotted={!isNonOval && node.glyph.dotted}
-                                flagCount={hasBeam ? 0 : undefined}
-                                hideStem={true}
-                                hideHead={true}
-                                alt=""
-                            />
-                            {dotElement}
                             {needsCssStem ? <span className="staff-note-head-stem" /> : null}
+                            {hasBeam ? <span className="staff-note-viewer-custom-stem" /> : null}
+                            {flagElement}
+                            {dotElement}
+                            {this.renderGhostParentheses(node.articulation)}
                             {this.renderNoteDecorations(node.noteStyle, node.articulation)}
+                            {accentElement}
                         </span>
-                        {node.articulation?.accent ? (
-                            <span className="staff-note-viewer-accent">&gt;</span>
-                        ) : null}
                         {hasBeam ? this.renderBeamSegments(node.eventIndex, beamInfo) : null}
-                        {hasBeam ? this.renderCustomStem(lineOffset, headType) : null}
                     </div>
                 );
             }
@@ -676,6 +689,15 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                 scoreMetrics.stepsPerPulse)
                 ?? { length: NoteLength.Sixteenth, dotted: false };
             const isWholeOrHalf = restGlyph.length === NoteLength.Whole || restGlyph.length === NoteLength.Half;
+            const restSymbol = ScoreSymbols.rest(restGlyph.length);
+            const restBox = this.symbolBox(restSymbol);
+
+            // A whole or half rest sits on the line below the one the notes are drawn on, which is the line
+            // they hang from or sit on.
+            const restStyle = {
+                "--rest-ink-width": restBox.width,
+                "--rest-line-offset": `${isWholeOrHalf ? restLineOffset : 0}px`,
+            } as CSSProperties;
 
             return (
                 <div key={`${keyPrefix}rest-${index}`} className="staff-note-viewer-run" style={slotStyle}
@@ -687,17 +709,16 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                         start: node.start,
                         measure,
                     }, measure.events[node.eventIndex])}>
-                    <NoteImage
-                        className="staff-note-viewer-rest-symbol"
-                        kind={NoteKind.Rest}
-                        value={restGlyph.length}
-                        style={{
-                            flexShrink: 0,
-                            ...(isWholeOrHalf ? { transform: `translateY(${restLineOffset}px)` } : {}),
-                        }}
-                        dotted={restGlyph.dotted}
-                        alt=""
-                    />
+                    <span className="staff-note-viewer-rest-symbol" style={restStyle}>
+                        <ScoreSymbolView symbol={restSymbol} staffSpace={staffSpacePx} />
+                        {restGlyph.dotted
+                            ? <ScoreSymbolView
+                                className="staff-note-viewer-rest-dot"
+                                symbol={ScoreSymbol.AugmentationDot}
+                                staffSpace={staffSpacePx}
+                            />
+                            : null}
+                    </span>
                 </div>
             );
         });
@@ -770,29 +791,77 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
     }
 
     /**
-     * Renders a CSS stem overlay for beamed notes, replacing the hidden SVG stem.
-     * Spans from the stem anchor of the note's head to just above the primary beam.
+     * @param symbol The symbol whose ink box is wanted.
      *
-     * @param lineOffset Vertical offset in px for this note's staff line relative to the centre line.
-     * @param headType   The note head type, which states where its stem leaves the head.
-     *
-     * @returns A VNode representing the custom stem.
+     * @returns The box the symbol's ink occupies, as the CSS lengths a drawing sizes it by: the box the
+     * font states for a glyph, and the box the catalogue states for a path of the score's own.
      */
-    private renderCustomStem(lineOffset: number, headType: NoteDisplayType): VNode {
-        const headClass = headType !== NoteDisplayType.Oval
-            ? `staff-note-viewer-custom-stem--${this.headTypeClassName(headType)}`
-            : "";
+    private symbolBox(symbol: ScoreSymbol): ISymbolBox {
+        const definition = ScoreSymbols.definition(symbol);
+        if (definition.source === ScoreSymbolSource.OwnPath) {
+            const { width, height } = definition.path;
+
+            return {
+                width: `calc(var(--staff-space) * ${width})`,
+                height: `calc(var(--staff-space) * ${height})`,
+            };
+        }
+
+        const glyphName = definition.glyph.toLowerCase();
+
+        return {
+            width: `var(${glyphInkVariablePrefix}width-${glyphName})`,
+            height: `var(${glyphInkVariablePrefix}height-${glyphName})`,
+        };
+    }
+
+    /**
+     * Renders the parentheses a ghost note is wrapped in. They hang on the head's ink box, so they fit any
+     * head shape without an offset tuned to one of them.
+     *
+     * @param articulation The note's articulation.
+     *
+     * @returns The two parentheses, or null for a note that is not a ghost note.
+     */
+    private renderGhostParentheses(articulation?: INoteArticulation): ComponentChild {
+        if (articulation?.ghost !== true) {
+            return null;
+        }
 
         return (
-            <span
-                className={`staff-note-viewer-custom-stem ${headClass}`}
-                style={{
-                    // The beam sits on the stem tips; the stem ends at the anchor the note's head
-                    // carries, which the stylesheet reads from the font.
-                    height: `calc(var(--stem-tip, 35px) + ${lineOffset}px - var(--stem-anchor-y, 3px))`,
-                }}
-            />
+            <>
+                <ScoreSymbolView
+                    className="staff-note-head-paren-left"
+                    symbol={ScoreSymbol.GhostParenthesisLeft}
+                    staffSpace={staffSpacePx}
+                />
+                <ScoreSymbolView
+                    className="staff-note-head-paren-right"
+                    symbol={ScoreSymbol.GhostParenthesisRight}
+                    staffSpace={staffSpacePx}
+                />
+            </>
         );
+    }
+
+    /**
+     * @param flag The flag symbol to place.
+     *
+     * @returns Where the flag hangs on its stem, as the CSS variables the stylesheet places it by: the
+     * font states where the end of the stem sits inside the flag's ink.
+     */
+    private flagStemVariables(flag: ScoreSymbol): CSSProperties {
+        const definition = ScoreSymbols.definition(flag);
+        if (definition.source !== ScoreSymbolSource.MusicFontGlyph) {
+            return {};
+        }
+
+        const glyphName = definition.glyph.toLowerCase();
+
+        return {
+            "--flag-stem-x": `var(${stemEndVariablePrefix}x-${glyphName}, 0px)`,
+            "--flag-stem-y": `var(${stemEndVariablePrefix}y-${glyphName}, 0px)`,
+        } as CSSProperties;
     }
 
     /**
@@ -809,6 +878,11 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
      */
     private renderWholeBarRestSlot(restLineOffset: number, barNumber: number, trackId: number,
         measure: ISbDmTrackMeasure, scoreElementRegistry?: ScoreElementRegistry): VNode {
+        const restStyle = {
+            "--rest-ink-width": this.symbolBox(ScoreSymbol.RestWhole).width,
+            "--rest-line-offset": `${restLineOffset}px`,
+        } as CSSProperties;
+
         return (
             <div
                 key="rest-whole-bar"
@@ -823,16 +897,9 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                     measure,
                 }, measure.events[0])}
             >
-                <NoteImage
-                    className="staff-note-viewer-rest-symbol"
-                    kind={NoteKind.Rest}
-                    value={NoteLength.Whole}
-                    style={{
-                        flexShrink: 0,
-                        transform: `translateY(${restLineOffset}px)`,
-                    }}
-                    alt=""
-                />
+                <span className="staff-note-viewer-rest-symbol" style={restStyle}>
+                    <ScoreSymbolView symbol={ScoreSymbol.RestWhole} staffSpace={staffSpacePx} />
+                </span>
             </div>
         );
     }
@@ -970,11 +1037,7 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
             classes.push("blown");
         }
 
-        // Ghost notes: rendered with parentheses, derived from the note's articulation.
-        if (articulation?.ghost) {
-            classes.push("ghost-note");
-        }
-
+        // Ghost notes are drawn with parentheses, derived from the note's articulation.
         return classes;
     }
 
@@ -1103,13 +1166,6 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
         if (articulation?.damping === Damping.Muted) {
             nodes.push(
                 <span key="damped-plus" className="staff-note-head-damped-plus">+</span>,
-            );
-        }
-
-        // Ghost note: closing parenthesis (opening is via CSS ::before on .ghost-note).
-        if (articulation?.ghost) {
-            nodes.push(
-                <span key="ghost-paren" className="staff-note-head-ghost-paren">)</span>,
             );
         }
 
