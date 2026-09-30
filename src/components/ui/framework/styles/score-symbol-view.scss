@@ -1,0 +1,13 @@
+/*
+ * Copyright (c) Mike Lischke. All rights reserved.
+ * Licensed under the MIT License. See License.txt in the project root for license information.
+ */
+
+/* A notation symbol of the score's symbol catalogue, drawn as a glyph or as an own path. The glyph
+ * case carries the styles of `.smufl-glyph-view`, which this class is combined with. */
+.score-symbol-view {
+    display: block;
+
+    /* A symbol may reach beyond the box it is laid out in, so nothing may be clipped. */
+    overflow: visible;
+}

@@ -11,6 +11,7 @@ import {
     Damping, ExcitationMode, HandTechnique, NoteDisplayType, StickTechnique,
     type INoteArticulation,
 } from "../../../core/ScoreBookDataModel.js";
+import { ScoreSymbols } from "../../../core/ScoreSymbols.js";
 import {
     MeasureProjection, NoteGroupKind, ProjectedItemKind, pulseLengthAt,
     type INotationGrid, type IProjectedEvent, type IProjectedItem,
@@ -24,6 +25,7 @@ import { addFractions, compareFractions, divideFraction, subtractFractions }
     from "../../../core/serialisation/numeric-functions.js";
 import { ScoreElementKind, type ScoreElementRegistry } from "../../../ui/ScoreElementRegistry.js";
 import { NoteImage, NoteKind, NoteLength } from "../framework/NoteImage.js";
+import { ScoreSymbolView } from "../framework/ScoreSymbolView.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
 
 export interface IStaffNoteViewerProperties extends ICommonUIProperties {
@@ -64,7 +66,6 @@ interface IStaffNoteNode {
     glyph: INoteValue;
     beamCount: number;
     displayType: NoteDisplayType;
-    diamondOpen?: boolean;
     noteLine?: number;
     noteStyle?: IAudioData;
     articulation?: INoteArticulation;
@@ -282,12 +283,10 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
         }
 
         let displayType = NoteDisplayType.Oval;
-        let diamondOpen: boolean | undefined;
         let noteLine: number | undefined;
 
         if (audioData) {
             displayType = this.resolveDisplayType(audioData);
-            diamondOpen = this.resolveDiamondOpen(audioData);
             noteLine = audioData.noteLine;
         }
 
@@ -300,7 +299,6 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
             glyph,
             beamCount,
             displayType,
-            diamondOpen,
             noteLine,
             noteStyle: audioData,
             articulation: event.articulation ?? (audioData
@@ -589,7 +587,7 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
             if (node.noteStyle !== undefined) {
                 // Compute vertical offset for this note's staff line.
                 const effectiveNoteLine = node.noteLine ?? 1;
-                const lineOffset = (effectiveNoteLine - centerLine) * 10; // 10px = line spacing
+                const lineOffset = (effectiveNoteLine - centerLine) * staffSpacePx;
                 const translateY = `translateY(calc(-18px + ${lineOffset}px))`;
 
                 const headType = node.displayType;
@@ -607,8 +605,10 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                 const decoClasses = this.resolveDecorationClasses(node.noteStyle, node.articulation);
                 headWrapperClasses.push(...decoClasses);
 
-                // Non-oval heads are drawn in CSS and hide the sprite's head, so they draw the
-                // augmentation dot themselves as well.
+                const headSymbol = ScoreSymbols.notehead(headType, node.glyph.length);
+
+                // The sprite's dot sits where its own oval head leaves room for it. A percussion head is
+                // drawn on its own ink box, so it draws its dot beside that ink instead.
                 const dotElement = isNonOval && node.glyph.dotted
                     ? <span className="staff-note-head-dot" />
                     : null;
@@ -637,6 +637,14 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                 return (
                     <div {...runDivProps}>
                         <span className={headWrapperClasses.join(" ")} style={headStyle}>
+                            <ScoreSymbolView
+                                className="staff-note-head-symbol"
+                                symbol={headSymbol}
+                                staffSpace={staffSpacePx}
+                            />
+                            {/* The sprite draws what a head does not: the flags of an unbeamed note and the
+                                augmentation dot. It also keeps the box the head wrapper and the decorations
+                                around it are laid out by. */}
                             <NoteImage
                                 className="staff-note-viewer-note-symbol"
                                 kind={NoteKind.Note}
@@ -645,17 +653,15 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                                     flexShrink: 0,
                                     transform: `translateX(var(--note-head-shift-x, 0px)) ${translateY}`,
                                 }}
-                                headType={headType}
                                 dotted={!isNonOval && node.glyph.dotted}
-                                diamondOpen={node.diamondOpen}
                                 flagCount={hasBeam ? 0 : undefined}
                                 hideStem={true}
+                                hideHead={true}
                                 alt=""
                             />
                             {dotElement}
                             {needsCssStem ? <span className="staff-note-head-stem" /> : null}
                             {this.renderNoteDecorations(node.noteStyle, node.articulation)}
-                            {headType === NoteDisplayType.Cross ? this.renderCrossHead() : null}
                         </span>
                         {node.articulation?.accent ? (
                             <span className="staff-note-viewer-accent">&gt;</span>
@@ -849,15 +855,6 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
         }
 
         return NoteDisplayType.Oval;
-    }
-
-    private resolveDiamondOpen(noteStyle: IAudioData): boolean | undefined {
-        const characteristics = noteStyle.characteristics;
-        if (!("mainDisplayType" in characteristics) || characteristics.mainDisplayType !== NoteDisplayType.Diamond) {
-            return undefined;
-        }
-
-        return noteStyle.sampleProfile.builtInDamping === Damping.Open;
     }
 
     /**
@@ -1125,33 +1122,6 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
             <svg key={key} className={className} width={width} height={height}
                 viewBox={`0 0 ${width} ${height}`} aria-hidden="true">
                 {content}
-            </svg>
-        );
-    }
-
-    /**
-     * Renders the cross (×) note head as a cached SVG symbol with rounded line caps. The symbol spans the
-     * ink box of the font's cross head (noteheadXBlack, 1.2 × 1 staff spaces), which the stylesheet sizes,
-     * so one symbol unit is one pixel and the arms stay on the pixel grid.
-     *
-     * @returns An SVG VNode referencing the cached cross symbol.
-     */
-    private renderCrossHead(): VNode {
-        NoteImage.registerSymbol("cross-head", "0 0 12 10",
-            `<line x1="1" y1="1" x2="11" y2="9" />` +
-            `<line x1="11" y1="1" x2="1" y2="9" />`,
-        );
-
-        return (
-            <svg className="staff-note-head-cross-svg"
-                aria-hidden="true"
-                style={{
-                    stroke: "var(--color-base-content)",
-                    strokeWidth: 2,
-                    strokeLinecap: "round",
-                    overflow: "visible"
-                }}>
-                <use href="#symbol-cross-head" />
             </svg>
         );
     }

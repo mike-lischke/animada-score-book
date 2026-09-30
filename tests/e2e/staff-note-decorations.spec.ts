@@ -178,9 +178,10 @@ test.describe("Note head types", () => {
 
         await expect(page.locator(".staff-measure-track-row").first()).toBeVisible();
 
-        // Oval heads use the SVG note symbol.
-        const noteSymbol = page.locator(".staff-note-viewer-note-symbol").first();
-        await expect(noteSymbol).toBeVisible();
+        // Oval heads are glyphs of the music font, drawn as an SVG text element.
+        const headGlyph = page.locator(".staff-note-head-symbol text").first();
+        await expect(headGlyph).toBeVisible();
+        await expect(headGlyph).toHaveText(String.fromCodePoint(0xE0A4));
     });
 
     test("renders cross note heads for Tamborim", async ({ page }) => {
@@ -210,9 +211,10 @@ test.describe("Note head types", () => {
 
         await expect(page.locator(".staff-measure-track-row").first()).toBeVisible();
 
-        // Cross heads are rendered via SVG.
-        const crossSvg = page.locator(".staff-note-head-cross-svg").first();
-        await expect(crossSvg).toBeVisible();
+        // Cross heads come from the symbol catalogue as the score's own cross path.
+        const crossPath = page.locator(".staff-note-head-symbol path").first();
+        await expect(crossPath).toBeVisible();
+        await expect(crossPath).toHaveAttribute("stroke", "currentColor");
     });
 
     test("renders triangle note heads for Chocalho", async ({ page }) => {

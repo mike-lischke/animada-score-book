@@ -1126,11 +1126,11 @@
 }
 
 .staff-prefix-clef {
-    margin: 0 8px;
-    width: 8px;
-    height: calc(var(--note-height) * 0.25);
-    border-left: 3px solid var(--color-base-content);
-    border-right: 3px solid var(--color-base-content);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 4px;
+    color: var(--color-base-content);
     flex-shrink: 0;
 }
 
@@ -1460,8 +1460,8 @@
 }
 
 /* ---------------------------------------------------------------------------
- * Staff note heads drawn with CSS (Square, Triangle, Cross, Diamond).
- * Oval heads come from the SVG sprite.
+ * Staff note heads: one head per note, drawn from the symbol catalogue, with the
+ * decorations a play technique adds sitting around it.
  * --------------------------------------------------------------------------- */
 
 .staff-note-head {
@@ -1469,24 +1469,25 @@
     display: inline-block;
     flex-shrink: 0;
     margin-left: calc(var(--note-anchor) - var(--staff-note-symbol-width) / 2);
+    color: var(--color-base-content);
 
     /*
-     * Shared head shape via ::after. Each head type states the ink box of its glyph, in staff spaces, and
-     * the box is centred on the note's staff line with its right edge on the right edge of the stem.
+     * The notehead, drawn from the symbol catalogue as a glyph of the music font or as a path of the
+     * score's own. Its ink ends on the right edge of the stem and is centred on the note's staff line,
+     * which is the line everything drawn around the head is placed by. It takes its colour from the
+     * wrapper, so a selected note colours its head like its decorations.
      */
-    &::after {
-        content: "";
+    .staff-note-head-symbol {
         position: absolute;
         top: calc(50% + var(--note-line-offset, 0px));
         right: calc(50% - var(--stem-right-edge, 0px));
         transform: translateY(-50%);
-        color: var(--color-base-content);
     }
 
     /*
-     * The sprite draws the augmentation dot where an oval head leaves room for it, which a head centred on
-     * the stem covers. These heads hide the sprite's dot and draw their own beside their ink instead, just
-     * right of the anchor that ink ends on.
+     * The sprite draws what a head does not: the augmentation dot of an oval head and the flags of an
+     * unbeamed note. These heads draw their own dot beside their ink instead, just right of the anchor
+     * that ink ends on.
      */
     .staff-note-head-dot {
         position: absolute;
@@ -1497,46 +1498,6 @@
         border-radius: 50%;
         background: var(--color-base-content);
         pointer-events: none;
-    }
-
-    /*
-     * ---- Square (1.4 × 1.4 staff spaces) ----
-     * The square head is a square, not the ink box of noteheadSquareBlack: that box is 1.252 × 1 space, a flat
-     * rectangle, which no longer matches the technique marks drawn inside the head (cross, circles).
-     */
-    &.square::after {
-        width: calc(var(--staff-space) * 1.4);
-        height: calc(var(--staff-space) * 1.4);
-        background: currentColor;
-    }
-
-    /* ---- Triangle up (noteheadTriangleUpBlack: 1.172 × 1 space, pointing up from its base) ---- */
-    &.triangle::after {
-        width: 0;
-        height: 0;
-        border-left: round(nearest, var(--staff-space) * 0.586, 1px) solid transparent;
-        border-right: round(nearest, var(--staff-space) * 0.586, 1px) solid transparent;
-        border-bottom: var(--staff-space) solid currentColor;
-        background: transparent;
-    }
-
-    /* ---- Cross (noteheadXBlack: 1.2 × 1 staff space, rendered as cached SVG) ---- */
-    .staff-note-head-cross-svg {
-        position: absolute;
-        top: calc(50% + var(--note-line-offset, 0px));
-        right: calc(50% - var(--stem-right-edge, 0px));
-        width: calc(var(--staff-space) * 1.2);
-        height: var(--staff-space);
-        transform: translateY(-50%);
-        pointer-events: none;
-    }
-
-    /* ---- Diamond (noteheadDiamondBlack: 0.98 × 1.128 staff spaces) ---- */
-    &.diamond::after {
-        width: round(nearest, var(--staff-space) * 0.98, 1px);
-        height: round(nearest, var(--staff-space) * 1.128, 1px);
-        background: currentColor;
-        clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
     }
 
     /* ---- CSS stem for non-oval, non-beamed notes ---- */
@@ -1894,7 +1855,6 @@
     .staff-note-head {
 
         &,
-        &::after,
         &::before {
             color: var(--color-primary) !important;
         }
@@ -1911,7 +1871,6 @@
             background: var(--color-primary) !important;
         }
 
-        .staff-note-head-cross-svg,
         .staff-note-head-press-roll-svg,
         .staff-note-head-rimshot-cross-svg {
             stroke: var(--color-primary) !important;

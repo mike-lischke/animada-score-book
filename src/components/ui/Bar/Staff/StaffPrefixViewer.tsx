@@ -7,9 +7,9 @@ import type { ComponentChild, CSSProperties } from "preact";
 
 import { staffSpacePx } from "../../../../core/MeasureLayout.js";
 import type { ISbDmArrangement, ISbDmTrack } from "../../../../core/ScoreBookDataModel.js";
-import { SmuflGlyphs, SmuflGlyph } from "../../../../core/smufl/SmuflGlyphs.js";
+import { ScoreSymbols, ScoreSymbol } from "../../../../core/ScoreSymbols.js";
 import { Container } from "../../framework/Container.js";
-import { SmuflGlyphView } from "../../framework/SmuflGlyphView.js";
+import { ScoreSymbolView } from "../../framework/ScoreSymbolView.js";
 import { UIComponent, type ICommonUIProperties } from "../../framework/UIComponent.js";
 import { ChildAlignment, Orientation } from "../../framework/ui-types.js";
 
@@ -71,7 +71,9 @@ export class StaffPrefixViewer extends UIComponent<IStaffPrefixViewerProps> {
                 aria-hidden
             >
                 {staffLines}
-                <div className="staff-prefix-clef" />
+                <div className="staff-prefix-clef">
+                    <ScoreSymbolView symbol={ScoreSymbol.PercussionClef} staffSpace={staffSpacePx} />
+                </div>
                 {this.renderTimeSignature(timeSignature)}
             </Container>
         );
@@ -90,7 +92,7 @@ export class StaffPrefixViewer extends UIComponent<IStaffPrefixViewerProps> {
         if (timeSignature === "4/4") {
             return (
                 <div className="staff-prefix-time-signature">
-                    <SmuflGlyphView glyph={SmuflGlyph.TimeSigCommon} staffSpace={staffSpacePx} />
+                    <ScoreSymbolView symbol={ScoreSymbol.TimeSignatureCommon} staffSpace={staffSpacePx} />
                 </div>
             );
         }
@@ -107,12 +109,12 @@ export class StaffPrefixViewer extends UIComponent<IStaffPrefixViewerProps> {
 
     private renderDigits(digits: string): ComponentChild[] {
         return [...digits].map((digit, position) => {
-            const glyph = SmuflGlyphs.timeSignatureDigit(digit);
-            if (glyph === undefined) {
+            const symbol = ScoreSymbols.timeSignatureDigit(digit);
+            if (symbol === undefined) {
                 return null;
             }
 
-            return <SmuflGlyphView key={`${digit}-${position}`} glyph={glyph} staffSpace={staffSpacePx} />;
+            return <ScoreSymbolView key={`${digit}-${position}`} symbol={symbol} staffSpace={staffSpacePx} />;
         });
     }
 }

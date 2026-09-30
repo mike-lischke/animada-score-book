@@ -153,22 +153,3 @@ describe("SmuflFonts family stack", () => {
         expect(SmuflFonts.familyStack(index, fontEntry(index, "leipzig"))).toBe("\"Leipzig\", \"Bravura\"");
     });
 });
-
-describe("SmuflGlyphs time signature digits", () => {
-    it("maps every digit to the glyph of its codepoint", () => {
-        const digits = "0123456789";
-
-        for (const digit of digits) {
-            const glyph = SmuflGlyphs.timeSignatureDigit(digit);
-            expect(glyph, digit).toBeDefined();
-            expect(SmuflGlyphs.definition(glyph!).codepoint, digit).toBe(0xE080 + Number(digit));
-        }
-    });
-
-    it("rejects anything that is not a single digit", () => {
-        expect(SmuflGlyphs.timeSignatureDigit("")).toBeUndefined();
-        expect(SmuflGlyphs.timeSignatureDigit("12")).toBeUndefined();
-        expect(SmuflGlyphs.timeSignatureDigit("/")).toBeUndefined();
-        expect(SmuflGlyphs.timeSignatureDigit("x")).toBeUndefined();
-    });
-});

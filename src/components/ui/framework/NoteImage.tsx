@@ -45,6 +45,9 @@ export interface INoteImageProperties extends IImageBaseProps {
     /** When true, hides all SVG stem variants (for custom CSS stem overlay). */
     hideStem?: boolean;
 
+    /** When true, hides the head and draws only what sits around it, i.e. the flags and the dot. */
+    hideHead?: boolean;
+
     innerRef?: RefObject<SVGSVGElement>;
 }
 
@@ -103,7 +106,7 @@ export class NoteImage extends UIComponent<INoteImageProperties> {
     public override render(): ComponentChild {
         const {
             id, title, alt, style, disabled, width, height, innerRef, kind = NoteKind.Note, value,
-            headType = NoteDisplayType.Oval, dotted = false, hideStem = false,
+            headType = NoteDisplayType.Oval, dotted = false, hideStem = false, hideHead = false,
         } = this.props;
 
         const source = kind === NoteKind.Note ? NoteImage.noteSpriteSource : NoteImage.restSpriteSource;
@@ -115,7 +118,7 @@ export class NoteImage extends UIComponent<INoteImageProperties> {
         ]);
 
         const cssStyle = kind === NoteKind.Note
-            ? this.computeNoteStyle(style ?? {}, value, headType, dotted, hideStem)
+            ? this.computeNoteStyle(style ?? {}, value, headType, dotted, hideStem, hideHead)
             : this.computeRestStyle(style ?? {}, value, dotted);
 
         return (
@@ -137,15 +140,15 @@ export class NoteImage extends UIComponent<INoteImageProperties> {
         );
     }
 
-    private computeNoteStyle(baseStyle: CSSProperties, value: NoteLength,
-        headType: NoteDisplayType, dotted: boolean, hideStem = false): CSSProperties {
+    private computeNoteStyle(baseStyle: CSSProperties, value: NoteLength, headType: NoteDisplayType,
+        dotted: boolean, hideStem = false, hideHead = false): CSSProperties {
         const { flagCount, hasStem: hasStemOverride } = this.props;
         const style = { ...baseStyle } as CSSProperties & Record<string, string>;
 
         const flags = flagCount ?? this.defaultFlagCount(value);
         const stemDefault = value !== NoteLength.Whole;
         const hasStem = hideStem ? false : (hasStemOverride ?? stemDefault);
-        const isOval = headType === NoteDisplayType.Oval;
+        const isOval = headType === NoteDisplayType.Oval && !hideHead;
 
         style["--note-show-oval-body"] = isOval && value !== NoteLength.Whole ? "inline" : "none";
         style["--note-show-oval-stem"] = hasStem ? "inline" : "none";
