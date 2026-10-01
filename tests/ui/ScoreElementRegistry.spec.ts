@@ -5,7 +5,7 @@
 
 import { expect, it } from "vitest";
 
-import type { ISbDmTrack, ISbDmTrackMeasure } from "../../src/core/ScoreBookDataModel.js";
+import type { ISbDmTrack, ISbDmTrackPiece } from "../../src/core/ScoreBookDataModel.js";
 import type { IMeasureEvent } from "../../src/core/types/general.js";
 import { ScoreElementKind, ScoreElementRegistry } from "../../src/ui/ScoreElementRegistry.js";
 import { SelectionGranularity, type ISelectionTarget } from "../../src/ui/SelectionSerializer.js";
@@ -17,7 +17,7 @@ it("resolves the cells a selection target addresses", () => {
     const arrangement: { tracks: ISbDmTrack[]; } = { tracks: [] };
     const track = { id: 3, measures: [], arrangement } as unknown as ISbDmTrack;
     arrangement.tracks.push(track);
-    const measure = { number: 2, track } as unknown as ISbDmTrackMeasure;
+    const measure = { number: 2, track } as unknown as ISbDmTrackPiece;
     track.measures.push(measure);
     const event: IMeasureEvent = {
         start: { numerator: 1, denominator: 2 },
@@ -45,8 +45,8 @@ it("expands a bar-level or track-piece target to the rendered pieces", () => {
     const firstTrack = { id: 1, measures: [], arrangement } as unknown as ISbDmTrack;
     const secondTrack = { id: 2, measures: [], arrangement } as unknown as ISbDmTrack;
     arrangement.tracks.push(firstTrack, secondTrack);
-    const firstMeasure = { number: 1, track: firstTrack } as unknown as ISbDmTrackMeasure;
-    const secondMeasure = { number: 1, track: secondTrack } as unknown as ISbDmTrackMeasure;
+    const firstMeasure = { number: 1, track: firstTrack } as unknown as ISbDmTrackPiece;
+    const secondMeasure = { number: 1, track: secondTrack } as unknown as ISbDmTrackPiece;
     firstTrack.measures.push(firstMeasure);
     secondTrack.measures.push(secondMeasure);
 
@@ -66,7 +66,7 @@ it("unions the cells of a note group and drops elements of groups without events
     const registry = new ScoreElementRegistry();
     const firstCell = document.createElement("div");
     const secondCell = document.createElement("div");
-    const measure = { number: 1, track: { id: 1 } } as unknown as ISbDmTrackMeasure;
+    const measure = { number: 1, track: { id: 1 } } as unknown as ISbDmTrackPiece;
     const firstEvent: IMeasureEvent = {
         start: { numerator: 0, denominator: 1 },
         duration: { numerator: 1, denominator: 4 },
@@ -111,7 +111,7 @@ it("replaces and clears callback-ref registrations", () => {
     const arrangement: { tracks: ISbDmTrack[]; } = { tracks: [] };
     const track = { id: 7, measures: [], arrangement } as unknown as ISbDmTrack;
     arrangement.tracks.push(track);
-    const measure = { number: 2, track } as unknown as ISbDmTrackMeasure;
+    const measure = { number: 2, track } as unknown as ISbDmTrackPiece;
     track.measures.push(measure);
     const start = { numerator: 1, denominator: 2 };
     const event: IMeasureEvent = { start, duration: { numerator: 1, denominator: 4 } };
@@ -199,7 +199,7 @@ it("distinguishes tuplet slots that share a step", () => {
     const firstSlot = document.createElement("div");
     const secondSlot = document.createElement("div");
     const track = { id: 2 } as unknown as ISbDmTrack;
-    const measure = { number: 1, track } as unknown as ISbDmTrackMeasure;
+    const measure = { number: 1, track } as unknown as ISbDmTrackPiece;
     const start = { numerator: 5, denominator: 12 };
     const event: IMeasureEvent = { start, duration: { numerator: 1, denominator: 12 } };
 

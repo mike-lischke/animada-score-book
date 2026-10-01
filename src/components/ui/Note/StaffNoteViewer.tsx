@@ -6,7 +6,7 @@
 import { type ComponentChild, type CSSProperties, type VNode } from "preact";
 
 import { articulationFromSampleProfile } from "../../../core/articulation.js";
-import type { ISbDmTrackMeasure } from "../../../core/ScoreBookDataModel.js";
+import type { ISbDmTrackPiece } from "../../../core/ScoreBookDataModel.js";
 import {
     Damping, ExcitationMode, HandTechnique, NoteDisplayType, StickTechnique,
     type INoteArticulation,
@@ -34,7 +34,7 @@ export interface IStaffNoteViewerProperties extends ICommonUIProperties {
     scoreMetrics: IScoreMetrics;
     baseSteps: number;
 
-    measure: ISbDmTrackMeasure;
+    measure: ISbDmTrackPiece;
     barNumber: number;
     trackId: number;
     scoreElementRegistry?: ScoreElementRegistry;
@@ -52,7 +52,7 @@ export enum StaffNodeKind {
 interface IStaffNoteNode {
     kind: StaffNodeKind.Note;
 
-    /** Index of this note's event in `ISbDmTrackMeasure.events`, matching the resolved note events 1:1. */
+    /** Index of this note's event in `ISbDmTrackPiece.events`, matching the resolved note events 1:1. */
     eventIndex: number;
 
     /** Absolute start within the measure, as a fraction of the whole bar. */
@@ -136,7 +136,10 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
             this.classFromProperty(isLastBar, "last-bar"),
         ]);
 
-        const items = MeasureProjection.project(measure);
+        // A simile holds no content of its own; its mark replaces the notes the measure would draw.
+        const usesSimile = measure.simile === true;
+
+        const items = usesSimile ? [] : MeasureProjection.project(measure);
         const nodes = this.buildNodes(items, scoreMetrics);
 
         const beamSpans = this.computeBeamSpans(nodes, scoreMetrics);
@@ -160,10 +163,14 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
         const restNoteLine = Math.ceil(centerLine);
         const restLineOffset = (restNoteLine - centerLine) * staffSpacePx;
 
-        const runs =
-            usesWholeBarRest
-                ? [this.renderWholeBarRestSlot(restLineOffset, barNumber, trackId, measure, scoreElementRegistry)]
-                : this.renderItems(nodes, beamSpans, "", centerLine, restLineOffset);
+        let runs: ComponentChild[];
+        if (usesSimile) {
+            runs = [this.renderSimileSlot(barNumber, trackId, measure, scoreElementRegistry)];
+        } else if (usesWholeBarRest) {
+            runs = [this.renderWholeBarRestSlot(restLineOffset, barNumber, trackId, measure, scoreElementRegistry)];
+        } else {
+            runs = this.renderItems(nodes, beamSpans, "", centerLine, restLineOffset);
+        }
 
         // Render the staff lines around the line the notes sit on. The stylesheet states where that line is in
         // the row, so only the line's place in the staff is computed here.
@@ -845,7 +852,7 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
      * @returns The whole-measure rest run.
      */
     private renderWholeBarRestSlot(restLineOffset: number, barNumber: number, trackId: number,
-        measure: ISbDmTrackMeasure, scoreElementRegistry?: ScoreElementRegistry): VNode {
+        measure: ISbDmTrackPiece, scoreElementRegistry?: ScoreElementRegistry): VNode {
         const restStyle = {
             "--rest-ink-width": ScoreSymbols.inkBox(ScoreSymbol.RestWhole).width,
             "--rest-line-offset": `${restLineOffset}px`,
@@ -868,6 +875,37 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                 <span className="staff-note-viewer-rest-symbol" style={restStyle}>
                     <ScoreSymbolView symbol={ScoreSymbol.RestWhole} staffSpace={staffSpacePx} />
                 </span>
+            </div>
+        );
+    }
+
+    /**
+     * Renders the one-bar repeat (simile) mark in place of the measure's notes.
+     *
+     * @param barNumber The one-based measure number of this viewer.
+     * @param trackId The track identity of this viewer.
+     * @param measure The measure the mark stands for.
+     * @param scoreElementRegistry The registry to register the mark in.
+     *
+     * @returns The simile run.
+     */
+    private renderSimileSlot(barNumber: number, trackId: number, measure: ISbDmTrackPiece,
+        scoreElementRegistry?: ScoreElementRegistry): VNode {
+        return (
+            <div
+                key="simile"
+                className="staff-note-viewer-run staff-note-viewer-simile"
+                style={{ width: "100%" }}
+                ref={scoreElementRegistry?.createRef({
+                    kind: ScoreElementKind.StaffRun,
+                    bar: barNumber,
+                    trackId,
+                    step: 0,
+                    start: { numerator: 0, denominator: 1 },
+                    measure,
+                }, measure)}
+            >
+                <ScoreSymbolView symbol={ScoreSymbol.MeasureRepeat} staffSpace={staffSpacePx} />
             </div>
         );
     }

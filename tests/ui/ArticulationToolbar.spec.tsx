@@ -11,7 +11,7 @@ import { Articulation } from "../../src/core/articulation.js";
 import { AppStorage } from "../../src/core/AppStorage.js";
 import {
     Damping, ExcitationMode, NoteDisplayType, StickTechnique,
-    type ISbDmArrangement, type ISbDmTrack, type ISbDmTrackMeasure, type ScoreBookDataModel,
+    type ISbDmArrangement, type ISbDmTrack, type ISbDmTrackPiece, type ScoreBookDataModel,
 } from "../../src/core/ScoreBookDataModel.js";
 import type { IAudioData } from "../../src/core/types/general.js";
 import { EditEntryMode } from "../../src/core/types/general.js";
@@ -75,7 +75,7 @@ const makeTrackWithNote = (
                 audioData: { id: styleId },
             },
         ],
-    } as unknown as ISbDmTrackMeasure;
+    } as unknown as ISbDmTrackPiece;
 
     track.measures.push(measure);
     arrangement.tracks.push(track);
@@ -367,7 +367,7 @@ describe.sequential("ArticulationToolbar", () => {
                     audioData: { id: event.noteStyleId },
                 };
             }),
-        } as unknown as ISbDmTrackMeasure;
+        } as unknown as ISbDmTrackPiece;
         track.measures.push(measure);
 
         const dataModel = makeDataModel([track]);

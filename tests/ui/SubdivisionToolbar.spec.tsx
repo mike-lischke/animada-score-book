@@ -7,14 +7,25 @@ import { cleanup, render, type RenderResult } from "@testing-library/preact";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { SubdivisionToolbar } from "../../src/components/ui/Arrangement/SubdivisionToolbar.js";
-import type { ISbDmArrangement, ISbDmTrack, ISbDmTrackMeasure } from "../../src/core/ScoreBookDataModel.js";
+import type { ISbDmArrangement, ISbDmTrack, ISbDmTrackPiece } from "../../src/core/ScoreBookDataModel.js";
 import { ScoreBookDataModel } from "../../src/core/ScoreBookDataModel.js";
 import type { IFraction } from "../../src/core/types/general.js";
 import { SelectionManager } from "../../src/ui/SelectionManager.js";
-import { createInstrument, noteEntry, runEntry } from "../unit-test-helpers.js";
+import { createInstrument, noteEntry, runEntry, trackPieceEntry } from "../unit-test-helpers.js";
 
 const triggerButton = (container: Element): HTMLButtonElement => {
     return container.querySelector<HTMLButtonElement>("button")!;
+};
+
+/**
+ * The one-bar repeat toggle, which follows the tuplet dropdown in the same group.
+ *
+ * @param container The rendered toolbar.
+ *
+ * @returns The toggle button.
+ */
+const repeatButton = (container: Element): HTMLButtonElement => {
+    return container.querySelectorAll<HTMLButtonElement>("button")[1];
 };
 
 /**
@@ -24,22 +35,23 @@ const triggerButton = (container: Element): HTMLButtonElement => {
  * @param trackId The track identity.
  * @param starts The positions of the measure's events.
  * @param duration The length every event gets.
+ * @param measureNumber The one-based measure number; defaults to 1.
  *
  * @returns The measure to address in selection entries.
  */
 const makeMeasure = (trackId: number, starts: IFraction[],
-    duration: IFraction = { numerator: 1, denominator: 16 }): ISbDmTrackMeasure => {
+    duration: IFraction = { numerator: 1, denominator: 16 }, measureNumber = 1): ISbDmTrackPiece => {
     const arrangement = { tracks: [] } as unknown as ISbDmArrangement;
     const track = { id: trackId, measures: [], arrangement } as unknown as ISbDmTrack;
     const measure = {
-        number: 1,
+        number: measureNumber,
         track,
         meter: { stepResolution: 16 },
         subdivisions: [],
         events: starts.map((start) => {
             return { start, duration };
         }),
-    } as unknown as ISbDmTrackMeasure;
+    } as unknown as ISbDmTrackPiece;
 
     track.measures.push(measure);
     arrangement.tracks.push(track);
@@ -54,10 +66,12 @@ const cell = (step: number): IFraction => {
 describe.sequential("SubdivisionToolbar", () => {
     let renderResult: RenderResult | null;
     let selectionManager: SelectionManager;
+    let dataModel: ScoreBookDataModel;
 
     beforeEach(() => {
         renderResult = null;
         selectionManager = new SelectionManager();
+        dataModel = new ScoreBookDataModel();
     });
 
     afterEach(() => {
@@ -78,7 +92,7 @@ describe.sequential("SubdivisionToolbar", () => {
         selectionManager.replaceSelection([noteEntry(measure, { numerator: 1, denominator: 12 })]);
 
         renderResult = render(
-            <SubdivisionToolbar selectionManager={selectionManager} />,
+            <SubdivisionToolbar selectionManager={selectionManager} dataModel={dataModel} />,
         );
 
         expect(triggerButton(renderResult.container).disabled).toBe(false);
@@ -87,7 +101,7 @@ describe.sequential("SubdivisionToolbar", () => {
             { numerator: 1, denominator: 6 }, 3, 2);
         selectionManager.replaceSelection([noteEntry(measure, { numerator: 1, denominator: 18 })]);
         renderResult.rerender(
-            <SubdivisionToolbar selectionManager={selectionManager} />,
+            <SubdivisionToolbar selectionManager={selectionManager} dataModel={dataModel} />,
         );
 
         // A note in the second level has no room for another bracket.
@@ -110,7 +124,7 @@ describe.sequential("SubdivisionToolbar", () => {
         ]);
 
         renderResult = render(
-            <SubdivisionToolbar selectionManager={selectionManager} />,
+            <SubdivisionToolbar selectionManager={selectionManager} dataModel={dataModel} />,
         );
 
         expect(triggerButton(renderResult.container).disabled).toBe(true);
@@ -118,7 +132,7 @@ describe.sequential("SubdivisionToolbar", () => {
 
     it("renders a disabled creation dropdown when nothing is selected", () => {
         renderResult = render(
-            <SubdivisionToolbar selectionManager={selectionManager} />,
+            <SubdivisionToolbar selectionManager={selectionManager} dataModel={dataModel} />,
         );
 
         expect(triggerButton(renderResult.container).disabled).toBe(true);
@@ -129,7 +143,7 @@ describe.sequential("SubdivisionToolbar", () => {
         selectionManager.replaceSelection([noteEntry(measure, cell(0))]);
 
         renderResult = render(
-            <SubdivisionToolbar selectionManager={selectionManager} />,
+            <SubdivisionToolbar selectionManager={selectionManager} dataModel={dataModel} />,
         );
 
         expect(triggerButton(renderResult.container).disabled).toBe(false);
@@ -152,7 +166,7 @@ describe.sequential("SubdivisionToolbar", () => {
         selectionManager.replaceSelection([noteEntry(measure, slotStart)]);
 
         renderResult = render(
-            <SubdivisionToolbar selectionManager={selectionManager} />,
+            <SubdivisionToolbar selectionManager={selectionManager} dataModel={dataModel} />,
         );
 
         const dropdownItems = [...renderResult.container.querySelectorAll<HTMLAnchorElement>("a")];
@@ -172,7 +186,7 @@ describe.sequential("SubdivisionToolbar", () => {
         selectionManager.replaceSelection(entries);
 
         renderResult = render(
-            <SubdivisionToolbar selectionManager={selectionManager} />,
+            <SubdivisionToolbar selectionManager={selectionManager} dataModel={dataModel} />,
         );
 
         expect(triggerButton(renderResult.container).disabled).toBe(false);
@@ -188,7 +202,7 @@ describe.sequential("SubdivisionToolbar", () => {
         selectionManager.replaceSelection(entries);
 
         renderResult = render(
-            <SubdivisionToolbar selectionManager={selectionManager} />,
+            <SubdivisionToolbar selectionManager={selectionManager} dataModel={dataModel} />,
         );
 
         expect(triggerButton(renderResult.container).disabled).toBe(true);
@@ -203,7 +217,7 @@ describe.sequential("SubdivisionToolbar", () => {
         selectionManager.replaceSelection(entries);
 
         renderResult = render(
-            <SubdivisionToolbar selectionManager={selectionManager} />,
+            <SubdivisionToolbar selectionManager={selectionManager} dataModel={dataModel} />,
         );
 
         const dropdownItems = [...renderResult.container.querySelectorAll<HTMLAnchorElement>("a")];
@@ -224,7 +238,7 @@ describe.sequential("SubdivisionToolbar", () => {
         selectionManager.replaceSelection([runEntry(measure, measure.events[0])]);
 
         renderResult = render(
-            <SubdivisionToolbar selectionManager={selectionManager} />,
+            <SubdivisionToolbar selectionManager={selectionManager} dataModel={dataModel} />,
         );
 
         const dropdownItems = [...renderResult.container.querySelectorAll<HTMLAnchorElement>("a")];
@@ -237,5 +251,52 @@ describe.sequential("SubdivisionToolbar", () => {
 
         expect(quadruplet?.getAttribute("aria-disabled")).toBeNull();
         expect(nontuplet?.getAttribute("aria-disabled")).toBe("true");
+    });
+
+    it("disables the one-bar repeat unless the whole selection is track pieces", () => {
+        const measure = makeMeasure(7, [cell(0)], undefined, 2);
+        selectionManager.replaceSelection([noteEntry(measure, cell(0))]);
+
+        renderResult = render(
+            <SubdivisionToolbar selectionManager={selectionManager} dataModel={dataModel} />,
+        );
+
+        expect(repeatButton(renderResult.container).disabled).toBe(true);
+    });
+
+    it("enables the one-bar repeat for a track piece beyond the first measure", () => {
+        const measure = makeMeasure(7, [cell(0)], undefined, 2);
+        selectionManager.replaceSelection([trackPieceEntry(measure.track, measure)]);
+
+        renderResult = render(
+            <SubdivisionToolbar selectionManager={selectionManager} dataModel={dataModel} />,
+        );
+
+        const button = repeatButton(renderResult.container);
+        expect(button.disabled).toBe(false);
+        expect(button.classList.contains("du-btn-primary")).toBe(false);
+    });
+
+    it("disables the one-bar repeat on the first measure", () => {
+        const measure = makeMeasure(7, [cell(0)]);
+        selectionManager.replaceSelection([trackPieceEntry(measure.track, measure)]);
+
+        renderResult = render(
+            <SubdivisionToolbar selectionManager={selectionManager} dataModel={dataModel} />,
+        );
+
+        expect(repeatButton(renderResult.container).disabled).toBe(true);
+    });
+
+    it("marks the one-bar repeat when every selected track piece carries it", () => {
+        const measure = makeMeasure(7, [cell(0)], undefined, 2);
+        measure.simile = true;
+        selectionManager.replaceSelection([trackPieceEntry(measure.track, measure)]);
+
+        renderResult = render(
+            <SubdivisionToolbar selectionManager={selectionManager} dataModel={dataModel} />,
+        );
+
+        expect(repeatButton(renderResult.container).classList.contains("du-btn-primary")).toBe(true);
     });
 });

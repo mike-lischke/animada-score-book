@@ -88,14 +88,20 @@ export interface IArrangementSnapshot {
 export interface ITrackSnapshot {
     id: number;
     instrumentId: string;
-    measures: ITrackMeasureSnapshot[];
+    measures: ITrackPieceSnapshot[];
 }
 
-export interface ITrackMeasureSnapshot {
+export interface ITrackPieceSnapshot {
     number: number;
     meter: IMeterSnapshot;
     events: IMeasureEvent[];
     subdivisions: ISubdivision[];
+
+    /**
+     * One-bar repeat (simile): the measure plays what the nearest preceding measure plays, so it holds no
+     * content of its own. Never set on the first measure of a track.
+     */
+    simile?: boolean;
 }
 
 export interface IMeterSnapshot {

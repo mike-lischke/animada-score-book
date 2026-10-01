@@ -6,7 +6,7 @@
 import { Arrangement } from "../src/core/Arrangement.js";
 import { modelEventAt } from "../src/core/MeasureProjection.js";
 import {
-    SbDmEntityType, type ISbDmInstrument, type ISbDmTrack, type ISbDmTrackMeasure, type ScoreBookDataModel,
+    SbDmEntityType, type ISbDmInstrument, type ISbDmTrack, type ISbDmTrackPiece, type ScoreBookDataModel,
 } from "../src/core/ScoreBookDataModel.js";
 import { addFractions, reduceFraction } from "../src/core/serialisation/numeric-functions.js";
 import { NoteLength, type INoteValue } from "../src/core/rest-notation.js";
@@ -43,7 +43,7 @@ export const noteValue = (length: NoteLength, dotted = false): INoteValue => {
  *
  * @returns The selection entry addressing that cell.
  */
-export const noteEntry = (measure: ISbDmTrackMeasure, start: IFraction): ISelectionEntry => {
+export const noteEntry = (measure: ISbDmTrackPiece, start: IFraction): ISelectionEntry => {
     const event = modelEventAt(measure, start)!;
 
     return {
@@ -67,7 +67,7 @@ export const noteEntry = (measure: ISbDmTrackMeasure, start: IFraction): ISelect
  *
  * @returns The selection entry addressing that run.
  */
-export const runEntry = (measure: ISbDmTrackMeasure, event: IMeasureEvent): ISelectionEntry => {
+export const runEntry = (measure: ISbDmTrackPiece, event: IMeasureEvent): ISelectionEntry => {
     return {
         granularity: SelectionGranularity.Note,
         target: {
@@ -88,7 +88,7 @@ export const runEntry = (measure: ISbDmTrackMeasure, event: IMeasureEvent): ISel
  *
  * @returns The selection entry addressing the group.
  */
-export const noteGroupEntry = (measure: ISbDmTrackMeasure, events: IMeasureEvent[]): ISelectionEntry => {
+export const noteGroupEntry = (measure: ISbDmTrackPiece, events: IMeasureEvent[]): ISelectionEntry => {
     return {
         granularity: SelectionGranularity.NoteGroup,
         target: { granularity: SelectionGranularity.NoteGroup, measure, events },
@@ -104,7 +104,7 @@ export const noteGroupEntry = (measure: ISbDmTrackMeasure, events: IMeasureEvent
  *
  * @returns The events of the range, in measure order.
  */
-export const eventsInSteps = (measure: ISbDmTrackMeasure, startStep: number, endStep: number): IMeasureEvent[] => {
+export const eventsInSteps = (measure: ISbDmTrackPiece, startStep: number, endStep: number): IMeasureEvent[] => {
     const stepsPerBar = measure.meter.stepResolution;
 
     return measure.events.filter((event) => {
@@ -123,7 +123,7 @@ export const eventsInSteps = (measure: ISbDmTrackMeasure, startStep: number, end
  *
  * @returns The selection entry addressing the group.
  */
-export const noteGroupInSteps = (measure: ISbDmTrackMeasure, startStep: number,
+export const noteGroupInSteps = (measure: ISbDmTrackPiece, startStep: number,
     endStep: number): ISelectionEntry => {
     return noteGroupEntry(measure, eventsInSteps(measure, startStep, endStep));
 };
@@ -136,7 +136,7 @@ export const noteGroupInSteps = (measure: ISbDmTrackMeasure, startStep: number,
  *
  * @returns The selection entry addressing the track piece.
  */
-export const trackPieceEntry = (track: ISbDmTrack, measure: ISbDmTrackMeasure): ISelectionEntry => {
+export const trackPieceEntry = (track: ISbDmTrack, measure: ISbDmTrackPiece): ISelectionEntry => {
     return {
         granularity: SelectionGranularity.TrackPiece,
         target: { granularity: SelectionGranularity.TrackPiece, track, measure },
@@ -151,7 +151,7 @@ export const trackPieceEntry = (track: ISbDmTrack, measure: ISbDmTrackMeasure): 
  *
  * @returns The selection entry addressing the bar.
  */
-export const measureEntry = (measure: ISbDmTrackMeasure): ISelectionEntry => {
+export const measureEntry = (measure: ISbDmTrackPiece): ISelectionEntry => {
     return {
         granularity: SelectionGranularity.Measure,
         target: { granularity: SelectionGranularity.Measure, measure },

@@ -178,4 +178,20 @@ describe("snapshots", () => {
         expect(migrated).toBe(false);
         expect(getArrangementSnapshot(restored)).toEqual(snapshot);
     });
+
+    it("carries a one-bar repeat through the snapshot and the packed round trip", () => {
+        const instrument = createInstrument("0", 0, 0);
+        const arrangement = Arrangement.emptyArrangementWithInstruments([instrument], { length: 2 });
+        arrangement.tracks[0].measures[1].simile = true;
+
+        const snapshot = getArrangementSnapshot(arrangement);
+        expect(snapshot.tracks[0].measures[1].simile).toBe(true);
+
+        const packed = stringifyPackedArrangement(snapshot);
+        const { arrangement: restored, migrated } = ArrangementMigrator.migrateToArrangement(packed, [instrument]);
+
+        expect(migrated).toBe(false);
+        expect(restored.tracks[0].measures[1].simile).toBe(true);
+        expect(getArrangementSnapshot(restored)).toEqual(snapshot);
+    });
 });

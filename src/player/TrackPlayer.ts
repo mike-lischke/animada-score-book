@@ -4,10 +4,11 @@
  */
 
 import {
-    SbDmEntityType, type ISbDmNoteEvent, type ISbDmTrack, type ISbDmTrackMeasure, type RealTime
+    SbDmEntityType, type ISbDmNoteEvent, type ISbDmTrack, type ISbDmTrackPiece, type RealTime
 } from "../core/ScoreBookDataModel.js";
 import type { IFraction } from "../core/types/general.js";
 import { requisitions } from "../supplement/Requisitions.js";
+import { PlaybackOrder } from "./PlaybackOrder.js";
 import type { TimeCoordinator } from "./TimeCoordinator.js";
 import { Event, IInterval } from "./types.js";
 
@@ -25,6 +26,13 @@ export class TrackPlayer {
     private readonly timeCoordinator: TimeCoordinator;
 
     private disposed = false;
+
+    /**
+     * The events playback reads, one entry per sounding event in measure order. A measure contributes its own
+     * resolved events, a simile the events of the measure it repeats, re-timed to its own position. Kept apart
+     * from the measures' `noteEvents`, which stay the literal content the views draw and edit.
+     */
+    private readonly playbackEvents: ISbDmNoteEvent[] = [];
 
     /**
      * Creates a player for the given track and sets up note timing caches and subscriptions.
@@ -65,7 +73,7 @@ export class TrackPlayer {
 
         const events: Event[] = [];
 
-        for (const event of this.track.notes) {
+        for (const event of this.playbackEvents) {
             const realTime = this.timeCoordinator.convertEventToRealTime(event);
             // Treat `end` as exclusive. Events exactly on this end are included in the following interval.
             if (realTime >= interval.end) {
@@ -102,11 +110,47 @@ export class TrackPlayer {
 
     /** Rebuilds the resolved runtime note events from the persisted measure events. */
     private rebuildEventCache = (): void => {
-        for (const measure of this.track.measures) {
+        const measures = this.track.measures;
+
+        for (const measure of measures) {
             const runtimeEvents = this.resolveMeasureEvents(measure);
             measure.noteEvents.splice(0, measure.noteEvents.length, ...runtimeEvents);
         }
+
+        this.rebuildPlaybackEvents(measures);
     };
+
+    /**
+     * Builds the playback list: every measure's own events, and for a simile the events of the measure it
+     * repeats, re-timed to the simile's position.
+     *
+     * @param measures The measures of the track, in measure order.
+     */
+    private rebuildPlaybackEvents(measures: readonly ISbDmTrackPiece[]): void {
+        const sources = PlaybackOrder.sourcesOf(measures);
+        const events: ISbDmNoteEvent[] = [];
+
+        for (let index = 0; index < measures.length; index++) {
+            const measure = measures[index];
+            const source = sources[index];
+
+            if (source === undefined || source === measure) {
+                events.push(...measure.noteEvents);
+
+                continue;
+            }
+
+            for (const event of source.noteEvents) {
+                events.push({
+                    ...event,
+                    measure,
+                    timing: this.timingForEventStart(event.start, measure.number, measure.meter.stepResolution),
+                });
+            }
+        }
+
+        this.playbackEvents.splice(0, this.playbackEvents.length, ...events);
+    }
 
     /**
      * Resolves the persisted events of a measure into runtime note events (style ids → audio data).
@@ -114,7 +158,7 @@ export class TrackPlayer {
      * @param measure The measure to resolve.
      * @returns The resolved note events, one per measure event.
      */
-    private resolveMeasureEvents(measure: ISbDmTrackMeasure): ISbDmNoteEvent[] {
+    private resolveMeasureEvents(measure: ISbDmTrackPiece): ISbDmNoteEvent[] {
         const stepsPerBar = measure.meter.stepResolution;
 
         return measure.events.map((event, eventIndex) => {

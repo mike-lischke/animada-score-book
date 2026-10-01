@@ -5,8 +5,11 @@
 
 import type { ComponentChild } from "preact";
 
+import { staffSpacePx } from "../../../core/MeasureLayout.js";
 import { MeasureProjection } from "../../../core/MeasureProjection.js";
 import { NoteLength, noteLengthDenominator } from "../../../core/rest-notation.js";
+import type { ISbDmTrackPiece, ScoreBookDataModel } from "../../../core/ScoreBookDataModel.js";
+import { ScoreSymbol } from "../../../core/ScoreSymbols.js";
 import { addFractions, compareFractions, subtractFractions } from "../../../core/serialisation/numeric-functions.js";
 import type { IFraction } from "../../../core/types/general.js";
 import { requisitions } from "../../../supplement/Requisitions.js";
@@ -16,14 +19,17 @@ import {
     addressesNoteCells, SelectionGranularity, SelectionSerializer, type INoteCellTarget, type ISelectionEntry,
 } from "../../../ui/SelectionSerializer.js";
 import { TupletIcon } from "../Note/TupletIcon.js";
+import { Button } from "../framework/Button.js";
 import { Container } from "../framework/Container.js";
 import { Dropdown, type IDropdownItem } from "../framework/Dropdown.js";
 import { GooeyGroup } from "../framework/GooeyGroup.js";
+import { ScoreSymbolView } from "../framework/ScoreSymbolView.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
 import { ChildAlignment, Orientation } from "../framework/ui-types.js";
 
 export interface ISubdivisionToolbarProps extends ICommonUIProperties {
     selectionManager: SelectionManager;
+    dataModel: ScoreBookDataModel;
 }
 
 interface ISubdivisionToolbarState {
@@ -31,6 +37,12 @@ interface ISubdivisionToolbarState {
 
     /** How many slots the selection can hold: one per shortest note value that fits into its span. */
     maxSlots: number;
+
+    /** Whether the whole selection is track pieces the one-bar repeat mark can be toggled on. */
+    canToggleSimile: boolean;
+
+    /** Whether every addressed track piece carries the one-bar repeat mark. */
+    simileActive: boolean;
 }
 
 interface ISubdivisionOption {
@@ -71,6 +83,8 @@ export class SubdivisionToolbar extends UIComponent<ISubdivisionToolbarProps, IS
         this.state = {
             canCreate: false,
             maxSlots: 1,
+            canToggleSimile: false,
+            simileActive: false,
         };
     }
 
@@ -86,7 +100,7 @@ export class SubdivisionToolbar extends UIComponent<ISubdivisionToolbarProps, IS
     }
 
     public override render(): ComponentChild {
-        const { canCreate } = this.state;
+        const { canCreate, canToggleSimile, simileActive } = this.state;
 
         const dropdownItems = this.buildDropdownItems();
 
@@ -107,6 +121,14 @@ export class SubdivisionToolbar extends UIComponent<ISubdivisionToolbarProps, IS
                         items={dropdownItems}
                         data-tooltip="Add subdivision"
                     />
+                    <Button
+                        isDefault={simileActive}
+                        disabled={!canToggleSimile}
+                        data-tooltip="One-bar repeat (simile)"
+                        onClick={this.handleToggleSimile}
+                    >
+                        <ScoreSymbolView symbol={ScoreSymbol.MeasureRepeat} staffSpace={staffSpacePx} inkBox />
+                    </Button>
                 </GooeyGroup>
             </Container>
         );
@@ -236,8 +258,56 @@ export class SubdivisionToolbar extends UIComponent<ISubdivisionToolbarProps, IS
             canCreate = this.shareTupletLevel(entries);
         }
 
-        this.setState({ canCreate, maxSlots: this.getMaxSlots(entries) });
+        const measures = this.selectedTrackPieces();
+        const canToggleSimile = measures.length > 0 && measures.every((measure) => {
+            return measure.number > 1;
+        });
+        const simileActive = canToggleSimile && measures.every((measure) => {
+            return measure.simile === true;
+        });
+
+        this.setState({ canCreate, maxSlots: this.getMaxSlots(entries), canToggleSimile, simileActive });
     }
+
+    /**
+     * Resolves the measures the selection addresses, but only when the whole selection is track pieces.
+     *
+     * @returns The addressed measures, or an empty list when the selection is mixed or empty.
+     */
+    private selectedTrackPieces(): ISbDmTrackPiece[] {
+        const entries = [...this.props.selectionManager.currentSelection.values()];
+        if (entries.length === 0) {
+            return [];
+        }
+
+        const measures: ISbDmTrackPiece[] = [];
+        for (const entry of entries) {
+            const { target } = entry;
+            if (target.granularity !== SelectionGranularity.TrackPiece) {
+                return [];
+            }
+
+            measures.push(target.measure);
+        }
+
+        return measures;
+    }
+
+    private handleToggleSimile = (): void => {
+        const { dataModel } = this.props;
+        const measures = this.selectedTrackPieces();
+        if (measures.length === 0) {
+            return;
+        }
+
+        const value = !measures.every((measure) => {
+            return measure.simile === true;
+        });
+
+        dataModel.setMeasureSimiles(measures.map((measure) => {
+            return { trackId: measure.track.id, bar: measure.number };
+        }), value);
+    };
 
     /**
      * Checks whether the selection holds notes that share their tuplet level and whether one more

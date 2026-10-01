@@ -7,7 +7,7 @@ import type { ComponentChild } from "preact";
 
 import { Articulation, articulationOf, availableArticulations } from "../../../core/articulation.js";
 import { AppStorage } from "../../../core/AppStorage.js";
-import type { ISbDmTrack, ISbDmTrackMeasure, ScoreBookDataModel } from "../../../core/ScoreBookDataModel.js";
+import type { ISbDmTrack, ISbDmTrackPiece, ScoreBookDataModel } from "../../../core/ScoreBookDataModel.js";
 import { compareFractions } from "../../../core/serialisation/numeric-functions.js";
 import type { IAudioData, IFraction } from "../../../core/types/general.js";
 import { EditEntryMode } from "../../../core/types/general.js";
@@ -309,7 +309,7 @@ export class ArticulationToolbar extends UIComponent<IArticulationToolbarProps, 
      *
      * @returns The style id, or undefined without a usable note event.
      */
-    private noteStyleIdAt(measure: ISbDmTrackMeasure, start: IFraction): string | undefined {
+    private noteStyleIdAt(measure: ISbDmTrackPiece, start: IFraction): string | undefined {
         const noteEvent = measure.noteEvents.find((candidate) => {
             return candidate.audioData !== undefined && compareFractions(candidate.start, start) === 0;
         });

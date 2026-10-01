@@ -3,7 +3,7 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import type { ISbDmArrangement, ISbDmTrack, ISbDmTrackMeasure } from "../core/ScoreBookDataModel.js";
+import type { ISbDmArrangement, ISbDmTrack, ISbDmTrackPiece } from "../core/ScoreBookDataModel.js";
 import { addFractions, compareFractions, reduceFraction } from "../core/serialisation/numeric-functions.js";
 import type { IFraction, IMeasureEvent, ISubdivision } from "../core/types/general.js";
 
@@ -58,20 +58,20 @@ export interface ITrackTarget {
  */
 export interface IMeasureTarget {
     granularity: SelectionGranularity.Measure;
-    measure: ISbDmTrackMeasure;
+    measure: ISbDmTrackPiece;
 }
 
 /** One track within one measure. */
 export interface ITrackPieceTarget {
     granularity: SelectionGranularity.TrackPiece;
     track: ISbDmTrack;
-    measure: ISbDmTrackMeasure;
+    measure: ISbDmTrackPiece;
 }
 
 /** A group of notes, e.g. a beamed group, a tuplet or a subdivision. */
 export interface INoteGroupTarget {
     granularity: SelectionGranularity.NoteGroup;
-    measure: ISbDmTrackMeasure;
+    measure: ISbDmTrackPiece;
     events: IMeasureEvent[];
     subdivision?: ISubdivision;
 }
@@ -79,7 +79,7 @@ export interface INoteGroupTarget {
 /** A single note event, addressed by the cell or run it was selected at. */
 export interface INoteTarget {
     granularity: SelectionGranularity.Note;
-    measure: ISbDmTrackMeasure;
+    measure: ISbDmTrackPiece;
     event: IMeasureEvent;
 
     /** Exact start of the addressed cell or run; a longer event spans several cells. */
@@ -326,7 +326,7 @@ export class SelectionSerializer {
      *
      * @returns The reference measure, or undefined when no track has that bar.
      */
-    public static measureOfBar(arrangement: ISbDmArrangement, bar: number): ISbDmTrackMeasure | undefined {
+    public static measureOfBar(arrangement: ISbDmArrangement, bar: number): ISbDmTrackPiece | undefined {
         for (const track of arrangement.tracks) {
             const measure = track.measures.at(bar - 1);
             if (measure) {
@@ -373,7 +373,7 @@ export class SelectionSerializer {
      *
      * @returns The default span end.
      */
-    public static spanEnd(event: IMeasureEvent, start: IFraction, measure: ISbDmTrackMeasure): IFraction {
+    public static spanEnd(event: IMeasureEvent, start: IFraction, measure: ISbDmTrackPiece): IFraction {
         const eventEnd = addFractions(event.start, event.duration);
         if (SelectionSerializer.subdivisionAt(measure, start) !== undefined) {
             return eventEnd;
@@ -396,7 +396,7 @@ export class SelectionSerializer {
      *
      * @returns The grid cell index.
      */
-    public static cellOf(start: IFraction, measure: ISbDmTrackMeasure): number {
+    public static cellOf(start: IFraction, measure: ISbDmTrackPiece): number {
         const subdivision = SelectionSerializer.subdivisionAt(measure, start);
         const position = subdivision === undefined ? start : measure.events[subdivision.startIndex].start;
 
@@ -411,7 +411,7 @@ export class SelectionSerializer {
      *
      * @returns The covering subdivision, or undefined when the position is not subdivided.
      */
-    public static subdivisionAt(measure: ISbDmTrackMeasure, start: IFraction): ISubdivision | undefined {
+    public static subdivisionAt(measure: ISbDmTrackPiece, start: IFraction): ISubdivision | undefined {
         let found: ISubdivision | undefined;
         let foundStart: IFraction | undefined;
 
@@ -517,7 +517,7 @@ export class SelectionSerializer {
      *
      * @returns The covering event, or undefined when no event covers the position.
      */
-    private static eventAt(measure: ISbDmTrackMeasure, start: IFraction): IMeasureEvent | undefined {
+    private static eventAt(measure: ISbDmTrackPiece, start: IFraction): IMeasureEvent | undefined {
         return measure.events.find((event) => {
             const end = addFractions(event.start, event.duration);
 
@@ -533,7 +533,7 @@ export class SelectionSerializer {
      *
      * @returns The events of the group, in measure order.
      */
-    private static eventsInRange(measure: ISbDmTrackMeasure, stored: ISerialisedSelectionEntry): IMeasureEvent[] {
+    private static eventsInRange(measure: ISbDmTrackPiece, stored: ISerialisedSelectionEntry): IMeasureEvent[] {
         const { start, end } = stored;
         if (start === undefined || end === undefined) {
             return [];
@@ -552,7 +552,7 @@ export class SelectionSerializer {
      *
      * @returns The subdivision, or undefined when the event does not start one.
      */
-    private static subdivisionOf(measure: ISbDmTrackMeasure, event: IMeasureEvent): ISubdivision | undefined {
+    private static subdivisionOf(measure: ISbDmTrackPiece, event: IMeasureEvent): ISubdivision | undefined {
         return measure.subdivisions.find((candidate) => {
             const startEvent = measure.events[candidate.startIndex];
 

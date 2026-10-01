@@ -8,7 +8,7 @@ import type { ISbDmInstrument } from "../../ScoreBookDataModel.js";
 import { TimeParams } from "../../TimeParams.js";
 import type { IArrangementSnapshot } from "../../types/general.js";
 import { unpackArrangementSnapshot, type IPackedArrangement } from "../snapshot-packing.js";
-import { arrangementSnapshotVersion, isNaturalNumber } from "../snapshots.js";
+import { arrangementSnapshotVersion, isNaturalNumber, isReadableSnapshotVersion } from "../snapshots.js";
 import { BananaDrumMigrator, type IBananaDrumSnapshot } from "./BananaDrumMigrator.js";
 
 /** Returned by {@link ArrangementMigrator.migrateToArrangement}. */
@@ -39,13 +39,13 @@ export class ArrangementMigrator {
             const packed = ArrangementMigrator.tryParsePackedSource(source);
 
             if (packed) {
-                if (packed.v !== arrangementSnapshotVersion) {
+                if (!isReadableSnapshotVersion(packed.v)) {
                     throw new Error(`Unsupported snapshot schema version: ${packed.v}`);
                 }
 
                 return {
                     arrangement: this.createArrangementFromSnapshot(unpackArrangementSnapshot(packed), instruments),
-                    migrated: false,
+                    migrated: packed.v !== arrangementSnapshotVersion,
                 };
             }
 
@@ -72,7 +72,14 @@ export class ArrangementMigrator {
         }
 
         if (source.version !== arrangementSnapshotVersion) {
-            throw new Error(`Unsupported snapshot schema version: ${source.version}`);
+            if (!isReadableSnapshotVersion(source.version)) {
+                throw new Error(`Unsupported snapshot schema version: ${source.version}`);
+            }
+
+            return {
+                arrangement: this.createArrangementFromSnapshot(source, instruments),
+                migrated: true,
+            };
         }
 
         return { arrangement: this.createArrangementFromSnapshot(source, instruments), migrated: false };

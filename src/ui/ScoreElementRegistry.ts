@@ -3,7 +3,7 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import type { ISbDmTrack, ISbDmTrackMeasure } from "../core/ScoreBookDataModel.js";
+import type { ISbDmTrack, ISbDmTrackPiece } from "../core/ScoreBookDataModel.js";
 import { formatFraction } from "../core/serialisation/numeric-functions.js";
 import type { IMeasureEvent, IFraction, ISubdivision } from "../core/types/general.js";
 import { SelectionGranularity, type ISelectionTarget } from "./SelectionSerializer.js";
@@ -27,14 +27,14 @@ export interface IScoreElementLocation {
     start?: IFraction;
 
     /** The measure the element renders, so a consumer can resolve the model object behind it. */
-    measure?: ISbDmTrackMeasure;
+    measure?: ISbDmTrackPiece;
 }
 
 /**
  * The model objects a rendered element can stand for. These are the objects a renderer supplies for
  * the element it draws and the objects a selection addresses.
  */
-export type IScoreElementTarget = IMeasureEvent | ISbDmTrack | ISbDmTrackMeasure | ISubdivision;
+export type IScoreElementTarget = IMeasureEvent | ISbDmTrack | ISbDmTrackPiece | ISubdivision;
 
 interface IScoreElementRecord {
     element: HTMLElement;

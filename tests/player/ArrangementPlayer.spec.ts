@@ -110,9 +110,9 @@ vi.mock("../../src/player/TrackPlayer.js", () => {
 });
 
 // Build simple track/arrangement factories
-const makeMeasure = (track: ISbDmTrack, stepResolution = 16): ISbDmTrackMeasure => {
+const makeMeasure = (track: ISbDmTrack, stepResolution = 16): ISbDmTrackPiece => {
     return {
-        type: SbDmEntityType.TrackMeasure,
+        type: SbDmEntityType.TrackPiece,
         id: getNewId(),
         track,
         number: 1,
@@ -256,7 +256,7 @@ const makeArrangement = (trackCount: number): ISbDmArrangement => {
 // Import after mocks
 import {
     SbDmEntityType, ScoreBookDataModel, type ISbDmArrangement, type ISbDmInstrument, type ISbDmNoteEvent,
-    type ISbDmTimeParams, type ISbDmTrack, type ISbDmTrackMeasure, type ITiming, type RealTime
+    type ISbDmTimeParams, type ISbDmTrack, type ISbDmTrackPiece, type ITiming, type RealTime
 } from "../../src/core/ScoreBookDataModel.js";
 import { getNewId } from "../../src/core/utils.js";
 import { ArrangementPlayer } from "../../src/player/ArrangementPlayer.js";

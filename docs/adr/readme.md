@@ -33,4 +33,5 @@ hard to infer from code alone.
 | ADR-0011 | accepted | Give note entry an insert and an overwrite mode | note entry, note length change, measure editing, delete, grid vs. staff behaviour, subdivision slots, entry toolbars |
 | ADR-0012 | accepted | Execute the input through the active measure editor | measure editing, note entry, note length change, delete, cursor movement, input handling, editor boundaries, grid vs. staff behaviour |
 | ADR-0013 | accepted | Keep the rest structure a measure holds instead of deriving it anew | rest length change, rests, measure layout, notation, staff view, whole-measure rest, gaps between events |
+| ADR-0015 | accepted | Keep a one-bar repeat as a mark on the track piece and resolve it in playback | one-bar repeat, simile, track piece, measure content, playback, snapshot schema, migration |
 | ADR-0014 | accepted | Draw standard score symbols as glyphs of a user-selectable SMuFL font | score rendering, notation symbols, noteheads, rests, clef, time signature, fonts, settings, print, engraving metrics |

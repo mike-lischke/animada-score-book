@@ -6,7 +6,7 @@
 import { AppStorage } from "../core/AppStorage.js";
 import { EditEntryMode } from "../core/types/general.js";
 import {
-    ScoreBookChangeReason, type ISbDmTrackMeasure, type ScoreBookDataModel,
+    ScoreBookChangeReason, type ISbDmTrackPiece, type ScoreBookDataModel,
 } from "../core/ScoreBookDataModel.js";
 import { modelEventAt } from "../core/MeasureProjection.js";
 import { addFractions, compareFractions, formatFraction } from "../core/serialisation/numeric-functions.js";
@@ -173,7 +173,7 @@ export class SelectionManager {
      *
      * @returns True if the cell is selected.
      */
-    public isCellSelected(measure: ISbDmTrackMeasure, start: IFraction): boolean {
+    public isCellSelected(measure: ISbDmTrackPiece, start: IFraction): boolean {
         return this.currentSelection.has(this.noteKey(measure, measure.track.id, start));
     }
 
@@ -640,7 +640,7 @@ export class SelectionManager {
      *
      * @returns The cell's selection key.
      */
-    private noteKey(measure: ISbDmTrackMeasure, trackId: number, start: IFraction): string {
+    private noteKey(measure: ISbDmTrackPiece, trackId: number, start: IFraction): string {
         return `note:${measure.number}:${trackId}:${formatFraction(start)}`;
     }
 
@@ -846,7 +846,7 @@ export class SelectionManager {
         this.originalSelection = new Map(this.currentSelection);
 
         // Collect the measures of the selected bars.
-        const measures = new Map<number, ISbDmTrackMeasure>();
+        const measures = new Map<number, ISbDmTrackPiece>();
         for (const entry of this.currentSelection.values()) {
             const coordinates = SelectionSerializer.coordinatesOf(entry);
             if (coordinates.bar < 1) {
@@ -886,7 +886,7 @@ export class SelectionManager {
      *
      * @returns A measure of that bar, or undefined when no track has it.
      */
-    private measureOfBar(bar: number): ISbDmTrackMeasure | undefined {
+    private measureOfBar(bar: number): ISbDmTrackPiece | undefined {
         for (const track of this.dataModel?.arrangement?.tracks ?? []) {
             const measure = track.measures.at(bar - 1);
             if (measure) {

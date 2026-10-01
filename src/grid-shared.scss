@@ -117,6 +117,18 @@
         /* No visible styling — these serve only as measurement anchors for GridMeasureViewer. */
     }
 
+    /* The one-bar repeat (simile) mark a row shows instead of its cells. It takes no pointer events, so a
+       click falls through to the row and selects the track piece. */
+    .grid-simile-overlay {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        pointer-events: none;
+        z-index: 3;
+    }
+
     .subdivision {
         position: relative;
         padding: 4px 0 4px 0;

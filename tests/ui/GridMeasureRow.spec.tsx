@@ -8,14 +8,14 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { GridMeasureRow } from "../../src/components/ui/Bar/Grid/GridMeasureRow.js";
 import { Arrangement } from "../../src/core/Arrangement.js";
-import { ScoreBookDataModel, type ISbDmTrackMeasure } from "../../src/core/ScoreBookDataModel.js";
+import { ScoreBookDataModel, type ISbDmTrackPiece } from "../../src/core/ScoreBookDataModel.js";
 import type { IMeasureEvent } from "../../src/core/types/general.js";
 import { ScoreElementRegistry } from "../../src/ui/ScoreElementRegistry.js";
 import { createInstrument, hydrateMeasureEvents } from "../unit-test-helpers.js";
 
 interface IRenderedRow {
     row: HTMLElement;
-    measure: ISbDmTrackMeasure;
+    measure: ISbDmTrackPiece;
     registry: ScoreElementRegistry;
 }
 
@@ -23,16 +23,18 @@ interface IRenderedRow {
  * Renders the first measure of a fresh 4/4 track holding the given events.
  *
  * @param events The events the measure should hold.
+ * @param simile Whether the measure carries a one-bar repeat mark.
  *
  * @returns The rendered row, its measure and the element registry behind it.
  */
-const renderRow = (events: IMeasureEvent[]): IRenderedRow => {
+const renderRow = (events: IMeasureEvent[], simile = false): IRenderedRow => {
     const model = new ScoreBookDataModel();
     model.startNewArrangement([createInstrument("0", 0, 0)]);
 
     const track = model.arrangement!.tracks[0];
     const measure = track.measures[0];
     measure.events.splice(0, measure.events.length, ...events);
+    measure.simile = simile ? true : undefined;
     hydrateMeasureEvents(model.arrangement! as Arrangement);
 
     const registry = new ScoreElementRegistry();
@@ -119,5 +121,14 @@ describe.sequential("GridMeasureRow", () => {
 
         // The split step is one column; the steps behind it keep their own grid position.
         expect(startsOf(registry, cells.slice(1, 4))).toEqual(["1/16", "1/8", "3/16"]);
+    });
+
+    it("shows the one-bar repeat mark instead of cells for a simile", () => {
+        const { row } = renderRow([
+            { start: { numerator: 0, denominator: 1 }, duration: { numerator: 1, denominator: 1 } },
+        ], true);
+
+        expect(row.querySelector(".grid-simile-overlay")).not.toBeNull();
+        expect(cellsOf(row)).toHaveLength(0);
     });
 });

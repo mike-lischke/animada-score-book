@@ -5,7 +5,7 @@
 
 import type { ComponentChild } from "preact";
 
-import type { ISbDmArrangement, ISbDmTrack, ISbDmTrackMeasure, ScoreBookDataModel }
+import type { ISbDmArrangement, ISbDmTrack, ISbDmTrackPiece, ScoreBookDataModel }
     from "../../../../core/ScoreBookDataModel.js";
 import { MeasureLayout, staffSpacePx } from "../../../../core/MeasureLayout.js";
 import type { ArrangementPlayer } from "../../../../player/ArrangementPlayer.js";
@@ -518,7 +518,7 @@ export class StaffMeasureViewer extends UIComponent<IStaffMeasureViewerProps, IS
      *
      * @returns The group the marker addresses, or undefined when it stands for none.
      */
-    private markerGroup(marker: HTMLElement, measure: ISbDmTrackMeasure, groups: INoteGroup[],
+    private markerGroup(marker: HTMLElement, measure: ISbDmTrackPiece, groups: INoteGroup[],
         registry: ScoreElementRegistry | undefined, isBeam: boolean): INoteGroup | undefined {
         if (isBeam) {
             const run = marker.closest<HTMLElement>(".staff-note-viewer-run");
@@ -547,7 +547,7 @@ export class StaffMeasureViewer extends UIComponent<IStaffMeasureViewerProps, IS
      *
      * @returns The selection entry for the event.
      */
-    private eventEntry(measure: ISbDmTrackMeasure, event: IMeasureEvent): ISelectionEntry {
+    private eventEntry(measure: ISbDmTrackPiece, event: IMeasureEvent): ISelectionEntry {
         return {
             granularity: SelectionGranularity.Note,
             target: {
@@ -568,7 +568,7 @@ export class StaffMeasureViewer extends UIComponent<IStaffMeasureViewerProps, IS
      *
      * @returns The selection entry for the group.
      */
-    private noteGroupEntry(measure: ISbDmTrackMeasure, group: INoteGroup): ISelectionEntry {
+    private noteGroupEntry(measure: ISbDmTrackPiece, group: INoteGroup): ISelectionEntry {
         return {
             granularity: SelectionGranularity.NoteGroup,
             target: {

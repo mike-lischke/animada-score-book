@@ -3,7 +3,7 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import type { ISbDmTrackMeasure } from "../core/ScoreBookDataModel.js";
+import type { ISbDmTrackPiece } from "../core/ScoreBookDataModel.js";
 import type { INoteValue } from "../core/rest-notation.js";
 import { addFractions, compareFractions, subtractFractions } from "../core/serialisation/numeric-functions.js";
 import { EditEntryMode, type IAudioData, type IFraction, type IMeasureEvent } from "../core/types/general.js";
@@ -29,14 +29,14 @@ export interface IInsertedStaffEvent extends IMeasurePosition {
 
 /** The element an exact staff position addresses in the model: the event and its measure. */
 export interface IStaffEventAddress {
-    measure: ISbDmTrackMeasure;
+    measure: ISbDmTrackPiece;
 
     event: IMeasureEvent;
 }
 
 /** Where an element is written: the measure it goes into, the position it starts at and its length. */
 interface IInsertionTarget {
-    measure: ISbDmTrackMeasure;
+    measure: ISbDmTrackPiece;
 
     /** The position the element starts at, which is the next measure's start when it moved over. */
     position: IMeasurePosition;
@@ -484,8 +484,8 @@ export class StaffMeasureEditor extends MeasureEditor {
      *
      * @returns The measure, or undefined when the selection is not confined to one.
      */
-    private measureOfSelection(entries: ISelectionEntry[]): ISbDmTrackMeasure | undefined {
-        const measures = new Set<ISbDmTrackMeasure>();
+    private measureOfSelection(entries: ISelectionEntry[]): ISbDmTrackPiece | undefined {
+        const measures = new Set<ISbDmTrackPiece>();
 
         for (const entry of entries) {
             const { target } = entry;
@@ -511,7 +511,7 @@ export class StaffMeasureEditor extends MeasureEditor {
      *
      * @returns The step count, or undefined when the span does not run from step boundary to step boundary.
      */
-    private stepSpanOf(start: IFraction, end: IFraction, measure: ISbDmTrackMeasure): number | undefined {
+    private stepSpanOf(start: IFraction, end: IFraction, measure: ISbDmTrackPiece): number | undefined {
         const stepsPerBar = measure.meter.stepResolution;
         const from = (start.numerator * stepsPerBar) / start.denominator;
         const to = (end.numerator * stepsPerBar) / end.denominator;
@@ -621,7 +621,7 @@ export class StaffMeasureEditor extends MeasureEditor {
      *
      * @returns The addressed event.
      */
-    private addressedEventOf(start: IFraction, measure: ISbDmTrackMeasure): IAddressedEvent {
+    private addressedEventOf(start: IFraction, measure: ISbDmTrackPiece): IAddressedEvent {
         return { trackId: measure.track.id, bar: measure.number, start: { ...start } };
     }
 

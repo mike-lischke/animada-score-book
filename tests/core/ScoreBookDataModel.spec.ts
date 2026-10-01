@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AppStorage } from "../../src/core/AppStorage.js";
 import { MeasureLayout } from "../../src/core/MeasureLayout.js";
-import { ScoreBookDataModel, type ISbDmTrackMeasure } from "../../src/core/ScoreBookDataModel.js";
+import { ScoreBookDataModel, type ISbDmTrackPiece } from "../../src/core/ScoreBookDataModel.js";
 import { reduceFraction } from "../../src/core/serialisation/numeric-functions.js";
 import type { IFraction, IMeasureEvent } from "../../src/core/types/general.js";
 import { requisitions } from "../../src/supplement/Requisitions.js";
@@ -33,7 +33,7 @@ const stepStart = (step: number): IFraction => {
  * @param measure The measure to inspect.
  * @returns The start step of every note, in display order.
  */
-const noteSteps = (measure: ISbDmTrackMeasure): number[] => {
+const noteSteps = (measure: ISbDmTrackPiece): number[] => {
     const stepsPerBar = measure.meter.stepResolution;
 
     return measure.events.filter((event) => {
@@ -49,7 +49,7 @@ const noteSteps = (measure: ISbDmTrackMeasure): number[] => {
  * @param measure The measure to inspect.
  * @returns One entry per event, in display order.
  */
-const eventList = (measure: ISbDmTrackMeasure): string[] => {
+const eventList = (measure: ISbDmTrackPiece): string[] => {
     return measure.events.map((event) => {
         const start = `${event.start.numerator}/${event.start.denominator}`;
         const duration = `${event.duration.numerator}/${event.duration.denominator}`;
@@ -64,7 +64,7 @@ const eventList = (measure: ISbDmTrackMeasure): string[] => {
  * @param measure The measure to inspect.
  * @returns One "start+duration" entry per note, in display order.
  */
-const noteSpans = (measure: ISbDmTrackMeasure): string[] => {
+const noteSpans = (measure: ISbDmTrackPiece): string[] => {
     return measure.events.filter((event) => {
         return event.noteStyleId !== undefined;
     }).map((event) => {
@@ -1666,5 +1666,91 @@ describe.sequential("ScoreBookDataModel measure widths", () => {
         model.replaceMeasureContent([{ trackId: track.id, bar: 1, events: sixteenthNotes(), subdivisions: [] }]);
 
         expect(widths.size).toBe(0);
+    });
+});
+
+describe.sequential("ScoreBookDataModel one-bar repeat (simile)", () => {
+    let model: ScoreBookDataModel;
+    let trackId: number;
+    let mutatedCalls: number;
+
+    const mutatedSpy = (): Promise<boolean> => {
+        mutatedCalls++;
+
+        return Promise.resolve(true);
+    };
+
+    beforeEach(() => {
+        mutatedCalls = 0;
+        model = new ScoreBookDataModel();
+        model.startNewArrangement([createInstrument("0", 0, 0)], { length: 2 });
+        trackId = model.arrangement!.tracks[0].id;
+        requisitions.register("arrangementMutated", mutatedSpy);
+    });
+
+    afterEach(() => {
+        requisitions.unregister("arrangementMutated", mutatedSpy);
+    });
+
+    it("empties the track piece and marks it, as one undo step", () => {
+        setCellNote(model, trackId, 2, 0, "1");
+        mutatedCalls = 0;
+
+        expect(model.setMeasureSimiles([{ trackId, bar: 2 }], true)).toBe(true);
+
+        const piece = model.arrangement!.tracks[0].measures[1];
+        expect(piece.simile).toBe(true);
+        expect(piece.events).toHaveLength(1);
+        expect(piece.events[0].noteStyleId).toBeUndefined();
+        expect(piece.subdivisions).toHaveLength(0);
+        expect(mutatedCalls).toBe(1);
+    });
+
+    it("clears the mark and leaves the piece empty", () => {
+        model.setMeasureSimiles([{ trackId, bar: 2 }], true);
+        mutatedCalls = 0;
+
+        expect(model.setMeasureSimiles([{ trackId, bar: 2 }], false)).toBe(true);
+
+        const piece = model.arrangement!.tracks[0].measures[1];
+        expect(piece.simile).toBeUndefined();
+        expect(piece.events).toHaveLength(1);
+        expect(mutatedCalls).toBe(1);
+    });
+
+    it("refuses the first measure of a track", () => {
+        expect(model.setMeasureSimiles([{ trackId, bar: 1 }], true)).toBe(false);
+        expect(model.arrangement!.tracks[0].measures[0].simile).toBeUndefined();
+        expect(mutatedCalls).toBe(0);
+    });
+
+    it("is a no-op when the mark already holds the requested state", () => {
+        model.setMeasureSimiles([{ trackId, bar: 2 }], true);
+        mutatedCalls = 0;
+
+        expect(model.setMeasureSimiles([{ trackId, bar: 2 }], true)).toBe(false);
+        expect(mutatedCalls).toBe(0);
+    });
+
+    it("treats a batch of track pieces as one edit", () => {
+        model.startNewArrangement([createInstrument("0", 0, 0), createInstrument("1", 1, 1)], { length: 2 });
+        const first = model.arrangement!.tracks[0].id;
+        const second = model.arrangement!.tracks[1].id;
+
+        expect(model.setMeasureSimiles([{ trackId: first, bar: 2 }, { trackId: second, bar: 2 }], true)).toBe(true);
+
+        expect(model.arrangement!.tracks[0].measures[1].simile).toBe(true);
+        expect(model.arrangement!.tracks[1].measures[1].simile).toBe(true);
+        expect(mutatedCalls).toBe(1);
+    });
+
+    it("drops a mark that a bar deletion moves onto the first measure", () => {
+        model.setMeasureSimiles([{ trackId, bar: 2 }], true);
+
+        model.deleteBar(1);
+
+        const piece = model.arrangement!.tracks[0].measures[0];
+        expect(piece.number).toBe(1);
+        expect(piece.simile).toBeUndefined();
     });
 });

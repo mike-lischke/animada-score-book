@@ -21,7 +21,7 @@ export enum ClipboardContentKind {
 }
 
 /** The content of one measure inside the clipboard. Events cover either the whole measure or a selected subrange. */
-export interface IClipboardMeasure {
+export interface IClipboardTrackPiece {
     /** The meter this measure was recorded with, used for target compatibility checks. */
     meter: IMeterSnapshot;
 
@@ -30,6 +30,9 @@ export interface IClipboardMeasure {
 
     /** Subdivision groups whose start index lies within the copied event range. */
     subdivisions: ISubdivision[];
+
+    /** One-bar repeat (simile) of the copied measure. Only a copied whole measure carries the mark. */
+    simile?: boolean;
 
     /**
      * The source measure's column width in px at 100% zoom, or undefined when it had the default width. Only a
@@ -51,7 +54,7 @@ export interface IClipboardTrack {
     instrumentTypeId: string;
 
     /** The copied measures, forming the repeat unit along the measure dimension. */
-    measures: IClipboardMeasure[];
+    measures: IClipboardTrackPiece[];
 }
 
 /**

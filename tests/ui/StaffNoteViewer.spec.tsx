@@ -9,7 +9,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { StaffNoteViewer } from "../../src/components/ui/Note/StaffNoteViewer.js";
 import {
     Damping, ExcitationMode, HandTechnique, NoteDisplayType, SbDmEntityType, type ISbDmNoteEvent, type ISbDmTrack,
-    type ISbDmTrackMeasure, type ISampleProfile,
+    type ISbDmTrackPiece, type ISampleProfile,
 } from "../../src/core/ScoreBookDataModel.js";
 import type { IAudioData, IFraction, IMeasureEvent, ISubdivision } from "../../src/core/types/general.js";
 import type { IScoreMetrics } from "../../src/player/TimeCoordinator.js";
@@ -43,7 +43,7 @@ const buildMeasure = (events: IMeasureEvent[], subdivisions: ISubdivision[],
     sampleProfile: ISampleProfile = { builtInDamping: Damping.Open, builtInAccent: false, ghost: false },
     handTechnique?: HandTechnique,
     displayType: NoteDisplayType = NoteDisplayType.Oval,
-): ISbDmTrackMeasure => {
+): ISbDmTrackPiece => {
     const instrument = {
         type: SbDmEntityType.Instrument,
         id: 1,
@@ -63,8 +63,8 @@ const buildMeasure = (events: IMeasureEvent[], subdivisions: ISubdivision[],
     } as unknown as IAudioData;
 
     const track = { id: 100 } as ISbDmTrack;
-    const measure: ISbDmTrackMeasure = {
-        type: SbDmEntityType.TrackMeasure,
+    const measure: ISbDmTrackPiece = {
+        type: SbDmEntityType.TrackPiece,
         id: 13,
         track,
         number: 1,
@@ -104,7 +104,7 @@ const buildMeasure = (events: IMeasureEvent[], subdivisions: ISubdivision[],
  *
  * @returns The measure with resolved note events.
  */
-const buildNestedMeasure = (): ISbDmTrackMeasure => {
+const buildNestedMeasure = (): ISbDmTrackPiece => {
     const events = [
         ...Array.from({ length: 8 }, (_, index) => {
             return event(fraction(index, 16), fraction(1, 16), "1");
@@ -144,7 +144,7 @@ const scoreMetrics: IScoreMetrics = {
  *
  * @returns The measure with resolved note events.
  */
-const buildFullBarEndingInThirtySecond = (): ISbDmTrackMeasure => {
+const buildFullBarEndingInThirtySecond = (): ISbDmTrackPiece => {
     const events = [
         ...Array.from({ length: 15 }, (_, index) => {
             return event(fraction(index, 16), fraction(1, 16), "1");
@@ -758,5 +758,30 @@ describe.sequential("StaffNoteViewer beams", () => {
         // stands for — the same one the toolbars mark for a selected slot.
         const restSymbol = renderResult.container.querySelector(".staff-note-viewer-rest-symbol text");
         expect(restSymbol?.textContent).toBe(String.fromCodePoint(0xE4E6));
+    });
+
+    it("draws the one-bar repeat mark instead of notes for a simile", () => {
+        const measure = buildMeasure([
+            event(fraction(0, 1), fraction(1, 4), "1"),
+            event(fraction(1, 4), fraction(3, 4)),
+        ], []);
+        measure.simile = true;
+
+        renderResult = render(
+            <StaffNoteViewer
+                isLastBar={false}
+                timeSignature="4/4"
+                scoreMetrics={scoreMetrics}
+                baseSteps={16}
+                measure={measure}
+                barNumber={2}
+                trackId={100}
+            />,
+        );
+
+        const run = renderResult.container.querySelector(".staff-note-viewer-simile");
+        expect(run).not.toBeNull();
+        expect(run?.querySelector("text")?.textContent).toBe(String.fromCodePoint(0xE500));
+        expect(renderResult.container.querySelector(".staff-note-viewer-note-run")).toBeNull();
     });
 });

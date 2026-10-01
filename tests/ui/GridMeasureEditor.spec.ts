@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Arrangement } from "../../src/core/Arrangement.js";
 import { MeasureProjection, ProjectedItemKind, modelEventAt } from "../../src/core/MeasureProjection.js";
 import { NoteLength } from "../../src/core/rest-notation.js";
-import { ScoreBookDataModel, type ISbDmTrackMeasure } from "../../src/core/ScoreBookDataModel.js";
+import { ScoreBookDataModel, type ISbDmTrackPiece } from "../../src/core/ScoreBookDataModel.js";
 import { addFractions, compareFractions } from "../../src/core/serialisation/numeric-functions.js";
 import type { IAudioData } from "../../src/core/types/general.js";
 import { requisitions } from "../../src/supplement/Requisitions.js";
@@ -29,7 +29,7 @@ import {
  * @param step The 0-based grid step to look up.
  * @returns The note style id covering the step, or undefined.
  */
-const noteAtStep = (measure: ISbDmTrackMeasure, step: number): string | undefined => {
+const noteAtStep = (measure: ISbDmTrackPiece, step: number): string | undefined => {
     const stepsPerBar = measure.meter.stepResolution;
     const start = { numerator: step, denominator: stepsPerBar };
 

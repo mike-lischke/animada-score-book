@@ -58,7 +58,7 @@ test("creates a subdivision from the notes selected in the staff view", async ({
     await page.locator(".staff-measure-track-row .staff-note-head-symbol").first().click();
     const runsBefore = await page.locator(".staff-note-viewer-run").count();
 
-    await page.locator(".subdivisionToolbar button").click();
+    await page.locator(".subdivisionToolbar button").first().click();
     const quadruplet = page.locator(".subdivisionToolbar .du-dropdown li", { hasText: "Quadruplet" }).locator("a");
 
     // A quarter note is four grid steps long, so a 4:1 split must be offered for it.
@@ -73,7 +73,7 @@ test("creates a subdivision from the notes selected in the staff view", async ({
 
 test("applies a length to a note beside a subdivision", async ({ page }) => {
     await page.locator(".staff-measure-track-row .staff-note-head-symbol").first().click();
-    await page.locator(".subdivisionToolbar button").click();
+    await page.locator(".subdivisionToolbar button").first().click();
     const quadruplet = page.locator(".subdivisionToolbar .du-dropdown li", { hasText: "Quadruplet" }).locator("a");
     await quadruplet.click({ force: true });
 

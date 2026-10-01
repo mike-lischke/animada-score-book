@@ -83,9 +83,12 @@ export class MiniBarViewer extends UIComponent<IMiniBarViewerProps, IMiniBarView
             <div className={className}>
                 {measureSelected && <div className="mini-bar-selection-overlay" />}
                 {arrangement.tracks.map((track) => {
-                    const events = barNumber - 1 < track.measures.length
-                        ? track.measures[barNumber - 1].noteEvents
-                        : [];
+                    const measure = barNumber - 1 < track.measures.length
+                        ? track.measures[barNumber - 1]
+                        : undefined;
+
+                    // A simile plays another measure and holds nothing of its own, so its track piece stays empty.
+                    const events = measure === undefined || measure.simile === true ? [] : measure.noteEvents;
 
                     const activeSteps = new Set<number>();
                     for (const event of events) {

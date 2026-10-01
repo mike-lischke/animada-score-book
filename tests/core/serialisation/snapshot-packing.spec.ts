@@ -9,10 +9,11 @@ import {
     isPackedArrangement, packArrangementSnapshot, stringifyPackedArrangement, tryParsePackedArrangement,
     unpackArrangementSnapshot, type IPackedArrangement
 } from "../../../src/core/serialisation/snapshot-packing.js";
+import { arrangementSnapshotVersion } from "../../../src/core/serialisation/snapshots.js";
 import type { IArrangementSnapshot } from "../../../src/core/types/general.js";
 
 const sampleSnapshot: IArrangementSnapshot = {
-    version: 5,
+    version: arrangementSnapshotVersion,
     title: "Sample",
     timeParams: { timeSignature: "4/4", tempo: 120, length: 2, pulse: "4n", stepResolution: 16 },
     tracks: [

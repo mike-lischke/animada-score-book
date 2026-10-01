@@ -9,7 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NoteStyleBar } from "../../src/components/ui/Arrangement/NoteStyleBar.js";
 import {
     Damping, ExcitationMode, HandTechnique, NoteDisplayType, StickTechnique,
-    type ISbDmArrangement, type ISbDmInstrument, type ISbDmTrack, type ISbDmTrackMeasure,
+    type ISbDmArrangement, type ISbDmInstrument, type ISbDmTrack, type ISbDmTrackPiece,
     type ScoreBookDataModel,
 } from "../../src/core/ScoreBookDataModel.js";
 import type { IAudioData } from "../../src/core/types/general.js";
@@ -112,7 +112,7 @@ const makeTrackWithNote = (
                 audioData: { id: styleId },
             },
         ],
-    } as unknown as ISbDmTrackMeasure;
+    } as unknown as ISbDmTrackPiece;
 
     track.measures.push(measure);
     arrangement.tracks.push(track);

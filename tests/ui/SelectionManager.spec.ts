@@ -8,7 +8,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AppStorage } from "../../src/core/AppStorage.js";
 import {
     SbDmEntityType, type ISbDmArrangement, type ISbDmNoteEvent, type ISbDmTrack,
-    type ISbDmTrackMeasure, type ScoreBookDataModel,
+    type ISbDmTrackPiece, type ScoreBookDataModel,
 } from "../../src/core/ScoreBookDataModel.js";
 import type { IFraction, IMeasureEvent, Mutable } from "../../src/core/types/general.js";
 import { requisitions } from "../../src/supplement/Requisitions.js";
@@ -103,7 +103,7 @@ const makeNote = (id: number): Mutable<ISbDmNoteEvent> => {
         type: SbDmEntityType.NoteEvent,
         id,
         measure: {
-            type: SbDmEntityType.TrackMeasure,
+            type: SbDmEntityType.TrackPiece,
             id: 1,
             track: { id: 7, measures: [] } as unknown as ISbDmTrack,
             number: 1,
@@ -271,10 +271,10 @@ describe.sequential("SelectionManager note groups", () => {
      *
      * @returns The measure to build groups in.
      */
-    const makeGroupMeasure = (): ISbDmTrackMeasure => {
+    const makeGroupMeasure = (): ISbDmTrackPiece => {
         return {
             id: 1,
-            type: SbDmEntityType.TrackMeasure,
+            type: SbDmEntityType.TrackPiece,
             track: { id: 9, measures: [] } as unknown as ISbDmTrack,
             number: 1,
             meter: { beats: 4, beatUnits: 4, stepResolution: 16, beatGroups: [4, 4, 4, 4] },
@@ -286,7 +286,7 @@ describe.sequential("SelectionManager note groups", () => {
             }),
             subdivisions: [],
             noteEvents: [],
-        } as unknown as ISbDmTrackMeasure;
+        } as unknown as ISbDmTrackPiece;
     };
 
     it("replaces a narrower group when the group covering it is picked", () => {
@@ -356,38 +356,38 @@ describe.sequential("SelectionManager re-validation after undo/redo", () => {
      * @returns The arrangement, its track and the two measures.
      */
     const makeUndoFixture = (): {
-        arrangement: ISbDmArrangement; track: ISbDmTrack; measure1: ISbDmTrackMeasure;
-        measure2: ISbDmTrackMeasure; measure2Events: IMeasureEvent[];
+        arrangement: ISbDmArrangement; track: ISbDmTrack; measure1: ISbDmTrackPiece;
+        measure2: ISbDmTrackPiece; measure2Events: IMeasureEvent[];
     } => {
         const arrangement = makeArrangement([] as ISbDmTrack[]);
 
         const measure1 = {
             id: 11,
-            type: SbDmEntityType.TrackMeasure,
+            type: SbDmEntityType.TrackPiece,
             number: 1,
             meter: { beats: 4, beatUnits: 4, stepResolution: 8, beatGroups: [8] },
             events: [{ start: { numerator: 0, denominator: 1 }, duration: { numerator: 1, denominator: 4 } }],
             subdivisions: [],
             noteEvents: [makeNote(1_001_001)],
-        } as unknown as ISbDmTrackMeasure;
+        } as unknown as ISbDmTrackPiece;
 
         const measure2Events = [
             { start: { numerator: 0, denominator: 1 }, duration: { numerator: 1, denominator: 4 } },
         ];
         const measure2 = {
             id: 12,
-            type: SbDmEntityType.TrackMeasure,
+            type: SbDmEntityType.TrackPiece,
             number: 2,
             meter: { beats: 4, beatUnits: 4, stepResolution: 8, beatGroups: [8] },
             events: measure2Events,
             subdivisions: [],
             noteEvents: [makeNote(1_002_001)],
-        } as unknown as ISbDmTrackMeasure;
+        } as unknown as ISbDmTrackPiece;
 
         const track = makeTrack([], arrangement);
         (track as Mutable<ISbDmTrack>).measures = [measure1, measure2];
-        (measure1 as Mutable<ISbDmTrackMeasure>).track = track;
-        (measure2 as Mutable<ISbDmTrackMeasure>).track = track;
+        (measure1 as Mutable<ISbDmTrackPiece>).track = track;
+        (measure2 as Mutable<ISbDmTrackPiece>).track = track;
         arrangement.tracks.push(track);
 
         return { arrangement, track, measure1, measure2, measure2Events };

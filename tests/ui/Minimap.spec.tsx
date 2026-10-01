@@ -9,7 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Minimap, type IVisibleBarRange } from "../../src/components/ui/Minimap/Minimap.js";
 import {
     SbDmEntityType, type ISbDmArrangement, type ISbDmNoteEvent, type ISbDmTimeParams,
-    type ISbDmTrack, type ISbDmTrackMeasure
+    type ISbDmTrack, type ISbDmTrackPiece
 } from "../../src/core/ScoreBookDataModel.js";
 import type { IScoreMetrics } from "../../src/player/TimeCoordinator.js";
 import { requisitions } from "../../src/supplement/Requisitions.js";
@@ -90,9 +90,9 @@ const makeTrack = (arrangement: ISbDmArrangement): ISbDmTrack => {
 
 const makePolyrhythmFixture = (
     track: ISbDmTrack,
-): { measure: ISbDmTrackMeasure; } => {
-    const measure: ISbDmTrackMeasure = {
-        type: SbDmEntityType.TrackMeasure,
+): { measure: ISbDmTrackPiece; } => {
+    const measure: ISbDmTrackPiece = {
+        type: SbDmEntityType.TrackPiece,
         id: 13,
         track,
         number: 1,
@@ -546,7 +546,7 @@ describe.sequential("Minimap (component)", () => {
             const polyrhythmArrangement = makeArrangement(1, 1);
             const track = polyrhythmArrangement.tracks[0];
             const { measure } = makePolyrhythmFixture(track);
-            (track as { measures: ISbDmTrackMeasure[]; }).measures = [measure];
+            (track as { measures: ISbDmTrackPiece[]; }).measures = [measure];
 
             renderMinimap({ arrangement: polyrhythmArrangement });
 

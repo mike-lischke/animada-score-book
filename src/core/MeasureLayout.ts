@@ -37,6 +37,9 @@ export const minEventWidth = 25;
 /** Distance two adjacent event anchors keep at least, in px at 100% zoom, so noteheads do not collide. */
 export const minEventGap = 12;
 
+/** Width the one-bar repeat (simile) mark keeps at least, in px at 100% zoom: the glyph plus its air. */
+export const minMeasureRepeatWidth = 3 * staffSpacePx;
+
 /** Horizontal insets of a staff measure column — its padding plus the closing barline — in px at 100% zoom. */
 export const staffMeasureInsets = 18;
 
@@ -225,9 +228,15 @@ export class MeasureLayout {
     public static minimumWidthOfMeasure(arrangement: Readonly<ISbDmArrangement>, bar: number): number {
         let shortestDuration = Number.POSITIVE_INFINITY;
         let tightestGap = Number.POSITIVE_INFINITY;
+        let hasSimile = false;
 
         for (const track of arrangement.tracks) {
-            const events = track.measures[bar - 1].events;
+            const measure = track.measures[bar - 1];
+            if (measure.simile === true) {
+                hasSimile = true;
+            }
+
+            const events = measure.events;
 
             for (let index = 0; index < events.length; index++) {
                 const duration = events[index].duration;
@@ -243,6 +252,7 @@ export class MeasureLayout {
         }
 
         const contentWidth = Math.max(
+            hasSimile ? minMeasureRepeatWidth : 0,
             Number.isFinite(shortestDuration) ? minEventWidth / shortestDuration : 0,
             Number.isFinite(tightestGap) ? (minEventWidth + minEventGap) / tightestGap : 0,
         );

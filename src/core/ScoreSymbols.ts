@@ -73,6 +73,9 @@ export enum ScoreSymbol {
     TechniqueCross,
     RimShotCross,
     PressRollStrokes,
+
+    /** The one-bar repeat (simile): the measure plays what the measure before it plays. */
+    MeasureRepeat,
 }
 
 /** What draws a symbol. */
@@ -399,6 +402,12 @@ export class ScoreSymbols {
                 strokeWidth: 0.25,
                 roundEnds: true,
             },
+        },
+
+        [ScoreSymbol.MeasureRepeat]: {
+            source: ScoreSymbolSource.MusicFontGlyph,
+            glyph: SmuflGlyph.Repeat1Bar,
+            anchor: GlyphAnchor.Centre,
         },
     };
 

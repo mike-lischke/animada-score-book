@@ -5,7 +5,7 @@
 
 import type { ComponentChild } from "preact";
 
-import type { ISbDmTrackMeasure, ScoreBookDataModel } from "../../../core/ScoreBookDataModel.js";
+import type { ISbDmTrackPiece, ScoreBookDataModel } from "../../../core/ScoreBookDataModel.js";
 import { AppStorage } from "../../../core/AppStorage.js";
 import { MeasureProjection } from "../../../core/MeasureProjection.js";
 import {
@@ -391,7 +391,7 @@ export class NoteLengthToolbar extends UIComponent<INoteLengthToolbarProps, INot
      *
      * @returns The note value, or undefined when the arrangement is not loaded.
      */
-    private noteValueOf(measure: ISbDmTrackMeasure, index: number): INoteValue | undefined {
+    private noteValueOf(measure: ISbDmTrackPiece, index: number): INoteValue | undefined {
         const arrangement = this.props.dataModel.arrangement;
         if (!arrangement) {
             return undefined;

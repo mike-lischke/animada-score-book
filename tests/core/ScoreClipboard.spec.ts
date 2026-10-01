@@ -6,7 +6,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { Arrangement } from "../../src/core/Arrangement.js";
-import { ScoreBookDataModel, type ISbDmInstrument, type ISbDmTrack, type ISbDmTrackMeasure }
+import { ScoreBookDataModel, type ISbDmInstrument, type ISbDmTrack, type ISbDmTrackPiece }
     from "../../src/core/ScoreBookDataModel.js";
 import {
     PasteOverflowMode, PasteResultKind, ScoreClipboard, SubdivisionPasteMode,
@@ -25,7 +25,7 @@ import {
  * @param step The 0-based grid step to look up.
  * @returns The note style id covering the step, or undefined.
  */
-const noteAtStep = (measure: ISbDmTrackMeasure, step: number): string | undefined => {
+const noteAtStep = (measure: ISbDmTrackPiece, step: number): string | undefined => {
     const stepsPerBar = measure.meter.stepResolution;
     const start = { numerator: step, denominator: stepsPerBar };
 
@@ -50,7 +50,7 @@ const noteAtStep = (measure: ISbDmTrackMeasure, step: number): string | undefine
  * @param denominator The fraction denominator.
  * @returns The note style id at that exact position, or undefined for rests.
  */
-const noteAtFraction = (measure: ISbDmTrackMeasure, numerator: number, denominator: number): string | undefined => {
+const noteAtFraction = (measure: ISbDmTrackPiece, numerator: number, denominator: number): string | undefined => {
     const start = { numerator, denominator };
 
     return measure.events.find((candidate) => {

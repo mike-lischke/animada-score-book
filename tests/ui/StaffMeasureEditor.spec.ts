@@ -9,7 +9,7 @@ import { Arrangement } from "../../src/core/Arrangement.js";
 import { Articulation } from "../../src/core/articulation.js";
 import { NoteLength } from "../../src/core/rest-notation.js";
 import {
-    Damping, ExcitationMode, NoteDisplayType, ScoreBookDataModel, StickTechnique, type ISbDmTrackMeasure,
+    Damping, ExcitationMode, NoteDisplayType, ScoreBookDataModel, StickTechnique, type ISbDmTrackPiece,
 } from "../../src/core/ScoreBookDataModel.js";
 import { addFractions, compareFractions } from "../../src/core/serialisation/numeric-functions.js";
 import type { IAudioData, IFraction, IMeasureEvent } from "../../src/core/types/general.js";
@@ -50,7 +50,7 @@ const makeNoteStyle = (id: string, accent: boolean): IAudioData => {
  *
  * @returns The measure that was written.
  */
-const setEvents = (model: ScoreBookDataModel, events: IMeasureEvent[]): ISbDmTrackMeasure => {
+const setEvents = (model: ScoreBookDataModel, events: IMeasureEvent[]): ISbDmTrackPiece => {
     const measure = model.arrangement!.tracks[0].measures[0];
     measure.events.splice(0, measure.events.length, ...events);
     hydrateMeasureEvents(model.arrangement! as Arrangement);
@@ -66,7 +66,7 @@ const setEvents = (model: ScoreBookDataModel, events: IMeasureEvent[]): ISbDmTra
  *
  * @returns The note style id covering the position, or undefined.
  */
-const styleAt = (measure: ISbDmTrackMeasure, start: IFraction): string | undefined => {
+const styleAt = (measure: ISbDmTrackPiece, start: IFraction): string | undefined => {
     const event = measure.events.find((candidate) => {
         return compareFractions(candidate.start, start) <= 0
             && compareFractions(start, addFractions(candidate.start, candidate.duration)) < 0;
@@ -83,7 +83,7 @@ const styleAt = (measure: ISbDmTrackMeasure, start: IFraction): string | undefin
  *
  * @returns The duration of the event starting there, or undefined when no event starts there.
  */
-const durationAt = (measure: ISbDmTrackMeasure, start: IFraction): IFraction | undefined => {
+const durationAt = (measure: ISbDmTrackPiece, start: IFraction): IFraction | undefined => {
     const event = measure.events.find((candidate) => {
         return compareFractions(candidate.start, start) === 0;
     });
@@ -95,7 +95,7 @@ describe.sequential("StaffMeasureEditor", () => {
     let model: ScoreBookDataModel;
     let editor: StaffMeasureEditor;
     let trackId: number;
-    let measure: ISbDmTrackMeasure;
+    let measure: ISbDmTrackPiece;
     let position: IMeasurePosition;
 
     beforeEach(() => {
@@ -403,7 +403,7 @@ describe.sequential("StaffMeasureEditor input", () => {
     let editor: StaffMeasureEditor;
     let input: IMeasureEditorInput;
     let trackId: number;
-    let measure: ISbDmTrackMeasure;
+    let measure: ISbDmTrackPiece;
 
     beforeEach(() => {
         vi.restoreAllMocks();

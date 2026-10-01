@@ -3,7 +3,7 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import type { IMeasureRange, ISbDmArrangement, ISbDmTrack, ISbDmTrackMeasure }
+import type { ITrackPieceRange, ISbDmArrangement, ISbDmTrack, ISbDmTrackPiece }
     from "../core/ScoreBookDataModel.js";
 import type { IAddressedEvent } from "./MeasureEditor.js";
 import { modelEventAt } from "../core/MeasureProjection.js";
@@ -14,7 +14,7 @@ import type { IFraction } from "../core/types/general.js";
 
 /** A measure a selection addresses, with the indexes of the events it covers. */
 export interface IAddressedMeasureEvents {
-    measure: ISbDmTrackMeasure;
+    measure: ISbDmTrackPiece;
     indexes: number[];
 }
 
@@ -87,7 +87,7 @@ export const selectionEventsOf = (arrangement: ISbDmArrangement,
  * @param measure The measure the events belong to.
  * @param starts The positions of the addressed events.
  */
-const addAddressedEvents = (addressed: IAddressedMeasureEvents[], measure: ISbDmTrackMeasure,
+const addAddressedEvents = (addressed: IAddressedMeasureEvents[], measure: ISbDmTrackPiece,
     starts: IFraction[]): void => {
     let covered = addressed.find((candidate) => {
         return candidate.measure === measure;
@@ -141,8 +141,8 @@ export const selectionEventTargets = (arrangement: ISbDmArrangement,
  *
  * @returns The clear ranges derived from the selection.
  */
-export const selectionToClearRanges = (entries: ISelectionEntry[]): IMeasureRange[] => {
-    const ranges: IMeasureRange[] = [];
+export const selectionToClearRanges = (entries: ISelectionEntry[]): ITrackPieceRange[] => {
+    const ranges: ITrackPieceRange[] = [];
 
     for (const entry of entries) {
         ranges.push(...targetClearRanges(entry.target));
@@ -192,7 +192,7 @@ export const selectionTracksOf = (arrangement: ISbDmArrangement, entries: ISelec
  *
  * @returns The clear ranges derived from the target.
  */
-const targetClearRanges = (target: ISelectionTarget): IMeasureRange[] => {
+const targetClearRanges = (target: ISelectionTarget): ITrackPieceRange[] => {
     switch (target.granularity) {
         case SelectionGranularity.Note: {
             const event = modelEventAt(target.measure, target.start ?? target.event.start) ?? target.event;

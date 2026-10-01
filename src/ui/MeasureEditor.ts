@@ -12,7 +12,7 @@ import { modelEventAt } from "../core/MeasureProjection.js";
 import { defaultEntryValue, noteValueFraction, type INoteValue } from "../core/rest-notation.js";
 import { compareFractions, reduceFraction } from "../core/serialisation/numeric-functions.js";
 import type {
-    IEventResizeRequest, INoteStyleAssignment, ISbDmTrack, ISbDmTrackMeasure, ScoreBookDataModel,
+    IEventResizeRequest, INoteStyleAssignment, ISbDmTrack, ISbDmTrackPiece, ScoreBookDataModel,
 } from "../core/ScoreBookDataModel.js";
 import { EditEntryMode, type IAudioData, type IFraction, type IMeasureEvent } from "../core/types/general.js";
 import { AudioBufferPlayer } from "../player/AudioBufferPlayer.js";
@@ -883,7 +883,7 @@ export abstract class MeasureEditor {
      *
      * @returns The duration as a fraction of the measure, or undefined when the value is invalid.
      */
-    protected noteValueDurationFor(value: INoteValue, measure: ISbDmTrackMeasure): IFraction | undefined {
+    protected noteValueDurationFor(value: INoteValue, measure: ISbDmTrackPiece): IFraction | undefined {
         const arrangement = this.dataModel.arrangement;
         if (!arrangement) {
             return undefined;
@@ -981,7 +981,7 @@ export abstract class MeasureEditor {
      *
      * @returns The measure, or undefined when the track or measure does not exist.
      */
-    protected resolveMeasure(trackId: number, bar: number): ISbDmTrackMeasure | undefined {
+    protected resolveMeasure(trackId: number, bar: number): ISbDmTrackPiece | undefined {
         return this.trackOf(trackId)?.measures[bar - 1];
     }
 

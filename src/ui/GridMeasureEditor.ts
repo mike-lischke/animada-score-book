@@ -8,7 +8,7 @@ import { h } from "preact";
 import type { IRadialMenuItem } from "../components/ui/framework/RadialMenu.js";
 import { NoteStyleSymbolViewer } from "../components/ui/Note/NoteStyleSymbolViewer.js";
 import type {
-    ISbDmArrangement, ISbDmNoteEvent, ISbDmTrack, ISbDmTrackMeasure, ITiming,
+    ISbDmArrangement, ISbDmNoteEvent, ISbDmTrack, ISbDmTrackPiece, ITiming,
 } from "../core/ScoreBookDataModel.js";
 import type { INoteValue } from "../core/rest-notation.js";
 import {
@@ -643,12 +643,12 @@ export class GridMeasureEditor extends MeasureEditor {
      *
      * @returns The addressed event.
      */
-    private addressedEventOf(start: IFraction, measure: ISbDmTrackMeasure): IAddressedEvent {
+    private addressedEventOf(start: IFraction, measure: ISbDmTrackPiece): IAddressedEvent {
         return { trackId: measure.track.id, bar: measure.number, start: { ...start } };
     }
 
-    private noteLengthDurationForMeasure(duration: IFraction, sourceMeasure: ISbDmTrackMeasure,
-        targetMeasure: ISbDmTrackMeasure): IFraction | undefined {
+    private noteLengthDurationForMeasure(duration: IFraction, sourceMeasure: ISbDmTrackPiece,
+        targetMeasure: ISbDmTrackPiece): IFraction | undefined {
         const steps = duration.numerator * sourceMeasure.meter.stepResolution / duration.denominator;
         if (!Number.isInteger(steps)) {
             return undefined;

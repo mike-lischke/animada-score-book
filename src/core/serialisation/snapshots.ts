@@ -5,12 +5,27 @@
 
 import type { ISbDmArrangement, ISbDmTrack } from "../ScoreBookDataModel.js";
 import type {
-    IArrangementExtensions, IArrangementSnapshot, ITrackMeasureSnapshot, ITrackSnapshot,
+    IArrangementExtensions, IArrangementSnapshot, ITrackPieceSnapshot, ITrackSnapshot,
 } from "../types/general.js";
 
 /** Current internal arrangement snapshot schema version. */
 
-export const arrangementSnapshotVersion = 5;
+export const arrangementSnapshotVersion = 6;
+
+/**
+ * Every snapshot version this build reads, the current one included. An older version is upgraded on load, so a
+ * score a previous build wrote keeps its content. A schema change adds the version it supersedes here.
+ */
+const readableSnapshotVersions: ReadonlySet<number> = new Set([5, arrangementSnapshotVersion]);
+
+/**
+ * @param version The schema version of a snapshot.
+ *
+ * @returns True when this build reads the version, upgrading it when it is an older one.
+ */
+export const isReadableSnapshotVersion = (version: unknown): version is number => {
+    return typeof version === "number" && readableSnapshotVersions.has(version);
+};
 
 /** Chunk name under which an arrangement stores the column widths of individual measures. */
 const measureWidthsChunk = "measureWidths";
@@ -105,9 +120,9 @@ const getTrackSnapshot = (track: ISbDmTrack): ITrackSnapshot => {
     };
 };
 
-const getMeasureSnapshots = (track: ISbDmTrack): ITrackMeasureSnapshot[] => {
+const getMeasureSnapshots = (track: ISbDmTrack): ITrackPieceSnapshot[] => {
     return track.measures.map((measure) => {
-        return {
+        const snapshot: ITrackPieceSnapshot = {
             number: measure.number,
             meter: { ...measure.meter },
             events: measure.events.map((event) => {
@@ -122,5 +137,11 @@ const getMeasureSnapshots = (track: ISbDmTrack): ITrackMeasureSnapshot[] => {
                 return { ...subdivision };
             }),
         };
+
+        if (measure.simile) {
+            snapshot.simile = true;
+        }
+
+        return snapshot;
     });
 };

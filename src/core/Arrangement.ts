@@ -7,7 +7,7 @@ import { MeasureLayout } from "./MeasureLayout.js";
 import { requisitions } from "../supplement/Requisitions.js";
 import {
     SbDmEntityType, type ISbDmArrangement, type ISbDmInstrument, type ISbDmTrack,
-    type ISbDmTrackMeasure
+    type ISbDmTrackPiece
 } from "./ScoreBookDataModel.js";
 import { TimeParams } from "./TimeParams.js";
 import { Track } from "./Track.js";
@@ -142,6 +142,7 @@ export class Arrangement implements ISbDmArrangement {
                             subdivisions: measure.subdivisions.map((subdivision) => {
                                 return { ...subdivision };
                             }),
+                            simile: measure.simile ? true : undefined,
                         };
                     }),
                 };
@@ -453,15 +454,15 @@ export class Arrangement implements ISbDmArrangement {
     };
 
     private applyTrackSnapshot(track: Track, trackSnapshot: ITrackSnapshot): void {
-        const newMeasures: ISbDmTrackMeasure[] = trackSnapshot.measures.map((measureSnapshot) => {
+        const newMeasures: ISbDmTrackPiece[] = trackSnapshot.measures.map((measureSnapshot) => {
             const beatGroupsCandidate = (measureSnapshot.meter as { beatGroups?: unknown; }).beatGroups;
             const beatGroups = Array.isArray(beatGroupsCandidate)
                 ? [...(beatGroupsCandidate as number[])]
                 : [measureSnapshot.meter.stepResolution];
 
-            return {
-                id: this.getTrackMeasureId(track, measureSnapshot.number),
-                type: SbDmEntityType.TrackMeasure,
+            const measure: ISbDmTrackPiece = {
+                id: this.getTrackPieceId(track, measureSnapshot.number),
+                type: SbDmEntityType.TrackPiece,
                 track,
                 number: measureSnapshot.number,
                 meter: {
@@ -481,13 +482,20 @@ export class Arrangement implements ISbDmArrangement {
                 }),
                 noteEvents: [],
             };
+
+            // A simile repeats the measure before it, so the first measure of a track cannot carry one.
+            if (measureSnapshot.number > 1 && measureSnapshot.simile === true) {
+                measure.simile = true;
+            }
+
+            return measure;
         });
 
         track.measures.splice(0, track.measures.length, ...newMeasures);
         void requisitions.execute("trackChanged", track.id);
     }
 
-    private getTrackMeasureId(track: Track, measureNumber: number): number {
+    private getTrackPieceId(track: Track, measureNumber: number): number {
         return (track.id * 100) + measureNumber;
     }
 };

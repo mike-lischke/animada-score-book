@@ -397,4 +397,20 @@ describe("ArrangementMigrator - BananaDrum URL migration", () => {
         });
 
     });
+
+    it("loads a version 5 snapshot and reports the migration", () => {
+        const instruments = [createInstrument("0", 0, 0)];
+        const packedV5 = {
+            v: 5,
+            p: ["4/4", 120, 1, "1/4", 16],
+            k: [[100, "0", [[1, [4, 4, 16, [4, 4, 4, 4]], [[[1, 1], "1"]], []]]]],
+        };
+
+        const { arrangement, migrated } =
+            ArrangementMigrator.migrateToArrangement(JSON.stringify(packedV5), instruments);
+
+        expect(migrated).toBe(true);
+        expect(arrangement.tracks[0].measures[0].events[0].noteStyleId).toBe("1");
+        expect(arrangement.tracks[0].measures[0].simile).toBeUndefined();
+    });
 });

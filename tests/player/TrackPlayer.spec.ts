@@ -6,8 +6,8 @@
 import { describe, expect, it, vi } from "vitest";
 
 import {
-    SbDmEntityType, type ISbDmArrangement, type ISbDmNoteEvent, type ISbDmTrack,
-    type ISbDmTrackMeasure, type ITiming, type RealTime
+    SbDmEntityType, type ISbDmArrangement, type ISbDmInstrument, type ISbDmNoteEvent, type ISbDmTrack,
+    type ISbDmTrackPiece, type ITiming, type RealTime
 } from "../../src/core/ScoreBookDataModel.js";
 import type { IAudioData, ITimeParams, Mutable } from "../../src/core/types/general.js";
 import type { TimeCoordinator } from "../../src/player/TimeCoordinator.js";
@@ -53,7 +53,7 @@ const makeNote = (
     noteStyle?: IAudioData,
 ): ISbDmNoteEvent => {
     const measure = {
-        type: SbDmEntityType.TrackMeasure,
+        type: SbDmEntityType.TrackPiece,
         id: 1,
         track,
         number: 1,
@@ -61,7 +61,7 @@ const makeNote = (
         events: [],
         subdivisions: [],
         noteEvents: [],
-    } as ISbDmTrackMeasure;
+    } as ISbDmTrackPiece;
 
     return {
         type: SbDmEntityType.NoteEvent,
@@ -165,6 +165,9 @@ const makeTrack = (opts?: {
 
     } as IAudioData;
 
+    // The player resolves the measure events' style ids through the instrument, so the stub publishes the style.
+    (track.instrument as Mutable<ISbDmInstrument>).noteStyles = { [noteStyle.id]: noteStyle };
+
     const note = makeNote(track, { bar: 1, step: 1 }, noteStyle);
     track._notes.push(note);
 
@@ -174,8 +177,8 @@ const makeTrack = (opts?: {
     }
 
     const measureEvents: ISbDmNoteEvent[] = [];
-    const measure: ISbDmTrackMeasure = {
-        type: SbDmEntityType.TrackMeasure,
+    const measure: ISbDmTrackPiece = {
+        type: SbDmEntityType.TrackPiece,
         id: 1,
         track,
         number: 1,

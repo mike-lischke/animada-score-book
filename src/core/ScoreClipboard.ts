@@ -9,14 +9,14 @@ import {
 } from "../ui/SelectionSerializer.js";
 import { MeasureProjection, modelEventAt, ProjectedItemKind } from "./MeasureProjection.js";
 import type {
-    IMeasureInsert, IMeasureReplace, ISbDmArrangement, ISbDmTrack, ISbDmTrackMeasure, ScoreBookDataModel,
+    ITrackPieceInsert, ITrackPieceReplace, ISbDmArrangement, ISbDmTrack, ISbDmTrackPiece, ScoreBookDataModel,
 } from "./ScoreBookDataModel.js";
 import {
     addFractions, compareFractions, divideFraction, multiplyFraction, subtractFractions,
 } from "./serialisation/numeric-functions.js";
 import { computeIsTuplet } from "./tuplets.js";
 import {
-    ClipboardContentKind, type IClipboardContent, type IClipboardMeasure, type IClipboardTrack,
+    ClipboardContentKind, type IClipboardContent, type IClipboardTrackPiece, type IClipboardTrack,
 } from "./types/clipboard.js";
 import type { IFraction, IMeasureEvent, IMeterSnapshot, ISubdivision } from "./types/general.js";
 
@@ -121,7 +121,7 @@ interface IPasteRange {
 /** The result of building range changes for one source/target track pair. */
 interface IRangePasteBuild {
     kind: PasteResultKind;
-    replacements: IMeasureReplace[];
+    replacements: ITrackPieceReplace[];
 }
 
 /** A source track paired with the target track it was matched to, if any. */
@@ -375,8 +375,8 @@ export class ScoreClipboard {
         return tracks.length > 0 ? { kind: ClipboardContentKind.EventRange, tracks } : undefined;
     }
 
-    private captureRangeMeasures(track: ISbDmTrack, entries: ISelectionEntry[]): IClipboardMeasure[] {
-        const measures: IClipboardMeasure[] = [];
+    private captureRangeMeasures(track: ISbDmTrack, entries: ISelectionEntry[]): IClipboardTrackPiece[] {
+        const measures: IClipboardTrackPiece[] = [];
 
         for (const bar of this.sortedUniqueBars(entries)) {
             const measure = track.measures.at(bar - 1);
@@ -420,7 +420,7 @@ export class ScoreClipboard {
      * @returns The captured events (relative to the range start) with the range they cover, or
      *          undefined when the entries carry no address or no content.
      */
-    private captureSelectionRange(measure: ISbDmTrackMeasure,
+    private captureSelectionRange(measure: ISbDmTrackPiece,
         entries: ISelectionEntry[]): ICapturedRange | undefined {
         const singleNote = entries.length === 1 && entries[0].target.granularity === SelectionGranularity.Note
             ? entries[0].target
@@ -495,7 +495,7 @@ export class ScoreClipboard {
      *
      * @returns The addressed fraction range, or undefined when the entry carries no address.
      */
-    private entryRange(measure: ISbDmTrackMeasure, entry: ISelectionEntry): IFractionRange | undefined {
+    private entryRange(measure: ISbDmTrackPiece, entry: ISelectionEntry): IFractionRange | undefined {
         const target = entry.target;
         if (target.granularity === SelectionGranularity.Note) {
             const start = target.start ?? target.event.start;
@@ -529,7 +529,7 @@ export class ScoreClipboard {
      *
      * @returns The captured events, relative to the range start.
      */
-    private captureSegments(measure: ISbDmTrackMeasure, rangeStart: IFraction,
+    private captureSegments(measure: ISbDmTrackPiece, rangeStart: IFraction,
         bounds: IFraction[]): IMeasureEvent[] {
         const captured: IMeasureEvent[] = [];
         let cursor = { ...rangeStart };
@@ -581,7 +581,7 @@ export class ScoreClipboard {
      *
      * @returns The event starting there, or undefined when no event begins at the position.
      */
-    private eventStartingAt(measure: ISbDmTrackMeasure, start: IFraction): IMeasureEvent | undefined {
+    private eventStartingAt(measure: ISbDmTrackPiece, start: IFraction): IMeasureEvent | undefined {
         return measure.events.find((event) => {
             return compareFractions(event.start, start) === 0;
         });
@@ -633,7 +633,7 @@ export class ScoreClipboard {
      *
      * @returns The subdivisions and mixed flag for the copied measure.
      */
-    private captureSubdivisionContent(measure: ISbDmTrackMeasure, rangeStart: IFraction, rangeEnd: IFraction,
+    private captureSubdivisionContent(measure: ISbDmTrackPiece, rangeStart: IFraction, rangeEnd: IFraction,
         eventCount: number): { subdivisions: ISubdivision[]; mixed?: boolean; } {
         const kind = this.classifyRange(measure, rangeStart, rangeEnd);
 
@@ -674,7 +674,7 @@ export class ScoreClipboard {
      *
      * @returns The content classification.
      */
-    private classifyRange(measure: ISbDmTrackMeasure, rangeStart: IFraction, rangeEnd: IFraction): RangeContentKind {
+    private classifyRange(measure: ISbDmTrackPiece, rangeStart: IFraction, rangeEnd: IFraction): RangeContentKind {
         const spans = this.topLevelSubdivisionSpans(measure);
         if (spans.length === 0) {
             return RangeContentKind.Plain;
@@ -711,7 +711,7 @@ export class ScoreClipboard {
      *
      * @returns The top-level subdivision spans.
      */
-    private topLevelSubdivisionSpans(measure: ISbDmTrackMeasure): ISubdivisionSpan[] {
+    private topLevelSubdivisionSpans(measure: ISbDmTrackPiece): ISubdivisionSpan[] {
         const projected = MeasureProjection.project(measure);
         const spans: ISubdivisionSpan[] = [];
 
@@ -873,8 +873,8 @@ export class ScoreClipboard {
             return SelectionSerializer.trackOf(entry).id;
         }));
 
-        const replacements: IMeasureReplace[] = [];
-        const insertions: IMeasureInsert[] = [];
+        const replacements: ITrackPieceReplace[] = [];
+        const insertions: ITrackPieceInsert[] = [];
 
         for (const trackId of trackIds) {
             const track = arrangement.tracks.find((candidate) => {
@@ -956,8 +956,8 @@ export class ScoreClipboard {
             return { kind: matchResult.kind };
         }
 
-        const replacements: IMeasureReplace[] = [];
-        const insertions: IMeasureInsert[] = [];
+        const replacements: ITrackPieceReplace[] = [];
+        const insertions: ITrackPieceInsert[] = [];
         let matchedAny = false;
 
         for (const match of matchResult.matches) {
@@ -1111,8 +1111,8 @@ export class ScoreClipboard {
         // A chosen mode takes precedence and applies to any selection that neither matches the
         // source nor is a plain cursor.
         if (options.subdivisionMode !== undefined) {
-            const replacements: IMeasureReplace[] = [];
-            const base: Omit<IMeasureReplace, "events" | "subdivisions"> = {
+            const replacements: ITrackPieceReplace[] = [];
+            const base: Omit<ITrackPieceReplace, "events" | "subdivisions"> = {
                 trackId: targetTrack.id,
                 bar: firstSlot.bar,
                 start: targetStart,
@@ -1432,8 +1432,8 @@ export class ScoreClipboard {
      * @returns The insertions, or undefined when they cannot be built from the selection.
      */
     private buildShiftInsertions(entries: ISelectionEntry[],
-        sourceTrack: IClipboardTrack): IMeasureInsert[] | undefined {
-        const addressed: Array<{ measure: ISbDmTrackMeasure; event: IMeasureEvent; start: IFraction; }> = [];
+        sourceTrack: IClipboardTrack): ITrackPieceInsert[] | undefined {
+        const addressed: Array<{ measure: ISbDmTrackPiece; event: IMeasureEvent; start: IFraction; }> = [];
 
         for (const entry of entries) {
             const target = entry.target;
@@ -1508,7 +1508,7 @@ export class ScoreClipboard {
      *
      * @returns True when a subdivision would be cut.
      */
-    private cutsSubdivision(measure: ISbDmTrackMeasure, start: IFraction, end: IFraction): boolean {
+    private cutsSubdivision(measure: ISbDmTrackPiece, start: IFraction, end: IFraction): boolean {
         return this.topLevelSubdivisionSpans(measure).some((span) => {
             const overlaps = compareFractions(span.start, end) < 0 && compareFractions(span.end, start) > 0;
             const covered = compareFractions(span.start, start) >= 0 && compareFractions(span.end, end) <= 0;
@@ -1529,7 +1529,7 @@ export class ScoreClipboard {
 
         const isSingleNoteAnchor = options.singleNote && slots.length === 1;
 
-        const replacements: IMeasureReplace[] = [];
+        const replacements: ITrackPieceReplace[] = [];
         const groups = this.groupRangesByBar(slots);
         let sourcePosition = { ...zero };
 
@@ -1948,7 +1948,7 @@ export class ScoreClipboard {
     }
 
     private applyMeasurePaste(targets: IMeasureTarget[], content: IClipboardContent): IPasteResult {
-        const replacements: IMeasureReplace[] = [];
+        const replacements: ITrackPieceReplace[] = [];
         // A width belongs to one bar, so only a copied measure may carry one.
         const transfersWidth = content.kind === ClipboardContentKind.Measure;
 
@@ -1980,6 +1980,7 @@ export class ScoreClipboard {
                     events: sourceMeasure.events.map((event) => {
                         return this.cloneEvent(event);
                     }),
+                    simile: sourceMeasure.simile,
                 });
             }
         }
@@ -1987,7 +1988,7 @@ export class ScoreClipboard {
         return this.applyReplacements(replacements);
     }
 
-    private applyReplacements(replacements: IMeasureReplace[]): IPasteResult {
+    private applyReplacements(replacements: ITrackPieceReplace[]): IPasteResult {
         if (replacements.length === 0) {
             return { kind: PasteResultKind.NoSelection };
         }
@@ -2012,7 +2013,7 @@ export class ScoreClipboard {
      *
      * @returns The outcome of the operation.
      */
-    private applyRangeChanges(replacements: IMeasureReplace[], insertions: IMeasureInsert[]): IPasteResult {
+    private applyRangeChanges(replacements: ITrackPieceReplace[], insertions: ITrackPieceInsert[]): IPasteResult {
         const inserted = insertions.length > 0 ? this.dataModel.insertEventsWithShift(insertions) : [];
         const remaining = replacements.filter((replacement) => {
             return !inserted.includes(replacement.trackId);
@@ -2027,8 +2028,8 @@ export class ScoreClipboard {
         return inserted.length > 0 ? { kind: PasteResultKind.Success } : result;
     }
 
-    private captureMeasures(track: ISbDmTrack, bars: number[], withWidth = false): IClipboardMeasure[] {
-        const measures: IClipboardMeasure[] = [];
+    private captureMeasures(track: ISbDmTrack, bars: number[], withWidth = false): IClipboardTrackPiece[] {
+        const measures: IClipboardTrackPiece[] = [];
 
         for (const bar of bars) {
             const measure = track.measures.at(bar - 1);
@@ -2040,8 +2041,8 @@ export class ScoreClipboard {
         return measures;
     }
 
-    private captureMeasure(measure: ISbDmTrackMeasure, withWidth = false): IClipboardMeasure {
-        const captured: IClipboardMeasure = {
+    private captureMeasure(measure: ISbDmTrackPiece, withWidth = false): IClipboardTrackPiece {
+        const captured: IClipboardTrackPiece = {
             meter: this.copyMeter(measure.meter),
             events: measure.events.map((event) => {
                 return this.cloneEvent(event);
@@ -2053,6 +2054,10 @@ export class ScoreClipboard {
 
         if (withWidth) {
             captured.width = this.dataModel.arrangement?.measureWidths?.get(measure.number);
+        }
+
+        if (measure.simile) {
+            captured.simile = true;
         }
 
         return captured;

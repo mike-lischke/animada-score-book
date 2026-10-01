@@ -6,7 +6,7 @@
 import { describe, expect, it } from "vitest";
 
 import { Arrangement } from "../../src/core/Arrangement.js";
-import { ScoreBookDataModel, type ISbDmTrackMeasure } from "../../src/core/ScoreBookDataModel.js";
+import { ScoreBookDataModel, type ISbDmTrackPiece } from "../../src/core/ScoreBookDataModel.js";
 import { selectionToClearRanges } from "../../src/ui/selection-ranges.js";
 import { createInstrument, hydrateMeasureEvents, noteEntry, setCellNote } from "../unit-test-helpers.js";
 
@@ -128,7 +128,7 @@ describe("selectionToClearRanges", () => {
 const buildSubdivisionMeasure = (): {
     model: ScoreBookDataModel;
     trackId: number;
-    measure: ISbDmTrackMeasure;
+    measure: ISbDmTrackPiece;
 } => {
     const model = new ScoreBookDataModel();
     model.startNewArrangement([createInstrument("0", 0, 0)]);
@@ -154,7 +154,7 @@ const buildSubdivisionMeasure = (): {
 const buildSubdivisionMeasureWithRestGap = (): {
     model: ScoreBookDataModel;
     trackId: number;
-    measure: ISbDmTrackMeasure;
+    measure: ISbDmTrackPiece;
 } => {
     const model = new ScoreBookDataModel();
     model.startNewArrangement([createInstrument("0", 0, 0)]);

@@ -552,6 +552,7 @@ export class App extends UIComponent<{}, IAppState> {
                                                         />
                                                         <SubdivisionToolbar
                                                             selectionManager={this.selectionManager}
+                                                            dataModel={this.dataModel}
                                                         />
                                                         {trackViewMode === "staff" && (
                                                             <>

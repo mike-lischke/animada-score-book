@@ -5,10 +5,10 @@
 
 import type {
     IArrangementExtensions, IArrangementSnapshot, IMeasureEvent, IMeterSnapshot, ISubdivision, ITimeParamsBase,
-    ITrackMeasureSnapshot, ITrackSnapshot
+    ITrackPieceSnapshot, ITrackSnapshot
 } from "../types/general.js";
 import { addFractions } from "./numeric-functions.js";
-import { arrangementSnapshotVersion, isNaturalNumber } from "./snapshots.js";
+import { arrangementSnapshotVersion, isNaturalNumber, isReadableSnapshotVersion } from "./snapshots.js";
 
 /**
  * Compact wire format for an `IArrangementSnapshot`.
@@ -25,7 +25,7 @@ import { arrangementSnapshotVersion, isNaturalNumber } from "./snapshots.js";
  *   t          optional title
  *   p          packed time params:  [timeSignature, tempo, length, pulse, stepResolution]
  *   k          tracks: [ [id, instrumentId, measures], ... ]
- *     measure: [ number, meter, events, subdivisions ]
+ *     measure: [ number, meter, events, subdivisions, simile? ]
  *   s          optional database score ID
  *   c          optional extension chunks, keyed by chunk name
  * ```
@@ -69,14 +69,15 @@ export type PackedSubdivision = [
     isTuplet: boolean,
 ];
 
-export type PackedMeasure = [
+export type PackedTrackPiece = [
     number: number,
     meter: PackedMeter,
     events: PackedEvent[],
     subdivisions: PackedSubdivision[],
+    simile?: boolean,
 ];
 
-export type PackedTrack = [id: number, instrumentId: string, measures: PackedMeasure[]];
+export type PackedTrack = [id: number, instrumentId: string, measures: PackedTrackPiece[]];
 
 /**
  * Encodes a snapshot into the compact wire format.
@@ -125,12 +126,12 @@ export const unpackArrangementSnapshot = (packed: IPackedArrangement): IArrangem
         throw new Error("Invalid packed arrangement: missing or non-numeric version");
     }
 
-    if (packed.v !== arrangementSnapshotVersion) {
+    if (!isReadableSnapshotVersion(packed.v)) {
         throw new Error(`Unsupported snapshot schema version: ${packed.v}`);
     }
 
     const snapshot: IArrangementSnapshot = {
-        version: packed.v,
+        version: arrangementSnapshotVersion,
         timeParams: unpackTimeParams(packed.p),
         tracks: packed.k.map(unpackTrack),
     };
@@ -224,33 +225,45 @@ const unpackTimeParams = (packed: PackedTimeParams): ITimeParamsBase => {
 };
 
 const packTrack = (track: ITrackSnapshot): PackedTrack => {
-    return [track.id, track.instrumentId, track.measures.map(packMeasure)];
+    return [track.id, track.instrumentId, track.measures.map(packTrackPiece)];
 };
 
 const unpackTrack = (packed: PackedTrack): ITrackSnapshot => {
     const [id, instrumentId, measures] = packed;
 
-    return { id, instrumentId, measures: measures.map(unpackMeasure) };
+    return { id, instrumentId, measures: measures.map(unpackTrackPiece) };
 };
 
-const packMeasure = (measure: ITrackMeasureSnapshot): PackedMeasure => {
-    return [
+const packTrackPiece = (measure: ITrackPieceSnapshot): PackedTrackPiece => {
+    const packed: PackedTrackPiece = [
         measure.number,
         packMeter(measure.meter),
         measure.events.map(packEvent),
         measure.subdivisions.map(packSubdivision),
     ];
+
+    if (measure.simile) {
+        packed.push(true);
+    }
+
+    return packed;
 };
 
-const unpackMeasure = (packed: PackedMeasure): ITrackMeasureSnapshot => {
-    const [number, meter, events, subdivisions] = packed;
+const unpackTrackPiece = (packed: PackedTrackPiece): ITrackPieceSnapshot => {
+    const [number, meter, events, subdivisions, simile] = packed;
 
-    return {
+    const measure: ITrackPieceSnapshot = {
         number,
         meter: unpackMeter(meter),
         events: unpackEvents(events),
         subdivisions: subdivisions.map(unpackSubdivision),
     };
+
+    if (simile === true) {
+        measure.simile = true;
+    }
+
+    return measure;
 };
 
 const packMeter = (meter: IMeterSnapshot): PackedMeter => {

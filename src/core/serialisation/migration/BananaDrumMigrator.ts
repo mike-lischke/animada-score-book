@@ -10,7 +10,7 @@ import type { INoteArticulation, ISbDmInstrument } from "../../ScoreBookDataMode
 import { TimeParams } from "../../TimeParams.js";
 import type {
     IArrangementSnapshot, IFraction, IMeasureEvent, IMeterSnapshot, ISubdivision, ITimeParamsBase,
-    ITrackMeasureSnapshot, ITrackSnapshot
+    ITrackPieceSnapshot, ITrackSnapshot
 } from "../../types/general.js";
 import type { IRealtimeProvider } from "../../../ui/AnimationEngine.js";
 import { getNewId, primeFactors } from "../../utils.js";
@@ -546,13 +546,13 @@ export class BananaDrumMigrator {
         return {
             id: track.id,
             instrumentId: track.instrumentId,
-            measures: BananaDrumMigrator.convertTrackMeasures(track, metrics, meterBase, pulse, instrument),
+            measures: BananaDrumMigrator.convertTrackPieces(track, metrics, meterBase, pulse, instrument),
         };
     }
 
-    private static convertTrackMeasures(track: BananaDrumTrack, metrics: IScoreMetrics, meterBase: Set<number>,
-        pulse: string, instrument: ISbDmInstrument | undefined): ITrackMeasureSnapshot[] {
-        const measures: ITrackMeasureSnapshot[] = [];
+    private static convertTrackPieces(track: BananaDrumTrack, metrics: IScoreMetrics, meterBase: Set<number>,
+        pulse: string, instrument: ISbDmInstrument | undefined): ITrackPieceSnapshot[] {
+        const measures: ITrackPieceSnapshot[] = [];
         const stepsPerBar = metrics.stepsPerBar;
 
         const visibleNotes: BananaDrumNote[] = [];
@@ -862,7 +862,7 @@ export class BananaDrumMigrator {
      * @returns The measure in the current schema.
      */
     private static convertMeasure(measure: IBananaDrumMeasure, instrument: ISbDmInstrument | undefined,
-        pulse: string): ITrackMeasureSnapshot {
+        pulse: string): ITrackPieceSnapshot {
         const { events: serialized, subdivisions: subdivisionRecords } = BananaDrumMigrator.expandMeasure(
             measure, instrument,
         );

@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { NoteLengthToolbar } from "../../src/components/ui/Arrangement/NoteLengthToolbar.js";
 import { AppStorage } from "../../src/core/AppStorage.js";
-import type { ISbDmArrangement, ISbDmTrack, ISbDmTrackMeasure, ScoreBookDataModel }
+import type { ISbDmArrangement, ISbDmTrack, ISbDmTrackPiece, ScoreBookDataModel }
     from "../../src/core/ScoreBookDataModel.js";
 import { NoteLength, type INoteValue } from "../../src/core/rest-notation.js";
 import { EditEntryMode } from "../../src/core/types/general.js";
@@ -28,7 +28,7 @@ const makeDataModel = (stepResolution: number, stepsPerBar: number): ScoreBookDa
         track,
         events: [{ start: { numerator: 0, denominator: 1 }, duration: { numerator: 1, denominator: 16 } }],
         noteEvents: [],
-    } as unknown as ISbDmTrackMeasure;
+    } as unknown as ISbDmTrackPiece;
 
     track.measures.push(measure);
     arrangement.tracks.push(track);
@@ -81,7 +81,7 @@ const makeDataModelWithTuplet = (): ScoreBookDataModel => {
                 audioData: event.noteStyleId === undefined ? undefined : { id: "1" },
             };
         }),
-    } as unknown as ISbDmTrackMeasure;
+    } as unknown as ISbDmTrackPiece;
 
     track.measures.push(measure);
     arrangement.tracks.push(track);
@@ -113,7 +113,7 @@ const makeDataModelWithNotes = (stepResolution: number, stepsPerBar: number,
                 audioData: note.rest ? undefined : { id: "1" },
             };
         }),
-    } as unknown as ISbDmTrackMeasure;
+    } as unknown as ISbDmTrackPiece;
 
     track.measures.push(measure);
     arrangement.tracks.push(track);
@@ -150,7 +150,7 @@ const selectSingleNote = (selectionManager: SelectionManager): void => {
         track,
         events: [{ start: { numerator: 0, denominator: 1 }, duration: { numerator: 1, denominator: 16 } }],
         noteEvents: [],
-    } as unknown as ISbDmTrackMeasure;
+    } as unknown as ISbDmTrackPiece;
 
     track.measures.push(measure);
     arrangement.tracks.push(track);
@@ -382,7 +382,7 @@ describe.sequential("NoteLengthToolbar", () => {
                 start: { numerator: 0, denominator: 1 },
                 duration: { numerator: 16, denominator: 32 },
             }],
-        } as unknown as ISbDmTrackMeasure;
+        } as unknown as ISbDmTrackPiece;
         selectionManager.replaceSelection([entry]);
 
         renderResult = render(
