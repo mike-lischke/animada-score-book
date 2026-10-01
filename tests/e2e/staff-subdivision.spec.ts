@@ -51,7 +51,7 @@ test.beforeEach(async ({ page }) => {
     await page.goto("/");
     await expect(page.locator(".staff-measure-track-row").first()).toBeVisible();
     await page.locator(".editSaveGooey button").nth(1).click({ force: true });
-    await expect(page.locator("#editControlsHost .subdivisionToolbar")).toBeVisible();
+    await expect(page.locator("#editControlsHost .subdivisionToolbarHost")).toBeVisible();
 });
 
 test("creates a subdivision from the notes selected in the staff view", async ({ page }) => {

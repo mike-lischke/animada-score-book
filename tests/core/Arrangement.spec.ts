@@ -522,4 +522,50 @@ describe("Arrangement", () => {
 
         expect(Object.fromEntries(arrangement.measureWidths)).toEqual({ 3: 4000 });
     });
+
+    it("insertBars takes the repeat marks of the bars behind the insertion point along", () => {
+        const instrument = createInstrument("0", 0, 0);
+        const arrangement = Arrangement.emptyArrangementWithInstruments([instrument], { length: 3 });
+        arrangement.repeatBars.set(1, { start: true });
+        arrangement.repeatBars.set(3, { end: true });
+
+        arrangement.insertBars(2, 1, false, false);
+
+        expect(Object.fromEntries(arrangement.repeatBars)).toEqual({ 1: { start: true }, 4: { end: true } });
+    });
+
+    it("deleteBar drops the marks of the removed bar and shifts the rest down", () => {
+        const instrument = createInstrument("0", 0, 0);
+        const arrangement = Arrangement.emptyArrangementWithInstruments([instrument], { length: 3 });
+        arrangement.repeatBars.set(2, { end: true });
+        arrangement.repeatBars.set(3, { start: true });
+
+        arrangement.deleteBar(2);
+
+        expect(Object.fromEntries(arrangement.repeatBars)).toEqual({ 2: { start: true } });
+    });
+
+    it("duplicateBar gives the copy the marks of its original", () => {
+        const instrument = createInstrument("0", 0, 0);
+        const arrangement = Arrangement.emptyArrangementWithInstruments([instrument], { length: 3 });
+        arrangement.repeatBars.set(2, { end: true });
+
+        arrangement.duplicateBar(2);
+
+        expect(Object.fromEntries(arrangement.repeatBars)).toEqual({ 2: { end: true }, 3: { end: true } });
+    });
+
+    it("insertBars gives every copied bar the marks of the bar it copies", () => {
+        const instrument = createInstrument("0", 0, 0);
+        const arrangement = Arrangement.emptyArrangementWithInstruments([instrument], { length: 3 });
+        arrangement.repeatBars.set(2, { start: true, end: true });
+
+        arrangement.insertBars(2, 2, false, true);
+
+        expect(Object.fromEntries(arrangement.repeatBars)).toEqual({
+            2: { start: true, end: true },
+            3: { start: true, end: true },
+            4: { start: true, end: true },
+        });
+    });
 });

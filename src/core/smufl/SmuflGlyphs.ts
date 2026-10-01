@@ -25,6 +25,8 @@ export enum SmuflGlyphFamily {
     GhostParentheses,
     Accent,
     MeasureRepeat,
+    BarLines,
+    Repeats,
 }
 
 /** SMuFL glyph names, spelled exactly as SMuFL defines them. */
@@ -86,6 +88,14 @@ export enum SmuflGlyph {
 
     Repeat1Bar = "repeat1Bar",
     Repeat2Bars = "repeat2Bars",
+
+    BarlineSingle = "barlineSingle",
+    BarlineFinal = "barlineFinal",
+
+    RepeatLeft = "repeatLeft",
+    RepeatRight = "repeatRight",
+    RepeatRightLeft = "repeatRightLeft",
+    RepeatDots = "repeatDots",
 }
 
 /** What a font has to provide for a single glyph. */
@@ -137,8 +147,17 @@ export class SmuflGlyphs {
         "thinBarlineThickness",
         "thickBarlineThickness",
         "barlineSeparation",
+        "repeatBarlineDotSeparation",
         "bracketThickness",
         "tupletBracketThickness",
+    ];
+
+    /**
+     * The engraving defaults the score reads when a font states them, and falls back on
+     * `barlineSeparation` for when it does not.
+     */
+    public static readonly optionalEngravingDefaults: readonly string[] = [
+        "thinThickBarlineSeparation",
     ];
 
     /** Every glyph the score draws, with its family and its spec-fixed codepoint. */
@@ -200,6 +219,14 @@ export class SmuflGlyphs {
 
         [SmuflGlyph.Repeat1Bar]: { family: SmuflGlyphFamily.MeasureRepeat, codepoint: 0xE500 },
         [SmuflGlyph.Repeat2Bars]: { family: SmuflGlyphFamily.MeasureRepeat, codepoint: 0xE501 },
+
+        [SmuflGlyph.BarlineSingle]: { family: SmuflGlyphFamily.BarLines, codepoint: 0xE030 },
+        [SmuflGlyph.BarlineFinal]: { family: SmuflGlyphFamily.BarLines, codepoint: 0xE032 },
+
+        [SmuflGlyph.RepeatLeft]: { family: SmuflGlyphFamily.Repeats, codepoint: 0xE040 },
+        [SmuflGlyph.RepeatRight]: { family: SmuflGlyphFamily.Repeats, codepoint: 0xE041 },
+        [SmuflGlyph.RepeatRightLeft]: { family: SmuflGlyphFamily.Repeats, codepoint: 0xE042 },
+        [SmuflGlyph.RepeatDots]: { family: SmuflGlyphFamily.Repeats, codepoint: 0xE043 },
     };
 
     /**

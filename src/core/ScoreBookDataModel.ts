@@ -22,8 +22,9 @@ import { Instrument } from "./Instrument.js";
 import { MeasureLayout } from "./MeasureLayout.js";
 import type {
     IArrangementExtensions, IArrangementSnapshot, IAudioData, IFraction, IMeasureEvent, IMeterSnapshot,
-    IArticulationSymbol, ISubdivision, Mutable
+    IArticulationSymbol, IRepeatBar, ISubdivision, Mutable
 } from "./types/general.js";
+import { RepeatMark } from "./types/general.js";
 import { getNewId } from "./utils.js";
 
 /**
@@ -583,6 +584,9 @@ export interface ISbDmArrangement extends ISbDmCommon {
      * A measure without an entry is laid out with the default width of the view.
      */
     measureWidths?: Map<number, number>;
+
+    /** Repeat marks set for individual measures, keyed by 1-based measure number. */
+    repeatBars?: Map<number, IRepeatBar>;
 
     /**
      * Extension chunks of other features or newer builds, kept verbatim so that writing a snapshot never
@@ -1672,6 +1676,65 @@ export class ScoreBookDataModel {
         }
 
         this.announceTrackEdits(affectedTracks);
+
+        return true;
+    }
+
+    /**
+     * Sets or clears a repeat mark of the given bars in one edit. A mark sits on the barline at the side of the
+     * bar it is named after: `Start` opens a repeated section there, `End` closes one. Bars outside the
+     * arrangement and bars that already hold the requested state are skipped. Fires one arrangementMutated event
+     * (a single undo step) and one trackChanged event per track, because a barline belongs to the bar of every
+     * track.
+     *
+     * @param bars The 1-based bar numbers to mark.
+     * @param mark The mark to set or clear.
+     * @param value True to set the mark, false to clear it.
+     *
+     * @returns True when at least one mark changed.
+     */
+    public setRepeatBars(bars: number[], mark: RepeatMark, value: boolean): boolean {
+        const arrangement = this.arrangement;
+        const repeats = arrangement?.repeatBars;
+        if (!arrangement || !repeats) {
+            return false;
+        }
+
+        const barCount = arrangement.timeParams.length;
+        let changed = false;
+
+        for (const bar of bars) {
+            if (!Number.isInteger(bar) || bar < 1 || bar > barCount) {
+                continue;
+            }
+
+            const marks = repeats.get(bar) ?? {};
+            if ((marks[mark] === true) === value) {
+                continue;
+            }
+
+            if (value) {
+                marks[mark] = true;
+            } else {
+                delete marks[mark];
+            }
+
+            if (marks.start === undefined && marks.end === undefined) {
+                repeats.delete(bar);
+            } else {
+                repeats.set(bar, marks);
+            }
+
+            changed = true;
+        }
+
+        if (!changed) {
+            return false;
+        }
+
+        this.announceTrackEdits(new Set(arrangement.tracks.map((track) => {
+            return track.id;
+        })));
 
         return true;
     }

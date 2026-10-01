@@ -60,7 +60,6 @@ export class SmuflGlyphView extends UIComponent<ISmuflGlyphViewProperties> {
         const mergedClassName = this.generateFinalClassName(["smufl-glyph-view", className]);
         const boxWidth = staffSpace * width;
         const boxHeight = staffSpace * height;
-        const glyphStyle = fontFamily === undefined ? undefined : { fontFamily };
 
         // A glyph is placed by the anchor its symbol states: its ink is centred in the box, starts on the
         // box's left edge or ends on its right edge. The baseline always sits on the box's centre line,
@@ -69,6 +68,7 @@ export class SmuflGlyphView extends UIComponent<ISmuflGlyphViewProperties> {
         const endsOnRightEdge = anchor === GlyphAnchor.RightEdge;
         const textAnchor = startsOnLeftEdge ? "start" : endsOnRightEdge ? "end" : "middle";
         const x = startsOnLeftEdge ? 0 : endsOnRightEdge ? boxWidth : boxWidth / 2;
+        const fontStyle = fontFamily === undefined ? undefined : { fontFamily };
 
         return (
             <svg
@@ -87,7 +87,7 @@ export class SmuflGlyphView extends UIComponent<ISmuflGlyphViewProperties> {
                     y={boxHeight / 2}
                     fontSize={staffSpace * 4}
                     textAnchor={textAnchor}
-                    style={glyphStyle}
+                    style={fontStyle}
                 >
                     {character}
                 </text>

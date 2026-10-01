@@ -130,7 +130,7 @@ test("does not offer the mark for a note selection", async ({ page }) => {
     await seedScore(page, snapshotWith([notePiece, restPiece]));
 
     await page.locator(".editSaveGooey button").nth(1).click({ force: true });
-    await expect(page.locator("#editControlsHost .subdivisionToolbar")).toBeVisible();
+    await expect(page.locator("#editControlsHost .subdivisionToolbarHost")).toBeVisible();
 
     await staffBar(page, 1).locator(".staff-note-head-symbol").first().click();
 
@@ -141,7 +141,7 @@ test("sets the mark on a track piece and clears it again", async ({ page }) => {
     await seedScore(page, snapshotWith([notePiece, restPiece]));
 
     await page.locator(".editSaveGooey button").nth(1).click({ force: true });
-    await expect(page.locator("#editControlsHost .subdivisionToolbar")).toBeVisible();
+    await expect(page.locator("#editControlsHost .subdivisionToolbarHost")).toBeVisible();
 
     await selectTrackPiece(page, 2);
 
@@ -161,7 +161,7 @@ test("keeps the mark off a track piece of the first measure", async ({ page }) =
     await seedScore(page, snapshotWith([notePiece, restPiece]));
 
     await page.locator(".editSaveGooey button").nth(1).click({ force: true });
-    await expect(page.locator("#editControlsHost .subdivisionToolbar")).toBeVisible();
+    await expect(page.locator("#editControlsHost .subdivisionToolbarHost")).toBeVisible();
 
     await selectTrackPiece(page, 1);
 

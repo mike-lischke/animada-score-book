@@ -5,7 +5,7 @@
 
 import type { ISbDmArrangement, ISbDmTrack } from "../ScoreBookDataModel.js";
 import type {
-    IArrangementExtensions, IArrangementSnapshot, ITrackPieceSnapshot, ITrackSnapshot,
+    IArrangementExtensions, IArrangementSnapshot, IRepeatBar, ITrackPieceSnapshot, ITrackSnapshot,
 } from "../types/general.js";
 
 /** Current internal arrangement snapshot schema version. */
@@ -29,6 +29,9 @@ export const isReadableSnapshotVersion = (version: unknown): version is number =
 
 /** Chunk name under which an arrangement stores the column widths of individual measures. */
 const measureWidthsChunk = "measureWidths";
+
+/** Chunk name under which an arrangement stores the repeat marks of its bars. */
+const repeatBarsChunk = "repeatBars";
 
 export const isNaturalNumber = (value: unknown): value is number => {
     return typeof value === "number" && Number.isInteger(value) && value >= 1;
@@ -74,23 +77,48 @@ export const collectArrangementExtensions = (
         chunks[measureWidthsChunk] = Object.fromEntries(widths);
     }
 
+    const repeats = arrangementView.repeatBars;
+    if (repeats !== undefined && repeats.size > 0) {
+        chunks[repeatBarsChunk] = Object.fromEntries([...repeats].map(([bar, marks]) => {
+            const stored: IRepeatBar = {};
+            if (marks.start) {
+                stored.start = true;
+            }
+
+            if (marks.end) {
+                stored.end = true;
+            }
+
+            return [bar, stored];
+        }));
+    }
+
     return Object.keys(chunks).length > 0 ? chunks : undefined;
 };
 
 /**
  * Applies an arrangement snapshot's extension chunks. The chunks this build knows are read into their model
  * fields; the ones it does not know are kept verbatim, so the next snapshot writes them back unchanged. The
- * width chunk is filtered against the arrangement's bar count, so the time parameters have to be applied first.
+ * chunks are filtered against the arrangement's bar count, so the time parameters have to be applied first.
  *
  * @param arrangementView The arrangement to apply the chunks to.
  * @param snapshot The snapshot whose chunks to apply.
  */
 export const applyArrangementExtensions = (arrangementView: ISbDmArrangement,
     snapshot: IArrangementSnapshot): void => {
-    const { [measureWidthsChunk]: widthChunk, ...foreign } = snapshot.extensions ?? {};
+    const { [measureWidthsChunk]: widthChunk, [repeatBarsChunk]: repeatChunk, ...foreign } = snapshot.extensions ?? {};
 
     arrangementView.foreignExtensions = foreign;
 
+    applyMeasureWidths(arrangementView, widthChunk);
+    applyRepeatBars(arrangementView, repeatChunk);
+};
+
+/**
+ * @param arrangementView The arrangement to read the widths into.
+ * @param chunk The width chunk of a snapshot, as it was written.
+ */
+const applyMeasureWidths = (arrangementView: ISbDmArrangement, chunk: unknown): void => {
     const widths = arrangementView.measureWidths;
     if (widths === undefined) {
         return;
@@ -98,16 +126,56 @@ export const applyArrangementExtensions = (arrangementView: ISbDmArrangement,
 
     widths.clear();
 
-    if (typeof widthChunk !== "object" || widthChunk === null) {
+    if (typeof chunk !== "object" || chunk === null) {
         return;
     }
 
     const bars = arrangementView.timeParams.length;
-    for (const [bar, width] of Object.entries(widthChunk)) {
+    for (const [bar, width] of Object.entries(chunk)) {
         const barNumber = Number(bar);
         if (Number.isInteger(barNumber) && barNumber >= 1 && barNumber <= bars
             && typeof width === "number" && Number.isFinite(width) && width > 0) {
             widths.set(barNumber, width);
+        }
+    }
+};
+
+/**
+ * @param arrangementView The arrangement to read the repeat marks into.
+ * @param chunk The repeat chunk of a snapshot, as it was written.
+ */
+const applyRepeatBars = (arrangementView: ISbDmArrangement, chunk: unknown): void => {
+    const repeats = arrangementView.repeatBars;
+    if (repeats === undefined) {
+        return;
+    }
+
+    repeats.clear();
+
+    if (typeof chunk !== "object" || chunk === null) {
+        return;
+    }
+
+    const bars = arrangementView.timeParams.length;
+    for (const [bar, marks] of Object.entries(chunk)) {
+        const barNumber = Number(bar);
+        if (!Number.isInteger(barNumber) || barNumber < 1 || barNumber > bars
+            || typeof marks !== "object" || marks === null) {
+            continue;
+        }
+
+        const { start, end } = marks as IRepeatBar;
+        const stored: IRepeatBar = {};
+        if (start === true) {
+            stored.start = true;
+        }
+
+        if (end === true) {
+            stored.end = true;
+        }
+
+        if (stored.start !== undefined || stored.end !== undefined) {
+            repeats.set(barNumber, stored);
         }
     }
 };

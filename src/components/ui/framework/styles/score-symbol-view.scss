@@ -12,6 +12,29 @@
     overflow: visible;
 }
 
+/* A symbol drawn as an icon: the box around it states the size, and the ink the font draws is scaled to the larger
+ * side of it and stays centred, so an icon shows its symbol at the same size whatever glyph it is and whatever
+ * size the font draws it in. The box around the symbol is what carries this class. */
+.score-symbol-view-icon {
+    --icon-spaces: 2;
+
+    width: calc(var(--staff-space) * var(--icon-spaces));
+    height: calc(var(--staff-space) * var(--icon-spaces));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    .score-symbol-view-ink-box {
+        transform: scale(calc(var(--icon-spaces) / max(var(--symbol-ink-spaces-width), var(--symbol-ink-spaces-height))));
+    }
+
+    /* A barline the score draws states its own size, the staff band its strokes span, which is what the icon scales
+     * down to the box: the parts keep their proportions, so the strokes are scaled with them. */
+    .barline-view {
+        transform: scale(calc(var(--icon-spaces) * var(--staff-space) / (var(--staff-barline-height, calc(var(--staff-space) * 2)) + var(--staff-line-thickness, 1px))));
+    }
+}
+
 /* A symbol drawn in the box of its own ink: the wrapper is the ink box, which the caller sizes, and the
  * glyph box inside it is the box the font draws in, which is wider than the ink. The glyph therefore
  * hangs on the edge its anchor states, so the ink fills the wrapper. */

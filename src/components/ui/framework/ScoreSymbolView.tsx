@@ -3,11 +3,13 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import { type ComponentChild } from "preact";
+import { type ComponentChild, type CSSProperties } from "preact";
 
 import {
-    OwnPathInk, ScoreSymbols, ScoreSymbolSource, type IOwnPathDefinition, type ScoreSymbol,
+    glyphInkSpacesVariablePrefix, OwnPathInk, ScoreSymbols, ScoreSymbolSource, type IOwnPathDefinition,
+    type ScoreSymbol,
 } from "../../../core/ScoreSymbols.js";
+import { BarlineView } from "./BarlineView.js";
 import { SmuflGlyphView } from "./SmuflGlyphView.js";
 import { UIComponent, type ICommonUIProperties } from "./UIComponent.js";
 
@@ -44,7 +46,11 @@ export class ScoreSymbolView extends UIComponent<IScoreSymbolViewProperties> {
         const definition = ScoreSymbols.definition(symbol);
         const mergedClassName = this.generateFinalClassName(["score-symbol-view"]);
 
-        if (definition.source !== ScoreSymbolSource.MusicFontGlyph) {
+        if (definition.source === ScoreSymbolSource.Barline) {
+            return <BarlineView symbol={symbol} staffSpace={staffSpace} />;
+        }
+
+        if (definition.source === ScoreSymbolSource.OwnPath) {
             return this.renderOwnPath(definition.path, mergedClassName);
         }
 
@@ -54,6 +60,8 @@ export class ScoreSymbolView extends UIComponent<IScoreSymbolViewProperties> {
                 glyph={definition.glyph}
                 staffSpace={staffSpace}
                 anchor={definition.anchor}
+                width={definition.box?.width}
+                height={definition.box?.height}
             />
         );
 
@@ -64,13 +72,25 @@ export class ScoreSymbolView extends UIComponent<IScoreSymbolViewProperties> {
         // The glyph box is wider than the ink, so the box is hung on the edge the symbol's anchor states:
         // the ink's right edge meets a stem, its left edge hangs on one, and its centre sits in a slot.
         const box = ScoreSymbols.inkBox(symbol);
+        const glyphName = definition.glyph.toLowerCase();
         const boxClassName = this.generateFinalClassName([
             "score-symbol-view-ink-box",
             `score-symbol-view-${definition.anchor}`,
         ]);
 
+        // The ink box in the font's own unit, so a stylesheet can scale the ink to a box of its own without
+        // knowing the glyph: the height is the distance between the ink's edges.
+        const boxStyle = {
+            width: box.width,
+            height: box.height,
+            "--symbol-ink-spaces-width": `var(${glyphInkSpacesVariablePrefix}width-${glyphName})`,
+            "--symbol-ink-spaces-height":
+                `calc(var(${glyphInkSpacesVariablePrefix}top-${glyphName})`
+                + ` - var(${glyphInkSpacesVariablePrefix}bottom-${glyphName}))`,
+        } as CSSProperties;
+
         return (
-            <span className={boxClassName} style={{ width: box.width, height: box.height }}>
+            <span className={boxClassName} style={boxStyle}>
                 {glyph}
             </span>
         );

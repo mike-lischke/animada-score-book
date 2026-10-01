@@ -67,6 +67,7 @@ const createEngravingDefaults = (staffLineThickness: number) => {
         thinBarlineThickness: 0.16,
         thickBarlineThickness: 0.5,
         barlineSeparation: 0.4,
+        repeatBarlineDotSeparation: 0.16,
         bracketThickness: 0.5,
         tupletBracketThickness: 0.16,
     };
@@ -88,6 +89,13 @@ const createMetrics = (fontName: string, staffLineThickness: number, restHeight:
     hasBlackNotehead: boolean, hasFlag = true) => {
     const glyphs: Record<string, unknown> = {
         [SmuflGlyph.RestQuarter]: { bBoxNE: [1.08, restHeight], bBoxSW: [0.004, -restHeight] },
+
+        // The repeat dots and the barline glyphs the drawn barlines are measured against: the strokes of a
+        // repeat stand closer together than the font's barlineSeparation states.
+        [SmuflGlyph.RepeatDots]: { bBoxNE: [0.4, 2.68], bBoxSW: [0, 1.272] },
+        [SmuflGlyph.BarlineFinal]: { bBoxNE: [1.06, 4], bBoxSW: [0, 0] },
+        [SmuflGlyph.RepeatRight]: { bBoxNE: [1.464, 4], bBoxSW: [0, 0] },
+        [SmuflGlyph.RepeatRightLeft]: { bBoxNE: [2.428, 4], bBoxSW: [0, 0] },
     };
 
     if (hasBlackNotehead) {
@@ -327,6 +335,11 @@ describe.sequential("SmuflFontLoader", () => {
         expect(style.getPropertyValue("--glyph-ink-width-noteheadblack")).toBe("12px");
         expect(style.getPropertyValue("--glyph-ink-height-noteheadblack")).toBe("10px");
 
+        // The same box in the font's own unit, for the drawings that stretch ink to a band the box states in
+        // staff spaces.
+        expect(style.getPropertyValue("--glyph-ink-spaces-top-noteheadblack")).toBe("0.5");
+        expect(style.getPropertyValue("--glyph-ink-spaces-bottom-noteheadblack")).toBe("-0.5");
+
         // A flag states where the stem ends inside its ink, as lengths right of and above it.
         expect(style.getPropertyValue("--stem-end-x-flag8thup")).toBe("0px");
         expect(style.getPropertyValue("--stem-end-y-flag8thup")).toBe("0px");
@@ -334,6 +347,28 @@ describe.sequential("SmuflFontLoader", () => {
         await loader.select("leipzig");
 
         expect(style.getPropertyValue("--staff-line-thickness")).toBe("1px");
+    });
+
+    it("publishes the geometry of the barlines the score draws, in px", async () => {
+        respondWithIndex();
+
+        const loader = new SmuflFontLoader();
+        await loader.initialize();
+
+        const style = document.documentElement.style;
+
+        // A plain barline is one stroke of the thickness the font states, rounded to a whole pixel.
+        expect(style.getPropertyValue("--barline-single-width")).toBe("2px");
+
+        // The strokes are as far apart as the font draws them: the ink of the glyph a font states for the same
+        // barline, less the strokes and the dots it is assembled from, is what is left for the separation. A
+        // final barline keeps the separation the font states for a thin and a thick stroke, as its glyph ink
+        // covers exactly that; a repeat barline stands closer, which only its own glyph states.
+        expect(style.getPropertyValue("--barline-final-separation")).toBe("4px");
+        expect(style.getPropertyValue("--barline-final-width")).toBe("11px");
+        expect(style.getPropertyValue("--barline-repeat-separation")).toBe("2px");
+        expect(style.getPropertyValue("--barline-repeat-width")).toBe("15px");
+        expect(style.getPropertyValue("--barline-repeat-both-width")).toBe("25px");
     });
 
     it("measures a glyph the drawing font does not describe with the default font's metrics", async () => {

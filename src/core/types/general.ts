@@ -58,6 +58,24 @@ export interface ITimeParamsBase {
     stepResolution: number;
 }
 
+/** The repeat mark a barline carries: one opens a repeated section, the other closes it. */
+export enum RepeatMark {
+    /** `|:`, the barline the repeated section starts at. Its value is the field of {@link IRepeatBar} it sets. */
+    Start = "start",
+
+    /** `:|`, the barline the repeated section ends at. Its value is the field of {@link IRepeatBar} it sets. */
+    End = "end",
+}
+
+/** The repeat marks of one bar. Held per bar number on the arrangement, because a mark sits on a barline. */
+export interface IRepeatBar {
+    /** Whether the barline before the bar opens a repeated section (`|:`). */
+    start?: boolean;
+
+    /** Whether the barline after the bar closes a repeated section (`:|`). */
+    end?: boolean;
+}
+
 /**
  * Optional, feature-owned data of an arrangement snapshot, keyed by chunk name.
  *

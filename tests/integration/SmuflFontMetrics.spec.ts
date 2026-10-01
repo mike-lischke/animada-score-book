@@ -29,6 +29,7 @@ const metadata = {
         thinBarlineThickness: 0.16,
         thickBarlineThickness: 0.5,
         barlineSeparation: 0.4,
+        repeatBarlineDotSeparation: 0.16,
         bracketThickness: 0.5,
         tupletBracketThickness: 0.16,
     },

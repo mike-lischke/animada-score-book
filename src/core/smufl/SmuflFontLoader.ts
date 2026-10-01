@@ -15,12 +15,14 @@
  */
 
 import { staffSpacePx } from "../MeasureLayout.js";
-import { glyphInkVariablePrefix, ScoreSymbols } from "../ScoreSymbols.js";
+import {
+    BarlinePart, glyphInkSpacesVariablePrefix, glyphInkVariablePrefix, ScoreSymbols, ScoreSymbolSource,
+} from "../ScoreSymbols.js";
 import {
     SmuflFontMetrics, type ISmuflEngravingDefaults, type ISmuflFontMetrics,
     type ISmuflGlyphMetrics
 } from "./SmuflFontMetrics.js";
-import { SmuflGlyphs, type SmuflGlyph } from "./SmuflGlyphs.js";
+import { SmuflGlyph, SmuflGlyphs } from "./SmuflGlyphs.js";
 import { SmuflFonts, type ISmuflFontIndex, type ISmuflFontIndexEntry } from "./SmuflFonts.js";
 
 /** The CSS variable the drawing components read their font from. */
@@ -31,6 +33,12 @@ const defaultIndexUrl = "/fonts/smufl/index.json";
 
 /** The folder a font file is served from. */
 const fontFolderUrl = "/fonts/smufl/";
+
+/**
+ * The band a font draws its own barline glyphs for: the four staff spaces between the outer lines of a five-line
+ * staff, which is the band a barline spans.
+ */
+const barlineGlyphSpaces = 4;
 
 /**
  * The CSS variables the score's geometry reads, and the engraving default each is taken from. The
@@ -46,6 +54,7 @@ const engravingVariables: ReadonlyArray<readonly [keyof ISmuflEngravingDefaults,
     ["thinBarlineThickness", "--barline-thin-thickness"],
     ["thickBarlineThickness", "--barline-thick-thickness"],
     ["barlineSeparation", "--barline-separation"],
+    ["repeatBarlineDotSeparation", "--repeat-dot-separation"],
     ["bracketThickness", "--bracket-thickness"],
     ["tupletBracketThickness", "--tuplet-bracket-thickness"],
 ];
@@ -64,25 +73,6 @@ export const stemAnchorVariablePrefix = "--stem-anchor-";
  * sits in the flag's ink: `x` is how far right of the glyph's origin it sits, `y` how far above it.
  */
 export const stemEndVariablePrefix = "--stem-end-";
-
-/**
- * @param value A thickness or length in staff spaces.
- *
- * @returns The value in px, on the pixel grid: a fractional stroke is drawn with anti-aliasing, which
- * makes the thin lines of a score look fuzzy. A stroke never rounds down to nothing.
- */
-const lengthToPixels = (value: number): string => {
-    return `${Math.max(1, Math.round(value * staffSpacePx))}px`;
-};
-
-/**
- * @param value An offset in staff spaces, which may be zero or negative.
- *
- * @returns The value in px, rounded to whole pixels for the same reason as `lengthToPixels`.
- */
-const offsetToPixels = (value: number): string => {
-    return `${Math.round(value * staffSpacePx)}px`;
-};
 
 /** A font the user can pick, with the family list that draws it. */
 export interface ISmuflFontChoice extends ISmuflFontIndexEntry {
@@ -262,6 +252,39 @@ export class SmuflFontLoader {
         return this.preloading;
     }
 
+    /**
+     * @param value A thickness or length in staff spaces.
+     *
+     * @returns The value in px, on the pixel grid: a fractional stroke is drawn with anti-aliasing, which makes
+     * the thin lines of a score look fuzzy. A stroke never rounds down to nothing.
+     */
+    private static lengthToPixels(value: number): string {
+        return `${Math.max(1, Math.round(value * staffSpacePx))}px`;
+    }
+
+    /**
+     * @param value An offset in staff spaces, which may be zero or negative.
+     *
+     * @returns The value in px, rounded to whole pixels for the same reason as `lengthToPixels`.
+     */
+    private static offsetToPixels(value: number): string {
+        return `${Math.round(value * staffSpacePx)}px`;
+    }
+
+    /**
+     * @param metrics What the font states about a glyph.
+     *
+     * @returns The width of the glyph's ink in px, or zero when the font states no box.
+     */
+    private static inkWidth(metrics?: ISmuflGlyphMetrics): number {
+        const { bBoxNE, bBoxSW } = metrics ?? {};
+        if (bBoxNE === undefined || bBoxSW === undefined) {
+            return 0;
+        }
+
+        return (bBoxNE[0] - bBoxSW[0]) * staffSpacePx;
+    }
+
     private async register(entry: ISmuflFontIndexEntry): Promise<boolean> {
         if (this.loaded.has(entry.id)) {
             return true;
@@ -358,7 +381,10 @@ export class SmuflFontLoader {
 
         const style = document.documentElement.style;
         for (const [key, variable] of engravingVariables) {
-            style.setProperty(variable, lengthToPixels(defaults[key]));
+            const value = defaults[key];
+            if (value !== undefined) {
+                style.setProperty(variable, SmuflFontLoader.lengthToPixels(value));
+            }
         }
 
         // A stem leaves a head where the font says: it sits a stated distance right of the head's
@@ -374,11 +400,114 @@ export class SmuflFontLoader {
 
             const glyphName = glyph.toLowerCase();
             const inkCentre = (bBoxNE[0] + bBoxSW[0]) / 2;
-            style.setProperty(`${stemAnchorVariablePrefix}x-${glyphName}`, offsetToPixels(anchor[0] - inkCentre));
-            style.setProperty(`${stemAnchorVariablePrefix}y-${glyphName}`, offsetToPixels(anchor[1]));
+            style.setProperty(`${stemAnchorVariablePrefix}x-${glyphName}`,
+                SmuflFontLoader.offsetToPixels(anchor[0] - inkCentre));
+            style.setProperty(`${stemAnchorVariablePrefix}y-${glyphName}`,
+                SmuflFontLoader.offsetToPixels(anchor[1]));
         }
 
         this.publishGlyphBoxes(style);
+        this.publishBarlineGeometry(style);
+    }
+
+    /**
+     * Publishes the drawn geometry of every barline: how wide its ink is and how far its strokes stand apart.
+     *
+     * A barline is assembled from the font's engraved measurements, but the strokes of a repeat barline stand
+     * closer together than those measurements state, so the glyph a font draws the same barline with is what the
+     * drawn parts are measured against: its ink, less the dots, the stroke thicknesses and the distance of the
+     * dots from the strokes they face, is what is left for the separation between the strokes. A glyph that the
+     * font draws for another band than a barline spans says nothing about a barline, which is where the font's
+     * stated separation of a thin and a thick stroke stands in.
+     *
+     * @param style The style of the document root.
+     */
+    private publishBarlineGeometry(style: CSSStyleDeclaration): void {
+        const defaults = this.engravingDefaults;
+        if (defaults === undefined) {
+            return;
+        }
+
+        const thin = Math.round(defaults.thinBarlineThickness * staffSpacePx);
+        const thick = Math.round(defaults.thickBarlineThickness * staffSpacePx);
+        const dotSeparation = Math.round(defaults.repeatBarlineDotSeparation * staffSpacePx);
+        const dots = Math.round(SmuflFontLoader.inkWidth(this.glyphMetrics(SmuflGlyph.RepeatDots)));
+        const stated = Math.round(
+            (defaults.thinThickBarlineSeparation ?? defaults.barlineSeparation) * staffSpacePx);
+
+        for (const symbol of ScoreSymbols.all) {
+            const definition = ScoreSymbols.definition(symbol);
+            if (definition.source !== ScoreSymbolSource.Barline) {
+                continue;
+            }
+
+            const strokes = definition.parts.map((part) => {
+                switch (part) {
+                    case BarlinePart.ThickStroke: {
+                        return thick;
+                    }
+
+                    case BarlinePart.RepeatDots: {
+                        return dots;
+                    }
+
+                    default: {
+                        return thin;
+                    }
+                }
+            });
+
+            // A repeat reaches into the bar with its dots, so the gaps between the parts are the dots' distance
+            // from the stroke they face, and the separation between the strokes.
+            let strokeGaps = 0;
+            let dotGaps = 0;
+            for (let index = 1; index < definition.parts.length; index++) {
+                const facesDots = definition.parts[index - 1] === BarlinePart.RepeatDots
+                    || definition.parts[index] === BarlinePart.RepeatDots;
+                if (facesDots) {
+                    dotGaps++;
+                } else {
+                    strokeGaps++;
+                }
+            }
+
+            const partsWidth = strokes.reduce((sum, width) => {
+                return sum + width;
+            }, 0) + (dotGaps * dotSeparation);
+
+            const reference = this.barlineInkWidth(definition.fontGlyph);
+            const separation = reference === undefined || strokeGaps === 0
+                ? stated
+                : Math.max(0, Math.round((reference - partsWidth) / strokeGaps));
+            const width = partsWidth + (strokeGaps * separation);
+
+            style.setProperty(`--barline-${definition.key}-width`, `${width}px`);
+            style.setProperty(`--barline-${definition.key}-separation`, `${separation}px`);
+        }
+    }
+
+    /**
+     * @param glyph The glyph the symbol names, if it names one.
+     *
+     * @returns The width of the ink the font draws the glyph in, in px, or undefined when the glyph is not drawn
+     * for the band a barline spans.
+     */
+    private barlineInkWidth(glyph?: SmuflGlyph): number | undefined {
+        if (glyph === undefined) {
+            return undefined;
+        }
+
+        const metrics = this.glyphMetrics(glyph);
+        const { bBoxNE, bBoxSW } = metrics ?? {};
+        if (bBoxNE === undefined || bBoxSW === undefined) {
+            return undefined;
+        }
+
+        if (Math.abs((bBoxNE[1] - bBoxSW[1]) - barlineGlyphSpaces) > 0.5) {
+            return undefined;
+        }
+
+        return SmuflFontLoader.inkWidth(metrics);
     }
 
     /**
@@ -395,14 +524,23 @@ export class SmuflFontLoader {
 
             if (bBoxNE !== undefined && bBoxSW !== undefined) {
                 style.setProperty(`${glyphInkVariablePrefix}width-${glyphName}`,
-                    lengthToPixels(bBoxNE[0] - bBoxSW[0]));
+                    SmuflFontLoader.lengthToPixels(bBoxNE[0] - bBoxSW[0]));
                 style.setProperty(`${glyphInkVariablePrefix}height-${glyphName}`,
-                    lengthToPixels(bBoxNE[1] - bBoxSW[1]));
+                    SmuflFontLoader.lengthToPixels(bBoxNE[1] - bBoxSW[1]));
+
+                // The same box in the font's own unit, which is what a drawing scales against when the ink has to
+                // cover a staff band or fill an icon; the px box above is rounded to the pixel grid, which such a
+                // drawing cannot afford.
+                style.setProperty(`${glyphInkSpacesVariablePrefix}top-${glyphName}`, `${bBoxNE[1]}`);
+                style.setProperty(`${glyphInkSpacesVariablePrefix}bottom-${glyphName}`, `${bBoxSW[1]}`);
+                style.setProperty(`${glyphInkSpacesVariablePrefix}width-${glyphName}`, `${bBoxNE[0] - bBoxSW[0]}`);
             }
 
             if (stemUpNW !== undefined) {
-                style.setProperty(`${stemEndVariablePrefix}x-${glyphName}`, offsetToPixels(stemUpNW[0]));
-                style.setProperty(`${stemEndVariablePrefix}y-${glyphName}`, offsetToPixels(-stemUpNW[1]));
+                style.setProperty(`${stemEndVariablePrefix}x-${glyphName}`,
+                    SmuflFontLoader.offsetToPixels(stemUpNW[0]));
+                style.setProperty(`${stemEndVariablePrefix}y-${glyphName}`,
+                    SmuflFontLoader.offsetToPixels(-stemUpNW[1]));
             }
         }
     }

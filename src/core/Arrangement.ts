@@ -11,7 +11,9 @@ import {
 } from "./ScoreBookDataModel.js";
 import { TimeParams } from "./TimeParams.js";
 import { Track } from "./Track.js";
-import type { IArrangementExtensions, IArrangementSnapshot, ITimeParams, ITrackSnapshot } from "./types/general.js";
+import type {
+    IArrangementExtensions, IArrangementSnapshot, IRepeatBar, ITimeParams, ITrackSnapshot
+} from "./types/general.js";
 import { getNewId } from "./utils.js";
 import {
     applyArrangementExtensions, arrangementSnapshotVersion, collectArrangementExtensions,
@@ -38,6 +40,9 @@ export class Arrangement implements ISbDmArrangement {
 
     /** Column widths of individual measures, keyed by 1-based measure number, in px at 100% zoom. */
     public readonly measureWidths = new Map<number, number>();
+
+    /** Repeat marks of individual measures, keyed by 1-based measure number. */
+    public readonly repeatBars = new Map<number, IRepeatBar>();
 
     /**
      * Extension chunks of other features or newer builds, kept verbatim so that writing a snapshot never
@@ -279,6 +284,16 @@ export class Arrangement implements ISbDmArrangement {
             }
         }
 
+        // A copy holds the content of the bar it was made from, so it carries that bar's repeat marks too.
+        const sourceRepeats = copyContent ? this.repeatBars.get(atIndex) : undefined;
+        this.shiftRepeatBars(atIndex + 1, count);
+
+        if (sourceRepeats !== undefined) {
+            for (let i = 1; i <= count; i++) {
+                this.repeatBars.set(atIndex + i, { ...sourceRepeats });
+            }
+        }
+
         void requisitions.execute("arrangementChanged", this.id);
     }
 
@@ -299,6 +314,8 @@ export class Arrangement implements ISbDmArrangement {
         this.timeParams.length -= 1;
         this.measureWidths.delete(barNumber);
         this.shiftMeasureWidths(barNumber + 1, -1);
+        this.repeatBars.delete(barNumber);
+        this.shiftRepeatBars(barNumber + 1, -1);
         void requisitions.execute("arrangementChanged", this.id);
     }
 
@@ -333,6 +350,13 @@ export class Arrangement implements ISbDmArrangement {
         this.shiftMeasureWidths(barNumber + 1, 1);
         if (width !== undefined) {
             this.measureWidths.set(barNumber + 1, width);
+        }
+
+        // The marks belong to the barline the duplicate closes, so the copy carries its own.
+        const repeats = this.repeatBars.get(barNumber);
+        this.shiftRepeatBars(barNumber + 1, 1);
+        if (repeats !== undefined) {
+            this.repeatBars.set(barNumber + 1, { ...repeats });
         }
 
         void requisitions.execute("arrangementChanged", this.id);
@@ -424,6 +448,31 @@ export class Arrangement implements ISbDmArrangement {
 
         for (const [bar, width] of moved) {
             this.measureWidths.set(bar + delta, width);
+        }
+    }
+
+    /**
+     * Moves the repeat marks from a 1-based bar number onwards by a delta, so a mark stays with the barline it
+     * belongs to when bars are inserted or removed.
+     *
+     * @param fromBar The first bar whose marks move.
+     * @param delta The number of bars they move by.
+     */
+    private shiftRepeatBars(fromBar: number, delta: number): void {
+        if (delta === 0 || this.repeatBars.size === 0) {
+            return;
+        }
+
+        const moved = [...this.repeatBars].filter(([bar]) => {
+            return bar >= fromBar;
+        });
+
+        for (const [bar] of moved) {
+            this.repeatBars.delete(bar);
+        }
+
+        for (const [bar, marks] of moved) {
+            this.repeatBars.set(bar + delta, marks);
         }
     }
 

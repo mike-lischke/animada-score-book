@@ -10,8 +10,9 @@ import { SubdivisionToolbar } from "../../src/components/ui/Arrangement/Subdivis
 import type { ISbDmArrangement, ISbDmTrack, ISbDmTrackPiece } from "../../src/core/ScoreBookDataModel.js";
 import { ScoreBookDataModel } from "../../src/core/ScoreBookDataModel.js";
 import type { IFraction } from "../../src/core/types/general.js";
+import { RepeatMark } from "../../src/core/types/general.js";
 import { SelectionManager } from "../../src/ui/SelectionManager.js";
-import { createInstrument, noteEntry, runEntry, trackPieceEntry } from "../unit-test-helpers.js";
+import { createInstrument, measureEntry, noteEntry, runEntry, trackPieceEntry } from "../unit-test-helpers.js";
 
 const triggerButton = (container: Element): HTMLButtonElement => {
     return container.querySelector<HTMLButtonElement>("button")!;
@@ -26,6 +27,28 @@ const triggerButton = (container: Element): HTMLButtonElement => {
  */
 const repeatButton = (container: Element): HTMLButtonElement => {
     return container.querySelectorAll<HTMLButtonElement>("button")[1];
+};
+
+/**
+ * The button that marks the barline a repeated section opens at.
+ *
+ * @param container The rendered toolbar.
+ *
+ * @returns The toggle button.
+ */
+const startButton = (container: Element): HTMLButtonElement => {
+    return container.querySelectorAll<HTMLButtonElement>("button")[2];
+};
+
+/**
+ * The button that marks the barline a repeated section closes at.
+ *
+ * @param container The rendered toolbar.
+ *
+ * @returns The toggle button.
+ */
+const endButton = (container: Element): HTMLButtonElement => {
+    return container.querySelectorAll<HTMLButtonElement>("button")[3];
 };
 
 /**
@@ -298,5 +321,94 @@ describe.sequential("SubdivisionToolbar", () => {
         );
 
         expect(repeatButton(renderResult.container).classList.contains("du-btn-primary")).toBe(true);
+    });
+
+    it("disables the repeat marks unless the whole selection is whole bars", () => {
+        const measure = makeMeasure(7, [cell(0)]);
+        selectionManager.replaceSelection([noteEntry(measure, cell(0))]);
+
+        renderResult = render(
+            <SubdivisionToolbar selectionManager={selectionManager} dataModel={dataModel} />,
+        );
+
+        expect(startButton(renderResult.container).disabled).toBe(true);
+        expect(endButton(renderResult.container).disabled).toBe(true);
+    });
+
+    it("enables the repeat marks for whole bars and toggles the mark on them", () => {
+        const model = new ScoreBookDataModel();
+        model.startNewArrangement([createInstrument("0", 0, 0)]);
+        model.insertBars(1, 2, false, false);
+        const measure = model.arrangement!.tracks[0].measures[1];
+        selectionManager.replaceSelection([measureEntry(measure)]);
+
+        renderResult = render(
+            <SubdivisionToolbar selectionManager={selectionManager} dataModel={model} />,
+        );
+
+        const start = startButton(renderResult.container);
+        expect(start.disabled).toBe(false);
+        expect(endButton(renderResult.container).disabled).toBe(false);
+        expect(start.classList.contains("du-btn-primary")).toBe(false);
+
+        start.click();
+        expect(model.arrangement!.repeatBars?.get(2)).toEqual({ start: true });
+
+        // The button follows the model, so pressing it again takes the mark off with one undo step.
+        renderResult.rerender(<SubdivisionToolbar selectionManager={selectionManager} dataModel={model} />);
+        const marked = startButton(renderResult.container);
+        expect(marked.classList.contains("du-btn-primary")).toBe(true);
+
+        marked.click();
+        expect(model.arrangement!.repeatBars?.size).toBe(0);
+    });
+
+    it("disables the repeat mark that nothing can pair with on the first and the last bar", () => {
+        const model = new ScoreBookDataModel();
+        model.startNewArrangement([createInstrument("0", 0, 0)]);
+        model.insertBars(1, 2, false, false);
+        const measures = model.arrangement!.tracks[0].measures;
+
+        // The first bar can open a repeated section but not close one: no bar precedes it to open the repeat.
+        selectionManager.replaceSelection([measureEntry(measures[0])]);
+        renderResult = render(
+            <SubdivisionToolbar selectionManager={selectionManager} dataModel={model} />,
+        );
+
+        expect(startButton(renderResult.container).disabled).toBe(false);
+        expect(endButton(renderResult.container).disabled).toBe(true);
+
+        // The last bar is the other way round: no bar follows it that could close a repeat it opens.
+        selectionManager.replaceSelection([measureEntry(measures[2])]);
+        renderResult.rerender(<SubdivisionToolbar selectionManager={selectionManager} dataModel={model} />);
+
+        expect(startButton(renderResult.container).disabled).toBe(true);
+        expect(endButton(renderResult.container).disabled).toBe(false);
+
+        // A bar with bars on both sides can do both.
+        selectionManager.replaceSelection([measureEntry(measures[1])]);
+        renderResult.rerender(<SubdivisionToolbar selectionManager={selectionManager} dataModel={model} />);
+
+        expect(startButton(renderResult.container).disabled).toBe(false);
+        expect(endButton(renderResult.container).disabled).toBe(false);
+    });
+
+    it("does not light the repeat mark a bar cannot be given", () => {
+        const model = new ScoreBookDataModel();
+        model.startNewArrangement([createInstrument("0", 0, 0)]);
+        model.insertBars(1, 2, false, false);
+        const measures = model.arrangement!.tracks[0].measures;
+
+        // A score may carry the mark of a section opening on its last bar, where no repeat can follow it.
+        model.setRepeatBars([measures[2].number], RepeatMark.Start, true);
+        selectionManager.replaceSelection([measureEntry(measures[2])]);
+
+        renderResult = render(
+            <SubdivisionToolbar selectionManager={selectionManager} dataModel={model} />,
+        );
+
+        const start = startButton(renderResult.container);
+        expect(start.disabled).toBe(true);
+        expect(start.classList.contains("du-btn-primary")).toBe(false);
     });
 });

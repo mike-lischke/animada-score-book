@@ -1,0 +1,66 @@
+/*
+ * Copyright (c) Mike Lischke. All rights reserved.
+ * Licensed under the MIT License. See License.txt in the project root for license information.
+ */
+
+/* A barline the score assembles from the font's engraving defaults: the strokes are drawn, so their edges land
+ * on the pixel grid, and the repeat dots are a glyph of the font. Every measurement comes from the font, so the
+ * barline follows a font change like a glyph does. The fallbacks are what Bravura states, which is the font the
+ * score falls back to as well. */
+.barline-view {
+    /* The staff band the barline spans, which the staff viewer states, plus the thickness of the lower staff line:
+     * the band is the distance between the outer lines, and the strokes reach to that line's lower edge. */
+    height: calc(var(--staff-barline-height, calc(var(--staff-space, 10px) * 2)) + var(--staff-line-thickness, 1px));
+    display: flex;
+    align-items: flex-start;
+
+    /* The ink takes the colour it is drawn in, like a glyph does, so a button that is disabled greys it out too. */
+    color: inherit;
+}
+
+.barline-view-thin,
+.barline-view-thick {
+    /* A stroke is the border of a zero-width box, which is what puts its edge on the pixel grid. */
+    height: 100%;
+    border-left-style: solid;
+    border-left-color: currentColor;
+}
+
+.barline-view-thin {
+    border-left-width: var(--barline-thin-thickness, 2px);
+}
+
+.barline-view-thick {
+    border-left-width: var(--barline-thick-thickness, 5px);
+}
+
+.barline-view-dots {
+    /* The dots keep the shape the font inks them in, so a round dot stays round. The box is the ink the font
+       states, and the ink of the glyph sits above its baseline, so the ink, not the box, is what has to land on
+       the middle line of the staff: it is placed there in whole pixels, because at an odd ink height the centring
+       would land on half a pixel. */
+    --dots-ink-centre: calc((var(--glyph-ink-spaces-top-repeatdots, 2.68) + var(--glyph-ink-spaces-bottom-repeatdots, 1.272)) / 2 * var(--staff-space, 10px));
+
+    width: var(--glyph-ink-width-repeatdots, 4px);
+    height: var(--glyph-ink-height-repeatdots, 14px);
+    margin-top: calc(round(nearest, var(--staff-barline-height, 20px) / 2, 1px) + var(--dots-ink-centre) - round(nearest, var(--glyph-ink-height-repeatdots, 14px) / 2, 1px));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* The strokes of a barline stand apart as far as the font draws them, and so do the dots and the stroke they
+ * face. The gap hangs on the part that follows, so the ink of a barline starts on its box's left edge and ends on
+ * its right edge: with a trailing gap the box would be wider than the ink, and the box is what a caller centres on
+ * the bar's edge. */
+.barline-view-thin + .barline-view-thin,
+.barline-view-thin + .barline-view-thick,
+.barline-view-thick + .barline-view-thin {
+    margin-left: var(--barline-gap, var(--barline-separation, 4px));
+}
+
+.barline-view-dots + .barline-view-thin,
+.barline-view-dots + .barline-view-thick,
+.barline-view-thin + .barline-view-dots {
+    margin-left: var(--repeat-dot-separation, 2px);
+}

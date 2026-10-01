@@ -10,6 +10,7 @@ import { MeasureLayout } from "../../src/core/MeasureLayout.js";
 import { ScoreBookDataModel, type ISbDmTrackPiece } from "../../src/core/ScoreBookDataModel.js";
 import { reduceFraction } from "../../src/core/serialisation/numeric-functions.js";
 import type { IFraction, IMeasureEvent } from "../../src/core/types/general.js";
+import { RepeatMark } from "../../src/core/types/general.js";
 import { requisitions } from "../../src/supplement/Requisitions.js";
 import { createInstrument, setCellNote } from "../unit-test-helpers.js";
 
@@ -1752,5 +1753,57 @@ describe.sequential("ScoreBookDataModel one-bar repeat (simile)", () => {
         const piece = model.arrangement!.tracks[0].measures[0];
         expect(piece.number).toBe(1);
         expect(piece.simile).toBeUndefined();
+    });
+});
+
+describe.sequential("ScoreBookDataModel repeat barlines", () => {
+    let model: ScoreBookDataModel;
+    let mutatedCalls: number;
+
+    const mutatedSpy = (): Promise<boolean> => {
+        mutatedCalls++;
+
+        return Promise.resolve(true);
+    };
+
+    beforeEach(() => {
+        mutatedCalls = 0;
+        model = new ScoreBookDataModel();
+        model.startNewArrangement([createInstrument("0", 0, 0)], { length: 3 });
+        requisitions.register("arrangementMutated", mutatedSpy);
+    });
+
+    afterEach(() => {
+        requisitions.unregister("arrangementMutated", mutatedSpy);
+    });
+
+    it("marks the bars the edit addresses, as one undo step", () => {
+        expect(model.setRepeatBars([1, 3], RepeatMark.Start, true)).toBe(true);
+
+        expect(model.arrangement!.repeatBars?.get(1)).toEqual({ start: true });
+        expect(model.arrangement!.repeatBars?.get(3)).toEqual({ start: true });
+        expect(mutatedCalls).toBe(1);
+    });
+
+    it("keeps the other mark of a bar and drops the bar once both are gone", () => {
+        model.setRepeatBars([2], RepeatMark.Start, true);
+        model.setRepeatBars([2], RepeatMark.End, true);
+        expect(model.arrangement!.repeatBars?.get(2)).toEqual({ start: true, end: true });
+
+        mutatedCalls = 0;
+        expect(model.setRepeatBars([2], RepeatMark.Start, false)).toBe(true);
+        expect(model.arrangement!.repeatBars?.get(2)).toEqual({ end: true });
+        expect(mutatedCalls).toBe(1);
+
+        expect(model.setRepeatBars([2], RepeatMark.End, false)).toBe(true);
+        expect(model.arrangement!.repeatBars?.size).toBe(0);
+    });
+
+    it("ignores bars outside the arrangement and a mark that already holds", () => {
+        model.setRepeatBars([2], RepeatMark.End, true);
+        mutatedCalls = 0;
+
+        expect(model.setRepeatBars([2, 4, 0], RepeatMark.End, true)).toBe(false);
+        expect(mutatedCalls).toBe(0);
     });
 });

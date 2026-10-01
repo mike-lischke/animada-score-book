@@ -21,35 +21,35 @@ const shippedFontCount = 7;
  *
  * @param page The page to drive.
  * @param sessionId The session the score is seeded into.
+ * @param barCount The number of bars the score has.
  */
-const openScore = async (page: Page, sessionId: string): Promise<void> => {
+const openScore = async (page: Page, sessionId: string, barCount = 1): Promise<void> => {
     const stepResolution = 16;
+    const meter = {
+        beats: 4,
+        beatUnits: 4,
+        stepResolution,
+        beatGroups: new Array<number>(4).fill(stepResolution / 4),
+    };
+    const bars = Array.from({ length: barCount }, (_, index) => {
+        return {
+            number: index + 1,
+            meter,
+            events: index === 0
+                ? [{
+                    start: { numerator: 0, denominator: 16 },
+                    duration: { numerator: 1, denominator: 16 },
+                    noteStyleId: "1",
+                }, { start: { numerator: 1, denominator: 16 }, duration: { numerator: 15, denominator: 16 } }]
+                : [],
+            subdivisions: [],
+        };
+    });
     const snapshot = {
         version: arrangementSnapshotVersion,
         title: "E2E music font",
-        timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4", stepResolution },
-        tracks: [{
-            id: 100,
-            instrumentId: "1",
-            measures: [{
-                number: 1,
-                meter: {
-                    beats: 4,
-                    beatUnits: 4,
-                    stepResolution,
-                    beatGroups: new Array<number>(4).fill(stepResolution / 4),
-                },
-                events: [
-                    {
-                        start: { numerator: 0, denominator: 16 },
-                        duration: { numerator: 1, denominator: 16 },
-                        noteStyleId: "1",
-                    },
-                    { start: { numerator: 1, denominator: 16 }, duration: { numerator: 15, denominator: 16 } },
-                ],
-                subdivisions: [],
-            }],
-        }],
+        timeParams: { timeSignature: "4/4", tempo: 120, length: barCount, pulse: "1/4", stepResolution },
+        tracks: [{ id: 100, instrumentId: "1", measures: bars }],
     };
 
     await page.addInitScript(({ packed, id }: { packed: string; id: string; }) => {
@@ -76,6 +76,43 @@ const timeSignatureFontFamily = (page: Page): Promise<string> => {
 
         return glyph === null ? "" : getComputedStyle(glyph).fontFamily;
     });
+};
+
+/** The strokes one barline is drawn from, and the band it spans, in px. */
+interface IBarlineStrokes {
+    thin: number;
+
+    thick: number;
+
+    height: number;
+}
+
+/**
+ * Reads the strokes the barline closing the given bar is drawn from and the band they span.
+ *
+ * @param page The page to read from.
+ * @param barNumber The 1-based bar number whose closing barline is read.
+ *
+ * @returns The width of the barline's strokes and the height of the barline, all in px. A stroke the barline
+ * does not have is read as zero.
+ */
+const barlineStrokes = (page: Page, barNumber: number): Promise<IBarlineStrokes> => {
+    return page.evaluate((bar: number): IBarlineStrokes => {
+        // The list is indexed without a bounds check, so the column may be missing.
+        const column = document.querySelectorAll(".staff-measure-viewer")[bar - 1] as Element | undefined;
+        const barline = column?.querySelector(".staff-note-viewer-barline") ?? null;
+        const widthOf = (selector: string): number => {
+            const stroke = barline === null ? null : barline.querySelector(selector);
+
+            return stroke === null ? 0 : stroke.getBoundingClientRect().width;
+        };
+
+        return {
+            thin: widthOf(".barline-view-thin"),
+            thick: widthOf(".barline-view-thick"),
+            height: barline === null ? 0 : barline.getBoundingClientRect().height,
+        };
+    }, barNumber);
 };
 
 test.describe("SMuFL music font", () => {
@@ -169,5 +206,32 @@ test.describe("SMuFL music font", () => {
         await page.evaluate(() => {
             window.dispatchEvent(new Event("afterprint"));
         });
+    });
+
+    test("draws a barline in the stroke thickness the font states", async ({ page }) => {
+        // Two bars, so the bar the test reads closes the score and draws both strokes of a final barline.
+        await openScore(page, "e2e-smufl-barline-strokes", 2);
+
+        // Bravura states a thin stroke of 0.16 staff spaces and a thick one of 0.5: at ten px per staff space that
+        // is 1.6 and 5 px, and the drawing rounds every stroke to a whole pixel.
+        const bravura = await barlineStrokes(page, 2);
+        expect({ thin: bravura.thin, thick: bravura.thick }).toEqual({ thin: 2, thick: 5 });
+
+        await page.locator('[data-tutorial="display-options"]').click();
+        await page.locator("#settingsDialog .music-font-dropdown button").click();
+        await page.locator("#settingsDialog .music-font-dropdown .dropdown-popup li")
+            .filter({ hasText: "Leland" }).click();
+
+        // The switch loads the font and publishes its metrics, which the score then draws with.
+        await expect.poll(() => {
+            return timeSignatureFontFamily(page);
+        }).toContain("Leland");
+
+        // Leland states 0.18 and 0.55 staff spaces, so its thick stroke is 6 px wide. The band the strokes span is
+        // the staff's, not the font's, so it stays the same: that is how a barline reaches the staff lines whichever
+        // font draws the score.
+        const leland = await barlineStrokes(page, 2);
+        expect({ thin: leland.thin, thick: leland.thick }).toEqual({ thin: 2, thick: 6 });
+        expect(leland.height).toBe(bravura.height);
     });
 });

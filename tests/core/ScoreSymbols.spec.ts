@@ -8,9 +8,9 @@ import { describe, expect, it } from "vitest";
 import { NoteDisplayType } from "../../src/core/ScoreBookDataModel.js";
 import { NoteLength } from "../../src/core/rest-notation.js";
 import {
-    GlyphAnchor, OwnPathInk, ScoreSymbols, ScoreSymbol, ScoreSymbolSource,
+    BarlineEdge, BarlinePart, GlyphAnchor, OwnPathInk, ScoreSymbols, ScoreSymbol, ScoreSymbolSource,
 } from "../../src/core/ScoreSymbols.js";
-import { SmuflGlyphs } from "../../src/core/smufl/SmuflGlyphs.js";
+import { SmuflGlyph, SmuflGlyphs } from "../../src/core/smufl/SmuflGlyphs.js";
 
 describe("ScoreSymbols", () => {
     it("states a source for every symbol", () => {
@@ -154,5 +154,52 @@ describe("ScoreSymbols", () => {
                 expect(definition.anchor, ScoreSymbol[symbol]).toBe(GlyphAnchor.RightEdge);
             }
         }
+    });
+
+    it("assembles every barline from strokes the score draws and the font's repeat dots", () => {
+        const barlines = [
+            ScoreSymbol.BarlineSingle, ScoreSymbol.BarlineFinal, ScoreSymbol.RepeatStart, ScoreSymbol.RepeatEnd,
+            ScoreSymbol.RepeatBoth,
+        ];
+
+        for (const symbol of barlines) {
+            const definition = ScoreSymbols.definition(symbol);
+            expect(definition.source, ScoreSymbol[symbol]).toBe(ScoreSymbolSource.Barline);
+            if (definition.source !== ScoreSymbolSource.Barline) {
+                continue;
+            }
+
+            expect(definition.parts.length, ScoreSymbol[symbol]).toBeGreaterThan(0);
+            expect(definition.key, ScoreSymbol[symbol]).toMatch(/^[a-z][a-z-]*$/);
+
+            // The dots are the one part that stays a glyph: a stroke is drawn in the thickness the font states,
+            // which rounds to a whole pixel, while a dot has no edge to round either way.
+            const carriesDots = definition.parts.includes(BarlinePart.RepeatDots);
+            expect(definition.dotsGlyph, ScoreSymbol[symbol]).toBe(
+                carriesDots ? SmuflGlyph.RepeatDots : undefined);
+        }
+
+        // The dots of a repeat are a glyph of the font catalogue, so a font publishes their metrics.
+        expect(ScoreSymbols.drawnGlyphs).toContain(SmuflGlyph.RepeatDots);
+    });
+
+    it("states the edge of the bar a barline stands on", () => {
+        expect(ScoreSymbols.barlineEdge(ScoreSymbol.BarlineSingle)).toBe(BarlineEdge.End);
+        expect(ScoreSymbols.barlineEdge(ScoreSymbol.BarlineFinal)).toBe(BarlineEdge.End);
+        expect(ScoreSymbols.barlineEdge(ScoreSymbol.RepeatStart)).toBe(BarlineEdge.Start);
+        expect(ScoreSymbols.barlineEdge(ScoreSymbol.RepeatEnd)).toBe(BarlineEdge.End);
+
+        // A repeat that closes a section and opens the next one straddles the edge with its ink centred on it.
+        expect(ScoreSymbols.barlineEdge(ScoreSymbol.RepeatBoth)).toBe(BarlineEdge.Centred);
+
+        // A symbol that is not drawn as a barline ends on the edge of the box it is placed in.
+        expect(ScoreSymbols.barlineEdge(ScoreSymbol.NoteheadBlack)).toBe(BarlineEdge.End);
+    });
+
+    it("states the ink box of a drawn barline as the size the stylesheet draws it in", () => {
+        expect(ScoreSymbols.inkBox(ScoreSymbol.RepeatEnd)).toEqual({
+            width: "var(--barline-repeat-width)",
+            height: "var(--barline-height)",
+        });
     });
 });

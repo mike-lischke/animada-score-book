@@ -403,6 +403,19 @@
         border-color: var(--color-primary);
         background: color-mix(in srgb, var(--color-primary) 10%, var(--color-base-100));
     }
+
+    /* A button shows the mark it carries as active, the way the note length buttons do. */
+    &.du-btn-primary {
+        border-color: var(--color-primary);
+        background-color: color-mix(in srgb, var(--color-primary) 25%, var(--color-base-100));
+        color: var(--color-base-content);
+    }
+
+    /* The three marks of this toolbar are shown smaller than the other symbol icons: a simile and the two repeat
+       barlines differ that much in shape that only their height states their size. */
+    .score-symbol-view-icon {
+        --icon-spaces: calc(18px / var(--staff-space));
+    }
 }
 
 .noteLengthToolbarHost {
@@ -1012,7 +1025,9 @@
     flex: 1;
     min-width: calc(var(--steps-per-bar) * var(--note-height));
     border-right: 2px solid var(--color-base-300);
-    padding: 24px 8px 0 8px;
+
+    /* The right padding keeps the barline of a track piece clear of the separator that follows the column. */
+    padding: 24px 14px 0 8px;
     position: relative;
 
     /* The barline closing the column is the resize handle: an invisible strip centred on the border. */
@@ -1126,12 +1141,17 @@
        holds stems, beams and tuplet brackets. */
     --staff-centre: 32px;
 
-    /* A final barline joins the outer staff lines. A staff of one line has no outer lines and gets a stub of
-       one space above and below its line. */
+    /* A final barline joins the outer staff lines. The viewer states the height it draws with; this value is
+       the fallback for the time before a viewer rendered. */
     --staff-barline-height: max((var(--staff-line-count, 1) - 1) * var(--staff-space), var(--staff-space) * 2);
 
     /* Room the flags of a measure-final note need: the widest flag the font draws. */
     --note-flag-width: max(var(--glyph-ink-width-flag8thup), var(--glyph-ink-width-flag16thup), var(--glyph-ink-width-flag32ndup));
+
+    /* The least room the notes of a bar keep from the dots a repeat barline reaches into it with, on either side
+       of the barline: it is stated here because both the closing clearance the viewer passes and the room an
+       opening barline takes in a bar build on it. */
+    --staff-repeat-dot-gap: 2px;
 
     /*
      * Where an up-stem ends: this far above its note's staff line. It is the outer edge of the beam
@@ -1147,8 +1167,17 @@
     /* How far the stem's right edge reaches past the anchor: where a head's ink ends and a beam end stops. */
     --stem-right-edge: calc(var(--stem-thickness, 2px) - var(--stem-half-width, 1px));
 
-    /* Wide a final barline is: a thin and a thick stroke, separated. */
-    --final-barline-width: calc(var(--barline-thin-thickness, 2px) + var(--barline-separation, 1px) + var(--barline-thick-thickness, 3px));
+    /* How wide each barline the score draws is, and how far its strokes stand apart, from the font's engraved
+       measurements and the ink of its own barline glyphs: the viewer sizes the room a barline takes and the
+       clearance the notes need from it. The font loader states both in px; these are the fallbacks for the time
+       before the metrics have arrived, and they are what Bravura states. */
+    --barline-single-width: var(--barline-thin-thickness, 2px);
+    --barline-final-separation: 4px;
+    --barline-final-width: calc(var(--barline-thin-thickness, 2px) + var(--barline-final-separation) + var(--barline-thick-thickness, 5px));
+    --barline-repeat-separation: 2px;
+    --barline-repeat-width: calc(var(--barline-thin-thickness, 2px) + var(--barline-repeat-separation) + var(--barline-thick-thickness, 5px) + var(--repeat-dot-separation, 2px) + var(--glyph-ink-width-repeatdots, 4px));
+    --barline-repeat-both-separation: 2px;
+    --barline-repeat-both-width: calc(var(--barline-repeat-width) + var(--barline-repeat-both-separation) + var(--barline-thin-thickness, 2px) + var(--repeat-dot-separation, 2px) + var(--glyph-ink-width-repeatdots, 4px));
 
     position: relative;
     width: 100%;
@@ -1217,33 +1246,35 @@
     padding: 0 1px;
 }
 
-.staff-note-viewer-final-barline {
+/* The barline at the edge of a track piece, drawn from the symbol catalogue. It joins the outer staff lines, so
+ * its box covers their thickness too: the staff height states the distance between the lines and one line
+ * thickness extends it to the lower line's bottom edge. The box is as wide as the ink of its symbol, so the ink's
+ * edge is the box's edge. The lines snap their top to the pixel grid (see .staff-note-viewer-line), so the box
+ * snaps by that same half thickness. */
+.staff-note-viewer-barline {
+    --barline-snap: round(nearest, var(--staff-line-thickness, 1px) / 2, 1px);
+
     position: absolute;
     top: calc(50% + var(--staff-centre));
     right: 0;
-    width: var(--final-barline-width);
-    height: var(--staff-barline-height);
+    height: calc(var(--staff-barline-height) + var(--staff-line-thickness, 1px));
     pointer-events: none;
-    transform: translateY(-50%);
+    transform: translateY(calc(-50% + var(--staff-line-thickness, 1px) / 2 - var(--barline-snap)));
 }
 
-.staff-note-viewer-final-barline::before,
-.staff-note-viewer-final-barline::after {
-    content: "";
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    background: var(--color-base-content);
+/* A barline whose ink straddles the boundary: a repeat that closes a section and opens the next one at once. Its
+ * ink is centred on the edge, rounded to whole pixels: at an odd ink width the exact centre would land on half a
+ * pixel and blur every stroke of the barline. */
+.staff-note-viewer-barline-centred {
+    right: auto;
+    left: 100%;
+    margin-left: calc(-1 * round(nearest, var(--staff-barline-width, 0px) / 2, 1px));
 }
 
-.staff-note-viewer-final-barline::before {
-    right: calc(var(--barline-separation, 1px) + var(--barline-thick-thickness, 3px));
-    width: var(--barline-thin-thickness, 2px);
-}
-
-.staff-note-viewer-final-barline::after {
-    right: 0;
-    width: var(--barline-thick-thickness, 3px);
+/* The barline the score opens with, which has nothing before it to sit on. */
+.staff-note-viewer-barline-start {
+    right: auto;
+    left: 0;
 }
 
 /* Runs: flex row of proportional-width note / rest segments */
@@ -1253,6 +1284,15 @@
 
     /* The middle of the run box is the line the staff is drawn around, so it is offset by twice that. */
     margin-top: calc(var(--staff-centre) * 2);
+
+    /* A barline a bar opens with reaches into it, so the notes start right of that ink. How far they keep from it
+       is stated by the viewer, which takes the room the bar leaves before the barline at its other end, so a bar
+       stands the same distance from the dots on both sides of a repeated section. */
+    padding-left: var(--staff-opening-barline-room, 0px);
+
+    /* A barline a bar closes with reaches into it with its dots too, so the notes end left of that ink: the viewer
+       states the room of the barline it closes with, which the bar keeps free of notes. */
+    padding-right: var(--staff-closing-barline-room, 0px);
     display: flex;
 }
 

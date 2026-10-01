@@ -99,7 +99,7 @@ test.describe("Staff view multi-line rendering", () => {
         const { lineCount, offsets, barlineHeight } = await page.evaluate(() => {
             const viewer = document.querySelector(".staff-note-viewer");
             const lines = viewer?.querySelectorAll(".staff-note-viewer-line") ?? [];
-            const barline = viewer?.querySelector(".staff-note-viewer-final-barline");
+            const barline = viewer?.querySelector(".staff-note-viewer-barline");
 
             return {
                 lineCount: lines.length,
@@ -116,8 +116,9 @@ test.describe("Staff view multi-line rendering", () => {
         // Half a staff space above and below the line the notes sit on.
         expect(offsets).toEqual(["-5px", "5px"]);
 
-        // A staff of one space gets the two-space stub, the same as a staff of a single line.
-        expect(barlineHeight).toBe(20);
+        // A staff of one space gets the two-space stub, the same as a staff of a single line. The barline also
+        // covers the thickness of the lower line, so it reaches past the distance between the lines by it.
+        expect(barlineHeight).toBe(21);
     });
 
     test("renders four staff lines for a 4-line instrument (4-Bell Agogo)", async ({ page }) => {
@@ -140,7 +141,7 @@ test.describe("Staff view multi-line rendering", () => {
         const { lineCount, offsets, barlineHeight } = await page.evaluate(() => {
             const viewer = document.querySelector(".staff-note-viewer");
             const lines = viewer?.querySelectorAll(".staff-note-viewer-line") ?? [];
-            const barline = viewer?.querySelector(".staff-note-viewer-final-barline");
+            const barline = viewer?.querySelector(".staff-note-viewer-barline");
 
             return {
                 lineCount: lines.length,
@@ -158,7 +159,7 @@ test.describe("Staff view multi-line rendering", () => {
         expect(offsets).toEqual(["-15px", "-5px", "5px", "15px"]);
 
         // A staff of three spaces is taller than the stub, so the closing barline spans its outer lines.
-        expect(barlineHeight).toBe(30);
+        expect(barlineHeight).toBe(31);
     });
 
     test("draws stems of equal length for notes on different staff lines", async ({ page }) => {

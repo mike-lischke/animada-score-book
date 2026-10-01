@@ -69,6 +69,15 @@ export enum ScoreSymbol {
     GhostParenthesisRight,
     Accent,
 
+    /** The bar lines that close a track piece. */
+    BarlineSingle,
+    BarlineFinal,
+
+    /** The repeat bar lines: `|:` opens a repeated section, `:|` closes one, `:||:` does both at one line. */
+    RepeatStart,
+    RepeatEnd,
+    RepeatBoth,
+
     /** The marks a play technique draws over the head: the slap and rimshot cross, the buzz roll. */
     TechniqueCross,
     RimShotCross,
@@ -85,6 +94,25 @@ export enum ScoreSymbolSource {
 
     /** A path the score draws itself. */
     OwnPath,
+
+    /** A barline the score assembles from the font's engraved measurements. */
+    Barline,
+}
+
+/**
+ * A part a barline is assembled from. The strokes are drawn in the thickness the font states and land on the
+ * pixel grid, which the font's own outline cannot: a music font draws a thin barline thinner than a pixel, and
+ * anti-aliasing it is what makes it look fuzzy.
+ */
+export enum BarlinePart {
+    /** The thin stroke every barline carries. */
+    ThinStroke = "thin",
+
+    /** The thick stroke a final or repeat barline closes with. */
+    ThickStroke = "thick",
+
+    /** The dots a repeat barline states its repetition with, drawn with the font's own dots glyph. */
+    RepeatDots = "dots",
 }
 
 /**
@@ -136,6 +164,14 @@ export interface IMusicFontGlyphSource {
     glyph: SmuflGlyph;
 
     anchor: GlyphAnchor;
+
+    /**
+     * The box the glyph is drawn into, in staff spaces. Omitted means the font's own box, two staff spaces
+     * square, which fits every glyph whose ink stays within that. A glyph that reaches further, like a barline
+     * that spans the staff, states its box so the drawing does not cut its ink off. A box a barline states is
+     * the staff band its ink covers, which is why such a box is not just the room the ink gets.
+     */
+    box?: { width: number; height: number; };
 }
 
 /** A symbol that the score draws itself. */
@@ -145,13 +181,70 @@ export interface IOwnPathSource {
     path: IOwnPathDefinition;
 }
 
+/**
+ * The edge of a bar a drawn barline stands on, which is what places its ink: a barline that closes a section
+ * ends on the bar's right edge, one that opens the next section starts on the left edge, and a repeat that does
+ * both at once straddles the edge with its ink centred on it.
+ */
+export enum BarlineEdge {
+    End = "end",
+
+    Centred = "centred",
+
+    Start = "start",
+}
+
+/**
+ * A barline the score assembles from the font's engraving defaults: the thin and thick stroke thickness, the
+ * separation between the strokes and the distance of the dots from them all come from the font, so the barline
+ * follows a font change just like a glyph does — it is only drawn with strokes of whole pixels.
+ */
+export interface IBarlineSource {
+    source: ScoreSymbolSource.Barline;
+
+    /** The parts the barline is drawn from, left to right. */
+    parts: readonly BarlinePart[];
+
+    /** The edge of the bar the barline stands on. */
+    edge: BarlineEdge;
+
+    /** The glyph the repeat dots are drawn with, for the bar lines that carry them. */
+    dotsGlyph?: SmuflGlyph;
+
+    /**
+     * The glyph the font draws the same barline with. The strokes of a repeat barline stand closer together
+     * than the font's barline defaults state, so the ink of that glyph is what the drawn parts are measured
+     * against: a font's own glyph is the shape it is referring to.
+     */
+    fontGlyph?: SmuflGlyph;
+
+    /**
+     * The name the drawn geometry of this barline is published under, as `--barline-<key>-width` and
+     * `--barline-<key>-separation`: the font loader states both in px, the stylesheet keeps its own values as
+     * the fallback for the time before the metrics have arrived.
+     */
+    key: string;
+}
+
 /** Where a symbol is drawn from. */
-export type IScoreSymbolDefinition = IMusicFontGlyphSource | IOwnPathSource;
+export type IScoreSymbolDefinition = IMusicFontGlyphSource | IOwnPathSource | IBarlineSource;
 
 /** The ink box of a symbol, as the CSS lengths a drawing positions it by. */
 export interface ISymbolBox {
     width: string;
     height: string;
+}
+
+/** The marks one side of a bar carries, which decide the barline the score draws there. */
+export interface IBarlineMarks {
+    /** Whether the repeated section before the barline closes there (`:|`). */
+    closesRepeat: boolean;
+
+    /** Whether the repeated section after the barline opens there (`|:`). */
+    opensRepeat: boolean;
+
+    /** Whether the side is the end of the score, which a plain barline cannot state. */
+    endsScore: boolean;
 }
 
 /**
@@ -160,6 +253,14 @@ export interface ISymbolBox {
  * draws a glyph with, so a drawing places the ink and not the box its advance width decides.
  */
 export const glyphInkVariablePrefix = "--glyph-ink-";
+
+/**
+ * The prefix the same ink box is published under in the font's own unit: `--glyph-ink-spaces-`, `top-`, `bottom-`
+ * or `width-`, and the glyph's name in lower case, e.g. `--glyph-ink-spaces-top-barlineSingle`. The values are
+ * staff spaces and carry no unit, because that is the unit a staff band is stated in and the unit a stylesheet
+ * scales ink to a box of its own in: the px box is rounded to the pixel grid, which such a drawing cannot afford.
+ */
+export const glyphInkSpacesVariablePrefix = "--glyph-ink-spaces-";
 
 /** The vocabulary of notation symbols the score draws, and what draws each of them. */
 export class ScoreSymbols {
@@ -409,6 +510,51 @@ export class ScoreSymbols {
             glyph: SmuflGlyph.Repeat1Bar,
             anchor: GlyphAnchor.Centre,
         },
+
+        [ScoreSymbol.BarlineSingle]: {
+            source: ScoreSymbolSource.Barline,
+            parts: [BarlinePart.ThinStroke],
+            edge: BarlineEdge.End,
+            key: "single",
+        },
+        [ScoreSymbol.BarlineFinal]: {
+            source: ScoreSymbolSource.Barline,
+            parts: [BarlinePart.ThinStroke, BarlinePart.ThickStroke],
+            edge: BarlineEdge.End,
+            fontGlyph: SmuflGlyph.BarlineFinal,
+            key: "final",
+        },
+
+        // A repeat barline grows its ink away from the edge it stands on: `|:` starts at its left edge and hangs
+        // its dots right, `:|` ends on its right edge and hangs them left, `:||:` straddles the edge with the dots
+        // on both sides. The strokes sit next to each other in every repeat, so their width is the same.
+        [ScoreSymbol.RepeatStart]: {
+            source: ScoreSymbolSource.Barline,
+            parts: [BarlinePart.ThickStroke, BarlinePart.ThinStroke, BarlinePart.RepeatDots],
+            edge: BarlineEdge.Start,
+            dotsGlyph: SmuflGlyph.RepeatDots,
+            fontGlyph: SmuflGlyph.RepeatLeft,
+            key: "repeat",
+        },
+        [ScoreSymbol.RepeatEnd]: {
+            source: ScoreSymbolSource.Barline,
+            parts: [BarlinePart.RepeatDots, BarlinePart.ThinStroke, BarlinePart.ThickStroke],
+            edge: BarlineEdge.End,
+            dotsGlyph: SmuflGlyph.RepeatDots,
+            fontGlyph: SmuflGlyph.RepeatRight,
+            key: "repeat",
+        },
+        [ScoreSymbol.RepeatBoth]: {
+            source: ScoreSymbolSource.Barline,
+            parts: [
+                BarlinePart.RepeatDots, BarlinePart.ThinStroke, BarlinePart.ThickStroke, BarlinePart.ThinStroke,
+                BarlinePart.RepeatDots,
+            ],
+            edge: BarlineEdge.Centred,
+            dotsGlyph: SmuflGlyph.RepeatDots,
+            fontGlyph: SmuflGlyph.RepeatRightLeft,
+            key: "repeat-both",
+        },
     };
 
     /** The symbol a time signature digit is drawn with. */
@@ -437,6 +583,33 @@ export class ScoreSymbols {
     }
 
     /**
+     * Names the barline the score draws on one side of a bar out of the marks it carries. A repeat mark wins
+     * over the final barline of the score, and a repeat that closes and opens at the same barline over the two
+     * single ones.
+     *
+     * @param marks The marks at one side of a bar.
+     *
+     * @returns The symbol the barline is drawn with.
+     */
+    public static barlineAt(marks: IBarlineMarks): ScoreSymbol {
+        const { closesRepeat, opensRepeat, endsScore } = marks;
+
+        if (closesRepeat && opensRepeat) {
+            return ScoreSymbol.RepeatBoth;
+        }
+
+        if (closesRepeat) {
+            return ScoreSymbol.RepeatEnd;
+        }
+
+        if (opensRepeat) {
+            return ScoreSymbol.RepeatStart;
+        }
+
+        return endsScore ? ScoreSymbol.BarlineFinal : ScoreSymbol.BarlineSingle;
+    }
+
+    /**
      * @param symbol The symbol whose ink box is wanted.
      *
      * @returns The box the symbol's ink occupies, as the CSS lengths a drawing sizes the box around the ink
@@ -444,6 +617,13 @@ export class ScoreSymbols {
      */
     public static inkBox(symbol: ScoreSymbol): ISymbolBox {
         const definition = ScoreSymbols.definition(symbol);
+        if (definition.source === ScoreSymbolSource.Barline) {
+            return {
+                width: `var(--barline-${definition.key}-width)`,
+                height: "var(--barline-height)",
+            };
+        }
+
         if (definition.source === ScoreSymbolSource.OwnPath) {
             const { width, height } = definition.path;
 
@@ -459,6 +639,18 @@ export class ScoreSymbols {
             width: `var(${glyphInkVariablePrefix}width-${glyphName})`,
             height: `var(${glyphInkVariablePrefix}height-${glyphName})`,
         };
+    }
+
+    /**
+     * @param symbol The symbol to look up the drawing edge of.
+     *
+     * @returns The edge the symbol's ink stands on, which is the end of the bar for a symbol that is not drawn as
+     * a barline.
+     */
+    public static barlineEdge(symbol: ScoreSymbol): BarlineEdge {
+        const definition = ScoreSymbols.definition(symbol);
+
+        return definition.source === ScoreSymbolSource.Barline ? definition.edge : BarlineEdge.End;
     }
 
     /**
@@ -583,8 +775,21 @@ export class ScoreSymbols {
         Object.assign(ScoreSymbols, {
             drawnGlyphs: [...new Set(ScoreSymbols.all.flatMap((symbol) => {
                 const definition = ScoreSymbols.definitions[symbol];
+                switch (definition.source) {
+                    case ScoreSymbolSource.MusicFontGlyph: {
+                        return [definition.glyph];
+                    }
 
-                return definition.source === ScoreSymbolSource.MusicFontGlyph ? [definition.glyph] : [];
+                    case ScoreSymbolSource.Barline: {
+                        return [definition.dotsGlyph, definition.fontGlyph].filter((glyph) => {
+                            return glyph !== undefined;
+                        });
+                    }
+
+                    default: {
+                        return [];
+                    }
+                }
             }))],
         });
     }

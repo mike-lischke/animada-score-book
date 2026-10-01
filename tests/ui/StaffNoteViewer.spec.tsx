@@ -11,7 +11,7 @@ import {
     Damping, ExcitationMode, HandTechnique, NoteDisplayType, SbDmEntityType, type ISbDmNoteEvent, type ISbDmTrack,
     type ISbDmTrackPiece, type ISampleProfile,
 } from "../../src/core/ScoreBookDataModel.js";
-import type { IAudioData, IFraction, IMeasureEvent, ISubdivision } from "../../src/core/types/general.js";
+import type { IAudioData, IFraction, IMeasureEvent, IRepeatBar, ISubdivision } from "../../src/core/types/general.js";
 import type { IScoreMetrics } from "../../src/player/TimeCoordinator.js";
 import { ScoreElementKind, ScoreElementRegistry } from "../../src/ui/ScoreElementRegistry.js";
 
@@ -21,6 +21,17 @@ const fraction = (numerator: number, denominator: number): IFraction => {
 
 /** Width of a partial beam: its fixed length plus the stem's right edge, which it ends on. */
 const beamStubWidth = "calc(12px + var(--stem-right-edge, 0px))";
+
+/**
+ * @param barline The barline element to read.
+ *
+ * @returns The parts the barline is drawn from, in drawing order.
+ */
+const partsOf = (barline: Element): string[] => {
+    return [...barline.querySelectorAll(".barline-view-part")].map((part) => {
+        return part.className.replace("barline-view-part barline-view-", "");
+    });
+};
 
 const event = (start: IFraction, duration: IFraction, noteStyleId?: string) => {
     return noteStyleId === undefined
@@ -663,6 +674,32 @@ describe.sequential("StaffNoteViewer beams", () => {
         expect(viewer.style.getPropertyValue("--staff-line-count")).toBe("4");
     });
 
+    it("gives a single-line staff a barline stub of two staff spaces on either side", () => {
+        const measure = buildMeasure([
+            event(fraction(0, 16), fraction(1, 16), "1"),
+        ], []);
+
+        renderResult = render(
+            <StaffNoteViewer
+                isLastBar={false}
+                timeSignature="4/4"
+                scoreMetrics={scoreMetrics}
+                baseSteps={16}
+                measure={measure}
+                barNumber={1}
+                trackId={100}
+            />,
+        );
+
+        const viewer = renderResult.container.querySelector<HTMLElement>(".staff-note-viewer")!;
+
+        // The single line has no height of its own, so the barline reaches two staff spaces past it on both sides.
+        expect(viewer.style.getPropertyValue("--staff-barline-height")).toBe("40px");
+
+        // The barline is drawn, in the thin thickness the font states, over the band the viewer states.
+        expect(partsOf(viewer.querySelector(".staff-note-viewer-barline")!)).toEqual(["thin"]);
+    });
+
     it("keeps the flags of a final thirty-second note inside the bar", () => {
         const measure = buildFullBarEndingInThirtySecond();
 
@@ -682,9 +719,11 @@ describe.sequential("StaffNoteViewer beams", () => {
         expect(runs).toHaveLength(17);
 
         // The note's onset anchor would sit on the barline, so it is right-aligned to its slot
-        // instead and keeps the width of its flags free there.
+        // instead and keeps the width of its flags free there. No barline reaches into this bar.
         expect(runs[16].getAttribute("style"))
-            .toContain("--note-anchor: calc(100% - var(--note-flag-width))");
+            .toContain("--note-anchor: calc(100% - var(--note-flag-width) - var(--staff-note-clearance, 0px))");
+        expect(renderResult.container.querySelector<HTMLElement>(".staff-note-viewer")?.style
+            .getPropertyValue("--staff-note-clearance")).toBe("0px");
 
         // The sixteenth before the final half step keeps its onset anchor.
         expect(runs[14].getAttribute("style")).toContain("--note-anchor: 50%");
@@ -707,9 +746,11 @@ describe.sequential("StaffNoteViewer beams", () => {
 
         const runs = [...renderResult.container.querySelectorAll<HTMLElement>(".staff-note-viewer-run")];
 
-        // The final barline is drawn inside the bar, so the note keeps clear of it as well.
+        // The final barline is drawn inside the bar, so the viewer states it as the clearance the notes keep.
+        expect(renderResult.container.querySelector<HTMLElement>(".staff-note-viewer")?.style
+            .getPropertyValue("--staff-note-clearance")).toBe("var(--barline-final-width)");
         expect(runs[16].getAttribute("style"))
-            .toContain("--note-anchor: calc(100% - var(--note-flag-width) - var(--final-barline-width))");
+            .toContain("--note-anchor: calc(100% - var(--note-flag-width) - var(--staff-note-clearance, 0px))");
     });
 
     it("anchors a thirty-second note that does not end the measure at its slot", () => {
@@ -783,5 +824,117 @@ describe.sequential("StaffNoteViewer beams", () => {
         expect(run).not.toBeNull();
         expect(run?.querySelector("text")?.textContent).toBe(String.fromCodePoint(0xE500));
         expect(renderResult.container.querySelector(".staff-note-viewer-note-run")).toBeNull();
+    });
+});
+
+describe.sequential("StaffNoteViewer barlines", () => {
+    let renderResult: RenderResult | null;
+
+    afterEach(() => {
+        renderResult?.unmount();
+        cleanup();
+        renderResult = null;
+    });
+
+    /**
+     * Renders one piece with the repeat marks its bar carries.
+     *
+     * @param barNumber The 1-based bar of the piece.
+     * @param marks The repeat marks, keyed by 1-based bar number.
+     * @param isLastBar Whether the piece is the last bar of the score.
+     * @param events The content of the bar; a sixteenth note by default.
+     *
+     * @returns The rendered piece.
+     */
+    const renderBarline = (barNumber: number, marks: Record<number, IRepeatBar>,
+        isLastBar = false, events = [event(fraction(0, 16), fraction(1, 16), "1")]): HTMLElement => {
+        const measure = buildMeasure(events, []);
+
+        renderResult = render(
+            <StaffNoteViewer
+                isLastBar={isLastBar}
+                timeSignature="4/4"
+                scoreMetrics={scoreMetrics}
+                baseSteps={16}
+                measure={measure}
+                barNumber={barNumber}
+                trackId={100}
+                repeatBars={new Map(Object.entries(marks).map(([bar, repeatBar]) => {
+                    return [Number(bar), repeatBar];
+                }))}
+            />,
+        );
+
+        return renderResult.container.querySelector<HTMLElement>(".staff-note-viewer")!;
+    };
+
+    it("closes the piece with the repeat barline the marks call for", () => {
+        const viewer = renderBarline(2, { 2: { end: true } });
+        const barline = viewer.querySelector(".staff-note-viewer-barline")!;
+
+        // The dots of a repeat that closes a section reach into the bar, so the viewer states the ink the notes
+        // keep clear of: the dots, then the strokes of the barline.
+        expect(partsOf(barline)).toEqual(["dots", "thin", "thick"]);
+        expect(viewer.style.getPropertyValue("--staff-note-clearance"))
+            .toBe("calc(var(--barline-repeat-width) + var(--staff-repeat-dot-gap))");
+        expect(viewer.style.getPropertyValue("--staff-barline-width")).toBe("var(--barline-repeat-width)");
+
+        // The barline of a bar sits on the boundary it closes, so nothing stands inside the bar on its left, and
+        // the dots of the barline reach into it on the right, so the notes stay clear of that ink.
+        expect(viewer.style.getPropertyValue("--staff-opening-barline-room")).toBe("0px");
+        expect(viewer.style.getPropertyValue("--staff-closing-barline-room"))
+            .toBe("calc(var(--barline-repeat-width) + var(--staff-repeat-dot-gap))");
+    });
+
+    it("draws a repeat that only opens as the barline of the bar it opens", () => {
+        // The bar before it keeps none: a barline sits between two bars and a repeat is drawn once.
+        expect(renderBarline(1, { 2: { start: true } }).querySelector(".staff-note-viewer-barline")).toBeNull();
+
+        const viewer = renderBarline(2, { 2: { start: true } });
+        const leading = viewer.querySelector(".staff-note-viewer-barline-start")!;
+
+        // The thick stroke stands on the outside and the dots follow the thin stroke, so the dots reach into the
+        // bar that opens.
+        expect(partsOf(leading)).toEqual(["thick", "thin", "dots"]);
+        expect(viewer.style.getPropertyValue("--staff-note-clearance")).toBe("0px");
+
+        // The barline reaches into the bar, so the notes keep the room the last note of the bar (a sixteenth in
+        // this fixture, which leaves 96.875 % of the bar) leaves before the barline at the other end, less the
+        // half grid step the first notehead reaches left of its anchor.
+        const room = viewer.style.getPropertyValue("--staff-opening-barline-room");
+        expect(room).toContain("max(calc(var(--barline-repeat-width) + var(--staff-repeat-dot-gap)),");
+        expect(room).toContain("96.875%");
+        expect(room).toContain("- calc(3.125% - var(--glyph-ink-width-noteheadblack))");
+        expect(viewer.style.getPropertyValue("--staff-closing-barline-room")).toBe("0px");
+    });
+
+    it("keeps the notes of the next bar clear of the half of a barline that straddles the boundary", () => {
+        const viewer = renderBarline(2, { 1: { end: true }, 2: { start: true } });
+
+        // The barline stands centred on the boundary, so its inner half reaches into this bar.
+        expect(viewer.style.getPropertyValue("--staff-opening-barline-room"))
+            .toContain("var(--barline-repeat-both-width)");
+    });
+
+    it("leaves the room a repeat barline takes to the rest a bar holds", () => {
+        // A rest stands centred in its slot and keeps that room by itself, so a bar of rests is not shifted.
+        const viewer = renderBarline(1, { 1: { start: true, end: true } }, false,
+            [event(fraction(0, 1), fraction(1, 1))]);
+
+        expect(viewer.style.getPropertyValue("--staff-opening-barline-room")).toBe("0px");
+        expect(viewer.style.getPropertyValue("--staff-closing-barline-room")).toBe("0px");
+    });
+
+    it("draws one barline for a repeat that closes where the next one opens", () => {
+        const viewer = renderBarline(1, { 1: { end: true }, 2: { start: true } });
+        const barline = viewer.querySelector(".staff-note-viewer-barline")!;
+
+        // The ink straddles the boundary, so the dots of both repeats hang on the strokes in the middle.
+        expect(partsOf(barline)).toEqual(["dots", "thin", "thick", "thin", "dots"]);
+        expect(barline.classList.contains("staff-note-viewer-barline-centred")).toBe(true);
+
+        // Its inner half reaches into the bar, so the bar keeps the room of that ink free of notes.
+        expect(viewer.style.getPropertyValue("--staff-closing-barline-room"))
+            .toContain("var(--barline-repeat-both-width)");
     });
 });

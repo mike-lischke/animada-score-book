@@ -165,6 +165,46 @@ describe("snapshots", () => {
         expect(snapshot.extensions).toEqual({ measureWidths: { 1: 1500 } });
     });
 
+    it("keeps the repeat marks of the bars it has", () => {
+        const instrument = createInstrument("0", 0, 0);
+        const arrangement = Arrangement.emptyArrangement([instrument]);
+
+        arrangement.applyArrangementSnapshot({
+            version: arrangementSnapshotVersion,
+            timeParams: { timeSignature: "4/4", tempo: 120, length: 2, pulse: "1/4", stepResolution: 8 },
+            tracks: [],
+            extensions: { repeatBars: { 1: { start: true }, 2: { end: true } } },
+        }, [instrument]);
+
+        expect(Object.fromEntries(arrangement.repeatBars)).toEqual({ 1: { start: true }, 2: { end: true } });
+    });
+
+    it("drops repeat marks for bars the arrangement does not have", () => {
+        const instrument = createInstrument("0", 0, 0);
+        const arrangement = Arrangement.emptyArrangement([instrument]);
+
+        arrangement.applyArrangementSnapshot({
+            version: arrangementSnapshotVersion,
+            timeParams: { timeSignature: "4/4", tempo: 120, length: 2, pulse: "1/4", stepResolution: 8 },
+            tracks: [],
+            extensions: {
+                repeatBars: { 2: { end: true }, 5: { start: true }, 0: { start: true }, 1: {}, 3: { end: false } },
+            },
+        }, [instrument]);
+
+        expect(Object.fromEntries(arrangement.repeatBars)).toEqual({ 2: { end: true } });
+    });
+
+    it("reports the repeat marks through the undo snapshot as well", () => {
+        const instrument = createInstrument("0", 0, 0);
+        const arrangement = Arrangement.emptyArrangement([instrument]);
+        arrangement.repeatBars.set(2, { end: true });
+
+        const snapshot = getArrangementSnapshot(arrangement);
+
+        expect(snapshot.extensions).toEqual({ repeatBars: { 2: { end: true } } });
+    });
+
     it("loads a packed string through the migrator entry point", () => {
         const instrument = createInstrument("0", 0, 0);
         const arrangement = Arrangement.emptyArrangement([instrument]);

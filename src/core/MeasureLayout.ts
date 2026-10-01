@@ -41,7 +41,7 @@ export const minEventGap = 12;
 export const minMeasureRepeatWidth = 3 * staffSpacePx;
 
 /** Horizontal insets of a staff measure column — its padding plus the closing barline — in px at 100% zoom. */
-export const staffMeasureInsets = 18;
+export const staffMeasureInsets = 24;
 
 /**
  * Width of the bar action strip — five 48 px buttons with 4 px gaps — in px at 100% zoom. Mirrors

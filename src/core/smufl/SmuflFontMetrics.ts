@@ -50,6 +50,14 @@ export interface ISmuflEngravingDefaults {
     thinBarlineThickness: number;
     thickBarlineThickness: number;
     barlineSeparation: number;
+    repeatBarlineDotSeparation: number;
+
+    /**
+     * The distance between a thin and a thick barline that are locked together, which is what a final barline
+     * and a repeat barline are made of. Not every font states it, hence the fallback on `barlineSeparation`.
+     */
+    thinThickBarlineSeparation?: number;
+
     bracketThickness: number;
     tupletBracketThickness: number;
 }
@@ -268,6 +276,14 @@ export class SmuflFontMetrics {
             }
 
             defaults[key] = value;
+        }
+
+        // A default a font may leave out is read when it is there, and nothing is reported when it is not.
+        for (const key of SmuflGlyphs.optionalEngravingDefaults) {
+            const value = readNumber(source?.[key]);
+            if (value !== undefined) {
+                defaults[key] = value;
+            }
         }
 
         return defaults as unknown as ISmuflEngravingDefaults;
