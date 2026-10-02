@@ -42,8 +42,8 @@ export interface IClipboardTrackPiece {
     width?: number;
 
     /**
-     * Set when the copied range mixes subdivided and non-subdivided events. Such content cannot be
-     * pasted unambiguously and is rejected as too complex.
+     * Set when the copied range mixes subdivided and non-subdivided events. The subdivided part is
+     * described by {@link subdivisions}, positioned relative to {@link events}.
      */
     mixed?: boolean;
 }
