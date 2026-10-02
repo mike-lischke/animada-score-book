@@ -6,11 +6,13 @@
 import { expect, test } from "@playwright/test";
 
 import { stringifyPackedArrangement } from "../../src/core/serialisation/snapshot-packing.js";
+import { arrangementSnapshotVersion } from "../../src/core/serialisation/snapshots.js";
+import { EditEntryMode } from "../../src/core/types/general.js";
 import { routeApi } from "./e2e-test-helpers.js";
 
 /** Four beamed sixteenths, a quarter rest, then two blocks of sixteenths. */
 const snapshot = {
-    version: 4,
+    version: arrangementSnapshotVersion,
     title: "E2E Staff Deletion",
     timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4", stepResolution: 16 },
     tracks: [{
@@ -43,15 +45,16 @@ const snapshot = {
 
 test.beforeEach(async ({ page }) => {
     await routeApi(page);
-    await page.addInitScript((packed: string) => {
+    await page.addInitScript((data: { packed: string; entryMode: number; }) => {
         const sessionId = "e2e-staff-deletion";
         window.history.replaceState({ ...(window.history.state ?? {}), sessionId }, "");
         window.sessionStorage.setItem("asb-session-id", sessionId);
         window.localStorage.setItem(`asb-ui-settings-session-${sessionId}`, JSON.stringify({
-            currentScore: packed,
+            currentScore: data.packed,
+            entryMode: data.entryMode,
             viewSettings: { arrangementViewSettings: { displayMode: "staff" } },
         }));
-    }, stringifyPackedArrangement(snapshot));
+    }, { packed: stringifyPackedArrangement(snapshot), entryMode: EditEntryMode.Overwrite });
 
     await page.goto("/");
     await expect(page.locator("#trackViewerHost")).toBeVisible();
@@ -76,7 +79,7 @@ test("backspace removes the event before the cursor and pulls the rest left", as
     await page.keyboard.press("Backspace");
 
     // The rest is gone as a whole and everything behind it moved one quarter (four steps) to the left.
-    await expect(runs.nth(4).locator(".staff-note-viewer-note-symbol")).toHaveCount(1);
+    await expect(runs.nth(4).locator(".staff-note-head-symbol")).toHaveCount(1);
     const after = await runs.nth(4).boundingBox();
     expect(before).not.toBeNull();
     expect(after).not.toBeNull();

@@ -9,7 +9,8 @@ import type { ISbDmArrangement } from "../../../core/ScoreBookDataModel.js";
 import { requisitions } from "../../../supplement/Requisitions.js";
 import type { SelectionManager } from "../../../ui/SelectionManager.js";
 import {
-    SelectionGranularity, SelectionSerializer, type ISelectionDelta, type ISelectionEntry, type ISelectionHitTester,
+    SelectionGranularity, SelectionSerializer, type ISelectionDelta, type ISelectionHitEntry,
+    type ISelectionHitTester,
 } from "../../../ui/SelectionSerializer.js";
 import type { ICommonUIProperties } from "../framework/UIComponent.js";
 import { UIComponent } from "../framework/UIComponent.js";
@@ -50,7 +51,7 @@ export class MiniBarViewer extends UIComponent<IMiniBarViewerProps, IMiniBarView
         requisitions.unregister("selectionChanged", this.handleSelectionChanged);
     }
 
-    public hitTest(rect: DOMRect): ISelectionEntry[] {
+    public hitTest(rect: DOMRect): ISelectionHitEntry[] {
         const { barNumber, arrangement } = this.props;
         const element = this.base as HTMLElement | null;
         if (!element) {
@@ -71,6 +72,7 @@ export class MiniBarViewer extends UIComponent<IMiniBarViewerProps, IMiniBarView
         return [{
             granularity: SelectionGranularity.Measure,
             target: { granularity: SelectionGranularity.Measure, measure },
+            rect: elRect,
         }];
     }
 
@@ -83,9 +85,12 @@ export class MiniBarViewer extends UIComponent<IMiniBarViewerProps, IMiniBarView
             <div className={className}>
                 {measureSelected && <div className="mini-bar-selection-overlay" />}
                 {arrangement.tracks.map((track) => {
-                    const events = barNumber - 1 < track.measures.length
-                        ? track.measures[barNumber - 1].noteEvents
-                        : [];
+                    const measure = barNumber - 1 < track.measures.length
+                        ? track.measures[barNumber - 1]
+                        : undefined;
+
+                    // A simile plays another measure and holds nothing of its own, so its track piece stays empty.
+                    const events = measure === undefined || measure.simile === true ? [] : measure.noteEvents;
 
                     const activeSteps = new Set<number>();
                     for (const event of events) {

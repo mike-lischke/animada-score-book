@@ -5,6 +5,10 @@ import type { ISbDmArrangement } from "./ScoreBookDataModel.js";
 
 export interface IHistoryState {
     arrangementSnapshot: IArrangementSnapshot;
+
+    /** Serialised selection the UI reported for this state, restored with the snapshot. */
+    selection?: string;
+
     timestamp: number;
 }
 
@@ -56,15 +60,37 @@ export class UndoRedoStack {
     }
 
     /**
+     * The selection the state the arrangement stands at was recorded with. It is the selection the
+     * state was left in, which is where an undo returns the cursor to.
+     *
+     * @returns The serialised selection, or undefined for a state without a recorded one.
+     */
+    public get currentSelection(): string | undefined {
+        return this.past[this.past.length - 1].selection;
+    }
+
+    /**
+     * The selection the state the next redo returns to was recorded with.
+     *
+     * @returns The serialised selection, or undefined for a state without a recorded one.
+     */
+    public get futureSelection(): string | undefined {
+        return this.future[this.future.length - 1]?.selection;
+    }
+
+    /**
      * Records a snapshot of the current arrangement state into history.
      * Clears the `future` stack and publishes availability changes.
+     *
+     * @param selection The selection state the UI works in, so an undo restores the cursor as well.
      */
-    public recordSnapshot(): void {
+    public recordSnapshot(selection?: string): void {
         const hadFuture = this.future.length > 0;
         const wasFirstEdit = this.past.length === 1;
 
         this.past.push({
             arrangementSnapshot: getArrangementSnapshot(this.arrangementView),
+            selection,
             timestamp: Date.now(),
         });
 

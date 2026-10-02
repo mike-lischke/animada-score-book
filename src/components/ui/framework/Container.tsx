@@ -41,7 +41,7 @@ export class Container extends UIComponent<IContainerProperties> {
             id, children, style, orientation, mainAlignment, crossAlignment, wrap, innerRef,
             onClick, onDblClick, onPointerDown, onPointerUp, onPointerMove, onPointerEnter, onPointerLeave,
             onDragStart, onDragEnd,
-            title, gap, onScroll,
+            title, gap, onScroll, onWheel,
         } = this.props;
 
         const newStyle: CSSProperties = { ...style };
@@ -78,6 +78,7 @@ export class Container extends UIComponent<IContainerProperties> {
                 onClick={onClick}
                 onDblClick={onDblClick}
                 onScroll={onScroll}
+                onWheel={onWheel}
                 onPointerDown={onPointerDown}
                 onPointerUp={onPointerUp}
                 onPointerMove={onPointerMove}

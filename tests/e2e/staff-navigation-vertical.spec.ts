@@ -6,6 +6,7 @@
 import { expect, test } from "@playwright/test";
 
 import { stringifyPackedArrangement } from "../../src/core/serialisation/snapshot-packing.js";
+import { arrangementSnapshotVersion } from "../../src/core/serialisation/snapshots.js";
 import { routeApi } from "./e2e-test-helpers.js";
 
 test.beforeEach(async ({ page }) => {
@@ -14,7 +15,7 @@ test.beforeEach(async ({ page }) => {
 
 test("vertical navigation from a rest picks the note directly below its glyph", async ({ page }) => {
     const snapshot = {
-        version: 4,
+        version: arrangementSnapshotVersion,
         title: "E2E Vertical Navigation",
         timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4", stepResolution: 16 },
         tracks: [
@@ -103,7 +104,7 @@ test("vertical navigation from a rest picks the note directly below its glyph", 
 
     const selectedX = await page.evaluate(
         glyphCenterX,
-        ".staff-note-viewer-run.note-selected .staff-note-viewer-note-symbol",
+        ".staff-note-viewer-run.note-selected .staff-note-head-symbol",
     );
 
     expect(selectedX).not.toBeNaN();

@@ -5,22 +5,25 @@
 
 import type { ComponentChild, CSSProperties } from "preact";
 
-import type { ISbDmTrack, ISbDmTrackMeasure, ScoreBookDataModel } from "../../../../core/ScoreBookDataModel.js";
+import { staffSpacePx } from "../../../../core/MeasureLayout.js";
+import type { ISbDmTrack, ISbDmTrackPiece, ScoreBookDataModel } from "../../../../core/ScoreBookDataModel.js";
 import {
     MeasureProjection, ProjectedItemKind, modelEventAt,
     type IProjectedEvent, type IProjectedItem, type IProjectedSubdivision,
 } from "../../../../core/MeasureProjection.js";
+import { ScoreSymbol } from "../../../../core/ScoreSymbols.js";
 import { reduceFraction } from "../../../../core/serialisation/numeric-functions.js";
 import type { IAudioData, IFraction, IMeasureEvent } from "../../../../core/types/general.js";
 import { requisitions } from "../../../../supplement/Requisitions.js";
 import { ScoreElementKind, type ScoreElementRegistry } from "../../../../ui/ScoreElementRegistry.js";
 import { NoteStyleSymbolViewer } from "../../Note/NoteStyleSymbolViewer.js";
 import { Container } from "../../framework/Container.js";
+import { ScoreSymbolView } from "../../framework/ScoreSymbolView.js";
 import { UIComponent, type ICommonUIProperties } from "../../framework/UIComponent.js";
 
 export interface IGridMeasureRowProperties extends ICommonUIProperties {
     barNumber?: number;
-    measure: ISbDmTrackMeasure;
+    measure: ISbDmTrackPiece;
     track: ISbDmTrack;
     dataModel: ScoreBookDataModel;
     scoreElementRegistry?: ScoreElementRegistry;
@@ -71,7 +74,8 @@ export class GridMeasureRow extends UIComponent<IGridMeasureRowProperties, IGrid
         }
 
         const className = this.generateFinalClassName(["grid-measure-row"]);
-        const items = MeasureProjection.project(measure);
+        const usesSimile = measure.simile === true;
+        const items = usesSimile ? [] : MeasureProjection.project(measure);
         const baseSteps = measure.meter.stepResolution;
 
         // Beat tick markers: absolutely positioned at fractional positions derived
@@ -99,6 +103,19 @@ export class GridMeasureRow extends UIComponent<IGridMeasureRowProperties, IGrid
             gridTemplateColumns: `repeat(${baseSteps}, 1fr)`,
         };
 
+        let cells: ComponentChild[];
+        let simileOverlay: ComponentChild = null;
+        if (usesSimile) {
+            cells = [];
+            simileOverlay = (
+                <div className="grid-simile-overlay">
+                    <ScoreSymbolView symbol={ScoreSymbol.MeasureRepeat} staffSpace={staffSpacePx} />
+                </div>
+            );
+        } else {
+            cells = this.renderGridCells(items);
+        }
+
         return (
             <Container className={className} style={rowStyle}
                 innerRef={barNumber === undefined ? undefined : scoreElementRegistry?.createRef({
@@ -110,7 +127,8 @@ export class GridMeasureRow extends UIComponent<IGridMeasureRowProperties, IGrid
                 <div className="grid-beat-overlay" aria-hidden="true">
                     {beatMarkers}
                 </div>
-                {this.renderGridCells(items)}
+                {cells}
+                {simileOverlay}
             </Container>
         );
     }

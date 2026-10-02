@@ -6,11 +6,13 @@
 import { expect, test, type Page } from "@playwright/test";
 
 import { stringifyPackedArrangement } from "../../src/core/serialisation/snapshot-packing.js";
+import { arrangementSnapshotVersion } from "../../src/core/serialisation/snapshots.js";
+import { EditEntryMode } from "../../src/core/types/general.js";
 import { routeApi } from "./e2e-test-helpers.js";
 
 /** Four quarter notes, so the dot has a value on the current grid to stretch. */
 const snapshot = {
-    version: 4,
+    version: arrangementSnapshotVersion,
     title: "E2E Dotted Notes",
     timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4", stepResolution: 16 },
     tracks: [{
@@ -50,15 +52,16 @@ const growOf = (page: Page, index: number): Promise<string> => {
 
 test.beforeEach(async ({ page }) => {
     await routeApi(page);
-    await page.addInitScript((packed: string) => {
+    await page.addInitScript((data: { packed: string; entryMode: number; }) => {
         const sessionId = "e2e-dotted-notes";
         window.history.replaceState({ ...(window.history.state ?? {}), sessionId }, "");
         window.sessionStorage.setItem("asb-session-id", sessionId);
         window.localStorage.setItem(`asb-ui-settings-session-${sessionId}`, JSON.stringify({
-            currentScore: packed,
+            currentScore: data.packed,
+            entryMode: data.entryMode,
             viewSettings: { arrangementViewSettings: { displayMode: "staff" } },
         }));
-    }, stringifyPackedArrangement(snapshot));
+    }, { packed: stringifyPackedArrangement(snapshot), entryMode: EditEntryMode.Overwrite });
 
     await page.goto("/");
     await expect(page.locator("#trackViewerHost")).toBeVisible();
@@ -70,7 +73,7 @@ test.beforeEach(async ({ page }) => {
 test("dots the selected note and takes the dot away again", async ({ page }) => {
     const dot = page.locator(".noteDotButton");
 
-    await page.locator(".staff-measure-track-row .staff-note-viewer-note-symbol").first().click();
+    await page.locator(".staff-measure-track-row .staff-note-head-symbol").first().click();
     await expect(page.locator(".staff-note-viewer-run.note-selected")).toHaveCount(1);
     await expect(page.locator(".noteLengthButton.du-btn-primary")).toHaveCount(1);
     await expect(dot).not.toHaveClass(/du-btn-primary/);

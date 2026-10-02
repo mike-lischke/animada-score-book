@@ -5,23 +5,32 @@
 
 import type { ComponentChild } from "preact";
 
+import { staffSpacePx } from "../../../core/MeasureLayout.js";
+import { MeasureProjection } from "../../../core/MeasureProjection.js";
 import { NoteLength, noteLengthDenominator } from "../../../core/rest-notation.js";
+import type { ISbDmTrackPiece, ScoreBookDataModel } from "../../../core/ScoreBookDataModel.js";
+import { ScoreSymbol } from "../../../core/ScoreSymbols.js";
 import { addFractions, compareFractions, subtractFractions } from "../../../core/serialisation/numeric-functions.js";
 import type { IFraction } from "../../../core/types/general.js";
+import { RepeatMark } from "../../../core/types/general.js";
 import { requisitions } from "../../../supplement/Requisitions.js";
+import { maxTupletLevels } from "../../../core/tuplets.js";
 import type { SelectionManager } from "../../../ui/SelectionManager.js";
 import {
     addressesNoteCells, SelectionGranularity, SelectionSerializer, type INoteCellTarget, type ISelectionEntry,
 } from "../../../ui/SelectionSerializer.js";
 import { TupletIcon } from "../Note/TupletIcon.js";
+import { Button } from "../framework/Button.js";
 import { Container } from "../framework/Container.js";
 import { Dropdown, type IDropdownItem } from "../framework/Dropdown.js";
 import { GooeyGroup } from "../framework/GooeyGroup.js";
+import { ScoreSymbolView } from "../framework/ScoreSymbolView.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
 import { ChildAlignment, Orientation } from "../framework/ui-types.js";
 
 export interface ISubdivisionToolbarProps extends ICommonUIProperties {
     selectionManager: SelectionManager;
+    dataModel: ScoreBookDataModel;
 }
 
 interface ISubdivisionToolbarState {
@@ -29,6 +38,24 @@ interface ISubdivisionToolbarState {
 
     /** How many slots the selection can hold: one per shortest note value that fits into its span. */
     maxSlots: number;
+
+    /** Whether the whole selection is track pieces the one-bar repeat mark can be toggled on. */
+    canToggleSimile: boolean;
+
+    /** Whether every addressed track piece carries the one-bar repeat mark. */
+    simileActive: boolean;
+
+    /** Whether every addressed bar can open a repeated section, which a bar closing it has to follow. */
+    canMarkRepeatStart: boolean;
+
+    /** Whether every addressed bar can close a repeated section, which a bar opening it has to precede. */
+    canMarkRepeatEnd: boolean;
+
+    /** Whether every addressed bar opens a repeated section. */
+    repeatStartActive: boolean;
+
+    /** Whether every addressed bar closes a repeated section. */
+    repeatEndActive: boolean;
 }
 
 interface ISubdivisionOption {
@@ -69,22 +96,31 @@ export class SubdivisionToolbar extends UIComponent<ISubdivisionToolbarProps, IS
         this.state = {
             canCreate: false,
             maxSlots: 1,
+            canToggleSimile: false,
+            simileActive: false,
+            canMarkRepeatStart: false,
+            canMarkRepeatEnd: false,
+            repeatStartActive: false,
+            repeatEndActive: false,
         };
     }
 
     public override componentDidMount(): void {
         requisitions.register("selectionChanged", this.handleSelectionChanged);
         requisitions.register("arrangementReverted", this.handleArrangementReverted);
+        requisitions.register("arrangementMutated", this.handleArrangementReverted);
         this.refreshState();
     }
 
     public override componentWillUnmount(): void {
         requisitions.unregister("selectionChanged", this.handleSelectionChanged);
         requisitions.unregister("arrangementReverted", this.handleArrangementReverted);
+        requisitions.unregister("arrangementMutated", this.handleArrangementReverted);
     }
 
     public override render(): ComponentChild {
-        const { canCreate } = this.state;
+        const { canCreate, canToggleSimile, simileActive } = this.state;
+        const { canMarkRepeatStart, canMarkRepeatEnd, repeatStartActive, repeatEndActive } = this.state;
 
         const dropdownItems = this.buildDropdownItems();
 
@@ -105,6 +141,41 @@ export class SubdivisionToolbar extends UIComponent<ISubdivisionToolbarProps, IS
                         items={dropdownItems}
                         data-tooltip="Add subdivision"
                     />
+                </GooeyGroup>
+                <GooeyGroup
+                    className="subdivisionToolbar"
+                    background="var(--color-base-200)"
+                >
+                    <Button
+                        isDefault={simileActive}
+                        disabled={!canToggleSimile}
+                        data-tooltip="One-bar repeat (simile)"
+                        onClick={this.handleToggleSimile}
+                    >
+                        <span className="score-symbol-view-icon">
+                            <ScoreSymbolView symbol={ScoreSymbol.MeasureRepeat} staffSpace={staffSpacePx} inkBox />
+                        </span>
+                    </Button>
+                    <Button
+                        isDefault={repeatStartActive}
+                        disabled={!canMarkRepeatStart}
+                        data-tooltip="Repeat start"
+                        onClick={this.handleToggleRepeatStart}
+                    >
+                        <span className="score-symbol-view-icon">
+                            <ScoreSymbolView symbol={ScoreSymbol.RepeatStart} staffSpace={staffSpacePx} />
+                        </span>
+                    </Button>
+                    <Button
+                        isDefault={repeatEndActive}
+                        disabled={!canMarkRepeatEnd}
+                        data-tooltip="Repeat end"
+                        onClick={this.handleToggleRepeatEnd}
+                    >
+                        <span className="score-symbol-view-icon">
+                            <ScoreSymbolView symbol={ScoreSymbol.RepeatEnd} staffSpace={staffSpacePx} />
+                        </span>
+                    </Button>
                 </GooeyGroup>
             </Container>
         );
@@ -230,7 +301,180 @@ export class SubdivisionToolbar extends UIComponent<ISubdivisionToolbarProps, IS
             canCreate = this.isSingleTrackNoteSelection(entries);
         }
 
-        this.setState({ canCreate, maxSlots: this.getMaxSlots(entries) });
+        if (canCreate) {
+            canCreate = this.shareTupletLevel(entries);
+        }
+
+        const measures = this.selectedTrackPieces();
+        const canToggleSimile = measures.length > 0 && measures.every((measure) => {
+            return measure.number > 1;
+        });
+        const simileActive = canToggleSimile && measures.every((measure) => {
+            return measure.simile === true;
+        });
+
+        // A repeat mark is set on whole bars, and only where it can pair up with a counterpart: one that opens
+        // needs a bar after it that closes it, one that closes needs a bar before it that opens it. A mark that
+        // nothing can set or take off again is not shown as active either, so a button that does nothing is
+        // neither lit nor clickable.
+        const bars = this.selectedBars();
+        const repeats = this.props.dataModel.arrangement?.repeatBars;
+        const barCount = this.props.dataModel.arrangement?.timeParams.length ?? 0;
+        const canMarkRepeatStart = bars.length > 0 && bars.every((bar) => {
+            return bar < barCount;
+        });
+        const canMarkRepeatEnd = bars.length > 0 && bars.every((bar) => {
+            return bar > 1;
+        });
+        const repeatStartActive = canMarkRepeatStart && bars.every((bar) => {
+            return repeats?.get(bar)?.start === true;
+        });
+        const repeatEndActive = canMarkRepeatEnd && bars.every((bar) => {
+            return repeats?.get(bar)?.end === true;
+        });
+
+        this.setState({
+            canCreate,
+            maxSlots: this.getMaxSlots(entries),
+            canToggleSimile,
+            simileActive,
+            canMarkRepeatStart,
+            canMarkRepeatEnd,
+            repeatStartActive,
+            repeatEndActive,
+        });
+    }
+
+    /**
+     * Resolves the measures the selection addresses, but only when the whole selection is track pieces.
+     *
+     * @returns The addressed measures, or an empty list when the selection is mixed or empty.
+     */
+    private selectedTrackPieces(): ISbDmTrackPiece[] {
+        const entries = [...this.props.selectionManager.currentSelection.values()];
+        if (entries.length === 0) {
+            return [];
+        }
+
+        const measures: ISbDmTrackPiece[] = [];
+        for (const entry of entries) {
+            const { target } = entry;
+            if (target.granularity !== SelectionGranularity.TrackPiece) {
+                return [];
+            }
+
+            measures.push(target.measure);
+        }
+
+        return measures;
+    }
+
+    private handleToggleSimile = (): void => {
+        const { dataModel } = this.props;
+        const measures = this.selectedTrackPieces();
+        if (measures.length === 0) {
+            return;
+        }
+
+        const value = !measures.every((measure) => {
+            return measure.simile === true;
+        });
+
+        dataModel.setMeasureSimiles(measures.map((measure) => {
+            return { trackId: measure.track.id, bar: measure.number };
+        }), value);
+    };
+
+    private handleToggleRepeatStart = (): void => {
+        this.toggleRepeat(RepeatMark.Start);
+    };
+
+    private handleToggleRepeatEnd = (): void => {
+        this.toggleRepeat(RepeatMark.End);
+    };
+
+    /**
+     * Sets or clears a repeat mark on the selected bars, taking it off when every of them already carries it.
+     *
+     * @param mark The mark to toggle.
+     */
+    private toggleRepeat(mark: RepeatMark): void {
+        const { dataModel } = this.props;
+        const bars = this.selectedBars();
+        if (bars.length === 0) {
+            return;
+        }
+
+        const repeats = dataModel.arrangement?.repeatBars;
+        const value = !bars.every((bar) => {
+            return repeats?.get(bar)?.[mark] === true;
+        });
+
+        dataModel.setRepeatBars(bars, mark, value);
+    }
+
+    /**
+     * Resolves the bars the selection addresses, but only when the whole selection is whole bars.
+     *
+     * @returns The addressed 1-based bar numbers, or an empty list when the selection is mixed or empty.
+     */
+    private selectedBars(): number[] {
+        const entries = [...this.props.selectionManager.currentSelection.values()];
+        if (entries.length === 0) {
+            return [];
+        }
+
+        const bars: number[] = [];
+        for (const entry of entries) {
+            const { target } = entry;
+            if (target.granularity !== SelectionGranularity.Measure) {
+                return [];
+            }
+
+            bars.push(target.measure.number);
+        }
+
+        return bars;
+    }
+
+    /**
+     * Checks whether the selection holds notes that share their tuplet level and whether one more
+     * tuplet fits around them. A note that already sits inside the second level cannot take a third
+     * one, because the staff has no room left for another bracket.
+     *
+     * @param entries The selection entries to inspect.
+     *
+     * @returns True when every addressed event shares a level that can take another tuplet.
+     */
+    private shareTupletLevel(entries: ISelectionEntry[]): boolean {
+        let level: number | undefined;
+
+        for (const entry of entries) {
+            const { target } = entry;
+            if (!addressesNoteCells(target)) {
+                continue;
+            }
+
+            const events = target.granularity === SelectionGranularity.Note ? [target.event] : target.events;
+
+            for (const event of events) {
+                const index = target.measure.events.findIndex((candidate) => {
+                    return compareFractions(candidate.start, event.start) === 0;
+                });
+                if (index < 0) {
+                    return false;
+                }
+
+                const depth = MeasureProjection.tupletDepthOf(target.measure, index);
+                if (level === undefined) {
+                    level = depth;
+                } else if (level !== depth) {
+                    return false;
+                }
+            }
+        }
+
+        return level !== undefined && level < maxTupletLevels;
     }
 
     private handleCreate(option: ISubdivisionOption): void {

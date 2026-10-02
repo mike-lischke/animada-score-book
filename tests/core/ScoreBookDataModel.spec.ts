@@ -5,9 +5,12 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { ScoreBookDataModel, type ISbDmTrackMeasure } from "../../src/core/ScoreBookDataModel.js";
+import { AppStorage } from "../../src/core/AppStorage.js";
+import { MeasureLayout } from "../../src/core/MeasureLayout.js";
+import { ScoreBookDataModel, type ISbDmTrackPiece } from "../../src/core/ScoreBookDataModel.js";
 import { reduceFraction } from "../../src/core/serialisation/numeric-functions.js";
-import type { IFraction } from "../../src/core/types/general.js";
+import type { IFraction, IMeasureEvent } from "../../src/core/types/general.js";
+import { RepeatMark } from "../../src/core/types/general.js";
 import { requisitions } from "../../src/supplement/Requisitions.js";
 import { createInstrument, setCellNote } from "../unit-test-helpers.js";
 
@@ -31,7 +34,7 @@ const stepStart = (step: number): IFraction => {
  * @param measure The measure to inspect.
  * @returns The start step of every note, in display order.
  */
-const noteSteps = (measure: ISbDmTrackMeasure): number[] => {
+const noteSteps = (measure: ISbDmTrackPiece): number[] => {
     const stepsPerBar = measure.meter.stepResolution;
 
     return measure.events.filter((event) => {
@@ -47,7 +50,7 @@ const noteSteps = (measure: ISbDmTrackMeasure): number[] => {
  * @param measure The measure to inspect.
  * @returns One entry per event, in display order.
  */
-const eventList = (measure: ISbDmTrackMeasure): string[] => {
+const eventList = (measure: ISbDmTrackPiece): string[] => {
     return measure.events.map((event) => {
         const start = `${event.start.numerator}/${event.start.denominator}`;
         const duration = `${event.duration.numerator}/${event.duration.denominator}`;
@@ -62,7 +65,7 @@ const eventList = (measure: ISbDmTrackMeasure): string[] => {
  * @param measure The measure to inspect.
  * @returns One "start+duration" entry per note, in display order.
  */
-const noteSpans = (measure: ISbDmTrackMeasure): string[] => {
+const noteSpans = (measure: ISbDmTrackPiece): string[] => {
     return measure.events.filter((event) => {
         return event.noteStyleId !== undefined;
     }).map((event) => {
@@ -623,6 +626,165 @@ describe.sequential("ScoreBookDataModel track actions", () => {
         expect(noteSteps(track.measures[0])).toEqual([0, 4, 8, 12, 13, 14, 15]);
     });
 
+    it("insertEventsAt inserts an element and moves the content behind it", () => {
+        const instrument = createInstrument("0", 0, 0);
+        model.startNewArrangement([instrument], { length: 2 });
+        const track = model.arrangement!.tracks[0];
+
+        for (const step of [0, 4, 8, 12]) {
+            setCellNote(model, track.id, 1, step, "1");
+        }
+
+        mutatedCalls = 0;
+        const changed = model.insertEventsAt([{
+            measure: track.measures[0],
+            start: stepStart(4),
+            events: [{
+                start: { numerator: 0, denominator: 1 }, duration: { numerator: 1, denominator: 4 },
+                noteStyleId: "2",
+            }],
+        }]);
+
+        expect(changed).toEqual([track.id]);
+        expect(noteSpans(track.measures[0])).toEqual(["0/1+1/16", "1/4+1/4", "1/2+1/16", "3/4+1/16"]);
+        expect(noteSpans(track.measures[1])).toEqual(["0/1+1/16"]);
+        expect(mutatedCalls).toBe(1);
+    });
+
+    it("insertEventsAt pushes a subdivision block as a whole", () => {
+        const instrument = createInstrument("0", 0, 0);
+        model.startNewArrangement([instrument], { length: 2 });
+        const track = model.arrangement!.tracks[0];
+
+        model.createSubdivision(track.id, 1, { numerator: 1, denominator: 4 }, { numerator: 1, denominator: 2 },
+            3, 4);
+
+        model.insertEventsAt([{
+            measure: track.measures[0],
+            start: { numerator: 0, denominator: 1 },
+            events: [{
+                start: { numerator: 0, denominator: 1 }, duration: stepDuration, noteStyleId: "2",
+            }],
+        }]);
+
+        // The block keeps its three slots and moves behind the inserted note.
+        const subdivision = track.measures[0].subdivisions[0];
+        expect(subdivision).toBeDefined();
+        expect(track.measures[0].events[subdivision.startIndex].start).toEqual({
+            numerator: 5, denominator: 16,
+        });
+        expect(noteSpans(track.measures[0])).toEqual(["0/1+1/16"]);
+    });
+
+    it("insertEventsAt moves a subdivision block into the next measure", () => {
+        const instrument = createInstrument("0", 0, 0);
+        model.startNewArrangement([instrument], { length: 2 });
+        const track = model.arrangement!.tracks[0];
+
+        model.createSubdivision(track.id, 1, { numerator: 3, denominator: 4 }, { numerator: 1, denominator: 1 },
+            3, 4);
+
+        model.insertEventsAt([{
+            measure: track.measures[0],
+            start: { numerator: 3, denominator: 4 },
+            events: [{
+                start: { numerator: 0, denominator: 1 }, duration: stepDuration, noteStyleId: "2",
+            }],
+        }]);
+
+        expect(track.measures[0].subdivisions).toEqual([]);
+        expect(noteSpans(track.measures[0])).toEqual(["3/4+1/16"]);
+
+        const moved = track.measures[1].subdivisions[0];
+        expect(moved).toBeDefined();
+        expect(track.measures[1].events[moved.startIndex].start).toEqual({ numerator: 0, denominator: 1 });
+    });
+
+    it("deleteEventWithShift removes an event in front of a subdivision", () => {
+        const instrument = createInstrument("0", 0, 0);
+        model.startNewArrangement([instrument], { length: 1 });
+        const track = model.arrangement!.tracks[0];
+
+        setCellNote(model, track.id, 1, 0, "1");
+        model.createSubdivision(track.id, 1, { numerator: 1, denominator: 4 }, { numerator: 1, denominator: 2 },
+            3, 4);
+
+        expect(model.deleteEventWithShift(track.id, 1, { numerator: 0, denominator: 1 })).toBe(true);
+        expect(noteSpans(track.measures[0])).toEqual([]);
+    });
+
+    it("insertEventsAt moves an element that overshoots the bar line into a new bar", () => {
+        const instrument = createInstrument("0", 0, 0);
+        model.startNewArrangement([instrument]);
+        const track = model.arrangement!.tracks[0];
+
+        model.insertEventsAt([{
+            measure: track.measures[0],
+            start: stepStart(15),
+            events: [{
+                start: { numerator: 0, denominator: 1 }, duration: { numerator: 1, denominator: 4 },
+                noteStyleId: "2",
+            }],
+        }]);
+
+        expect(model.arrangement!.timeParams.length).toBe(2);
+        expect(track.measures).toHaveLength(2);
+        expect(noteSpans(track.measures[0])).toEqual([]);
+        expect(noteSpans(track.measures[1])).toEqual(["0/1+1/4"]);
+    });
+
+    it("insertEventsAt grows the arrangement instead of dropping pushed content", () => {
+        const instrument = createInstrument("0", 0, 0);
+        model.startNewArrangement([instrument]);
+        const track = model.arrangement!.tracks[0];
+
+        setCellNote(model, track.id, 1, 12, "1");
+
+        model.insertEventsAt([{
+            measure: track.measures[0],
+            start: stepStart(0),
+            events: [{
+                start: { numerator: 0, denominator: 1 }, duration: { numerator: 1, denominator: 2 },
+                noteStyleId: "2",
+            }],
+        }]);
+
+        expect(model.arrangement!.timeParams.length).toBe(2);
+        expect(noteSpans(track.measures[0])).toEqual(["0/1+1/2"]);
+        expect(noteSpans(track.measures[1])).toEqual(["1/4+1/16"]);
+    });
+
+    it("setNoteAt adds the bar the write addresses", () => {
+        const instrument = createInstrument("0", 0, 0);
+        model.startNewArrangement([instrument]);
+        const track = model.arrangement!.tracks[0];
+
+        expect(model.setNoteAt(track.id, 2, stepStart(0), stepDuration, "1")).toBe(true);
+        expect(model.arrangement!.timeParams.length).toBe(2);
+        expect(noteSpans(track.measures[1])).toEqual(["0/1+1/16"]);
+    });
+
+    it("keeps the content inside the last bar when growing is switched off", () => {
+        vi.spyOn(AppStorage, "loadUISettings").mockReturnValue({ autoExtendOnOverflow: false });
+        const instrument = createInstrument("0", 0, 0);
+        model.startNewArrangement([instrument]);
+        const track = model.arrangement!.tracks[0];
+
+        setCellNote(model, track.id, 1, 12, "1");
+
+        model.insertEventsAt([{
+            measure: track.measures[0],
+            start: stepStart(0),
+            events: [{
+                start: { numerator: 0, denominator: 1 }, duration: { numerator: 1, denominator: 2 },
+                noteStyleId: "2",
+            }],
+        }]);
+
+        expect(model.arrangement!.timeParams.length).toBe(1);
+        expect(noteSpans(track.measures[0])).toEqual(["0/1+1/2"]);
+    });
+
     it("insertEventsWithShift skips tracks that contain subdivisions", () => {
         const instrument = createInstrument("0", 0, 0);
         model.startNewArrangement([instrument], { length: 2 });
@@ -855,6 +1017,59 @@ describe.sequential("ScoreBookDataModel track actions", () => {
         expect(eventList(track.measures[0])).toEqual(["0/1+1/1:-"]);
     });
 
+    it("splits the only rest of a measure into the requested part", () => {
+        model.startNewArrangement([createInstrument("0", 0, 0)]);
+        const track = model.arrangement!.tracks[0];
+
+        // Nothing gives way behind the measure's only rest, so the request shapes the notation: the rest
+        // takes a half and the space behind it becomes the second half rest.
+        mutatedCalls = 0;
+        const changed = model.resizeEvents(track.id, [{
+            bar: 1, start: { numerator: 0, denominator: 1 }, duration: { numerator: 1, denominator: 2 },
+        }]);
+
+        expect(changed).toBe(true);
+        expect(mutatedCalls).toBe(1);
+        expect(eventList(track.measures[0])).toEqual(["0/1+1/2:-", "1/2+1/2:-"]);
+
+        // A part of the split is resized on its own: the rest of the measure keeps its structure.
+        expect(model.resizeEvents(track.id, [{
+            bar: 1, start: { numerator: 0, denominator: 1 }, duration: { numerator: 1, denominator: 4 },
+        }])).toBe(true);
+        expect(eventList(track.measures[0])).toEqual(["0/1+1/4:-", "1/4+1/4:-", "1/2+1/2:-"]);
+    });
+
+    it("keeps a split rest when a later layout rewrites the track", () => {
+        model.startNewArrangement([createInstrument("0", 0, 0)]);
+        const track = model.arrangement!.tracks[0];
+        model.ensureBarAvailable(2);
+
+        model.resizeEvents(track.id, [{
+            bar: 1, start: { numerator: 0, denominator: 1 }, duration: { numerator: 1, denominator: 2 },
+        }]);
+
+        // An edit in another measure lays the whole track out again, which keeps the split.
+        expect(model.resizeEvents(track.id, [{
+            bar: 2, start: { numerator: 0, denominator: 1 }, duration: { numerator: 1, denominator: 4 },
+        }])).toBe(true);
+
+        expect(eventList(track.measures[0])).toEqual(["0/1+1/2:-", "1/2+1/2:-"]);
+    });
+
+    it("joins the split rests again when the addressed rest takes the whole measure", () => {
+        model.startNewArrangement([createInstrument("0", 0, 0)]);
+        const track = model.arrangement!.tracks[0];
+        model.resizeEvents(track.id, [{
+            bar: 1, start: { numerator: 0, denominator: 1 }, duration: { numerator: 1, denominator: 2 },
+        }]);
+
+        expect(model.resizeEvents(track.id, [{
+            bar: 1, start: { numerator: 0, denominator: 1 }, duration: { numerator: 1, denominator: 1 },
+        }])).toBe(true);
+
+        expect(eventList(track.measures[0])).toEqual(["0/1+1/1:-"]);
+    });
+
     it("resizes a note whose start sits between two grid steps", () => {
         model.startNewArrangement([createInstrument("0", 0, 0)]);
         const track = model.arrangement!.tracks[0];
@@ -887,23 +1102,83 @@ describe.sequential("ScoreBookDataModel track actions", () => {
         expect(noteSpans(track.measures[0])).toEqual(["0/1+1/32"]);
     });
 
-    it("resizeEvents skips tracks that contain subdivisions", () => {
+    it("resizeEvents keeps the slots of a subdivision at their length", () => {
         model.startNewArrangement([createInstrument("0", 0, 0)]);
         const track = model.arrangement!.tracks[0];
-        model.createSubdivision(track.id, 1, { numerator: 0, denominator: 1 }, { numerator: 1, denominator: 4 },
+        model.createSubdivision(track.id, 1, { numerator: 1, denominator: 2 }, { numerator: 3, denominator: 4 },
             3, 4);
 
         mutatedCalls = 0;
 
+        // A slot's length follows from the subdivision's ratio, so the request cannot change it.
         const changed = model.resizeEvents(track.id, [{
-            bar: 1, start: { numerator: 1, denominator: 4 }, duration: { numerator: 1, denominator: 2 },
+            bar: 1, start: { numerator: 7, denominator: 12 }, duration: { numerator: 1, denominator: 8 },
         }]);
 
         expect(changed).toBe(false);
         expect(mutatedCalls).toBe(0);
+        expect(eventList(track.measures[0])).toEqual([
+            "0/1+1/2:-",
+            "1/2+1/12:-",
+            "7/12+1/12:-",
+            "2/3+1/12:-",
+            "3/4+1/4:-",
+        ]);
     });
 
-    it("deleteEventWithShift skips tracks that contain subdivisions", () => {
+    it("resizeEvents moves a subdivision aside when a note in front of it grows", () => {
+        model.startNewArrangement([createInstrument("0", 0, 0)]);
+        const track = model.arrangement!.tracks[0];
+        model.setNoteAt(track.id, 1, { numerator: 0, denominator: 1 }, { numerator: 1, denominator: 4 }, "1");
+        model.createSubdivision(track.id, 1, { numerator: 1, denominator: 2 }, { numerator: 3, denominator: 4 },
+            3, 4);
+
+        mutatedCalls = 0;
+        const changed = model.resizeEvents(track.id, [{
+            bar: 1, start: { numerator: 0, denominator: 1 }, duration: { numerator: 3, denominator: 4 },
+        }]);
+
+        expect(changed).toBe(true);
+        expect(mutatedCalls).toBe(1);
+        // The subdivision steps aside as one block: its slots keep their length and their spacing, and
+        // its record follows the first slot to its new index.
+        expect(eventList(track.measures[0])).toEqual([
+            "0/1+3/4:1",
+            "3/4+1/12:-",
+            "5/6+1/12:-",
+            "11/12+1/12:-",
+        ]);
+
+        const measure = track.measures[0];
+        const subdivision = measure.subdivisions[0];
+        expect(subdivision.actual).toBe(3);
+        expect(subdivision.normal).toBe(4);
+        expect(measure.events[subdivision.startIndex].start).toEqual({ numerator: 3, denominator: 4 });
+    });
+
+    it("resizeEvents moves a subdivision aside when a rest in front of it shrinks", () => {
+        model.startNewArrangement([createInstrument("0", 0, 0)]);
+        const track = model.arrangement!.tracks[0];
+        model.createSubdivision(track.id, 1, { numerator: 1, denominator: 2 }, { numerator: 3, denominator: 4 },
+            3, 4);
+
+        mutatedCalls = 0;
+        const changed = model.resizeEvents(track.id, [{
+            bar: 1, start: { numerator: 0, denominator: 1 }, duration: { numerator: 1, denominator: 4 },
+        }]);
+
+        expect(changed).toBe(true);
+        expect(mutatedCalls).toBe(1);
+        expect(eventList(track.measures[0])).toEqual([
+            "0/1+1/4:-",
+            "1/4+1/12:-",
+            "1/3+1/12:-",
+            "5/12+1/12:-",
+            "1/2+1/2:-",
+        ]);
+    });
+
+    it("deleteEventWithShift reports no change for the closing rest behind a subdivision", () => {
         model.startNewArrangement([createInstrument("0", 0, 0)]);
         const track = model.arrangement!.tracks[0];
         model.createSubdivision(track.id, 1, { numerator: 0, denominator: 1 }, { numerator: 1, denominator: 4 },
@@ -911,8 +1186,59 @@ describe.sequential("ScoreBookDataModel track actions", () => {
 
         mutatedCalls = 0;
 
+        // The rest is pulled left and notated again at the same place, so nothing changed at all.
         expect(model.deleteEventWithShift(track.id, 1, { numerator: 1, denominator: 4 })).toBe(false);
         expect(mutatedCalls).toBe(0);
+        expect(eventList(track.measures[0])).toEqual([
+            "0/1+1/12:-",
+            "1/12+1/12:-",
+            "1/6+1/12:-",
+            "1/4+3/4:-",
+        ]);
+    });
+
+    it("deleteEventWithShift moves a subdivision block up when an event in front of it goes", () => {
+        model.startNewArrangement([createInstrument("0", 0, 0)]);
+        const track = model.arrangement!.tracks[0];
+        const measure = track.measures[0];
+
+        measure.events.splice(0, measure.events.length,
+            { start: { numerator: 0, denominator: 1 }, duration: { numerator: 1, denominator: 4 } },
+            { start: { numerator: 1, denominator: 4 }, duration: { numerator: 1, denominator: 4 } },
+            { start: { numerator: 1, denominator: 2 }, duration: { numerator: 1, denominator: 2 }, noteStyleId: "1" },
+        );
+        model.createSubdivision(track.id, 1, { numerator: 1, denominator: 4 }, { numerator: 1, denominator: 2 }, 3, 4);
+
+        mutatedCalls = 0;
+
+        expect(model.deleteEventWithShift(track.id, 1, { numerator: 0, denominator: 1 })).toBe(true);
+        expect(mutatedCalls).toBe(1);
+        expect(eventList(measure)).toEqual([
+            "0/1+1/12:-",
+            "1/12+1/12:-",
+            "1/6+1/12:-",
+            "1/4+1/2:1",
+            "3/4+1/4:-",
+        ]);
+    });
+
+    it("deleteEventWithShift refuses a slot inside a subdivision", () => {
+        model.startNewArrangement([createInstrument("0", 0, 0)]);
+        const track = model.arrangement!.tracks[0];
+        model.createSubdivision(track.id, 1, { numerator: 0, denominator: 1 }, { numerator: 1, denominator: 4 },
+            3, 4);
+
+        mutatedCalls = 0;
+
+        // A slot cannot give way, so its deletion is refused and the controller clears it instead.
+        expect(model.deleteEventWithShift(track.id, 1, { numerator: 1, denominator: 12 })).toBe(false);
+        expect(mutatedCalls).toBe(0);
+        expect(eventList(track.measures[0])).toEqual([
+            "0/1+1/12:-",
+            "1/12+1/12:-",
+            "1/6+1/12:-",
+            "1/4+3/4:-",
+        ]);
     });
 
     it("clearAllTracks clears every track and fires arrangementMutated once", () => {
@@ -1074,6 +1400,52 @@ describe.sequential("ScoreBookDataModel track actions", () => {
         expect(measure.events[1].duration).toEqual({ numerator: 1, denominator: 16 });
     });
 
+    it("setNoteStyles writes single events and fires arrangementMutated once", () => {
+        const instrument = createInstrument("0", 0, 0);
+        model.startNewArrangement([instrument]);
+        const track = model.arrangement!.tracks[0];
+        const measure = track.measures[0];
+
+        measure.events.splice(0, measure.events.length,
+            { start: { numerator: 0, denominator: 16 }, duration: { numerator: 1, denominator: 16 }, noteStyleId: "1" },
+            { start: { numerator: 1, denominator: 16 }, duration: { numerator: 1, denominator: 16 }, noteStyleId: "1" },
+            { start: { numerator: 1, denominator: 8 }, duration: { numerator: 7, denominator: 8 } },
+        );
+        mutatedCalls = 0;
+
+        const changed = model.setNoteStyles([{
+            trackId: track.id,
+            bar: 1,
+            start: { numerator: 1, denominator: 16 },
+            noteStyleId: "2",
+        }]);
+
+        expect(changed).toBe(true);
+        expect(mutatedCalls).toBe(1);
+        expect(measure.events[0].noteStyleId).toBe("1");
+        expect(measure.events[1].noteStyleId).toBe("2");
+        expect(measure.events[1].duration).toEqual({ numerator: 1, denominator: 16 });
+        expect(measure.events[2].noteStyleId).toBeUndefined();
+    });
+
+    it("setNoteStyles ignores assignments for unknown events", () => {
+        const instrument = createInstrument("0", 0, 0);
+        model.startNewArrangement([instrument]);
+        const track = model.arrangement!.tracks[0];
+
+        mutatedCalls = 0;
+
+        const changed = model.setNoteStyles([{
+            trackId: track.id,
+            bar: 1,
+            start: { numerator: 5, denominator: 16 },
+            noteStyleId: "2",
+        }]);
+
+        expect(changed).toBe(false);
+        expect(mutatedCalls).toBe(0);
+    });
+
     it("createSubdivision creates a triplet of rest slots and fires arrangementMutated", () => {
         const instruments = [createInstrument("0", 0, 0)];
         model.startNewArrangement(instruments);
@@ -1092,6 +1464,26 @@ describe.sequential("ScoreBookDataModel track actions", () => {
         expect(measure.events[1].duration).toEqual({ numerator: 1, denominator: 24 });
         expect(measure.events[2].duration).toEqual({ numerator: 1, denominator: 24 });
         expect(measure.events[3]).toMatchObject({ start: { numerator: 1, denominator: 8 } });
+    });
+
+    it("createSubdivision refuses a third tuplet level", () => {
+        const instruments = [createInstrument("0", 0, 0)];
+        model.startNewArrangement(instruments);
+        const track = model.arrangement!.tracks[0];
+
+        // A triplet over a quarter and, inside it, a triplet over two of its slots: the second level.
+        expect(model.createSubdivision(track.id, 1, { numerator: 0, denominator: 1 },
+            { numerator: 1, denominator: 4 }, 3, 2)).toBe(true);
+        expect(model.createSubdivision(track.id, 1, { numerator: 0, denominator: 1 },
+            { numerator: 1, denominator: 6 }, 3, 2)).toBe(true);
+
+        mutatedCalls = 0;
+        const created = model.createSubdivision(track.id, 1, { numerator: 0, denominator: 1 },
+            { numerator: 1, denominator: 9 }, 3, 2);
+
+        // The staff draws one bracket above and one below the notes, so a third level is refused.
+        expect(created).toBe(false);
+        expect(mutatedCalls).toBe(0);
     });
 
     it("createSubdivision rejects invalid note or step counts", () => {
@@ -1163,5 +1555,255 @@ describe.sequential("ScoreBookDataModel track actions", () => {
         expect(mutatedCalls).toBe(1);
         expect(measure.subdivisions).toHaveLength(0);
         expect(measure.events).toHaveLength(3);
+    });
+});
+
+/**
+ * Builds sixteen sixteenth notes tiling one bar of the test arrangement.
+ *
+ * @returns The measure's events.
+ */
+const sixteenthNotes = (): IMeasureEvent[] => {
+    return Array.from({ length: 16 }, (_, index) => {
+        return {
+            start: { numerator: index, denominator: 16 },
+            duration: { numerator: 1, denominator: 16 },
+            noteStyleId: "1",
+        };
+    });
+};
+
+describe.sequential("ScoreBookDataModel measure widths", () => {
+    let model: ScoreBookDataModel;
+    let widths: Map<number, number>;
+    let mutatedCalls: number;
+    let changedCalls: number;
+
+    const mutatedSpy = (): Promise<boolean> => {
+        mutatedCalls++;
+
+        return Promise.resolve(true);
+    };
+
+    const changedSpy = (): Promise<boolean> => {
+        changedCalls++;
+
+        return Promise.resolve(true);
+    };
+
+    beforeEach(() => {
+        vi.restoreAllMocks();
+        model = new ScoreBookDataModel();
+        mutatedCalls = 0;
+        changedCalls = 0;
+        model.startNewArrangement([createInstrument("0", 0, 0)]);
+        widths = model.arrangement!.measureWidths!;
+        requisitions.register("arrangementMutated", mutatedSpy);
+        requisitions.register("arrangementChanged", changedSpy);
+    });
+
+    afterEach(() => {
+        requisitions.unregister("arrangementMutated", mutatedSpy);
+        requisitions.unregister("arrangementChanged", changedSpy);
+    });
+
+    it("stores a width and refreshes the layout without recording an undo step", () => {
+        expect(model.setMeasureWidth(1, 2000)).toBe(true);
+        expect(widths.get(1)).toBe(2000);
+        expect(changedCalls).toBe(1);
+        expect(mutatedCalls).toBe(0);
+    });
+
+    it("raises a width below the floor to the smallest width the measure fits in", () => {
+        const floor = MeasureLayout.minimumWidthOfMeasure(model.arrangement!, 1);
+
+        expect(model.setMeasureWidth(1, floor - 100)).toBe(true);
+        expect(widths.get(1)).toBe(floor);
+    });
+
+    it("restores the default width when the width is undefined", () => {
+        model.setMeasureWidth(1, 2000);
+
+        expect(model.setMeasureWidth(1, undefined)).toBe(true);
+        expect(widths.has(1)).toBe(false);
+    });
+
+    it("stores no width for a measure at its default width", () => {
+        expect(model.setMeasureWidth(1, MeasureLayout.defaultWidth())).toBe(false);
+        expect(widths.size).toBe(0);
+    });
+
+    it("ignores a measure the arrangement does not have", () => {
+        expect(model.setMeasureWidth(5, 2000)).toBe(false);
+        expect(widths.size).toBe(0);
+    });
+
+    it("records the whole gesture as one undo step", () => {
+        model.setMeasureWidth(1, 2000);
+        model.setMeasureWidth(1, 2100);
+        model.commitMeasureWidths();
+
+        expect(mutatedCalls).toBe(1);
+    });
+
+    it("widens a measure whose edit packs it tighter than its width, as the same undo step", () => {
+        const track = model.arrangement!.tracks[0];
+        const floor = MeasureLayout.minimumWidthOfMeasure(model.arrangement!, 1);
+        expect(model.setMeasureWidth(1, floor)).toBe(true);
+        expect(widths.get(1)).toBe(floor);
+
+        const before = mutatedCalls;
+        model.replaceMeasureContent([{ trackId: track.id, bar: 1, events: sixteenthNotes(), subdivisions: [] }]);
+
+        const widened = MeasureLayout.minimumWidthOfMeasure(model.arrangement!, 1);
+        expect(widened).toBeGreaterThan(floor);
+        expect(widths.get(1)).toBe(widened);
+        expect(mutatedCalls - before).toBe(1);
+    });
+
+    it("leaves a measure without a width at its default width", () => {
+        const track = model.arrangement!.tracks[0];
+
+        model.replaceMeasureContent([{ trackId: track.id, bar: 1, events: sixteenthNotes(), subdivisions: [] }]);
+
+        expect(widths.size).toBe(0);
+    });
+});
+
+describe.sequential("ScoreBookDataModel one-bar repeat (simile)", () => {
+    let model: ScoreBookDataModel;
+    let trackId: number;
+    let mutatedCalls: number;
+
+    const mutatedSpy = (): Promise<boolean> => {
+        mutatedCalls++;
+
+        return Promise.resolve(true);
+    };
+
+    beforeEach(() => {
+        mutatedCalls = 0;
+        model = new ScoreBookDataModel();
+        model.startNewArrangement([createInstrument("0", 0, 0)], { length: 2 });
+        trackId = model.arrangement!.tracks[0].id;
+        requisitions.register("arrangementMutated", mutatedSpy);
+    });
+
+    afterEach(() => {
+        requisitions.unregister("arrangementMutated", mutatedSpy);
+    });
+
+    it("empties the track piece and marks it, as one undo step", () => {
+        setCellNote(model, trackId, 2, 0, "1");
+        mutatedCalls = 0;
+
+        expect(model.setMeasureSimiles([{ trackId, bar: 2 }], true)).toBe(true);
+
+        const piece = model.arrangement!.tracks[0].measures[1];
+        expect(piece.simile).toBe(true);
+        expect(piece.events).toHaveLength(1);
+        expect(piece.events[0].noteStyleId).toBeUndefined();
+        expect(piece.subdivisions).toHaveLength(0);
+        expect(mutatedCalls).toBe(1);
+    });
+
+    it("clears the mark and leaves the piece empty", () => {
+        model.setMeasureSimiles([{ trackId, bar: 2 }], true);
+        mutatedCalls = 0;
+
+        expect(model.setMeasureSimiles([{ trackId, bar: 2 }], false)).toBe(true);
+
+        const piece = model.arrangement!.tracks[0].measures[1];
+        expect(piece.simile).toBeUndefined();
+        expect(piece.events).toHaveLength(1);
+        expect(mutatedCalls).toBe(1);
+    });
+
+    it("refuses the first measure of a track", () => {
+        expect(model.setMeasureSimiles([{ trackId, bar: 1 }], true)).toBe(false);
+        expect(model.arrangement!.tracks[0].measures[0].simile).toBeUndefined();
+        expect(mutatedCalls).toBe(0);
+    });
+
+    it("is a no-op when the mark already holds the requested state", () => {
+        model.setMeasureSimiles([{ trackId, bar: 2 }], true);
+        mutatedCalls = 0;
+
+        expect(model.setMeasureSimiles([{ trackId, bar: 2 }], true)).toBe(false);
+        expect(mutatedCalls).toBe(0);
+    });
+
+    it("treats a batch of track pieces as one edit", () => {
+        model.startNewArrangement([createInstrument("0", 0, 0), createInstrument("1", 1, 1)], { length: 2 });
+        const first = model.arrangement!.tracks[0].id;
+        const second = model.arrangement!.tracks[1].id;
+
+        expect(model.setMeasureSimiles([{ trackId: first, bar: 2 }, { trackId: second, bar: 2 }], true)).toBe(true);
+
+        expect(model.arrangement!.tracks[0].measures[1].simile).toBe(true);
+        expect(model.arrangement!.tracks[1].measures[1].simile).toBe(true);
+        expect(mutatedCalls).toBe(1);
+    });
+
+    it("drops a mark that a bar deletion moves onto the first measure", () => {
+        model.setMeasureSimiles([{ trackId, bar: 2 }], true);
+
+        model.deleteBar(1);
+
+        const piece = model.arrangement!.tracks[0].measures[0];
+        expect(piece.number).toBe(1);
+        expect(piece.simile).toBeUndefined();
+    });
+});
+
+describe.sequential("ScoreBookDataModel repeat barlines", () => {
+    let model: ScoreBookDataModel;
+    let mutatedCalls: number;
+
+    const mutatedSpy = (): Promise<boolean> => {
+        mutatedCalls++;
+
+        return Promise.resolve(true);
+    };
+
+    beforeEach(() => {
+        mutatedCalls = 0;
+        model = new ScoreBookDataModel();
+        model.startNewArrangement([createInstrument("0", 0, 0)], { length: 3 });
+        requisitions.register("arrangementMutated", mutatedSpy);
+    });
+
+    afterEach(() => {
+        requisitions.unregister("arrangementMutated", mutatedSpy);
+    });
+
+    it("marks the bars the edit addresses, as one undo step", () => {
+        expect(model.setRepeatBars([1, 3], RepeatMark.Start, true)).toBe(true);
+
+        expect(model.arrangement!.repeatBars?.get(1)).toEqual({ start: true });
+        expect(model.arrangement!.repeatBars?.get(3)).toEqual({ start: true });
+        expect(mutatedCalls).toBe(1);
+    });
+
+    it("keeps the other mark of a bar and drops the bar once both are gone", () => {
+        model.setRepeatBars([2], RepeatMark.Start, true);
+        model.setRepeatBars([2], RepeatMark.End, true);
+        expect(model.arrangement!.repeatBars?.get(2)).toEqual({ start: true, end: true });
+
+        mutatedCalls = 0;
+        expect(model.setRepeatBars([2], RepeatMark.Start, false)).toBe(true);
+        expect(model.arrangement!.repeatBars?.get(2)).toEqual({ end: true });
+        expect(mutatedCalls).toBe(1);
+
+        expect(model.setRepeatBars([2], RepeatMark.End, false)).toBe(true);
+        expect(model.arrangement!.repeatBars?.size).toBe(0);
+    });
+
+    it("ignores bars outside the arrangement and a mark that already holds", () => {
+        model.setRepeatBars([2], RepeatMark.End, true);
+        mutatedCalls = 0;
+
+        expect(model.setRepeatBars([2, 4, 0], RepeatMark.End, true)).toBe(false);
+        expect(mutatedCalls).toBe(0);
     });
 });

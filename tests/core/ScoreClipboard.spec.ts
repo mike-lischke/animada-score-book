@@ -6,7 +6,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { Arrangement } from "../../src/core/Arrangement.js";
-import { ScoreBookDataModel, type ISbDmInstrument, type ISbDmTrack, type ISbDmTrackMeasure }
+import { ScoreBookDataModel, type ISbDmInstrument, type ISbDmTrack, type ISbDmTrackPiece }
     from "../../src/core/ScoreBookDataModel.js";
 import {
     PasteOverflowMode, PasteResultKind, ScoreClipboard, SubdivisionPasteMode,
@@ -25,7 +25,7 @@ import {
  * @param step The 0-based grid step to look up.
  * @returns The note style id covering the step, or undefined.
  */
-const noteAtStep = (measure: ISbDmTrackMeasure, step: number): string | undefined => {
+const noteAtStep = (measure: ISbDmTrackPiece, step: number): string | undefined => {
     const stepsPerBar = measure.meter.stepResolution;
     const start = { numerator: step, denominator: stepsPerBar };
 
@@ -50,7 +50,7 @@ const noteAtStep = (measure: ISbDmTrackMeasure, step: number): string | undefine
  * @param denominator The fraction denominator.
  * @returns The note style id at that exact position, or undefined for rests.
  */
-const noteAtFraction = (measure: ISbDmTrackMeasure, numerator: number, denominator: number): string | undefined => {
+const noteAtFraction = (measure: ISbDmTrackPiece, numerator: number, denominator: number): string | undefined => {
     const start = { numerator, denominator };
 
     return measure.events.find((candidate) => {
@@ -87,6 +87,41 @@ describe("ScoreClipboard", () => {
         const measure = track.measures[bar - 1];
 
         return noteEntry(measure, { numerator: step, denominator: measure.meter.stepResolution });
+    };
+
+    /**
+     * Fills a track's first measure with four subdivision slots plus one plain note, then copies
+     * three of the slots and the plain note into the clipboard.
+     *
+     * @param track The track to fill and copy from.
+     */
+    const copyMixedRange = (track: ISbDmTrack): void => {
+        track.measures[0].events.splice(0, track.measures[0].events.length,
+            ...Array.from({ length: 4 }, (_, index) => {
+                return {
+                    start: { numerator: index, denominator: 16 },
+                    duration: { numerator: 1, denominator: 16 },
+                    noteStyleId: `${track.id}-${index}`,
+                };
+            }));
+        track.measures[0].events.push({
+            start: { numerator: 4, denominator: 16 }, duration: { numerator: 12, denominator: 16 },
+            noteStyleId: `${track.id}-plain`,
+        });
+        track.measures[0].subdivisions.splice(0, track.measures[0].subdivisions.length, {
+            startIndex: 0, actual: 4, normal: 4, isTuplet: false,
+        });
+
+        hydrateMeasureEvents(model.arrangement! as Arrangement);
+
+        const entries: ISelectionEntry[] = [];
+        for (let slot = 0; slot < 3; slot++) {
+            entries.push(noteEntry(track.measures[0], { numerator: slot, denominator: 16 }));
+        }
+
+        entries.push(noteEntry(track.measures[0], { numerator: 4, denominator: 16 }));
+
+        clipboard.copy(entries);
     };
 
     beforeEach(() => {
@@ -231,6 +266,54 @@ describe("ScoreClipboard", () => {
         expect(noteAtStep(second, 0)).toBe("2");
         expect(noteAtStep(second, 1)).toBe("2");
         expect(noteAtStep(second, 2)).toBeUndefined();
+    });
+
+    it("shifts the following notes in a target that holds a subdivision", () => {
+        model.startNewArrangement([instrumentA(), instrumentA()], { length: 2 });
+        const [source, target] = model.arrangement!.tracks;
+
+        // Source: two 16th notes followed by a quarter note.
+        model.setNoteAt(source.id, 1, { numerator: 0, denominator: 16 }, { numerator: 1, denominator: 16 }, "1");
+        model.setNoteAt(source.id, 1, { numerator: 1, denominator: 16 }, { numerator: 1, denominator: 16 }, "1");
+        model.setNoteAt(source.id, 1, { numerator: 2, denominator: 16 }, { numerator: 1, denominator: 4 }, "1");
+
+        // Target: two 16th notes, a subdivision over the third quarter and four 16th notes at the end.
+        setCellNote(model, target.id, 1, 0, "2");
+        setCellNote(model, target.id, 1, 1, "2");
+        model.createSubdivision(target.id, 1, { numerator: 1, denominator: 2 }, { numerator: 3, denominator: 4 },
+            3, 4);
+
+        for (let step = 12; step < 16; step++) {
+            setCellNote(model, target.id, 1, step, "2");
+        }
+
+        hydrateMeasureEvents(model.arrangement! as Arrangement);
+
+        const sourceMeasure = source.measures[0];
+        clipboard.copy(sourceMeasure.events.slice(0, 3).map((event) => {
+            return runEntry(sourceMeasure, event);
+        }));
+
+        const targetMeasure = target.measures[0];
+        const result = clipboard.paste([
+            runEntry(targetMeasure, targetMeasure.events[0]),
+            runEntry(targetMeasure, targetMeasure.events[1]),
+        ], { overflowMode: PasteOverflowMode.Shift });
+
+        expect(result.kind).toBe(PasteResultKind.Success);
+
+        // The phrase replaced the two 16th notes and everything behind it moved a quarter to the right;
+        // the subdivision keeps its three slots.
+        const first = target.measures[0];
+        expect(noteAtStep(first, 0)).toBe("1");
+        expect(noteAtStep(first, 1)).toBe("1");
+        expect(noteAtStep(first, 2)).toBe("1");
+
+        const subdivision = first.subdivisions[0];
+        expect(first.events[subdivision.startIndex].start).toEqual({ numerator: 3, denominator: 4 });
+
+        // The four 16th notes that followed the subdivision flow into the next measure.
+        expect(noteAtStep(target.measures[1], 0)).toBe("2");
     });
 
     it("tiles a copied note across a selected note group", () => {
@@ -485,6 +568,45 @@ describe("ScoreClipboard", () => {
         expect(noteAtStep(track.measures[0], 0)).toBe("1");
         expect(noteAtStep(track.measures[0], 1)).toBe("1");
         expect(noteAtStep(track.measures[0], 5)).toBeUndefined();
+    });
+
+    it("carries a copied measure's width into the pasted measure", () => {
+        model.startNewArrangement([instrumentA()], { length: 2 });
+        const track = model.arrangement!.tracks[0];
+        setCellNote(model, track.id, 1, 0, "1");
+        model.setMeasureWidth(1, 2000);
+
+        clipboard.copy([measureEntry(track.measures[0])]);
+        const result = clipboard.paste([measureEntry(track.measures[1])]);
+
+        expect(result.kind).toBe(PasteResultKind.Success);
+        expect(noteAtStep(track.measures[1], 0)).toBe("1");
+        expect(model.arrangement!.measureWidths!.get(2)).toBe(2000);
+    });
+
+    it("resets the pasted measure's width when the copied measure had the default width", () => {
+        model.startNewArrangement([instrumentA()], { length: 2 });
+        const track = model.arrangement!.tracks[0];
+        setCellNote(model, track.id, 1, 0, "1");
+        model.setMeasureWidth(2, 2000);
+
+        clipboard.copy([measureEntry(track.measures[0])]);
+        clipboard.paste([measureEntry(track.measures[1])]);
+
+        expect(model.arrangement!.measureWidths!.has(2)).toBe(false);
+    });
+
+    it("leaves the target width alone when a piece of a measure is pasted", () => {
+        model.startNewArrangement([instrumentA()], { length: 2 });
+        const track = model.arrangement!.tracks[0];
+        setCellNote(model, track.id, 1, 0, "1");
+        model.setMeasureWidth(1, 2000);
+        model.setMeasureWidth(2, 1500);
+
+        clipboard.copy([trackPieceEntry(track, track.measures[0])]);
+        clipboard.paste([trackPieceEntry(track, track.measures[1])]);
+
+        expect(model.arrangement!.measureWidths!.get(2)).toBe(1500);
     });
 
     it("rejects pasting a track piece into a different instrument", () => {
@@ -1027,12 +1149,17 @@ describe("ScoreClipboard", () => {
         expect(noteAtFraction(targetTrack.measures[0], 19, 48)).toBe(`${sourceTrack.id}-2`);
     });
 
-    it("rejects a multi-track subdivision source as too complex", () => {
-        const instruments = [createInstrument("tamborim", 0, 0), createInstrument("tamborim", 1, 1)];
+    it("pastes a multi-track subdivision source across tracks", () => {
+        const instruments = [
+            createInstrument("tamborim", 0, 0), createInstrument("tamborim", 1, 1),
+            createInstrument("tamborim", 2, 2), createInstrument("tamborim", 3, 3),
+        ];
         model.startNewArrangement(instruments);
         const tracks = model.arrangement!.tracks;
+        const sourceTracks = tracks.slice(0, 2);
+        const targetTracks = tracks.slice(2);
 
-        for (const track of tracks) {
+        for (const track of sourceTracks) {
             track.measures[0].events.splice(0, track.measures[0].events.length,
                 ...Array.from({ length: 12 }, (_, index) => {
                     return {
@@ -1049,7 +1176,7 @@ describe("ScoreClipboard", () => {
         hydrateMeasureEvents(model.arrangement! as Arrangement);
 
         const entries: ISelectionEntry[] = [];
-        for (const track of tracks) {
+        for (const track of sourceTracks) {
             for (let slot = 0; slot < 3; slot++) {
                 entries.push(noteEntry(track.measures[0], { numerator: slot, denominator: 12 }));
             }
@@ -1057,49 +1184,218 @@ describe("ScoreClipboard", () => {
 
         clipboard.copy(entries);
 
-        const result = clipboard.paste([
-            noteEntry(tracks[0].measures[0], { numerator: 5, denominator: 12 }),
-        ]);
+        // The two copied rows land on the two following tracks, which hold no subdivision yet.
+        const result = clipboard.paste([cell(targetTracks[0], 5)], { singleNote: true });
 
-        expect(result.kind).toBe(PasteResultKind.TooComplex);
+        expect(result.kind).toBe(PasteResultKind.Success);
+        expect(result.selectionInvalidated).toBe(true);
+
+        for (let index = 0; index < targetTracks.length; index++) {
+            const measure = targetTracks[index].measures[0];
+
+            // Each track recreates the copied slots as a subdivision at the cursor.
+            expect(measure.subdivisions).toEqual([{ startIndex: 1, actual: 3, normal: 4, isTuplet: true }]);
+            expect(noteAtFraction(measure, 15, 48)).toBe(`${sourceTracks[index].id}-0`);
+            expect(noteAtFraction(measure, 19, 48)).toBe(`${sourceTracks[index].id}-1`);
+            expect(noteAtFraction(measure, 23, 48)).toBe(`${sourceTracks[index].id}-2`);
+        }
     });
 
-    it("rejects a mixed subdivision source as too complex", () => {
-        const instruments = [createInstrument("tamborim", 0, 0)];
+    it("pastes a mixed subdivision source together with its slots", () => {
+        const instruments = [createInstrument("tamborim", 0, 0), createInstrument("tamborim", 1, 1)];
         model.startNewArrangement(instruments);
+        const sourceTrack = model.arrangement!.tracks[0];
+        const targetTrack = model.arrangement!.tracks[1];
+
+        copyMixedRange(sourceTrack);
+
+        const result = clipboard.paste([cell(targetTrack, 0)], { singleNote: true });
+
+        expect(result.kind).toBe(PasteResultKind.Success);
+        expect(result.selectionInvalidated).toBe(true);
+
+        // The plain note keeps its place next to the recreated slots, and the measure still tiles the bar.
+        const measure = targetTrack.measures[0];
+        expect(measure.subdivisions).toEqual([{ startIndex: 0, actual: 4, normal: 4, isTuplet: false }]);
+        expect(noteAtFraction(measure, 0, 16)).toBe(`${sourceTrack.id}-0`);
+        expect(noteAtFraction(measure, 3, 16)).toBe(`${sourceTrack.id}-3`);
+        expect(noteAtFraction(measure, 4, 16)).toBe(`${sourceTrack.id}-plain`);
+
+        const length = measure.events.reduce((sum, event) => {
+            return addFractions(sum, event.duration);
+        }, { numerator: 0, denominator: 1 });
+        expect(compareFractions(length, { numerator: 1, denominator: 1 })).toBe(0);
+    });
+
+    it("pastes a mixed source as plain content when the target size differs", () => {
+        const instruments = [createInstrument("tamborim", 0, 0), createInstrument("tamborim", 1, 1)];
+        model.startNewArrangement(instruments);
+        const sourceTrack = model.arrangement!.tracks[0];
+        const targetTrack = model.arrangement!.tracks[1];
+
+        copyMixedRange(sourceTrack);
+
+        // Two target cells do not match the copied range: the slots are dropped and the notes are laid out.
+        const result = clipboard.paste([cell(targetTrack, 0), cell(targetTrack, 1)]);
+
+        expect(result.kind).toBe(PasteResultKind.Success);
+        expect(targetTrack.measures[0].subdivisions).toEqual([]);
+        expect(noteAtFraction(targetTrack.measures[0], 0, 16)).toBe(`${sourceTrack.id}-0`);
+        expect(noteAtFraction(targetTrack.measures[0], 1, 16)).toBe(`${sourceTrack.id}-1`);
+    });
+
+    it("pastes plain notes into a mixed target range", () => {
+        const instruments = [createInstrument("tamborim", 0, 0), createInstrument("tamborim", 1, 1)];
+        model.startNewArrangement(instruments);
+        const sourceTrack = model.arrangement!.tracks[0];
+        const targetTrack = model.arrangement!.tracks[1];
+
+        setCellNote(model, sourceTrack.id, 1, 0, `${sourceTrack.id}-0`);
+        setCellNote(model, sourceTrack.id, 1, 1, `${sourceTrack.id}-1`);
+
+        // The target mixes a plain note with a four-slot subdivision over the second quarter.
+        targetTrack.measures[0].events.splice(0, targetTrack.measures[0].events.length,
+            {
+                start: { numerator: 0, denominator: 16 }, duration: { numerator: 1, denominator: 16 },
+                noteStyleId: `${targetTrack.id}-plain`
+            },
+            ...Array.from({ length: 4 }, (_, index) => {
+                return {
+                    start: { numerator: index + 1, denominator: 16 },
+                    duration: { numerator: 1, denominator: 16 },
+                    noteStyleId: `${targetTrack.id}-slot${index}`,
+                };
+            }),
+            { start: { numerator: 5, denominator: 16 }, duration: { numerator: 11, denominator: 16 } },
+        );
+        targetTrack.measures[0].subdivisions.splice(0, targetTrack.measures[0].subdivisions.length, {
+            startIndex: 1, actual: 4, normal: 4, isTuplet: false,
+        });
+
+        hydrateMeasureEvents(model.arrangement! as Arrangement);
+
+        const entries: ISelectionEntry[] = [];
+        for (let step = 0; step < 2; step++) {
+            entries.push(cell(sourceTrack, step));
+        }
+
+        clipboard.copy(entries);
+
+        // The selection covers the plain cell and the first slot, so the target range is mixed.
+        const result = clipboard.paste([cell(targetTrack, 0), cell(targetTrack, 1)]);
+
+        expect(result.kind).toBe(PasteResultKind.Success);
+        expect(result.selectionInvalidated).toBeUndefined();
+
+        // The target's slots keep their width and structure; only the notes change.
+        const measure = targetTrack.measures[0];
+        expect(measure.subdivisions).toEqual([{ startIndex: 1, actual: 4, normal: 4, isTuplet: false }]);
+        expect(noteAtFraction(measure, 0, 16)).toBe(`${sourceTrack.id}-0`);
+        expect(noteAtFraction(measure, 1, 16)).toBe(`${sourceTrack.id}-1`);
+        expect(noteAtFraction(measure, 2, 16)).toBe(`${targetTrack.id}-slot1`);
+
+        const length = measure.events.reduce((sum, event) => {
+            return addFractions(sum, event.duration);
+        }, { numerator: 0, denominator: 1 });
+        expect(compareFractions(length, { numerator: 1, denominator: 1 })).toBe(0);
+    });
+
+    it("stops a subdivision insert at the subdivision it would cut", () => {
+        const instruments = [createInstrument("tamborim", 0, 0), createInstrument("tamborim", 1, 1)];
+        model.startNewArrangement(instruments);
+        const sourceTrack = model.arrangement!.tracks[0];
+        const targetTrack = model.arrangement!.tracks[1];
+
+        // The source holds a four-slot subdivision over the first quarter.
+        sourceTrack.measures[0].events.splice(0, sourceTrack.measures[0].events.length,
+            ...Array.from({ length: 4 }, (_, index) => {
+                return {
+                    start: { numerator: index, denominator: 16 },
+                    duration: { numerator: 1, denominator: 16 },
+                    noteStyleId: `${sourceTrack.id}-${index}`,
+                };
+            }),
+            { start: { numerator: 4, denominator: 16 }, duration: { numerator: 12, denominator: 16 } },
+        );
+        sourceTrack.measures[0].subdivisions.splice(0, sourceTrack.measures[0].subdivisions.length, {
+            startIndex: 0, actual: 4, normal: 4, isTuplet: false,
+        });
+
+        // The target holds a plain eighth note followed by a four-slot subdivision.
+        targetTrack.measures[0].events.splice(0, targetTrack.measures[0].events.length,
+            {
+                start: { numerator: 0, denominator: 16 }, duration: { numerator: 2, denominator: 16 },
+                noteStyleId: `${targetTrack.id}-plain`
+            },
+            ...Array.from({ length: 4 }, (_, index) => {
+                return {
+                    start: { numerator: index + 2, denominator: 16 },
+                    duration: { numerator: 1, denominator: 16 },
+                    noteStyleId: `${targetTrack.id}-slot${index}`,
+                };
+            }),
+            { start: { numerator: 6, denominator: 16 }, duration: { numerator: 10, denominator: 16 } },
+        );
+        targetTrack.measures[0].subdivisions.splice(0, targetTrack.measures[0].subdivisions.length, {
+            startIndex: 1, actual: 4, normal: 4, isTuplet: false,
+        });
+
+        hydrateMeasureEvents(model.arrangement! as Arrangement);
+
+        const entries: ISelectionEntry[] = [];
+        for (let slot = 0; slot < 4; slot++) {
+            entries.push(noteEntry(sourceTrack.measures[0], { numerator: slot, denominator: 16 }));
+        }
+
+        clipboard.copy(entries);
+
+        // The pasted quarter note would reach into the target's subdivision, so it stops at its start.
+        const result = clipboard.paste([cell(targetTrack, 0)], { singleNote: true });
+
+        expect(result.kind).toBe(PasteResultKind.Success);
+        expect(result.selectionInvalidated).toBe(true);
+
+        const measure = targetTrack.measures[0];
+        expect(measure.subdivisions).toContainEqual({ startIndex: 0, actual: 2, normal: 2, isTuplet: false });
+        expect(measure.subdivisions).toContainEqual({ startIndex: 2, actual: 4, normal: 4, isTuplet: false });
+
+        expect(noteAtFraction(measure, 0, 16)).toBe(`${sourceTrack.id}-0`);
+        expect(noteAtFraction(measure, 1, 16)).toBe(`${sourceTrack.id}-1`);
+        expect(noteAtFraction(measure, 2, 16)).toBe(`${targetTrack.id}-slot0`);
+        expect(noteAtFraction(measure, 5, 16)).toBe(`${targetTrack.id}-slot3`);
+
+        const length = measure.events.reduce((sum, event) => {
+            return addFractions(sum, event.duration);
+        }, { numerator: 0, denominator: 1 });
+        expect(compareFractions(length, { numerator: 1, denominator: 1 })).toBe(0);
+    });
+
+    it("carries a copied measure's subdivisions into the pasted measure", () => {
+        model.startNewArrangement([instrumentA()], { length: 2 });
         const track = model.arrangement!.tracks[0];
 
-        // Four subdivision slots followed by one plain grid note in the same measure.
         track.measures[0].events.splice(0, track.measures[0].events.length,
-            ...Array.from({ length: 4 }, (_, index) => {
+            ...Array.from({ length: 12 }, (_, index) => {
                 return {
                     start: { numerator: index, denominator: 12 },
                     duration: { numerator: 1, denominator: 12 },
                     noteStyleId: `${track.id}-${index}`,
                 };
             }));
-        track.measures[0].events.push({
-            start: { numerator: 4, denominator: 12 }, duration: { numerator: 8, denominator: 12 },
-            noteStyleId: `${track.id}-plain`,
-        });
         track.measures[0].subdivisions.splice(0, track.measures[0].subdivisions.length, {
-            startIndex: 0, actual: 4, normal: 4, isTuplet: false,
+            startIndex: 0, actual: 12, normal: 16, isTuplet: true,
         });
 
         hydrateMeasureEvents(model.arrangement! as Arrangement);
 
-        const entries: ISelectionEntry[] = [];
-        for (let slot = 0; slot < 3; slot++) {
-            entries.push(noteEntry(track.measures[0], { numerator: slot, denominator: 12 }));
-        }
+        clipboard.copy([measureEntry(track.measures[0])]);
+        const result = clipboard.paste([measureEntry(track.measures[1])]);
 
-        entries.push(noteEntry(track.measures[0], { numerator: 4, denominator: 12 }));
-
-        clipboard.copy(entries);
-
-        const result = clipboard.paste([noteEntry(track.measures[0], { numerator: 8, denominator: 12 })]);
-
-        expect(result.kind).toBe(PasteResultKind.TooComplex);
+        expect(result.kind).toBe(PasteResultKind.Success);
+        expect(result.selectionInvalidated).toBe(true);
+        expect(track.measures[1].subdivisions).toEqual([{ startIndex: 0, actual: 12, normal: 16, isTuplet: true }]);
+        expect(noteAtFraction(track.measures[1], 0, 12)).toBe(`${track.id}-0`);
+        expect(noteAtFraction(track.measures[1], 11, 12)).toBe(`${track.id}-11`);
     });
 
     it("asks for a mode when pasting a subdivision onto a larger plain selection", () => {

@@ -98,6 +98,119 @@ export const noteValueForUnits = (units: number): INoteValue | undefined => {
 };
 
 /**
+ * Returns the note value a subdivision slot is notated with when its exact duration matches no
+ * value. A tuplet replaces notes of one value, so the slot is drawn with that value: a top-level
+ * subdivision stands for eighths, a subdivision nested in it for sixteenths.
+ *
+ * @param depth The subdivision nesting depth, 1 for a slot of a top-level subdivision.
+ *
+ * @returns The note value the slot is drawn with.
+ */
+const subdivisionSlotValue = (depth: number): INoteValue => {
+    if (depth <= 1) {
+        return { length: NoteLength.Eighth, dotted: false };
+    }
+
+    if (depth === 2) {
+        return { length: NoteLength.Sixteenth, dotted: false };
+    }
+
+    return { length: NoteLength.ThirtySecond, dotted: false };
+};
+
+/**
+ * Resolves the note value an event is drawn with. The exact duration wins when a single value can
+ * express it, so a plain 2:1 split of a step keeps its thirty-seconds. A slot of a real subdivision
+ * has a duration no single value expresses and falls back to the value of its subdivision.
+ *
+ * @param duration The event's duration as a fraction of the measure.
+ * @param depth The subdivision nesting depth; 0 for an event outside any subdivision.
+ * @param stepsPerBar The number of base-grid steps in one bar.
+ * @param pulseSteps The number of base-grid steps in the pulse the event falls into, which an
+ *                   irregular meter does not make the same for every pulse.
+ *
+ * @returns The note value the event is drawn with, or undefined when its duration has no value.
+ */
+export const noteValueForEvent = (duration: IFraction, depth: number, stepsPerBar: number,
+    pulseSteps: number): INoteValue | undefined => {
+    const units = duration.denominator > 0 ? (duration.numerator * 32) / duration.denominator : 0;
+
+    if (depth > 0) {
+        return noteValueForUnits(units) ?? subdivisionSlotValue(depth);
+    }
+
+    if (stepsPerBar <= 0) {
+        return undefined;
+    }
+
+    const lengthSteps = (duration.numerator * stepsPerBar) / duration.denominator;
+
+    // A ternary pulse fills three steps, and a single step of it stands for an eighth.
+    if (pulseSteps > 0 && pulseSteps % 3 === 0 && lengthSteps * 3 === pulseSteps
+        && duration.numerator * stepsPerBar === duration.denominator) {
+        return { length: NoteLength.Eighth, dotted: false };
+    }
+
+    // A twelfth of a bar is a quarter-note triplet slot, which stands for an eighth.
+    if (duration.numerator * 12 === duration.denominator) {
+        return { length: NoteLength.Eighth, dotted: false };
+    }
+
+    return noteValueForUnits(units);
+};
+
+/** The note value an event is drawn with when its exact duration matches no single value. */
+export const fallbackNoteValue: INoteValue = { length: NoteLength.Sixteenth, dotted: false };
+
+/** The note value the next entry uses until the user chooses another one. */
+export const defaultEntryValue: INoteValue = { length: NoteLength.Quarter, dotted: false };
+
+/**
+ * Returns the number of beam strokes a note value is drawn with.
+ *
+ * @param value The note value to inspect.
+ *
+ * @returns The number of beams, or 0 for a value that carries a flag or no stroke at all.
+ */
+export const beamCountOf = (value: NoteLength): number => {
+    switch (value) {
+        case NoteLength.Eighth: {
+            return 1;
+        }
+
+        case NoteLength.Sixteenth: {
+            return 2;
+        }
+
+        case NoteLength.ThirtySecond: {
+            return 3;
+        }
+
+        default: {
+            return 0;
+        }
+    }
+};
+
+/**
+ * Returns the number of beam strokes an event is drawn with. This is what ties an event to its
+ * neighbours in a beam group, so the renderer and the hit test derive beam groups the same way.
+ *
+ * @param duration The event's duration as a fraction of the measure.
+ * @param depth The subdivision nesting depth; 0 for an event outside any subdivision.
+ * @param stepsPerBar The number of base-grid steps in one bar.
+ * @param pulseSteps The number of base-grid steps in the pulse the event falls into.
+ *
+ * @returns The number of beams, or 0 for an event drawn with a flag or a plain notehead.
+ */
+export const beamCountForEvent = (duration: IFraction, depth: number, stepsPerBar: number,
+    pulseSteps: number): number => {
+    const value = noteValueForEvent(duration, depth, stepsPerBar, pulseSteps) ?? fallbackNoteValue;
+
+    return beamCountOf(value.length);
+};
+
+/**
  * Returns the duration of a note value as a fraction of a whole note, with the augmentation dot
  * applied.
  *

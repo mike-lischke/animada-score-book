@@ -51,7 +51,7 @@ export class StaffMeasureTrackRow extends UIComponent<IStaffMeasureTrackRowProps
     }
 
     public override render(): ComponentChild {
-        const { arrangementPlayer, barNumber, timeParams, track, scoreElementRegistry } = this.props;
+        const { arrangementPlayer, barNumber, dataModel, timeParams, track, scoreElementRegistry } = this.props;
 
         const measure = track.measures[barNumber - 1];
         const baseSteps = measure.meter.stepResolution;
@@ -61,6 +61,7 @@ export class StaffMeasureTrackRow extends UIComponent<IStaffMeasureTrackRowProps
         }));
 
         const rowClassName = this.generateFinalClassName(["staff-measure-track-row"]);
+        const repeatBars = dataModel.arrangement?.repeatBars;
 
         return (
             <StaffNoteViewer
@@ -73,6 +74,7 @@ export class StaffMeasureTrackRow extends UIComponent<IStaffMeasureTrackRowProps
                 barNumber={barNumber}
                 trackId={track.id}
                 maxNoteLine={maxNoteLine}
+                repeatBars={repeatBars}
                 scoreElementRegistry={scoreElementRegistry}
             />
         );

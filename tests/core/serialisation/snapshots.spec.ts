@@ -9,13 +9,13 @@ import { Arrangement } from "../../../src/core/Arrangement.js";
 import type { ISbDmInstrument } from "../../../src/core/ScoreBookDataModel.js";
 import { ArrangementMigrator } from "../../../src/core/serialisation/migration/ArrangementMigrator.js";
 import { stringifyPackedArrangement } from "../../../src/core/serialisation/snapshot-packing.js";
-import { getArrangementSnapshot } from "../../../src/core/serialisation/snapshots.js";
-import type { ILegacyArrangementSnapshot } from "../../../src/core/serialisation/migration/legacy-snapshot-types.js";
+import { getArrangementSnapshot, arrangementSnapshotVersion } from "../../../src/core/serialisation/snapshots.js";
+import type { IBananaDrumSnapshot } from "../../../src/core/serialisation/migration/BananaDrumMigrator.js";
 import type { IArrangementSnapshot, IAudioData, Mutable } from "../../../src/core/types/general.js";
 import { createInstrument } from "../../unit-test-helpers.js";
 
 describe("snapshots", () => {
-    it("writes arrangement snapshots as version 4 with tuplets instead of polyrhythms", () => {
+    it("writes arrangement snapshots at the current version with tuplets instead of polyrhythms", () => {
         const instrument = createInstrument("0", 0, 0);
         const noteStyle = {
             id: "1",
@@ -26,8 +26,7 @@ describe("snapshots", () => {
 
         (instrument as Mutable<ISbDmInstrument>).noteStyles = { "1": noteStyle };
 
-        const sourceSnapshot: ILegacyArrangementSnapshot = {
-            version: 1,
+        const sourceSnapshot: IBananaDrumSnapshot = {
             title: "Source",
             timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4", stepResolution: 8 },
             tracks: [{
@@ -57,7 +56,7 @@ describe("snapshots", () => {
 
         const snapshot = getArrangementSnapshot(arrangement);
 
-        expect(snapshot.version).toBe(4);
+        expect(snapshot.version).toBe(arrangementSnapshotVersion);
         const track = snapshot.tracks[0];
         expect("measures" in track).toBe(true);
         if ("measures" in track) {
@@ -94,7 +93,7 @@ describe("snapshots", () => {
     it("ArrangementMigrator preserves scoreId from snapshot", () => {
         const instrument = createInstrument("0", 0, 0);
         const snapshot: IArrangementSnapshot = {
-            version: 2,
+            version: arrangementSnapshotVersion,
             title: "Scored",
             scoreId: 12345,
             timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4", stepResolution: 8 },
@@ -121,7 +120,92 @@ describe("snapshots", () => {
         expect(snapshot.tracks[0].measures[0].events[0].noteStyleId).toBe("1");
     });
 
-    it("loads a packed v4 string through the migrator entry point", () => {
+    it("keeps unknown extension chunks through a snapshot round trip", () => {
+        const instrument = createInstrument("0", 0, 0);
+        const arrangement = Arrangement.emptyArrangement([instrument]);
+
+        arrangement.applyArrangementSnapshot({
+            version: arrangementSnapshotVersion,
+            title: "Foreign chunks",
+            timeParams: { timeSignature: "4/4", tempo: 120, length: 2, pulse: "1/4", stepResolution: 8 },
+            tracks: [],
+            extensions: { laterFeature: { nested: [1, 2, 3] }, measureWidths: { 1: 1000 } },
+        }, [instrument]);
+
+        expect([...arrangement.measureWidths]).toEqual([[1, 1000]]);
+
+        const snapshot = arrangement.toSnapshot();
+        expect(snapshot.extensions).toEqual({
+            laterFeature: { nested: [1, 2, 3] },
+            measureWidths: { 1: 1000 },
+        });
+    });
+
+    it("drops measure widths for bars the arrangement does not have", () => {
+        const instrument = createInstrument("0", 0, 0);
+        const arrangement = Arrangement.emptyArrangement([instrument]);
+
+        arrangement.applyArrangementSnapshot({
+            version: arrangementSnapshotVersion,
+            timeParams: { timeSignature: "4/4", tempo: 120, length: 2, pulse: "1/4", stepResolution: 8 },
+            tracks: [],
+            extensions: { measureWidths: { 2: 2000, 5: 500, 0: 900 } },
+        }, [instrument]);
+
+        expect([...arrangement.measureWidths]).toEqual([[2, 2000]]);
+    });
+
+    it("reports measure widths through the undo snapshot as well", () => {
+        const instrument = createInstrument("0", 0, 0);
+        const arrangement = Arrangement.emptyArrangement([instrument]);
+        arrangement.measureWidths.set(1, 1500);
+
+        const snapshot = getArrangementSnapshot(arrangement);
+
+        expect(snapshot.extensions).toEqual({ measureWidths: { 1: 1500 } });
+    });
+
+    it("keeps the repeat marks of the bars it has", () => {
+        const instrument = createInstrument("0", 0, 0);
+        const arrangement = Arrangement.emptyArrangement([instrument]);
+
+        arrangement.applyArrangementSnapshot({
+            version: arrangementSnapshotVersion,
+            timeParams: { timeSignature: "4/4", tempo: 120, length: 2, pulse: "1/4", stepResolution: 8 },
+            tracks: [],
+            extensions: { repeatBars: { 1: { start: true }, 2: { end: true } } },
+        }, [instrument]);
+
+        expect(Object.fromEntries(arrangement.repeatBars)).toEqual({ 1: { start: true }, 2: { end: true } });
+    });
+
+    it("drops repeat marks for bars the arrangement does not have", () => {
+        const instrument = createInstrument("0", 0, 0);
+        const arrangement = Arrangement.emptyArrangement([instrument]);
+
+        arrangement.applyArrangementSnapshot({
+            version: arrangementSnapshotVersion,
+            timeParams: { timeSignature: "4/4", tempo: 120, length: 2, pulse: "1/4", stepResolution: 8 },
+            tracks: [],
+            extensions: {
+                repeatBars: { 2: { end: true }, 5: { start: true }, 0: { start: true }, 1: {}, 3: { end: false } },
+            },
+        }, [instrument]);
+
+        expect(Object.fromEntries(arrangement.repeatBars)).toEqual({ 2: { end: true } });
+    });
+
+    it("reports the repeat marks through the undo snapshot as well", () => {
+        const instrument = createInstrument("0", 0, 0);
+        const arrangement = Arrangement.emptyArrangement([instrument]);
+        arrangement.repeatBars.set(2, { end: true });
+
+        const snapshot = getArrangementSnapshot(arrangement);
+
+        expect(snapshot.extensions).toEqual({ repeatBars: { 2: { end: true } } });
+    });
+
+    it("loads a packed string through the migrator entry point", () => {
         const instrument = createInstrument("0", 0, 0);
         const arrangement = Arrangement.emptyArrangement([instrument]);
         arrangement.tracks[0].measures[0].events[0].noteStyleId = "1";
@@ -132,6 +216,22 @@ describe("snapshots", () => {
         const { arrangement: restored, migrated } = ArrangementMigrator.migrateToArrangement(packed, [instrument]);
 
         expect(migrated).toBe(false);
+        expect(getArrangementSnapshot(restored)).toEqual(snapshot);
+    });
+
+    it("carries a one-bar repeat through the snapshot and the packed round trip", () => {
+        const instrument = createInstrument("0", 0, 0);
+        const arrangement = Arrangement.emptyArrangementWithInstruments([instrument], { length: 2 });
+        arrangement.tracks[0].measures[1].simile = true;
+
+        const snapshot = getArrangementSnapshot(arrangement);
+        expect(snapshot.tracks[0].measures[1].simile).toBe(true);
+
+        const packed = stringifyPackedArrangement(snapshot);
+        const { arrangement: restored, migrated } = ArrangementMigrator.migrateToArrangement(packed, [instrument]);
+
+        expect(migrated).toBe(false);
+        expect(restored.tracks[0].measures[1].simile).toBe(true);
         expect(getArrangementSnapshot(restored)).toEqual(snapshot);
     });
 });

@@ -5,6 +5,9 @@
 
 import { expect, test, type Page } from "@playwright/test";
 
+import { MeasureLayout, barActionStripWidth } from "../../src/core/MeasureLayout.js";
+import { stringifyPackedArrangement } from "../../src/core/serialisation/snapshot-packing.js";
+import { arrangementSnapshotVersion } from "../../src/core/serialisation/snapshots.js";
 import { routeApi } from "./e2e-test-helpers.js";
 
 test.beforeEach(async ({ page }) => {
@@ -223,6 +226,74 @@ test("disabling include legend hides the legend section in the print view", asyn
 
     await expect(page.locator(".print-root")).toBeAttached();
     await expect(page.locator(".print-legend")).toHaveCount(0);
+
+    // Cleanup.
+    await page.evaluate(() => {
+        window.dispatchEvent(new Event("afterprint"));
+    });
+});
+
+test("print view lays measures out at their stored widths", async ({ page }) => {
+    // The floor of a measure of four quarter notes is the width of the bar action strip.
+    const narrowWidth = barActionStripWidth;
+    const barCount = 4;
+    const measures = Array.from({ length: barCount }, (_, index) => {
+        return {
+            number: index + 1,
+            meter: { beats: 4, beatUnits: 4, stepResolution: 16, beatGroups: [4, 4, 4, 4] },
+            events: Array.from({ length: 4 }, (_, beat) => {
+                return {
+                    start: { numerator: beat, denominator: 4 },
+                    duration: { numerator: 1, denominator: 4 },
+                    noteStyleId: "1",
+                };
+            }),
+            subdivisions: [],
+        };
+    });
+
+    const packed = stringifyPackedArrangement({
+        version: arrangementSnapshotVersion,
+        title: "E2E Print Widths",
+        timeParams: { timeSignature: "4/4", tempo: 120, length: barCount, pulse: "1/4", stepResolution: 16 },
+        tracks: [{ id: 230, instrumentId: "0", measures }],
+        extensions: { measureWidths: { 2: narrowWidth, 3: narrowWidth } },
+    });
+
+    await page.addInitScript((content: string) => {
+        const sessionId = "e2e-print-widths";
+        window.history.replaceState({ ...(window.history.state ?? {}), sessionId }, "");
+        window.sessionStorage.setItem("asb-session-id", sessionId);
+        window.localStorage.setItem(`asb-ui-settings-session-${sessionId}`, JSON.stringify({
+            currentScore: content,
+            viewSettings: { arrangementViewSettings: { displayMode: "staff" } },
+        }));
+    }, packed);
+
+    await page.goto("/");
+    await expect(page.locator("#trackViewerHost")).toBeVisible();
+
+    await page.evaluate(() => {
+        window.print = () => {
+            // No-op; the test inspects the print DOM and dispatches afterprint itself.
+        };
+    });
+
+    const dialog = await openPrintDialog(page);
+    await dialog.locator("#print-button-print").click();
+
+    // The print stylesheet lays a measure out half as wide as on screen, so a stored width is halved with the
+    // default and the measures keep their relative widths on paper.
+    const printedMeasures = page.locator(".print-root .staff-measure-viewer");
+    await expect(printedMeasures).toHaveCount(barCount);
+    await expect(printedMeasures.nth(0)).toHaveCSS("flex-basis", `${MeasureLayout.defaultWidth() / 2}px`);
+    await expect(printedMeasures.nth(1)).toHaveCSS("flex-basis", `${narrowWidth / 2}px`);
+
+    // The narrow measures share the first row with the bar before them, instead of a fixed two-per-row grid.
+    const blocks = page.locator(".print-root .print-bar-block");
+    await expect(blocks).toHaveCount(2);
+    await expect(blocks.nth(0).locator(".staff-measure-viewer")).toHaveCount(3);
+    await expect(blocks.nth(1).locator(".staff-measure-viewer")).toHaveCount(1);
 
     // Cleanup.
     await page.evaluate(() => {

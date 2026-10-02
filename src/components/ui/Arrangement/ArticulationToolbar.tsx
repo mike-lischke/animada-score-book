@@ -6,12 +6,15 @@
 import type { ComponentChild } from "preact";
 
 import { Articulation, articulationOf, availableArticulations } from "../../../core/articulation.js";
-import type { ISbDmTrack, ScoreBookDataModel } from "../../../core/ScoreBookDataModel.js";
+import { AppStorage } from "../../../core/AppStorage.js";
+import type { ISbDmTrack, ISbDmTrackPiece, ScoreBookDataModel } from "../../../core/ScoreBookDataModel.js";
 import { compareFractions } from "../../../core/serialisation/numeric-functions.js";
-import type { IAudioData } from "../../../core/types/general.js";
+import type { IAudioData, IFraction } from "../../../core/types/general.js";
+import { EditEntryMode } from "../../../core/types/general.js";
 import { requisitions } from "../../../supplement/Requisitions.js";
 import type { SelectionManager } from "../../../ui/SelectionManager.js";
-import { SelectionGranularity, SelectionSerializer, type ISelectionEntry } from "../../../ui/SelectionSerializer.js";
+import { SelectionSerializer, type ISelectionEntry } from "../../../ui/SelectionSerializer.js";
+import { selectionEventsOf } from "../../../ui/selection-ranges.js";
 import { Button } from "../framework/Button.js";
 import { Container } from "../framework/Container.js";
 import { GooeyGroup } from "../framework/GooeyGroup.js";
@@ -21,6 +24,12 @@ import { ChildAlignment, Orientation } from "../framework/ui-types.js";
 export interface IArticulationToolbarProps extends ICommonUIProperties {
     dataModel: ScoreBookDataModel;
     selectionManager: SelectionManager;
+
+    /**
+     * The entry mode the view works in. In insert mode the bar keeps the chosen articulation, since the
+     * selection there is merely the insertion point.
+     */
+    entryMode?: EditEntryMode;
 }
 
 interface IArticulationToolbarState {
@@ -52,6 +61,7 @@ export class ArticulationToolbar extends UIComponent<IArticulationToolbarProps, 
 
         this.state = {
             canEnter: false,
+            activeArticulation: AppStorage.loadUISettings()?.entryArticulation,
             available: new Set(),
         };
     }
@@ -65,6 +75,20 @@ export class ArticulationToolbar extends UIComponent<IArticulationToolbarProps, 
     public override componentWillUnmount(): void {
         requisitions.unregister("selectionChanged", this.handleSelectionChanged);
         requisitions.unregister("arrangementReverted", this.handleArrangementReverted);
+    }
+
+    public override componentDidUpdate(previousProps: IArticulationToolbarProps): void {
+        const { entryMode } = this.props;
+
+        // Switching the mode switches where the mark comes from: the events the selection addresses in
+        // the overwrite mode, the articulation the next entry uses in insert mode.
+        if (previousProps.entryMode !== entryMode) {
+            this.refreshState();
+
+            if (entryMode === EditEntryMode.Insert) {
+                this.restoreStoredArticulation();
+            }
+        }
     }
 
     public override render(): ComponentChild {
@@ -118,7 +142,8 @@ export class ArticulationToolbar extends UIComponent<IArticulationToolbarProps, 
     };
 
     private refreshState(): void {
-        const { selectionManager } = this.props;
+        const { selectionManager, entryMode } = this.props;
+        const { activeArticulation: chosenArticulation } = this.state;
 
         const entries = [...selectionManager.currentSelection.values()];
         const tracks = this.resolveSelectedTracks(entries);
@@ -126,23 +151,47 @@ export class ArticulationToolbar extends UIComponent<IArticulationToolbarProps, 
         const markedStyleId = this.resolveMarkedStyleId(entries);
 
         const noteStyleList = Object.values(noteStyles);
-        const voiceStyle = markedStyleId !== undefined
-            ? noteStyleList.find((style) => {
+        const markedStyle = markedStyleId === undefined
+            ? undefined
+            : noteStyleList.find((style) => {
                 return style.id === markedStyleId;
-            })
-            : noteStyleList[0];
-        const activeArticulation = voiceStyle !== undefined
-            ? articulationOf(voiceStyle)
-            : undefined;
-        const available = voiceStyle !== undefined
-            ? availableArticulations(noteStyles, voiceStyle.id)
-            : new Set<Articulation>();
+            });
+
+        // The mark follows the selection: it is dropped as soon as the addressed events do not share
+        // one style. Insert mode keeps the articulation the user chose. The availability still comes
+        // from the reference style of the addressed instrument.
+        const markedArticulation = markedStyle === undefined ? undefined : articulationOf(markedStyle);
+        const activeArticulation = entryMode === EditEntryMode.Insert
+            ? chosenArticulation
+            : markedArticulation;
+        const buttonStyle = markedStyle ?? noteStyleList.at(0);
+        const available = buttonStyle === undefined
+            ? new Set<Articulation>()
+            : availableArticulations(noteStyles, buttonStyle.id);
 
         this.setState({
-            canEnter: this.canEnterNotes(tracks),
+            canEnter: this.canEnterArticulation(tracks, entryMode),
             activeArticulation,
             available,
         });
+    }
+
+    /**
+     * Checks whether the buttons can be used. The overwrite mode needs a selection it can change; in
+     * insert mode the choice only sets the value the next entry uses, which needs neither a cursor nor
+     * a selection.
+     *
+     * @param tracks The distinct selected tracks.
+     * @param entryMode The entry mode the view works in.
+     *
+     * @returns True when the toolbar buttons can be used.
+     */
+    private canEnterArticulation(tracks: ISbDmTrack[], entryMode?: EditEntryMode): boolean {
+        if (entryMode === EditEntryMode.Insert) {
+            return true;
+        }
+
+        return this.canEnterNotes(tracks);
     }
 
     /**
@@ -212,50 +261,73 @@ export class ArticulationToolbar extends UIComponent<IArticulationToolbarProps, 
     }
 
     /**
-     * Determines the note style shared by all currently selected notes across all selected tracks.
+     * Determines the note style shared by all events the selection addresses. A whole track or measure
+     * covers every one of its events, so one accented note among plain ones is enough to leave the
+     * toolbar without a mark.
      *
      * @param entries All current selection entries.
      *
      * @returns The common note style id, or undefined when no single style is shared.
      */
     private resolveMarkedStyleId(entries: ISelectionEntry[]): string | undefined {
-        const noteEntries = entries.filter((entry) => {
-            return entry.granularity === SelectionGranularity.Note;
-        });
-
-        if (noteEntries.length === 0) {
+        const arrangement = this.props.dataModel.arrangement;
+        if (!arrangement) {
             return undefined;
         }
 
-        const firstStyleId = this.noteStyleIdOf(noteEntries[0]);
-        const allMatch = noteEntries.every((entry) => {
-            return this.noteStyleIdOf(entry) === firstStyleId;
+        const styleIds: string[] = [];
+
+        for (const covered of selectionEventsOf(arrangement, entries)) {
+            for (const index of covered.indexes) {
+                const styleId = this.noteStyleIdAt(covered.measure, covered.measure.events[index].start);
+                if (styleId === undefined) {
+                    return undefined;
+                }
+
+                styleIds.push(styleId);
+            }
+        }
+
+        const firstStyleId = styleIds.at(0);
+        if (firstStyleId === undefined) {
+            return undefined;
+        }
+
+        const allMatch = styleIds.every((styleId) => {
+            return styleId === firstStyleId;
         });
 
         return allMatch ? firstStyleId : undefined;
     }
 
-    private noteStyleIdOf(entry: ISelectionEntry): string | undefined {
-        const { target } = entry;
-        if (target.granularity !== SelectionGranularity.Note) {
-            return undefined;
-        }
-
-        const { measure } = target;
-        const cellStart = target.start ?? target.event.start;
+    /**
+     * Resolves the note style of the event that starts at the given position. A rest carries none,
+     * which leaves the selection without a common style.
+     *
+     * @param measure The measure holding the event.
+     * @param start The exact start of the event.
+     *
+     * @returns The style id, or undefined without a usable note event.
+     */
+    private noteStyleIdAt(measure: ISbDmTrackPiece, start: IFraction): string | undefined {
         const noteEvent = measure.noteEvents.find((candidate) => {
-            if (candidate.audioData === undefined) {
-                return false;
-            }
-
-            return compareFractions(cellStart, candidate.start) === 0;
+            return candidate.audioData !== undefined && compareFractions(candidate.start, start) === 0;
         });
 
         return noteEvent?.audioData?.id;
     }
 
+    /**
+     * Marks the stored articulation, which is the one the next entry uses. The overwrite mode takes its
+     * mark from the selection, so returning to insert mode has to restore the chosen articulation.
+     */
+    private restoreStoredArticulation(): void {
+        this.setState({ activeArticulation: AppStorage.loadUISettings()?.entryArticulation });
+    }
+
     private selectArticulation(articulation: Articulation): void {
         this.setState({ activeArticulation: articulation });
+        AppStorage.saveSetting("entryArticulation", articulation);
         void requisitions.execute("articulationChanged", articulation);
     }
 

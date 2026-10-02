@@ -10,7 +10,7 @@ import type { IScoreMetrics } from "../../../../player/TimeCoordinator.js";
 import type { SelectionManager } from "../../../../ui/SelectionManager.js";
 import { ScoreElementKind, type ScoreElementRegistry } from "../../../../ui/ScoreElementRegistry.js";
 import {
-    SelectionGranularity, SelectionSerializer, type ISelectionEntry, type ISelectionHitTester,
+    SelectionGranularity, SelectionSerializer, type ISelectionHitEntry, type ISelectionHitTester,
 } from "../../../../ui/SelectionSerializer.js";
 import { Container } from "../../framework/Container.js";
 import { ChildAlignment, Orientation } from "../../framework/ui-types.js";
@@ -83,7 +83,7 @@ export class GridMeasureViewer extends UIComponent<IGridMeasureViewerProperties,
      *
      * @returns A single-element array with this measure's entry if intersected, or an empty array.
      */
-    public hitTest(rect: DOMRect): ISelectionEntry[] {
+    public hitTest(rect: DOMRect): ISelectionHitEntry[] {
         const { measureNumber, dataModel, scoreElementRegistry, tracks: tracksOverride } = this.props;
         const element = this.base as HTMLElement | null;
         if (!element) {
@@ -98,8 +98,8 @@ export class GridMeasureViewer extends UIComponent<IGridMeasureViewerProperties,
 
         const rows = element.querySelectorAll<HTMLElement>(".grid-measure-row");
         const tracks = tracksOverride ?? dataModel.arrangement!.tracks;
-        const noteEntries: ISelectionEntry[] = [];
-        const trackPieceEntries: ISelectionEntry[] = [];
+        const noteEntries: ISelectionHitEntry[] = [];
+        const trackPieceEntries: ISelectionHitEntry[] = [];
 
         for (let i = 0; i < rows.length; i++) {
             const rowRect = rows[i].getBoundingClientRect();
@@ -140,6 +140,7 @@ export class GridMeasureViewer extends UIComponent<IGridMeasureViewerProperties,
                                 start: location.start,
                                 end: SelectionSerializer.spanEnd(target, location.start, measure),
                             },
+                            rect: noteRect,
                         });
                     }
 
@@ -148,9 +149,10 @@ export class GridMeasureViewer extends UIComponent<IGridMeasureViewerProperties,
             }
 
             if (!rowHasNotes) {
-                const entry: ISelectionEntry = {
+                const entry: ISelectionHitEntry = {
                     granularity: SelectionGranularity.TrackPiece,
                     target: { granularity: SelectionGranularity.TrackPiece, track, measure },
+                    rect: rowRect,
                 };
 
                 trackPieceEntries.push(entry);
@@ -174,6 +176,7 @@ export class GridMeasureViewer extends UIComponent<IGridMeasureViewerProperties,
         return [{
             granularity: SelectionGranularity.Measure,
             target: { granularity: SelectionGranularity.Measure, measure },
+            rect: elRect,
         }];
     }
 

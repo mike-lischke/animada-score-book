@@ -58,6 +58,38 @@ export interface ITimeParamsBase {
     stepResolution: number;
 }
 
+/** The repeat mark a barline carries: one opens a repeated section, the other closes it. */
+export enum RepeatMark {
+    /** `|:`, the barline the repeated section starts at. Its value is the field of {@link IRepeatBar} it sets. */
+    Start = "start",
+
+    /** `:|`, the barline the repeated section ends at. Its value is the field of {@link IRepeatBar} it sets. */
+    End = "end",
+}
+
+/** The repeat marks of one bar. Held per bar number on the arrangement, because a mark sits on a barline. */
+export interface IRepeatBar {
+    /** Whether the barline before the bar opens a repeated section (`|:`). */
+    start?: boolean;
+
+    /** Whether the barline after the bar closes a repeated section (`:|`). */
+    end?: boolean;
+}
+
+/**
+ * Optional, feature-owned data of an arrangement snapshot, keyed by chunk name.
+ *
+ * A chunk carries everything one feature needs beyond the core of a snapshot (version, time params,
+ * tracks). Chunk names are camelCase and name the feature rather than the stored shape. A feature owns
+ * its chunk end to end: it keeps the data in a model field, writes the chunk in `toSnapshot()` and reads
+ * it back in `applyArrangementSnapshot()`, so adding one never touches the core and removing one is a
+ * matter of deleting those three places.
+ *
+ * A chunk is never required to read a snapshot, which is why a missing or unknown chunk is ignored. An unknown
+ * chunk is kept and written back verbatim, so a save through a build that does not understand it never loses it.
+ */
+export type IArrangementExtensions = Record<string, unknown>;
+
 export interface IArrangementSnapshot {
     version: number;
     title?: string;
@@ -67,21 +99,27 @@ export interface IArrangementSnapshot {
     /** The database score ID, if this arrangement is backed by a DB score. */
     scoreId?: number;
 
-    /** Optional per-measure section labels, keyed by 1-based measure number. */
-    measureLabels?: Record<number, string>;
+    /** Feature-owned extension data, keyed by chunk name. See {@link IArrangementExtensions}. */
+    extensions?: IArrangementExtensions;
 }
 
 export interface ITrackSnapshot {
     id: number;
     instrumentId: string;
-    measures: ITrackMeasureSnapshot[];
+    measures: ITrackPieceSnapshot[];
 }
 
-export interface ITrackMeasureSnapshot {
+export interface ITrackPieceSnapshot {
     number: number;
     meter: IMeterSnapshot;
     events: IMeasureEvent[];
     subdivisions: ISubdivision[];
+
+    /**
+     * One-bar repeat (simile): the measure plays what the nearest preceding measure plays, so it holds no
+     * content of its own. Never set on the first measure of a track.
+     */
+    simile?: boolean;
 }
 
 export interface IMeterSnapshot {
@@ -127,4 +165,13 @@ export interface ISubdivision {
 
     /** Whether this subdivision is a true tuplet (asymmetric ratio). */
     isTuplet: boolean;
+}
+
+/**
+ * How entering an event makes room for it. Insert pushes the content behind the entry position, overwrite
+ * keeps the content where it is and replaces or shortens it.
+ */
+export enum EditEntryMode {
+    Insert,
+    Overwrite,
 }

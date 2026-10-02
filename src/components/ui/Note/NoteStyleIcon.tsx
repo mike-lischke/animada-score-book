@@ -5,11 +5,14 @@
 
 import type { ComponentChild, VNode } from "preact";
 
+import { staffSpacePx } from "../../../core/MeasureLayout.js";
 import {
-    Damping, ExcitationMode, HandTechnique, NoteDisplayType, StickTechnique, type NoteCharacteristics,
+    ExcitationMode, HandTechnique, NoteDisplayType, StickTechnique, type NoteCharacteristics,
 } from "../../../core/ScoreBookDataModel.js";
+import { NoteLength } from "../../../core/rest-notation.js";
+import { ScoreSymbols } from "../../../core/ScoreSymbols.js";
 import type { IAudioData } from "../../../core/types/general.js";
-import { NoteImage, NoteKind, NoteLength } from "../framework/NoteImage.js";
+import { ScoreSymbolView } from "../framework/ScoreSymbolView.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
 
 export interface INoteStyleIconProps extends ICommonUIProperties {
@@ -17,8 +20,8 @@ export interface INoteStyleIconProps extends ICommonUIProperties {
 }
 
 /**
- * Renders the note head of a note style the way it appears in the score. The shape and the
- * technique decoration (slap cross, rim line, press roll etc.) are derived from the style's play
+ * Renders the note head of a note style the way it appears in the score. The head comes from the symbol
+ * catalogue, the technique decoration (slap cross, rim line, press roll etc.) from the style's play
  * characteristics, so every instrument voice shows its own recognisable note symbol. Articulation
  * (accent, damping, ghost) is intentionally not shown here — it lives in the articulation toolbar.
  */
@@ -31,29 +34,17 @@ export class NoteStyleIcon extends UIComponent<INoteStyleIconProps> {
         }
 
         const displayType = this.resolveDisplayType(noteStyle.characteristics);
-        const diamondOpen = this.resolveDiamondOpen(noteStyle, displayType);
         const stickTechniqueLayoutClass = this.stickTechniqueLayoutClass();
         const decorations = this.resolveDecorations(noteStyle);
 
-        const headClassName = this.generateFinalClassName([
-            "note-style-icon-head",
-            this.headClass(displayType),
-            this.classFromProperty(diamondOpen, "hollow"),
-        ]);
-
         const showHead = stickTechniqueLayoutClass !== "press-roll";
-        const head = displayType === NoteDisplayType.Oval && showHead
+        const head = showHead
             ? (
-                <NoteImage
-                    className="note-style-icon-note-image"
-                    kind={NoteKind.Note}
-                    value={NoteLength.Quarter}
-                    headType={NoteDisplayType.Oval}
-                    hideStem={true}
-                    flagCount={0}
-                    width={28}
-                    height={56}
-                    alt=""
+                <ScoreSymbolView
+                    className="note-style-icon-head-symbol"
+                    symbol={ScoreSymbols.notehead(displayType, NoteLength.Quarter)}
+                    staffSpace={staffSpacePx}
+                    inkBox
                 />
             )
             : null;
@@ -61,7 +52,7 @@ export class NoteStyleIcon extends UIComponent<INoteStyleIconProps> {
         return (
             <span className={this.generateFinalClassName(["note-style-icon", stickTechniqueLayoutClass])}
                 {...this.dataAttributes}>
-                {showHead && <span className={headClassName}>{head}</span>}
+                {head}
                 {decorations}
             </span>
         );
@@ -99,14 +90,6 @@ export class NoteStyleIcon extends UIComponent<INoteStyleIconProps> {
         }
 
         return characteristics.mainDisplayType!;
-    }
-
-    private resolveDiamondOpen(noteStyle: IAudioData, displayType: NoteDisplayType): boolean {
-        if (displayType !== NoteDisplayType.Diamond) {
-            return false;
-        }
-
-        return noteStyle.sampleProfile.builtInDamping === Damping.Open;
     }
 
     /**
@@ -286,29 +269,5 @@ export class NoteStyleIcon extends UIComponent<INoteStyleIconProps> {
                 <line x1="13" y1="10" x2="3" y2="14" />
             </svg>
         );
-    }
-
-    private headClass(displayType: NoteDisplayType): string {
-        switch (displayType) {
-            case NoteDisplayType.Cross: {
-                return "cross";
-            }
-
-            case NoteDisplayType.Diamond: {
-                return "diamond";
-            }
-
-            case NoteDisplayType.Square: {
-                return "square";
-            }
-
-            case NoteDisplayType.Triangle: {
-                return "triangle";
-            }
-
-            default: {
-                return "oval";
-            }
-        }
     }
 }

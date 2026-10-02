@@ -9,14 +9,14 @@ import {
 } from "../ui/SelectionSerializer.js";
 import { MeasureProjection, modelEventAt, ProjectedItemKind } from "./MeasureProjection.js";
 import type {
-    IMeasureInsert, IMeasureReplace, ISbDmArrangement, ISbDmTrack, ISbDmTrackMeasure, ScoreBookDataModel,
+    ITrackPieceInsert, ITrackPieceReplace, ISbDmArrangement, ISbDmTrack, ISbDmTrackPiece, ScoreBookDataModel,
 } from "./ScoreBookDataModel.js";
 import {
     addFractions, compareFractions, divideFraction, multiplyFraction, subtractFractions,
 } from "./serialisation/numeric-functions.js";
 import { computeIsTuplet } from "./tuplets.js";
 import {
-    ClipboardContentKind, type IClipboardContent, type IClipboardMeasure, type IClipboardTrack,
+    ClipboardContentKind, type IClipboardContent, type IClipboardTrackPiece, type IClipboardTrack,
 } from "./types/clipboard.js";
 import type { IFraction, IMeasureEvent, IMeterSnapshot, ISubdivision } from "./types/general.js";
 
@@ -121,7 +121,7 @@ interface IPasteRange {
 /** The result of building range changes for one source/target track pair. */
 interface IRangePasteBuild {
     kind: PasteResultKind;
-    replacements: IMeasureReplace[];
+    replacements: ITrackPieceReplace[];
 }
 
 /** A source track paired with the target track it was matched to, if any. */
@@ -305,7 +305,7 @@ export class ScoreClipboard {
             tracks.push({
                 instrumentTypeId: track.instrument.typeId,
                 measures: track.measures.map((measure) => {
-                    return this.captureMeasure(measure);
+                    return this.captureMeasure(measure, true);
                 }),
             });
         }
@@ -323,7 +323,7 @@ export class ScoreClipboard {
         const tracks = arrangement.tracks.map((track) => {
             return {
                 instrumentTypeId: track.instrument.typeId,
-                measures: this.captureMeasures(track, bars),
+                measures: this.captureMeasures(track, bars, true),
             };
         });
 
@@ -375,8 +375,8 @@ export class ScoreClipboard {
         return tracks.length > 0 ? { kind: ClipboardContentKind.EventRange, tracks } : undefined;
     }
 
-    private captureRangeMeasures(track: ISbDmTrack, entries: ISelectionEntry[]): IClipboardMeasure[] {
-        const measures: IClipboardMeasure[] = [];
+    private captureRangeMeasures(track: ISbDmTrack, entries: ISelectionEntry[]): IClipboardTrackPiece[] {
+        const measures: IClipboardTrackPiece[] = [];
 
         for (const bar of this.sortedUniqueBars(entries)) {
             const measure = track.measures.at(bar - 1);
@@ -394,7 +394,7 @@ export class ScoreClipboard {
             }
 
             const content = this.captureSubdivisionContent(measure, captured.range.start, captured.range.end,
-                captured.events.length);
+                captured.events);
             measures.push({
                 meter: this.copyMeter(measure.meter),
                 events: captured.events,
@@ -420,7 +420,7 @@ export class ScoreClipboard {
      * @returns The captured events (relative to the range start) with the range they cover, or
      *          undefined when the entries carry no address or no content.
      */
-    private captureSelectionRange(measure: ISbDmTrackMeasure,
+    private captureSelectionRange(measure: ISbDmTrackPiece,
         entries: ISelectionEntry[]): ICapturedRange | undefined {
         const singleNote = entries.length === 1 && entries[0].target.granularity === SelectionGranularity.Note
             ? entries[0].target
@@ -495,7 +495,7 @@ export class ScoreClipboard {
      *
      * @returns The addressed fraction range, or undefined when the entry carries no address.
      */
-    private entryRange(measure: ISbDmTrackMeasure, entry: ISelectionEntry): IFractionRange | undefined {
+    private entryRange(measure: ISbDmTrackPiece, entry: ISelectionEntry): IFractionRange | undefined {
         const target = entry.target;
         if (target.granularity === SelectionGranularity.Note) {
             const start = target.start ?? target.event.start;
@@ -529,7 +529,7 @@ export class ScoreClipboard {
      *
      * @returns The captured events, relative to the range start.
      */
-    private captureSegments(measure: ISbDmTrackMeasure, rangeStart: IFraction,
+    private captureSegments(measure: ISbDmTrackPiece, rangeStart: IFraction,
         bounds: IFraction[]): IMeasureEvent[] {
         const captured: IMeasureEvent[] = [];
         let cursor = { ...rangeStart };
@@ -581,7 +581,7 @@ export class ScoreClipboard {
      *
      * @returns The event starting there, or undefined when no event begins at the position.
      */
-    private eventStartingAt(measure: ISbDmTrackMeasure, start: IFraction): IMeasureEvent | undefined {
+    private eventStartingAt(measure: ISbDmTrackPiece, start: IFraction): IMeasureEvent | undefined {
         return measure.events.find((event) => {
             return compareFractions(event.start, start) === 0;
         });
@@ -622,25 +622,27 @@ export class ScoreClipboard {
     }
 
     /**
-     * Determines the subdivision bookkeeping for a copied event range. Returns the scaled
-     * subdivision for a pure subdivision selection, an empty list for plain content, or the mixed
-     * flag when the range mixes subdivided and non-subdivided events (which paste rejects).
+     * Determines the subdivision bookkeeping for a copied event range. A plain range carries none,
+     * a pure subdivision selection is scaled to the selected slots, and a range that mixes plain
+     * events with subdivision slots keeps each slot group at its place within the range.
      *
      * @param measure The source measure.
      * @param rangeStart The copied range start (inclusive).
      * @param rangeEnd The copied range end (exclusive).
-     * @param eventCount The number of captured events.
+     * @param events The captured events, relative to the range start.
      *
-     * @returns The subdivisions and mixed flag for the copied measure.
+     * @returns The subdivisions and the mixed flag for the copied measure.
      */
-    private captureSubdivisionContent(measure: ISbDmTrackMeasure, rangeStart: IFraction, rangeEnd: IFraction,
-        eventCount: number): { subdivisions: ISubdivision[]; mixed?: boolean; } {
+    private captureSubdivisionContent(measure: ISbDmTrackPiece, rangeStart: IFraction, rangeEnd: IFraction,
+        events: IMeasureEvent[]): { subdivisions: ISubdivision[]; mixed?: boolean; } {
         const kind = this.classifyRange(measure, rangeStart, rangeEnd);
 
-        if (kind !== RangeContentKind.Subdivision) {
-            return kind === RangeContentKind.Mixed
-                ? { subdivisions: [], mixed: true }
-                : { subdivisions: [] };
+        if (kind === RangeContentKind.Plain) {
+            return { subdivisions: [] };
+        }
+
+        if (kind === RangeContentKind.Mixed) {
+            return { subdivisions: this.captureRangeSubdivisions(measure, rangeStart, rangeEnd, events), mixed: true };
         }
 
         const overlapping = this.topLevelSubdivisionSpans(measure).find((span) => {
@@ -650,13 +652,12 @@ export class ScoreClipboard {
         // Scale the single subdivision to the selected slots: normal becomes the selected span in
         // steps, actual becomes the number of captured slots.
         const span = subtractFractions(rangeEnd, rangeStart);
-        const stepsPerBar = measure.meter.stepResolution;
-        const normal = Math.round((span.numerator * stepsPerBar) / span.denominator);
+        const normal = this.fractionSteps(span, measure.meter.stepResolution);
 
         return {
             subdivisions: [{
                 startIndex: 0,
-                actual: eventCount,
+                actual: events.length,
                 normal,
                 isTuplet: overlapping?.isTuplet ?? false,
             }],
@@ -664,9 +665,63 @@ export class ScoreClipboard {
     }
 
     /**
+     * Captures the top-level subdivisions a mixed range covers, each clipped to the range and
+     * positioned relative to the captured events, so a paste recreates the slots where they were.
+     *
+     * @param measure The source measure.
+     * @param rangeStart The copied range start (inclusive).
+     * @param rangeEnd The copied range end (exclusive).
+     * @param events The captured events, relative to the range start.
+     *
+     * @returns The captured subdivisions.
+     */
+    private captureRangeSubdivisions(measure: ISbDmTrackPiece, rangeStart: IFraction, rangeEnd: IFraction,
+        events: IMeasureEvent[]): ISubdivision[] {
+        const stepsPerBar = measure.meter.stepResolution;
+        const subdivisions: ISubdivision[] = [];
+
+        for (const span of this.topLevelSubdivisionSpans(measure)) {
+            const clipStart = compareFractions(span.start, rangeStart) < 0 ? rangeStart : span.start;
+            const clipEnd = compareFractions(span.end, rangeEnd) > 0 ? rangeEnd : span.end;
+            if (compareFractions(clipStart, clipEnd) >= 0) {
+                continue;
+            }
+
+            let startIndex = -1;
+            let actual = 0;
+
+            for (let index = 0; index < events.length; index++) {
+                const start = addFractions(rangeStart, events[index].start);
+                if (compareFractions(start, clipStart) < 0 || compareFractions(start, clipEnd) >= 0) {
+                    continue;
+                }
+
+                if (startIndex < 0) {
+                    startIndex = index;
+                }
+
+                actual++;
+            }
+
+            if (startIndex < 0) {
+                continue;
+            }
+
+            subdivisions.push({
+                startIndex,
+                actual,
+                normal: this.fractionSteps(subtractFractions(clipEnd, clipStart), stepsPerBar),
+                isTuplet: span.isTuplet,
+            });
+        }
+
+        return subdivisions;
+    }
+
+    /**
      * Classifies a fraction range of a measure by its subdivision content: plain when it contains
      * no subdivision slots, subdivision when it contains only subdivision slots, and mixed when it
-     * contains both. Mixed ranges cannot be pasted unambiguously.
+     * contains both. A mixed range carries its slots with the copied content.
      *
      * @param measure The measure to inspect.
      * @param rangeStart The range start (inclusive).
@@ -674,7 +729,7 @@ export class ScoreClipboard {
      *
      * @returns The content classification.
      */
-    private classifyRange(measure: ISbDmTrackMeasure, rangeStart: IFraction, rangeEnd: IFraction): RangeContentKind {
+    private classifyRange(measure: ISbDmTrackPiece, rangeStart: IFraction, rangeEnd: IFraction): RangeContentKind {
         const spans = this.topLevelSubdivisionSpans(measure);
         if (spans.length === 0) {
             return RangeContentKind.Plain;
@@ -711,7 +766,7 @@ export class ScoreClipboard {
      *
      * @returns The top-level subdivision spans.
      */
-    private topLevelSubdivisionSpans(measure: ISbDmTrackMeasure): ISubdivisionSpan[] {
+    private topLevelSubdivisionSpans(measure: ISbDmTrackPiece): ISubdivisionSpan[] {
         const projected = MeasureProjection.project(measure);
         const spans: ISubdivisionSpan[] = [];
 
@@ -726,6 +781,20 @@ export class ScoreClipboard {
         }
 
         return spans;
+    }
+
+    /**
+     * Returns the start of the first top-level subdivision that begins behind the given position.
+     *
+     * @param measure The measure to inspect.
+     * @param start The position to look past.
+     *
+     * @returns The subdivision start, or undefined when none begins behind the position.
+     */
+    private followingSubdivisionStart(measure: ISbDmTrackPiece, start: IFraction): IFraction | undefined {
+        return this.topLevelSubdivisionSpans(measure).find((span) => {
+            return compareFractions(span.start, start) > 0;
+        })?.start;
     }
 
     private pasteTrack(content: IClipboardContent, entries: ISelectionEntry[],
@@ -839,26 +908,6 @@ export class ScoreClipboard {
             return { kind: PasteResultKind.TrackCountMismatch };
         }
 
-        // A range that mixes subdivided and non-subdivided events cannot be pasted unambiguously.
-        if (content.tracks.some((track) => {
-            return track.measures.some((measure) => {
-                return measure.mixed === true;
-            });
-        })) {
-            return { kind: PasteResultKind.TooComplex };
-        }
-
-        const subdivisionTracks = content.tracks.filter((track) => {
-            return track.measures.some((measure) => {
-                return measure.subdivisions.length > 0;
-            });
-        });
-
-        // Pasting subdivisions from more than one source track is too complex to match reliably.
-        if (subdivisionTracks.length > 1) {
-            return { kind: PasteResultKind.TooComplex };
-        }
-
         if (content.tracks.length === 1) {
             return this.pasteSingleTrackRanges(content.tracks[0], entries, arrangement, granularity, options);
         }
@@ -873,8 +922,8 @@ export class ScoreClipboard {
             return SelectionSerializer.trackOf(entry).id;
         }));
 
-        const replacements: IMeasureReplace[] = [];
-        const insertions: IMeasureInsert[] = [];
+        const replacements: ITrackPieceReplace[] = [];
+        const insertions: ITrackPieceInsert[] = [];
 
         for (const trackId of trackIds) {
             const track = arrangement.tracks.find((candidate) => {
@@ -909,21 +958,7 @@ export class ScoreClipboard {
                 continue;
             }
 
-            const hasSubdivision = sourceTrack.measures.some((measure) => {
-                return measure.subdivisions.length > 0;
-            });
-
-            let build: IRangePasteBuild;
-            if (hasSubdivision && this.isTargetSubdivision(track, slots)) {
-                build = this.buildSubdivisionIntoTarget(sourceTrack, track, slots, options);
-            } else if (this.isTargetSubdivision(track, slots)) {
-                build = this.buildPlainIntoTargetSubdivision(sourceTrack, track, slots);
-            } else if (hasSubdivision) {
-                build = this.buildSubdivisionReplacements(sourceTrack, track, slots, options);
-            } else {
-                build = this.buildRangeReplacements(sourceTrack, track, slots, options);
-            }
-
+            const build = this.buildRangePaste(sourceTrack, track, slots, options);
             if (build.kind !== PasteResultKind.Success) {
                 return { kind: build.kind };
             }
@@ -956,8 +991,8 @@ export class ScoreClipboard {
             return { kind: matchResult.kind };
         }
 
-        const replacements: IMeasureReplace[] = [];
-        const insertions: IMeasureInsert[] = [];
+        const replacements: ITrackPieceReplace[] = [];
+        const insertions: ITrackPieceInsert[] = [];
         let matchedAny = false;
 
         for (const match of matchResult.matches) {
@@ -985,7 +1020,7 @@ export class ScoreClipboard {
                 ? this.resolvePasteRanges(granularity, trackEntries, targetTrack)
                 : this.anchorRanges(targetTrack, anchorEntry);
 
-            const build = this.buildRangeReplacements(match.sourceTrack, targetTrack,
+            const build = this.buildRangePaste(match.sourceTrack, targetTrack,
                 this.sortPasteRanges(slots), options);
             if (build.kind !== PasteResultKind.Success) {
                 return { kind: build.kind };
@@ -999,6 +1034,58 @@ export class ScoreClipboard {
         }
 
         return this.applyRangeChanges(replacements, insertions);
+    }
+
+    /**
+     * Chooses the builder for one source/target track pair. A subdivision target keeps its own
+     * structure; a subdivision source recreates its slots, unless it is mixed and the target does not
+     * match its size, which pastes as plain content.
+     *
+     * @param sourceTrack The copied source track.
+     * @param targetTrack The target track.
+     * @param slots The resolved target ranges.
+     * @param options The resolutions of this paste.
+     *
+     * @returns The build result.
+     */
+    private buildRangePaste(sourceTrack: IClipboardTrack, targetTrack: ISbDmTrack,
+        slots: IPasteRange[], options: IRangePasteOptions): IRangePasteBuild {
+        if (slots.length === 0) {
+            return this.buildRangeReplacements(sourceTrack, targetTrack, slots, options);
+        }
+
+        const hasSubdivision = sourceTrack.measures.some((measure) => {
+            return measure.subdivisions.length > 0;
+        });
+
+        if (this.isTargetSubdivision(targetTrack, slots)) {
+            const recreatesSlots = hasSubdivision && !this.isMixedSource(sourceTrack);
+
+            return recreatesSlots
+                ? this.buildSubdivisionIntoTarget(sourceTrack, targetTrack, slots, options)
+                : this.buildPlainIntoTargetSubdivision(sourceTrack, targetTrack, slots);
+        }
+
+        if (!hasSubdivision) {
+            return this.buildRangeReplacements(sourceTrack, targetTrack, slots, options);
+        }
+
+        return this.isMixedSource(sourceTrack)
+            ? this.buildMixedSubdivisionReplacements(sourceTrack, targetTrack, slots, options)
+            : this.buildSubdivisionReplacements(sourceTrack, targetTrack, slots, options);
+    }
+
+    /**
+     * Determines whether a copied track piece mixes plain events with subdivision slots.
+     *
+     * @param sourceTrack The copied source track.
+     *
+     * @returns True when any copied measure is mixed.
+     */
+    private isMixedSource(sourceTrack: IClipboardTrack): boolean {
+        return sourceTrack.measures.some((measure) => {
+            return measure.mixed === true;
+        });
     }
 
     /**
@@ -1053,8 +1140,15 @@ export class ScoreClipboard {
 
         if (isCursor) {
             targetStart = firstSlot.start;
-            const remaining = subtractFractions({ numerator: 1, denominator: 1 }, targetStart);
+            const remaining = subtractFractions(barLine, targetStart);
             targetSpan = compareFractions(sourceSpan, remaining) < 0 ? sourceSpan : remaining;
+
+            // A range that would reach into a subdivision stops at its start, so no slot is cut.
+            const boundary = this.followingSubdivisionStart(measure, targetStart);
+            const targetEnd = addFractions(targetStart, targetSpan);
+            if (boundary !== undefined && compareFractions(boundary, targetEnd) < 0) {
+                targetSpan = subtractFractions(boundary, targetStart);
+            }
         } else {
             const lastSlot = slots[slots.length - 1];
             targetStart = firstSlot.start;
@@ -1065,10 +1159,6 @@ export class ScoreClipboard {
         const targetEnd = addFractions(targetStart, targetSpan);
         const spanSteps = normalOverride ?? this.fractionSteps(targetSpan, stepsPerBar);
         const spanMatches = compareFractions(targetSpan, sourceSpan) === 0;
-
-        if (this.classifyRange(measure, targetStart, targetEnd) === RangeContentKind.Mixed) {
-            return { kind: PasteResultKind.TooComplex, replacements: [] };
-        }
 
         // Case 1 (cursor) and Case 3 (matching selection): insert the subdivision as-is.
         if (isCursor || spanMatches) {
@@ -1111,8 +1201,8 @@ export class ScoreClipboard {
         // A chosen mode takes precedence and applies to any selection that neither matches the
         // source nor is a plain cursor.
         if (options.subdivisionMode !== undefined) {
-            const replacements: IMeasureReplace[] = [];
-            const base: Omit<IMeasureReplace, "events" | "subdivisions"> = {
+            const replacements: ITrackPieceReplace[] = [];
+            const base: Omit<ITrackPieceReplace, "events" | "subdivisions"> = {
                 trackId: targetTrack.id,
                 bar: firstSlot.bar,
                 start: targetStart,
@@ -1171,6 +1261,76 @@ export class ScoreClipboard {
 
         // Case 2: a larger plain selection needs a user decision.
         return { kind: PasteResultKind.NeedsSubdivisionMode, replacements: [] };
+    }
+
+    /**
+     * Builds replacements for pasting a mixed source range — plain events next to subdivision slots.
+     * A matching target receives the range as it was copied, slots included; a target of a different
+     * size drops the slots and pastes the range as plain content.
+     *
+     * @param sourceTrack The copied mixed source.
+     * @param targetTrack The target track.
+     * @param slots The resolved target ranges.
+     * @param options The resolutions of this paste.
+     *
+     * @returns The build result.
+     */
+    private buildMixedSubdivisionReplacements(sourceTrack: IClipboardTrack, targetTrack: ISbDmTrack,
+        slots: IPasteRange[], options: IRangePasteOptions): IRangePasteBuild {
+        // A mixed range is captured as one measure; anything else pastes as plain content.
+        if (sourceTrack.measures.length !== 1) {
+            return this.buildRangeReplacements(sourceTrack, targetTrack, slots, options);
+        }
+
+        const sourceMeasure = sourceTrack.measures[0];
+        const firstSlot = slots[0];
+        const measure = targetTrack.measures.at(firstSlot.bar - 1);
+        if (!measure) {
+            return { kind: PasteResultKind.NoSelection, replacements: [] };
+        }
+
+        if (!this.meterMatches(sourceMeasure.meter, measure.meter)) {
+            return { kind: PasteResultKind.MeterMismatch, replacements: [] };
+        }
+
+        const sourceSpan = sourceMeasure.events.reduce((sum, event) => {
+            return addFractions(sum, event.duration);
+        }, { ...zero });
+
+        if (sourceSpan.numerator <= 0) {
+            return { kind: PasteResultKind.Success, replacements: [] };
+        }
+
+        const targetStart = firstSlot.start;
+        let targetSpan: IFraction;
+
+        if (options.singleNote && slots.length === 1) {
+            const remaining = subtractFractions(barLine, targetStart);
+            targetSpan = compareFractions(sourceSpan, remaining) < 0 ? sourceSpan : remaining;
+        } else {
+            targetSpan = subtractFractions(slots[slots.length - 1].end, targetStart);
+        }
+
+        // Only an exact match recreates the slots; a different target size pastes as plain content.
+        if (compareFractions(targetSpan, sourceSpan) !== 0) {
+            return this.buildRangeReplacements(sourceTrack, targetTrack, slots, options);
+        }
+
+        return {
+            kind: PasteResultKind.Success,
+            replacements: [{
+                trackId: targetTrack.id,
+                bar: firstSlot.bar,
+                events: sourceMeasure.events.map((event) => {
+                    return this.cloneEvent(event);
+                }),
+                start: targetStart,
+                end: addFractions(targetStart, sourceSpan),
+                subdivisions: sourceMeasure.subdivisions.map((subdivision) => {
+                    return { ...subdivision };
+                }),
+            }],
+        };
     }
 
     /**
@@ -1342,9 +1502,6 @@ export class ScoreClipboard {
         }
 
         const range = this.spanOf(slots);
-        if (this.classifyRange(measure, range.start, range.end) === RangeContentKind.Mixed) {
-            return { kind: PasteResultKind.TooComplex, replacements: [] };
-        }
 
         const sourceEvents = this.flattenSourceEvents(sourceTrack).events;
         if (sourceEvents.length === 0) {
@@ -1432,8 +1589,8 @@ export class ScoreClipboard {
      * @returns The insertions, or undefined when they cannot be built from the selection.
      */
     private buildShiftInsertions(entries: ISelectionEntry[],
-        sourceTrack: IClipboardTrack): IMeasureInsert[] | undefined {
-        const addressed: Array<{ measure: ISbDmTrackMeasure; event: IMeasureEvent; start: IFraction; }> = [];
+        sourceTrack: IClipboardTrack): ITrackPieceInsert[] | undefined {
+        const addressed: Array<{ measure: ISbDmTrackPiece; event: IMeasureEvent; start: IFraction; }> = [];
 
         for (const entry of entries) {
             const target = entry.target;
@@ -1452,8 +1609,9 @@ export class ScoreClipboard {
             return undefined;
         }
 
-        const targetTrack = addressed[0].measure.track;
-        if (this.trackHasSubdivisions(targetTrack) || sourceTrack.measures.some((measure) => {
+        // A subdivision source keeps its records, which only the replace path rebuilds; the shifted
+        // insertion carries plain events.
+        if (sourceTrack.measures.some((measure) => {
             return measure.subdivisions.length > 0;
         })) {
             return undefined;
@@ -1474,6 +1632,13 @@ export class ScoreClipboard {
             return undefined;
         }
 
+        // A run that covers a subdivision only partly would lose slots, so the addressed ranges are
+        // replaced instead of shifted.
+        if (this.cutsSubdivision(first.measure, first.event.start,
+            addFractions(last.event.start, last.event.duration))) {
+            return undefined;
+        }
+
         const { events: sourceEvents } = this.flattenSourceEvents(sourceTrack);
         const offset = subtractFractions(first.start, first.event.start);
 
@@ -1491,15 +1656,21 @@ export class ScoreClipboard {
     }
 
     /**
-     * Checks whether a track contains subdivisions, which do not take part in length changes yet.
+     * Checks whether replacing a run would cut a subdivision: one the run covers only partly would
+     * lose the slots that stick out of it.
      *
-     * @param track The track to inspect.
+     * @param measure The target measure.
+     * @param start The exact start of the run within the measure.
+     * @param end The exact end of the run within the measure.
      *
-     * @returns True when any measure of the track has a subdivision.
+     * @returns True when a subdivision would be cut.
      */
-    private trackHasSubdivisions(track: ISbDmTrack): boolean {
-        return track.measures.some((measure) => {
-            return measure.subdivisions.length > 0;
+    private cutsSubdivision(measure: ISbDmTrackPiece, start: IFraction, end: IFraction): boolean {
+        return this.topLevelSubdivisionSpans(measure).some((span) => {
+            const overlaps = compareFractions(span.start, end) < 0 && compareFractions(span.end, start) > 0;
+            const covered = compareFractions(span.start, start) >= 0 && compareFractions(span.end, end) <= 0;
+
+            return overlaps && !covered;
         });
     }
 
@@ -1515,7 +1686,7 @@ export class ScoreClipboard {
 
         const isSingleNoteAnchor = options.singleNote && slots.length === 1;
 
-        const replacements: IMeasureReplace[] = [];
+        const replacements: ITrackPieceReplace[] = [];
         const groups = this.groupRangesByBar(slots);
         let sourcePosition = { ...zero };
 
@@ -1934,7 +2105,9 @@ export class ScoreClipboard {
     }
 
     private applyMeasurePaste(targets: IMeasureTarget[], content: IClipboardContent): IPasteResult {
-        const replacements: IMeasureReplace[] = [];
+        const replacements: ITrackPieceReplace[] = [];
+        // A width belongs to one bar, so only a copied measure may carry one.
+        const transfersWidth = content.kind === ClipboardContentKind.Measure;
 
         for (let trackIndex = 0; trackIndex < targets.length; trackIndex++) {
             const target = targets[trackIndex];
@@ -1952,12 +2125,22 @@ export class ScoreClipboard {
                     return { kind: PasteResultKind.MeterMismatch };
                 }
 
+                // The width is written before the content, so it is part of the paste's single undo step and the
+                // content can still raise it to its floor.
+                if (transfersWidth) {
+                    this.dataModel.setMeasureWidth(target.bars[barIndex], sourceMeasure.width);
+                }
+
                 replacements.push({
                     trackId: target.track.id,
                     bar: target.bars[barIndex],
                     events: sourceMeasure.events.map((event) => {
                         return this.cloneEvent(event);
                     }),
+                    subdivisions: sourceMeasure.subdivisions.map((subdivision) => {
+                        return { ...subdivision };
+                    }),
+                    simile: sourceMeasure.simile,
                 });
             }
         }
@@ -1965,7 +2148,7 @@ export class ScoreClipboard {
         return this.applyReplacements(replacements);
     }
 
-    private applyReplacements(replacements: IMeasureReplace[]): IPasteResult {
+    private applyReplacements(replacements: ITrackPieceReplace[]): IPasteResult {
         if (replacements.length === 0) {
             return { kind: PasteResultKind.NoSelection };
         }
@@ -1990,7 +2173,7 @@ export class ScoreClipboard {
      *
      * @returns The outcome of the operation.
      */
-    private applyRangeChanges(replacements: IMeasureReplace[], insertions: IMeasureInsert[]): IPasteResult {
+    private applyRangeChanges(replacements: ITrackPieceReplace[], insertions: ITrackPieceInsert[]): IPasteResult {
         const inserted = insertions.length > 0 ? this.dataModel.insertEventsWithShift(insertions) : [];
         const remaining = replacements.filter((replacement) => {
             return !inserted.includes(replacement.trackId);
@@ -2005,21 +2188,21 @@ export class ScoreClipboard {
         return inserted.length > 0 ? { kind: PasteResultKind.Success } : result;
     }
 
-    private captureMeasures(track: ISbDmTrack, bars: number[]): IClipboardMeasure[] {
-        const measures: IClipboardMeasure[] = [];
+    private captureMeasures(track: ISbDmTrack, bars: number[], withWidth = false): IClipboardTrackPiece[] {
+        const measures: IClipboardTrackPiece[] = [];
 
         for (const bar of bars) {
             const measure = track.measures.at(bar - 1);
             if (measure) {
-                measures.push(this.captureMeasure(measure));
+                measures.push(this.captureMeasure(measure, withWidth));
             }
         }
 
         return measures;
     }
 
-    private captureMeasure(measure: ISbDmTrackMeasure): IClipboardMeasure {
-        return {
+    private captureMeasure(measure: ISbDmTrackPiece, withWidth = false): IClipboardTrackPiece {
+        const captured: IClipboardTrackPiece = {
             meter: this.copyMeter(measure.meter),
             events: measure.events.map((event) => {
                 return this.cloneEvent(event);
@@ -2028,6 +2211,16 @@ export class ScoreClipboard {
                 return { ...subdivision };
             }),
         };
+
+        if (withWidth) {
+            captured.width = this.dataModel.arrangement?.measureWidths?.get(measure.number);
+        }
+
+        if (measure.simile) {
+            captured.simile = true;
+        }
+
+        return captured;
     }
 
     private cloneEvent(event: IMeasureEvent): IMeasureEvent {

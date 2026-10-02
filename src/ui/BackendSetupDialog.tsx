@@ -32,7 +32,17 @@ enum BackendSetupState {
     Error,
 }
 
-type BackendSetupMode = "fatal" | "initial" | "admin";
+/** Why the backend setup dialog was opened, which decides what it offers. */
+export enum BackendSetupMode {
+    /** The backend cannot run at all, so the dialog only states why. */
+    Fatal,
+
+    /** The backend needs its database tables, so the dialog offers to create them. */
+    Initial,
+
+    /** The user administers the database from within the app. */
+    Admin,
+}
 
 interface IBackendConfig {
     engine: string;
@@ -62,7 +72,7 @@ export class BackendSetupDialog extends UIComponent<IBackendSetupDialogPropertie
 
         this.state = {
             phase: BackendSetupState.NeedsSetup,
-            mode: "initial",
+            mode: BackendSetupMode.Initial,
             config: undefined,
             hasData: false,
             errorMessage: "",
@@ -82,7 +92,7 @@ export class BackendSetupDialog extends UIComponent<IBackendSetupDialogPropertie
      */
     public async show(options: {
         mode: BackendSetupMode; configError?: string; dbError?: string;
-    } = { mode: "initial" }): Promise<"done" | "reset"> {
+    } = { mode: BackendSetupMode.Initial }): Promise<"done" | "reset"> {
         this.signal = new Semaphore<"done" | "reset">();
         this.setState({
             mode: options.mode,
@@ -167,7 +177,7 @@ export class BackendSetupDialog extends UIComponent<IBackendSetupDialogPropertie
             ];
         } else if (isBusy) {
             actions = [];
-        } else if (mode === "initial") {
+        } else if (mode === BackendSetupMode.Initial) {
             actions = [
                 <Button
                     id="backend-setup-init"

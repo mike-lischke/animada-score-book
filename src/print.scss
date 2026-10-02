@@ -38,13 +38,13 @@
         background: white;
 
         /*
-         * Render the score exactly like the on-screen player and use one CSS `zoom` to
-         * fit the configured number of bars per line into the printable page width.
-         * `--print-bars-per-line` is set inline on .print-root by PrintView.
-         * `--print-zoom` is exposed so stem widths and pixel offsets can compensate
-         * for the scaling and stay pixel-perfect (integer px after zoom).
+         * Render the score exactly like the on-screen player and use one CSS `zoom` to fit the widest row
+         * into the printable page width. PrintView sets `--print-zoom` inline on .print-root from the
+         * measures' widths; the fallback is the value two default measures per row produce and keeps this
+         * stylesheet usable on its own. The variable is exposed so stem widths and pixel offsets can
+         * compensate for the scaling and stay pixel-perfect (integer px after zoom).
          */
-        --print-zoom: calc(1.32 / var(--print-bars-per-line, 2));
+        --print-zoom: 0.66;
         zoom: var(--print-zoom);
     }
 
@@ -279,10 +279,8 @@
     }
 
     /* Note decorations: force black for print. */
-    .staff-note-head.ghost-note::before,
-    .staff-note-head-ghost-paren,
     .staff-note-head-damped-plus,
-    .staff-note-viewer-accent {
+    .staff-note-head {
         color: #000 !important;
     }
 

@@ -7,7 +7,7 @@ import { expect, test } from "@playwright/test";
 
 import {
     beijaFlorImportPath, ensureGridMode, expectGridModePolyrhythmNotes, expectImportedPolyrhythmSong,
-    expectPlaybackToMove, routeApi,
+    expectPlaybackToMove, findStaffMeasure, routeApi,
 } from "./e2e-test-helpers.js";
 
 const bolero3ImportPath = "/?t=Bolero%203&a2=6-8.50.1.3-8.8.319ihbrp-4UX1WbY5oS";
@@ -135,8 +135,7 @@ test.describe("BananaDrum polyrhythm import", () => {
 
         await expect(page.locator(".staff-measure-viewer").first()).toBeVisible();
 
-        const staffTupletLabelCount = await page.evaluate(() => {
-            const viewer = document.querySelectorAll(".staff-measure-viewer")[5];
+        const staffTupletLabelCount = await (await findStaffMeasure(page, 6)).evaluate((viewer) => {
             const container = viewer.querySelector(".staff-note-viewer-tuplets");
 
             return container ? container.children.length : 0;

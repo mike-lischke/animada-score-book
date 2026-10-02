@@ -9,13 +9,13 @@ import type { Mutable } from "../../../core/types/general.js";
 import { requisitions } from "../../../supplement/Requisitions.js";
 import type { SelectionManager } from "../../../ui/SelectionManager.js";
 import {
-    SelectionGranularity, SelectionSerializer, type ISelectionDelta, type ISelectionEntry, type ISelectionHitTester,
+    SelectionGranularity, SelectionSerializer, type ISelectionDelta, type ISelectionHitEntry,
+    type ISelectionHitTester,
 } from "../../../ui/SelectionSerializer.js";
 import { Button } from "../framework/Button.js";
 import { UIIcon } from "../framework/UIIcon.js";
 import { Container } from "../framework/Container.js";
 import { Icon } from "../framework/Icon.js";
-import { NoteImage, NoteLength } from "../framework/NoteImage.js";
 import { SplitSlider } from "../framework/SplitSlider.js";
 import { CheckState, Toggle } from "../framework/Toggle.js";
 import { ChildAlignment, Orientation } from "../framework/ui-types.js";
@@ -72,7 +72,7 @@ export class TrackControls extends UIComponent<ITrackControlsProperties, ITrackC
         }
     }
 
-    public hitTest(rect: DOMRect): ISelectionEntry[] {
+    public hitTest(rect: DOMRect): ISelectionHitEntry[] {
         const { tracks } = this.props;
         const element = this.base as HTMLElement | null;
         if (!element) {
@@ -80,7 +80,7 @@ export class TrackControls extends UIComponent<ITrackControlsProperties, ITrackC
         }
 
         const rows = element.querySelectorAll<HTMLElement>(".trackControls");
-        const entries: ISelectionEntry[] = [];
+        const entries: ISelectionHitEntry[] = [];
 
         for (let i = 0; i < rows.length; i++) {
             const rowRect = rows[i].getBoundingClientRect();
@@ -90,6 +90,7 @@ export class TrackControls extends UIComponent<ITrackControlsProperties, ITrackC
                 entries.push({
                     granularity: SelectionGranularity.Track,
                     target: { granularity: SelectionGranularity.Track, track },
+                    rect: rowRect,
                 });
             }
         }
@@ -195,13 +196,10 @@ export class TrackControls extends UIComponent<ITrackControlsProperties, ITrackC
                             mainAlignment={ChildAlignment.SpaceBetween}
                         >
                             <div className="trackViewModeGridIcon" aria-label="Show grid view" />
-                            <NoteImage
-                                className="trackViewModeStaffIcon"
-                                value={NoteLength.Quarter}
-                                width={12}
-                                height={18}
-                                alt="Show staff view"
-                            />
+                            <div className="trackViewModeStaffIcon" aria-label="Show staff view">
+                                <span className="trackViewModeStaffIconHead" />
+                                <span className="trackViewModeStaffIconStem" />
+                            </div>
                         </Container>
                     </Container>
                 </Container>

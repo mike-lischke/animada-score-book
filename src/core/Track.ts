@@ -6,14 +6,14 @@
 import { requisitions } from "../supplement/Requisitions.js";
 import {
     SbDmEntityType, type ISbDmArrangement, type ISbDmInstrument, type ISbDmNoteEvent, type ISbDmTrack,
-    type ISbDmTrackMeasure, type ITiming
+    type ISbDmTrackPiece, type ITiming
 } from "./ScoreBookDataModel.js";
 import { addFractions, compareFractions, reduceFraction } from "./serialisation/numeric-functions.js";
 import type { Mutable } from "./types/general.js";
 import { createBeatGroups, getNewId, reserveId } from "./utils.js";
 
 /**
- * A track holds its content as a list of {@link ISbDmTrackMeasure} entries (one per bar).
+ * A track holds its content as a list of {@link ISbDmTrackPiece} entries (one per bar).
  * Measure events are the single source of truth for note placement, duration and style.
  *
  * Tracks created via {@link Arrangement.addTrack} start with empty measures. Snapshot
@@ -25,7 +25,7 @@ import { createBeatGroups, getNewId, reserveId } from "./utils.js";
 export class Track implements ISbDmTrack {
     public readonly type = SbDmEntityType.Track;
     public readonly id: number;
-    public readonly measures: ISbDmTrackMeasure[] = [];
+    public readonly measures: ISbDmTrackPiece[] = [];
 
     public name = "";
     public volume = 1.0;
@@ -53,7 +53,7 @@ export class Track implements ISbDmTrack {
      * @returns The matching event, a synthesised rest, or undefined.
      */
     public getNoteAt(timing: ITiming): ISbDmNoteEvent | undefined {
-        const measure = this.measures[timing.bar - 1] as ISbDmTrackMeasure | undefined;
+        const measure = this.measures[timing.bar - 1] as ISbDmTrackPiece | undefined;
         if (!measure) {
             return undefined;
         }
@@ -112,6 +112,7 @@ export class Track implements ISbDmTrack {
                 duration: { numerator: 1, denominator: 1 },
             });
             measure.subdivisions.splice(0, measure.subdivisions.length);
+            measure.simile = undefined;
             measure.noteEvents.splice(0, measure.noteEvents.length);
         }
 
@@ -125,7 +126,7 @@ export class Track implements ISbDmTrack {
      * @param atIndex The 0-based index at which to insert.
      * @param source The measure to copy content from, or undefined for an empty measure.
      */
-    public insertMeasure(atIndex: number, source?: ISbDmTrackMeasure): void {
+    public insertMeasure(atIndex: number, source?: ISbDmTrackPiece): void {
         const measure = this.createEmptyMeasure(atIndex + 1);
         if (source) {
             measure.events.splice(0, measure.events.length, ...source.events.map((event) => {
@@ -140,6 +141,10 @@ export class Track implements ISbDmTrack {
             measure.subdivisions.splice(0, measure.subdivisions.length, ...source.subdivisions.map((subdivision) => {
                 return { ...subdivision };
             }));
+
+            if (source.simile) {
+                measure.simile = true;
+            }
         }
 
         this.measures.splice(atIndex, 0, measure);
@@ -168,6 +173,7 @@ export class Track implements ISbDmTrack {
             duration: { numerator: 1, denominator: 1 },
         });
         measure.subdivisions.splice(0, measure.subdivisions.length);
+        measure.simile = undefined;
         measure.noteEvents.splice(0, measure.noteEvents.length);
     }
 
@@ -182,20 +188,25 @@ export class Track implements ISbDmTrack {
 
     private renumberMeasures(): void {
         for (let index = 0; index < this.measures.length; index++) {
-            const measure = this.measures[index] as Mutable<ISbDmTrackMeasure>;
+            const measure = this.measures[index] as Mutable<ISbDmTrackPiece>;
             measure.number = index + 1;
             measure.id = this.getMeasureId(index + 1);
+
+            // A simile repeats the measure before it, so the first measure of a track cannot carry one.
+            if (index === 0 && measure.simile) {
+                measure.simile = undefined;
+            }
         }
     }
 
-    private createEmptyMeasure(measureNumber: number): ISbDmTrackMeasure {
+    private createEmptyMeasure(measureNumber: number): ISbDmTrackPiece {
         const stepsPerBar = this.getStepsPerBar();
         const { timeSignature } = this.arrangement.timeParams;
         const [beats, beatUnits] = timeSignature.split("/").map(Number);
 
         return {
             id: this.getMeasureId(measureNumber),
-            type: SbDmEntityType.TrackMeasure,
+            type: SbDmEntityType.TrackPiece,
             track: this,
             number: measureNumber,
             meter: {
@@ -213,7 +224,7 @@ export class Track implements ISbDmTrack {
         };
     }
 
-    private createSynthesisedRest(measure: ISbDmTrackMeasure, timing: ITiming): ISbDmNoteEvent {
+    private createSynthesisedRest(measure: ISbDmTrackPiece, timing: ITiming): ISbDmNoteEvent {
         const stepsPerBar = this.getStepsPerBar();
 
         return {

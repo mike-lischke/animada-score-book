@@ -6,20 +6,27 @@
 import { type ComponentChild, type CSSProperties, type VNode } from "preact";
 
 import { articulationFromSampleProfile } from "../../../core/articulation.js";
-import type { ISbDmTrackMeasure } from "../../../core/ScoreBookDataModel.js";
+import type { ISbDmTrackPiece } from "../../../core/ScoreBookDataModel.js";
 import {
     Damping, ExcitationMode, HandTechnique, NoteDisplayType, StickTechnique,
     type INoteArticulation,
 } from "../../../core/ScoreBookDataModel.js";
+import { ScoreSymbols, ScoreSymbol, ScoreSymbolSource } from "../../../core/ScoreSymbols.js";
 import {
-    MeasureProjection, ProjectedItemKind, type IProjectedEvent, type IProjectedItem,
+    MeasureProjection, NoteGroupKind, ProjectedItemKind, pulseLengthAt,
+    type INotationGrid, type IProjectedEvent, type IProjectedItem,
 } from "../../../core/MeasureProjection.js";
-import type { IFraction, IAudioData } from "../../../core/types/general.js";
-import { noteValueForUnits, type INoteValue } from "../../../core/rest-notation.js";
+import { staffSpacePx } from "../../../core/MeasureLayout.js";
+import { stemEndVariablePrefix } from "../../../core/smufl/SmuflFontLoader.js";
+import type { IFraction, IAudioData, IRepeatBar, ISubdivision } from "../../../core/types/general.js";
+import { beamCountOf, fallbackNoteValue, noteValueForEvent, NoteLength, type INoteValue }
+    from "../../../core/rest-notation.js";
 import type { IScoreMetrics } from "../../../player/TimeCoordinator.js";
-import { addFractions, compareFractions, subtractFractions } from "../../../core/serialisation/numeric-functions.js";
+import { addFractions, compareFractions, divideFraction, subtractFractions }
+    from "../../../core/serialisation/numeric-functions.js";
 import { ScoreElementKind, type ScoreElementRegistry } from "../../../ui/ScoreElementRegistry.js";
-import { NoteImage, NoteKind, NoteLength } from "../framework/NoteImage.js";
+import { BarlineView } from "../framework/BarlineView.js";
+import { ScoreSymbolView } from "../framework/ScoreSymbolView.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
 
 export interface IStaffNoteViewerProperties extends ICommonUIProperties {
@@ -28,9 +35,15 @@ export interface IStaffNoteViewerProperties extends ICommonUIProperties {
     scoreMetrics: IScoreMetrics;
     baseSteps: number;
 
-    measure: ISbDmTrackMeasure;
+    measure: ISbDmTrackPiece;
     barNumber: number;
     trackId: number;
+
+    /**
+     * The repeat marks of the arrangement, keyed by 1-based bar number. Omitted means no barline carries a mark.
+     */
+    repeatBars?: Map<number, IRepeatBar>;
+
     scoreElementRegistry?: ScoreElementRegistry;
 
     /** Maximum noteLine value across all variants of the instrument (default 1 = single line). */
@@ -46,7 +59,7 @@ export enum StaffNodeKind {
 interface IStaffNoteNode {
     kind: StaffNodeKind.Note;
 
-    /** Index of this note's event in `ISbDmTrackMeasure.events`, matching the resolved note events 1:1. */
+    /** Index of this note's event in `ISbDmTrackPiece.events`, matching the resolved note events 1:1. */
     eventIndex: number;
 
     /** Absolute start within the measure, as a fraction of the whole bar. */
@@ -57,13 +70,9 @@ interface IStaffNoteNode {
     /** Tuplet nesting depth (0 at the top level). */
     depth: number;
 
-    /** Identity of the innermost enclosing tuplet, or undefined for notes outside any tuplet. */
-    tupletId?: number;
-
     glyph: INoteValue;
     beamCount: number;
     displayType: NoteDisplayType;
-    diamondOpen?: boolean;
     noteLine?: number;
     noteStyle?: IAudioData;
     articulation?: INoteArticulation;
@@ -71,6 +80,10 @@ interface IStaffNoteNode {
 
 interface IStaffSubdivisionNode {
     kind: StaffNodeKind.Subdivision;
+
+    /** The subdivision group in the model, which identifies the group a click addresses. */
+    group: ISubdivision;
+
     start: IFraction;
     span: IFraction;
     actual: number;
@@ -94,6 +107,9 @@ interface IBeamSegment {
 }
 
 interface ITupletLabel {
+    /** The tuplet the label belongs to, which is what the label addresses in a hit test. */
+    group: ISubdivision;
+
     leftPercent: number;
     widthPercent: number;
     text: string;
@@ -101,63 +117,152 @@ interface ITupletLabel {
     placement: "above" | "below";
 }
 
-interface ITupletNoteBounds {
-    firstStart?: IFraction;
-    lastStart?: IFraction;
+interface IDrawnAnchors {
+    /** Drawn position of the first anchor, as a fraction of the whole bar. */
+    firstAnchor?: IFraction;
+
+    /** Whether the first anchor belongs to a notehead, which reaches left of its anchor. */
+    firstIsNote: boolean;
+
+    /** Drawn position of the last anchor, as a fraction of the whole bar. */
+    lastAnchor?: IFraction;
+
+    /** Whether the last anchor belongs to a notehead, which ends on its anchor. */
+    lastIsNote: boolean;
 }
 
-export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
-    private tupletIdSequence = 0;
+/**
+ * Width the final barline occupies at the right edge of the last bar, which is what the notes of that bar keep
+ * clear of.
+ */
+const finalBarlineWidth = ScoreSymbols.inkBox(ScoreSymbol.BarlineFinal).width;
 
+/** Width the flags occupy right of a notehead, which the stylesheet owns for the same reason. */
+const noteFlagWidth = "var(--note-flag-width)";
+
+export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
     public override render(): ComponentChild {
         const { isLastBar, scoreMetrics, measure, barNumber, trackId, maxNoteLine = 1,
-            scoreElementRegistry } = this.props;
+            scoreElementRegistry, repeatBars } = this.props;
+
+        // A barline sits between two bars, so the marks on both sides of it decide which one it is. A repeat that
+        // only opens is the opening barline of the bar it opens, so the bar before it draws none at all.
+        const closesRepeat = repeatBars?.get(barNumber)?.end === true;
+        const opensRepeat = repeatBars?.get(barNumber + 1)?.start === true;
+        const boundaryBarline = ScoreSymbols.barlineAt({ closesRepeat, opensRepeat, endsScore: isLastBar });
+        const closingBarline = boundaryBarline === ScoreSymbol.RepeatStart ? undefined : boundaryBarline;
+        const opensWithRepeat = repeatBars?.get(barNumber)?.start === true
+            && repeatBars.get(barNumber - 1)?.end !== true;
+        const openingBarline = opensWithRepeat ? ScoreSymbol.RepeatStart : undefined;
         const className = this.generateFinalClassName([
             "staff-note-viewer",
             this.classFromProperty(isLastBar, "last-bar"),
         ]);
 
-        const { stepsPerBar, stepsPerPulse } = scoreMetrics;
+        // A simile holds no content of its own; its mark replaces the notes the measure would draw.
+        const usesSimile = measure.simile === true;
 
-        const items = MeasureProjection.project(measure);
-        this.tupletIdSequence = 0;
-        const nodes = this.mergeRestsWithinPulses(
-            this.buildNodes(items, stepsPerBar, stepsPerPulse),
-            stepsPerBar,
-            stepsPerPulse,
-        );
+        const items = usesSimile ? [] : MeasureProjection.project(measure);
+        const nodes = this.buildNodes(items, scoreMetrics);
 
         const beamSpans = this.computeBeamSpans(nodes, scoreMetrics);
-        const tupletLabels = this.computeTupletLabels(nodes, stepsPerBar);
+        const tupletLabels = this.computeTupletLabels(nodes, scoreMetrics.stepsPerBar);
 
         const hasAnyNote = nodes.some((node) => {
             return this.nodeHasAnyNote(node);
         });
 
+        // A subdivision is a structure of its own, so its slots stay visible even when they hold rests
+        // only, and so are rests the user split. Only a measure holding nothing but one rest covering
+        // the bar becomes a single whole-measure rest.
+        const hasAnySubdivision = nodes.some((node) => {
+            return node.kind === StaffNodeKind.Subdivision;
+        });
+        const usesWholeBarRest = !hasAnyNote && !hasAnySubdivision && measure.events.length <= 1;
+
         const centerLine = (maxNoteLine + 1) / 2;
 
         // Whole and half rests sit on the centre line (odd count) or the line just below it (even count).
         const restNoteLine = Math.ceil(centerLine);
-        const restLineOffset = (restNoteLine - centerLine) * 10;
+        const restLineOffset = (restNoteLine - centerLine) * staffSpacePx;
 
-        const runs =
-            hasAnyNote
-                ? this.renderItems(nodes, beamSpans, "", centerLine, restLineOffset)
-                : [this.renderWholeBarRestSlot(restLineOffset, barNumber, trackId, scoreElementRegistry)];
+        let runs: ComponentChild[];
+        if (usesSimile) {
+            runs = [this.renderSimileSlot(barNumber, trackId, measure, scoreElementRegistry)];
+        } else if (usesWholeBarRest) {
+            runs = [this.renderWholeBarRestSlot(restLineOffset, barNumber, trackId, measure, scoreElementRegistry)];
+        } else {
+            runs = this.renderItems(nodes, beamSpans, "", centerLine, restLineOffset);
+        }
 
-        // Render staff lines. For a single line, render the centred middle line as before.
-        // For multiple lines, render N lines symmetrically around the vertical centre.
+        // Render the staff lines around the line the notes sit on. The stylesheet states where that line is in
+        // the row, so only the line's place in the staff is computed here.
         const staffLines: ComponentChild[] = [];
         for (let i = 1; i <= maxNoteLine; i++) {
-            const offset = ((i - centerLine) * 10) + 31.5; // 10px = line spacing, +16px = prefix-row shift
+            const offset = (i - centerLine) * staffSpacePx;
             staffLines.push(
                 <div
                     key={`staff-line-${i}`}
                     className="staff-note-viewer-line"
-                    style={{ top: `calc(50% + ${offset}px)` }}
+                    style={{ "--staff-line-offset": `${offset}px` } as CSSProperties}
                 />,
             );
         }
+
+        // The barline spans the staff lines and reaches one staff space past them. A staff of a single line has
+        // no height of its own, so its barline is a stub of two staff spaces on either side of its line.
+        const barlineHeight = maxNoteLine === 1
+            ? staffSpacePx * 4
+            : Math.max((maxNoteLine - 1) * staffSpacePx, staffSpacePx * 2);
+
+        // Every track piece closes with a real barline; the repeat marks at its boundary decide which one, and a
+        // bar that opens a repeated section draws that barline itself.
+        const closingInkWidth = closingBarline === undefined ? "0px" : ScoreSymbols.inkBox(closingBarline).width;
+
+        // A repeat barline reaches into the bar with its dots, so the notes keep clear of that ink and of the gap
+        // the stylesheet states, which is what the dots would otherwise stand right against.
+        let clearance = "0px";
+        if (closingBarline === ScoreSymbol.RepeatEnd || closingBarline === ScoreSymbol.RepeatBoth) {
+            clearance = `calc(${closingInkWidth} + var(--staff-repeat-dot-gap))`;
+        } else if (isLastBar) {
+            clearance = finalBarlineWidth;
+        }
+
+        // The barline a bar opens with stands inside the bar it opens; so does the half of the barline a repeat
+        // draws centred on the boundary when it ends the bar before this one and opens this one at once.
+        const opensAfterRepeatEnd = repeatBars?.get(barNumber)?.start === true
+            && repeatBars.get(barNumber - 1)?.end === true;
+        const openingReach = openingBarline !== undefined
+            ? ScoreSymbols.inkBox(openingBarline).width
+            : (opensAfterRepeatEnd ? StaffNoteViewer.centredReach(ScoreSymbol.RepeatBoth) : undefined);
+
+        // A repeat that closes the bar reaches into it the same way, so the bar keeps that room free of notes too.
+        const closingReach = closingBarline === undefined
+            ? undefined
+            : StaffNoteViewer.repeatReach(closingBarline);
+
+        // A rest stands centred in its slot, and so does the mark of a simile: both keep the room a barline takes
+        // by themselves, so a bar reserves room only where a notehead stands next to the barline.
+        const anchors = StaffNoteViewer.drawnAnchors(nodes, {
+            numerator: 1,
+            denominator: 2 * scoreMetrics.stepsPerBar,
+        });
+        const closingRoom = closingReach === undefined || !anchors.lastIsNote
+            ? "0px"
+            : `calc(${closingReach} + var(--staff-repeat-dot-gap))`;
+        const firstHeadWidth = anchors.firstIsNote
+            ? StaffNoteViewer.firstNoteHeadWidth(nodes)
+            : undefined;
+
+        const openingRoom = this.openingBarlineRoom(openingReach, closingRoom, anchors, firstHeadWidth,
+            scoreMetrics.stepsPerBar);
+
+        const closingBarlineElement = closingBarline === undefined
+            ? null
+            : this.renderBarline(closingBarline, staffSpacePx);
+        const openingBarlineElement = openingBarline === undefined
+            ? null
+            : this.renderBarline(openingBarline, staffSpacePx);
 
         return (
             <div
@@ -167,6 +272,14 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                     bar: barNumber,
                     trackId,
                 })}
+                style={{
+                    "--staff-line-count": `${maxNoteLine}`,
+                    "--staff-barline-height": `${barlineHeight}px`,
+                    "--staff-barline-width": closingInkWidth,
+                    "--staff-opening-barline-room": openingRoom,
+                    "--staff-closing-barline-room": closingRoom,
+                    "--staff-note-clearance": clearance,
+                } as CSSProperties}
                 aria-hidden
                 {...this.dataAttributes}
             >
@@ -193,6 +306,12 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                                         key={`${label.leftPercent}-${label.text}-${label.placement}`}
                                         className={`${baseCls} ${placementCls}`}
                                         style={style}
+                                        ref={scoreElementRegistry?.createRef({
+                                            kind: ScoreElementKind.StaffTupletLabel,
+                                            bar: barNumber,
+                                            trackId,
+                                            measure,
+                                        }, label.group)}
                                     >
                                         <span className="staff-note-viewer-tuplet-text">{label.text}</span>
                                     </span>
@@ -201,8 +320,174 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                         </div>
                     )
                     : null}
-                {isLastBar ? <div className="staff-note-viewer-final-barline" /> : null}
+                {closingBarlineElement}
+                {openingBarlineElement}
             </div>
+        );
+    }
+
+    /**
+     * @param symbol The barline the bar closes with.
+     *
+     * @returns How far that barline reaches into the bar, in CSS length syntax: a repeat that closes the bar draws
+     * its ink on the bar's edge, a repeat that ends and opens at once draws it centred on that edge.
+     */
+    private static repeatReach(symbol: ScoreSymbol): string | undefined {
+        if (symbol === ScoreSymbol.RepeatEnd) {
+            return ScoreSymbols.inkBox(symbol).width;
+        }
+
+        if (symbol === ScoreSymbol.RepeatBoth) {
+            return StaffNoteViewer.centredReach(symbol);
+        }
+
+        return undefined;
+    }
+
+    /**
+     * @param symbol The barline a caller draws centred on a bar's edge.
+     *
+     * @returns How far that barline reaches into the bar beyond the edge, in CSS length syntax.
+     */
+    private static centredReach(symbol: ScoreSymbol): string {
+        const ink = ScoreSymbols.inkBox(symbol).width;
+
+        return `calc(${ink} - round(nearest, ${ink} / 2, 1px))`;
+    }
+
+    /**
+     * Finds the drawn positions of the first and last anchor of a list of nodes, as fractions of the bar the nodes
+     * belong to. A notehead is drawn half a grid step behind its onset, a rest sits centred in its slot. Rests count
+     * as children: a group that starts or ends with one still has to be covered over its full extent.
+     *
+     * @param nodes The nodes to inspect.
+     * @param halfStep Half a grid step, the offset a notehead is drawn at behind its onset.
+     *
+     * @returns The first and last anchor and whether they belong to a notehead, or undefined anchors when the
+     * nodes hold no child.
+     */
+    private static drawnAnchors(nodes: IStaffTreeNode[], halfStep: IFraction): IDrawnAnchors {
+        let firstAnchor: IFraction | undefined;
+        let firstIsNote = false;
+        let lastAnchor: IFraction | undefined;
+        let lastIsNote = false;
+
+        const walk = (items: IStaffTreeNode[]): void => {
+            for (const item of items) {
+                if (item.kind === StaffNodeKind.Note) {
+                    const isNote = item.noteStyle !== undefined;
+                    const anchor = isNote
+                        ? addFractions(item.start, halfStep)
+                        : addFractions(item.start, divideFraction(item.duration, 2));
+
+                    if (firstAnchor === undefined || compareFractions(anchor, firstAnchor) < 0) {
+                        firstAnchor = anchor;
+                        firstIsNote = isNote;
+                    }
+
+                    if (lastAnchor === undefined || compareFractions(anchor, lastAnchor) > 0) {
+                        lastAnchor = anchor;
+                        lastIsNote = isNote;
+                    }
+                } else {
+                    walk(item.children);
+                }
+            }
+        };
+
+        walk(nodes);
+
+        return { firstAnchor, firstIsNote, lastAnchor, lastIsNote };
+    }
+
+    /**
+     * @param nodes The nodes to search.
+     *
+     * @returns The width of the ink of the first notehead, in CSS length syntax, or undefined when the nodes hold
+     * no note.
+     */
+    private static firstNoteHeadWidth(nodes: IStaffTreeNode[]): string | undefined {
+        for (const node of nodes) {
+            if (node.kind === StaffNodeKind.Subdivision) {
+                const nested = StaffNoteViewer.firstNoteHeadWidth(node.children);
+                if (nested !== undefined) {
+                    return nested;
+                }
+
+                continue;
+            }
+
+            if (node.noteStyle !== undefined) {
+                return ScoreSymbols.inkBox(ScoreSymbols.notehead(node.displayType, node.glyph.length)).width;
+            }
+        }
+
+        return undefined;
+    }
+
+    /**
+     * @param fraction The fraction to read.
+     *
+     * @returns The fraction as a percentage of the whole.
+     */
+    private static percentOf(fraction: IFraction): number {
+        return (fraction.numerator / fraction.denominator) * 100;
+    }
+
+    /**
+     * The room the notes of a bar keep before the barline it opens with. A barline a bar opens with reaches into
+     * the bar with its dots, so the notes start right of that ink. How far right is the room the bar's last note
+     * leaves before the barline it closes with, on top of the room the bar keeps free for that barline, which is
+     * what makes both sides of a repeated section look alike. The barline's own ink and the gap the stylesheet
+     * states are the smallest room, and a notehead reaches left of its anchor, so the room the first head already
+     * takes is added back.
+     *
+     * @param reach How far the barline reaches into the bar, or undefined when no barline reaches into it.
+     * @param closingRoom The room the bar keeps free before the barline it closes with.
+     * @param anchors The drawn anchors of the bar's first and last ink.
+     * @param firstHeadWidth The width of the first notehead's ink, or undefined when the bar opens without a note.
+     * @param stepsPerBar The number of base-grid steps in a bar.
+     *
+     * @returns The room, in CSS length syntax.
+     */
+    private openingBarlineRoom(reach: string | undefined, closingRoom: string, anchors: IDrawnAnchors,
+        firstHeadWidth: string | undefined, stepsPerBar: number): string {
+        if (reach === undefined || firstHeadWidth === undefined || anchors.firstAnchor === undefined
+            || !anchors.firstIsNote) {
+            return "0px";
+        }
+
+        const ink = `calc(${reach} + var(--staff-repeat-dot-gap))`;
+
+        // The room the last note leaves before the barline it closes with, or the barline's own ink when the bar
+        // closes with no note whose room could stand in for it.
+        const { lastAnchor } = anchors;
+        const room = lastAnchor === undefined || !anchors.lastIsNote
+            ? ink
+            : `max(${ink}, calc(${100 - StaffNoteViewer.percentOf(lastAnchor)}% + ${closingRoom}))`;
+
+        // A notehead is drawn half a grid step behind the anchor of its slot, so what the first head already takes
+        // of the room is subtracted. Never more than half the bar is reserved, so the notes keep a place to stand.
+        const headOverhang = `calc(${100 / (2 * stepsPerBar)}% - ${firstHeadWidth})`;
+
+        return `max(0px, min(50%, calc(${room} - ${headOverhang})))`;
+    }
+
+    /**
+     * @param symbol The barline to draw.
+     * @param staffSpace The size of one staff space, in px.
+     *
+     * @returns The barline, placed on the edge of the bar the symbol states.
+     */
+    private renderBarline(symbol: ScoreSymbol, staffSpace: number): ComponentChild {
+        const placement = ScoreSymbols.barlineEdge(symbol);
+
+        // The class is built here and not merged with the viewer's own class name, which belongs to the row the
+        // viewer draws: a barline is placed by the bar it stands on.
+        return (
+            <span className={`staff-note-viewer-barline staff-note-viewer-barline-${placement}`}>
+                <BarlineView symbol={symbol} staffSpace={staffSpace} />
+            </span>
         );
     }
 
@@ -211,38 +496,32 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
      * beam and style data resolved from the measure's note events.
      *
      * @param items The projected items to convert.
-     * @param stepsPerBar The number of base-grid steps in a bar.
-     * @param stepsPerPulse The number of base-grid steps in a pulse.
-     * @param depth The tuplet nesting depth (0 at the top level).
-     * @param tupletId The identity of the innermost enclosing tuplet, or undefined.
+     * @param grid The timing of the arrangement.
+     * @param depth The subdivision nesting depth (0 at the top level).
      *
      * @returns The staff tree nodes.
      */
-    private buildNodes(items: IProjectedItem[], stepsPerBar: number, stepsPerPulse: number,
-        depth = 0, tupletId?: number): IStaffTreeNode[] {
+    private buildNodes(items: IProjectedItem[], grid: INotationGrid, depth = 0): IStaffTreeNode[] {
         return items.map((item) => {
             if (item.kind === ProjectedItemKind.Subdivision) {
-                const childTupletId = item.isTuplet ? this.tupletIdSequence++ : tupletId;
-
                 return {
                     kind: StaffNodeKind.Subdivision,
+                    group: item.group,
                     start: { ...item.start },
                     span: { ...item.span },
                     actual: item.actual,
                     normal: item.normal,
                     isTuplet: item.isTuplet,
                     depth,
-                    children: this.buildNodes(item.items, stepsPerBar, stepsPerPulse, depth + 1,
-                        childTupletId),
+                    children: this.buildNodes(item.items, grid, depth + 1),
                 };
             }
 
-            return this.buildNoteNode(item, stepsPerBar, stepsPerPulse, depth, tupletId);
+            return this.buildNoteNode(item, grid, depth);
         });
     }
 
-    private buildNoteNode(item: IProjectedEvent, stepsPerBar: number, stepsPerPulse: number,
-        depth: number, tupletId?: number): IStaffNoteNode {
+    private buildNoteNode(item: IProjectedEvent, grid: INotationGrid, depth: number): IStaffNoteNode {
         const { measure } = this.props;
 
         const event = item.event;
@@ -250,33 +529,22 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
             ? measure.noteEvents[item.eventIndex]?.audioData
             : undefined;
 
-        let glyph: INoteValue = { length: NoteLength.Sixteenth, dotted: false };
+        let glyph: INoteValue = fallbackNoteValue;
         let beamCount = 0;
 
         if (audioData) {
-            if (depth > 0) {
-                // A slot of a plain subdivision can hold a length the grid cannot address — a 2:1 split
-                // of a step holds thirty-seconds — and must keep the beams of that length.
-                glyph = this.subdivisionSlotGlyph(event.duration) ?? this.subdivisionGlyph(depth);
-            } else {
-                const lengthSteps = event.duration.denominator > 0
-                    ? (event.duration.numerator * stepsPerBar) / event.duration.denominator
-                    : 0;
-
-                glyph = this.getStandaloneNoteGlyph(lengthSteps, stepsPerBar, stepsPerPulse, event.duration)
-                    ?? { length: NoteLength.Sixteenth, dotted: false };
-            }
-
-            beamCount = this.glyphBeamCount(glyph.length);
+            // A slot of a plain subdivision can hold a length the grid cannot address — a 2:1 split
+            // of a step holds thirty-seconds — and must keep the beams of that length.
+            glyph = noteValueForEvent(event.duration, depth, grid.stepsPerBar,
+                pulseLengthAt(event.start, grid)) ?? fallbackNoteValue;
+            beamCount = beamCountOf(glyph.length);
         }
 
         let displayType = NoteDisplayType.Oval;
-        let diamondOpen: boolean | undefined;
         let noteLine: number | undefined;
 
         if (audioData) {
             displayType = this.resolveDisplayType(audioData);
-            diamondOpen = this.resolveDiamondOpen(audioData);
             noteLine = audioData.noteLine;
         }
 
@@ -286,11 +554,9 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
             start: { ...event.start },
             duration: { ...event.duration },
             depth,
-            tupletId,
             glyph,
             beamCount,
             displayType,
-            diamondOpen,
             noteLine,
             noteStyle: audioData,
             articulation: event.articulation ?? (audioData
@@ -300,158 +566,55 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
     }
 
     /**
-     * Merges consecutive rests that share a pulse into a single rest when their combined duration
-     * is a plain (non-dotted) note value. Two eighth rests in one pulse become a quarter rest, for
-     * example. Rest groups never cross a pulse boundary or a subdivision boundary.
+     * Assigns beam spans from the measure's beam groups. Which events share a beam is a composition
+     * rule of the measure and not of the rendering, so the groups come from `MeasureProjection`;
+     * this method only resolves the strokes to draw for the notes of each group.
      *
-     * @param nodes The staff tree to merge rests in.
-     * @param stepsPerBar The number of base-grid steps in a bar.
-     * @param stepsPerPulse The number of base-grid steps in a pulse.
-     *
-     * @returns The staff tree with adjacent same-pulse rests merged.
-     */
-    private mergeRestsWithinPulses(nodes: IStaffTreeNode[], stepsPerBar: number,
-        stepsPerPulse: number): IStaffTreeNode[] {
-        const result: IStaffTreeNode[] = [];
-        let restGroup: IStaffNoteNode[] = [];
-
-        const flush = (): void => {
-            if (restGroup.length > 1 && this.isPlainRestGroup(restGroup, stepsPerBar, stepsPerPulse)) {
-                let total: IFraction = { numerator: 0, denominator: 1 };
-
-                for (const node of restGroup) {
-                    total = addFractions(total, node.duration);
-                }
-
-                result.push({ ...restGroup[0], duration: total });
-                restGroup = [];
-
-                return;
-            }
-
-            result.push(...restGroup);
-            restGroup = [];
-        };
-
-        for (const node of nodes) {
-            if (node.kind === StaffNodeKind.Note && node.noteStyle === undefined) {
-                const previousRest = restGroup.at(-1);
-
-                if (previousRest !== undefined
-                    && this.pulseIndex(previousRest, stepsPerBar, stepsPerPulse)
-                    !== this.pulseIndex(node, stepsPerBar, stepsPerPulse)) {
-                    flush();
-                }
-
-                restGroup.push(node);
-
-                continue;
-            }
-
-            flush();
-            result.push(node);
-        }
-
-        flush();
-
-        return result;
-    }
-
-    /**
-     * Checks whether a group of rests sums to a plain (non-dotted) rest value.
-     *
-     * @param group The rest nodes to evaluate.
-     * @param stepsPerBar The number of base-grid steps in a bar.
-     * @param stepsPerPulse The number of base-grid steps in a pulse.
-     *
-     * @returns True when the combined duration maps to a non-dotted rest glyph.
-     */
-    private isPlainRestGroup(group: IStaffNoteNode[], stepsPerBar: number, stepsPerPulse: number): boolean {
-        let total: IFraction = { numerator: 0, denominator: 1 };
-
-        for (const node of group) {
-            total = addFractions(total, node.duration);
-        }
-
-        const lengthSteps = total.denominator > 0
-            ? (total.numerator * stepsPerBar) / total.denominator
-            : 0;
-        const glyph = this.getStandaloneNoteGlyph(lengthSteps, stepsPerBar, stepsPerPulse, total);
-
-        return glyph !== undefined && !glyph.dotted;
-    }
-
-    /**
-     * Assigns beam spans. Beam runs are broken at unbeamed notes (rests and notes of a quarter or
-     * longer), at top-level pulse boundaries, and when leaving one tuplet for another. Inside a
-     * tuplet the entire tuplet is treated as one beam group (no internal pulse breaks), and plain
-     * (non-tuplet) subdivisions stay connected so their outer beams span nested splits.
-     *
-     * @param nodes The nodes to process.
-     * @param scoreMetrics Timing metrics for pulse-boundary detection.
+     * @param nodes The nodes holding the render data of the measure's events.
+     * @param scoreMetrics Timing metrics for the grouping rules.
      *
      * @returns Map of note event indices to beam info.
      */
     private computeBeamSpans(nodes: IStaffTreeNode[], scoreMetrics: IScoreMetrics): Map<number, IBeamInfo> {
+        const { measure } = this.props;
         const target = new Map<number, IBeamInfo>();
-        const flat: IStaffNoteNode[] = [];
-        this.collectNotes(nodes, flat);
+        const notesByEvent = new Map<number, IStaffNoteNode>();
 
-        const { stepsPerBar, stepsPerPulse } = scoreMetrics;
-        let run: IStaffNoteNode[] = [];
+        for (const note of this.collectNotes(nodes)) {
+            notesByEvent.set(note.eventIndex, note);
+        }
 
-        const flush = (): void => {
-            if (run.length >= 2) {
-                this.assignBeamSegments(run, target);
-            }
-
-            run = [];
-        };
-
-        for (const note of flat) {
-            if (note.beamCount === 0) {
-                flush();
+        for (const group of MeasureProjection.noteGroups(measure, scoreMetrics)) {
+            if (group.kind !== NoteGroupKind.Beam) {
                 continue;
             }
 
-            if (run.length > 0) {
-                const previous = run[run.length - 1];
-                const crossedPulse = note.depth === 0 && previous.depth === 0
-                    && this.pulseIndex(note, stepsPerBar, stepsPerPulse)
-                    !== this.pulseIndex(previous, stepsPerBar, stepsPerPulse);
-                const leftTuplet = note.tupletId !== previous.tupletId;
-
-                if (crossedPulse || leftTuplet) {
-                    flush();
+            const run: IStaffNoteNode[] = [];
+            for (const eventIndex of group.eventIndexes) {
+                const note = notesByEvent.get(eventIndex);
+                if (note !== undefined) {
+                    run.push(note);
                 }
             }
 
-            run.push(note);
+            this.assignBeamSegments(run, target);
         }
-
-        flush();
 
         return target;
     }
 
-    private collectNotes(nodes: IStaffTreeNode[], output: IStaffNoteNode[]): void {
+    private collectNotes(nodes: IStaffTreeNode[]): IStaffNoteNode[] {
+        const notes: IStaffNoteNode[] = [];
+
         for (const node of nodes) {
             if (node.kind === StaffNodeKind.Note) {
-                output.push(node);
+                notes.push(node);
             } else {
-                this.collectNotes(node.children, output);
+                notes.push(...this.collectNotes(node.children));
             }
         }
-    }
 
-    private pulseIndex(note: IStaffNoteNode, stepsPerBar: number, stepsPerPulse: number): number {
-        if (stepsPerPulse <= 0) {
-            return 0;
-        }
-
-        const startInSteps = (note.start.numerator * stepsPerBar) / note.start.denominator;
-
-        return Math.floor(startInSteps / stepsPerPulse);
+        return notes;
     }
 
     private assignBeamSegments(run: IStaffNoteNode[], target: Map<number, IBeamInfo>): void {
@@ -479,8 +642,9 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
     }
 
     /**
-     * Computes bracket/number labels for tuplet groups. Markers span from the first to the last
-     * sounding notehead, so they sit exactly over the notes they group.
+     * Computes bracket/number labels for tuplet groups. A marker spans from the first to the last
+     * child of the group, its rests included, so it covers the whole group and not only its
+     * sounding notes.
      *
      * @param nodes The nodes to process.
      * @param stepsPerBar The number of base-grid steps in a bar (for the half-step notehead offset).
@@ -495,13 +659,13 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
             for (const item of items) {
                 if (item.kind === StaffNodeKind.Subdivision) {
                     if (item.isTuplet) {
-                        const bounds = this.tupletNoteBounds(item);
-                        if (bounds.firstStart !== undefined && bounds.lastStart !== undefined) {
-                            const left = addFractions(bounds.firstStart, halfStep);
-                            const width = subtractFractions(bounds.lastStart, bounds.firstStart);
+                        const bounds = StaffNoteViewer.drawnAnchors(item.children, halfStep);
+                        if (bounds.firstAnchor !== undefined && bounds.lastAnchor !== undefined) {
+                            const width = subtractFractions(bounds.lastAnchor, bounds.firstAnchor);
 
                             labels.push({
-                                leftPercent: (left.numerator / left.denominator) * 100,
+                                group: item.group,
+                                leftPercent: (bounds.firstAnchor.numerator / bounds.firstAnchor.denominator) * 100,
                                 widthPercent: (width.numerator / width.denominator) * 100,
                                 text: item.actual.toString(),
                                 bracket: this.tupletNeedsBracket(item, items),
@@ -520,42 +684,6 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
         walk(nodes, 0);
 
         return labels;
-    }
-
-    /**
-     * Finds the first and last sounding note starts within a subdivision's subtree.
-     *
-     * @param node The subdivision to inspect.
-     *
-     * @returns The first and last note start fractions, or undefined when the subtree has no notes.
-     */
-    private tupletNoteBounds(node: IStaffSubdivisionNode): ITupletNoteBounds {
-        let firstStart: IFraction | undefined;
-        let lastStart: IFraction | undefined;
-
-        const walk = (items: IStaffTreeNode[]): void => {
-            for (const item of items) {
-                if (item.kind === StaffNodeKind.Note) {
-                    if (item.noteStyle === undefined) {
-                        continue;
-                    }
-
-                    if (firstStart === undefined || compareFractions(item.start, firstStart) < 0) {
-                        firstStart = item.start;
-                    }
-
-                    if (lastStart === undefined || compareFractions(item.start, lastStart) > 0) {
-                        lastStart = item.start;
-                    }
-                } else {
-                    walk(item.children);
-                }
-            }
-        };
-
-        walk(node.children);
-
-        return { firstStart, lastStart };
     }
 
     private tupletNeedsBracket(node: IStaffSubdivisionNode, siblings: IStaffTreeNode[]): boolean {
@@ -606,14 +734,18 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
      * @param centerLine The centre line index ((maxNoteLine + 1) / 2), used to compute per-note vertical offsets.
      * @param restLineOffset Vertical offset in px for whole/half rests so they sit on the centre line.
      * @param containerSpan The total span of the current flex container as a fraction of the whole bar.
+     * @param atMeasureEnd Whether the current container ends with the measure.
      *
      * @returns List of VNodes representing the rendered items at this level.
      */
     private renderItems(nodes: IStaffTreeNode[], beamSpans: Map<number, IBeamInfo>,
-        keyPrefix: string, centerLine: number, restLineOffset: number, containerSpan = 1): ComponentChild[] {
+        keyPrefix: string, centerLine: number, restLineOffset: number, containerSpan = 1,
+        atMeasureEnd = true): ComponentChild[] {
         const { scoreMetrics, measure, barNumber, trackId, scoreElementRegistry } = this.props;
 
         return nodes.map((node, index) => {
+            const isMeasureEnd = atMeasureEnd && index === nodes.length - 1;
+
             if (node.kind === StaffNodeKind.Subdivision) {
                 const spanFraction = node.span.numerator / node.span.denominator;
 
@@ -630,7 +762,7 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                         }}
                     >
                         {this.renderItems(node.children, beamSpans, `${keyPrefix}${index}-`, centerLine,
-                            restLineOffset, spanFraction)}
+                            restLineOffset, spanFraction, isMeasureEnd)}
                     </div>
                 );
             }
@@ -647,24 +779,34 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                 ? (node.duration.denominator / (2 * node.duration.numerator * scoreMetrics.stepsPerBar)) * 100
                 : 50;
 
+            const beamInfo = beamSpans.get(node.eventIndex);
+            const hasBeam = beamInfo !== undefined;
+
+            // A standalone flagged note ending the measure has its onset before the barline but its
+            // flags behind it, because such a note is shorter than half a grid step and its anchor
+            // therefore sits at the end of its slot (100 %). It is drawn right-aligned to that slot
+            // instead, so its flags end where the slot ends and stay inside the bar. What the barline draws
+            // into the bar then decides how far the flags stay clear of it, which the viewer states.
+            const endsMeasureWithFlags = isMeasureEnd && !hasBeam && node.noteStyle !== undefined
+                && anchorPercent >= 100;
+            const anchor = endsMeasureWithFlags
+                ? `calc(100% - ${noteFlagWidth} - var(--staff-note-clearance, 0px))`
+                : `${anchorPercent}%`;
+
             const slotStyle = {
                 flex: `${grow} 1 0`,
                 minWidth: 0,
-                "--note-anchor": `${anchorPercent}%`,
+                "--note-anchor": anchor,
             } as CSSProperties;
             const stepIndex = Math.floor(
                 (node.start.numerator * scoreMetrics.stepsPerBar) / node.start.denominator,
             );
 
             if (node.noteStyle !== undefined) {
-                const beamInfo = beamSpans.get(node.eventIndex);
-
                 // Compute vertical offset for this note's staff line.
                 const effectiveNoteLine = node.noteLine ?? 1;
-                const lineOffset = (effectiveNoteLine - centerLine) * 10; // 10px = line spacing
-                const translateY = `translateY(calc(-18px + ${lineOffset}px))`;
+                const lineOffset = (effectiveNoteLine - centerLine) * staffSpacePx;
 
-                const hasBeam = beamInfo !== undefined;
                 const headType = node.displayType;
                 const isNonOval = headType !== NoteDisplayType.Oval;
 
@@ -673,10 +815,50 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                     headWrapperClasses.push(this.headTypeClassName(headType));
                 }
 
+                if (node.glyph.dotted) {
+                    headWrapperClasses.push("staff-note-head-dotted");
+                }
+
                 const decoClasses = this.resolveDecorationClasses(node.noteStyle, node.articulation);
                 headWrapperClasses.push(...decoClasses);
 
+                const headSymbol = ScoreSymbols.notehead(headType, node.glyph.length);
+                const headBox = ScoreSymbols.inkBox(headSymbol);
+                const flagSymbol = hasBeam ? undefined : ScoreSymbols.flag(node.glyph.length);
+
+                const flagElement = flagSymbol === undefined
+                    ? null
+                    : <ScoreSymbolView
+                        className="staff-note-head-flag"
+                        symbol={flagSymbol}
+                        staffSpace={staffSpacePx}
+                    />;
+                const dotElement = node.glyph.dotted
+                    ? <ScoreSymbolView
+                        className="staff-note-head-dot"
+                        symbol={ScoreSymbol.AugmentationDot}
+                        staffSpace={staffSpacePx}
+                    />
+                    : null;
+                const accentElement = node.articulation?.accent
+                    ? <ScoreSymbolView
+                        className="staff-note-head-accent"
+                        symbol={ScoreSymbol.Accent}
+                        staffSpace={staffSpacePx}
+                    />
+                    : null;
+
                 const needsCssStem = !hasBeam && node.glyph.length !== NoteLength.Whole;
+
+                // The head wrapper is the head's ink box: its right edge sits on the note's anchor and its
+                // centre on the note's staff line, so every decoration below is placed by the box the font
+                // draws the head in instead of an offset tuned to one head shape.
+                const headStyle = {
+                    "--head-ink-width": headBox.width,
+                    "--head-ink-height": headBox.height,
+                    "--note-line-offset": `${lineOffset}px`,
+                    ...(flagSymbol === undefined ? {} : this.flagStemVariables(flagSymbol)),
+                } as CSSProperties;
 
                 const runDivProps: Record<string, unknown> = {
                     key: `${keyPrefix}note-${index}`,
@@ -695,47 +877,38 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
 
                 return (
                     <div {...runDivProps}>
-                        <span className={headWrapperClasses.join(" ")}>
-                            <NoteImage
-                                className="staff-note-viewer-note-symbol"
-                                kind={NoteKind.Note}
-                                value={node.glyph.length}
-                                style={{
-                                    flexShrink: 0,
-                                    transform: translateY,
-                                }}
-                                headType={headType}
-                                dotted={node.glyph.dotted}
-                                diamondOpen={node.diamondOpen}
-                                flagCount={hasBeam ? 0 : undefined}
-                                hideStem={true}
-                                alt=""
+                        <span className={headWrapperClasses.join(" ")} style={headStyle}>
+                            <ScoreSymbolView
+                                className="staff-note-head-symbol"
+                                symbol={headSymbol}
+                                staffSpace={staffSpacePx}
                             />
-                            {needsCssStem ? (
-                                <span
-                                    className="staff-note-head-stem"
-                                    style={{ height: `calc(33px + ${lineOffset}px)` }}
-                                />
-                            ) : null}
+                            {needsCssStem ? <span className="staff-note-head-stem" /> : null}
+                            {hasBeam ? <span className="staff-note-viewer-custom-stem" /> : null}
+                            {flagElement}
+                            {dotElement}
+                            {this.renderGhostParentheses(node.articulation)}
                             {this.renderNoteDecorations(node.noteStyle, node.articulation)}
-                            {headType === NoteDisplayType.Cross ? this.renderCrossHead() : null}
+                            {accentElement}
                         </span>
-                        {node.articulation?.accent ? (
-                            <span className="staff-note-viewer-accent">&gt;</span>
-                        ) : null}
                         {hasBeam ? this.renderBeamSegments(node.eventIndex, beamInfo) : null}
-                        {hasBeam ? this.renderCustomStem(lineOffset, headType) : null}
                     </div>
                 );
             }
 
-            const lengthSteps = node.duration.denominator > 0
-                ? (node.duration.numerator * scoreMetrics.stepsPerBar) / node.duration.denominator
-                : 1;
-            const restGlyph = this.getStandaloneNoteGlyph(lengthSteps, scoreMetrics.stepsPerBar,
-                scoreMetrics.stepsPerPulse, node.duration)
+            const restGlyph = noteValueForEvent(node.duration, node.depth, scoreMetrics.stepsPerBar,
+                scoreMetrics.stepsPerPulse)
                 ?? { length: NoteLength.Sixteenth, dotted: false };
             const isWholeOrHalf = restGlyph.length === NoteLength.Whole || restGlyph.length === NoteLength.Half;
+            const restSymbol = ScoreSymbols.rest(restGlyph.length);
+            const restBox = ScoreSymbols.inkBox(restSymbol);
+
+            // A whole or half rest sits on the line below the one the notes are drawn on, which is the line
+            // they hang from or sit on.
+            const restStyle = {
+                "--rest-ink-width": restBox.width,
+                "--rest-line-offset": `${isWholeOrHalf ? restLineOffset : 0}px`,
+            } as CSSProperties;
 
             return (
                 <div key={`${keyPrefix}rest-${index}`} className="staff-note-viewer-run" style={slotStyle}
@@ -747,17 +920,16 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                         start: node.start,
                         measure,
                     }, measure.events[node.eventIndex])}>
-                    <NoteImage
-                        className="staff-note-viewer-rest-symbol"
-                        kind={NoteKind.Rest}
-                        value={restGlyph.length}
-                        style={{
-                            flexShrink: 0,
-                            ...(isWholeOrHalf ? { transform: `translateY(${restLineOffset}px)` } : {}),
-                        }}
-                        dotted={restGlyph.dotted}
-                        alt=""
-                    />
+                    <span className="staff-note-viewer-rest-symbol" style={restStyle}>
+                        <ScoreSymbolView symbol={restSymbol} staffSpace={staffSpacePx} />
+                        {restGlyph.dotted
+                            ? <ScoreSymbolView
+                                className="staff-note-viewer-rest-dot"
+                                symbol={ScoreSymbol.AugmentationDot}
+                                staffSpace={staffSpacePx}
+                            />
+                            : null}
+                    </span>
                 </div>
             );
         });
@@ -774,12 +946,16 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
      * @returns List of VNodes representing the beam segments attached to this note.
      */
     private renderBeamSegments(stepIndex: number, info: IBeamInfo): VNode[] {
-        const beamGap = 6;
-        const primaryTopOffset = 38;
+        // Further beams hang below the primary one in the font's own rhythm: one beam thickness plus
+        // one beam space per level.
+        const beamOffset = "(var(--beam-thickness, 4px) + var(--beam-spacing, 2px))";
+        const halfStem = "var(--stem-half-width, 1px)";
         const partialPixels = 12;
+        const stubWidth = `calc(${partialPixels}px + var(--stem-right-edge, 0px))`;
 
         return info.segments.map((segment) => {
-            const top = `calc(50% - ${primaryTopOffset - ((segment.level - 1) * beamGap)}px)`;
+            // The primary beam sits on the stem tips, which is the height the stems are drawn to.
+            const top = `calc(50% - var(--stem-tip, 35px) + ${segment.level - 1} * ${beamOffset})`;
             const key = `beam-${stepIndex}-${segment.level}-${segment.kind}`;
 
             if (segment.kind === "shared-right") {
@@ -789,7 +965,7 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                         className="staff-note-viewer-beam"
                         style={{
                             top,
-                            left: "var(--note-anchor)",
+                            left: `calc(var(--note-anchor) - ${halfStem})`,
                             width: "100%",
                         }}
                     />
@@ -803,8 +979,8 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                         className="staff-note-viewer-beam"
                         style={{
                             top,
-                            left: "var(--note-anchor)",
-                            width: `${partialPixels}px`,
+                            left: `calc(var(--note-anchor) - ${halfStem})`,
+                            width: stubWidth,
                         }}
                     />
                 );
@@ -818,7 +994,7 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                     style={{
                         top,
                         left: `calc(var(--note-anchor) - ${partialPixels}px)`,
-                        width: `${partialPixels}px`,
+                        width: stubWidth,
                     }}
                 />
             );
@@ -826,41 +1002,73 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
     }
 
     /**
-     * Renders a CSS stem overlay for beamed notes, replacing the hidden SVG stem.
-     * Spans from the note-head connection point to just above the primary beam.
+     * Renders the parentheses a ghost note is wrapped in. They hang on the head's ink box, so they fit any
+     * head shape without an offset tuned to one of them.
      *
-     * @param lineOffset Vertical offset in px for this note's staff line relative to the centre line.
-     * @param headType   The note head type, used for per-head-type stem positioning.
+     * @param articulation The note's articulation.
      *
-     * @returns A VNode representing the custom stem.
+     * @returns The two parentheses, or null for a note that is not a ghost note.
      */
-    private renderCustomStem(lineOffset: number, headType: NoteDisplayType): VNode {
-        const headClass = headType !== NoteDisplayType.Oval
-            ? `staff-note-viewer-custom-stem--${this.headTypeClassName(headType)}`
-            : "";
+    private renderGhostParentheses(articulation?: INoteArticulation): ComponentChild {
+        if (articulation?.ghost !== true) {
+            return null;
+        }
 
         return (
-            <span
-                className={`staff-note-viewer-custom-stem ${headClass}`}
-                style={{
-                    height: `calc(35px + ${lineOffset}px)`,
-                }}
-            />
+            <>
+                <ScoreSymbolView
+                    className="staff-note-head-paren-left"
+                    symbol={ScoreSymbol.GhostParenthesisLeft}
+                    staffSpace={staffSpacePx}
+                />
+                <ScoreSymbolView
+                    className="staff-note-head-paren-right"
+                    symbol={ScoreSymbol.GhostParenthesisRight}
+                    staffSpace={staffSpacePx}
+                />
+            </>
         );
     }
 
     /**
-     * Renders the whole-measure rest shown when a measure contains no sounding notes.
+     * @param flag The flag symbol to place.
+     *
+     * @returns Where the flag hangs on its stem, as the CSS variables the stylesheet places it by: the
+     * font states where the end of the stem sits inside the flag's ink.
+     */
+    private flagStemVariables(flag: ScoreSymbol): CSSProperties {
+        const definition = ScoreSymbols.definition(flag);
+        if (definition.source !== ScoreSymbolSource.MusicFontGlyph) {
+            return {};
+        }
+
+        const glyphName = definition.glyph.toLowerCase();
+
+        return {
+            "--flag-stem-x": `var(${stemEndVariablePrefix}x-${glyphName}, 0px)`,
+            "--flag-stem-y": `var(${stemEndVariablePrefix}y-${glyphName}, 0px)`,
+        } as CSSProperties;
+    }
+
+    /**
+     * Renders the whole-measure rest of a measure that holds rests only. The run carries the measure's
+     * first event, so the rest is selectable and addressable like any other run.
      *
      * @param restLineOffset Vertical offset in px so the rest sits on the centre line.
      * @param barNumber The one-based measure number of this viewer.
      * @param trackId The track identity of this viewer.
+     * @param measure The measure the rest stands for.
      * @param scoreElementRegistry The registry to register the rest run in.
      *
      * @returns The whole-measure rest run.
      */
     private renderWholeBarRestSlot(restLineOffset: number, barNumber: number, trackId: number,
-        scoreElementRegistry?: ScoreElementRegistry): VNode {
+        measure: ISbDmTrackPiece, scoreElementRegistry?: ScoreElementRegistry): VNode {
+        const restStyle = {
+            "--rest-ink-width": ScoreSymbols.inkBox(ScoreSymbol.RestWhole).width,
+            "--rest-line-offset": `${restLineOffset}px`,
+        } as CSSProperties;
+
         return (
             <div
                 key="rest-whole-bar"
@@ -872,104 +1080,45 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                     trackId,
                     step: 0,
                     start: { numerator: 0, denominator: 1 },
-                })}
+                    measure,
+                }, measure.events[0])}
             >
-                <NoteImage
-                    className="staff-note-viewer-rest-symbol"
-                    kind={NoteKind.Rest}
-                    value={NoteLength.Whole}
-                    style={{
-                        flexShrink: 0,
-                        transform: `translateY(${restLineOffset}px)`,
-                    }}
-                    alt=""
-                />
+                <span className="staff-note-viewer-rest-symbol" style={restStyle}>
+                    <ScoreSymbolView symbol={ScoreSymbol.RestWhole} staffSpace={staffSpacePx} />
+                </span>
             </div>
         );
     }
 
     /**
-     * Returns the number of beam strokes implied by a note glyph icon.
+     * Renders the one-bar repeat (simile) mark in place of the measure's notes.
      *
-     * @param icon The note glyph icon to evaluate.
+     * @param barNumber The one-based measure number of this viewer.
+     * @param trackId The track identity of this viewer.
+     * @param measure The measure the mark stands for.
+     * @param scoreElementRegistry The registry to register the mark in.
      *
-     * @returns The number of beam strokes (0 for non-beamable notes).
+     * @returns The simile run.
      */
-    private glyphBeamCount(icon: NoteLength): number {
-        if (icon === NoteLength.Eighth) {
-            return 1;
-        }
-
-        if (icon === NoteLength.Sixteenth) {
-            return 2;
-        }
-
-        if (icon === NoteLength.ThirtySecond) {
-            return 3;
-        }
-
-        return 0;
-    }
-
-    /**
-     * Resolves the glyph of a subdivision slot from the length the slot actually has.
-     *
-     * @param duration The slot's duration as a fraction of the bar.
-     *
-     * @returns The glyph, or undefined when the length is no single note value — the slots of a
-     *          tuplet are such lengths, and keep the glyph their nesting depth gives them.
-     */
-    private subdivisionSlotGlyph(duration: IFraction): INoteValue | undefined {
-        if (duration.numerator <= 0 || duration.denominator <= 0) {
-            return undefined;
-        }
-
-        return noteValueForUnits((duration.numerator * 32) / duration.denominator);
-    }
-
-    /**
-     * Resolves the glyph for a note inside a subdivision. Without real note lengths the first
-     * nesting level uses an eighth note, and each further level halves the value (sixteenth,
-     * thirty-second), so subdivision notes are always beamed.
-     *
-     * @param depth The subdivision nesting depth (1 for notes in a top-level subdivision).
-     *
-     * @returns The glyph for the note.
-     */
-    private subdivisionGlyph(depth: number): INoteValue {
-        if (depth <= 1) {
-            return { length: NoteLength.Eighth, dotted: false };
-        }
-
-        if (depth === 2) {
-            return { length: NoteLength.Sixteenth, dotted: false };
-        }
-
-        return { length: NoteLength.ThirtySecond, dotted: false };
-    }
-
-    private getStandaloneNoteGlyph(lengthSteps: number, stepsPerBar: number, stepsPerPulse: number,
-        duration: IFraction): INoteValue | undefined {
-        if (stepsPerBar <= 0) {
-            return undefined;
-        }
-
-        if (stepsPerPulse > 0 && stepsPerPulse % 3 === 0 && lengthSteps * 3 === stepsPerPulse
-            && duration.numerator * stepsPerBar === duration.denominator) {
-            return { length: NoteLength.Eighth, dotted: false };
-        }
-
-        if (duration.denominator > 0 && duration.numerator * 12 === duration.denominator) {
-            return { length: NoteLength.Eighth, dotted: false };
-        }
-
-        // Compute note value from the actual duration fraction, not from the
-        // rounded lengthSteps (which loses sub-step precision for subdivision notes).
-        const units = duration.denominator > 0
-            ? (duration.numerator * 32) / duration.denominator
-            : (lengthSteps * 32) / stepsPerBar;
-
-        return noteValueForUnits(units);
+    private renderSimileSlot(barNumber: number, trackId: number, measure: ISbDmTrackPiece,
+        scoreElementRegistry?: ScoreElementRegistry): VNode {
+        return (
+            <div
+                key="simile"
+                className="staff-note-viewer-run staff-note-viewer-simile"
+                style={{ width: "100%" }}
+                ref={scoreElementRegistry?.createRef({
+                    kind: ScoreElementKind.StaffRun,
+                    bar: barNumber,
+                    trackId,
+                    step: 0,
+                    start: { numerator: 0, denominator: 1 },
+                    measure,
+                }, measure)}
+            >
+                <ScoreSymbolView symbol={ScoreSymbol.MeasureRepeat} staffSpace={staffSpacePx} />
+            </div>
+        );
     }
 
     private getTupletRestIcon(effectiveStepsPerPulse: number): NoteLength {
@@ -990,15 +1139,6 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
         }
 
         return NoteDisplayType.Oval;
-    }
-
-    private resolveDiamondOpen(noteStyle: IAudioData): boolean | undefined {
-        const characteristics = noteStyle.characteristics;
-        if (!("mainDisplayType" in characteristics) || characteristics.mainDisplayType !== NoteDisplayType.Diamond) {
-            return undefined;
-        }
-
-        return noteStyle.sampleProfile.builtInDamping === Damping.Open;
     }
 
     /**
@@ -1114,11 +1254,7 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
             classes.push("blown");
         }
 
-        // Ghost notes: rendered with parentheses, derived from the note's articulation.
-        if (articulation?.ghost) {
-            classes.push("ghost-note");
-        }
-
+        // Ghost notes are drawn with parentheses, derived from the note's articulation.
         return classes;
     }
 
@@ -1191,23 +1327,9 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                 }
 
                 case HandTechnique.Slap: {
-                    NoteImage.registerSymbol("cross-head", "0 0 14 14",
-                        `<line x1="2" y1="2" x2="12" y2="12" />` +
-                        `<line x1="12" y1="2" x2="2" y2="12" />`,
-                    );
-
                     nodes.push(
-                        <svg key="slap-cross" className="staff-note-head-slap-svg"
-                            width={10} height={10}
-                            viewBox="0 0 14 14"
-                            aria-hidden="true"
-                            style={{
-                                stroke: "var(--color-base-100)",
-                                strokeWidth: 3,
-                                strokeLinecap: "round",
-                            }}>
-                            <use href="#symbol-cross-head" />
-                        </svg>,
+                        <ScoreSymbolView key="slap-cross" className="staff-note-head-slap-svg"
+                            symbol={ScoreSymbol.TechniqueCross} staffSpace={staffSpacePx} />,
                     );
                     break;
                 }
@@ -1220,36 +1342,17 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
 
         if (characteristics.excitationMode === ExcitationMode.Struck && "stickTechnique" in characteristics
             && characteristics.stickTechnique === StickTechnique.PressRoll) {
-            NoteImage.registerSymbol("press-roll", "0 0 14 35",
-                `<line x1="11" y1="6" x2="3" y2="11" />` +
-                `<line x1="11" y1="11" x2="3" y2="16" />` +
-                `<line x1="11" y1="16" x2="3" y2="21" />`,
-            );
-
             nodes.push(
-                <svg key="press-roll" className="staff-note-head-press-roll-svg"
-                    width={14} height={35}
-                    aria-hidden="true"
-                    style={{ stroke: "var(--color-base-content)", strokeWidth: 2.5, strokeLinecap: "round" }}>
-                    <use href="#symbol-press-roll" />
-                </svg>,
+                <ScoreSymbolView key="press-roll" className="staff-note-head-press-roll-svg"
+                    symbol={ScoreSymbol.PressRollStrokes} staffSpace={staffSpacePx} />,
             );
         }
 
         if (characteristics.excitationMode === ExcitationMode.Struck && "stickTechnique" in characteristics
             && characteristics.stickTechnique === StickTechnique.RimShot) {
-            NoteImage.registerSymbol("cross-head", "0 0 14 14",
-                `<line x1="2" y1="2" x2="12" y2="12" />` +
-                `<line x1="12" y1="2" x2="2" y2="12" />`,
-            );
-
             nodes.push(
-                <svg key="rimshot-cross" className="staff-note-head-rimshot-cross-svg"
-                    width={8} height={8}
-                    aria-hidden="true"
-                    style={{ stroke: "var(--color-base-content)", strokeWidth: 2.5, strokeLinecap: "round" }}>
-                    <use href="#symbol-cross-head" />
-                </svg>,
+                <ScoreSymbolView key="rimshot-cross" className="staff-note-head-rimshot-cross-svg"
+                    symbol={ScoreSymbol.RimShotCross} staffSpace={staffSpacePx} />,
             );
         }
 
@@ -1257,13 +1360,6 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
         if (articulation?.damping === Damping.Muted) {
             nodes.push(
                 <span key="damped-plus" className="staff-note-head-damped-plus">+</span>,
-            );
-        }
-
-        // Ghost note: closing parenthesis (opening is via CSS ::before on .ghost-note).
-        if (articulation?.ghost) {
-            nodes.push(
-                <span key="ghost-paren" className="staff-note-head-ghost-paren">)</span>,
             );
         }
 
@@ -1276,32 +1372,6 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
             <svg key={key} className={className} width={width} height={height}
                 viewBox={`0 0 ${width} ${height}`} aria-hidden="true">
                 {content}
-            </svg>
-        );
-    }
-
-    /**
-     * Renders the cross (×) note head as a cached SVG symbol with rounded line caps.
-     *
-     * @returns An SVG VNode referencing the cached cross symbol.
-     */
-    private renderCrossHead(): VNode {
-        NoteImage.registerSymbol("cross-head", "0 0 14 14",
-            `<line x1="2" y1="2" x2="12" y2="12" />` +
-            `<line x1="12" y1="2" x2="2" y2="12" />`,
-        );
-
-        return (
-            <svg className="staff-note-head-cross-svg"
-                width={14} height={14}
-                aria-hidden="true"
-                style={{
-                    stroke: "var(--color-base-content)",
-                    strokeWidth: 2.8,
-                    strokeLinecap: "round",
-                    overflow: "visible"
-                }}>
-                <use href="#symbol-cross-head" />
             </svg>
         );
     }

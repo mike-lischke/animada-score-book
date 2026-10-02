@@ -8,14 +8,15 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AppStorage } from "../../src/core/AppStorage.js";
 import {
     SbDmEntityType, type ISbDmArrangement, type ISbDmNoteEvent, type ISbDmTrack,
-    type ISbDmTrackMeasure, type ScoreBookDataModel,
+    type ISbDmTrackPiece, type ScoreBookDataModel,
 } from "../../src/core/ScoreBookDataModel.js";
-import type { IFraction, Mutable } from "../../src/core/types/general.js";
+import type { IFraction, IMeasureEvent, Mutable } from "../../src/core/types/general.js";
 import { requisitions } from "../../src/supplement/Requisitions.js";
 import { SelectionManager } from "../../src/ui/SelectionManager.js";
 import {
-    SelectionGranularity, type ISelectionDelta, type ISelectionEntry
+    SelectionGranularity, SelectionMode, type ISelectionDelta, type ISelectionEntry, type ISelectionHitEntry
 } from "../../src/ui/SelectionSerializer.js";
+import { measureEntry, trackEntry, trackPieceEntry } from "../unit-test-helpers.js";
 
 const makeArrangement = (tracks: ISbDmTrack[]): ISbDmArrangement => {
     const arrangement: ISbDmArrangement = {
@@ -42,7 +43,6 @@ const makeArrangement = (tracks: ISbDmTrack[]): ISbDmArrangement => {
         loop: false,
         useMetronome: false,
         countIn: false,
-        measureLabels: {},
     };
 
     return arrangement;
@@ -103,7 +103,7 @@ const makeNote = (id: number): Mutable<ISbDmNoteEvent> => {
         type: SbDmEntityType.NoteEvent,
         id,
         measure: {
-            type: SbDmEntityType.TrackMeasure,
+            type: SbDmEntityType.TrackPiece,
             id: 1,
             track: { id: 7, measures: [] } as unknown as ISbDmTrack,
             number: 1,
@@ -133,6 +133,33 @@ const cellEntry = (note: Mutable<ISbDmNoteEvent>, start: IFraction): ISelectionE
         granularity: SelectionGranularity.Note,
         target: { granularity: SelectionGranularity.Note, measure: note.measure, event: note, start },
     };
+};
+
+/**
+ * @param x The rectangle's X coordinate.
+ * @param y The rectangle's Y coordinate.
+ * @param width The rectangle's width.
+ * @param height The rectangle's height.
+ *
+ * @returns The rectangle, in the shape the DOM hands out.
+ */
+const rectOf = (x: number, y: number, width: number, height: number): DOMRect => {
+    return {
+        x, y, width, height,
+        left: x, top: y, right: x + width, bottom: y + height,
+        toJSON: () => {
+            return {};
+        },
+    } as DOMRect;
+};
+
+/**
+ * Builds a tiny rect at the origin, standing in for the click position a hit test runs on.
+ *
+ * @returns The click rect.
+ */
+const clickRect = (): DOMRect => {
+    return rectOf(0, 0, 1, 1);
 };
 
 describe.sequential("SelectionManager (class)", () => {
@@ -222,41 +249,246 @@ describe.sequential("SelectionManager (class)", () => {
         expect(manager.currentSelection.size).toBe(3);
         expect([...manager.currentSelection.values()]).toEqual(entries);
     });
+
+    it("places the cursor on the addressed note when a click only places a cursor", () => {
+        const cursor = cellEntry(noteA, { numerator: 0, denominator: 1 });
+        manager.registerHitTester({
+            hitTest: () => {
+                return [trackEntry(track), measureEntry(noteA.measure), cursor].map((entry) => {
+                    return { ...entry, rect: rectOf(0, 0, 0, 0) };
+                });
+            },
+        });
+
+        manager.endSelection(clickRect(), true);
+
+        expect([...manager.currentSelection.values()]).toEqual([cursor]);
+    });
+
+    it("leaves the cursor alone when a click that only places a cursor addresses no note", () => {
+        const cursor = cellEntry(noteA, { numerator: 0, denominator: 1 });
+        manager.replaceSelection([cursor]);
+        manager.registerHitTester({
+            hitTest: () => {
+                return [measureEntry(noteA.measure)].map((entry) => {
+                    return { ...entry, rect: rectOf(0, 0, 0, 0) };
+                });
+            },
+        });
+
+        manager.endSelection(clickRect(), true);
+
+        expect([...manager.currentSelection.values()]).toEqual([cursor]);
+    });
+});
+
+describe.sequential("SelectionManager click resolution", () => {
+    let manager: SelectionManager;
+    let track: ISbDmTrack;
+    let referenceMeasure: ISbDmTrackPiece;
+
+    /**
+     * Builds a hit entry for a track piece whose element spans the given band.
+     *
+     * @param measureNumber The measure number, which tells the pieces apart.
+     * @param top The element's top edge.
+     *
+     * @returns The hit entry with the rect of its element.
+     */
+    const piece = (measureNumber: number, top: number): ISelectionHitEntry => {
+        const measure = { ...referenceMeasure, number: measureNumber } as ISbDmTrackPiece;
+
+        return { ...trackPieceEntry(track, measure), rect: rectOf(0, top, 100, 80) };
+    };
+
+    /**
+     * @param top The click rectangle's top edge.
+     *
+     * @returns A click rectangle whose centre sits a half pixel below that edge.
+     */
+    const click = (top: number): DOMRect => {
+        return rectOf(0, top, 1, 1);
+    };
+
+    /**
+     * @param hit A hit-test entry.
+     *
+     * @returns The entry as the selection stores it, without the rect it was hit at.
+     */
+    const stored = (hit: ISelectionHitEntry): ISelectionEntry => {
+        return { granularity: hit.granularity, target: hit.target };
+    };
+
+    beforeEach(() => {
+        const note = makeNote(1);
+        const arrangement = makeArrangement([] as ISbDmTrack[]);
+        track = makeTrack([note], arrangement);
+        arrangement.tracks.push(track);
+        referenceMeasure = note.measure;
+        manager = new SelectionManager();
+    });
+
+    it("selects the track piece closest to the click's centre", () => {
+        const upper = piece(1, 0);
+        const lower = piece(2, 80);
+        manager.registerHitTester({
+            hitTest: () => {
+                return [upper, lower];
+            },
+        });
+
+        manager.endSelection(click(60));
+        expect([...manager.currentSelection.values()]).toEqual([stored(upper)]);
+
+        manager.endSelection(click(100));
+        expect([...manager.currentSelection.values()]).toEqual([stored(lower)]);
+    });
+
+    it("keeps the track piece later in the DOM when both are equally close", () => {
+        const upper = piece(1, 0);
+        const lower = piece(2, 80);
+        manager.registerHitTester({
+            hitTest: () => {
+                return [upper, lower];
+            },
+        });
+
+        // The click's centre sits on the shared edge, which both elements include.
+        manager.endSelection(click(79.5));
+        expect([...manager.currentSelection.values()]).toEqual([stored(lower)]);
+    });
+});
+
+describe.sequential("SelectionManager note groups", () => {
+    /**
+     * Builds a measure holding five sixteenths, which is what the group fixtures address.
+     *
+     * @returns The measure to build groups in.
+     */
+    const makeGroupMeasure = (): ISbDmTrackPiece => {
+        return {
+            id: 1,
+            type: SbDmEntityType.TrackPiece,
+            track: { id: 9, measures: [] } as unknown as ISbDmTrack,
+            number: 1,
+            meter: { beats: 4, beatUnits: 4, stepResolution: 16, beatGroups: [4, 4, 4, 4] },
+            events: [0, 1, 2, 3, 4].map((index) => {
+                return {
+                    start: { numerator: index, denominator: 16 },
+                    duration: { numerator: 1, denominator: 16 },
+                };
+            }),
+            subdivisions: [],
+            noteEvents: [],
+        } as unknown as ISbDmTrackPiece;
+    };
+
+    it("replaces a narrower group when the group covering it is picked", () => {
+        const measure = makeGroupMeasure();
+        const beamGroup: ISelectionEntry = {
+            granularity: SelectionGranularity.NoteGroup,
+            target: {
+                granularity: SelectionGranularity.NoteGroup,
+                measure,
+                events: measure.events.slice(0, 3),
+            },
+        };
+        const tupletGroup: ISelectionEntry = {
+            granularity: SelectionGranularity.NoteGroup,
+            target: { granularity: SelectionGranularity.NoteGroup, measure, events: [...measure.events] },
+        };
+
+        const removed: ISelectionEntry[] = [];
+        const spy = (delta: ISelectionDelta): Promise<boolean> => {
+            removed.push(...delta.removed);
+
+            return Promise.resolve(true);
+        };
+
+        const manager = new SelectionManager();
+        requisitions.register("selectionChanged", spy);
+
+        manager.selectNotes([beamGroup]);
+        manager.selectionMode = SelectionMode.Add;
+        manager.selectNotes([tupletGroup]);
+        requisitions.unregister("selectionChanged", spy);
+
+        // Both groups cover the same events in part, so the one picked last is the one that counts.
+        expect([...manager.currentSelection.values()]).toEqual([tupletGroup]);
+        expect(removed).toEqual([beamGroup]);
+    });
+
+    it("replaces the covering group when a narrower group is picked", () => {
+        const measure = makeGroupMeasure();
+        const beamGroup: ISelectionEntry = {
+            granularity: SelectionGranularity.NoteGroup,
+            target: {
+                granularity: SelectionGranularity.NoteGroup,
+                measure,
+                events: measure.events.slice(0, 3),
+            },
+        };
+        const tupletGroup: ISelectionEntry = {
+            granularity: SelectionGranularity.NoteGroup,
+            target: { granularity: SelectionGranularity.NoteGroup, measure, events: [...measure.events] },
+        };
+
+        const manager = new SelectionManager();
+
+        manager.selectNotes([tupletGroup]);
+        manager.selectionMode = SelectionMode.Add;
+        manager.selectNotes([beamGroup]);
+
+        expect([...manager.currentSelection.values()]).toEqual([beamGroup]);
+    });
 });
 
 describe.sequential("SelectionManager re-validation after undo/redo", () => {
-    it("keeps selections whose measure content survived an undo and drops the others", () => {
+    /**
+     * Builds an arrangement with one track of two measures, each holding a single event.
+     *
+     * @returns The arrangement, its track and the two measures.
+     */
+    const makeUndoFixture = (): {
+        arrangement: ISbDmArrangement; track: ISbDmTrack; measure1: ISbDmTrackPiece;
+        measure2: ISbDmTrackPiece; measure2Events: IMeasureEvent[];
+    } => {
         const arrangement = makeArrangement([] as ISbDmTrack[]);
 
         const measure1 = {
             id: 11,
-            type: SbDmEntityType.TrackMeasure,
+            type: SbDmEntityType.TrackPiece,
             number: 1,
             meter: { beats: 4, beatUnits: 4, stepResolution: 8, beatGroups: [8] },
             events: [{ start: { numerator: 0, denominator: 1 }, duration: { numerator: 1, denominator: 4 } }],
             subdivisions: [],
             noteEvents: [makeNote(1_001_001)],
-        } as unknown as ISbDmTrackMeasure;
+        } as unknown as ISbDmTrackPiece;
 
         const measure2Events = [
             { start: { numerator: 0, denominator: 1 }, duration: { numerator: 1, denominator: 4 } },
         ];
         const measure2 = {
             id: 12,
-            type: SbDmEntityType.TrackMeasure,
+            type: SbDmEntityType.TrackPiece,
             number: 2,
             meter: { beats: 4, beatUnits: 4, stepResolution: 8, beatGroups: [8] },
             events: measure2Events,
             subdivisions: [],
             noteEvents: [makeNote(1_002_001)],
-        } as unknown as ISbDmTrackMeasure;
+        } as unknown as ISbDmTrackPiece;
 
         const track = makeTrack([], arrangement);
         (track as Mutable<ISbDmTrack>).measures = [measure1, measure2];
-        (measure1 as Mutable<ISbDmTrackMeasure>).track = track;
-        (measure2 as Mutable<ISbDmTrackMeasure>).track = track;
+        (measure1 as Mutable<ISbDmTrackPiece>).track = track;
+        (measure2 as Mutable<ISbDmTrackPiece>).track = track;
         arrangement.tracks.push(track);
 
+        return { arrangement, track, measure1, measure2, measure2Events };
+    };
+
+    it("keeps selections whose measure content survived an undo and drops the others", () => {
+        const { arrangement, measure1, measure2, measure2Events } = makeUndoFixture();
         const manager = new SelectionManager({ arrangement } as unknown as ScoreBookDataModel);
 
         manager.selectNotes([
@@ -277,5 +509,30 @@ describe.sequential("SelectionManager re-validation after undo/redo", () => {
 
         expect(manager.isCellSelected(measure1, { numerator: 0, denominator: 1 })).toBe(true);
         expect(manager.isCellSelected(measure2, { numerator: 0, denominator: 1 })).toBe(false);
+    });
+
+    it("restores the selection an undo reports", () => {
+        const { arrangement, measure1, measure2 } = makeUndoFixture();
+        const manager = new SelectionManager({ arrangement } as unknown as ScoreBookDataModel);
+        const trackId = arrangement.tracks[0].id;
+
+        manager.selectNotes([{
+            granularity: SelectionGranularity.Note,
+            target: { granularity: SelectionGranularity.Note, measure: measure1, event: measure1.events[0] },
+        }]);
+
+        // The undone edit was made with the second measure selected, so the cursor returns there.
+        const reported = JSON.stringify([{
+            granularity: SelectionGranularity.Note,
+            bar: 2,
+            trackId,
+            start: { numerator: 0, denominator: 1 },
+            end: { numerator: 1, denominator: 4 },
+        }]);
+
+        void requisitions.execute("arrangementReverted", reported);
+
+        expect(manager.isCellSelected(measure1, { numerator: 0, denominator: 1 })).toBe(false);
+        expect(manager.isCellSelected(measure2, { numerator: 0, denominator: 1 })).toBe(true);
     });
 });

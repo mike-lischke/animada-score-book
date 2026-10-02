@@ -4,17 +4,19 @@
 */
 
 import { AppStorage } from "../core/AppStorage.js";
+import { EditEntryMode } from "../core/types/general.js";
 import {
-    ScoreBookChangeReason, type ISbDmTrackMeasure, type ScoreBookDataModel,
+    ScoreBookChangeReason, type ISbDmTrackPiece, type ScoreBookDataModel,
 } from "../core/ScoreBookDataModel.js";
 import { modelEventAt } from "../core/MeasureProjection.js";
-import { compareFractions, formatFraction } from "../core/serialisation/numeric-functions.js";
-import type { IFraction } from "../core/types/general.js";
-import type { PlayerPlayState } from "../player/ArrangementPlayer.js";
+import { addFractions, compareFractions, formatFraction } from "../core/serialisation/numeric-functions.js";
+import type { IFraction, IMeasureEvent } from "../core/types/general.js";
+import { PlayerPlayState } from "../player/ArrangementPlayer.js";
 import { requisitions } from "../supplement/Requisitions.js";
 import {
     SelectionGranularity, SelectionMode, SelectionSerializer, type ISelectionEntry,
-    type ISelectionHitTester, type ISelectionPoint, type ISelectionRectChange, type ISerialisedSelectionEntry,
+    type ISelectionHitEntry, type ISelectionHitTester, type ISelectionPoint, type ISelectionRectChange,
+    type ISerialisedSelectionEntry,
 } from "./SelectionSerializer.js";
 import type { ScoreElementRegistry } from "./ScoreElementRegistry.js";
 import { SelectionView } from "./SelectionView.js";
@@ -68,6 +70,12 @@ export class SelectionManager {
     /** Edit mode as last published on `editModeChanged`, used to initialise new selection views. */
     private editMode = false;
 
+    /**
+     * Entry mode as last published on `editEntryModeChanged`, used to initialise new selection views. The
+     * persisted value is the start value, because the app only announces a mode the user switched to.
+     */
+    private entryMode = AppStorage.loadUISettings()?.entryMode ?? EditEntryMode.Insert;
+
     /** Owned view — handles pointer events, rect drawing, and DOM updates. Created lazily when the container is set. */
     private view?: SelectionView;
 
@@ -77,6 +85,7 @@ export class SelectionManager {
         requisitions.register("scoreBookLoaded", this.handleScoreBookLoaded);
         requisitions.register("arrangementReverted", this.handleArrangementReverted);
         requisitions.register("editModeChanged", this.handleEditModeChanged);
+        requisitions.register("editEntryModeChanged", this.handleEntryModeChanged);
     }
 
     public get selectionMode(): SelectionMode {
@@ -93,6 +102,7 @@ export class SelectionManager {
 
     public dispose(): void {
         requisitions.unregister("editModeChanged", this.handleEditModeChanged);
+        requisitions.unregister("editEntryModeChanged", this.handleEntryModeChanged);
 
         if (this.view) {
             this.view.dispose();
@@ -112,7 +122,7 @@ export class SelectionManager {
             this.view.dispose();
         }
 
-        this.view = new SelectionView(this, container, scoreElementRegistry, this.editMode);
+        this.view = new SelectionView(this, container, scoreElementRegistry, this.editMode, this.entryMode);
     }
 
     /**
@@ -151,7 +161,7 @@ export class SelectionManager {
      *
      * @returns True if the cell is selected.
      */
-    public isCellSelected(measure: ISbDmTrackMeasure, start: IFraction): boolean {
+    public isCellSelected(measure: ISbDmTrackPiece, start: IFraction): boolean {
         return this.currentSelection.has(this.noteKey(measure, measure.track.id, start));
     }
 
@@ -211,11 +221,28 @@ export class SelectionManager {
      * Runs a hit-test at the click position and applies the result using the current {@link selectionMode}.
      *
      * @param clickRect A tiny rect at the click position.
+     * @param cursorOnly True in insert mode, where a click only places the cursor instead of selecting.
      */
-    public endSelection(clickRect: DOMRect): void {
+    public endSelection(clickRect: DOMRect, cursorOnly = false): void {
         this.previousEntries = [];
 
-        const entries = this.resolveEntries(clickRect);
+        const rawEntries = this.collectEntries(clickRect);
+
+        // Insert mode draws no selection: a click places the cursor on the addressed note, and a click
+        // that addresses a coarser element leaves the cursor where it is.
+        if (cursorOnly) {
+            const cursor = SelectionManager.cursorEntryOf(rawEntries);
+            if (cursor === undefined) {
+                return;
+            }
+
+            this.replaceSelection([SelectionManager.withoutHitRect(cursor)]);
+            this.publishPlayRange();
+
+            return;
+        }
+
+        const entries = SelectionManager.closestToClick(clickRect, this.resolveRawEntries(rawEntries));
 
         if (entries.length === 0) {
             if (this.currentSelectionMode === SelectionMode.New) {
@@ -233,10 +260,11 @@ export class SelectionManager {
         }
 
         if (this.currentSelectionMode === SelectionMode.New) {
-            this.internalClearSelection();
+            this.replaceSelection(entries);
+        } else {
+            this.applySelection(entries);
         }
 
-        this.applySelection(entries);
         this.publishPlayRange();
     }
 
@@ -246,7 +274,7 @@ export class SelectionManager {
      * @param clickRect A tiny rect at the pointer position.
      */
     public previewNote(clickRect: DOMRect): void {
-        const entries = this.resolveEntries(clickRect);
+        const entries = SelectionManager.closestToClick(clickRect, this.resolveEntries(clickRect));
 
         const noteIds: number[] = [];
         for (const entry of entries) {
@@ -411,6 +439,93 @@ export class SelectionManager {
     }
 
     /**
+     * Picks the one entry a click addresses. A click touches a single element, so when it touches several the
+     * entry closest to the click's centre wins; an equally close one wins when it comes later, which is the
+     * element later in the DOM.
+     *
+     * @param rect The click rectangle in viewport coordinates.
+     * @param entries The entries the click touched.
+     *
+     * @returns The one entry the click addresses, or the entries when it touched at most one.
+     */
+    private static closestToClick(rect: DOMRect, entries: ISelectionHitEntry[]): ISelectionEntry[] {
+        if (entries.length <= 1) {
+            return entries.map((entry) => {
+                return SelectionManager.withoutHitRect(entry);
+            });
+        }
+
+        const x = rect.left + (rect.width / 2);
+        const y = rect.top + (rect.height / 2);
+
+        let closest = entries[0];
+        let closestDistance = Number.POSITIVE_INFINITY;
+
+        for (const entry of entries) {
+            const distance = SelectionManager.distanceToEntry(x, y, entry);
+
+            // `<=` lets a later entry replace an equally close one, so a tie keeps the element later in the DOM.
+            if (distance <= closestDistance) {
+                closest = entry;
+                closestDistance = distance;
+            }
+        }
+
+        return [SelectionManager.withoutHitRect(closest)];
+    }
+
+    /**
+     * @param x The X coordinate to measure from.
+     * @param y The Y coordinate to measure from.
+     * @param entry The entry to measure to.
+     *
+     * @returns The distance to the entry's element, 0 when the point lies on it.
+     */
+    private static distanceToEntry(x: number, y: number, entry: ISelectionHitEntry): number {
+        const { rect } = entry;
+        const dx = Math.max(rect.left - x, 0, x - rect.right);
+        const dy = Math.max(rect.top - y, 0, y - rect.bottom);
+
+        return Math.hypot(dx, dy);
+    }
+
+    /**
+     * @param entry A hit-test entry.
+     *
+     * @returns The entry without the rect of the element it was hit at, which a stored selection does not carry.
+     */
+    private static withoutHitRect(entry: ISelectionEntry): ISelectionEntry {
+        return { granularity: entry.granularity, target: entry.target };
+    }
+
+    /**
+     * Returns the end of a list of measure events, which is the end of its last event.
+     *
+     * @param events The events to measure.
+     *
+     * @returns The end of the events' span.
+     */
+    private static endOfEvents(events: IMeasureEvent[]): IFraction {
+        const last = events[events.length - 1];
+
+        return addFractions(last.start, last.duration);
+    }
+
+    /**
+     * Picks the note the cursor can take from hit-test entries. The cursor addresses one note, so the
+     * coarser granularities a hit test offers (track, measure, track piece) are dropped.
+     *
+     * @param entries The hit-test entries to pick from.
+     *
+     * @returns The addressed note, or undefined when the entries hold none.
+     */
+    private static cursorEntryOf(entries: ISelectionEntry[]): ISelectionEntry | undefined {
+        return entries.find((entry) => {
+            return entry.granularity === SelectionGranularity.Note;
+        });
+    }
+
+    /**
      * Applies a set of selection entries according to the current mode, computes the delta
      * (added/removed), and publishes the change.
      *
@@ -426,8 +541,7 @@ export class SelectionManager {
                 this.currentSelection.delete(key);
                 removed.push(entry);
             } else {
-                this.currentSelection.set(key, entry);
-                added.push(entry);
+                this.addEntry(entry, added, removed);
             }
         };
 
@@ -442,10 +556,8 @@ export class SelectionManager {
 
             case SelectionMode.Add: {
                 for (const entry of incoming) {
-                    const key = this.entryKey(entry);
-                    if (!this.currentSelection.has(key)) {
-                        this.currentSelection.set(key, entry);
-                        added.push(entry);
+                    if (!this.currentSelection.has(this.entryKey(entry))) {
+                        this.addEntry(entry, added, removed);
                     }
                 }
 
@@ -464,6 +576,57 @@ export class SelectionManager {
         }
 
         this.schedulePersist();
+    }
+
+    /**
+     * Adds an entry that is not selected yet. A note group replaces the selected group it covers or
+     * is covered by, so a selection never holds a group together with a nesting one.
+     *
+     * @param entry The entry to add.
+     * @param added Collects the entries that enter the selection.
+     * @param removed Collects the entries that leave the selection.
+     */
+    private addEntry(entry: ISelectionEntry, added: ISelectionEntry[], removed: ISelectionEntry[]): void {
+        this.dropNestingGroups(entry, removed);
+        this.currentSelection.set(this.entryKey(entry), entry);
+        added.push(entry);
+    }
+
+    /**
+     * Removes the selected note groups that nest with an entry about to be applied. Groups of one
+     * track overlap only when one covers the other, and the group a user picks is the group they
+     * mean, so picking a group replaces the group it covers or is covered by.
+     *
+     * @param incoming The entry that is about to be applied.
+     * @param removed Collects the entries that leave the selection.
+     */
+    private dropNestingGroups(incoming: ISelectionEntry, removed: ISelectionEntry[]): void {
+        const { target } = incoming;
+        if (target.granularity !== SelectionGranularity.NoteGroup) {
+            return;
+        }
+
+        const incomingStart = target.events[0].start;
+        const incomingEnd = SelectionManager.endOfEvents(target.events);
+
+        for (const [key, entry] of [...this.currentSelection]) {
+            const other = entry.target;
+            if (other.granularity !== SelectionGranularity.NoteGroup || other.measure !== target.measure) {
+                continue;
+            }
+
+            const otherStart = other.events[0].start;
+            const otherEnd = SelectionManager.endOfEvents(other.events);
+            const incomingCovers = compareFractions(incomingStart, otherStart) <= 0
+                && compareFractions(otherEnd, incomingEnd) <= 0;
+            const otherCovers = compareFractions(otherStart, incomingStart) <= 0
+                && compareFractions(incomingEnd, otherEnd) <= 0;
+
+            if (incomingCovers || otherCovers) {
+                this.currentSelection.delete(key);
+                removed.push(entry);
+            }
+        }
     }
 
     /**
@@ -513,8 +676,13 @@ export class SelectionManager {
             }
 
             case SelectionGranularity.NoteGroup: {
+                // The span identifies the group: groups nest, so two of them can start at the same
+                // event and only the end tells them apart.
+                const { events } = target;
+                const last = events[events.length - 1];
+
                 return `noteGroup:${target.measure.number}:${target.measure.track.id}:`
-                    + formatFraction(target.events[0].start);
+                    + `${formatFraction(events[0].start)}-${formatFraction(addFractions(last.start, last.duration))}`;
             }
 
             case SelectionGranularity.Note: {
@@ -533,7 +701,7 @@ export class SelectionManager {
      *
      * @returns The cell's selection key.
      */
-    private noteKey(measure: ISbDmTrackMeasure, trackId: number, start: IFraction): string {
+    private noteKey(measure: ISbDmTrackPiece, trackId: number, start: IFraction): string {
         return `note:${measure.number}:${trackId}:${formatFraction(start)}`;
     }
 
@@ -545,7 +713,7 @@ export class SelectionManager {
      * @param entries The raw hit-test results, potentially at mixed granularities.
      * @returns Only the entries at the most specific granularity found.
      */
-    private filterToDominantGranularity(entries: ISelectionEntry[]): ISelectionEntry[] {
+    private filterToDominantGranularity(entries: ISelectionHitEntry[]): ISelectionHitEntry[] {
         let bestRank = 0;
         for (const entry of entries) {
             const rank = SelectionManager.granularityRank[entry.granularity];
@@ -571,12 +739,34 @@ export class SelectionManager {
      *
      * @returns The resolved entries, possibly empty.
      */
-    private resolveEntries(rect: DOMRect): ISelectionEntry[] {
-        const rawEntries: ISelectionEntry[] = [];
+    private resolveEntries(rect: DOMRect): ISelectionHitEntry[] {
+        return this.resolveRawEntries(this.collectEntries(rect));
+    }
+
+    /**
+     * Runs every registered hit tester for the given rectangle.
+     *
+     * @param rect The selection rectangle in viewport coordinates.
+     *
+     * @returns All entries the hit testers reported.
+     */
+    private collectEntries(rect: DOMRect): ISelectionHitEntry[] {
+        const rawEntries: ISelectionHitEntry[] = [];
         for (const tester of this.hitTesters) {
             rawEntries.push(...tester.hitTest(rect));
         }
 
+        return rawEntries;
+    }
+
+    /**
+     * Resolves raw hit-test entries to the level the selection takes.
+     *
+     * @param rawEntries The entries the hit testers reported.
+     *
+     * @returns The resolved entries, possibly empty.
+     */
+    private resolveRawEntries(rawEntries: ISelectionHitEntry[]): ISelectionHitEntry[] {
         const trackEntries = rawEntries.filter((entry) => {
             return entry.granularity === SelectionGranularity.Track;
         });
@@ -607,7 +797,10 @@ export class SelectionManager {
     }
 
     private handleSelectionRectChanged = (data: ISelectionRectChange): Promise<boolean> => {
-        const currentEntries = this.resolveEntries(data.rect);
+        // The selection stores entries without the rect of the element they were hit at.
+        const currentEntries = this.resolveEntries(data.rect).map((entry) => {
+            return SelectionManager.withoutHitRect(entry);
+        });
 
         // Reject mixed-granularity drag in Add/Invert mode.
         if (currentEntries.length > 0 && this.currentSelection.size > 0
@@ -687,7 +880,7 @@ export class SelectionManager {
      * @returns A resolved promise to satisfy the requisition handler signature.
      */
     private handlePlayerStateChanged = (state: PlayerPlayState): Promise<boolean> => {
-        if (state === "playing" || state === "counting") {
+        if (state === PlayerPlayState.Playing || state === PlayerPlayState.Counting) {
             this.switchToMeasureSelection();
         } else {
             this.restoreOriginalSelection();
@@ -717,7 +910,7 @@ export class SelectionManager {
         this.originalSelection = new Map(this.currentSelection);
 
         // Collect the measures of the selected bars.
-        const measures = new Map<number, ISbDmTrackMeasure>();
+        const measures = new Map<number, ISbDmTrackPiece>();
         for (const entry of this.currentSelection.values()) {
             const coordinates = SelectionSerializer.coordinatesOf(entry);
             if (coordinates.bar < 1) {
@@ -757,7 +950,7 @@ export class SelectionManager {
      *
      * @returns A measure of that bar, or undefined when no track has it.
      */
-    private measureOfBar(bar: number): ISbDmTrackMeasure | undefined {
+    private measureOfBar(bar: number): ISbDmTrackPiece | undefined {
         for (const track of this.dataModel?.arrangement?.tracks ?? []) {
             const measure = track.measures.at(bar - 1);
             if (measure) {
@@ -808,19 +1001,30 @@ export class SelectionManager {
     }
 
     /**
+     * The current selection in the form the history stores it.
+     *
+     * @returns The serialised selection, or undefined when nothing is selected.
+     */
+    public get serialisedSelection(): string | undefined {
+        const entries = [...this.currentSelection.values()];
+
+        return entries.length === 0 ? undefined : JSON.stringify(SelectionSerializer.serialise(entries));
+    }
+
+    /**
      * Serialises the current selection and writes it to localStorage via AppStorage.
      * An empty or cleared selection removes the stored state.
      */
     private persistSelection(): void {
-        const entries = [...this.currentSelection.values()];
+        const state = this.serialisedSelection;
 
         const settings = AppStorage.loadUISettings() ?? {};
         const viewSettings = settings.viewSettings ?? {};
 
-        if (entries.length > 0) {
-            viewSettings.selectionState = JSON.stringify(SelectionSerializer.serialise(entries));
-        } else {
+        if (state === undefined) {
             delete viewSettings.selectionState;
+        } else {
+            viewSettings.selectionState = state;
         }
 
         settings.viewSettings = viewSettings;
@@ -832,9 +1036,21 @@ export class SelectionManager {
      * Called when the scorebook finishes loading so the arrangement and DOM are ready.
      */
     private restorePersistedSelection(): void {
-        const arrangement = this.dataModel?.arrangement;
         const state = AppStorage.loadUISettings()?.viewSettings?.selectionState;
-        if (!arrangement || !state) {
+        if (state !== undefined) {
+            this.applySerialisedSelection(state);
+        }
+    }
+
+    /**
+     * Resolves a serialised selection against the current arrangement and applies it whole, so the
+     * cursor lands where the selection was made. Entries whose element no longer exists are dropped.
+     *
+     * @param state The serialised selection state.
+     */
+    private applySerialisedSelection(state: string): void {
+        const arrangement = this.dataModel?.arrangement;
+        if (!arrangement) {
             return;
         }
 
@@ -849,15 +1065,7 @@ export class SelectionManager {
             return;
         }
 
-        const entries = SelectionSerializer.deserialise(arrangement, stored);
-        const removed = [...this.currentSelection.values()];
-        this.currentSelection.clear();
-        for (const entry of entries) {
-            this.currentSelection.set(this.entryKey(entry), entry);
-        }
-
-        void requisitions.execute("selectionChanged", { added: entries, removed });
-        this.publishPlayRange();
+        this.replaceSelection(SelectionSerializer.deserialise(arrangement, stored));
     }
 
     /**
@@ -907,12 +1115,32 @@ export class SelectionManager {
     };
 
     /**
-     * Reacts to an undo/redo by re-resolving the selection against the current arrangement.
+     * Remembers the entry mode for newly created selection views.
+     *
+     * @param mode The entry mode announced by the app.
      *
      * @returns A resolved promise to satisfy the requisition handler signature.
      */
-    private handleArrangementReverted = (): Promise<boolean> => {
+    private handleEntryModeChanged = (mode: EditEntryMode): Promise<boolean> => {
+        this.entryMode = mode;
+
+        return Promise.resolve(true);
+    };
+
+    /**
+     * Reacts to an undo/redo by re-resolving the selection against the current arrangement and
+     * restoring the cursor the restored state was last edited in.
+     *
+     * @param selectionState The serialised selection of the restored history state, if it has one.
+     *
+     * @returns A resolved promise to satisfy the requisition handler signature.
+     */
+    private handleArrangementReverted = (selectionState?: string): Promise<boolean> => {
         this.reResolveSelection();
+
+        if (selectionState !== undefined) {
+            this.applySerialisedSelection(selectionState);
+        }
 
         return Promise.resolve(true);
     };

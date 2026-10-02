@@ -3,7 +3,7 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import type { ISbDmNoteEvent, ITiming, RealTime } from "../core/ScoreBookDataModel.js";
+import type { ITiming, RealTime } from "../core/ScoreBookDataModel.js";
 import type { ITimeParamsBase } from "../core/types/general.js";
 import type { IRealtimeProvider } from "../ui/AnimationEngine.js";
 import { createBeatGroups } from "../core/utils.js";
@@ -13,8 +13,8 @@ import { createBeatGroups } from "../core/utils.js";
  */
 export interface IScoreMetrics {
     /**
-     * The length of the full loop in seconds.
-     * A loop is the full length of the music before it starts again.
+     * The length of the full performance in seconds: the music as written, played in the order the repeat bar lines
+     * state. This is the length the transport loops over.
      */
     realTimeLength: number,
 
@@ -26,6 +26,9 @@ export interface IScoreMetrics {
 
     /** How many bars are in the score? */
     bars: number,
+
+    /** How many bars are played? Repeats make this more than {@link bars}. */
+    performedBars: number,
 
     /** How many beats are in a bar? */
     beatsPerBar: number,
@@ -82,13 +85,33 @@ export class TimeCoordinator {
 
     #metrics: IScoreMetrics;
 
+    /** How many bars the arrangement plays, which is what its length is measured in. */
+    #performedBars: number;
+
     public constructor(private timeParams: Readonly<ITimeParamsBase>,
         private readonly realtimeProvider: IRealtimeProvider) {
+        this.#performedBars = timeParams.length;
         this.#metrics = this.computeMetrics();
     }
 
     public get metrics(): IScoreMetrics {
         return this.#metrics;
+    }
+
+    /**
+     * Computes the number of base-grid steps in one pulse. Notation rules need it to tell a ternary
+     * pulse (three equal steps, drawn as eighths) from a binary one.
+     *
+     * @param timeParams The time parameters to read the pulse and the step resolution from.
+     *
+     * @returns The number of steps in one pulse.
+     */
+    public static stepsPerPulseOf(timeParams: Readonly<ITimeParamsBase>): number {
+        const [pulseFrequency, pulseResolution] = timeParams.pulse.split("/").map((str) => {
+            return Number(str);
+        });
+
+        return timeParams.stepResolution * pulseFrequency / pulseResolution;
     }
 
     /**
@@ -102,21 +125,24 @@ export class TimeCoordinator {
         return (this.#metrics.secondsPerBar * (timing.bar - 1)) + (this.#metrics.secondsPerStep * (timing.step - 1));
     };
 
-    /**
-     * Converts a fractional measure event position to real time.
-     *
-     * @param event The note event to convert.
-     * @returns The real-time position.
-     */
-    public convertEventToRealTime(event: ISbDmNoteEvent): RealTime {
-        const { measure, start } = event;
-
-        return this.#metrics.secondsPerBar * ((measure.number - 1) + (start.numerator / start.denominator));
-    }
-
     public convertToLoopProgress(realTime: number): RealTime {
         return ((realTime + this.internalOffset) % this.#metrics.realTimeLength) / this.#metrics.realTimeLength;
     };
+
+    /**
+     * States how many bars the arrangement plays, which is what its length is measured in. The repeat bar lines
+     * decide it; a performance without repeats plays as many bars as the arrangement has.
+     *
+     * @param count The number of bars in the performance.
+     */
+    public setPerformedBars(count: number): void {
+        if (count === this.#performedBars) {
+            return;
+        }
+
+        this.#performedBars = count;
+        this.recomputeMetrics();
+    }
 
     /**
      * Called when the current arrangement stopped playing.
@@ -135,11 +161,8 @@ export class TimeCoordinator {
     }
 
     private computeMetrics(): IScoreMetrics {
-        const { timeSignature, tempo, pulse, stepResolution } = this.timeParams;
+        const { timeSignature, tempo, stepResolution } = this.timeParams;
         const [beatsPerBar, beatUnit] = timeSignature.split("/").map((str) => {
-            return Number(str);
-        });
-        const [pulseFrequency, pulseResolution] = pulse.split("/").map((str) => {
             return Number(str);
         });
 
@@ -150,7 +173,7 @@ export class TimeCoordinator {
             throw new Error(`Incompatible time grid: ${timeSignature} with step resolution ${stepResolution}`);
         }
 
-        const stepsPerPulse = stepResolution * pulseFrequency / pulseResolution;
+        const stepsPerPulse = TimeCoordinator.stepsPerPulseOf(this.timeParams);
         const secondsPerPulse = 60 / tempo;
 
         // And produce our actually useful values.
@@ -159,10 +182,11 @@ export class TimeCoordinator {
         const beatGroups = createBeatGroups(beatsPerBar, beatUnit, stepsPerBar);
 
         return {
-            realTimeLength: secondsPerBar * this.timeParams.length,
+            realTimeLength: secondsPerBar * this.#performedBars,
             secondsPerBar,
             secondsPerStep,
             bars: this.timeParams.length,
+            performedBars: this.#performedBars,
             pulsesPerBar: beatGroups.length,
             beatsPerBar,
             beatUnit,

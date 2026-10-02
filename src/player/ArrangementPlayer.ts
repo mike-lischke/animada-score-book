@@ -10,13 +10,19 @@ import { sleep, waitFor } from "../core/utils.js";
 import { AnimationEngine } from "../ui/AnimationEngine.js";
 import { AudioBufferPlayer } from "./AudioBufferPlayer.js";
 import { Metronome } from "./Metronome.js";
+import { PlaybackOrder } from "./PlaybackOrder.js";
 import { TimeCoordinator, type IScoreMetrics } from "./TimeCoordinator.js";
 import { TrackPlayer } from "./TrackPlayer.js";
 import {
     Event, ICallbackEvent, IInterval, type IAudioEvent, type IMetronomeEvent,
 } from "./types.js";
 
-export type PlayerPlayState = "counting" | "playing" | "stopped";
+/** What the player is doing: counting a bar in, playing, or idle. */
+export enum PlayerPlayState {
+    Counting,
+    Playing,
+    Stopped,
+}
 
 /**
  * Coordinates playback for an `IArrangementView` by aggregating events from all `TrackPlayer`s and
@@ -68,7 +74,10 @@ export class ArrangementPlayer {
         timeoutId: ReturnType<typeof setTimeout>;
     }> = [];
 
-    #state: PlayerPlayState = "stopped";
+    /** The bars in the order they are played, as 1-based bar numbers. */
+    #playOrder: number[] = [];
+
+    #state: PlayerPlayState = PlayerPlayState.Stopped;
 
     /**
      * Creates a player for the given arrangement and sets up all necessary subscriptions.
@@ -77,12 +86,14 @@ export class ArrangementPlayer {
      */
     public constructor(private dataModel: ScoreBookDataModel) {
         this.timeCoordinator = new TimeCoordinator(this.dataModel.arrangement!.timeParams, this);
+        this.refreshPerformance();
 
         this.updateTrackPlayers();
         requisitions.register("arrangementChanged", this.handleArrangementChanged);
 
         this.updateCallbackEvents();
         requisitions.register("timeParamsChanged", this.handleTimeParamsChanged);
+        requisitions.register("trackChanged", this.handleTrackChanged);
 
         this.animationEngine = new AnimationEngine(this);
         this.metronome = new Metronome(this.timeCoordinator);
@@ -100,6 +111,16 @@ export class ArrangementPlayer {
 
     public get scoreMetrics(): IScoreMetrics {
         return this.timeCoordinator.metrics;
+    }
+
+    /**
+     * The bars in the order they are played, as 1-based bar numbers. A repeat makes a bar appear once per pass over
+     * its section, so the order is longer than the arrangement whenever a repeat is marked.
+     *
+     * @returns The bar numbers of the performance, in the order they sound.
+     */
+    public get playOrder(): readonly number[] {
+        return this.#playOrder;
     }
 
     /**
@@ -154,6 +175,7 @@ export class ArrangementPlayer {
         // Unsubscribe from arrangement changes and the event engine.
         requisitions.unregister("arrangementChanged", this.handleArrangementChanged);
         requisitions.unregister("timeParamsChanged", this.handleTimeParamsChanged);
+        requisitions.unregister("trackChanged", this.handleTrackChanged);
 
         this.metronome.dispose();
         this.trackPlayers.clear();
@@ -164,16 +186,25 @@ export class ArrangementPlayer {
      * Playback will start at the beginning of `startBar` and stop after the given number of bars.
      * If `loop` is true the interval will be looped.
      *
+     * A repeat makes a bar appear more than once, so the interval runs from the first pass over its first bar to
+     * the end of the last pass over its last one.
+     *
      * @param startBar The 1-based bar number to start playback at.
      * @param numberOfBars The number of bars to play.
      *
      * @returns A promise that resolves when playback has stopped.
      */
     public async playBars(startBar: number, numberOfBars: number): Promise<void> {
-        const startTime = this.timeCoordinator.convertToRealTime({ bar: startBar, step: 1 });
-        const endTime = this.timeCoordinator.convertToRealTime({ bar: startBar + numberOfBars, step: 1 });
+        const order = this.#playOrder;
+        const first = order.indexOf(startBar);
+        const last = order.lastIndexOf(startBar + numberOfBars - 1);
+        if (first < 0 || last < first) {
+            return;
+        }
 
-        return this.play({ start: startTime, end: endTime });
+        const { secondsPerBar } = this.timeCoordinator.metrics;
+
+        return this.play({ start: first * secondsPerBar, end: (last + 1) * secondsPerBar });
     }
 
     /**
@@ -196,7 +227,7 @@ export class ArrangementPlayer {
         // Clear any interval restriction and start from 0.
         this.currentInterval = interval;
 
-        this.#state = "counting";
+        this.#state = PlayerPlayState.Counting;
         if (this.dataModel.arrangement!.countIn) {
             void requisitions.execute("playerStateChanged", this.#state);
             this.offset = this.audioContext.currentTime;
@@ -204,11 +235,11 @@ export class ArrangementPlayer {
         }
 
         // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-        if (this.#state !== "counting") { // May have been stopped during count-in.
+        if (this.#state !== PlayerPlayState.Counting) { // May have been stopped during count-in.
             return;
         }
 
-        this.#state = "playing";
+        this.#state = PlayerPlayState.Playing;
 
         // If an interval is given, pretend we started earlier by setting the offset back in time.
         // We never access time before the current audio time.
@@ -240,16 +271,16 @@ export class ArrangementPlayer {
             }
         }
 
-        if (this.#state !== "stopped") { // Playing or counting.
+        if (this.#state !== PlayerPlayState.Stopped) { // Playing or counting.
             this.clearScheduledEvents();
-            this.#state = "stopped";
+            this.#state = PlayerPlayState.Stopped;
 
             this.onStop();
         }
     }
 
     public get currentTime(): number {
-        if (this.#state === "playing") {
+        if (this.#state === PlayerPlayState.Playing) {
             return this.audioContext.currentTime - this.offset;
         }
 
@@ -391,9 +422,36 @@ export class ArrangementPlayer {
             return Promise.resolve(false);
         }
 
+        this.refreshPerformance();
         this.updateTrackPlayers();
 
         return Promise.resolve(true);
+    };
+
+    /**
+     * Keeps the performance in step with the arrangement: the repeat marks a track edit may carry decide how many
+     * bars are played, so the order and the length are re-read.
+     *
+     * @returns Always true (the change is always handled).
+     */
+    private handleTrackChanged = (): Promise<boolean> => {
+        this.refreshPerformance();
+
+        return Promise.resolve(true);
+    };
+
+    /**
+     * Reads the order the repeat bar lines state and states its length to the time coordinator.
+     */
+    private refreshPerformance = (): void => {
+        const arrangement = this.dataModel.arrangement;
+        if (arrangement === undefined) {
+            return;
+        }
+
+        this.#playOrder = PlaybackOrder.performedBars(arrangement.repeatBars ?? new Map(),
+            arrangement.timeParams.length);
+        this.timeCoordinator.setPerformedBars(this.#playOrder.length);
     };
 
     /**
@@ -430,6 +488,7 @@ export class ArrangementPlayer {
      * @returns Always true (the change is always handled).
      */
     private handleTimeParamsChanged = (): Promise<boolean> => {
+        this.refreshPerformance();
         this.updateCallbackEvents();
 
         return Promise.resolve(true);
@@ -444,7 +503,7 @@ export class ArrangementPlayer {
         this.timeCoordinator.recomputeMetrics();
 
         // If playing the full score (no interval restriction), update endOffset to match the new tempo.
-        if (this.#state === "playing" && !this.currentInterval) {
+        if (this.#state === PlayerPlayState.Playing && !this.currentInterval) {
             this.endOffset = this.timeCoordinator.metrics.realTimeLength;
         }
 
@@ -664,7 +723,7 @@ export class ArrangementPlayer {
         // play before we start the main playback loop, which also schedules sounds at the very beginning of
         // the arrangement.
         await waitFor((metrics.secondsPerBar * 1000) + 10, () => {
-            return this.#state !== "counting";
+            return this.#state !== PlayerPlayState.Counting;
         });
     }
 }

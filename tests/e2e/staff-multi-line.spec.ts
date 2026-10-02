@@ -6,6 +6,7 @@
 import { expect, test } from "@playwright/test";
 
 import { stringifyPackedArrangement } from "../../src/core/serialisation/snapshot-packing.js";
+import { arrangementSnapshotVersion } from "../../src/core/serialisation/snapshots.js";
 import { routeApi } from "./e2e-test-helpers.js";
 
 test.beforeEach(async ({ page }) => {
@@ -23,7 +24,7 @@ test.beforeEach(async ({ page }) => {
  */
 const buildSnapshot = (instrumentId: string, title: string, noteStyleId = "1") => {
     return {
-        version: 4,
+        version: arrangementSnapshotVersion,
         title,
         timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4", stepResolution: 16 },
         tracks: [{
@@ -95,23 +96,29 @@ test.describe("Staff view multi-line rendering", () => {
         await expect(page.locator("#trackViewerHost")).toBeVisible();
         await expect(page.locator(".staff-measure-track-row").first()).toBeVisible();
 
-        const { lineCount, positions } = await page.evaluate(() => {
+        const { lineCount, offsets, barlineHeight } = await page.evaluate(() => {
             const viewer = document.querySelector(".staff-note-viewer");
             const lines = viewer?.querySelectorAll(".staff-note-viewer-line") ?? [];
+            const barline = viewer?.querySelector(".staff-note-viewer-barline");
 
             return {
                 lineCount: lines.length,
-                positions: Array.from(lines).map((l) => {
-                    return (l as HTMLElement).style.top;
+                offsets: Array.from(lines).map((l) => {
+                    return (l as HTMLElement).style.getPropertyValue("--staff-line-offset");
                 }),
+                barlineHeight: barline === null || barline === undefined
+                    ? null
+                    : barline.getBoundingClientRect().height,
             };
         });
 
         expect(lineCount).toBe(2);
-        // Two lines centred: offset = (line - centerLine) * 10 + 31.5
-        // centerLine = 1.5: line 1 → -5+31.5=26.5, line 2 → +5+31.5=36.5
-        expect(positions[0]).toBe("calc(50% + 26.5px)");
-        expect(positions[1]).toBe("calc(50% + 36.5px)");
+        // Half a staff space above and below the line the notes sit on.
+        expect(offsets).toEqual(["-5px", "5px"]);
+
+        // A staff of one space gets the two-space stub, the same as a staff of a single line. The barline also
+        // covers the thickness of the lower line, so it reaches past the distance between the lines by it.
+        expect(barlineHeight).toBe(21);
     });
 
     test("renders four staff lines for a 4-line instrument (4-Bell Agogo)", async ({ page }) => {
@@ -131,25 +138,118 @@ test.describe("Staff view multi-line rendering", () => {
         await expect(page.locator("#trackViewerHost")).toBeVisible();
         await expect(page.locator(".staff-measure-track-row").first()).toBeVisible();
 
-        const { lineCount, positions } = await page.evaluate(() => {
+        const { lineCount, offsets, barlineHeight } = await page.evaluate(() => {
             const viewer = document.querySelector(".staff-note-viewer");
             const lines = viewer?.querySelectorAll(".staff-note-viewer-line") ?? [];
+            const barline = viewer?.querySelector(".staff-note-viewer-barline");
 
             return {
                 lineCount: lines.length,
-                positions: Array.from(lines).map((l) => {
-                    return (l as HTMLElement).style.top;
+                offsets: Array.from(lines).map((l) => {
+                    return (l as HTMLElement).style.getPropertyValue("--staff-line-offset");
                 }),
+                barlineHeight: barline === null || barline === undefined
+                    ? null
+                    : barline.getBoundingClientRect().height,
             };
         });
 
         expect(lineCount).toBe(4);
-        // Four lines centred: offset = (line - centerLine) * 10 + 31.5
-        // centerLine = 2.5: lines → 16.5, 26.5, 36.5, 46.5
-        expect(positions[0]).toBe("calc(50% + 16.5px)");
-        expect(positions[1]).toBe("calc(50% + 26.5px)");
-        expect(positions[2]).toBe("calc(50% + 36.5px)");
-        expect(positions[3]).toBe("calc(50% + 46.5px)");
+        // One and a half, half a space above and below the line the notes sit on.
+        expect(offsets).toEqual(["-15px", "-5px", "5px", "15px"]);
+
+        // A staff of three spaces is taller than the stub, so the closing barline spans its outer lines.
+        expect(barlineHeight).toBe(31);
+    });
+
+    test("draws stems of equal length for notes on different staff lines", async ({ page }) => {
+        // Four eighths on the four lines of the 4-Bell Agogo, each followed by a rest so that they
+        // stay unbeamed and are drawn with a flag on a stem of their own.
+        const snapshot = {
+            version: arrangementSnapshotVersion,
+            title: "E2E Stem Length",
+            timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4", stepResolution: 16 },
+            tracks: [{
+                id: 100,
+                instrumentId: "a",
+                measures: [{
+                    number: 1,
+                    meter: { beats: 4, beatUnits: 4, stepResolution: 16, beatGroups: [4, 4, 4, 4] },
+                    events: [
+                        // One eighth per pulse, alternating with a rest, from the lowest to the highest line.
+                        ...[1, 2, 3, 4].flatMap((noteStyleId, index) => {
+                            return [
+                                {
+                                    start: { numerator: index * 4, denominator: 16 },
+                                    duration: { numerator: 2, denominator: 16 },
+                                    noteStyleId: noteStyleId.toString(),
+                                },
+                                {
+                                    start: { numerator: (index * 4) + 2, denominator: 16 },
+                                    duration: { numerator: 2, denominator: 16 },
+                                },
+                            ];
+                        }),
+                    ],
+                    subdivisions: [],
+                }],
+            }],
+        };
+
+        await page.addInitScript((packed: string) => {
+            const sessionId = "e2e-staff-stem-length";
+            window.history.replaceState({ ...(window.history.state ?? {}), sessionId }, "");
+            window.sessionStorage.setItem("asb-session-id", sessionId);
+            window.localStorage.setItem(`asb-ui-settings-session-${sessionId}`, JSON.stringify({
+                currentScore: packed,
+                viewSettings: { arrangementViewSettings: { displayMode: "staff" } },
+            }));
+        }, stringifyPackedArrangement(snapshot));
+
+        await page.goto("/");
+        await expect(page.locator("#trackViewerHost")).toBeVisible();
+        await expect(page.locator(".staff-measure-track-row").first()).toBeVisible();
+
+        const stems = await page.evaluate(() => {
+            const row = document.querySelector(".staff-measure-track-row");
+            const runs = [...(row?.querySelectorAll(".staff-note-viewer-note-run") ?? [])];
+
+            return runs.map((run) => {
+                const head = run.querySelector<HTMLElement>(".staff-note-head");
+                const stem = run.querySelector<HTMLElement>(".staff-note-head-stem");
+                if (!head || !stem) {
+                    return null;
+                }
+
+                const stemRect = stem.getBoundingClientRect();
+                const headRect = head.getBoundingClientRect();
+
+                return {
+                    lineOffset: getComputedStyle(head).getPropertyValue("--note-line-offset").trim(),
+                    height: Math.round(stemRect.height),
+                    top: Math.round((stemRect.top - headRect.top) * 10) / 10,
+                };
+            });
+        });
+
+        // A stem is a rigid part of its notehead: it keeps its length on every line and moves with
+        // the head instead of reaching up to a fixed height above the row. Its tip sits where a beam
+        // sits, and its length is the distance from there down to the anchor the font states.
+        expect(stems.map((stem) => {
+            return stem?.height;
+        })).toEqual([33, 33, 33, 33]);
+
+        const tops = stems.map((stem) => {
+            return stem?.top ?? 0;
+        });
+        expect(tops[1] - tops[0]).toBeCloseTo(0, 1);
+        expect(tops[2] - tops[0]).toBeCloseTo(0, 1);
+        expect(tops[3] - tops[0]).toBeCloseTo(0, 1);
+
+        // The four notes sit on the four lines of the 4-bell agogo, lowest first.
+        expect(stems.map((stem) => {
+            return stem?.lineOffset;
+        })).toEqual(["15px", "5px", "-5px", "-15px"]);
     });
 
     test("staff prefix viewer renders matching lines for multi-line instruments", async ({ page }) => {
@@ -168,13 +268,21 @@ test.describe("Staff view multi-line rendering", () => {
         await page.goto("/");
         await expect(page.locator("#trackViewerHost")).toBeVisible();
 
-        // Prefix row for the 4-line instrument must have matching staff lines.
-        const prefixLineCount = await page.evaluate(() => {
+        // Prefix row for the 4-line instrument must have matching staff lines, and they must sit on the
+        // same pixel as the lines of the note row: both draw around the line the viewer states.
+        const { prefixLineCount, prefixLineTop, noteLineTop } = await page.evaluate(() => {
             const row = document.querySelector(".staff-prefix-row");
+            const prefixLine = row?.querySelector(".staff-note-viewer-line");
+            const noteLine = document.querySelector(".staff-measure-track-row .staff-note-viewer-line");
 
-            return row?.querySelectorAll(".staff-note-viewer-line").length ?? 0;
+            return {
+                prefixLineCount: row?.querySelectorAll(".staff-note-viewer-line").length ?? 0,
+                prefixLineTop: prefixLine?.getBoundingClientRect().top ?? null,
+                noteLineTop: noteLine?.getBoundingClientRect().top ?? null,
+            };
         });
 
         expect(prefixLineCount).toBe(4);
+        expect(prefixLineTop).toBe(noteLineTop);
     });
 });

@@ -25,7 +25,7 @@ test("keyboard navigation scrolls the staff viewer to keep the cursor visible", 
     await expect(page.locator(".staff-measure-track-row").first()).toBeVisible();
 
     // Select the first note of the first measure so arrow navigation has a starting point.
-    const firstNote = page.locator(".staff-measure-track-row .staff-note-viewer-note-symbol").first();
+    const firstNote = page.locator(".staff-measure-track-row .staff-note-head-symbol").first();
     await firstNote.click();
     await expect(page.locator(".staff-note-viewer-run.note-selected").first()).toBeVisible();
 

@@ -12,6 +12,9 @@ import { type ICommonUIProperties, type MouseEventCallback, UIComponent } from "
 export interface IDropdownItem {
     label?: string;
     icon?: ComponentChild;
+
+    /** Rendered at the end of the item, after the label. */
+    detail?: ComponentChild;
     disabled?: boolean;
     onClick?: MouseEventCallback;
 }
@@ -70,6 +73,7 @@ export class Dropdown extends UIComponent<IDropdownProperties, IDropdownState> {
                             {item.icon}
                         </span>}
                         {item.label}
+                        {item.detail && <span className="dropdown-item-detail">{item.detail}</span>}
                     </a>
                 </li>
             );

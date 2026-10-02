@@ -418,6 +418,7 @@ export default tseslint.config(
             "@typescript-eslint/class-literal-property-style": "off",
             "@typescript-eslint/no-misused-spread": "off",
             "@typescript-eslint/no-dynamic-delete": "off",
+            "@typescript-eslint/no-unnecessary-boolean-literal-compare": "error",
 
             "jsdoc/check-alignment": "error",
             "jsdoc/check-indentation": "off",

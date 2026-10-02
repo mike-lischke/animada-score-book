@@ -6,6 +6,7 @@
 import { type ComponentChild } from "preact";
 
 import type { Arrangement } from "../../../core/Arrangement.js";
+import { MeasureLayout } from "../../../core/MeasureLayout.js";
 import type { ISbDmTrack, ScoreBookDataModel } from "../../../core/ScoreBookDataModel.js";
 import type { ArrangementPlayer } from "../../../player/ArrangementPlayer.js";
 import type { SelectionManager } from "../../../ui/SelectionManager.js";
@@ -19,6 +20,21 @@ import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.
 
 /** Bars-per-row may be auto-fit (`"auto"`) or a fixed positive integer. */
 export type BarsPerLine = "auto" | 1 | 2 | 4 | 8;
+
+/**
+ * Factor the print stylesheet scales a measure's screen width down by. Mirrors `.staff-measure-viewer` in
+ * print.scss.
+ */
+const printWidthScale = 2;
+
+/**
+ * Width of the printed page in default measures. Mirrors the `1.32` that `--print-zoom` used to be derived
+ * from in print.scss.
+ */
+const pageWidthInMeasures = 1.32;
+
+/** Measures a print row holds when every measure has the default width. */
+const defaultMeasuresPerRow = 2;
 
 /** Options the user can choose in the print preview dialog. */
 export interface IPrintOptions {
@@ -55,11 +71,10 @@ export class PrintView extends UIComponent<IPrintViewProps> {
         const tracks = this.getSelectedTracks();
         const blocks = this.buildBarBlocks();
 
-        // Tell print.scss how many bars share a row, so it can scale --note-height
-        // (and everything derived from it) down accordingly. This keeps note glyphs
-        // proportionally sized when the user picks a higher bars-per-line.
-        const barsPerLine = blocks.length > 0 ? blocks[0].length : 1;
-        const printRootStyle = { "--print-bars-per-line": String(barsPerLine) } as Record<string, string>;
+        // print.scss scales the whole document with one CSS zoom, so the zoom makes the widest row fill the
+        // printable page. It follows the measures' widths, which is what keeps a row of narrow measures from
+        // leaving most of the page empty.
+        const printRootStyle = { "--print-zoom": String(this.printZoom(blocks)) } as Record<string, string>;
 
         return (
             <div className={className} role="document" style={printRootStyle}>
@@ -158,7 +173,9 @@ export class PrintView extends UIComponent<IPrintViewProps> {
     }
 
     /**
-     * Splits the bars into rows according to the `barsPerLine` setting.
+     * Splits the bars into rows according to the `barsPerLine` setting. `auto` aims for two default measures per
+     * row — the capacity the layout has always had — and gives narrower measures the room they free up, so a row
+     * holds more of them.
      *
      * @returns A list of rows, each containing the (1-based) bar numbers in that row.
      */
@@ -166,21 +183,86 @@ export class PrintView extends UIComponent<IPrintViewProps> {
         const { arrangementPlayer, options } = this.props;
         const totalBars = arrangementPlayer.scoreMetrics.bars;
 
-        const perLine = options.barsPerLine === "auto"
-            ? 2
-            : options.barsPerLine;
+        if (options.barsPerLine !== "auto" || options.viewMode !== "staff") {
+            // Only the staff view has measures of differing widths, so only it can pack by width.
+            const perLine = options.barsPerLine === "auto" ? defaultMeasuresPerRow : options.barsPerLine;
+            const fixedBlocks: number[][] = [];
+            for (let i = 1; i <= totalBars; i += perLine) {
+                const block: number[] = [];
+                for (let j = 0; j < perLine && (i + j) <= totalBars; j++) {
+                    block.push(i + j);
+                }
 
-        const blocks: number[][] = [];
-        for (let i = 1; i <= totalBars; i += perLine) {
-            const block: number[] = [];
-            for (let j = 0; j < perLine && (i + j) <= totalBars; j++) {
-                block.push(i + j);
+                fixedBlocks.push(block);
             }
 
+            return fixedBlocks;
+        }
+
+        const blocks: number[][] = [];
+        let block: number[] = [];
+        let width = 0;
+
+        for (let bar = 1; bar <= totalBars; bar++) {
+            const barWidth = this.measureUnits(bar);
+            if (block.length > 0 && width + barWidth > defaultMeasuresPerRow) {
+                blocks.push(block);
+                block = [];
+                width = 0;
+            }
+
+            block.push(bar);
+            width += barWidth;
+        }
+
+        if (block.length > 0) {
             blocks.push(block);
         }
 
         return blocks;
+    }
+
+    /**
+     * @param blocks The rows of bar numbers.
+     *
+     * @returns The zoom that makes the widest row fill the page. It is capped, because the note glyphs are drawn
+     *          at fixed px that only the zoom scales: a row narrower than one default measure would otherwise be
+     *          blown up far beyond the size the notation is designed for.
+     */
+    private printZoom(blocks: number[][]): number {
+        const widest = Math.max(1, ...blocks.map((block) => {
+            return this.rowWidth(block);
+        }));
+
+        return pageWidthInMeasures / widest;
+    }
+
+    /**
+     * @param block The bars of one row.
+     *
+     * @returns The width of the row in default measures. The grid view lays its equal columns out at the default
+     *          width, so there a bar counts as one.
+     */
+    private rowWidth(block: number[]): number {
+        const { options } = this.props;
+        if (options.viewMode !== "staff") {
+            return block.length;
+        }
+
+        return block.reduce((sum, bar) => {
+            return sum + this.measureUnits(bar);
+        }, 0);
+    }
+
+    /**
+     * @param barNumber The 1-based number of the measured bar.
+     *
+     * @returns The bar's width in default measures, so a row's capacity is comparable to the default width.
+     */
+    private measureUnits(barNumber: number): number {
+        const { arrangement } = this.props;
+
+        return MeasureLayout.widthOf(barNumber, arrangement.measureWidths) / MeasureLayout.defaultWidth();
     }
 
     private renderGridBar(barNumber: number, tracks: ISbDmTrack[]): ComponentChild {
@@ -229,7 +311,11 @@ export class PrintView extends UIComponent<IPrintViewProps> {
 
     private renderStaffMeasure(barNumber: number, tracks: ISbDmTrack[]): ComponentChild {
         const { arrangement, arrangementPlayer, dataModel, selectionManager } = this.props;
-        const ownLabel = arrangement.measureLabels[barNumber] as string | undefined;
+
+        // The print stylesheet lays a measure out half as wide as on screen, so a stored width is halved with
+        // the default and the measures keep their relative widths on paper.
+        const width = MeasureLayout.widthOf(barNumber, arrangement.measureWidths) / printWidthScale;
+        const measureStyle = { flex: `0 0 ${width}px`, minWidth: 0 };
 
         return (
             <StaffMeasureViewer
@@ -240,8 +326,8 @@ export class PrintView extends UIComponent<IPrintViewProps> {
                 inEditMode={false}
                 selectionManager={selectionManager}
                 dataModel={dataModel}
-                ownLabel={ownLabel}
                 tracks={tracks}
+                style={measureStyle}
             />
         );
     }

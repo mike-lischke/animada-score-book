@@ -443,20 +443,6 @@ describe("Arrangement", () => {
         expect(track.measures[2].events[0].noteStyleId).toBeUndefined();
     });
 
-    it("insertBars and deleteBar shift measure labels", () => {
-        const instrument = createInstrument("0", 0, 0);
-        const arrangement = Arrangement.emptyArrangementWithInstruments([instrument], { length: 3 });
-        arrangement.measureLabels = { 2: "Section A", 3: "Section B" };
-
-        arrangement.insertBars(3, 1, true, false);
-
-        expect(arrangement.measureLabels).toEqual({ 2: "Section A", 4: "Section B" });
-
-        arrangement.deleteBar(1);
-
-        expect(arrangement.measureLabels).toEqual({ 1: "Section A", 3: "Section B" });
-    });
-
     it("deleteBar keeps at least one bar in the arrangement", () => {
         const instrument = createInstrument("0", 0, 0);
         const arrangement = Arrangement.emptyArrangementWithInstruments([instrument], { length: 1 });
@@ -469,5 +455,117 @@ describe("Arrangement", () => {
         expect(arrangement.timeParams.length).toBe(1);
         expect(track.measures).toHaveLength(1);
         expect(track.measures[0].events[0].noteStyleId).toBe("1");
+    });
+
+    it("insertBars takes the widths of the bars behind the insertion point along", () => {
+        const instrument = createInstrument("0", 0, 0);
+        const arrangement = Arrangement.emptyArrangementWithInstruments([instrument], { length: 3 });
+        arrangement.measureWidths.set(1, 1000);
+        arrangement.measureWidths.set(3, 3000);
+
+        arrangement.insertBars(2, 1, false, false);
+
+        expect(Object.fromEntries(arrangement.measureWidths)).toEqual({ 1: 1000, 4: 3000 });
+    });
+
+    it("deleteBar drops the width of the removed bar and shifts the rest down", () => {
+        const instrument = createInstrument("0", 0, 0);
+        const arrangement = Arrangement.emptyArrangementWithInstruments([instrument], { length: 3 });
+        arrangement.measureWidths.set(1, 1000);
+        arrangement.measureWidths.set(2, 2000);
+        arrangement.measureWidths.set(3, 3000);
+
+        arrangement.deleteBar(2);
+
+        expect(Object.fromEntries(arrangement.measureWidths)).toEqual({ 1: 1000, 2: 3000 });
+    });
+
+    it("duplicateBar gives the copy the width of its original", () => {
+        const instrument = createInstrument("0", 0, 0);
+        const arrangement = Arrangement.emptyArrangementWithInstruments([instrument], { length: 3 });
+        arrangement.measureWidths.set(2, 2000);
+        arrangement.measureWidths.set(3, 3000);
+
+        arrangement.duplicateBar(2);
+
+        expect(Object.fromEntries(arrangement.measureWidths)).toEqual({ 2: 2000, 3: 2000, 4: 3000 });
+    });
+
+    it("insertBars gives every copied bar the width of the bar it copies", () => {
+        const instrument = createInstrument("0", 0, 0);
+        const arrangement = Arrangement.emptyArrangementWithInstruments([instrument], { length: 3 });
+        arrangement.measureWidths.set(2, 2000);
+        arrangement.measureWidths.set(3, 3000);
+
+        arrangement.insertBars(2, 2, false, true);
+
+        expect(Object.fromEntries(arrangement.measureWidths)).toEqual({ 2: 2000, 3: 2000, 4: 2000, 5: 3000 });
+    });
+
+    it("insertBars copies the width of the bar in front when inserting before it", () => {
+        const instrument = createInstrument("0", 0, 0);
+        const arrangement = Arrangement.emptyArrangementWithInstruments([instrument], { length: 3 });
+        arrangement.measureWidths.set(2, 2000);
+        arrangement.measureWidths.set(3, 3000);
+
+        arrangement.insertBars(3, 1, true, true);
+
+        expect(Object.fromEntries(arrangement.measureWidths)).toEqual({ 2: 2000, 3: 2000, 4: 3000 });
+    });
+
+    it("insertBars leaves copied bars at the default width when the bar they copy has none", () => {
+        const instrument = createInstrument("0", 0, 0);
+        const arrangement = Arrangement.emptyArrangementWithInstruments([instrument], { length: 2 });
+        arrangement.measureWidths.set(2, 4000);
+
+        arrangement.insertBars(1, 1, false, true);
+
+        expect(Object.fromEntries(arrangement.measureWidths)).toEqual({ 3: 4000 });
+    });
+
+    it("insertBars takes the repeat marks of the bars behind the insertion point along", () => {
+        const instrument = createInstrument("0", 0, 0);
+        const arrangement = Arrangement.emptyArrangementWithInstruments([instrument], { length: 3 });
+        arrangement.repeatBars.set(1, { start: true });
+        arrangement.repeatBars.set(3, { end: true });
+
+        arrangement.insertBars(2, 1, false, false);
+
+        expect(Object.fromEntries(arrangement.repeatBars)).toEqual({ 1: { start: true }, 4: { end: true } });
+    });
+
+    it("deleteBar drops the marks of the removed bar and shifts the rest down", () => {
+        const instrument = createInstrument("0", 0, 0);
+        const arrangement = Arrangement.emptyArrangementWithInstruments([instrument], { length: 3 });
+        arrangement.repeatBars.set(2, { end: true });
+        arrangement.repeatBars.set(3, { start: true });
+
+        arrangement.deleteBar(2);
+
+        expect(Object.fromEntries(arrangement.repeatBars)).toEqual({ 2: { start: true } });
+    });
+
+    it("duplicateBar gives the copy the marks of its original", () => {
+        const instrument = createInstrument("0", 0, 0);
+        const arrangement = Arrangement.emptyArrangementWithInstruments([instrument], { length: 3 });
+        arrangement.repeatBars.set(2, { end: true });
+
+        arrangement.duplicateBar(2);
+
+        expect(Object.fromEntries(arrangement.repeatBars)).toEqual({ 2: { end: true }, 3: { end: true } });
+    });
+
+    it("insertBars gives every copied bar the marks of the bar it copies", () => {
+        const instrument = createInstrument("0", 0, 0);
+        const arrangement = Arrangement.emptyArrangementWithInstruments([instrument], { length: 3 });
+        arrangement.repeatBars.set(2, { start: true, end: true });
+
+        arrangement.insertBars(2, 2, false, true);
+
+        expect(Object.fromEntries(arrangement.repeatBars)).toEqual({
+            2: { start: true, end: true },
+            3: { start: true, end: true },
+            4: { start: true, end: true },
+        });
     });
 });

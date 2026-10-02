@@ -3,9 +3,10 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import { expect, test } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 
 import { stringifyPackedArrangement } from "../../src/core/serialisation/snapshot-packing.js";
+import { arrangementSnapshotVersion } from "../../src/core/serialisation/snapshots.js";
 import type { IArrangementSnapshot } from "../../src/core/types/general.js";
 import { routeApi } from "./e2e-test-helpers.js";
 
@@ -16,19 +17,46 @@ test.beforeEach(async ({ page }) => {
 /**
  * Builds a packed v3 arrangement with the given track instruments and steps.
  *
- * @param tracks The track definitions with per-step note style and articulation data.
+ * @param tracks The track definitions with per-step note style and articulation data, or with an
+ *               explicit event list for measures that need lengths the step raster cannot express.
  *
  * @returns A JSON-stringified packed arrangement snapshot ready for addInitScript.
  */
 const buildPackedArrangement = (tracks: Array<{
     instrumentId: string;
-    steps: Array<{ noteStyleId?: string; articulation?: { damping: number; accent: boolean; ghost: boolean; }; }>;
+    steps?: Array<{ noteStyleId?: string; articulation?: { damping: number; accent: boolean; ghost: boolean; }; }>;
+    events?: Array<{
+        start: [number, number];
+        duration: [number, number];
+        noteStyleId?: string;
+        articulation?: { damping: number; accent: boolean; ghost: boolean; };
+    }>;
 }>): string => {
     const snapshot: IArrangementSnapshot = {
-        version: 4,
+        version: arrangementSnapshotVersion,
         title: "Decoration Test",
         timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4", stepResolution: 16 },
         tracks: tracks.map((track, trackIndex) => {
+            const events = track.events
+                ? track.events.map((event) => {
+                    return {
+                        start: { numerator: event.start[0], denominator: event.start[1] },
+                        duration: { numerator: event.duration[0], denominator: event.duration[1] },
+                        noteStyleId: event.noteStyleId,
+                        articulation: event.articulation ? { ...event.articulation } : undefined,
+                    };
+                })
+                : Array.from({ length: 16 }, (_, index) => {
+                    const stepData = track.steps?.at(index);
+
+                    return {
+                        start: { numerator: index, denominator: 16 },
+                        duration: { numerator: 1, denominator: 16 },
+                        noteStyleId: stepData?.noteStyleId,
+                        articulation: stepData?.articulation ? { ...stepData.articulation } : undefined,
+                    };
+                });
+
             return {
                 id: trackIndex + 1,
                 instrumentId: track.instrumentId,
@@ -40,16 +68,7 @@ const buildPackedArrangement = (tracks: Array<{
                         stepResolution: 16,
                         beatGroups: [4, 4, 4, 4],
                     },
-                    events: Array.from({ length: 16 }, (_, index) => {
-                        const stepData = track.steps.at(index);
-
-                        return {
-                            start: { numerator: index, denominator: 16 },
-                            duration: { numerator: 1, denominator: 16 },
-                            noteStyleId: stepData?.noteStyleId,
-                            articulation: stepData?.articulation ? { ...stepData.articulation } : undefined,
-                        };
-                    }),
+                    events,
                     subdivisions: [],
                 }],
             };
@@ -57,6 +76,78 @@ const buildPackedArrangement = (tracks: Array<{
     };
 
     return stringifyPackedArrangement(snapshot);
+};
+
+/** The session details a test seeds before the app loads. */
+interface ISessionSeed {
+    /** The packed arrangement snapshot stored as the session's current score. */
+    packed: string;
+
+    /** The session id the arrangement is stored under. */
+    sessionId: string;
+}
+
+/**
+ * Seeds a session with a packed arrangement and switches the arrangement view to staff mode.
+ *
+ * @param page The page to prepare.
+ * @param seed The arrangement snapshot and session id to load.
+ */
+const openStaffArrangement = async (page: Page, seed: ISessionSeed): Promise<void> => {
+    await page.addInitScript((initSeed: ISessionSeed) => {
+        window.history.replaceState({ ...(window.history.state ?? {}), sessionId: initSeed.sessionId }, "");
+        window.sessionStorage.setItem("asb-session-id", initSeed.sessionId);
+        window.localStorage.setItem(`asb-ui-settings-session-${initSeed.sessionId}`, JSON.stringify({
+            currentScore: initSeed.packed,
+        }));
+    }, seed);
+
+    await page.goto("/");
+
+    const trackViewToggle = page.locator("input.trackViewModeToggle").first();
+    await expect(trackViewToggle).toBeVisible();
+    if (!await trackViewToggle.isChecked()) {
+        await trackViewToggle.check({ force: true });
+    }
+
+    await expect(page.locator(".staff-measure-track-row").first()).toBeVisible();
+};
+
+/**
+ * Selects a note with a mouse click on its note head. The head is centred on the note's onset, while
+ * beams and selection overlays are drawn with `pointer-events: none`, so the click has to be placed
+ * by coordinate rather than on the elements the renderer paints on top.
+ *
+ * @param page The page holding the staff view.
+ * @param head The note head to click.
+ */
+const clickNoteHead = async (page: Page, head: Locator): Promise<void> => {
+    const box = await head.boundingBox();
+    if (!box) {
+        throw new Error("Note head has no bounding box.");
+    }
+
+    await page.mouse.click(box.x + (box.width / 2), box.y + (box.height / 2));
+};
+
+/**
+ * Resolves the theme's primary colour, which selection highlighting is drawn with, to a computed
+ * `rgb()` value, so the tests do not hardcode a theme colour.
+ *
+ * @param page The page holding the staff view.
+ *
+ * @returns The primary colour as a computed CSS colour value.
+ */
+const primaryColor = (page: Page): Promise<string> => {
+    return page.evaluate(() => {
+        const probe = document.createElement("span");
+        probe.style.color = "var(--color-primary)";
+        document.body.appendChild(probe);
+        const color = getComputedStyle(probe).color;
+        probe.remove();
+
+        return color;
+    });
 };
 
 test.describe("Note head types", () => {
@@ -87,9 +178,10 @@ test.describe("Note head types", () => {
 
         await expect(page.locator(".staff-measure-track-row").first()).toBeVisible();
 
-        // Oval heads use the SVG note symbol.
-        const noteSymbol = page.locator(".staff-note-viewer-note-symbol").first();
-        await expect(noteSymbol).toBeVisible();
+        // Oval heads are glyphs of the music font, drawn as an SVG text element.
+        const headGlyph = page.locator(".staff-note-head-symbol text").first();
+        await expect(headGlyph).toBeVisible();
+        await expect(headGlyph).toHaveText(String.fromCodePoint(0xE0A4));
     });
 
     test("renders cross note heads for Tamborim", async ({ page }) => {
@@ -119,9 +211,10 @@ test.describe("Note head types", () => {
 
         await expect(page.locator(".staff-measure-track-row").first()).toBeVisible();
 
-        // Cross heads are rendered via SVG.
-        const crossSvg = page.locator(".staff-note-head-cross-svg").first();
-        await expect(crossSvg).toBeVisible();
+        // Cross heads come from the symbol catalogue as the score's own cross path.
+        const crossPath = page.locator(".staff-note-head-symbol path").first();
+        await expect(crossPath).toBeVisible();
+        await expect(crossPath).toHaveAttribute("stroke", "currentColor");
     });
 
     test("renders triangle note heads for Chocalho", async ({ page }) => {
@@ -216,11 +309,10 @@ test.describe("Note decorations", () => {
 
         await expect(page.locator(".staff-measure-track-row").first()).toBeVisible();
 
-        // Ghost notes have the ghost-note class for opening paren + a span for closing paren.
-        const ghostNote = page.locator(".staff-note-head.ghost-note").first();
+        // Ghost notes are wrapped in the catalogue's parentheses.
+        const ghostNote = page.locator(".staff-note-head:has(.staff-note-head-paren-left)").first();
         await expect(ghostNote).toBeVisible();
-        const ghostParen = ghostNote.locator(".staff-note-head-ghost-paren");
-        await expect(ghostParen).toBeVisible();
+        await expect(ghostNote.locator(".staff-note-head-paren-right")).toBeVisible();
     });
 
     test("renders damped plus sign for High Surdo muted", async ({ page }) => {
@@ -282,9 +374,70 @@ test.describe("Note decorations", () => {
 
         await expect(page.locator(".staff-measure-track-row").first()).toBeVisible();
 
-        const accentMark = page.locator(".staff-note-viewer-accent").first();
+        const accentMark = page.locator(".staff-note-head-accent text").first();
         await expect(accentMark).toBeVisible();
-        await expect(accentMark).toHaveText(">");
+
+        // The accent is the font's accent above the note at U+E4A0, drawn under the head.
+        await expect(accentMark).toHaveText(String.fromCodePoint(0xE4A0));
+
+        const accentBox = await page.locator(".staff-note-head-accent").first().boundingBox();
+        const headBox = await page.locator(".staff-note-head").first().boundingBox();
+        if (!accentBox || !headBox) {
+            throw new Error("Note head or accent mark has no bounding box.");
+        }
+
+        expect(accentBox.y).toBeGreaterThanOrEqual(headBox.y + headBox.height);
+    });
+
+    test("selects the note a mark belongs to", async ({ page }) => {
+        const packed = buildPackedArrangement([{
+            instrumentId: "7", // High Surdo
+            steps: [
+                { noteStyleId: "1", articulation: { damping: 0, accent: true, ghost: false } },
+            ],
+        }]);
+
+        await openStaffArrangement(page, { packed, sessionId: "e2e-mark-hit" });
+
+        // The accent hangs below the head, so a click on it has to address the note as well.
+        const accent = page.locator(".staff-note-head-accent").first();
+        await expect(accent).toBeVisible();
+        await clickNoteHead(page, accent);
+
+        await expect(page.locator(".staff-note-viewer-run.note-selected").first()).toBeVisible();
+    });
+
+    test("covers a group's accents with its selection overlay", async ({ page }) => {
+        const accented = { damping: 0, accent: true, ghost: false };
+        const packed = buildPackedArrangement([{
+            instrumentId: "7", // High Surdo
+            steps: Array.from({ length: 4 }, () => {
+                return { noteStyleId: "1", articulation: accented };
+            }),
+        }]);
+
+        await openStaffArrangement(page, { packed, sessionId: "e2e-group-band" });
+
+        // The four accented sixteenths form one beamed group, which a click on the beam selects.
+        const beam = page.locator(".staff-note-viewer-beam").first();
+        await expect(beam).toBeVisible();
+        await clickNoteHead(page, beam);
+
+        const overlay = page.locator(".selection-overlay").first();
+        await expect(overlay).toBeVisible();
+
+        const overlayBox = await overlay.boundingBox();
+        const accentBox = await page.locator(".staff-note-head-accent").first().boundingBox();
+        if (!overlayBox || !accentBox) {
+            throw new Error("The overlay or the accent mark has no bounding box.");
+        }
+
+        // A glyph's ink sits above its box's centre line, so the accent's ink ends at the box's middle.
+        const accentInkBottom = accentBox.y + (accentBox.height / 2);
+
+        // The band covers the group's notes and the room their marks hang into below the heads.
+        expect(overlayBox.y).toBeLessThanOrEqual(accentBox.y);
+        expect(overlayBox.y + overlayBox.height).toBeGreaterThan(accentInkBottom);
     });
 
     test("renders rimshot decoration for Repinique rimshot", async ({ page }) => {
@@ -418,11 +571,157 @@ test.describe("Note decorations", () => {
         await expect(page.locator(".staff-measure-track-row").first()).toBeVisible();
 
         // Ghost parentheses should NOT be present.
-        const ghostParen = page.locator(".staff-note-head-ghost-paren");
-        await expect(ghostParen).toHaveCount(0);
+        await expect(page.locator(".staff-note-head-paren-left")).toHaveCount(0);
+        await expect(page.locator(".staff-note-head-paren-right")).toHaveCount(0);
 
         // But rimshot cross SHOULD be present.
         const rimshotCross = page.locator(".staff-note-head-rimshot-cross-svg").first();
         await expect(rimshotCross).toBeVisible();
+    });
+
+    test("keeps the augmentation dot clear of cross and triangle heads", async ({ page }) => {
+        const ghost = { damping: 0, accent: false, ghost: true };
+        // Dotted quarters carry no flags, so these notes draw nothing but head and dot.
+        const packed = buildPackedArrangement([
+            {
+                instrumentId: "2", // Tamborim – cross heads
+                events: [
+                    { start: [0, 16], duration: [6, 16], noteStyleId: "1" },
+                    { start: [6, 16], duration: [6, 16], noteStyleId: "1", articulation: ghost },
+                ],
+            },
+            {
+                instrumentId: "1", // Chocalho – triangle heads
+                events: [
+                    { start: [0, 16], duration: [6, 16], noteStyleId: "1" },
+                    { start: [6, 16], duration: [6, 16], noteStyleId: "2", articulation: ghost },
+                ],
+            },
+        ]);
+
+        await page.addInitScript((snapshotPacked: string) => {
+            const sessionId = "e2e-deco-dot";
+            window.history.replaceState({ ...(window.history.state ?? {}), sessionId }, "");
+            window.sessionStorage.setItem("asb-session-id", sessionId);
+            window.localStorage.setItem(`asb-ui-settings-session-${sessionId}`, JSON.stringify({
+                currentScore: snapshotPacked,
+            }));
+        }, packed);
+
+        await page.goto("/");
+
+        const trackViewToggle = page.locator("input.trackViewModeToggle").first();
+        await expect(trackViewToggle).toBeVisible();
+        if (!await trackViewToggle.isChecked()) {
+            await trackViewToggle.check({ force: true });
+        }
+
+        await expect(page.locator(".staff-note-head").first()).toBeVisible();
+
+        const heads = await page.evaluate(() => {
+            return [...document.querySelectorAll<HTMLElement>(".staff-note-head")].map((head) => {
+                const box = head.getBoundingClientRect();
+                const dot = head.querySelector<HTMLElement>(".staff-note-head-dot");
+                const paren = head.querySelector<HTMLElement>(".staff-note-head-paren-right");
+                const dotBox = dot?.getBoundingClientRect();
+                const parenBox = paren?.getBoundingClientRect();
+
+                return {
+                    className: head.className,
+                    dotGap: dotBox === undefined ? null : Math.round(dotBox.left - box.right),
+                    parenGap: parenBox === undefined || dotBox === undefined
+                        ? null
+                        : Math.round(parenBox.right - dotBox.left),
+                };
+            });
+        });
+
+        // The dot's ink starts on its box's left edge, a strike beside the head's ink, at the same
+        // distance for every head shape. The closing parenthesis ends on its box's right edge and leaves
+        // room for the dot: both symbols' ink is about 0.4 staff spaces wide, so a gap of 0.8 staff
+        // spaces is the least that keeps them apart.
+        expect(heads[0].className).toContain("cross");
+        expect(heads[0].dotGap).toBe(4);
+        expect(heads[0].parenGap).toBeNull();
+
+        expect(heads[1].dotGap).toBe(4);
+        expect(heads[1].parenGap).toBeGreaterThanOrEqual(8);
+
+        expect(heads[2].className).toContain("triangle");
+        expect(heads[2].dotGap).toBe(4);
+
+        expect(heads[3].parenGap).toBeGreaterThanOrEqual(8);
+    });
+});
+
+test.describe("Decoration colouring while selected", () => {
+    test("colours the closing parenthesis of a ghost note", async ({ page }) => {
+        const packed = buildPackedArrangement([{
+            instrumentId: "5", // Caixa
+            steps: [
+                {}, {}, {}, {},
+                { noteStyleId: "2", articulation: { damping: 0, accent: false, ghost: true } },
+            ],
+        }]);
+
+        await openStaffArrangement(page, { packed, sessionId: "e2e-deco-selected-ghost" });
+
+        const head = page.locator(".staff-measure-track-row .staff-note-head:has(.staff-note-head-paren-left)").first();
+        await expect(head).toBeVisible();
+        await clickNoteHead(page, head);
+        await expect(page.locator(".staff-note-viewer-run.note-selected")).toHaveCount(1);
+
+        // The opening parenthesis is a ::before on the head and was always coloured. The closing one
+        // is a child span and needs its own colour, otherwise the pair is highlighted asymmetrically.
+        const primary = await primaryColor(page);
+        const closingParen = page.locator(".staff-note-viewer-run.note-selected .staff-note-head-paren-right");
+        await expect(closingParen).toHaveCSS("color", primary);
+    });
+
+    test("colours the plus sign of a damped note", async ({ page }) => {
+        const packed = buildPackedArrangement([{
+            instrumentId: "7", // High Surdo
+            steps: [
+                {}, {}, {}, {},
+                { noteStyleId: "2", articulation: { damping: 1, accent: false, ghost: false } },
+            ],
+        }]);
+
+        await openStaffArrangement(page, { packed, sessionId: "e2e-deco-selected-damped" });
+
+        const head = page.locator(".staff-measure-track-row .staff-note-head:has(.staff-note-head-damped-plus)")
+            .first();
+        await expect(head).toBeVisible();
+        await clickNoteHead(page, head);
+        await expect(page.locator(".staff-note-viewer-run.note-selected")).toHaveCount(1);
+
+        const plus = page.locator(".staff-note-viewer-run.note-selected .staff-note-head-damped-plus");
+        await expect(plus).toHaveText("+");
+
+        const primary = await primaryColor(page);
+        await expect(plus).toHaveCSS("color", primary);
+    });
+
+    test("colours the dot of a dotted note", async ({ page }) => {
+        const packed = buildPackedArrangement([{
+            instrumentId: "2", // Tamborim – cross heads draw the augmentation dot themselves
+            events: [
+                { start: [0, 16], duration: [4, 16] },
+                { start: [4, 16], duration: [6, 16], noteStyleId: "1" },
+            ],
+        }]);
+
+        await openStaffArrangement(page, { packed, sessionId: "e2e-deco-selected-dot" });
+
+        const head = page.locator(".staff-measure-track-row .staff-note-head.staff-note-head-dotted").first();
+        await expect(head).toHaveClass(/cross/);
+        await expect(head).toBeVisible();
+        await clickNoteHead(page, head);
+        await expect(page.locator(".staff-note-viewer-run.note-selected")).toHaveCount(1);
+
+        // The dot is a glyph of the music font, so the selection colours it with the head's ink colour.
+        const primary = await primaryColor(page);
+        const dot = page.locator(".staff-note-viewer-run.note-selected .staff-note-head-dot");
+        await expect(dot).toHaveCSS("color", primary);
     });
 });

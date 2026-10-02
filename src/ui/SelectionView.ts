@@ -3,14 +3,17 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import type { IFraction, IRect } from "../core/types/general.js";
+import { compareFractions } from "../core/serialisation/numeric-functions.js";
+import { staffSpacePx } from "../core/MeasureLayout.js";
+import { EditEntryMode } from "../core/types/general.js";
+import type { IFraction, IMeasureEvent, IRect } from "../core/types/general.js";
 import { requisitions } from "../supplement/Requisitions.js";
 import type { SelectionManager } from "./SelectionManager.js";
 import {
     ScoreElementKind, type IScoreElementLocation, type ScoreElementRegistry,
 } from "./ScoreElementRegistry.js";
 import {
-    addressesNoteCells, SelectionGranularity, SelectionMode, SelectionSerializer, type ISelectionDelta,
+    addressesNoteCells, SelectionGranularity, SelectionMode, SelectionSerializer,
     type ISelectionEntry, type ISelectionTarget, type ISerialisedSelectionEntry,
 } from "./SelectionSerializer.js";
 
@@ -19,6 +22,31 @@ const selectionOverlayClass = "selection-overlay";
 const selectionCursorClass = "selection-cursor";
 const noteSelectedClass = "note-selected";
 const staffNoteRunClass = "staff-note-viewer-run";
+
+/** How far an overlay of track rows reaches past the row's right edge, so the barline closing the piece sits inside. */
+const barlineOverlayReach = 3;
+
+/**
+ * Height of the box the selection cursor spans in staff mode, as a multiple of the staff space: the room a
+ * note needs for its stem and its head. The cursor marks the note's slot, not the ink the head is drawn
+ * with, so it looks the same for every note and every head shape.
+ */
+const staffNoteBoxHeight = staffSpacePx * 6;
+
+/** Where an arrow key moves the cursor: the address to select, its measure, and the element it came from. */
+interface IArrowMove {
+    /** 1-based measure the cursor moves into. */
+    bar: number;
+
+    /** The note address to select. */
+    noteTarget: ISelectionTarget;
+
+    /** Position inside the measure the cursor moves to, as a fraction of the measure. */
+    position?: IFraction;
+
+    /** The rendered element of the target, when the move was resolved from one. */
+    element?: HTMLElement;
+}
 const formElementNames = new Set(["BUTTON", "INPUT", "SELECT", "TEXTAREA"]);
 
 /** The start of a measure as a bar fraction. */
@@ -66,6 +94,7 @@ export class SelectionView {
     private autoScrollDX = 0;
     private autoScrollDY = 0;
     private editMode: boolean;
+    private entryMode: EditEntryMode;
     private selectionDeleteButtonCreated = false;
     private selectionRefreshFrame?: number;
 
@@ -85,14 +114,20 @@ export class SelectionView {
      * @param scoreElementRegistry The registry of rendered score elements, if available.
      * @param editMode The edit mode as remembered by the manager. The view cannot subscribe early
      *                 enough to receive the requisition that announced the current state.
+     * @param entryMode The entry mode as remembered by the manager, for the same reason.
      */
     public constructor(private manager: SelectionManager, private eventContainer: HTMLElement,
-        private readonly scoreElementRegistry?: ScoreElementRegistry, editMode = false) {
+        private readonly scoreElementRegistry?: ScoreElementRegistry, editMode = false,
+        entryMode = EditEntryMode.Overwrite) {
         this.editMode = editMode;
+        this.entryMode = entryMode;
 
         requisitions.register("selectionChanged", this.handleSelectionChanged);
         requisitions.register("editModeChanged", this.handleEditModeChanged);
-        requisitions.register("trackChanged", this.handleTrackChanged);
+        requisitions.register("editEntryModeChanged", this.handleEntryModeChanged);
+        requisitions.register("trackChanged", this.scheduleOverlayRefresh);
+        requisitions.register("arrangementChanged", this.scheduleOverlayRefresh);
+        requisitions.register("staffWindowChanged", this.handleStaffWindowChanged);
         eventContainer.addEventListener("pointerdown", this.handlePointerDown);
         document.addEventListener("keydown", this.handleKeyDown);
         document.addEventListener("keyup", this.handleKeyUp);
@@ -104,7 +139,10 @@ export class SelectionView {
         document.removeEventListener("keydown", this.handleKeyDown);
         requisitions.unregister("selectionChanged", this.handleSelectionChanged);
         requisitions.unregister("editModeChanged", this.handleEditModeChanged);
-        requisitions.unregister("trackChanged", this.handleTrackChanged);
+        requisitions.unregister("editEntryModeChanged", this.handleEntryModeChanged);
+        requisitions.unregister("trackChanged", this.scheduleOverlayRefresh);
+        requisitions.unregister("arrangementChanged", this.scheduleOverlayRefresh);
+        requisitions.unregister("staffWindowChanged", this.handleStaffWindowChanged);
 
         if (this.selectionRefreshFrame !== undefined) {
             cancelAnimationFrame(this.selectionRefreshFrame);
@@ -165,7 +203,10 @@ export class SelectionView {
             this.verticalScrollHost.addEventListener("scroll", this.handleScroll, { passive: true });
         }
 
-        this.createRectElement(event.clientX, event.clientY);
+        // Insert mode has no selection to draw, so the pointer only places the cursor when it is released.
+        if (!this.showsCursorOnly) {
+            this.createRectElement(event.clientX, event.clientY);
+        }
 
         event.preventDefault();
     };
@@ -206,7 +247,7 @@ export class SelectionView {
             const half = 2;
             const clickRect = new DOMRect(this.startX - half, this.startY - half,
                 (half * 2) + 1, (half * 2) + 1);
-            this.manager.endSelection(clickRect);
+            this.manager.endSelection(clickRect, this.showsCursorOnly);
         }
 
         if (this.isDragging) {
@@ -282,7 +323,10 @@ export class SelectionView {
         if (event.key === "Escape" && this.isDragging) {
             this.cancelDrag();
         } else {
-            this.manager.selectionMode = this.selectionModeFromEvent(event);
+            // Insert mode never accumulates a selection, so modifier keys select nothing.
+            this.manager.selectionMode = this.showsCursorOnly
+                ? SelectionMode.New
+                : this.selectionModeFromEvent(event);
         }
     };
 
@@ -310,42 +354,141 @@ export class SelectionView {
             return false;
         }
 
-        const noteElement = this.findNoteElements(entry).at(0);
-        if (!noteElement) {
-            return false;
-        }
-
-        const isStaffMode = noteElement.classList.contains(staffNoteRunClass);
-        const target = isStaffMode
-            ? this.findStaffArrowTarget(noteElement, event.key)
-            : this.findArrowTarget(noteElement, event.key);
-
-        if (!target) {
-            return false;
-        }
-
-        const location = this.scoreElementRegistry?.getLocation(target);
-        if (location?.step === undefined) {
-            return false;
-        }
-
-        const noteTarget = this.noteTargetOf(target, location);
-        if (noteTarget === undefined) {
+        const move = this.arrowKeyTarget(entry, event.key);
+        if (move === undefined) {
             return false;
         }
 
         this.manager.selectSingleNote({
             granularity: SelectionGranularity.Note,
-            target: noteTarget,
+            target: move.noteTarget,
         });
 
-        // Keep the cursor visible: scroll the nearest scroll hosts so the newly selected
-        // element stays inside the viewport (horizontally across measures, vertically across tracks).
-        target.scrollIntoView({ block: "nearest", inline: "nearest" });
+        // Bring the newly selected element into view. The staff view renders only a window of measures and decides
+        // the horizontal scroll itself, from the measure the cursor moved into: scrolling the element into view
+        // horizontally would leave the previous measure filling the viewport when the element is a measure's first
+        // note. So the request comes first and the element scroll only fixes up what a position cannot describe,
+        // which is the vertical axis across tracks.
+        void requisitions.execute("measureVisibilityRequested", { bar: move.bar, position: move.position });
+        move.element?.scrollIntoView({ block: "nearest", inline: "nearest" });
 
         event.preventDefault();
 
         return true;
+    }
+
+    /**
+     * Resolves the note an arrow key moves the cursor to. A measure the staff view did not render has no element, so
+     * the move is resolved from the model in that case — the target measure may lie anywhere in the score.
+     *
+     * @param entry The single selected note.
+     * @param key The arrow key that was pressed.
+     *
+     * @returns The address to select and the measure it lies in, or undefined when the cursor cannot move.
+     */
+    private arrowKeyTarget(entry: ISelectionEntry, key: string): IArrowMove | undefined {
+        const noteElement = this.findNoteElements(entry).at(0);
+        if (noteElement === undefined) {
+            return this.arrowMoveFromModel(entry, key);
+        }
+
+        const isStaffMode = noteElement.classList.contains(staffNoteRunClass);
+        const target = isStaffMode
+            ? this.findStaffArrowTarget(noteElement, key)
+            : this.findArrowTarget(noteElement, key);
+
+        if (target === undefined) {
+            return isStaffMode ? this.arrowMoveFromModel(entry, key) : undefined;
+        }
+
+        const location = this.scoreElementRegistry?.getLocation(target);
+        if (location?.step === undefined) {
+            return undefined;
+        }
+
+        const noteTarget = this.noteTargetOf(target, location);
+        if (noteTarget === undefined) {
+            return undefined;
+        }
+
+        return { bar: location.bar, noteTarget, position: location.start, element: target };
+    }
+
+    /**
+     * Resolves an arrow-key move from the model. The steps mirror what the cursor does over rendered runs: a
+     * horizontal key moves on by one event of the measure, and only a measure's last (or first) event steps into
+     * the neighbouring measure. The measure a staff address belongs to is the only horizontal information it
+     * carries (ADR-0005), so a step beyond the measure has to be resolved from the model's measure order. Vertical
+     * moves need the rows of the measure, which only the rendering knows.
+     *
+     * @param entry The single selected note.
+     * @param key The arrow key that was pressed.
+     *
+     * @returns The address to select and the measure it lies in, or undefined when there is no such note.
+     */
+    private arrowMoveFromModel(entry: ISelectionEntry, key: string): IArrowMove | undefined {
+        if (!this.isStaffView()) {
+            return undefined;
+        }
+
+        const direction = key === "ArrowLeft" ? -1 : key === "ArrowRight" ? 1 : 0;
+        const { target } = entry;
+        if (direction === 0 || target.granularity !== SelectionGranularity.Note) {
+            return undefined;
+        }
+
+        const { measure } = target;
+        let targetMeasure = measure;
+        let event: IMeasureEvent | undefined;
+
+        // The measure's events tile it without gaps, so the neighbouring event is the next note or rest of the
+        // same measure — the step the cursor takes over rendered runs as well. The cursor's own event is found by
+        // the address itself, which is a position in the measure (ADR-0005), not by object identity alone: an undo
+        // may well have replaced the events the selection still addresses.
+        const start = target.start ?? target.event.start;
+        const index = measure.events.findIndex((candidate) => {
+            return candidate === target.event || compareFractions(candidate.start, start) === 0;
+        });
+        const stepIndex = index + direction;
+        if (index !== -1 && stepIndex >= 0 && stepIndex < measure.events.length) {
+            event = measure.events[stepIndex];
+        } else {
+            const bar = measure.number + direction;
+            if (bar < 1 || bar > measure.track.measures.length) {
+                return undefined;
+            }
+
+            targetMeasure = measure.track.measures[bar - 1];
+            event = direction > 0 ? targetMeasure.events.at(0) : targetMeasure.events.at(-1);
+        }
+
+        if (event === undefined) {
+            return undefined;
+        }
+
+        return {
+            bar: targetMeasure.number,
+            noteTarget: {
+                granularity: SelectionGranularity.Note,
+                measure: targetMeasure,
+                event,
+                start: event.start,
+            },
+            position: event.start,
+        };
+    }
+
+    /** @returns True when the viewer currently renders the staff view. */
+    private isStaffView(): boolean {
+        return this.eventContainer.querySelector(".staff-measure-viewer") !== null;
+    }
+
+    /**
+     * @returns True while the staff view runs in insert mode. The cursor is then the only decoration and
+     *          nothing can be selected; in the grid view overwrite is always in effect.
+     */
+    private get showsCursorOnly(): boolean {
+        return this.editMode && this.entryMode === EditEntryMode.Insert && this.isStaffView();
     }
 
     private findStaffArrowTarget(noteElement: HTMLElement, key: string): HTMLElement | undefined {
@@ -358,7 +501,7 @@ export class SelectionView {
             return [...rowElement.querySelectorAll<HTMLElement>(".staff-note-viewer-run")]
                 .filter((run) => {
                     return run.querySelector(
-                        ".staff-note-viewer-note-symbol, .staff-note-viewer-rest-symbol",
+                        ".staff-note-head, .staff-note-viewer-rest-symbol",
                     ) !== null;
                 });
         };
@@ -673,13 +816,32 @@ export class SelectionView {
         }
     }
 
-    private handleSelectionChanged = (_delta: ISelectionDelta): Promise<boolean> => {
+    private handleSelectionChanged = (): Promise<boolean> => {
         this.updateTrackViewerOverlays();
 
         return Promise.resolve(true);
     };
 
-    private handleTrackChanged = (): Promise<boolean> => {
+    /**
+     * The staff view renders a window of measures, so measures arrive and leave while scrolling. Their
+     * decoration is redone in the same task in which they were mounted, which is what keeps the overlay from
+     * trailing behind the measures.
+     *
+     * @returns A promise that resolves when the decoration was redrawn.
+     */
+    private handleStaffWindowChanged = (): Promise<boolean> => {
+        this.updateTrackViewerOverlays();
+
+        return Promise.resolve(true);
+    };
+
+    /**
+     * Redraws the decoration after rendered notes moved: a track change, or an arrangement mutation, which a
+     * measure resize fires on every frame. The redraw waits a frame, so it reads the laid-out geometry.
+     *
+     * @returns A promise that resolves when the redraw was scheduled.
+     */
+    private scheduleOverlayRefresh = (): Promise<boolean> => {
         if (this.selectionRefreshFrame !== undefined) {
             cancelAnimationFrame(this.selectionRefreshFrame);
         }
@@ -709,6 +871,13 @@ export class SelectionView {
             this.selectionDeleteButtonCreated = false;
         }
 
+        this.updateTrackViewerOverlays();
+
+        return Promise.resolve(true);
+    };
+
+    private handleEntryModeChanged = (mode: EditEntryMode): Promise<boolean> => {
+        this.entryMode = mode;
         this.updateTrackViewerOverlays();
 
         return Promise.resolve(true);
@@ -810,8 +979,6 @@ export class SelectionView {
         this.renderMeasureOverlays(contentHost, overlayContainer, containerRect, measureEntries);
     }
 
-    // ---- Note overlays (grid + staff) ------------------------------------------------
-
     /**
      * Renders selection decoration for note and note-group entries.
      *
@@ -861,6 +1028,12 @@ export class SelectionView {
             }
         }
 
+        // Insert mode decorates nothing but the cursor: the addressed element marks where the next entry
+        // lands, it is not selected.
+        if (this.showsCursorOnly) {
+            return;
+        }
+
         // Single notes in staff mode: apply CSS class for head/stem colouring.
         if (isStaffMode && singleNotes.length > 0) {
             for (const entry of singleNotes) {
@@ -881,7 +1054,6 @@ export class SelectionView {
             // coverage between adjacent steps but narrow the left/right edges to the
             // inner note-content elements so the overlay hugs the actual note symbols.
             const contentSelector = [
-                ".staff-note-viewer-note-symbol",
                 ".staff-note-head",
                 ".staff-note-viewer-rest-symbol",
             ].join(", ");
@@ -893,47 +1065,39 @@ export class SelectionView {
                     continue;
                 }
 
-                // Runs sit at margin-top:64px inside the 80px viewer. Extend the
-                // overlay upward to the viewer top edge (0px) and downward
-                // through the 20px margin-bottom (+2px).
-                const offsetY = -64;
-                const heightOffset = 84;
+                // A group covers the note band of the row its runs live in: a row holds one viewer, whose
+                // height makes up that band, while the runs are only as tall as the line they sit on. The
+                // band reaches below the row by the room a note's marks hang into — its dot, its accent —
+                // so a group whose notes carry marks is still covered by its own band.
+                const row = runs[0].closest<HTMLElement>(".staff-measure-track-row");
+                if (row === null) {
+                    continue;
+                }
+
+                const rowRect = row.getBoundingClientRect();
 
                 // Compute the union rect of all runs (gap-free horizontal coverage).
-                let minTop = Infinity;
-                let maxBottom = -Infinity;
                 let minLeft = Infinity;
                 let maxRight = -Infinity;
 
                 for (const run of runs) {
-                    const r = this.computeElementRect(run, containerRect);
-                    const absTop = r.y + containerRect.top;
-                    const absBottom = absTop + r.height;
+                    const runRect = run.getBoundingClientRect();
 
-                    if (absTop < minTop) {
-                        minTop = absTop;
+                    if (runRect.left < minLeft) {
+                        minLeft = runRect.left;
                     }
 
-                    if (absBottom > maxBottom) {
-                        maxBottom = absBottom;
-                    }
-
-                    const rawRect = run.getBoundingClientRect();
-                    if (rawRect.left < minLeft) {
-                        minLeft = rawRect.left;
-                    }
-
-                    if (rawRect.right > maxRight) {
-                        maxRight = rawRect.right;
+                    if (runRect.right > maxRight) {
+                        maxRight = runRect.right;
                     }
                 }
 
-                // Narrow left edge to the first run's inner content, with 10 px padding
-                // but never beyond the run's own bounding box.
+                // Narrow left edge to the first run's inner content, with a staff space of padding but
+                // never beyond the run's own bounding box.
                 const firstContent = runs[0].querySelector<HTMLElement>(contentSelector);
                 if (firstContent) {
                     const firstRect = firstContent.getBoundingClientRect();
-                    minLeft = Math.max(minLeft, firstRect.left - (10 * this.zoomFactor));
+                    minLeft = Math.max(minLeft, firstRect.left - (staffSpacePx * this.zoomFactor));
                 }
 
                 // Narrow right edge to the last run's inner content.
@@ -943,15 +1107,18 @@ export class SelectionView {
                     maxRight = lastRect.right + (2 * this.zoomFactor);
                 }
 
-                // Convert viewport-pixel deltas to CSS pixels. offsetY/heightOffset
-                // are CSS pixels and must not be divided.
+                // Convert viewport-pixel deltas to CSS pixels, which the overlay container is laid out in.
                 const z = this.zoomFactor;
+
+                // The band marks the group a little wider than its content, so a group whose notes reach its
+                // edges still reads as marked.
+                const bandWidth = 5;
 
                 this.createOverlay(overlayContainer, {
                     x: (minLeft - containerRect.left) / z,
-                    y: ((minTop - containerRect.top) / z) + offsetY,
-                    width: (maxRight - minLeft) / z,
-                    height: ((maxBottom - minTop) / z) + heightOffset,
+                    y: (rowRect.top - containerRect.top) / z,
+                    width: ((maxRight - minLeft) / z) + bandWidth,
+                    height: (rowRect.height / z) + (staffSpacePx * 2),
                 });
             }
 
@@ -1220,8 +1387,8 @@ export class SelectionView {
     /**
      * Computes the rectangle that should anchor the selection cursor for a single note.
      * In grid mode this is the note cell. In staff mode the horizontal position comes from the
-     * note/rest symbol while the vertical position is corrected to the single-line reference, so
-     * the cursor stays put when notes on different staff lines are selected.
+     * note/rest symbol while the vertical position comes from the note's slot, so the cursor stays
+     * put when notes on different staff lines are selected.
      *
      * @param entry The selection entry identifying the note or group.
      * @param isStaffMode Whether the arrangement is rendered in staff mode.
@@ -1240,9 +1407,7 @@ export class SelectionView {
             return noteElement.getBoundingClientRect();
         }
 
-        const symbol = noteElement.querySelector<HTMLElement>(
-            ".staff-note-viewer-note-symbol, .staff-note-viewer-rest-symbol",
-        );
+        const symbol = this.glyphElement(noteElement);
         if (!symbol) {
             return noteElement.getBoundingClientRect();
         }
@@ -1250,12 +1415,24 @@ export class SelectionView {
         const runRect = noteElement.getBoundingClientRect();
         const symbolRect = symbol.getBoundingClientRect();
 
-        // Anchor the cursor to the run and move it so the cursor matches the single-line note position.
+        // The stem of a note needs room above its line and its head room below it, so the cursor spans that
+        // box instead of the head's ink. Its line is the middle of the run, which the viewer draws its line
+        // on, so the cursor stays put when notes on different staff lines are selected.
+        const lineY = runRect.top + (runRect.height / 2);
         const baseTranslateY = 8;
-        const singleLineTop = runRect.top + ((runRect.height - symbolRect.height) / 2) - baseTranslateY;
-        const glyphLeft = this.staffGlyphLeftEdge(noteElement, symbol);
+        const top = lineY - baseTranslateY - (staffNoteBoxHeight / 2);
 
-        return new DOMRect(glyphLeft, singleLineTop, symbolRect.width, symbolRect.height);
+        return new DOMRect(symbolRect.left, top, symbolRect.width, staffNoteBoxHeight);
+    }
+
+    /**
+     * @param run The staff note or rest run element.
+     *
+     * @returns The element that is drawn at the glyph's place: a note's head, whose box is its ink, or a
+     * rest's symbol.
+     */
+    private glyphElement(run: HTMLElement): HTMLElement | null {
+        return run.querySelector<HTMLElement>(".staff-note-head, .staff-note-viewer-rest-symbol");
     }
 
     /**
@@ -1267,52 +1444,11 @@ export class SelectionView {
      * @returns The glyph centre in viewport pixels.
      */
     private staffRunGlyphCenterX(run: HTMLElement): number {
-        const symbol = run.querySelector<HTMLElement>(
-            ".staff-note-viewer-note-symbol, .staff-note-viewer-rest-symbol",
-        );
+        const symbol = this.glyphElement(run);
         const rect = (symbol ?? run).getBoundingClientRect();
 
         return rect.left + (rect.width / 2);
     }
-
-    private staffGlyphLeftEdge(run: HTMLElement, symbol: HTMLElement): number {
-        const symbolRect = symbol.getBoundingClientRect();
-
-        if (symbol.classList.contains("staff-note-viewer-rest-symbol")) {
-            // Rests are always centred in their run via CSS, regardless of duration, so the
-            // symbol's own rendered rect (not a duration-derived anchor) gives the true position.
-            return symbolRect.left + 5;
-        }
-
-        const head = run.querySelector<HTMLElement>(".staff-note-head");
-        const headRect = head?.getBoundingClientRect();
-        const centerX = headRect
-            ? headRect.left + (headRect.width / 2)
-            : symbolRect.left + (symbolRect.width / 2);
-
-        if (head?.classList.contains("cross")) {
-            const cross = head.querySelector<HTMLElement>(".staff-note-head-cross-svg");
-
-            return cross ? cross.getBoundingClientRect().left : centerX - 7;
-        }
-
-        if (head?.classList.contains("square")) {
-            return centerX - 14;
-        }
-
-        if (head?.classList.contains("triangle")) {
-            return centerX - 7;
-        }
-
-        if (head?.classList.contains("diamond")) {
-            return centerX - 5.5;
-        }
-
-        // Oval: the head is drawn at the left edge of the note sprite.
-        return symbolRect.left + 1;
-    }
-
-    // ---- Track-piece overlays --------------------------------------------------------
 
     /**
      * Renders merged overlays for track-piece selections. Within each bar consecutive
@@ -1426,15 +1562,13 @@ export class SelectionView {
 
         merged.push(current);
 
-        // 4. Create overlays. Track pieces stay within the row (no upward offset), so they
-        //    don't overlap the accent zone of the track above. The bottom edge aligns with
-        //    the row bottom, matching whole-track overlays.
+        // 4. Create overlays. Track pieces stay within the row and the margin below it (no upward offset),
+        //    so they don't overlap the accent zone of the track above. The bottom edge runs through that
+        //    margin, matching whole-track overlays.
         for (const group of merged) {
-            this.createMergedOverlay(overlayContainer, containerRect, group.elements, 0, 0);
+            this.createMergedOverlay(overlayContainer, containerRect, group.elements, 0, 0, barlineOverlayReach);
         }
     }
-
-    // ---- Whole-track overlays --------------------------------------------------------
 
     /**
      * Renders merged overlays for whole-track selections. Tracks that are visually
@@ -1491,7 +1625,7 @@ export class SelectionView {
             }
 
             if (elements.length > 0) {
-                this.createMergedOverlay(overlayContainer, containerRect, elements);
+                this.createMergedOverlay(overlayContainer, containerRect, elements, 0, 0, barlineOverlayReach);
             }
         }
     }
@@ -1555,22 +1689,61 @@ export class SelectionView {
 
             if (elements.length > 0) {
                 const rect = this.computeElementsRect(elements, containerRect);
-                rect.x += 4;
-                rect.width -= 8;
+
+                // A measure overlay covers exactly the track pieces it decorates: the first row's top edge to
+                // the last row's bottom edge (its margin included) and the first row's left edge to the last
+                // row's right edge. The left edge sits behind the column's padding, so the overlay keeps clear
+                // of the time signature. The grid view has no staff rows and keeps the column's bounds.
+                const rows = this.measureRowsOf(contentHost, barNumbers);
+                if (rows.length > 0) {
+                    const rowsRect = this.computeElementsRect(rows, containerRect);
+                    rect.x = rowsRect.x;
+                    rect.y = rowsRect.y;
+                    rect.width = rowsRect.width;
+                    rect.height = rowsRect.height;
+                } else {
+                    rect.x += 4;
+                    rect.width -= 8;
+                }
+
                 this.createOverlay(overlayContainer, rect);
             }
         }
     }
 
+    /**
+     * Collects the rendered track rows of the given bars, in the staff view only.
+     *
+     * @param contentHost The host element containing the track rows.
+     * @param barNumbers The measures whose rows to collect.
+     *
+     * @returns The rows in DOM order, or an empty array in the grid view.
+     */
+    private measureRowsOf(contentHost: HTMLElement, barNumbers: number[]): HTMLElement[] {
+        if (!this.isStaffView()) {
+            return [];
+        }
+
+        const rows: HTMLElement[] = [];
+        for (const bar of barNumbers) {
+            rows.push(...(this.scoreElementRegistry?.findElements(ScoreElementKind.TrackRow, bar)
+                .filter((element) => {
+                    return contentHost.contains(element);
+                }) ?? []));
+        }
+
+        return rows;
+    }
+
     private createMergedOverlay(overlayContainer: HTMLElement, containerRect: DOMRect,
-        elements: HTMLElement[], offsetY = 0, heightOffset = 0): void {
+        elements: HTMLElement[], offsetY = 0, heightOffset = 0, rightExtension = 0): void {
         let minLeft = Infinity;
         let minTop = Infinity;
         let maxRight = -Infinity;
         let maxBottom = -Infinity;
 
-        // Horizontal bounds use raw element rects to avoid margin-induced over-extension.
-        // Vertical bounds use margin-expanded rects so adjacent track rows touch without gaps.
+        // Horizontal bounds use raw element rects to avoid margin-induced over-extension. Vertical bounds use
+        // margin-expanded rects, because the margin below a track piece belongs to that piece.
         for (const el of elements) {
             const r = this.computeElementRect(el, containerRect);
             const absTop = r.y + containerRect.top;
@@ -1594,14 +1767,14 @@ export class SelectionView {
             }
         }
 
-        // Convert viewport-pixel deltas to CSS pixels. offsetY/heightOffset are
+        // Convert viewport-pixel deltas to CSS pixels. offsetY/heightOffset/rightExtension are
         // already CSS pixels and must not be divided.
         const z = this.zoomFactor;
 
         this.createOverlay(overlayContainer, {
             x: (minLeft - containerRect.left) / z,
             y: ((minTop - containerRect.top) / z) + offsetY,
-            width: (maxRight - minLeft) / z,
+            width: ((maxRight - minLeft) / z) + rightExtension,
             height: ((maxBottom - minTop) / z) + heightOffset,
         });
     }

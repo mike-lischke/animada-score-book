@@ -29,6 +29,17 @@ export const exists = <T>(value: T | undefined | null): value is T => {
 };
 
 /**
+ * Checks whether a value is a non-null, non-array object, which is the shape JSON objects arrive in.
+ *
+ * @param value The value to check.
+ *
+ * @returns Whether the value is a JSON object.
+ */
+export const isJsonObject = (value: unknown): value is Record<string, unknown> => {
+    return typeof value === "object" && value !== null && !Array.isArray(value);
+};
+
+/**
  * @returns A set of prime factors. Returns an empty set for n ≤ 1.
  *
  * @param n The number to factorize (must be > 0).

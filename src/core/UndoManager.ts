@@ -3,6 +3,13 @@ import type { ScoreBookDataModel } from "./ScoreBookDataModel.js";
 import { requisitions } from "../supplement/Requisitions.js";
 import { UndoRedoStack } from "./UndoRedoStack.js";
 
+/**
+ * Supplies the selection state a history entry remembers, so an undo restores the cursor along with
+ * the arrangement. The value stays serialised, which keeps the history independent of the selection
+ * model.
+ */
+export type SelectionStateProvider = () => string | undefined;
+
 /** Encapsulates the application-level undo/redo management. */
 export class UndoManager {
     private undoRedoStack;
@@ -11,8 +18,12 @@ export class UndoManager {
      * Creates a new score book from an arrangement snapshot.
      *
      * @param dataModel The data model containing the arrangement and instruments to manage.
+     * @param selectionState Supplies the selection state of the current edit.
      */
-    public constructor(private dataModel: ScoreBookDataModel) {
+    public constructor(private dataModel: ScoreBookDataModel,
+        private readonly selectionState: SelectionStateProvider = () => {
+            return undefined;
+        }) {
         this.undoRedoStack = new UndoRedoStack(this.dataModel.arrangement!);
         this.updateDirtyState();
 
@@ -61,12 +72,16 @@ export class UndoManager {
             return;
         }
 
+        // The state being left remembers where its last edit was made, which is where the cursor
+        // returns to once that edit is undone.
+        const selection = this.undoRedoStack.currentSelection;
+
         this.undoRedoStack.goBack();
         this.dataModel.arrangement!.applyArrangementSnapshot(this.undoRedoStack.currentState,
             this.dataModel.instruments);
         this.updateDirtyState();
         this.dataModel.persistCurrentScore();
-        void requisitions.execute("arrangementReverted", undefined);
+        void requisitions.execute("arrangementReverted", selection);
     };
 
     /**
@@ -77,12 +92,15 @@ export class UndoManager {
             return;
         }
 
+        // The state being re-entered remembers the selection it was created in.
+        const selection = this.undoRedoStack.futureSelection;
+
         this.undoRedoStack.goForward();
         this.dataModel.arrangement!.applyArrangementSnapshot(this.undoRedoStack.currentState,
             this.dataModel.instruments);
         this.updateDirtyState();
         this.dataModel.persistCurrentScore();
-        void requisitions.execute("arrangementReverted", undefined);
+        void requisitions.execute("arrangementReverted", selection);
     };
 
     /**
@@ -115,7 +133,7 @@ export class UndoManager {
      * @returns Always true to signal the event was handled.
      */
     private handleArrangementMutated = async (): Promise<boolean> => {
-        this.undoRedoStack.recordSnapshot();
+        this.undoRedoStack.recordSnapshot(this.selectionState());
         this.updateDirtyState();
 
         return Promise.resolve(true);

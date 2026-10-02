@@ -59,6 +59,33 @@ export class MySqlAdapter implements IDatabaseAdapter {
         return this.pool !== undefined;
     }
 
+    public async dropAllTables(): Promise<void> {
+        const pool = this.getPoolOrThrow();
+        const [rows] = await pool.query<RowDataPacket[]>("SHOW TABLES");
+
+        if (rows.length === 0) {
+            return;
+        }
+
+        const connection = await pool.getConnection();
+
+        try {
+            // Foreign keys tie the drop order to the schema; switching the checks off for this session
+            // lets every table go in one pass.
+            await connection.query("SET FOREIGN_KEY_CHECKS = 0");
+
+            for (const row of rows) {
+                const [name] = Object.values(row) as string[];
+
+                await connection.query(`DROP TABLE IF EXISTS \`${name}\``);
+            }
+
+            await connection.query("SET FOREIGN_KEY_CHECKS = 1");
+        } finally {
+            connection.release();
+        }
+    }
+
     public async ping(): Promise<boolean> {
         const pool = this.getPoolOrThrow();
         const [rows] = await pool.execute<RowDataPacket[]>("SELECT 1 AS result");

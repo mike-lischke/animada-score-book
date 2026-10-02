@@ -10,7 +10,6 @@ import { GooeyGroup } from "../framework/GooeyGroup.js";
 import { Icon } from "../framework/Icon.js";
 import { UIIcon } from "../framework/UIIcon.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
-import { ScoreElementKind, type ScoreElementRegistry } from "../../../ui/ScoreElementRegistry.js";
 
 /** The bar-level actions offered by the strip. */
 export enum BarActionKind {
@@ -27,7 +26,14 @@ export interface IBarActionStripProps extends ICommonUIProperties {
 
     /** The horizontally scrolling host that contains the bar columns. */
     scrollHostRef: preact.RefObject<HTMLDivElement>;
-    scoreElementRegistry: ScoreElementRegistry;
+
+    /**
+     * Supplies the horizontal center of every measure column, in px at 100% zoom. The staff view renders only a
+     * window of measures, so the position of a bar cannot be read from its element.
+     *
+     * @returns The center of every measure column, keyed by 1-based measure number.
+     */
+    barCenters: () => Map<number, number>;
 
     /** Invoked with the 1-based bar number and the selected action. */
     onBarAction: (barNumber: number, action: BarActionKind) => void;
@@ -64,27 +70,20 @@ export class BarActionStrip extends UIComponent<IBarActionStripProps> {
 
     /** Aligns the strip with the scroll host and centers each group of buttons over its bar. */
     public layout(): void {
-        const { scrollHostRef, scoreElementRegistry } = this.props;
+        const { scrollHostRef, barCenters } = this.props;
         const strip = this.stripRef.current;
         const host = scrollHostRef.current;
         if (!strip || !host) {
             return;
         }
 
+        const centers = barCenters();
         const groups = strip.querySelectorAll<HTMLElement>(".bar-action-group");
-        const barElements = scoreElementRegistry.findElements(ScoreElementKind.BarContainer).sort((first, second) => {
-            const firstBar = scoreElementRegistry.getLocation(first)?.bar ?? 0;
-            const secondBar = scoreElementRegistry.getLocation(second)?.bar ?? 0;
-
-            return firstBar - secondBar;
-        });
-
-        const count = Math.min(groups.length, barElements.length);
-        for (let i = 0; i < count; i++) {
-            const group = groups[i];
-            const bar = barElements[i];
-
-            group.style.left = `${bar.offsetLeft + (bar.offsetWidth / 2) - (group.offsetWidth / 2)}px`;
+        for (let index = 0; index < groups.length; index++) {
+            const center = centers.get(index + 1);
+            if (center !== undefined) {
+                groups[index].style.left = `${center}px`;
+            }
         }
     }
 

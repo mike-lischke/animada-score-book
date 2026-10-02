@@ -4,19 +4,20 @@
  */
 
 import { act, cleanup, fireEvent, render, type RenderResult } from "@testing-library/preact";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { NoteStyleBar } from "../../src/components/ui/Arrangement/NoteStyleBar.js";
 import {
     Damping, ExcitationMode, HandTechnique, NoteDisplayType, StickTechnique,
-    type ISbDmArrangement, type ISbDmInstrument, type ISbDmTrack, type ISbDmTrackMeasure,
+    type ISbDmArrangement, type ISbDmInstrument, type ISbDmTrack, type ISbDmTrackPiece,
     type ScoreBookDataModel,
 } from "../../src/core/ScoreBookDataModel.js";
 import type { IAudioData } from "../../src/core/types/general.js";
+import { EditEntryMode } from "../../src/core/types/general.js";
 import { requisitions } from "../../src/supplement/Requisitions.js";
 import { SelectionManager } from "../../src/ui/SelectionManager.js";
 import type { ISelectionEntry } from "../../src/ui/SelectionSerializer.js";
-import { noteEntry } from "../unit-test-helpers.js";
+import { measureEntry, noteEntry } from "../unit-test-helpers.js";
 
 const makeNoteStyle = (id: string, shortDescription: string, description: string): IAudioData => {
     return {
@@ -55,10 +56,20 @@ const makeNoteStyleWithHead = (
     } as unknown as IAudioData;
 };
 
+/** The tracks the stub model holds; a test fills them in through {@link makeDataModel}. */
+const modelTracks: ISbDmTrack[] = [];
+
+/** The arrangement of the stub model. The tracks of a test share it, as they do in a real score. */
+const modelArrangement = { tracks: modelTracks } as unknown as ISbDmArrangement;
+
+/** The stub model the selection manager is bound to; {@link makeDataModel} keeps it in sync. */
+const modelStub = { arrangement: modelArrangement } as unknown as ScoreBookDataModel;
+
 const makeTrack = (id: number, noteStyles: Record<string, IAudioData>): ISbDmTrack => {
     return {
         id,
         instrument: { noteStyles },
+        measures: [],
     } as unknown as ISbDmTrack;
 };
 
@@ -70,7 +81,7 @@ const makeTrackWithNote = (
     styleId: string,
     durationSteps = 1,
 ): ISbDmTrack => {
-    const arrangement = { tracks: [] } as unknown as ISbDmArrangement;
+    const arrangement = modelArrangement;
     const track = {
         id,
         instrument: { id: instrumentId, noteStyles },
@@ -101,19 +112,13 @@ const makeTrackWithNote = (
                 audioData: { id: styleId },
             },
         ],
-    } as unknown as ISbDmTrackMeasure;
+    } as unknown as ISbDmTrackPiece;
 
     track.measures.push(measure);
     arrangement.tracks.push(track);
 
     return track;
 };
-
-/** The tracks the stub model holds; a test fills them in through {@link makeDataModel}. */
-const modelTracks: ISbDmTrack[] = [];
-
-/** The stub model the selection manager is bound to; {@link makeDataModel} keeps it in sync. */
-const modelStub = { arrangement: { tracks: modelTracks } } as unknown as ScoreBookDataModel;
 
 /**
  * Creates the model a toolbar renders.
@@ -156,6 +161,7 @@ describe.sequential("NoteStyleBar", () => {
         renderResult?.unmount();
         cleanup();
         renderResult = null;
+        vi.restoreAllMocks();
     });
 
     it("matches snapshot with minimal props", () => {
@@ -350,6 +356,151 @@ describe.sequential("NoteStyleBar", () => {
         expect(renderResult.container.querySelectorAll(".noteStyleButton.du-btn-primary")).toHaveLength(0);
     });
 
+    it("marks the style of the selection when the view switches to overwrite", async () => {
+        const noteStyles = {
+            "1": makeNoteStyle("1", "Accent", "Tamborim Accent"),
+            "2": makeNoteStyle("2", "Ghost", "Tamborim Ghost Note"),
+        };
+        const track = makeTrackWithNote(7, 55, noteStyles, 7001, "1");
+        const dataModel = makeDataModel([track]);
+
+        selectionManager.replaceSelection([noteEntryOf(track)]);
+
+        renderResult = render(
+            <NoteStyleBar dataModel={dataModel} selectionManager={selectionManager} entryMode={EditEntryMode.Insert} />,
+        );
+
+        expect(renderResult.container.querySelectorAll(".noteStyleBar button.du-btn-primary")).toHaveLength(0);
+
+        await act(() => {
+            renderResult!.rerender(
+                <NoteStyleBar
+                    dataModel={dataModel}
+                    selectionManager={selectionManager}
+                    entryMode={EditEntryMode.Overwrite}
+                />,
+            );
+        });
+
+        const marked = renderResult.container.querySelector(".noteStyleButton.du-btn-primary");
+
+        expect(marked?.getAttribute("data-tooltip")).toBe("Tamborim Accent (1)");
+    });
+
+    it("keeps every button unmarked in insert mode", async () => {
+        const noteStyles = {
+            "1": makeNoteStyle("1", "Accent", "Tamborim Accent"),
+            "2": makeNoteStyle("2", "Ghost", "Tamborim Ghost Note"),
+        };
+        const track = makeTrackWithNote(7, 55, noteStyles, 7001, "1");
+        const dataModel = makeDataModel([track]);
+
+        selectionManager.replaceSelection([noteEntryOf(track)]);
+
+        renderResult = render(
+            <NoteStyleBar dataModel={dataModel} selectionManager={selectionManager} entryMode={EditEntryMode.Insert} />,
+        );
+
+        // An entry names the style it writes, so insert mode holds no style the bar could show.
+        expect(renderResult.container.querySelectorAll(".noteStyleBar button.du-btn-primary")).toHaveLength(0);
+
+        // A selection that moves does not mark either, the selection is only the insertion point.
+        await act(() => {
+            selectionManager.replaceSelection([noteEntry(track.measures[0],
+                track.measures[0].events[1].start)]);
+        });
+
+        expect(renderResult.container.querySelectorAll(".noteStyleBar button.du-btn-primary")).toHaveLength(0);
+    });
+
+    it("drops the overwrite mark when the view switches to insert mode", async () => {
+        const noteStyles = {
+            "1": makeNoteStyle("1", "Accent", "Tamborim Accent"),
+        };
+        const track = makeTrackWithNote(7, 55, noteStyles, 7001, "1");
+        const dataModel = makeDataModel([track]);
+
+        selectionManager.replaceSelection([noteEntryOf(track)]);
+
+        renderResult = render(
+            <NoteStyleBar
+                dataModel={dataModel}
+                selectionManager={selectionManager}
+                entryMode={EditEntryMode.Overwrite}
+            />,
+        );
+
+        expect(renderResult.container.querySelectorAll(".noteStyleButton.du-btn-primary")).toHaveLength(1);
+
+        await act(() => {
+            renderResult!.rerender(
+                <NoteStyleBar
+                    dataModel={dataModel}
+                    selectionManager={selectionManager}
+                    entryMode={EditEntryMode.Insert}
+                />,
+            );
+        });
+
+        expect(renderResult.container.querySelectorAll(".noteStyleBar button.du-btn-primary")).toHaveLength(0);
+    });
+
+    it("leads the bar with the rest button", () => {
+        const noteStyles = { "1": makeNoteStyle("1", "Accent", "Tamborim Accent") };
+        const dataModel = makeDataModel([makeTrackWithNote(7, 55, noteStyles, 7001, "1")]);
+        selectionManager.selectTracks([7]);
+
+        renderResult = render(
+            <NoteStyleBar dataModel={dataModel} selectionManager={selectionManager} />,
+        );
+
+        const buttons = renderResult.container.querySelectorAll(".noteStyleBar button");
+        expect(buttons[0].classList.contains("noteStyleRestButton")).toBe(true);
+        expect(buttons[0].getAttribute("data-tooltip")).toBe("Rest (0)");
+        expect(buttons[1].classList.contains("noteStyleButton")).toBe(true);
+    });
+
+    it("marks the rest button when the selection holds rests only", () => {
+        const noteStyles = { "1": makeNoteStyle("1", "Accent", "Tamborim Accent") };
+        const track = makeTrackWithNote(7, 55, noteStyles, 7001, "1");
+        const dataModel = makeDataModel([track]);
+        const rest = track.measures[0].events[1];
+
+        selectionManager.replaceSelection([noteEntry(track.measures[0], rest.start)]);
+
+        renderResult = render(
+            <NoteStyleBar dataModel={dataModel} selectionManager={selectionManager} />,
+        );
+
+        expect(renderResult.container.querySelectorAll(".noteStyleRestButton.du-btn-primary")).toHaveLength(1);
+        expect(renderResult.container.querySelectorAll(".noteStyleButton.du-btn-primary")).toHaveLength(0);
+    });
+
+    it("requests a rest entry when the rest button is clicked", () => {
+        const noteStyles = { "1": makeNoteStyle("1", "Accent", "Tamborim Accent") };
+        const dataModel = makeDataModel([makeTrackWithNote(7, 55, noteStyles, 7001, "1")]);
+        selectionManager.selectTracks([7]);
+
+        let requested = 0;
+        const handler = (): Promise<boolean> => {
+            requested++;
+
+            return Promise.resolve(true);
+        };
+
+        requisitions.register("restEntryRequested", handler);
+
+        renderResult = render(
+            <NoteStyleBar dataModel={dataModel} selectionManager={selectionManager} />,
+        );
+
+        fireEvent.click(renderResult.container.querySelector(".noteStyleRestButton")!);
+
+        expect(requested).toBe(1);
+
+        requisitions.unregister("restEntryRequested", handler);
+    });
+
     it("disables the note style buttons when selected tracks use different instruments", () => {
         const trackA = makeTrackWithNote(
             7, 55, { "1": makeNoteStyle("1", "Accent", "Tamborim Accent") }, 7001, "1",
@@ -368,6 +519,46 @@ describe.sequential("NoteStyleBar", () => {
         const buttons = [...renderResult.container.querySelectorAll<HTMLButtonElement>(".noteStyleButton")];
         expect(buttons).toHaveLength(1);
         expect(buttons[0].disabled).toBe(true);
+    });
+
+    it("disables the note style buttons when whole measures span different instruments", () => {
+        const trackA = makeTrackWithNote(
+            7, 55, { "1": makeNoteStyle("1", "Accent", "Tamborim Accent") }, 7001, "1",
+        );
+        const trackB = makeTrackWithNote(
+            8, 66, { "1": makeNoteStyle("1", "Bass", "Timbau Bass") }, 8001, "1",
+        );
+        const dataModel = makeDataModel([trackA, trackB]);
+
+        selectionManager.replaceSelection([measureEntry(trackA.measures[0]), measureEntry(trackB.measures[0])]);
+
+        renderResult = render(
+            <NoteStyleBar dataModel={dataModel} selectionManager={selectionManager} />,
+        );
+
+        const buttons = [...renderResult.container.querySelectorAll<HTMLButtonElement>(".noteStyleButton")];
+        expect(buttons[0].disabled).toBe(true);
+    });
+
+    it("keeps the note style buttons enabled when whole measures share their instrument", () => {
+        const noteStyles = {
+            "1": makeNoteStyle("1", "Accent", "Tamborim Accent"),
+            "2": makeNoteStyle("2", "Ghost", "Tamborim Ghost Note"),
+        };
+        const trackA = makeTrackWithNote(7, 55, noteStyles, 7001, "1");
+        const trackB = makeTrackWithNote(8, 55, noteStyles, 8001, "1");
+        const dataModel = makeDataModel([trackA, trackB]);
+
+        selectionManager.replaceSelection([measureEntry(trackA.measures[0]), measureEntry(trackB.measures[0])]);
+
+        renderResult = render(
+            <NoteStyleBar dataModel={dataModel} selectionManager={selectionManager} />,
+        );
+
+        const buttons = [...renderResult.container.querySelectorAll<HTMLButtonElement>(".noteStyleButton")];
+        expect(buttons.every((button) => {
+            return !button.disabled;
+        })).toBe(true);
     });
 
     it("marks no note style when the cursor sits inside a note's duration", () => {
@@ -415,7 +606,7 @@ describe.sequential("NoteStyleBar", () => {
         // Line spacing is 7px, centered in the 24px icon: lines at 8.5 and 15.5.
         expect(itemIcons[0].querySelector<HTMLElement>(".note-style-line-icon-head")!.style.top).toBe("15.5px");
         expect(itemIcons[1].querySelector<HTMLElement>(".note-style-line-icon-head")!.style.top).toBe("8.5px");
-        expect(itemIcons[0].querySelectorAll(".note-style-line-icon-note-image")).toHaveLength(1);
+        expect(itemIcons[0].querySelectorAll(".note-style-line-icon-head .score-symbol-view")).toHaveLength(1);
     });
 
     it("keeps distinct note heads as separate buttons in staff mode", () => {
@@ -563,11 +754,11 @@ describe.sequential("NoteStyleBar", () => {
         );
 
         const pressRollIcon = renderResult.container.querySelector(".note-style-icon.press-roll")!;
-        expect(pressRollIcon.querySelectorAll(".note-style-icon-head")).toHaveLength(0);
+        expect(pressRollIcon.querySelectorAll(".score-symbol-view")).toHaveLength(0);
         expect(pressRollIcon.querySelectorAll(".note-style-icon-press-roll line")).toHaveLength(3);
 
         const rimshotIcon = renderResult.container.querySelector(".note-style-icon.rimshot")!;
-        expect(rimshotIcon.querySelectorAll(".note-style-icon-head.oval")).toHaveLength(1);
+        expect(rimshotIcon.querySelectorAll(".score-symbol-view-ink-box")).toHaveLength(1);
         expect(rimshotIcon.querySelectorAll(".note-style-icon-rimshot-cross")).toHaveLength(1);
     });
 

@@ -29,6 +29,7 @@ import { ArrangementPlayControls } from "./components/ui/Arrangement/Arrangement
 import { ArrangementTitle } from "./components/ui/Arrangement/ArrangementTitle.js";
 import { ArrangementViewer } from "./components/ui/Arrangement/ArrangementViewer.js";
 import { ArticulationToolbar } from "./components/ui/Arrangement/ArticulationToolbar.js";
+import { EntryModeButton } from "./components/ui/Arrangement/EntryModeButton.js";
 import { NoteLengthToolbar } from "./components/ui/Arrangement/NoteLengthToolbar.js";
 import { NoteStyleBar } from "./components/ui/Arrangement/NoteStyleBar.js";
 import { SubdivisionToolbar } from "./components/ui/Arrangement/SubdivisionToolbar.js";
@@ -56,8 +57,9 @@ import {
 } from "./core/ScoreClipboard.js";
 import { ArrangementMigrator } from "./core/serialisation/migration/ArrangementMigrator.js";
 import { stringifyPackedArrangement, tryParsePackedArrangement } from "./core/serialisation/snapshot-packing.js";
+import { SmuflFontLoader } from "./core/smufl/SmuflFontLoader.js";
 import { mixerStepIndex, tutorialSteps } from "./core/TutorialSteps.js";
-import type { IArrangementSnapshot } from "./core/types/general.js";
+import { EditEntryMode, type IArrangementSnapshot } from "./core/types/general.js";
 import { SelectionGranularity } from "./ui/SelectionSerializer.js";
 import { UndoManager } from "./core/UndoManager.js";
 import { convertErrorToString } from "./core/utils.js";
@@ -67,7 +69,7 @@ import { escapeStack } from "./supplement/EscapeStack.js";
 import { requisitions } from "./supplement/Requisitions.js";
 import { AdminSetupDialog } from "./ui/AdminSetupDialog.js";
 import { BackendDisconnectedDialog } from "./ui/BackendDisconnectedDialog.js";
-import { BackendSetupDialog } from "./ui/BackendSetupDialog.js";
+import { BackendSetupDialog, BackendSetupMode } from "./ui/BackendSetupDialog.js";
 import { LoginDialog } from "./ui/LoginDialog.js";
 import { PermissionEditor } from "./ui/PermissionEditor.js";
 import { SelectionManager } from "./ui/SelectionManager.js";
@@ -108,6 +110,12 @@ interface IAppState {
     /** The active arrangement view mode (grid or staff notation). */
     trackViewMode: "grid" | "staff";
 
+    /**
+     * The entry mode the staff view was last set to. The grid view always works with overwrite, so the
+     * mode that is in effect is derived from the view mode instead of being stored.
+     */
+    preferredEntryMode: EditEntryMode;
+
     /** Token for the active score lock, if editing. */
     lockToken?: string;
 
@@ -147,6 +155,7 @@ export class App extends UIComponent<{}, IAppState> {
 
     private dataModel = new ScoreBookDataModel();
     private scoreClipboard = new ScoreClipboard(this.dataModel);
+    private smuflFontLoader = new SmuflFontLoader();
 
     private selectionManager: SelectionManager;
     private arrangementPlayer?: ArrangementPlayer;
@@ -174,6 +183,7 @@ export class App extends UIComponent<{}, IAppState> {
             sidebarOpen: false,
             headerCollapsed: false,
             trackViewMode: AppStorage.loadUISettings()?.viewSettings?.arrangementViewSettings?.displayMode ?? "grid",
+            preferredEntryMode: AppStorage.loadUISettings()?.entryMode ?? EditEntryMode.Insert,
             printing: false,
             instrumentEditorEnabled: false,
             backendUnreachable: false,
@@ -202,24 +212,26 @@ export class App extends UIComponent<{}, IAppState> {
         requisitions.register("timeParamsChanged", this.handleTimeParamsChange);
         requisitions.register("undoStackChanged", this.handleUndoStackChanged);
         requisitions.register("trackViewModeToggled", this.handleTrackViewModeToggled);
+        requisitions.register("editEntryModeChanged", this.handleEntryModeChanged);
 
         void this.checkBackendThenInitialize();
     }
 
     public override shouldComponentUpdate(nextProps: {}, nextState: IAppState): boolean {
         const { editMode, sidebarOpen, phase, headerCollapsed, trackViewMode, printing, backendUnreachable,
-            startupError } = this.state;
+            startupError, preferredEntryMode } = this.state;
 
         return editMode !== nextState.editMode
             || sidebarOpen !== nextState.sidebarOpen || phase !== nextState.phase
             || headerCollapsed !== nextState.headerCollapsed
             || trackViewMode !== nextState.trackViewMode
+            || preferredEntryMode !== nextState.preferredEntryMode
             || printing !== nextState.printing
             || backendUnreachable !== nextState.backendUnreachable
             || startupError !== nextState.startupError;
     }
 
-    public override componentDidUpdate(_prevProps: {}, prevState: IAppState): void {
+    public override componentDidUpdate(prevProps: {}, prevState: IAppState): void {
         const { phase } = this.state;
 
         if (prevState.phase !== AppPhase.Running && phase === AppPhase.Running) {
@@ -244,11 +256,13 @@ export class App extends UIComponent<{}, IAppState> {
         requisitions.unregister("arrangementMutated", this.handleArrangementMutated);
         requisitions.unregister("undoStackChanged", this.handleUndoStackChanged);
         requisitions.unregister("trackViewModeToggled", this.handleTrackViewModeToggled);
+        requisitions.unregister("editEntryModeChanged", this.handleEntryModeChanged);
     }
 
     public render() {
         const { phase, editMode, sidebarOpen, headerCollapsed, trackViewMode, instrumentEditorEnabled,
-            printing, printOptions, backendUnreachable, startupError } = this.state;
+            printing, printOptions, backendUnreachable, startupError, preferredEntryMode } = this.state;
+        const entryMode = this.effectiveEntryMode(trackViewMode, preferredEntryMode);
         const isRunning = phase === AppPhase.Running;
         const headerClassName = `rounded-3xl shadow-md border border-base-200/70 gap-4`
             + (headerCollapsed ? " collapsed" : "");
@@ -532,8 +546,13 @@ export class App extends UIComponent<{}, IAppState> {
                                                         <Separator
                                                             style={{ marginLeft: "16px", height: "50%" }}
                                                         />
+                                                        <EntryModeButton
+                                                            entryMode={entryMode}
+                                                            locked={trackViewMode !== "staff"}
+                                                        />
                                                         <SubdivisionToolbar
                                                             selectionManager={this.selectionManager}
+                                                            dataModel={this.dataModel}
                                                         />
                                                         {trackViewMode === "staff" && (
                                                             <>
@@ -543,6 +562,7 @@ export class App extends UIComponent<{}, IAppState> {
                                                                 <NoteLengthToolbar
                                                                     dataModel={this.dataModel}
                                                                     selectionManager={this.selectionManager}
+                                                                    entryMode={entryMode}
                                                                 />
                                                             </>
                                                         )}
@@ -552,6 +572,7 @@ export class App extends UIComponent<{}, IAppState> {
                                                         <ArticulationToolbar
                                                             dataModel={this.dataModel}
                                                             selectionManager={this.selectionManager}
+                                                            entryMode={entryMode}
                                                         />
                                                         <Separator
                                                             style={{ marginLeft: "16px", height: "50%" }}
@@ -560,6 +581,7 @@ export class App extends UIComponent<{}, IAppState> {
                                                             dataModel={this.dataModel}
                                                             selectionManager={this.selectionManager}
                                                             trackViewMode={trackViewMode}
+                                                            entryMode={entryMode}
                                                         />
                                                     </>)}
                                             </Container>
@@ -581,6 +603,7 @@ export class App extends UIComponent<{}, IAppState> {
                                             dataModel={this.dataModel}
                                             selectionManager={this.selectionManager}
                                             inEditMode={editMode}
+                                            entryMode={entryMode}
                                         />}
                                     </div>
                                 </Container>
@@ -590,7 +613,7 @@ export class App extends UIComponent<{}, IAppState> {
                         </Container>
                         <TooltipProvider />
                         <ValueDialog ref={this.valueDialogRef} />
-                        <SettingsDialog ref={this.settingsDialogRef} />
+                        <SettingsDialog ref={this.settingsDialogRef} fontLoader={this.smuflFontLoader} />
                         <TutorialWizard
                             ref={this.tutorialWizardRef}
                             steps={tutorialSteps}
@@ -811,7 +834,7 @@ export class App extends UIComponent<{}, IAppState> {
         if (!health.configLoaded) {
             await this.setStatePromise({ phase: AppPhase.Setup });
             await this.backendSetupDialogRef.current?.show({
-                mode: "fatal",
+                mode: BackendSetupMode.Fatal,
                 configError: health.configError,
             });
 
@@ -838,7 +861,7 @@ export class App extends UIComponent<{}, IAppState> {
         if (!health.initialized) {
             await this.setStatePromise({ phase: AppPhase.Setup });
             await this.backendSetupDialogRef.current?.show({
-                mode: "initial",
+                mode: BackendSetupMode.Initial,
                 dbError: health.dbError,
             });
 
@@ -852,7 +875,7 @@ export class App extends UIComponent<{}, IAppState> {
             await this.setStatePromise({ phase: AppPhase.Setup });
 
             const setupResult = await this.backendSetupDialogRef.current?.show({
-                mode: "admin",
+                mode: BackendSetupMode.Admin,
                 dbError: health.dbError,
             });
 
@@ -860,38 +883,12 @@ export class App extends UIComponent<{}, IAppState> {
                 return;
             }
 
-            const confirmed = await this.confirmDialogRef.current?.show(
-                "This will delete all scores, folders, users and groups.\n"
-                + "The database tables will be recreated from scratch.",
-                { accept: "Reset Database", refuse: "Cancel" },
-                "Reset Database",
-                ["This cannot be undone. Make sure to export your scores if you want to keep them."],
-            );
-
-            if (confirmed !== DialogResponseClosure.Accept) {
-                return;
-            }
-
             // Skip login when there are no users (e.g., schema broken,
             // users table missing). The backend allows emergency reset without auth.
-            if (health.hasUsers) {
-                await this.setStatePromise({ phase: AppPhase.Login });
-                const loggedIn = await this.loginDialogRef.current?.show(true);
+            await this.resetBackend(health.hasUsers);
 
-                if (!loggedIn) {
-                    return;
-                }
-            }
-
-            const ok = await this.dataModel.resetDatabase();
-
-            if (!ok) {
-                // Reset failed — restart the health check so the setup dialog can show the error.
-                return this.checkBackendThenInitialize();
-            }
-
-            // Restart the health check — the backend is now fresh.
-            return this.checkBackendThenInitialize();
+            // resetBackend restarts the boot sequence itself; this health report is stale now.
+            return;
         }
 
         if (!health.hasUsers) {
@@ -1086,7 +1083,12 @@ export class App extends UIComponent<{}, IAppState> {
     };
 
     private async initializeApp(): Promise<void> {
-        await this.dataModel.initialize();
+        // The score is drawn with the music font from its first paint on, so the font loads next to the data.
+        const musicFont = AppStorage.loadUISettings()?.musicFont;
+        await Promise.all([
+            this.dataModel.initialize(),
+            this.smuflFontLoader.initialize({ fontId: musicFont }),
+        ]);
 
         const params = new URL(window.location.href).searchParams;
         const hasBananaDrum = params.has("a") || params.has("a2");
@@ -1230,6 +1232,41 @@ export class App extends UIComponent<{}, IAppState> {
         });
     };
 
+    /**
+     * Runs the destructive backend reset: confirmation, a login when the backend demands one, then the
+     * reset itself. The backend drops every table and rebuilds the schema, so the boot sequence has to
+     * run again afterwards — the fresh database holds neither users nor scores any more.
+     *
+     * @param requiresLogin Whether the reset needs an admin session at the backend.
+     */
+    private async resetBackend(requiresLogin: boolean): Promise<void> {
+        const confirmed = await this.confirmDialogRef.current?.show(
+            "This will delete all scores, folders, users and groups.\n"
+            + "The database tables will be recreated from scratch.",
+            { accept: "Reset Database", refuse: "Cancel" },
+            "Reset Database",
+            ["This cannot be undone. Make sure you export your scores if you want to keep them."],
+        );
+
+        if (confirmed !== DialogResponseClosure.Accept) {
+            return;
+        }
+
+        if (requiresLogin) {
+            await this.setStatePromise({ phase: AppPhase.Login });
+
+            const loggedIn = await this.loginDialogRef.current?.show(true);
+            if (!loggedIn) {
+                return;
+            }
+        }
+
+        await this.dataModel.resetDatabase();
+
+        // Restart the boot sequence; the health check reports the result of the reset.
+        await this.checkBackendThenInitialize();
+    }
+
     private buildUserMenuItems(): IDropdownItem[] {
         const { user, activeGroup } = this.dataModel;
         const items: IDropdownItem[] = [];
@@ -1258,7 +1295,9 @@ export class App extends UIComponent<{}, IAppState> {
                 label: "Reset Backend",
                 icon: <Icon src={UIIcon.Server} />,
                 onClick: () => {
-                    void this.backendSetupDialogRef.current?.show({ mode: "admin" });
+                    // The menu only shows for admins, so the backend accepts the reset without a
+                    // further login.
+                    void this.resetBackend(false);
                 },
             });
         } else if (user) {
@@ -1392,6 +1431,26 @@ export class App extends UIComponent<{}, IAppState> {
 
         return Promise.resolve(true);
     };
+
+    private handleEntryModeChanged = (mode: EditEntryMode): Promise<boolean> => {
+        AppStorage.saveSetting("entryMode", mode);
+        this.setState({ preferredEntryMode: mode });
+
+        return Promise.resolve(true);
+    };
+
+    /**
+     * Resolves the entry mode the button shows. The grid view always works with overwrite, so it never
+     * offers insert.
+     *
+     * @param viewMode The active view mode.
+     * @param preferred The mode the staff view was last set to.
+     *
+     * @returns The entry mode in effect.
+     */
+    private effectiveEntryMode(viewMode: "grid" | "staff", preferred: EditEntryMode): EditEntryMode {
+        return viewMode === "staff" ? preferred : EditEntryMode.Overwrite;
+    }
 
     private handleSystemThemeChange = (): void => {
         if (this.selectedThemePreference === "Auto") {
@@ -1655,9 +1714,21 @@ export class App extends UIComponent<{}, IAppState> {
         return true;
     };
 
+    /**
+     * Creates the undo manager for the current arrangement. It remembers the selection of every edit,
+     * so an undo puts the cursor back where the undone edit was made.
+     *
+     * @returns The undo manager to use.
+     */
+    private createUndoManager(): UndoManager {
+        return new UndoManager(this.dataModel, () => {
+            return this.selectionManager.serialisedSelection;
+        });
+    }
+
     private initAppState(): void {
         this.undoManager?.dispose();
-        this.undoManager = new UndoManager(this.dataModel);
+        this.undoManager = this.createUndoManager();
         this.arrangementPlayer = new ArrangementPlayer(this.dataModel);
     }
 
@@ -1697,7 +1768,7 @@ export class App extends UIComponent<{}, IAppState> {
         }
 
         this.undoManager?.dispose();
-        this.undoManager = new UndoManager(this.dataModel);
+        this.undoManager = this.createUndoManager();
         this.arrangementPlayer = new ArrangementPlayer(this.dataModel);
 
         if (arrangement.title) {
@@ -2072,7 +2143,7 @@ export class App extends UIComponent<{}, IAppState> {
         const arrangement = this.dataModel.startNewArrangement(instruments, options);
 
         this.undoManager?.dispose();
-        this.undoManager = new UndoManager(this.dataModel);
+        this.undoManager = this.createUndoManager();
         this.arrangementPlayer = new ArrangementPlayer(this.dataModel);
 
         if (arrangement.title) {
@@ -2217,6 +2288,7 @@ export class App extends UIComponent<{}, IAppState> {
 
     private handleArrangementMutated = (): Promise<boolean> => {
         this.dataModel.persistCurrentScore();
+        this.updateStatsItem();
 
         return Promise.resolve(true);
     };
@@ -2235,8 +2307,8 @@ export class App extends UIComponent<{}, IAppState> {
     };
 
     /**
-     * Creates or updates the status bar item that shows the current score metrics
-     * (time signature, bar count, duration) on the right side of the status bar.
+     * Creates or updates the status bar item that shows the metrics of the performance (time signature, the bars it
+     * plays, duration) on the right side of the status bar.
      */
     private updateStatsItem(): void {
         const player = this.arrangementPlayer;
@@ -2245,7 +2317,7 @@ export class App extends UIComponent<{}, IAppState> {
         }
 
         const metrics = player.scoreMetrics;
-        const bars = metrics.bars === 1 ? "1 bar" : `${metrics.bars} bars`;
+        const bars = metrics.performedBars === 1 ? "1 bar" : `${metrics.performedBars} bars`;
         const text = `${metrics.beatsPerBar}/${metrics.beatUnit} • ${bars} • ` +
             `${Math.round(100 * metrics.realTimeLength) / 100} s`;
 

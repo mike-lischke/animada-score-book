@@ -6,6 +6,7 @@
 import { expect, test } from "@playwright/test";
 
 import { tryParsePackedArrangement } from "../../src/core/serialisation/snapshot-packing.js";
+import { arrangementSnapshotVersion } from "../../src/core/serialisation/snapshots.js";
 import {
     beijaFlorImportPath, beijaFlorTitle, beijaFlorDisplayedTitle, expectImportedPolyrhythmSong, expectPlaybackToMove,
     readStoredCurrentScore, routeApi,
@@ -24,7 +25,7 @@ test.describe("Snapshot compatibility polyrhythm flow", () => {
         const storedSnapshot = tryParsePackedArrangement(storedCurrentScore);
         expect(storedSnapshot).toBeDefined();
 
-        expect(storedSnapshot!.version).toBe(4);
+        expect(storedSnapshot!.version).toBe(arrangementSnapshotVersion);
         expect(storedSnapshot!.title).toBe(beijaFlorTitle);
         expect(storedSnapshot!.title).not.toBe(beijaFlorDisplayedTitle);
         expect(Array.isArray(storedSnapshot!.tracks)).toBeTruthy();

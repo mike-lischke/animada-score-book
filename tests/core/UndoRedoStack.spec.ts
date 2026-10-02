@@ -53,7 +53,6 @@ const makeArrangement = (title: string): ISbDmArrangement => {
         removeTrack: vi.fn(),
         duplicateTrack: vi.fn(),
         applyArrangementSnapshot: vi.fn(),
-        measureLabels: {},
     };
 };
 
@@ -92,6 +91,26 @@ describe("UndoRedoStack (class)", () => {
         expect(stack.canUndo).toBe(true);
         expect(onCanUndo).toHaveBeenCalled();
         requisitions.unregister("undoStackChanged", onCanUndo);
+    });
+
+    it("remembers the selection state of each recorded state", () => {
+        const arrangement = makeArrangement("A");
+        const stack = new UndoRedoStack(arrangement);
+
+        arrangement.title = "B";
+        stack.recordSnapshot("selection-b");
+
+        arrangement.title = "C";
+        stack.recordSnapshot("selection-c");
+
+        // The state the arrangement stands at was left in the second selection.
+        expect(stack.currentSelection).toBe("selection-c");
+
+        stack.goBack();
+
+        // Going back leaves the state that was recorded with the first edit, whose redo returns to it.
+        expect(stack.futureSelection).toBe("selection-c");
+        expect(stack.currentSelection).toBe("selection-b");
     });
 
     it("goBack moves current to future and publishes canRedo/canUndo", () => {

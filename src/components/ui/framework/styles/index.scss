@@ -4,6 +4,7 @@
  */
 
 @use "animations";
+@use "barline-view";
 @use "button";
 @use "card";
 @use "container";
@@ -23,8 +24,10 @@
 @use "popup";
 @use "progress-indicator";
 @use "radial-menu";
+@use "score-symbol-view";
 @use "slider-split";
 @use "split-container";
+@use "smufl-glyph-view";
 @use "statusbar";
 @use "tab-view";
 @use "tag-input";

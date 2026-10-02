@@ -3,10 +3,75 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import { expect, type Page } from "@playwright/test";
+import { expect, type Locator, type Page } from "@playwright/test";
 
 const normalizeWhitespace = (value: string): string => {
     return value.trim().replace(/\s+/g, " ");
+};
+
+/**
+ * Scrolls the staff viewer until the given measure is rendered. The staff view renders only the measures around
+ * the viewport, so a test that inspects a measure has to bring it into that window first.
+ *
+ * @param page The page under test.
+ * @param barNumber The 1-based measure number that has to be rendered.
+ */
+export const ensureStaffBarRendered = async (page: Page, barNumber: number): Promise<void> => {
+    await expect.poll(async () => {
+        return page.evaluate((bar) => {
+            const host = document.querySelector<HTMLElement>("#trackViewerHost");
+            const viewers = Array.from(document.querySelectorAll<HTMLElement>(".staff-measure-viewer"));
+            const rendered = viewers.some((viewer) => {
+                return viewer.querySelector(".staff-measure-number")?.textContent === String(bar);
+            });
+            if (rendered || !host || viewers.length === 0) {
+                return rendered;
+            }
+
+            // Measure columns share their width, so the offset of an unknown measure follows from a rendered one.
+            const first = Number(viewers[0].querySelector(".staff-measure-number")?.textContent ?? "0");
+            host.scrollLeft = viewers[0].offsetLeft + ((bar - first) * viewers[0].offsetWidth);
+
+            return false;
+        }, barNumber);
+    }, { message: `measure ${barNumber} should be rendered in the staff view` }).toBe(true);
+};
+
+/**
+ * @param page The page under test.
+ * @param barNumber The 1-based measure number to locate.
+ *
+ * @returns The rendered staff measure of the given measure number.
+ */
+export const findStaffMeasure = async (page: Page, barNumber: number): Promise<Locator> => {
+    await ensureStaffBarRendered(page, barNumber);
+
+    return page.locator(".staff-measure-viewer").filter({
+        has: page.locator(".staff-measure-number", { hasText: new RegExp(`^${barNumber}$`) }),
+    }).first();
+};
+
+/**
+ * Selects the whole track piece of a bar by clicking its staff line, away from any note.
+ *
+ * @param page The page under test.
+ * @param barNumber The 1-based measure number.
+ */
+export const selectTrackPiece = async (page: Page, barNumber: number): Promise<void> => {
+    const row = (await findStaffMeasure(page, barNumber)).locator(".staff-measure-track-row").first();
+    const rowBox = await row.boundingBox();
+    const lineBox = await row.locator(".staff-note-viewer-line").first().boundingBox();
+    if (!rowBox || !lineBox) {
+        throw new Error("The track row has no bounding box.");
+    }
+
+    // Clicking through the locator scrolls the row into the viewport first, which a coordinate click does not.
+    await row.click({
+        position: {
+            x: Math.round(rowBox.width * 0.15),
+            y: Math.round(lineBox.y - rowBox.y + (lineBox.height / 2)),
+        },
+    });
 };
 
 export const beijaFlorTitle = "Beija Flor 2004  -  Bossa 1 (H-Break)";
@@ -247,7 +312,9 @@ export const expectPlaybackToMove = async (page: Page): Promise<void> => {
     const playBeam = page.locator("#playBeam");
 
     await expect(playButton).toBeVisible();
-    await expect(playBeam).toBeVisible();
+
+    // The beam marks playback, so it is hidden while none runs.
+    await expect(playBeam).toBeHidden();
 
     const readBeamX = async (): Promise<number> => {
         return playBeam.evaluate((element) => {
@@ -255,11 +322,12 @@ export const expectPlaybackToMove = async (page: Page): Promise<void> => {
         });
     };
 
-    const initialX = await readBeamX();
-    expect(Number.isFinite(initialX)).toBeTruthy();
-
     await playButton.click();
     await expect(playbackToggle).toBeChecked();
+    await expect(playBeam).toBeVisible();
+
+    const initialX = await readBeamX();
+    expect(Number.isFinite(initialX)).toBeTruthy();
 
     await expect.poll(async () => {
         const currentX = await readBeamX();
@@ -269,6 +337,7 @@ export const expectPlaybackToMove = async (page: Page): Promise<void> => {
 
     await playButton.click();
     await expect(playbackToggle).not.toBeChecked();
+    await expect(playBeam).toBeHidden();
 };
 
 export const readStoredCurrentScore = async (page: Page): Promise<string> => {

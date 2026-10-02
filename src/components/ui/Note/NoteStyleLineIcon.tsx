@@ -5,9 +5,12 @@
 
 import type { ComponentChild } from "preact";
 
+import { staffSpacePx } from "../../../core/MeasureLayout.js";
 import { NoteDisplayType } from "../../../core/ScoreBookDataModel.js";
+import { NoteLength } from "../../../core/rest-notation.js";
+import { ScoreSymbols } from "../../../core/ScoreSymbols.js";
 import type { IAudioData } from "../../../core/types/general.js";
-import { NoteImage, NoteKind, NoteLength } from "../framework/NoteImage.js";
+import { ScoreSymbolView } from "../framework/ScoreSymbolView.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
 
 export interface INoteStyleLineEntry {
@@ -55,6 +58,7 @@ export class NoteStyleLineIcon extends UIComponent<INoteStyleLineIconProps> {
 
         const heads = entries.map((entry) => {
             const y = this.lineY(entry.line);
+            const displayType = this.displayTypeOf(entry.noteStyle);
 
             return (
                 <span
@@ -62,16 +66,10 @@ export class NoteStyleLineIcon extends UIComponent<INoteStyleLineIconProps> {
                     className="note-style-line-icon-head"
                     style={{ top: `${y}px` }}
                 >
-                    <NoteImage
-                        className="note-style-line-icon-note-image"
-                        kind={NoteKind.Note}
-                        value={NoteLength.Quarter}
-                        headType={NoteDisplayType.Oval}
-                        hideStem={true}
-                        flagCount={0}
-                        width={28}
-                        height={56}
-                        alt=""
+                    <ScoreSymbolView
+                        symbol={ScoreSymbols.notehead(displayType, NoteLength.Quarter)}
+                        staffSpace={staffSpacePx}
+                        inkBox
                     />
                 </span>
             );
@@ -91,6 +89,20 @@ export class NoteStyleLineIcon extends UIComponent<INoteStyleLineIconProps> {
                 {heads}
             </span>
         );
+    }
+
+    /**
+     * @param noteStyle The note style whose head the icon shows.
+     *
+     * @returns The head shape the style's own note is drawn with.
+     */
+    private displayTypeOf(noteStyle: IAudioData): NoteDisplayType {
+        const { characteristics } = noteStyle;
+        if (!("mainDisplayType" in characteristics) || characteristics.mainDisplayType === undefined) {
+            return NoteDisplayType.Oval;
+        }
+
+        return characteristics.mainDisplayType;
     }
 
     /**

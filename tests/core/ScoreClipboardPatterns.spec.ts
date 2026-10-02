@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 
 import { bateriaInstruments } from "../../src/bateria-instruments.js";
 import { Arrangement } from "../../src/core/Arrangement.js";
-import { ScoreBookDataModel, type ISbDmTrackMeasure } from "../../src/core/ScoreBookDataModel.js";
+import { ScoreBookDataModel, type ISbDmTrackPiece } from "../../src/core/ScoreBookDataModel.js";
 import { PasteResultKind, ScoreClipboard } from "../../src/core/ScoreClipboard.js";
 import { addFractions, compareFractions } from "../../src/core/serialisation/numeric-functions.js";
 import type { ISelectionEntry } from "../../src/ui/SelectionSerializer.js";
@@ -23,7 +23,7 @@ const stepsPerBar = 16;
  * @param step The 0-based grid step to look up.
  * @returns The note style id covering the step, or undefined.
  */
-const noteAtStep = (measure: ISbDmTrackMeasure, step: number): string | undefined => {
+const noteAtStep = (measure: ISbDmTrackPiece, step: number): string | undefined => {
     const start = { numerator: step, denominator: stepsPerBar };
 
     const event = measure.events.find((candidate) => {
@@ -46,7 +46,7 @@ const noteAtStep = (measure: ISbDmTrackMeasure, step: number): string | undefine
  * @param cell The 0-based grid cell.
  * @returns The note's duration in whole cells, or 1 when the cell is not a note start.
  */
-const noteDurationInCells = (measure: ISbDmTrackMeasure, cell: number): number => {
+const noteDurationInCells = (measure: ISbDmTrackPiece, cell: number): number => {
     const start = { numerator: cell, denominator: stepsPerBar };
     const event = measure.events.find((candidate) => {
         return compareFractions(candidate.start, start) === 0 && candidate.noteStyleId !== undefined;
@@ -69,7 +69,7 @@ const noteDurationInCells = (measure: ISbDmTrackMeasure, cell: number): number =
  * @param copyCells The number of cells to copy (1..4).
  * @returns The expected note style per target cell; undefined for rests.
  */
-const expectedTiledPattern = (measure: ISbDmTrackMeasure, pattern: number[], groupStart: number,
+const expectedTiledPattern = (measure: ISbDmTrackPiece, pattern: number[], groupStart: number,
     copyCells: number): Array<string | undefined> => {
     let clipboard: Array<{ cells: number; noteStyleId?: string; }>;
 

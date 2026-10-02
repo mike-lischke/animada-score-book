@@ -3,16 +3,21 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
+import { MeasureLayout } from "./MeasureLayout.js";
 import { requisitions } from "../supplement/Requisitions.js";
 import {
     SbDmEntityType, type ISbDmArrangement, type ISbDmInstrument, type ISbDmTrack,
-    type ISbDmTrackMeasure
+    type ISbDmTrackPiece
 } from "./ScoreBookDataModel.js";
 import { TimeParams } from "./TimeParams.js";
 import { Track } from "./Track.js";
-import type { IArrangementSnapshot, ITimeParams, ITrackSnapshot } from "./types/general.js";
+import type {
+    IArrangementExtensions, IArrangementSnapshot, IRepeatBar, ITimeParams, ITrackSnapshot
+} from "./types/general.js";
 import { getNewId } from "./utils.js";
-import { arrangementSnapshotVersion } from "./serialisation/snapshots.js";
+import {
+    applyArrangementExtensions, arrangementSnapshotVersion, collectArrangementExtensions,
+} from "./serialisation/snapshots.js";
 
 /** Initial title and timing options for creating a new arrangement. */
 export interface IArrangementCreationOptions {
@@ -33,8 +38,17 @@ export class Arrangement implements ISbDmArrangement {
 
     public timeParams!: ITimeParams;
 
-    /** Per-measure section labels, keyed by 1-based measure number. */
-    public measureLabels: Record<number, string> = {};
+    /** Column widths of individual measures, keyed by 1-based measure number, in px at 100% zoom. */
+    public readonly measureWidths = new Map<number, number>();
+
+    /** Repeat marks of individual measures, keyed by 1-based measure number. */
+    public readonly repeatBars = new Map<number, IRepeatBar>();
+
+    /**
+     * Extension chunks of other features or newer builds, kept verbatim so that writing a snapshot never
+     * drops data this build does not understand. See {@link IArrangementExtensions}.
+     */
+    public foreignExtensions: IArrangementExtensions = {};
 
     public mainVolume = 100;
     public loop = false;
@@ -104,7 +118,7 @@ export class Arrangement implements ISbDmArrangement {
      * @returns An arrangement snapshot reflecting the current state.
      */
     public toSnapshot(): IArrangementSnapshot {
-        return {
+        const snapshot: IArrangementSnapshot = {
             version: arrangementSnapshotVersion,
             title: this.titleString,
             timeParams: {
@@ -133,15 +147,20 @@ export class Arrangement implements ISbDmArrangement {
                             subdivisions: measure.subdivisions.map((subdivision) => {
                                 return { ...subdivision };
                             }),
+                            simile: measure.simile ? true : undefined,
                         };
                     }),
                 };
             }),
-            measureLabels: Object.keys(this.measureLabels).length > 0
-                ? { ...this.measureLabels }
-                : undefined,
             scoreId: this.id >= 10000 ? this.id : undefined,
         };
+
+        const extensions = collectArrangementExtensions(this);
+        if (extensions !== undefined) {
+            snapshot.extensions = extensions;
+        }
+
+        return snapshot;
     }
 
     /**
@@ -232,7 +251,8 @@ export class Arrangement implements ISbDmArrangement {
 
     /**
      * Inserts a number of bars before or after the given bar. When copyContent is set, the content
-     * of the bar preceding the insertion point is copied into each new bar.
+     * of the bar preceding the insertion point is copied into each new bar, and each new bar takes
+     * that bar's width as well.
      *
      * @param barNumber The 1-based bar the new bars are inserted relative to.
      * @param count The number of bars to insert.
@@ -252,7 +272,28 @@ export class Arrangement implements ISbDmArrangement {
         }
 
         this.timeParams.length += count;
-        this.shiftMeasureLabels(atIndex + 1, count);
+
+        // The new bars hold the content of the bar they were made from, so they take its width too. The source
+        // bar is the one right in front of them, which the shift below leaves where it is.
+        const sourceWidth = copyContent ? this.measureWidths.get(atIndex) : undefined;
+        this.shiftMeasureWidths(atIndex + 1, count);
+
+        if (sourceWidth !== undefined) {
+            for (let i = 1; i <= count; i++) {
+                this.measureWidths.set(atIndex + i, sourceWidth);
+            }
+        }
+
+        // A copy holds the content of the bar it was made from, so it carries that bar's repeat marks too.
+        const sourceRepeats = copyContent ? this.repeatBars.get(atIndex) : undefined;
+        this.shiftRepeatBars(atIndex + 1, count);
+
+        if (sourceRepeats !== undefined) {
+            for (let i = 1; i <= count; i++) {
+                this.repeatBars.set(atIndex + i, { ...sourceRepeats });
+            }
+        }
+
         void requisitions.execute("arrangementChanged", this.id);
     }
 
@@ -271,7 +312,10 @@ export class Arrangement implements ISbDmArrangement {
         }
 
         this.timeParams.length -= 1;
-        this.removeMeasureLabel(barNumber);
+        this.measureWidths.delete(barNumber);
+        this.shiftMeasureWidths(barNumber + 1, -1);
+        this.repeatBars.delete(barNumber);
+        this.shiftRepeatBars(barNumber + 1, -1);
         void requisitions.execute("arrangementChanged", this.id);
     }
 
@@ -300,7 +344,21 @@ export class Arrangement implements ISbDmArrangement {
         }
 
         this.timeParams.length += 1;
-        this.shiftMeasureLabels(barNumber + 1, 1);
+
+        // The copy takes the width of its original, so the duplicate looks like the bar it was made from.
+        const width = this.measureWidths.get(barNumber);
+        this.shiftMeasureWidths(barNumber + 1, 1);
+        if (width !== undefined) {
+            this.measureWidths.set(barNumber + 1, width);
+        }
+
+        // The marks belong to the barline the duplicate closes, so the copy carries its own.
+        const repeats = this.repeatBars.get(barNumber);
+        this.shiftRepeatBars(barNumber + 1, 1);
+        if (repeats !== undefined) {
+            this.repeatBars.set(barNumber + 1, { ...repeats });
+        }
+
         void requisitions.execute("arrangementChanged", this.id);
     }
 
@@ -327,15 +385,14 @@ export class Arrangement implements ISbDmArrangement {
         // applyTimeParams is redundant when loading Animada Score Book, since we just created the Arrangement with the
         // same TPs. However, applying the full snapshot is required for Undo/Redo.
         this.applyTimeParams(arrangementSnapshot);
+
+        // The bar count is known only after the time params, so the width chunk is filtered against it here.
+        applyArrangementExtensions(this, arrangementSnapshot);
         this.title = arrangementSnapshot.title ?? "Untitled Arrangement";
 
         if (arrangementSnapshot.scoreId !== undefined) {
             this.id = arrangementSnapshot.scoreId;
         }
-
-        this.measureLabels = arrangementSnapshot.measureLabels
-            ? { ...arrangementSnapshot.measureLabels }
-            : {};
 
         // Rebuild the track list in snapshot order. Reusing addTrack here would re-sort by instrument
         // displayOrder, which is unstable when several tracks share the same instrument — a restored
@@ -365,8 +422,72 @@ export class Arrangement implements ISbDmArrangement {
         }
 
         this.tracks.splice(0, this.tracks.length, ...restoredTracks);
+        this.clampMeasureWidths();
         void requisitions.execute("arrangementChanged", this.id);
     };
+
+    /**
+     * Moves the widths of the measures from a 1-based number onwards by a delta, so a width stays with the
+     * measure it belongs to when bars are inserted or removed.
+     *
+     * @param fromBar The first measure whose width moves.
+     * @param delta The number of measures it moves by.
+     */
+    private shiftMeasureWidths(fromBar: number, delta: number): void {
+        if (delta === 0 || this.measureWidths.size === 0) {
+            return;
+        }
+
+        const moved = [...this.measureWidths].filter(([bar]) => {
+            return bar >= fromBar;
+        });
+
+        for (const [bar] of moved) {
+            this.measureWidths.delete(bar);
+        }
+
+        for (const [bar, width] of moved) {
+            this.measureWidths.set(bar + delta, width);
+        }
+    }
+
+    /**
+     * Moves the repeat marks from a 1-based bar number onwards by a delta, so a mark stays with the barline it
+     * belongs to when bars are inserted or removed.
+     *
+     * @param fromBar The first bar whose marks move.
+     * @param delta The number of bars they move by.
+     */
+    private shiftRepeatBars(fromBar: number, delta: number): void {
+        if (delta === 0 || this.repeatBars.size === 0) {
+            return;
+        }
+
+        const moved = [...this.repeatBars].filter(([bar]) => {
+            return bar >= fromBar;
+        });
+
+        for (const [bar] of moved) {
+            this.repeatBars.delete(bar);
+        }
+
+        for (const [bar, marks] of moved) {
+            this.repeatBars.set(bar + delta, marks);
+        }
+    }
+
+    /**
+     * Raises every stored measure width to its floor, so a stored value can never squeeze a measure below
+     * what its events need.
+     */
+    private clampMeasureWidths(): void {
+        for (const [bar, width] of [...this.measureWidths]) {
+            const floor = MeasureLayout.minimumWidthOfMeasure(this, bar);
+            if (width < floor) {
+                this.measureWidths.set(bar, floor);
+            }
+        }
+    }
 
     /**
      * Apply all timeParams without checking if they've changed. TP does this check and won't publish redundantly
@@ -382,15 +503,15 @@ export class Arrangement implements ISbDmArrangement {
     };
 
     private applyTrackSnapshot(track: Track, trackSnapshot: ITrackSnapshot): void {
-        const newMeasures: ISbDmTrackMeasure[] = trackSnapshot.measures.map((measureSnapshot) => {
+        const newMeasures: ISbDmTrackPiece[] = trackSnapshot.measures.map((measureSnapshot) => {
             const beatGroupsCandidate = (measureSnapshot.meter as { beatGroups?: unknown; }).beatGroups;
             const beatGroups = Array.isArray(beatGroupsCandidate)
                 ? [...(beatGroupsCandidate as number[])]
                 : [measureSnapshot.meter.stepResolution];
 
-            return {
-                id: this.getTrackMeasureId(track, measureSnapshot.number),
-                type: SbDmEntityType.TrackMeasure,
+            const measure: ISbDmTrackPiece = {
+                id: this.getTrackPieceId(track, measureSnapshot.number),
+                type: SbDmEntityType.TrackPiece,
                 track,
                 number: measureSnapshot.number,
                 meter: {
@@ -410,54 +531,20 @@ export class Arrangement implements ISbDmArrangement {
                 }),
                 noteEvents: [],
             };
+
+            // A simile repeats the measure before it, so the first measure of a track cannot carry one.
+            if (measureSnapshot.number > 1 && measureSnapshot.simile === true) {
+                measure.simile = true;
+            }
+
+            return measure;
         });
 
         track.measures.splice(0, track.measures.length, ...newMeasures);
         void requisitions.execute("trackChanged", track.id);
     }
 
-    private getTrackMeasureId(track: Track, measureNumber: number): number {
+    private getTrackPieceId(track: Track, measureNumber: number): number {
         return (track.id * 100) + measureNumber;
-    }
-
-    /**
-     * Shifts section labels starting at the given bar by the given delta. Labels that would move below
-     * bar 1 are dropped.
-     *
-     * @param fromBar The 1-based bar from which labels are shifted.
-     * @param delta The number of bars to shift by (positive or negative).
-     */
-    private shiftMeasureLabels(fromBar: number, delta: number): void {
-        const shifted: Record<number, string> = {};
-
-        for (const [barString, label] of Object.entries(this.measureLabels)) {
-            const bar = Number(barString);
-            const newBar = bar >= fromBar ? bar + delta : bar;
-            if (newBar >= 1) {
-                shifted[newBar] = label;
-            }
-        }
-
-        this.measureLabels = shifted;
-    }
-
-    /**
-     * Removes the section label of the given bar and shifts later labels down by one.
-     *
-     * @param barNumber The 1-based bar whose label is removed.
-     */
-    private removeMeasureLabel(barNumber: number): void {
-        const shifted: Record<number, string> = {};
-
-        for (const [barString, label] of Object.entries(this.measureLabels)) {
-            const bar = Number(barString);
-            if (bar === barNumber) {
-                continue;
-            }
-
-            shifted[bar > barNumber ? bar - 1 : bar] = label;
-        }
-
-        this.measureLabels = shifted;
     }
 };

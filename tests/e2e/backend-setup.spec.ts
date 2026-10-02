@@ -5,11 +5,74 @@
 
 import { expect, test, type Page } from "@playwright/test";
 
+import { setupAuthenticatedSession } from "./e2e-test-helpers.js";
+
 interface IApiState {
     initialized: boolean;
     hasData: boolean;
     engine: string;
 }
+
+/**
+ * Mocks a healthy backend that holds an admin session and records every reset request. Once a reset went
+ * through, the health endpoint reports a database without users, as a fresh installation would.
+ *
+ * @param page The Playwright page.
+ *
+ * @returns A function returning the payloads of all `setup` requests the app sent.
+ */
+const routeHealthyApi = async (page: Page): Promise<() => Array<Record<string, unknown>>> => {
+    const setupRequests: Array<Record<string, unknown>> = [];
+
+    await page.route("**/api**", async (route) => {
+        const action = new URL(route.request().url()).searchParams.get("action");
+
+        if (action === "setup") {
+            setupRequests.push(JSON.parse(route.request().postData() ?? "{}") as Record<string, unknown>);
+
+            await route.fulfill({
+                status: 200, contentType: "application/json", body: JSON.stringify({ success: true }),
+            });
+
+            return;
+        }
+
+        if (action === "health") {
+            await route.fulfill({
+                status: 200, contentType: "application/json",
+                body: JSON.stringify({
+                    status: "ok", initialized: true, configLoaded: true, engine: "mysql",
+                    host: "127.0.0.1", port: 3306, database: "animada_score_book",
+                    hasData: setupRequests.length === 0,
+                    hasUsers: setupRequests.length === 0,
+                }),
+            });
+
+            return;
+        }
+
+        if (action === "listSoundLib") {
+            await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify([]) });
+
+            return;
+        }
+
+        if (action === "listScoreFolderContent") {
+            await route.fulfill({
+                status: 200, contentType: "application/json",
+                body: JSON.stringify({ folders: [], scores: [] }),
+            });
+
+            return;
+        }
+
+        await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({}) });
+    });
+
+    return () => {
+        return setupRequests;
+    };
+};
 
 /**
  * Creates a mock route for the backend API with a given initial state.
@@ -300,5 +363,46 @@ test.describe("Setup: backend unreachable", () => {
         // The app shows a "Server Unreachable" error card with a retry button.
         await expect(page.locator(".backend-unreachable-card")).toBeVisible({ timeout: 5000 });
         await expect(page.locator(".backend-unreachable-card")).toContainText("Server Unreachable");
+    });
+});
+
+// ── Reset ──
+
+test.describe("Reset Backend", () => {
+    test("drops the database from the user menu and starts the boot sequence over", async ({ page }) => {
+        const getSetupRequests = await routeHealthyApi(page);
+
+        // Registered after the catch-all, so its whoami and refresh mocks take precedence.
+        await setupAuthenticatedSession(page);
+
+        await page.goto("/");
+
+        // The user menu offers the reset to admins of a healthy backend.
+        const userMenuButton = page.locator("#userMenu button").first();
+
+        await expect(userMenuButton).toBeVisible();
+        await userMenuButton.click();
+
+        const popover = page.locator("ul[popover]").filter({ hasText: "Reset Backend" });
+
+        await expect(popover).toBeVisible();
+        await popover.locator("li a").filter({ hasText: "Reset Backend" }).click();
+
+        // Nothing is dropped before the user confirmed.
+        const confirmDialog = page.locator(".dialog").filter({ hasText: "Reset Database" });
+
+        await expect(confirmDialog).toBeVisible();
+        expect(getSetupRequests()).toHaveLength(0);
+
+        await confirmDialog.locator("button").filter({ hasText: "Reset Database" }).click();
+
+        // The reset reaches the backend as an overwrite …
+        await expect.poll(() => {
+            return getSetupRequests().length;
+        }).toBe(1);
+        expect(getSetupRequests()[0]).toEqual({ overwrite: true });
+
+        // … and the app starts over: the fresh database has no users, so it asks for the first admin.
+        await expect(page.locator("#adminSetupDialog")).toBeVisible({ timeout: 10000 });
     });
 });
