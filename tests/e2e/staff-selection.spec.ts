@@ -167,9 +167,7 @@ test.describe("Staff view selection", () => {
         });
 
         if (!crossingBeamBox) {
-            test.skip(true, "No nested-subdivision beam found in this arrangement");
-
-            return;
+            throw new Error("Bolero 3 fixture should contain a beam crossing a subdivision boundary.");
         }
 
         // Click at the center of the beam for a stable hit.
@@ -427,9 +425,7 @@ test.describe("Staff view selection", () => {
             ".staff-measure-track-row .staff-note-viewer-run:has(.staff-note-head-symbol)",
         );
         const count = await runs.count();
-        if (count < 2) {
-            test.skip(true, "Not enough note runs for drag test");
-        }
+        expect(count).toBeGreaterThanOrEqual(2);
 
         const firstRun = runs.nth(0);
         const secondRun = runs.nth(1);

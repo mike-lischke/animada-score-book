@@ -172,6 +172,9 @@ export class ArrangementPlayer {
         // Stop any ongoing play state.
         this.onStop();
 
+        // The engine keeps a subscription of its own, which must not outlive the player.
+        this.animationEngine.dispose();
+
         // Unsubscribe from arrangement changes and the event engine.
         requisitions.unregister("arrangementChanged", this.handleArrangementChanged);
         requisitions.unregister("timeParamsChanged", this.handleTimeParamsChanged);

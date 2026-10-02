@@ -2440,12 +2440,12 @@ export class ScoreBookDataModel {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(body),
-        });
+        }, true, true);
 
         if (!res?.ok) {
-            const data = await res?.json() as { error?: string; };
+            const data = res ? await res.json() as { error?: string; } : undefined;
 
-            throw new Error(data.error ?? "Failed to set permissions.");
+            throw new Error(data?.error ?? "Failed to set permissions.");
         }
     }
 
