@@ -69,7 +69,7 @@ import { escapeStack } from "./supplement/EscapeStack.js";
 import { requisitions } from "./supplement/Requisitions.js";
 import { AdminSetupDialog } from "./ui/AdminSetupDialog.js";
 import { BackendDisconnectedDialog } from "./ui/BackendDisconnectedDialog.js";
-import { BackendSetupDialog } from "./ui/BackendSetupDialog.js";
+import { BackendSetupDialog, BackendSetupMode } from "./ui/BackendSetupDialog.js";
 import { LoginDialog } from "./ui/LoginDialog.js";
 import { PermissionEditor } from "./ui/PermissionEditor.js";
 import { SelectionManager } from "./ui/SelectionManager.js";
@@ -834,7 +834,7 @@ export class App extends UIComponent<{}, IAppState> {
         if (!health.configLoaded) {
             await this.setStatePromise({ phase: AppPhase.Setup });
             await this.backendSetupDialogRef.current?.show({
-                mode: "fatal",
+                mode: BackendSetupMode.Fatal,
                 configError: health.configError,
             });
 
@@ -861,7 +861,7 @@ export class App extends UIComponent<{}, IAppState> {
         if (!health.initialized) {
             await this.setStatePromise({ phase: AppPhase.Setup });
             await this.backendSetupDialogRef.current?.show({
-                mode: "initial",
+                mode: BackendSetupMode.Initial,
                 dbError: health.dbError,
             });
 
@@ -875,7 +875,7 @@ export class App extends UIComponent<{}, IAppState> {
             await this.setStatePromise({ phase: AppPhase.Setup });
 
             const setupResult = await this.backendSetupDialogRef.current?.show({
-                mode: "admin",
+                mode: BackendSetupMode.Admin,
                 dbError: health.dbError,
             });
 

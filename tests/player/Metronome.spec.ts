@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest";
 
 import type { ITimeParams } from "../../src/core/types/general.js";
 import { Metronome } from "../../src/player/Metronome.js";
+import { PlayerPlayState } from "../../src/player/ArrangementPlayer.js";
 import { TimeCoordinator } from "../../src/player/TimeCoordinator.js";
 
 const makeTimeCoordinator = (): TimeCoordinator => {
@@ -23,7 +24,7 @@ const makeTimeCoordinator = (): TimeCoordinator => {
     };
 
     const realtimeProvider = {
-        state: "stopped" as const,
+        state: PlayerPlayState.Stopped,
         currentTime: -1,
     };
 

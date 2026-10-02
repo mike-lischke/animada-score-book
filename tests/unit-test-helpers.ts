@@ -18,6 +18,7 @@ import { SelectionManager } from "../src/ui/SelectionManager.js";
 import { SelectionGranularity, SelectionSerializer, type ISelectionEntry }
     from "../src/ui/SelectionSerializer.js";
 import { StaffMeasureEditor } from "../src/ui/StaffMeasureEditor.js";
+import { PlayerPlayState } from "../src/player/ArrangementPlayer.js";
 import { TimeCoordinator } from "../src/player/TimeCoordinator.js";
 import { TrackPlayer } from "../src/player/TrackPlayer.js";
 
@@ -235,7 +236,7 @@ export const createInstrument = (typeId: string, id: number, displayOrder = id):
  */
 export const hydrateMeasureEvents = (arrangement: Arrangement): void => {
     const timeCoordinator = new TimeCoordinator(arrangement.timeParams, {
-        state: "stopped",
+        state: PlayerPlayState.Stopped,
         get currentTime() {
             return -1;
         },

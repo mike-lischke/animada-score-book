@@ -3,7 +3,7 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import type { PlayerPlayState } from "../../../player/ArrangementPlayer.js";
+import { PlayerPlayState } from "../../../player/ArrangementPlayer.js";
 import { TimeCoordinator, type IScoreMetrics } from "../../../player/TimeCoordinator.js";
 import { decomposeRestSpan } from "../../rest-notation.js";
 import type { INoteArticulation, ISbDmInstrument } from "../../ScoreBookDataModel.js";
@@ -507,7 +507,7 @@ export class BananaDrumMigrator {
     private static getScoreMetrics(arrangement: BananaDrumArrangement): IScoreMetrics {
         const realtimeProvider: IRealtimeProvider = {
             get state(): PlayerPlayState {
-                return "stopped";
+                return PlayerPlayState.Stopped;
             },
             get currentTime() {
                 return 0;

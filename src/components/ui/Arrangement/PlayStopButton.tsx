@@ -5,7 +5,7 @@
 
 import { type ComponentChild } from "preact";
 
-import type { ArrangementPlayer } from "../../../player/ArrangementPlayer.js";
+import { PlayerPlayState, type ArrangementPlayer } from "../../../player/ArrangementPlayer.js";
 import { Image, PredefinedImage } from "../framework/Image.js";
 import { Swap } from "../framework/Swap.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
@@ -31,7 +31,8 @@ export class PlayStopButton extends UIComponent<IPlayStopButtonProperties> {
     public override render(): ComponentChild {
         const { id, arrangementPlayer } = this.props;
 
-        const isPlaying = arrangementPlayer.state === "playing" || arrangementPlayer.state === "counting";
+        const isPlaying = arrangementPlayer.state === PlayerPlayState.Playing
+            || arrangementPlayer.state === PlayerPlayState.Counting;
 
         const className = this.generateFinalClassName(["playStopButton"]);
 

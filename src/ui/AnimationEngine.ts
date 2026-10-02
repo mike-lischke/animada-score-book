@@ -5,7 +5,7 @@
 
 import { requisitions } from "../supplement/Requisitions.js";
 import type { RealTime } from "../core/ScoreBookDataModel.js";
-import type { PlayerPlayState } from "../player/ArrangementPlayer.js";
+import { PlayerPlayState } from "../player/ArrangementPlayer.js";
 
 export interface IRealtimeProvider {
     get state(): PlayerPlayState;
@@ -18,7 +18,7 @@ export class AnimationEngine {
 
     public constructor(private readonly realtimeProvider: IRealtimeProvider) {
         requisitions.register("playerStateChanged", () => {
-            if (realtimeProvider.state === "playing") {
+            if (realtimeProvider.state === PlayerPlayState.Playing) {
                 if (this.nextAnimationId === 0) {
                     this.start();
                 }
@@ -44,17 +44,17 @@ export class AnimationEngine {
     }
 
     private start() {
-        if (this.realtimeProvider.state === "playing") {
-            void requisitions.execute("animationStateChanged", "playing");
+        if (this.realtimeProvider.state === PlayerPlayState.Playing) {
+            void requisitions.execute("animationStateChanged", PlayerPlayState.Playing);
             this.runAnimations();
         }
     }
 
     private stop() {
-        if (this.realtimeProvider.state === "stopped") {
+        if (this.realtimeProvider.state === PlayerPlayState.Stopped) {
             cancelAnimationFrame(this.nextAnimationId);
             this.nextAnimationId = 0;
-            void requisitions.execute("animationStateChanged", "stopped");
+            void requisitions.execute("animationStateChanged", PlayerPlayState.Stopped);
         }
     }
 

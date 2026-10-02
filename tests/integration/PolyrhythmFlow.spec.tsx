@@ -17,6 +17,7 @@ import {
 } from "../../src/core/serialisation/migration/BananaDrumMigrator.js";
 import { TimeParams } from "../../src/core/TimeParams.js";
 import { Track } from "../../src/core/Track.js";
+import { PlayerPlayState } from "../../src/player/ArrangementPlayer.js";
 import type { IAudioData } from "../../src/core/types/general.js";
 import { TimeCoordinator } from "../../src/player/TimeCoordinator.js";
 import { TrackPlayer } from "../../src/player/TrackPlayer.js";
@@ -59,7 +60,7 @@ const createInstrumentWithNoteStyle = (typeId: string, id: number, displayOrder:
 
 const createRealtimeProvider = (): IRealtimeProvider => {
     return {
-        state: "stopped",
+        state: PlayerPlayState.Stopped,
         currentTime: -1,
     };
 };

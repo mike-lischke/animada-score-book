@@ -11,7 +11,7 @@ import {
 import { modelEventAt } from "../core/MeasureProjection.js";
 import { addFractions, compareFractions, formatFraction } from "../core/serialisation/numeric-functions.js";
 import type { IFraction, IMeasureEvent } from "../core/types/general.js";
-import type { PlayerPlayState } from "../player/ArrangementPlayer.js";
+import { PlayerPlayState } from "../player/ArrangementPlayer.js";
 import { requisitions } from "../supplement/Requisitions.js";
 import {
     SelectionGranularity, SelectionMode, SelectionSerializer, type ISelectionEntry,
@@ -20,77 +20,6 @@ import {
 } from "./SelectionSerializer.js";
 import type { ScoreElementRegistry } from "./ScoreElementRegistry.js";
 import { SelectionView } from "./SelectionView.js";
-
-/**
- * Returns the end of a list of measure events, which is the end of its last event.
- *
- * @param events The events to measure.
- *
- * @returns The end of the events' span.
- */
-const endOfEvents = (events: IMeasureEvent[]): IFraction => {
-    const last = events[events.length - 1];
-
-    return addFractions(last.start, last.duration);
-};
-
-/**
- * @param entry A hit-test entry.
- *
- * @returns The entry without the rect of the element it was hit at, which a stored selection does not carry.
- */
-const withoutHitRect = (entry: ISelectionEntry): ISelectionEntry => {
-    return { granularity: entry.granularity, target: entry.target };
-};
-
-/**
- * @param x The X coordinate to measure from.
- * @param y The Y coordinate to measure from.
- * @param entry The entry to measure to.
- *
- * @returns The distance to the entry's element, 0 when the point lies on it.
- */
-const distanceToEntry = (x: number, y: number, entry: ISelectionHitEntry): number => {
-    const { rect } = entry;
-    const dx = Math.max(rect.left - x, 0, x - rect.right);
-    const dy = Math.max(rect.top - y, 0, y - rect.bottom);
-
-    return Math.hypot(dx, dy);
-};
-
-/**
- * Picks the one entry a click addresses. A click touches a single element, so when it touches several the
- * entry closest to the click's centre wins; an equally close one wins when it comes later, which is the
- * element later in the DOM.
- *
- * @param rect The click rectangle in viewport coordinates.
- * @param entries The entries the click touched.
- *
- * @returns The one entry the click addresses, or the entries when it touched at most one.
- */
-const closestToClick = (rect: DOMRect, entries: ISelectionHitEntry[]): ISelectionEntry[] => {
-    if (entries.length <= 1) {
-        return entries.map(withoutHitRect);
-    }
-
-    const x = rect.left + (rect.width / 2);
-    const y = rect.top + (rect.height / 2);
-
-    let closest = entries[0];
-    let closestDistance = Number.POSITIVE_INFINITY;
-
-    for (const entry of entries) {
-        const distance = distanceToEntry(x, y, entry);
-
-        // `<=` lets a later entry replace an equally close one, so a tie keeps the element later in the DOM.
-        if (distance <= closestDistance) {
-            closest = entry;
-            closestDistance = distance;
-        }
-    }
-
-    return [withoutHitRect(closest)];
-};
 
 /**
  * Manages selections across tracks and publishes selection changes.
@@ -307,13 +236,13 @@ export class SelectionManager {
                 return;
             }
 
-            this.replaceSelection([withoutHitRect(cursor)]);
+            this.replaceSelection([SelectionManager.withoutHitRect(cursor)]);
             this.publishPlayRange();
 
             return;
         }
 
-        const entries = closestToClick(clickRect, this.resolveRawEntries(rawEntries));
+        const entries = SelectionManager.closestToClick(clickRect, this.resolveRawEntries(rawEntries));
 
         if (entries.length === 0) {
             if (this.currentSelectionMode === SelectionMode.New) {
@@ -345,7 +274,7 @@ export class SelectionManager {
      * @param clickRect A tiny rect at the pointer position.
      */
     public previewNote(clickRect: DOMRect): void {
-        const entries = closestToClick(clickRect, this.resolveEntries(clickRect));
+        const entries = SelectionManager.closestToClick(clickRect, this.resolveEntries(clickRect));
 
         const noteIds: number[] = [];
         for (const entry of entries) {
@@ -510,6 +439,79 @@ export class SelectionManager {
     }
 
     /**
+     * Picks the one entry a click addresses. A click touches a single element, so when it touches several the
+     * entry closest to the click's centre wins; an equally close one wins when it comes later, which is the
+     * element later in the DOM.
+     *
+     * @param rect The click rectangle in viewport coordinates.
+     * @param entries The entries the click touched.
+     *
+     * @returns The one entry the click addresses, or the entries when it touched at most one.
+     */
+    private static closestToClick(rect: DOMRect, entries: ISelectionHitEntry[]): ISelectionEntry[] {
+        if (entries.length <= 1) {
+            return entries.map((entry) => {
+                return SelectionManager.withoutHitRect(entry);
+            });
+        }
+
+        const x = rect.left + (rect.width / 2);
+        const y = rect.top + (rect.height / 2);
+
+        let closest = entries[0];
+        let closestDistance = Number.POSITIVE_INFINITY;
+
+        for (const entry of entries) {
+            const distance = SelectionManager.distanceToEntry(x, y, entry);
+
+            // `<=` lets a later entry replace an equally close one, so a tie keeps the element later in the DOM.
+            if (distance <= closestDistance) {
+                closest = entry;
+                closestDistance = distance;
+            }
+        }
+
+        return [SelectionManager.withoutHitRect(closest)];
+    }
+
+    /**
+     * @param x The X coordinate to measure from.
+     * @param y The Y coordinate to measure from.
+     * @param entry The entry to measure to.
+     *
+     * @returns The distance to the entry's element, 0 when the point lies on it.
+     */
+    private static distanceToEntry(x: number, y: number, entry: ISelectionHitEntry): number {
+        const { rect } = entry;
+        const dx = Math.max(rect.left - x, 0, x - rect.right);
+        const dy = Math.max(rect.top - y, 0, y - rect.bottom);
+
+        return Math.hypot(dx, dy);
+    }
+
+    /**
+     * @param entry A hit-test entry.
+     *
+     * @returns The entry without the rect of the element it was hit at, which a stored selection does not carry.
+     */
+    private static withoutHitRect(entry: ISelectionEntry): ISelectionEntry {
+        return { granularity: entry.granularity, target: entry.target };
+    }
+
+    /**
+     * Returns the end of a list of measure events, which is the end of its last event.
+     *
+     * @param events The events to measure.
+     *
+     * @returns The end of the events' span.
+     */
+    private static endOfEvents(events: IMeasureEvent[]): IFraction {
+        const last = events[events.length - 1];
+
+        return addFractions(last.start, last.duration);
+    }
+
+    /**
      * Picks the note the cursor can take from hit-test entries. The cursor addresses one note, so the
      * coarser granularities a hit test offers (track, measure, track piece) are dropped.
      *
@@ -605,7 +607,7 @@ export class SelectionManager {
         }
 
         const incomingStart = target.events[0].start;
-        const incomingEnd = endOfEvents(target.events);
+        const incomingEnd = SelectionManager.endOfEvents(target.events);
 
         for (const [key, entry] of [...this.currentSelection]) {
             const other = entry.target;
@@ -614,7 +616,7 @@ export class SelectionManager {
             }
 
             const otherStart = other.events[0].start;
-            const otherEnd = endOfEvents(other.events);
+            const otherEnd = SelectionManager.endOfEvents(other.events);
             const incomingCovers = compareFractions(incomingStart, otherStart) <= 0
                 && compareFractions(otherEnd, incomingEnd) <= 0;
             const otherCovers = compareFractions(otherStart, incomingStart) <= 0
@@ -796,7 +798,9 @@ export class SelectionManager {
 
     private handleSelectionRectChanged = (data: ISelectionRectChange): Promise<boolean> => {
         // The selection stores entries without the rect of the element they were hit at.
-        const currentEntries = this.resolveEntries(data.rect).map(withoutHitRect);
+        const currentEntries = this.resolveEntries(data.rect).map((entry) => {
+            return SelectionManager.withoutHitRect(entry);
+        });
 
         // Reject mixed-granularity drag in Add/Invert mode.
         if (currentEntries.length > 0 && this.currentSelection.size > 0
@@ -876,7 +880,7 @@ export class SelectionManager {
      * @returns A resolved promise to satisfy the requisition handler signature.
      */
     private handlePlayerStateChanged = (state: PlayerPlayState): Promise<boolean> => {
-        if (state === "playing" || state === "counting") {
+        if (state === PlayerPlayState.Playing || state === PlayerPlayState.Counting) {
             this.switchToMeasureSelection();
         } else {
             this.restoreOriginalSelection();

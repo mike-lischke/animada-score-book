@@ -10,8 +10,7 @@ import { MeasureLayout, staffPrefixWidth, type IMeasureRange } from "../../../co
 import type { RealTime, ScoreBookDataModel } from "../../../core/ScoreBookDataModel.js";
 import type { EditEntryMode } from "../../../core/types/general.js";
 import { clampValue } from "../../../core/utils.js";
-import type { ArrangementPlayer } from "../../../player/ArrangementPlayer.js";
-import type { PlayerPlayState } from "../../../player/ArrangementPlayer.js";
+import { PlayerPlayState, type ArrangementPlayer } from "../../../player/ArrangementPlayer.js";
 import { requisitions, type IMeasureVisibilityRequest } from "../../../supplement/Requisitions.js";
 import type { SelectionManager } from "../../../ui/SelectionManager.js";
 import { GridMeasureEditor } from "../../../ui/GridMeasureEditor.js";
@@ -772,11 +771,11 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
     private handleAnimationStateChanged = (state: PlayerPlayState): Promise<boolean> => {
         const { autoFollowIsOn } = this.state;
 
-        if (state === "playing" && !autoFollowIsOn) {
+        if (state === PlayerPlayState.Playing && !autoFollowIsOn) {
             this.setState({ autoFollowIsOn: true });
         }
 
-        this.setPlayBeamVisible(state === "playing");
+        this.setPlayBeamVisible(state === PlayerPlayState.Playing);
 
         return Promise.resolve(true);
     };

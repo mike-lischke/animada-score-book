@@ -17,7 +17,12 @@ import {
     Event, ICallbackEvent, IInterval, type IAudioEvent, type IMetronomeEvent,
 } from "./types.js";
 
-export type PlayerPlayState = "counting" | "playing" | "stopped";
+/** What the player is doing: counting a bar in, playing, or idle. */
+export enum PlayerPlayState {
+    Counting,
+    Playing,
+    Stopped,
+}
 
 /**
  * Coordinates playback for an `IArrangementView` by aggregating events from all `TrackPlayer`s and
@@ -72,7 +77,7 @@ export class ArrangementPlayer {
     /** The bars in the order they are played, as 1-based bar numbers. */
     #playOrder: number[] = [];
 
-    #state: PlayerPlayState = "stopped";
+    #state: PlayerPlayState = PlayerPlayState.Stopped;
 
     /**
      * Creates a player for the given arrangement and sets up all necessary subscriptions.
@@ -222,7 +227,7 @@ export class ArrangementPlayer {
         // Clear any interval restriction and start from 0.
         this.currentInterval = interval;
 
-        this.#state = "counting";
+        this.#state = PlayerPlayState.Counting;
         if (this.dataModel.arrangement!.countIn) {
             void requisitions.execute("playerStateChanged", this.#state);
             this.offset = this.audioContext.currentTime;
@@ -230,11 +235,11 @@ export class ArrangementPlayer {
         }
 
         // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-        if (this.#state !== "counting") { // May have been stopped during count-in.
+        if (this.#state !== PlayerPlayState.Counting) { // May have been stopped during count-in.
             return;
         }
 
-        this.#state = "playing";
+        this.#state = PlayerPlayState.Playing;
 
         // If an interval is given, pretend we started earlier by setting the offset back in time.
         // We never access time before the current audio time.
@@ -266,16 +271,16 @@ export class ArrangementPlayer {
             }
         }
 
-        if (this.#state !== "stopped") { // Playing or counting.
+        if (this.#state !== PlayerPlayState.Stopped) { // Playing or counting.
             this.clearScheduledEvents();
-            this.#state = "stopped";
+            this.#state = PlayerPlayState.Stopped;
 
             this.onStop();
         }
     }
 
     public get currentTime(): number {
-        if (this.#state === "playing") {
+        if (this.#state === PlayerPlayState.Playing) {
             return this.audioContext.currentTime - this.offset;
         }
 
@@ -498,7 +503,7 @@ export class ArrangementPlayer {
         this.timeCoordinator.recomputeMetrics();
 
         // If playing the full score (no interval restriction), update endOffset to match the new tempo.
-        if (this.#state === "playing" && !this.currentInterval) {
+        if (this.#state === PlayerPlayState.Playing && !this.currentInterval) {
             this.endOffset = this.timeCoordinator.metrics.realTimeLength;
         }
 
@@ -718,7 +723,7 @@ export class ArrangementPlayer {
         // play before we start the main playback loop, which also schedules sounds at the very beginning of
         // the arrangement.
         await waitFor((metrics.secondsPerBar * 1000) + 10, () => {
-            return this.#state !== "counting";
+            return this.#state !== PlayerPlayState.Counting;
         });
     }
 }
