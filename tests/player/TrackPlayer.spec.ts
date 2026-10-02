@@ -37,9 +37,6 @@ const makeTimeCoordinator = (realTimeLength: RealTime = 4): TimeCoordinator => {
         convertToRealTime: (timing: ITiming) => {
             return ((timing.bar - 1) * 1) + ((timing.step - 1) * 0.1);
         },
-        convertEventToRealTime: (event: ISbDmNoteEvent) => {
-            return event.start.numerator / event.start.denominator;
-        },
         convertToLoopProgress: () => {
             return 0;
         },

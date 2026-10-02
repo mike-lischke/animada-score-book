@@ -6,6 +6,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { ISbDmTrackPiece } from "../../src/core/ScoreBookDataModel.js";
+import type { IRepeatBar } from "../../src/core/types/general.js";
 import { PlaybackOrder } from "../../src/player/PlaybackOrder.js";
 
 /**
@@ -45,5 +46,70 @@ describe("PlaybackOrder", () => {
         const measures = [piece(1, true), piece(2)];
 
         expect(PlaybackOrder.sourcesOf(measures)).toEqual([undefined, measures[1]]);
+    });
+});
+
+/**
+ * @param marks The repeat marks, keyed by 1-based bar number.
+ *
+ * @returns The map the resolution reads them from.
+ */
+const marksOf = (marks: Record<number, IRepeatBar>): Map<number, IRepeatBar> => {
+    return new Map(Object.entries(marks).map(([bar, mark]) => {
+        return [Number(bar), mark];
+    }));
+};
+
+describe("PlaybackOrder.performedBars", () => {
+    it("plays the bars in the order they are written when no repeat is marked", () => {
+        expect(PlaybackOrder.performedBars(marksOf({}), 3)).toEqual([1, 2, 3]);
+    });
+
+    it("repeats the section a pair of marked barlines encloses", () => {
+        expect(PlaybackOrder.performedBars(marksOf({ 1: { start: true }, 2: { end: true } }), 3))
+            .toEqual([1, 2, 1, 2, 3]);
+    });
+
+    it("repeats a bar that carries both marks", () => {
+        expect(PlaybackOrder.performedBars(marksOf({ 2: { start: true, end: true } }), 3)).toEqual([1, 2, 2, 3]);
+    });
+
+    it("repeats from the first bar when a repeat closes without one that opens", () => {
+        expect(PlaybackOrder.performedBars(marksOf({ 2: { end: true } }), 3)).toEqual([1, 2, 1, 2, 3]);
+    });
+
+    it("plays an inner section through before the outer one goes on", () => {
+        const marks = marksOf({ 1: { start: true }, 2: { start: true }, 3: { end: true }, 4: { end: true } });
+
+        expect(PlaybackOrder.performedBars(marks, 4)).toEqual([1, 2, 3, 2, 3, 4, 1, 2, 3, 2, 3, 4]);
+    });
+
+    it("plays a marked section as often as the play count states", () => {
+        expect(PlaybackOrder.performedBars(marksOf({ 1: { start: true }, 2: { end: true } }), 3, 3))
+            .toEqual([1, 2, 1, 2, 1, 2, 3]);
+    });
+
+    it("leaves a repeat that never closes without effect", () => {
+        expect(PlaybackOrder.performedBars(marksOf({ 2: { start: true } }), 3)).toEqual([1, 2, 3]);
+    });
+
+    it("stops resolving a nesting that would grow without bound", () => {
+        // Twenty sections around each other, the last end closing the outermost one: the marks alone ask for
+        // 2^20 passes over the bars.
+        const marks: Record<number, IRepeatBar> = {};
+        for (let bar = 1; bar <= 20; bar++) {
+            marks[bar] = { start: true };
+        }
+
+        for (let bar = 21; bar <= 40; bar++) {
+            marks[bar] = { end: true };
+        }
+
+        const order = PlaybackOrder.performedBars(marksOf(marks), 40);
+
+        expect(order.length).toBe(40 * 16);
+        expect(order.every((bar) => {
+            return bar >= 1 && bar <= 40;
+        })).toBe(true);
     });
 });

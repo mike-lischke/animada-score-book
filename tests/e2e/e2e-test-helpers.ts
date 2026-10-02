@@ -51,6 +51,29 @@ export const findStaffMeasure = async (page: Page, barNumber: number): Promise<L
     }).first();
 };
 
+/**
+ * Selects the whole track piece of a bar by clicking its staff line, away from any note.
+ *
+ * @param page The page under test.
+ * @param barNumber The 1-based measure number.
+ */
+export const selectTrackPiece = async (page: Page, barNumber: number): Promise<void> => {
+    const row = (await findStaffMeasure(page, barNumber)).locator(".staff-measure-track-row").first();
+    const rowBox = await row.boundingBox();
+    const lineBox = await row.locator(".staff-note-viewer-line").first().boundingBox();
+    if (!rowBox || !lineBox) {
+        throw new Error("The track row has no bounding box.");
+    }
+
+    // Clicking through the locator scrolls the row into the viewport first, which a coordinate click does not.
+    await row.click({
+        position: {
+            x: Math.round(rowBox.width * 0.15),
+            y: Math.round(lineBox.y - rowBox.y + (lineBox.height / 2)),
+        },
+    });
+};
+
 export const beijaFlorTitle = "Beija Flor 2004  -  Bossa 1 (H-Break)";
 export const beijaFlorDisplayedTitle = normalizeWhitespace(beijaFlorTitle);
 

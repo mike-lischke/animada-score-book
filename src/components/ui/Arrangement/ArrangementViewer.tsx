@@ -638,8 +638,8 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         }
 
         const { arrangementPlayer } = this.props;
-        const metrics = arrangementPlayer.scoreMetrics;
-        const totalProgress = arrangementPlayer.convertToLoopProgress(realTime) * metrics.bars;
+        const order = arrangementPlayer.playOrder;
+        const totalProgress = arrangementPlayer.convertToLoopProgress(realTime) * order.length;
 
         return this.playheadColumn(totalProgress);
     }
@@ -663,24 +663,27 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
     /**
      * Resolves the measure column the play head is in.
      *
-     * @param totalProgress The play head position in measures, as a fraction of the whole arrangement.
+     * @param totalProgress The play head position in played bars, as a fraction of the whole performance.
      *
      * @returns The start of the column, its width, the fraction of the play head inside it, and the total
      *          width of the rendered content. The grid view uses the same width for every measure.
      */
     private playheadColumn(totalProgress: number): IPlayheadColumn {
+        // The columns follow the bars as written, the order says which of them a played bar is.
         const bars = this.props.arrangementPlayer.scoreMetrics.bars;
-        if (bars <= 0) {
+        const order = this.props.arrangementPlayer.playOrder;
+        if (bars <= 0 || order.length === 0) {
             return { start: 0, width: 0, progress: 0, contentWidth: 0 };
         }
 
-        const index = Math.min(bars - 1, Math.max(0, Math.floor(totalProgress)));
+        const index = Math.min(order.length - 1, Math.max(0, Math.floor(totalProgress)));
         const progress = totalProgress - index;
+        const column = order[index] - 1;
 
         if (this.state.trackViewMode === "staff") {
             return {
-                start: this.staffOffsets[index],
-                width: this.staffColumns[index],
+                start: this.staffOffsets[column],
+                width: this.staffColumns[column],
                 progress,
                 contentWidth: MeasureLayout.totalWidth(this.staffOffsets),
             };
@@ -689,7 +692,7 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         const contentWidth = this.viewerContentHostRef.current!.scrollWidth;
         const width = contentWidth / bars;
 
-        return { start: index * width, width, progress, contentWidth };
+        return { start: column * width, width, progress, contentWidth };
     };
 
     /**

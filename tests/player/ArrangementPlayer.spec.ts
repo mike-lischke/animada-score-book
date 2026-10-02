@@ -33,6 +33,8 @@ vi.mock("../../src/player/TimeCoordinator.js", () => {
     class MockTimeCoordinator {
         public realTimeLength: RealTime;
 
+        public performedBars = 1;
+
         public constructor() {
             this.realTimeLength = 1;
         }
@@ -49,12 +51,17 @@ vi.mock("../../src/player/TimeCoordinator.js", () => {
             // No-op for mock.
         }
 
+        public setPerformedBars(count: number): void {
+            this.performedBars = count;
+        }
+
         public get metrics() {
             return {
                 realTimeLength: this.realTimeLength,
                 secondsPerBar: 1,
                 secondsPerStep: 0.1,
                 bars: 1,
+                performedBars: this.performedBars,
                 beatsPerBar: 4,
                 beatUnit: 4,
                 pulsesPerBar: 4,
@@ -366,5 +373,23 @@ describe("ArrangementPlayer", () => {
         const progress = player.convertToLoopProgress(1.02);
         expect(progress).toBeGreaterThan(0.99);
         expect(progress).toBeLessThan(1);
+    });
+
+    it("resolves the order the repeat barlines state and re-reads it when a track changes", () => {
+        const arrangement = makeArrangement(1);
+        arrangement.repeatBars = new Map([[1, { start: true, end: true }]]);
+        const dm = new TestScoreBookDataModel(arrangement);
+        const player = new ArrangementPlayer(dm);
+
+        // The only bar carries both marks, so it is played twice and the performance is two bars long.
+        expect(player.playOrder).toEqual([1, 1]);
+        expect(player.scoreMetrics.performedBars).toBe(2);
+
+        // A track edit carries the repeat marks with it, so the player re-reads the order it announces.
+        arrangement.repeatBars = new Map();
+        void requisitions.execute("trackChanged", 1);
+
+        expect(player.playOrder).toEqual([1]);
+        expect(player.scoreMetrics.performedBars).toBe(1);
     });
 });

@@ -9,7 +9,7 @@ import { stringifyPackedArrangement } from "../../src/core/serialisation/snapsho
 import { arrangementSnapshotVersion } from "../../src/core/serialisation/snapshots.js";
 import { EditEntryMode } from "../../src/core/types/general.js";
 import type { IArrangementSnapshot, ITrackPieceSnapshot } from "../../src/core/types/general.js";
-import { routeApi, findStaffMeasure } from "./e2e-test-helpers.js";
+import { routeApi, selectTrackPiece } from "./e2e-test-helpers.js";
 
 const meter = { beats: 4, beatUnits: 4, stepResolution: 16, beatGroups: [4, 4, 4, 4] };
 
@@ -78,29 +78,6 @@ const seedScore = async (page: Page, score: IArrangementSnapshot): Promise<void>
  */
 const staffBar = (page: Page, barNumber: number): Locator => {
     return page.locator(".staff-measure-viewer").nth(barNumber - 1);
-};
-
-/**
- * Selects the track piece of a bar by clicking its staff line, away from any note.
- *
- * @param page The page under test.
- * @param barNumber The 1-based measure number.
- */
-const selectTrackPiece = async (page: Page, barNumber: number): Promise<void> => {
-    const row = (await findStaffMeasure(page, barNumber)).locator(".staff-measure-track-row").first();
-    const rowBox = await row.boundingBox();
-    const lineBox = await row.locator(".staff-note-viewer-line").first().boundingBox();
-    if (!rowBox || !lineBox) {
-        throw new Error("The track row has no bounding box.");
-    }
-
-    // Clicking through the locator scrolls the row into the viewport first, which a coordinate click does not.
-    await row.click({
-        position: {
-            x: Math.round(rowBox.width * 0.15),
-            y: Math.round(lineBox.y - rowBox.y + (lineBox.height / 2)),
-        },
-    });
 };
 
 test.beforeEach(async ({ page }) => {

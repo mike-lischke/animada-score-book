@@ -2288,6 +2288,7 @@ export class App extends UIComponent<{}, IAppState> {
 
     private handleArrangementMutated = (): Promise<boolean> => {
         this.dataModel.persistCurrentScore();
+        this.updateStatsItem();
 
         return Promise.resolve(true);
     };
@@ -2306,8 +2307,8 @@ export class App extends UIComponent<{}, IAppState> {
     };
 
     /**
-     * Creates or updates the status bar item that shows the current score metrics
-     * (time signature, bar count, duration) on the right side of the status bar.
+     * Creates or updates the status bar item that shows the metrics of the performance (time signature, the bars it
+     * plays, duration) on the right side of the status bar.
      */
     private updateStatsItem(): void {
         const player = this.arrangementPlayer;
@@ -2316,7 +2317,7 @@ export class App extends UIComponent<{}, IAppState> {
         }
 
         const metrics = player.scoreMetrics;
-        const bars = metrics.bars === 1 ? "1 bar" : `${metrics.bars} bars`;
+        const bars = metrics.performedBars === 1 ? "1 bar" : `${metrics.performedBars} bars`;
         const text = `${metrics.beatsPerBar}/${metrics.beatUnit} • ${bars} • ` +
             `${Math.round(100 * metrics.realTimeLength) / 100} s`;
 

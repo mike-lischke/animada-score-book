@@ -141,6 +141,7 @@ const scoreMetrics: IScoreMetrics = {
     secondsPerBar: 2,
     secondsPerStep: 0.125,
     bars: 1,
+    performedBars: 1,
     beatsPerBar: 4,
     beatUnit: 4,
     pulsesPerBar: 4,

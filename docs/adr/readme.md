@@ -35,3 +35,5 @@ hard to infer from code alone.
 | ADR-0013 | accepted | Keep the rest structure a measure holds instead of deriving it anew | rest length change, rests, measure layout, notation, staff view, whole-measure rest, gaps between events |
 | ADR-0015 | accepted | Keep a one-bar repeat as a mark on the track piece and resolve it in playback | one-bar repeat, simile, track piece, measure content, playback, snapshot schema, migration |
 | ADR-0014 | accepted | Draw standard score symbols as glyphs of a user-selectable SMuFL font | score rendering, notation symbols, noteheads, rests, clef, time signature, fonts, settings, print, engraving metrics |
+| ADR-0016 | accepted | Assemble barlines from pixel-snapped strokes measured against the font's barline glyphs (supersedes part of ADR-0014) | score rendering, barlines, repeat barlines, final barline, fonts, engraving metrics, staff view |
+| ADR-0017 | accepted | Play an arrangement in the order its repeat barlines state, not along the written timeline | playback, repeat barlines, transport, play range, playhead, score length, status bar, simile |
