@@ -312,7 +312,9 @@ export const expectPlaybackToMove = async (page: Page): Promise<void> => {
     const playBeam = page.locator("#playBeam");
 
     await expect(playButton).toBeVisible();
-    await expect(playBeam).toBeVisible();
+
+    // The beam marks playback, so it is hidden while none runs.
+    await expect(playBeam).toBeHidden();
 
     const readBeamX = async (): Promise<number> => {
         return playBeam.evaluate((element) => {
@@ -320,11 +322,12 @@ export const expectPlaybackToMove = async (page: Page): Promise<void> => {
         });
     };
 
-    const initialX = await readBeamX();
-    expect(Number.isFinite(initialX)).toBeTruthy();
-
     await playButton.click();
     await expect(playbackToggle).toBeChecked();
+    await expect(playBeam).toBeVisible();
+
+    const initialX = await readBeamX();
+    expect(Number.isFinite(initialX)).toBeTruthy();
 
     await expect.poll(async () => {
         const currentX = await readBeamX();
@@ -334,6 +337,7 @@ export const expectPlaybackToMove = async (page: Page): Promise<void> => {
 
     await playButton.click();
     await expect(playbackToggle).not.toBeChecked();
+    await expect(playBeam).toBeHidden();
 };
 
 export const readStoredCurrentScore = async (page: Page): Promise<string> => {

@@ -10,6 +10,7 @@ import {
 } from "../../src/core/MeasureLayout.js";
 import { stringifyPackedArrangement } from "../../src/core/serialisation/snapshot-packing.js";
 import { arrangementSnapshotVersion } from "../../src/core/serialisation/snapshots.js";
+import { EditEntryMode } from "../../src/core/types/general.js";
 import { routeApi } from "./e2e-test-helpers.js";
 
 const barCount = 2;
@@ -52,17 +53,20 @@ const snapshot = {
  * Opens the view on the two-measure score, in staff mode.
  *
  * @param page The page to open the score in.
+ * @param entryMode The entry mode to start in. Insert mode ignores a click in edit mode, so tests that
+ *                  select with a click ask for overwrite mode.
  */
-const openScore = async (page: Page): Promise<void> => {
-    await page.addInitScript((packed: string) => {
+const openScore = async (page: Page, entryMode?: EditEntryMode): Promise<void> => {
+    await page.addInitScript((data: { packed: string; entryMode?: number; }) => {
         const sessionId = "e2e-staff-measure-resize";
         window.history.replaceState({ ...(window.history.state ?? {}), sessionId }, "");
         window.sessionStorage.setItem("asb-session-id", sessionId);
         window.localStorage.setItem(`asb-ui-settings-session-${sessionId}`, JSON.stringify({
-            currentScore: packed,
+            currentScore: data.packed,
+            entryMode: data.entryMode,
             viewSettings: { arrangementViewSettings: { displayMode: "staff" } },
         }));
-    }, stringifyPackedArrangement(snapshot));
+    }, { packed: stringifyPackedArrangement(snapshot), entryMode });
 
     await page.goto("/");
     await expect(page.locator("#trackViewerHost")).toBeVisible();
@@ -262,4 +266,42 @@ test("places the play head for the view that is shown", async ({ page }) => {
     await expect.poll(() => {
         return playBeamTransform(page);
     }).toBe("translate3d(0px, 0px, 0px)");
+});
+
+test("widens the overlay of a selected measure while the barline is dragged", async ({ page }) => {
+    await openScore(page, EditEntryMode.Overwrite);
+    await page.locator(".editSaveGooey button").nth(1).click({ force: true });
+
+    // The bar action strip pushes the staff down, so waiting for it keeps the measured row box current.
+    await expect(page.locator("#editControlsHost .articulationToolbar")).toBeVisible();
+
+    const row = page.locator(".staff-measure-track-row").first();
+    const rowBox = (await row.boundingBox())!;
+
+    // In the measure's head room, above the first staff: the click selects the whole measure.
+    await page.mouse.click(rowBox.x + (rowBox.width / 2), rowBox.y - 5);
+
+    const overlay = page.locator(".selection-overlay");
+    await expect(overlay).toHaveCount(1);
+    const before = (await overlay.boundingBox())!;
+
+    await page.evaluate((scroll) => {
+        document.querySelector<HTMLElement>("#trackViewerHost")!.scrollLeft = scroll;
+    }, barlineScrollPx);
+
+    const handle = page.locator(".staff-measure-resize-handle").first();
+    const box = (await handle.boundingBox())!;
+    const y = box.y + 100;
+    await page.mouse.move(box.x + (box.width / 2), y);
+    await page.mouse.down();
+    await page.mouse.move(box.x + (box.width / 2) + dragPx, y, { steps: 8 });
+    await page.mouse.up();
+
+    // The overlay is built from the staff rows, so resizing the measure rebuilds it instead of keeping the
+    // width it had when the selection was made.
+    await expect.poll(async () => {
+        const after = await overlay.boundingBox();
+
+        return after === null ? 0 : Math.round(after.width - before.width);
+    }).toBe(dragPx);
 });

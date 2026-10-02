@@ -227,6 +227,7 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         this.trackViewerContainerRef.current!.style.zoom = `${viewerZoom}%`;
         this.updateStaffWindow();
         this.handleTrackViewerScroll();
+        this.updatePlayBeamExtent();
 
         // The measure columns move under the play head — a view switch lays them out differently, a resize changes
         // them — so the beam is placed again for the view that is shown, also while playback is paused. A view
@@ -661,6 +662,53 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
     }
 
     /**
+     * Applies the vertical extent of the staff's track rows to the play beam, so the beam is exactly as tall
+     * and as high as a measure selection overlay. The grid view keeps the beam across the whole content.
+     */
+    private updatePlayBeamExtent(): void {
+        const beam = this.playBeamRef.current;
+        const host = this.viewerContentHostRef.current;
+        if (beam === null || host === null) {
+            return;
+        }
+
+        if (this.state.trackViewMode !== "staff") {
+            beam.style.top = "";
+            beam.style.height = "";
+
+            return;
+        }
+
+        const rows = host.querySelectorAll<HTMLElement>(".staff-measure-track-row");
+        if (rows.length === 0) {
+            return;
+        }
+
+        // The rows state the extent in viewport px; the beam is laid out in CSS px at 100% zoom.
+        const hostRect = host.getBoundingClientRect();
+        const zoom = host.offsetWidth > 0 ? hostRect.width / host.offsetWidth : 1;
+        const first = rows[0].getBoundingClientRect();
+        const last = rows[rows.length - 1];
+        const lastRect = last.getBoundingClientRect();
+        const marginBottom = parseFloat(getComputedStyle(last).marginBottom) || 0;
+
+        beam.style.top = `${(first.top - hostRect.top) / zoom}px`;
+        beam.style.height = `${((lastRect.bottom + (marginBottom * zoom)) - first.top) / zoom}px`;
+    }
+
+    /**
+     * Shows or hides the play beam. The beam marks playback, so it is hidden while none runs.
+     *
+     * @param visible Whether playback is running.
+     */
+    private setPlayBeamVisible(visible: boolean): void {
+        const beam = this.playBeamRef.current;
+        if (beam !== null) {
+            beam.style.visibility = visible ? "visible" : "";
+        }
+    }
+
+    /**
      * Resolves the measure column the play head is in.
      *
      * @param totalProgress The play head position in played bars, as a fraction of the whole performance.
@@ -727,6 +775,8 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         if (state === "playing" && !autoFollowIsOn) {
             this.setState({ autoFollowIsOn: true });
         }
+
+        this.setPlayBeamVisible(state === "playing");
 
         return Promise.resolve(true);
     };

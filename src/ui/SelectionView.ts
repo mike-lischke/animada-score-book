@@ -23,6 +23,9 @@ const selectionCursorClass = "selection-cursor";
 const noteSelectedClass = "note-selected";
 const staffNoteRunClass = "staff-note-viewer-run";
 
+/** How far an overlay of track rows reaches past the row's right edge, so the barline closing the piece sits inside. */
+const barlineOverlayReach = 3;
+
 /**
  * Height of the box the selection cursor spans in staff mode, as a multiple of the staff space: the room a
  * note needs for its stem and its head. The cursor marks the note's slot, not the ink the head is drawn
@@ -122,7 +125,8 @@ export class SelectionView {
         requisitions.register("selectionChanged", this.handleSelectionChanged);
         requisitions.register("editModeChanged", this.handleEditModeChanged);
         requisitions.register("editEntryModeChanged", this.handleEntryModeChanged);
-        requisitions.register("trackChanged", this.handleTrackChanged);
+        requisitions.register("trackChanged", this.scheduleOverlayRefresh);
+        requisitions.register("arrangementChanged", this.scheduleOverlayRefresh);
         requisitions.register("staffWindowChanged", this.handleStaffWindowChanged);
         eventContainer.addEventListener("pointerdown", this.handlePointerDown);
         document.addEventListener("keydown", this.handleKeyDown);
@@ -136,7 +140,8 @@ export class SelectionView {
         requisitions.unregister("selectionChanged", this.handleSelectionChanged);
         requisitions.unregister("editModeChanged", this.handleEditModeChanged);
         requisitions.unregister("editEntryModeChanged", this.handleEntryModeChanged);
-        requisitions.unregister("trackChanged", this.handleTrackChanged);
+        requisitions.unregister("trackChanged", this.scheduleOverlayRefresh);
+        requisitions.unregister("arrangementChanged", this.scheduleOverlayRefresh);
         requisitions.unregister("staffWindowChanged", this.handleStaffWindowChanged);
 
         if (this.selectionRefreshFrame !== undefined) {
@@ -830,7 +835,13 @@ export class SelectionView {
         return Promise.resolve(true);
     };
 
-    private handleTrackChanged = (): Promise<boolean> => {
+    /**
+     * Redraws the decoration after rendered notes moved: a track change, or an arrangement mutation, which a
+     * measure resize fires on every frame. The redraw waits a frame, so it reads the laid-out geometry.
+     *
+     * @returns A promise that resolves when the redraw was scheduled.
+     */
+    private scheduleOverlayRefresh = (): Promise<boolean> => {
         if (this.selectionRefreshFrame !== undefined) {
             cancelAnimationFrame(this.selectionRefreshFrame);
         }
@@ -1551,11 +1562,11 @@ export class SelectionView {
 
         merged.push(current);
 
-        // 4. Create overlays. Track pieces stay within the row (no upward offset), so they
-        //    don't overlap the accent zone of the track above. The bottom edge aligns with
-        //    the row bottom, matching whole-track overlays.
+        // 4. Create overlays. Track pieces stay within the row and the margin below it (no upward offset),
+        //    so they don't overlap the accent zone of the track above. The bottom edge runs through that
+        //    margin, matching whole-track overlays.
         for (const group of merged) {
-            this.createMergedOverlay(overlayContainer, containerRect, group.elements, 0, 0);
+            this.createMergedOverlay(overlayContainer, containerRect, group.elements, 0, 0, barlineOverlayReach);
         }
     }
 
@@ -1614,7 +1625,7 @@ export class SelectionView {
             }
 
             if (elements.length > 0) {
-                this.createMergedOverlay(overlayContainer, containerRect, elements);
+                this.createMergedOverlay(overlayContainer, containerRect, elements, 0, 0, barlineOverlayReach);
             }
         }
     }
@@ -1678,22 +1689,61 @@ export class SelectionView {
 
             if (elements.length > 0) {
                 const rect = this.computeElementsRect(elements, containerRect);
-                rect.x += 4;
-                rect.width -= 8;
+
+                // A measure overlay covers exactly the track pieces it decorates: the first row's top edge to
+                // the last row's bottom edge (its margin included) and the first row's left edge to the last
+                // row's right edge. The left edge sits behind the column's padding, so the overlay keeps clear
+                // of the time signature. The grid view has no staff rows and keeps the column's bounds.
+                const rows = this.measureRowsOf(contentHost, barNumbers);
+                if (rows.length > 0) {
+                    const rowsRect = this.computeElementsRect(rows, containerRect);
+                    rect.x = rowsRect.x;
+                    rect.y = rowsRect.y;
+                    rect.width = rowsRect.width;
+                    rect.height = rowsRect.height;
+                } else {
+                    rect.x += 4;
+                    rect.width -= 8;
+                }
+
                 this.createOverlay(overlayContainer, rect);
             }
         }
     }
 
+    /**
+     * Collects the rendered track rows of the given bars, in the staff view only.
+     *
+     * @param contentHost The host element containing the track rows.
+     * @param barNumbers The measures whose rows to collect.
+     *
+     * @returns The rows in DOM order, or an empty array in the grid view.
+     */
+    private measureRowsOf(contentHost: HTMLElement, barNumbers: number[]): HTMLElement[] {
+        if (!this.isStaffView()) {
+            return [];
+        }
+
+        const rows: HTMLElement[] = [];
+        for (const bar of barNumbers) {
+            rows.push(...(this.scoreElementRegistry?.findElements(ScoreElementKind.TrackRow, bar)
+                .filter((element) => {
+                    return contentHost.contains(element);
+                }) ?? []));
+        }
+
+        return rows;
+    }
+
     private createMergedOverlay(overlayContainer: HTMLElement, containerRect: DOMRect,
-        elements: HTMLElement[], offsetY = 0, heightOffset = 0): void {
+        elements: HTMLElement[], offsetY = 0, heightOffset = 0, rightExtension = 0): void {
         let minLeft = Infinity;
         let minTop = Infinity;
         let maxRight = -Infinity;
         let maxBottom = -Infinity;
 
-        // Horizontal bounds use raw element rects to avoid margin-induced over-extension.
-        // Vertical bounds use margin-expanded rects so adjacent track rows touch without gaps.
+        // Horizontal bounds use raw element rects to avoid margin-induced over-extension. Vertical bounds use
+        // margin-expanded rects, because the margin below a track piece belongs to that piece.
         for (const el of elements) {
             const r = this.computeElementRect(el, containerRect);
             const absTop = r.y + containerRect.top;
@@ -1717,14 +1767,14 @@ export class SelectionView {
             }
         }
 
-        // Convert viewport-pixel deltas to CSS pixels. offsetY/heightOffset are
+        // Convert viewport-pixel deltas to CSS pixels. offsetY/heightOffset/rightExtension are
         // already CSS pixels and must not be divided.
         const z = this.zoomFactor;
 
         this.createOverlay(overlayContainer, {
             x: (minLeft - containerRect.left) / z,
             y: ((minTop - containerRect.top) / z) + offsetY,
-            width: (maxRight - minLeft) / z,
+            width: ((maxRight - minLeft) / z) + rightExtension,
             height: ((maxBottom - minTop) / z) + heightOffset,
         });
     }

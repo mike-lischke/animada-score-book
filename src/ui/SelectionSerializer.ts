@@ -134,6 +134,15 @@ export interface ISelectionEntry {
 }
 
 /**
+ * A selection entry as a hit test resolved it, together with the rect of the element it was found at. The
+ * rect is what lets a click that touches several elements address the one closest to it.
+ */
+export interface ISelectionHitEntry extends ISelectionEntry {
+    /** The rect of the element the entry was found at, in viewport coordinates. */
+    rect: DOMRect;
+}
+
+/**
  * Interface for Preact components that participate in hit-testing during selection.
  *
  * Each component that renders selectable score content implements this interface
@@ -147,9 +156,9 @@ export interface ISelectionHitTester {
      *
      * @param rect The selection rectangle in viewport coordinates.
      *
-     * @returns Array of selection entries describing what was hit.
+     * @returns The entries describing what was hit, each with the rect of its element.
      */
-    hitTest(rect: DOMRect): ISelectionEntry[];
+    hitTest(rect: DOMRect): ISelectionHitEntry[];
 }
 
 /** Describes what changed in a selection update. */

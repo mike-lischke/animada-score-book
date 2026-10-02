@@ -14,9 +14,9 @@ import type { IFraction, IMeasureEvent, Mutable } from "../../src/core/types/gen
 import { requisitions } from "../../src/supplement/Requisitions.js";
 import { SelectionManager } from "../../src/ui/SelectionManager.js";
 import {
-    SelectionGranularity, SelectionMode, type ISelectionDelta, type ISelectionEntry
+    SelectionGranularity, SelectionMode, type ISelectionDelta, type ISelectionEntry, type ISelectionHitEntry
 } from "../../src/ui/SelectionSerializer.js";
-import { measureEntry, trackEntry } from "../unit-test-helpers.js";
+import { measureEntry, trackEntry, trackPieceEntry } from "../unit-test-helpers.js";
 
 const makeArrangement = (tracks: ISbDmTrack[]): ISbDmArrangement => {
     const arrangement: ISbDmArrangement = {
@@ -136,17 +136,30 @@ const cellEntry = (note: Mutable<ISbDmNoteEvent>, start: IFraction): ISelectionE
 };
 
 /**
+ * @param x The rectangle's X coordinate.
+ * @param y The rectangle's Y coordinate.
+ * @param width The rectangle's width.
+ * @param height The rectangle's height.
+ *
+ * @returns The rectangle, in the shape the DOM hands out.
+ */
+const rectOf = (x: number, y: number, width: number, height: number): DOMRect => {
+    return {
+        x, y, width, height,
+        left: x, top: y, right: x + width, bottom: y + height,
+        toJSON: () => {
+            return {};
+        },
+    } as DOMRect;
+};
+
+/**
  * Builds a tiny rect at the origin, standing in for the click position a hit test runs on.
  *
  * @returns The click rect.
  */
 const clickRect = (): DOMRect => {
-    return {
-        x: 0, y: 0, width: 1, height: 1, left: 0, top: 0, right: 1, bottom: 1,
-        toJSON: () => {
-            return {};
-        },
-    } as DOMRect;
+    return rectOf(0, 0, 1, 1);
 };
 
 describe.sequential("SelectionManager (class)", () => {
@@ -241,7 +254,9 @@ describe.sequential("SelectionManager (class)", () => {
         const cursor = cellEntry(noteA, { numerator: 0, denominator: 1 });
         manager.registerHitTester({
             hitTest: () => {
-                return [trackEntry(track), measureEntry(noteA.measure), cursor];
+                return [trackEntry(track), measureEntry(noteA.measure), cursor].map((entry) => {
+                    return { ...entry, rect: rectOf(0, 0, 0, 0) };
+                });
             },
         });
 
@@ -255,13 +270,92 @@ describe.sequential("SelectionManager (class)", () => {
         manager.replaceSelection([cursor]);
         manager.registerHitTester({
             hitTest: () => {
-                return [measureEntry(noteA.measure)];
+                return [measureEntry(noteA.measure)].map((entry) => {
+                    return { ...entry, rect: rectOf(0, 0, 0, 0) };
+                });
             },
         });
 
         manager.endSelection(clickRect(), true);
 
         expect([...manager.currentSelection.values()]).toEqual([cursor]);
+    });
+});
+
+describe.sequential("SelectionManager click resolution", () => {
+    let manager: SelectionManager;
+    let track: ISbDmTrack;
+    let referenceMeasure: ISbDmTrackPiece;
+
+    /**
+     * Builds a hit entry for a track piece whose element spans the given band.
+     *
+     * @param measureNumber The measure number, which tells the pieces apart.
+     * @param top The element's top edge.
+     *
+     * @returns The hit entry with the rect of its element.
+     */
+    const piece = (measureNumber: number, top: number): ISelectionHitEntry => {
+        const measure = { ...referenceMeasure, number: measureNumber } as ISbDmTrackPiece;
+
+        return { ...trackPieceEntry(track, measure), rect: rectOf(0, top, 100, 80) };
+    };
+
+    /**
+     * @param top The click rectangle's top edge.
+     *
+     * @returns A click rectangle whose centre sits a half pixel below that edge.
+     */
+    const click = (top: number): DOMRect => {
+        return rectOf(0, top, 1, 1);
+    };
+
+    /**
+     * @param hit A hit-test entry.
+     *
+     * @returns The entry as the selection stores it, without the rect it was hit at.
+     */
+    const stored = (hit: ISelectionHitEntry): ISelectionEntry => {
+        return { granularity: hit.granularity, target: hit.target };
+    };
+
+    beforeEach(() => {
+        const note = makeNote(1);
+        const arrangement = makeArrangement([] as ISbDmTrack[]);
+        track = makeTrack([note], arrangement);
+        arrangement.tracks.push(track);
+        referenceMeasure = note.measure;
+        manager = new SelectionManager();
+    });
+
+    it("selects the track piece closest to the click's centre", () => {
+        const upper = piece(1, 0);
+        const lower = piece(2, 80);
+        manager.registerHitTester({
+            hitTest: () => {
+                return [upper, lower];
+            },
+        });
+
+        manager.endSelection(click(60));
+        expect([...manager.currentSelection.values()]).toEqual([stored(upper)]);
+
+        manager.endSelection(click(100));
+        expect([...manager.currentSelection.values()]).toEqual([stored(lower)]);
+    });
+
+    it("keeps the track piece later in the DOM when both are equally close", () => {
+        const upper = piece(1, 0);
+        const lower = piece(2, 80);
+        manager.registerHitTester({
+            hitTest: () => {
+                return [upper, lower];
+            },
+        });
+
+        // The click's centre sits on the shared edge, which both elements include.
+        manager.endSelection(click(79.5));
+        expect([...manager.currentSelection.values()]).toEqual([stored(lower)]);
     });
 });
 

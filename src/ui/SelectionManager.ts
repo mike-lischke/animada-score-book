@@ -15,7 +15,8 @@ import type { PlayerPlayState } from "../player/ArrangementPlayer.js";
 import { requisitions } from "../supplement/Requisitions.js";
 import {
     SelectionGranularity, SelectionMode, SelectionSerializer, type ISelectionEntry,
-    type ISelectionHitTester, type ISelectionPoint, type ISelectionRectChange, type ISerialisedSelectionEntry,
+    type ISelectionHitEntry, type ISelectionHitTester, type ISelectionPoint, type ISelectionRectChange,
+    type ISerialisedSelectionEntry,
 } from "./SelectionSerializer.js";
 import type { ScoreElementRegistry } from "./ScoreElementRegistry.js";
 import { SelectionView } from "./SelectionView.js";
@@ -31,6 +32,64 @@ const endOfEvents = (events: IMeasureEvent[]): IFraction => {
     const last = events[events.length - 1];
 
     return addFractions(last.start, last.duration);
+};
+
+/**
+ * @param entry A hit-test entry.
+ *
+ * @returns The entry without the rect of the element it was hit at, which a stored selection does not carry.
+ */
+const withoutHitRect = (entry: ISelectionEntry): ISelectionEntry => {
+    return { granularity: entry.granularity, target: entry.target };
+};
+
+/**
+ * @param x The X coordinate to measure from.
+ * @param y The Y coordinate to measure from.
+ * @param entry The entry to measure to.
+ *
+ * @returns The distance to the entry's element, 0 when the point lies on it.
+ */
+const distanceToEntry = (x: number, y: number, entry: ISelectionHitEntry): number => {
+    const { rect } = entry;
+    const dx = Math.max(rect.left - x, 0, x - rect.right);
+    const dy = Math.max(rect.top - y, 0, y - rect.bottom);
+
+    return Math.hypot(dx, dy);
+};
+
+/**
+ * Picks the one entry a click addresses. A click touches a single element, so when it touches several the
+ * entry closest to the click's centre wins; an equally close one wins when it comes later, which is the
+ * element later in the DOM.
+ *
+ * @param rect The click rectangle in viewport coordinates.
+ * @param entries The entries the click touched.
+ *
+ * @returns The one entry the click addresses, or the entries when it touched at most one.
+ */
+const closestToClick = (rect: DOMRect, entries: ISelectionHitEntry[]): ISelectionEntry[] => {
+    if (entries.length <= 1) {
+        return entries.map(withoutHitRect);
+    }
+
+    const x = rect.left + (rect.width / 2);
+    const y = rect.top + (rect.height / 2);
+
+    let closest = entries[0];
+    let closestDistance = Number.POSITIVE_INFINITY;
+
+    for (const entry of entries) {
+        const distance = distanceToEntry(x, y, entry);
+
+        // `<=` lets a later entry replace an equally close one, so a tie keeps the element later in the DOM.
+        if (distance <= closestDistance) {
+            closest = entry;
+            closestDistance = distance;
+        }
+    }
+
+    return [withoutHitRect(closest)];
 };
 
 /**
@@ -248,13 +307,13 @@ export class SelectionManager {
                 return;
             }
 
-            this.replaceSelection([cursor]);
+            this.replaceSelection([withoutHitRect(cursor)]);
             this.publishPlayRange();
 
             return;
         }
 
-        const entries = this.resolveRawEntries(rawEntries);
+        const entries = closestToClick(clickRect, this.resolveRawEntries(rawEntries));
 
         if (entries.length === 0) {
             if (this.currentSelectionMode === SelectionMode.New) {
@@ -286,7 +345,7 @@ export class SelectionManager {
      * @param clickRect A tiny rect at the pointer position.
      */
     public previewNote(clickRect: DOMRect): void {
-        const entries = this.resolveEntries(clickRect);
+        const entries = closestToClick(clickRect, this.resolveEntries(clickRect));
 
         const noteIds: number[] = [];
         for (const entry of entries) {
@@ -652,7 +711,7 @@ export class SelectionManager {
      * @param entries The raw hit-test results, potentially at mixed granularities.
      * @returns Only the entries at the most specific granularity found.
      */
-    private filterToDominantGranularity(entries: ISelectionEntry[]): ISelectionEntry[] {
+    private filterToDominantGranularity(entries: ISelectionHitEntry[]): ISelectionHitEntry[] {
         let bestRank = 0;
         for (const entry of entries) {
             const rank = SelectionManager.granularityRank[entry.granularity];
@@ -678,7 +737,7 @@ export class SelectionManager {
      *
      * @returns The resolved entries, possibly empty.
      */
-    private resolveEntries(rect: DOMRect): ISelectionEntry[] {
+    private resolveEntries(rect: DOMRect): ISelectionHitEntry[] {
         return this.resolveRawEntries(this.collectEntries(rect));
     }
 
@@ -689,8 +748,8 @@ export class SelectionManager {
      *
      * @returns All entries the hit testers reported.
      */
-    private collectEntries(rect: DOMRect): ISelectionEntry[] {
-        const rawEntries: ISelectionEntry[] = [];
+    private collectEntries(rect: DOMRect): ISelectionHitEntry[] {
+        const rawEntries: ISelectionHitEntry[] = [];
         for (const tester of this.hitTesters) {
             rawEntries.push(...tester.hitTest(rect));
         }
@@ -705,7 +764,7 @@ export class SelectionManager {
      *
      * @returns The resolved entries, possibly empty.
      */
-    private resolveRawEntries(rawEntries: ISelectionEntry[]): ISelectionEntry[] {
+    private resolveRawEntries(rawEntries: ISelectionHitEntry[]): ISelectionHitEntry[] {
         const trackEntries = rawEntries.filter((entry) => {
             return entry.granularity === SelectionGranularity.Track;
         });
@@ -736,7 +795,8 @@ export class SelectionManager {
     }
 
     private handleSelectionRectChanged = (data: ISelectionRectChange): Promise<boolean> => {
-        const currentEntries = this.resolveEntries(data.rect);
+        // The selection stores entries without the rect of the element they were hit at.
+        const currentEntries = this.resolveEntries(data.rect).map(withoutHitRect);
 
         // Reject mixed-granularity drag in Add/Invert mode.
         if (currentEntries.length > 0 && this.currentSelection.size > 0

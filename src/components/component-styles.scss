@@ -595,6 +595,9 @@
                 top: 0;
                 bottom: 0;
 
+                /* The beam marks playback, so it only appears while playback runs. */
+                visibility: hidden;
+
                 /* Parked off-screen until playback starts. The beam is moved with a transform, never
                  * with `left`: the layout property made the browser lay out the scroller on every
                  * animation frame (measured ≈120 layouts/s); the transform leaves layout untouched. */
@@ -1026,8 +1029,8 @@
     min-width: calc(var(--steps-per-bar) * var(--note-height));
     border-right: 2px solid var(--color-base-300);
 
-    /* The right padding keeps the barline of a track piece clear of the separator that follows the column. */
-    padding: 24px 14px 0 8px;
+    /* Keeps the barline of a track piece clear of the column separator, which gets the same room on both sides. */
+    padding: 24px 11px 0 11px;
     position: relative;
 
     /* The barline closing the column is the resize handle: an invisible strip centred on the border. */
@@ -1338,7 +1341,6 @@
     font-weight: 700;
     line-height: 1;
     color: var(--color-base-content);
-    background: var(--color-base-100);
     padding: 0 2px;
     z-index: 2;
 }
@@ -1356,6 +1358,9 @@
  * in surrounding material. Spans from first to last tuplet child center.
  */
 .staff-note-viewer-tuplet-bracket {
+    /* The number sits on the line, so the line leaves this much room free in its middle. */
+    --tuplet-number-gap: 17px;
+
     position: absolute;
     height: 9px;
     border-left: var(--tuplet-bracket-thickness, 1.5px) solid var(--color-base-content);
@@ -1364,18 +1369,42 @@
     color: var(--color-base-content);
     z-index: 2;
     pointer-events: none;
+
+    /* The horizontal line is drawn in two segments, so the gap for the number stays free. */
+    &::before,
+    &::after {
+        content: "";
+        position: absolute;
+        width: calc(50% - (var(--tuplet-number-gap) / 2));
+    }
+
+    &::before {
+        left: 0;
+    }
+
+    &::after {
+        right: 0;
+    }
 }
 
 .staff-note-viewer-tuplet-bracket.staff-note-viewer-tuplet-above {
     top: calc(50% - 24px);
-    border-top: var(--tuplet-bracket-thickness, 1.5px) solid var(--color-base-content);
-    border-bottom: 0;
+
+    &::before,
+    &::after {
+        top: 0;
+        border-top: var(--tuplet-bracket-thickness, 1.5px) solid var(--color-base-content);
+    }
 }
 
 .staff-note-viewer-tuplet-bracket.staff-note-viewer-tuplet-below {
     top: calc(50% + 45px);
-    border-top: 0;
-    border-bottom: var(--tuplet-bracket-thickness, 1.5px) solid var(--color-base-content);
+
+    &::before,
+    &::after {
+        bottom: 0;
+        border-bottom: var(--tuplet-bracket-thickness, 1.5px) solid var(--color-base-content);
+    }
 }
 
 .staff-note-viewer-tuplet-bracket > .staff-note-viewer-tuplet-text {
@@ -1385,7 +1414,6 @@
     font-size: 16px;
     font-weight: 700;
     line-height: 1;
-    background: var(--color-base-100);
     padding: 0 3px;
 }
 
@@ -1829,9 +1857,12 @@
     pointer-events: none;
 
     .selection-delete-button {
+        /* Lay the two bars out as one grid cell each, so the grid centres the cross on the circle. */
+        display: grid;
+        place-items: center;
         position: absolute;
         top: -9px;
-        right: -9px;
+        right: -9.5px;
         width: 18px;
         height: 18px;
         padding: 0;
@@ -1841,15 +1872,11 @@
         color: var(--color-primary-content);
         cursor: pointer;
         pointer-events: auto;
-        line-height: 15px;
-        font-size: 0;
         z-index: 1;
 
         &::before,
         &::after {
-            position: absolute;
-            top: 4px;
-            left: 7px;
+            grid-area: 1 / 1;
             width: 1px;
             height: 8px;
             background-color: currentColor;

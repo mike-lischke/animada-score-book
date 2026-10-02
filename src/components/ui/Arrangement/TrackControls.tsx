@@ -9,7 +9,8 @@ import type { Mutable } from "../../../core/types/general.js";
 import { requisitions } from "../../../supplement/Requisitions.js";
 import type { SelectionManager } from "../../../ui/SelectionManager.js";
 import {
-    SelectionGranularity, SelectionSerializer, type ISelectionDelta, type ISelectionEntry, type ISelectionHitTester,
+    SelectionGranularity, SelectionSerializer, type ISelectionDelta, type ISelectionHitEntry,
+    type ISelectionHitTester,
 } from "../../../ui/SelectionSerializer.js";
 import { Button } from "../framework/Button.js";
 import { UIIcon } from "../framework/UIIcon.js";
@@ -71,7 +72,7 @@ export class TrackControls extends UIComponent<ITrackControlsProperties, ITrackC
         }
     }
 
-    public hitTest(rect: DOMRect): ISelectionEntry[] {
+    public hitTest(rect: DOMRect): ISelectionHitEntry[] {
         const { tracks } = this.props;
         const element = this.base as HTMLElement | null;
         if (!element) {
@@ -79,7 +80,7 @@ export class TrackControls extends UIComponent<ITrackControlsProperties, ITrackC
         }
 
         const rows = element.querySelectorAll<HTMLElement>(".trackControls");
-        const entries: ISelectionEntry[] = [];
+        const entries: ISelectionHitEntry[] = [];
 
         for (let i = 0; i < rows.length; i++) {
             const rowRect = rows[i].getBoundingClientRect();
@@ -89,6 +90,7 @@ export class TrackControls extends UIComponent<ITrackControlsProperties, ITrackC
                 entries.push({
                     granularity: SelectionGranularity.Track,
                     target: { granularity: SelectionGranularity.Track, track },
+                    rect: rowRect,
                 });
             }
         }

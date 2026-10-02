@@ -20,7 +20,8 @@ import {
     ScoreElementKind, type ScoreElementRegistry,
 } from "../../../../ui/ScoreElementRegistry.js";
 import {
-    SelectionGranularity, SelectionSerializer, type ISelectionEntry, type ISelectionHitTester,
+    SelectionGranularity, SelectionSerializer, type ISelectionEntry, type ISelectionHitEntry,
+    type ISelectionHitTester,
 } from "../../../../ui/SelectionSerializer.js";
 import { UIComponent, type ICommonUIProperties } from "../../framework/UIComponent.js";
 import { StaffMeasureTrackRow } from "./StaffMeasureTrackRow.js";
@@ -60,16 +61,22 @@ const touchesElement = (selection: DOMRect, element: HTMLElement): boolean => {
     return rectsIntersect(selection, bounds.left, bounds.top, bounds.right, bounds.bottom, hitTolerance);
 };
 
+/** A note group a hit test found, together with the rect of the marker it was found at. */
+interface INoteGroupHit {
+    group: INoteGroup;
+    rect: DOMRect;
+}
+
 /**
- * Orders the groups a selection touched by their position in the measure.
+ * Orders the group hits of a measure by the position of their groups.
  *
- * @param groups The groups to order.
+ * @param hits The hits to order.
  *
- * @returns The groups, earliest first.
+ * @returns The hits, earliest group first.
  */
-const groupsInMeasureOrder = (groups: INoteGroup[]): INoteGroup[] => {
-    return groups.sort((first, second) => {
-        return compareFractions(first.start, second.start);
+const groupsInMeasureOrder = (hits: INoteGroupHit[]): INoteGroupHit[] => {
+    return hits.sort((first, second) => {
+        return compareFractions(first.group.start, second.group.start);
     });
 };
 
@@ -135,7 +142,7 @@ export class StaffMeasureViewer extends UIComponent<IStaffMeasureViewerProps, IS
      *
      * @returns Entries for any intersected elements, or a fallback measure entry.
      */
-    public hitTest(rect: DOMRect): ISelectionEntry[] {
+    public hitTest(rect: DOMRect): ISelectionHitEntry[] {
         const { barNumber, arrangement, arrangementPlayer, scoreElementRegistry } = this.props;
         const element = this.base as HTMLElement | null;
         if (!element) {
@@ -149,8 +156,8 @@ export class StaffMeasureViewer extends UIComponent<IStaffMeasureViewerProps, IS
         }
 
         const rows = element.querySelectorAll<HTMLElement>(".staff-measure-track-row");
-        const noteEntries: ISelectionEntry[] = [];
-        const trackPieceEntries: ISelectionEntry[] = [];
+        const noteEntries: ISelectionHitEntry[] = [];
+        const trackPieceEntries: ISelectionHitEntry[] = [];
 
         // Group markers are drawn outside the note band of a row, so they are resolved from the
         // marker element itself rather than from the row's bounds.
@@ -241,7 +248,10 @@ export class StaffMeasureViewer extends UIComponent<IStaffMeasureViewerProps, IS
                     const target = scoreElementRegistry?.getTarget(runEl);
                     if (target !== undefined && "duration" in target && measure !== undefined) {
                         // A staff run is the whole event, so it is copied with its full duration.
-                        noteEntries.push(this.eventEntry(measure, target));
+                        noteEntries.push({
+                            ...this.eventEntry(measure, target),
+                            rect: runEl.getBoundingClientRect()
+                        });
                     }
 
                     if (runLocation.noteId !== undefined) {
@@ -250,11 +260,19 @@ export class StaffMeasureViewer extends UIComponent<IStaffMeasureViewerProps, IS
                 }
             }
 
-            if (!rowHasSoundingNotes) {
+            // A track piece owns the room below it: the row's box plus its bottom margin, which is what
+            // separates it from the next piece. The expanded bounds above and below only reach the notes
+            // drawn outside the row, so a rectangle above the piece addresses the measure.
+            const pieceBottom = rowRect.bottom + (parseFloat(getComputedStyle(row).marginBottom) || 0);
+            const hitsTrackPiece = rectsIntersect(rect, rowRect.left, rowRect.top, rowRect.right,
+                pieceBottom, 0);
+
+            if (!rowHasSoundingNotes && hitsTrackPiece) {
                 if (track !== undefined && measure !== undefined) {
                     trackPieceEntries.push({
                         granularity: SelectionGranularity.TrackPiece,
                         target: { granularity: SelectionGranularity.TrackPiece, track, measure },
+                        rect: new DOMRect(rowRect.left, rowRect.top, rowRect.width, pieceBottom - rowRect.top),
                     });
                 }
             }
@@ -280,8 +298,8 @@ export class StaffMeasureViewer extends UIComponent<IStaffMeasureViewerProps, IS
                 continue;
             }
 
-            for (const group of groups) {
-                noteEntries.push(this.noteGroupEntry(measure, group));
+            for (const { group, rect: markerRect } of groups) {
+                noteEntries.push({ ...this.noteGroupEntry(measure, group), rect: markerRect });
             }
         }
 
@@ -301,6 +319,7 @@ export class StaffMeasureViewer extends UIComponent<IStaffMeasureViewerProps, IS
         return [{
             granularity: SelectionGranularity.Measure,
             target: { granularity: SelectionGranularity.Measure, measure },
+            rect: elRect,
         }];
     }
 
@@ -450,8 +469,8 @@ export class StaffMeasureViewer extends UIComponent<IStaffMeasureViewerProps, IS
      * @returns The groups hit per track id, for the tracks whose markers were touched.
      */
     private findGroupHits(bar: HTMLElement, rect: DOMRect, arrangement: ISbDmArrangement, barNumber: number,
-        registry: ScoreElementRegistry | undefined, grid: INotationGrid): Map<number, INoteGroup[]> {
-        const hitsByTrack = new Map<number, INoteGroup[]>();
+        registry: ScoreElementRegistry | undefined, grid: INotationGrid): Map<number, INoteGroupHit[]> {
+        const hitsByTrack = new Map<number, INoteGroupHit[]>();
         const groupsByTrack = new Map<number, INoteGroup[]>();
         const markers = bar.querySelectorAll<HTMLElement>(
             ".staff-note-viewer-beam, .staff-note-viewer-tuplet-number, .staff-note-viewer-tuplet-bracket",
@@ -494,12 +513,14 @@ export class StaffMeasureViewer extends UIComponent<IStaffMeasureViewerProps, IS
                 hitsByTrack.set(trackId, hits);
             }
 
-            if (!hits.includes(group)) {
-                hits.push(group);
+            if (!hits.some((hit) => {
+                return hit.group === group;
+            })) {
+                hits.push({ group, rect: marker.getBoundingClientRect() });
             }
         }
 
-        const result = new Map<number, INoteGroup[]>();
+        const result = new Map<number, INoteGroupHit[]>();
         for (const [trackId, hits] of hitsByTrack) {
             result.set(trackId, groupsInMeasureOrder(hits));
         }
