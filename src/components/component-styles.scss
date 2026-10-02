@@ -412,7 +412,7 @@
     }
 
     /* The three marks of this toolbar are shown smaller than the other symbol icons: a simile and the two repeat
-       barlines differ that much in shape that only their height states their size. */
+       bar lines differ that much in shape that only their height states their size. */
     .score-symbol-view-icon {
         --icon-spaces: calc(18px / var(--staff-space));
     }
@@ -1555,8 +1555,8 @@
     /* ---- Press roll: the slashes run along the stem, from its tip down ---- */
     .staff-note-head-press-roll-svg {
         position: absolute;
-        left: calc(100% - var(--staff-space) * 0.7);
-        top: calc(50% - var(--stem-tip, 35px));
+        left: calc(100% - var(--staff-space) * 0.7 - 1px);
+        top: calc(50% - var(--stem-tip, 35px) + 1px);
         pointer-events: none;
     }
 

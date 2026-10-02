@@ -95,6 +95,17 @@ export default defineConfig(({ command }) => {
         build: {
             target: "esnext",
             assetsInlineLimit: 0, // Don't inline any assets.
+            rollupOptions: {
+                output: {
+                    // The libraries the score view needs to start, in a chunk of their own: the app's own chunk
+                    // stays inside the size warning limit and a library update no longer invalidates it.
+                    // Libraries the app imports on demand (the MP3 encoder, the score library's table) are not
+                    // listed here, so they keep the chunk their dynamic import gave them.
+                    manualChunks: {
+                        vendor: ["preact", "@mdi/js", "classnames"],
+                    },
+                },
+            },
         },
         appType: "mpa",
         define: {
