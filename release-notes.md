@@ -1,6 +1,36 @@
 # Animada Score Book Release Notes
 
-Version history, newest first. The current release is **1.3.0**.
+Version history, newest first. The current release is **1.4.0**.
+
+## 1.4.0
+
+- Music font rendering: the score draws its notation symbols from the selected music font, with the percussion clef,
+  time signature, noteheads, rests, flags, dots and technique marks coming from the font's own glyphs and catalogue,
+  and staff lines, stems, beams and barlines derived from its engraving defaults. The bundled fonts are verified at
+  build time, and the music font is picked in the settings with a per-font sample and live preview.
+- Repeats: `|:` and `:|` barlines are drawn from the font metrics, stored on the arrangement (undo, clipboard and
+  snapshots included) and played in performed order, as are one-bar repeats (simile) on track pieces. The transport,
+  play range, play head and status bar follow the resolved play order.
+- Staff view performance: only a window of measures is rendered instead of the whole score (26,663 → 6,331 DOM nodes
+  on a 79-measure score, view switch 206 → 44 ms). Measures carry a data-backed width that is resized by dragging the
+  closing barline, travels through copy/paste, undo and snapshots, and packs the print view's rows.
+- Note entry: insert and overwrite modes with a mode button in the toolbar, and the input logic moved into the active
+  measure editor, so the grid and staff views own their cursor, entry values and preview.
+- Selection and editing: note groups (tuplets, beams) are derived from the measure composition, so rendering, hit
+  testing and selection share one rule set; a selection rectangle selects the groups it covers; subdivisions are
+  atomic blocks; subdivisions can be pasted across tracks and mixed ranges; selection rectangles align with the
+  elements they decorate and note decorations highlight in the selection colour.
+- Rests: a measure keeps the rest structure it holds, split rests stay visible and selectable, and a whole-measure
+  rest can be selected and addressed like any other run.
+- Snapshot format: the legacy packing readers are gone in favour of a single v5 schema plus BananaDrum share links;
+  measure labels were dropped, and optional data now travels in a versionless extension-chunk container. Schema 6
+  adds the one-bar repeat mark and upgrades v5 on load.
+- Backend: a full database reset (drop → migrations → seed → anonymous user) from the user menu, which also fixes the
+  setup overwrite path; seeding is idempotent and runs only into an empty database, and the migration runner only
+  maintains the schema.
+- Fixes and polish: tuplet brackets include rests, stems follow their head's line offset, press roll marks sit on the
+  stem, the staff prefix stays mounted in the windowed view, smoother play-head movement, a split vendor chunk, and
+  the play state and setup mode became enums.
 
 ## 1.3.0
 
