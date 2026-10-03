@@ -323,6 +323,22 @@ h6 {
     margin-left: 8px;
 }
 
+#editControlsHost {
+    .separator {
+        width: 1px;
+        height: 50%;
+        margin: 0 12px;
+    }
+
+    > .undoRedoGooey,
+    > .entryModeGooey,
+    > .noteLengthToolbarHost,
+    > .articulationToolbarHost,
+    > .noteStyleBarHost {
+        margin-left: 0;
+    }
+}
+
 .header-breadcrumb-root {
     font-size: 16px;
     font-weight: 500;

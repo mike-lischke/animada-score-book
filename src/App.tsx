@@ -537,15 +537,11 @@ export class App extends UIComponent<{}, IAppState> {
                                                 </GooeyGroup>
                                                 {editMode && (
                                                     <>
-                                                        <Separator
-                                                            style={{ marginLeft: "16px", height: "50%" }}
-                                                        />
+                                                        <Separator />
                                                         <UndoRedoControls
                                                             undoManager={this.undoManager!}
                                                         />
-                                                        <Separator
-                                                            style={{ marginLeft: "16px", height: "50%" }}
-                                                        />
+                                                        <Separator />
                                                         <EntryModeButton
                                                             entryMode={entryMode}
                                                             locked={trackViewMode !== "staff"}
@@ -556,9 +552,7 @@ export class App extends UIComponent<{}, IAppState> {
                                                         />
                                                         {trackViewMode === "staff" && (
                                                             <>
-                                                                <Separator
-                                                                    style={{ marginLeft: "16px", height: "50%" }}
-                                                                />
+                                                                <Separator />
                                                                 <NoteLengthToolbar
                                                                     dataModel={this.dataModel}
                                                                     selectionManager={this.selectionManager}
@@ -566,17 +560,13 @@ export class App extends UIComponent<{}, IAppState> {
                                                                 />
                                                             </>
                                                         )}
-                                                        <Separator
-                                                            style={{ marginLeft: "16px", height: "50%" }}
-                                                        />
+                                                        <Separator />
                                                         <ArticulationToolbar
                                                             dataModel={this.dataModel}
                                                             selectionManager={this.selectionManager}
                                                             entryMode={entryMode}
                                                         />
-                                                        <Separator
-                                                            style={{ marginLeft: "16px", height: "50%" }}
-                                                        />
+                                                        <Separator />
                                                         <NoteStyleBar
                                                             dataModel={this.dataModel}
                                                             selectionManager={this.selectionManager}

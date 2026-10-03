@@ -20,6 +20,7 @@ import {
     addressesNoteCells, SelectionGranularity, SelectionSerializer, type INoteCellTarget, type ISelectionEntry,
 } from "../../../ui/SelectionSerializer.js";
 import { TupletIcon } from "../Note/TupletIcon.js";
+import { Separator } from "../Separator.js";
 import { Button } from "../framework/Button.js";
 import { Container } from "../framework/Container.js";
 import { Dropdown, type IDropdownItem } from "../framework/Dropdown.js";
@@ -142,6 +143,7 @@ export class SubdivisionToolbar extends UIComponent<ISubdivisionToolbarProps, IS
                         data-tooltip="Add subdivision"
                     />
                 </GooeyGroup>
+                <Separator />
                 <GooeyGroup
                     className="subdivisionToolbar"
                     background="var(--color-base-200)"
