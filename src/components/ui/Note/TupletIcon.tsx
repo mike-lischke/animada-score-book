@@ -30,7 +30,7 @@ export class TupletIcon extends UIComponent<ITupletIconProps> {
                 style={style}
             >
                 <path
-                    d="M5 4.5 H19 M5 4.5 V7.5 M19 4.5 V7.5"
+                    d="M3.5 3.5 H20.5 M3.5 3.5 V8 M20.5 3.5 V8"
                     fill="none"
                     strokeWidth="1"
                     strokeLinecap="round"
@@ -38,9 +38,9 @@ export class TupletIcon extends UIComponent<ITupletIconProps> {
                 />
                 <text
                     x="12"
-                    y="18.5"
+                    y="21.5"
                     textAnchor="middle"
-                    fontSize="14"
+                    fontSize="17"
                     fontWeight="600"
                     fontFamily="sans-serif"
                     stroke="none"

@@ -24,6 +24,7 @@ export enum SmuflGlyphFamily {
     Tremolo,
     GhostParentheses,
     Accent,
+    Dynamics,
     MeasureRepeat,
     BarLines,
     Repeats,
@@ -85,6 +86,8 @@ export enum SmuflGlyph {
     NoteheadParenthesisRight = "noteheadParenthesisRight",
 
     ArticAccentAbove = "articAccentAbove",
+
+    DynamicForte = "dynamicForte",
 
     Repeat1Bar = "repeat1Bar",
     Repeat2Bars = "repeat2Bars",
@@ -150,6 +153,7 @@ export class SmuflGlyphs {
         "repeatBarlineDotSeparation",
         "bracketThickness",
         "tupletBracketThickness",
+        "hairpinThickness",
     ];
 
     /**
@@ -216,6 +220,8 @@ export class SmuflGlyphs {
         [SmuflGlyph.NoteheadParenthesisRight]: { family: SmuflGlyphFamily.GhostParentheses, codepoint: 0xE0F6 },
 
         [SmuflGlyph.ArticAccentAbove]: { family: SmuflGlyphFamily.Accent, codepoint: 0xE4A0 },
+
+        [SmuflGlyph.DynamicForte]: { family: SmuflGlyphFamily.Dynamics, codepoint: 0xE522 },
 
         [SmuflGlyph.Repeat1Bar]: { family: SmuflGlyphFamily.MeasureRepeat, codepoint: 0xE500 },
         [SmuflGlyph.Repeat2Bars]: { family: SmuflGlyphFamily.MeasureRepeat, codepoint: 0xE501 },

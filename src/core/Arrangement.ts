@@ -12,7 +12,7 @@ import {
 import { TimeParams } from "./TimeParams.js";
 import { Track } from "./Track.js";
 import type {
-    IArrangementExtensions, IArrangementSnapshot, IRepeatBar, ITimeParams, ITrackSnapshot
+    IArrangementExtensions, IArrangementSnapshot, IRangeArticulation, IRepeatBar, ITimeParams, ITrackSnapshot
 } from "./types/general.js";
 import { getNewId } from "./utils.js";
 import {
@@ -43,6 +43,12 @@ export class Arrangement implements ISbDmArrangement {
 
     /** Repeat marks of individual measures, keyed by 1-based measure number. */
     public readonly repeatBars = new Map<number, IRepeatBar>();
+
+    /**
+     * Hairpins and `f` markings of the arrangement, in insertion order. Held as a flat list because each
+     * anchor carries the measure it belongs to itself.
+     */
+    public readonly rangeArticulations: IRangeArticulation[] = [];
 
     /**
      * Extension chunks of other features or newer builds, kept verbatim so that writing a snapshot never
@@ -386,8 +392,6 @@ export class Arrangement implements ISbDmArrangement {
         // same TPs. However, applying the full snapshot is required for Undo/Redo.
         this.applyTimeParams(arrangementSnapshot);
 
-        // The bar count is known only after the time params, so the width chunk is filtered against it here.
-        applyArrangementExtensions(this, arrangementSnapshot);
         this.title = arrangementSnapshot.title ?? "Untitled Arrangement";
 
         if (arrangementSnapshot.scoreId !== undefined) {
@@ -422,6 +426,10 @@ export class Arrangement implements ISbDmArrangement {
         }
 
         this.tracks.splice(0, this.tracks.length, ...restoredTracks);
+
+        // The chunks filter against the bar count and resolve their anchors against the restored tracks, so
+        // they are applied after both the time params and the track list.
+        applyArrangementExtensions(this, arrangementSnapshot);
         this.clampMeasureWidths();
         void requisitions.execute("arrangementChanged", this.id);
     };

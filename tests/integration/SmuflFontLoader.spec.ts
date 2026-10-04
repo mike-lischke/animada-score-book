@@ -70,6 +70,7 @@ const createEngravingDefaults = (staffLineThickness: number) => {
         repeatBarlineDotSeparation: 0.16,
         bracketThickness: 0.5,
         tupletBracketThickness: 0.16,
+        hairpinThickness: 0.16,
     };
 };
 

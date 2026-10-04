@@ -694,8 +694,8 @@ describe.sequential("StaffNoteViewer beams", () => {
 
         const viewer = renderResult.container.querySelector<HTMLElement>(".staff-note-viewer")!;
 
-        // The single line has no height of its own, so the barline reaches two staff spaces past it on both sides.
-        expect(viewer.style.getPropertyValue("--staff-barline-height")).toBe("40px");
+        // The single line has no height of its own, so the barline stands the two staff spaces of a one-line system.
+        expect(viewer.style.getPropertyValue("--staff-barline-height")).toBe("20px");
 
         // The barline is drawn, in the thin thickness the font states, over the band the viewer states.
         expect(partsOf(viewer.querySelector(".staff-note-viewer-barline")!)).toEqual(["thin"]);

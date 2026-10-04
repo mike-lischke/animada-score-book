@@ -32,6 +32,7 @@ const metadata = {
         repeatBarlineDotSeparation: 0.16,
         bracketThickness: 0.5,
         tupletBracketThickness: 0.16,
+        hairpinThickness: 0.16,
     },
     glyphBBoxes: {
         [SmuflGlyph.NoteheadBlack]: { bBoxNE: [1.18, 0.5], bBoxSW: [0, -0.5] },

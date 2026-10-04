@@ -209,11 +209,9 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
             );
         }
 
-        // The barline spans the staff lines and reaches one staff space past them. A staff of a single line has
-        // no height of its own, so its barline is a stub of two staff spaces on either side of its line.
-        const barlineHeight = maxNoteLine === 1
-            ? staffSpacePx * 4
-            : Math.max((maxNoteLine - 1) * staffSpacePx, staffSpacePx * 2);
+        // The barline spans the staff lines and reaches one staff space past them; a staff of a single line has no
+        // height of its own, so its barline stays at two staff spaces — the band `barlineShort` covers.
+        const barlineHeight = Math.max((maxNoteLine - 1) * staffSpacePx, staffSpacePx * 2);
 
         // Every track piece closes with a real barline; the repeat marks at its boundary decide which one, and a
         // bar that opens a repeated section draws that barline itself.
@@ -459,10 +457,11 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
 
         const ink = `calc(${reach} + var(--staff-repeat-dot-gap))`;
 
-        // The room the last note leaves before the barline it closes with, or the barline's own ink when the bar
-        // closes with no note whose room could stand in for it.
+        // The room the last anchor leaves before the barline the bar closes with, or the barline's own ink when the
+        // bar holds no child at all. A rest leaves room the same way a note does — it sits centred in its slot —
+        // so only the barline's own ink is what a bar without a last anchor falls back on.
         const { lastAnchor } = anchors;
-        const room = lastAnchor === undefined || !anchors.lastIsNote
+        const room = lastAnchor === undefined
             ? ink
             : `max(${ink}, calc(${100 - StaffNoteViewer.percentOf(lastAnchor)}% + ${closingRoom}))`;
 

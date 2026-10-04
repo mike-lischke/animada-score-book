@@ -20,11 +20,13 @@ import { requisitions } from "../supplement/Requisitions.js";
 import type { IScoreDBEntry, ISoundLibFsNode } from "./DatabaseTypes.js";
 import { Instrument } from "./Instrument.js";
 import { MeasureLayout } from "./MeasureLayout.js";
+import { HairpinEnd, RangeArticulations } from "./RangeArticulations.js";
 import type {
-    IArrangementExtensions, IArrangementSnapshot, IAudioData, IFraction, IMeasureEvent, IMeterSnapshot,
-    IArticulationSymbol, IRepeatBar, ISubdivision, Mutable
+    IArrangementExtensions, IArrangementSnapshot, IAudioData, IFraction, IForteMark, IHairpin, IMeasureEvent,
+    IMeterSnapshot, IArticulationSymbol, IRangeArticulation, IRangeArticulationAnchor, IRepeatBar, ISubdivision,
+    Mutable
 } from "./types/general.js";
-import { RepeatMark } from "./types/general.js";
+import { RangeArticulationKind, RepeatMark } from "./types/general.js";
 import { getNewId } from "./utils.js";
 
 /**
@@ -587,6 +589,9 @@ export interface ISbDmArrangement extends ISbDmCommon {
 
     /** Repeat marks set for individual measures, keyed by 1-based measure number. */
     repeatBars?: Map<number, IRepeatBar>;
+
+    /** Hairpins and `f` markings of the arrangement, in insertion order. */
+    rangeArticulations?: IRangeArticulation[];
 
     /**
      * Extension chunks of other features or newer builds, kept verbatim so that writing a snapshot never
@@ -1735,6 +1740,255 @@ export class ScoreBookDataModel {
         this.announceTrackEdits(new Set(arrangement.tracks.map((track) => {
             return track.id;
         })));
+
+        return true;
+    }
+
+    /**
+     * Inserts a hairpin between two chronologically ordered sounding note anchors of one track. Fires one
+     * arrangementMutated event (a single undo step) and one trackChanged event.
+     *
+     * @param kind Whether the dynamic level rises or falls from the first to the second anchor.
+     * @param trackId The track the hairpin belongs to.
+     * @param from The chronologically first note anchor.
+     * @param to The chronologically second note anchor.
+     *
+     * @returns The inserted hairpin, or undefined when the placement is invalid.
+     */
+    public insertHairpin(kind: RangeArticulationKind.Crescendo | RangeArticulationKind.Decrescendo,
+        trackId: number, from: IRangeArticulationAnchor, to: IRangeArticulationAnchor): IHairpin | undefined {
+        const arrangement = this.arrangement;
+        const articulations = arrangement?.rangeArticulations;
+        if (!arrangement || !articulations) {
+            return undefined;
+        }
+
+        const hairpin: IHairpin = {
+            id: getNewId(),
+            trackId,
+            kind,
+            from: RangeArticulations.cloneAnchor(from),
+            to: RangeArticulations.cloneAnchor(to),
+        };
+
+        if (!RangeArticulations.isValidHairpin(arrangement, hairpin)
+            || RangeArticulations.conflicts(hairpin, articulations)) {
+            return undefined;
+        }
+
+        articulations.push(hairpin);
+        this.announceTrackEdits(new Set([trackId]));
+
+        return hairpin;
+    }
+
+    /**
+     * Inserts an `f` marking at an event position of one track. Fires one arrangementMutated event (a single
+     * undo step) and one trackChanged event.
+     *
+     * @param trackId The track the marking belongs to.
+     * @param at The event position the marking sits at. A note or a rest.
+     *
+     * @returns The inserted marking, or undefined when no event starts at that position.
+     */
+    public insertForteMark(trackId: number, at: IRangeArticulationAnchor): IForteMark | undefined {
+        const arrangement = this.arrangement;
+        const articulations = arrangement?.rangeArticulations;
+        if (!arrangement || !articulations) {
+            return undefined;
+        }
+
+        const mark: IForteMark = {
+            id: getNewId(),
+            trackId,
+            kind: RangeArticulationKind.Forte,
+            at: RangeArticulations.cloneAnchor(at),
+        };
+
+        if (!RangeArticulations.isValidForteMark(arrangement, mark)
+            || RangeArticulations.conflicts(mark, articulations)) {
+            return undefined;
+        }
+
+        articulations.push(mark);
+        this.announceTrackEdits(new Set([trackId]));
+
+        return mark;
+    }
+
+    /**
+     * Removes a hairpin or `f` marking by id. Fires one arrangementMutated event (a single undo step) and one
+     * trackChanged event.
+     *
+     * @param id The id of the marking to remove.
+     *
+     * @returns True when a marking was removed.
+     */
+    public removeRangeArticulation(id: number): boolean {
+        const articulations = this.arrangement?.rangeArticulations;
+        if (!articulations) {
+            return false;
+        }
+
+        const index = articulations.findIndex((candidate) => {
+            return candidate.id === id;
+        });
+
+        if (index < 0) {
+            return false;
+        }
+
+        const [removed] = articulations.splice(index, 1);
+        this.announceTrackEdits(new Set([removed.trackId]));
+
+        return true;
+    }
+
+    /**
+     * Moves one anchor of a hairpin to a new note anchor. Fires one arrangementMutated event (a single undo
+     * step) and one trackChanged event when the move is valid and actually changes the anchor.
+     *
+     * @param id The id of the hairpin to move.
+     * @param trackId The track the hairpin belongs to after the move.
+     * @param end The end of the hairpin to move.
+     * @param anchor The note anchor to move it to.
+     *
+     * @returns True when the anchor changed.
+     */
+    public moveHairpinAnchor(id: number, trackId: number, end: HairpinEnd,
+        anchor: IRangeArticulationAnchor): boolean {
+        const arrangement = this.arrangement;
+        const articulations = arrangement?.rangeArticulations;
+        if (!arrangement || !articulations) {
+            return false;
+        }
+
+        const existing = articulations.find((candidate) => {
+            return candidate.id === id;
+        });
+
+        if (existing === undefined || !RangeArticulations.isHairpin(existing)) {
+            return false;
+        }
+
+        const target = RangeArticulations.cloneAnchor(anchor);
+        const current = end === HairpinEnd.From ? existing.from : existing.to;
+        if (RangeArticulations.compareAnchors(current, target) === 0) {
+            return false;
+        }
+
+        const moved = RangeArticulations.withMovedEnd({ ...existing, trackId }, end, anchor);
+
+        if (!RangeArticulations.isValidHairpin(arrangement, moved)) {
+            return false;
+        }
+
+        if (RangeArticulations.conflicts(moved, articulations.filter((candidate) => {
+            return candidate.id !== id;
+        }))) {
+            return false;
+        }
+
+        existing.trackId = trackId;
+        existing.kind = moved.kind;
+        existing.from = moved.from;
+        existing.to = moved.to;
+        this.announceTrackEdits(new Set([existing.trackId]));
+
+        return true;
+    }
+
+    /**
+     * Moves both anchors of a hairpin. Fires one arrangementMutated event (a single undo step) and one
+     * trackChanged event when the move is valid and actually changes an anchor.
+     *
+     * @param id The id of the hairpin to move.
+     * @param trackId The track the hairpin belongs to after the move.
+     * @param from The note anchor the first end moves to.
+     * @param to The note anchor the second end moves to.
+     *
+     * @returns True when an anchor changed.
+     */
+    public moveHairpin(id: number, trackId: number, from: IRangeArticulationAnchor,
+        to: IRangeArticulationAnchor): boolean {
+        const arrangement = this.arrangement;
+        const articulations = arrangement?.rangeArticulations;
+        if (!arrangement || !articulations) {
+            return false;
+        }
+
+        const existing = articulations.find((candidate) => {
+            return candidate.id === id;
+        });
+
+        if (existing === undefined || !RangeArticulations.isHairpin(existing)) {
+            return false;
+        }
+
+        const moved = RangeArticulations.withMovedEnd(
+            { ...existing, trackId, from: RangeArticulations.cloneAnchor(from) }, HairpinEnd.To, to);
+        if (RangeArticulations.compareAnchors(moved.from, existing.from) === 0
+            && RangeArticulations.compareAnchors(moved.to, existing.to) === 0) {
+            return false;
+        }
+
+        if (!RangeArticulations.isValidHairpin(arrangement, moved)
+            || RangeArticulations.conflicts(moved, articulations.filter((candidate) => {
+                return candidate.id !== id;
+            }))) {
+            return false;
+        }
+
+        existing.trackId = trackId;
+        existing.kind = moved.kind;
+        existing.from = moved.from;
+        existing.to = moved.to;
+        this.announceTrackEdits(new Set([existing.trackId]));
+
+        return true;
+    }
+
+    /**
+     * Moves an `f` marking to a new event position. Fires one arrangementMutated event (a single undo step) and
+     * one trackChanged event when the move is valid and actually changes the position.
+     *
+     * @param id The id of the marking to move.
+     * @param trackId The track the marking belongs to after the move.
+     * @param anchor The event position to move it to.
+     *
+     * @returns True when the position changed.
+     */
+    public moveForteMark(id: number, trackId: number, anchor: IRangeArticulationAnchor): boolean {
+        const arrangement = this.arrangement;
+        const articulations = arrangement?.rangeArticulations;
+        if (!arrangement || !articulations) {
+            return false;
+        }
+
+        const existing = articulations.find((candidate) => {
+            return candidate.id === id;
+        });
+
+        if (existing === undefined || RangeArticulations.isHairpin(existing)) {
+            return false;
+        }
+
+        const target = RangeArticulations.cloneAnchor(anchor);
+        if (RangeArticulations.compareAnchors(existing.at, target) === 0) {
+            return false;
+        }
+
+        const moved: IForteMark = { ...existing, trackId, at: target };
+        if (!RangeArticulations.isValidForteMark(arrangement, moved)
+            || RangeArticulations.conflicts(moved, articulations.filter((candidate) => {
+                return candidate.id !== id;
+            }))) {
+            return false;
+        }
+
+        existing.trackId = trackId;
+        existing.at = moved.at;
+        this.announceTrackEdits(new Set([existing.trackId]));
 
         return true;
     }

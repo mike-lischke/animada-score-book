@@ -85,11 +85,14 @@ const noteIconSize = 20;
 /** Border width of the note symbols. */
 const noteHeadLineWidth = 1;
 
-/** The circle the plain note values show, centered in the icon. */
+/**
+ * The circle the plain note values show, centered in the icon. Its ink spans 15 of the icon's 20 units, which
+ * scales to 18px in the 24px box every toolbar icon is drawn in — the 3px margin the drawn icons have.
+ */
 const noteHeadCircle: INoteHeadGeometry = {
     centerX: noteIconSize / 2,
     centerY: noteIconSize / 2,
-    radius: 8,
+    radius: 7,
     lineWidth: noteHeadLineWidth,
 };
 
@@ -449,7 +452,7 @@ export class NoteLengthToolbar extends UIComponent<INoteLengthToolbarProps, INot
 
         return (
             <svg className="noteLengthIcon" viewBox={`0 0 ${noteIconSize} ${noteIconSize}`}
-                width={noteIconSize} height={noteIconSize} aria-hidden="true">
+                width={24} height={24} aria-hidden="true">
                 {outline}
                 {segmentPath}
             </svg>
@@ -523,7 +526,11 @@ export class NoteLengthToolbar extends UIComponent<INoteLengthToolbarProps, INot
         const radius = head.radius + (lineWidth / 2);
 
         if (length === NoteLength.Whole) {
-            return "";
+            // The whole note fills the head: the outline alone would read as an empty ring.
+            const top = `${centerX} ${centerY - radius}`;
+            const bottom = `${centerX} ${centerY + radius}`;
+
+            return `M ${top} A ${radius} ${radius} 0 0 1 ${bottom} A ${radius} ${radius} 0 0 1 ${top} Z`;
         }
 
         if (length === NoteLength.Half) {

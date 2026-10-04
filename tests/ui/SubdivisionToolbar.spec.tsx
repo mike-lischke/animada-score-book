@@ -11,11 +11,24 @@ import type { ISbDmArrangement, ISbDmTrack, ISbDmTrackPiece } from "../../src/co
 import { ScoreBookDataModel } from "../../src/core/ScoreBookDataModel.js";
 import type { IFraction } from "../../src/core/types/general.js";
 import { RepeatMark } from "../../src/core/types/general.js";
+import { requisitions, RangeArticulationTool } from "../../src/supplement/Requisitions.js";
 import { SelectionManager } from "../../src/ui/SelectionManager.js";
 import { createInstrument, measureEntry, noteEntry, runEntry, trackPieceEntry } from "../unit-test-helpers.js";
 
 const triggerButton = (container: Element): HTMLButtonElement => {
     return container.querySelector<HTMLButtonElement>("button")!;
+};
+
+/**
+ * Resolves a button of the toolbar by the tooltip that names it, so a new button in a group does not shift it.
+ *
+ * @param container The rendered toolbar.
+ * @param tooltip The tooltip the button carries.
+ *
+ * @returns The button.
+ */
+const buttonWithTooltip = (container: Element, tooltip: string): HTMLButtonElement => {
+    return container.querySelector<HTMLButtonElement>(`button[data-tooltip="${tooltip}"]`)!;
 };
 
 /**
@@ -26,7 +39,7 @@ const triggerButton = (container: Element): HTMLButtonElement => {
  * @returns The toggle button.
  */
 const repeatButton = (container: Element): HTMLButtonElement => {
-    return container.querySelectorAll<HTMLButtonElement>("button")[1];
+    return buttonWithTooltip(container, "One-bar repeat (simile)");
 };
 
 /**
@@ -37,7 +50,7 @@ const repeatButton = (container: Element): HTMLButtonElement => {
  * @returns The toggle button.
  */
 const startButton = (container: Element): HTMLButtonElement => {
-    return container.querySelectorAll<HTMLButtonElement>("button")[2];
+    return buttonWithTooltip(container, "Repeat start");
 };
 
 /**
@@ -48,7 +61,7 @@ const startButton = (container: Element): HTMLButtonElement => {
  * @returns The toggle button.
  */
 const endButton = (container: Element): HTMLButtonElement => {
-    return container.querySelectorAll<HTMLButtonElement>("button")[3];
+    return buttonWithTooltip(container, "Repeat end");
 };
 
 /**
@@ -410,5 +423,78 @@ describe.sequential("SubdivisionToolbar", () => {
         const start = startButton(renderResult.container);
         expect(start.disabled).toBe(true);
         expect(start.classList.contains("du-btn-primary")).toBe(false);
+    });
+
+    it("announces the placing tool of a clicked button", async () => {
+        const model = new ScoreBookDataModel();
+        model.startNewArrangement([createInstrument("0", 0, 0)]);
+        const announced: RangeArticulationTool[] = [];
+        const spy = (tool: RangeArticulationTool): Promise<boolean> => {
+            announced.push(tool);
+
+            return Promise.resolve(true);
+        };
+
+        requisitions.register("rangeArticulationToolChanged", spy);
+        try {
+            renderResult = render(<SubdivisionToolbar selectionManager={selectionManager} dataModel={model} />);
+            void requisitions.execute("trackViewModeToggled", "staff");
+            await Promise.resolve();
+
+            buttonWithTooltip(renderResult.container, "Draw crescendo / decrescendo hairpin").click();
+            buttonWithTooltip(renderResult.container, "Place forte (f)").click();
+
+            expect(announced).toEqual([RangeArticulationTool.Hairpin, RangeArticulationTool.Forte]);
+        } finally {
+            requisitions.unregister("rangeArticulationToolChanged", spy);
+        }
+    });
+
+    it("offers the placing buttons in the staff view only", async () => {
+        const model = new ScoreBookDataModel();
+        model.startNewArrangement([createInstrument("0", 0, 0)]);
+
+        renderResult = render(<SubdivisionToolbar selectionManager={selectionManager} dataModel={model} />);
+
+        // The dynamics belong to the staff view, which renders the notes they hang on.
+        expect(buttonWithTooltip(renderResult.container, "Draw crescendo / decrescendo hairpin").disabled).toBe(true);
+        expect(buttonWithTooltip(renderResult.container, "Place forte (f)").disabled).toBe(true);
+
+        void requisitions.execute("trackViewModeToggled", "staff");
+        await Promise.resolve();
+        expect(buttonWithTooltip(renderResult.container, "Draw crescendo / decrescendo hairpin").disabled).toBe(false);
+        expect(buttonWithTooltip(renderResult.container, "Place forte (f)").disabled).toBe(false);
+
+        void requisitions.execute("trackViewModeToggled", "grid");
+        await Promise.resolve();
+        expect(buttonWithTooltip(renderResult.container, "Draw crescendo / decrescendo hairpin").disabled).toBe(true);
+    });
+
+    it("ends a placing mode when the toolbar goes away", async () => {
+        const model = new ScoreBookDataModel();
+        model.startNewArrangement([createInstrument("0", 0, 0)]);
+        const announced: RangeArticulationTool[] = [];
+        const spy = (tool: RangeArticulationTool): Promise<boolean> => {
+            announced.push(tool);
+
+            return Promise.resolve(true);
+        };
+
+        requisitions.register("rangeArticulationToolChanged", spy);
+        try {
+            renderResult = render(<SubdivisionToolbar selectionManager={selectionManager} dataModel={model} />);
+            void requisitions.execute("trackViewModeToggled", "staff");
+            await Promise.resolve();
+
+            buttonWithTooltip(renderResult.container, "Place forte (f)").click();
+            await Promise.resolve();
+
+            renderResult.unmount();
+            renderResult = null;
+
+            expect(announced).toEqual([RangeArticulationTool.Forte, RangeArticulationTool.None]);
+        } finally {
+            requisitions.unregister("rangeArticulationToolChanged", spy);
+        }
     });
 });

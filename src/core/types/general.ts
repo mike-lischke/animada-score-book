@@ -77,6 +77,64 @@ export interface IRepeatBar {
 }
 
 /**
+ * The kind of a range articulation. The values double as the stored kind in the snapshot chunk, so they
+ * must stay stable.
+ */
+export enum RangeArticulationKind {
+    /** A `<` hairpin that raises the dynamic level from its first to its second anchor. */
+    Crescendo = "crescendo",
+
+    /** A `>` hairpin that lowers the dynamic level from its first to its second anchor. */
+    Decrescendo = "decrescendo",
+
+    /** An `f` marking that restores the normal dynamic level at its event. */
+    Forte = "forte",
+}
+
+/** A position on a track's timeline: a measure and an exact event onset inside it. */
+export interface IRangeArticulationAnchor {
+    /** 1-based measure number. */
+    bar: number;
+
+    /** Exact event onset within the measure, as a fraction of a bar. */
+    start: IFraction;
+}
+
+/** The fields every range articulation shares. */
+export interface IRangeArticulationBase {
+    /** Stable id, minted by the session that created the marking. */
+    id: number;
+
+    /** The id of the track the marking belongs to. */
+    trackId: number;
+}
+
+/**
+ * A hairpin between two sounding note anchors of one track, in one measure or across a barline. The anchors are
+ * kept in chronological order, so {@link kind} alone states whether the dynamic level rises or falls.
+ */
+export interface IHairpin extends IRangeArticulationBase {
+    kind: RangeArticulationKind.Crescendo | RangeArticulationKind.Decrescendo;
+
+    /** The chronologically first note anchor. */
+    from: IRangeArticulationAnchor;
+
+    /** The chronologically second note anchor. */
+    to: IRangeArticulationAnchor;
+}
+
+/** An `f` marking at one event position, resetting the dynamic level to normal. */
+export interface IForteMark extends IRangeArticulationBase {
+    kind: RangeArticulationKind.Forte;
+
+    /** The event position the marking sits at. A note or a rest. */
+    at: IRangeArticulationAnchor;
+}
+
+/** A hairpin or an `f` marking of an arrangement. */
+export type IRangeArticulation = IHairpin | IForteMark;
+
+/**
  * Optional, feature-owned data of an arrangement snapshot, keyed by chunk name.
  *
  * A chunk carries everything one feature needs beyond the core of a snapshot (version, time params,

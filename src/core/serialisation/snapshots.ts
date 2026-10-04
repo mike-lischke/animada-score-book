@@ -4,6 +4,7 @@
  */
 
 import type { ISbDmArrangement, ISbDmTrack } from "../ScoreBookDataModel.js";
+import { RangeArticulations } from "../RangeArticulations.js";
 import type {
     IArrangementExtensions, IArrangementSnapshot, IRepeatBar, ITrackPieceSnapshot, ITrackSnapshot,
 } from "../types/general.js";
@@ -32,6 +33,9 @@ const measureWidthsChunk = "measureWidths";
 
 /** Chunk name under which an arrangement stores the repeat marks of its bars. */
 const repeatBarsChunk = "repeatBars";
+
+/** Chunk name under which an arrangement stores its hairpins and `f` markings. */
+const rangeArticulationsChunk = "rangeArticulations";
 
 export const isNaturalNumber = (value: unknown): value is number => {
     return typeof value === "number" && Number.isInteger(value) && value >= 1;
@@ -93,6 +97,13 @@ export const collectArrangementExtensions = (
         }));
     }
 
+    const articulations = arrangementView.rangeArticulations;
+    if (articulations !== undefined && articulations.length > 0) {
+        chunks[rangeArticulationsChunk] = articulations.map((articulation) => {
+            return RangeArticulations.clone(articulation);
+        });
+    }
+
     return Object.keys(chunks).length > 0 ? chunks : undefined;
 };
 
@@ -106,12 +117,16 @@ export const collectArrangementExtensions = (
  */
 export const applyArrangementExtensions = (arrangementView: ISbDmArrangement,
     snapshot: IArrangementSnapshot): void => {
-    const { [measureWidthsChunk]: widthChunk, [repeatBarsChunk]: repeatChunk, ...foreign } = snapshot.extensions ?? {};
+    const {
+        [measureWidthsChunk]: widthChunk, [repeatBarsChunk]: repeatChunk,
+        [rangeArticulationsChunk]: articulationChunk, ...foreign
+    } = snapshot.extensions ?? {};
 
     arrangementView.foreignExtensions = foreign;
 
     applyMeasureWidths(arrangementView, widthChunk);
     applyRepeatBars(arrangementView, repeatChunk);
+    applyRangeArticulations(arrangementView, articulationChunk);
 };
 
 /**
@@ -178,6 +193,20 @@ const applyRepeatBars = (arrangementView: ISbDmArrangement, chunk: unknown): voi
             repeats.set(barNumber, stored);
         }
     }
+};
+
+/**
+ * @param arrangementView The arrangement to read the range articulations into.
+ * @param chunk The range articulation chunk of a snapshot, as it was written.
+ */
+const applyRangeArticulations = (arrangementView: ISbDmArrangement, chunk: unknown): void => {
+    const articulations = arrangementView.rangeArticulations;
+    if (articulations === undefined) {
+        return;
+    }
+
+    const validated = RangeArticulations.validateChunk(chunk, arrangementView);
+    articulations.splice(0, articulations.length, ...validated);
 };
 
 const getTrackSnapshot = (track: ISbDmTrack): ITrackSnapshot => {

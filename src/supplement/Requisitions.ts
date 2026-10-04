@@ -22,6 +22,13 @@ export interface ISubdivisionCreationRequest {
     normal: number;
 }
 
+/** The placing tool the staff view is in: none, placing a hairpin, or placing an `f`. */
+export enum RangeArticulationTool {
+    None,
+    Hairpin,
+    Forte,
+}
+
 /** Payload for a request to bring a measure into view. */
 export interface IMeasureVisibilityRequest {
     /** 1-based measure number to show. */
@@ -98,6 +105,12 @@ export interface IRequestTypeMap {
 
     /** Fired by the subdivision toolbar to create a subdivision at the cursor or selection. */
     "subdivisionCreationRequested": (request: ISubdivisionCreationRequest) => Promise<boolean>;
+
+    /**
+     * The range articulation placing tool that is in effect. Posted by the toolbar and applied by the staff
+     * view, which also posts it to exit the mode after a completed or cancelled gesture.
+     */
+    "rangeArticulationToolChanged": (tool: RangeArticulationTool) => Promise<boolean>;
 
     /** Fired by the note length toolbar to change the length, including its dot, of subsequently entered notes. */
     "noteLengthChanged": (value: INoteValue) => Promise<boolean>;

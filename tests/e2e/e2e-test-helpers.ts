@@ -74,6 +74,19 @@ export const selectTrackPiece = async (page: Page, barNumber: number): Promise<v
     });
 };
 
+/**
+ * Resolves a button of the subdivision toolbar by the tooltip that names it, so adding a button to one of its groups
+ * does not move the ones beside it.
+ *
+ * @param page The page under test.
+ * @param tooltip The tooltip the button carries.
+ *
+ * @returns The button.
+ */
+export const toolbarButton = (page: Page, tooltip: string): Locator => {
+    return page.locator(`.subdivisionToolbar button[data-tooltip="${tooltip}"]`);
+};
+
 export const beijaFlorTitle = "Beija Flor 2004  -  Bossa 1 (H-Break)";
 export const beijaFlorDisplayedTitle = normalizeWhitespace(beijaFlorTitle);
 

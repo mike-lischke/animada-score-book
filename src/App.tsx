@@ -381,7 +381,7 @@ export class App extends UIComponent<{}, IAppState> {
                 onClick={this.handlePrintClick}
             >
                 <Icon
-                    src={UIIcon.FilePdf}
+                    src={UIIcon.Printer}
                     width={24}
                     height={24}
                     data-tooltip="inherit"

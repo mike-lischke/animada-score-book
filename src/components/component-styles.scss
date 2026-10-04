@@ -116,12 +116,6 @@
     }
 }
 
-/* The rest button draws the quarter rest of the symbol catalogue. */
-.noteStyleRestIcon {
-    display: block;
-    pointer-events: none;
-}
-
 .note-style-icon {
     position: relative;
     display: inline-block;
@@ -389,6 +383,17 @@
     align-self: stretch;
 }
 
+/* A symbol that fills the icon box in both sides reads larger than the marks next to it, so it states the side
+ * the ink is scaled to itself: what is left over is the margin the hand-drawn icons have. The dynamic `f` is
+ * taller than it is wide, the simile a touch wider than it is high, so each side is what lands on whole pixels. */
+.forteButton .score-symbol-icon {
+    --icon-ink-spaces: 1.6;
+}
+
+.simileButton .score-symbol-icon {
+    --icon-ink-spaces: 1.61;
+}
+
 .subdivisionToolbar .btn {
     height: 40px;
     width: 40px;
@@ -410,12 +415,6 @@
         border-color: var(--color-primary);
         background-color: color-mix(in srgb, var(--color-primary) 25%, var(--color-base-100));
         color: var(--color-base-content);
-    }
-
-    /* The three marks of this toolbar are shown smaller than the other symbol icons: a simile and the two repeat
-       bar lines differ that much in shape that only their height states their size. */
-    .score-symbol-view-icon {
-        --icon-spaces: calc(18px / var(--staff-space));
     }
 }
 
@@ -522,9 +521,17 @@
     }
 }
 
-.tuplet-icon {
+/* Every icon of the toolbars is drawn in the same box, so the buttons read as one row whatever mark they carry.
+ * A symbol of the notation catalogue states its own size (`.score-symbol-icon`); this is the box the drawings
+ * the toolbar components bring along are drawn in. */
+.score-symbol-icon,
+.tuplet-icon,
+.hairpin-icon,
+.articulation-icon,
+.noteLengthIcon {
     width: 24px;
     height: 24px;
+    display: block;
 }
 
 #volumeSlider,
@@ -1892,6 +1899,101 @@
             transform: rotate(-45deg);
         }
     }
+}
+
+/*
+ * The layer the hairpins and f markings are drawn into. Its parent is the pointer-transparent decoration
+ * layer, so only the placing modes, which listen on the content host, react to the pointer.
+ */
+#rangeArticulationLayer {
+    position: absolute;
+    overflow: visible;
+    inset: 0;
+    pointer-events: none;
+
+    /* The markings take pointer events of their own, so they have to stand above the score the decorations are
+       laid over. */
+    z-index: 1;
+}
+
+/* A drawn marking: a hairpin or an f, positioned at the anchors it was resolved from. It takes pointer events, so
+ * a press can select it and reach its handles. */
+.range-articulation {
+    position: absolute;
+    cursor: pointer;
+    pointer-events: auto;
+
+    svg {
+        display: block;
+        overflow: visible;
+    }
+}
+
+/* The handle a selected marking shows: one per end of a hairpin, one for the position of an f. */
+.range-articulation-handle {
+    position: absolute;
+    width: 10px;
+    height: 10px;
+    margin: -5px 0 0 -5px;
+    box-sizing: border-box;
+    border: 1px solid var(--color-base-100);
+    border-radius: 50%;
+    background-color: var(--color-primary);
+    cursor: ew-resize;
+    pointer-events: auto;
+}
+
+/* The selected marking that has no handles takes the highlight colour, like a selected note does. */
+.range-articulation-selected {
+    color: var(--color-primary);
+}
+
+/* The f glyph is centred on the event position it sits at. */
+.range-articulation-forte {
+    transform: translate(-50%, -50%);
+}
+
+/* The marking the pointer would place, drawn dimmed so it reads as a preview and not as a placed one. */
+.range-articulation-preview {
+    color: var(--color-base-content);
+    opacity: 0.45;
+}
+
+/* The image that follows the pointer while a marking is carried or a placing mode draws one. It sits in the content
+ * colour, like the mark it stands for, and right of the cursor so the cursor does not cover it. */
+.range-articulation-drag-image {
+    position: fixed;
+    display: grid;
+    place-items: center;
+    width: 24px;
+    height: 24px;
+    color: var(--color-base-content);
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    z-index: 3;
+
+    /* A carried hairpin repeats the drawing of the score, so it needs the same block layout and visible strokes. */
+    svg {
+        display: block;
+        overflow: visible;
+    }
+}
+
+/* A carried marking is placed at the place it was grabbed, which its own corner and the grab offset decide. */
+.range-articulation-drag-image-carried {
+    transform: none;
+}
+
+/* While a placing mode is active, the mode owns the pointer: every other part of the app stays inert, so a press
+ * cannot leave the mode or change anything else. The score keeps its pointer events, which is where the mode
+ * works. */
+body.range-articulation-mode * {
+    pointer-events: none;
+}
+
+body.range-articulation-mode #trackViewerContentHost,
+body.range-articulation-mode #trackViewerContentHost * {
+    pointer-events: auto;
 }
 
 /*
