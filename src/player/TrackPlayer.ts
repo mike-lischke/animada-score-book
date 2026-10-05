@@ -7,6 +7,7 @@ import {
     SbDmEntityType, type ISbDmNoteEvent, type ISbDmTrack, type ISbDmTrackPiece, type RealTime
 } from "../core/ScoreBookDataModel.js";
 import type { IFraction } from "../core/types/general.js";
+import { RangeArticulations } from "../core/RangeArticulations.js";
 import { requisitions } from "../supplement/Requisitions.js";
 import { PlaybackOrder } from "./PlaybackOrder.js";
 import type { TimeCoordinator } from "./TimeCoordinator.js";
@@ -16,6 +17,9 @@ import { Event, IInterval } from "./types.js";
 interface IPerformedEvent {
     event: ISbDmNoteEvent;
     realTime: RealTime;
+
+    /** The dynamic level the note plays at, resolved from the track's hairpins and `f` markings. */
+    dynamicsFactor: number;
 }
 
 /**
@@ -87,7 +91,7 @@ export class TrackPlayer {
             }
 
             if (performed.realTime >= interval.start && performed.event.audioData) {
-                events.push(this.getAudioEvent(performed.event, performed.realTime));
+                events.push(this.getAudioEvent(performed.event, performed.realTime, performed.dynamicsFactor));
             }
         }
 
@@ -140,6 +144,7 @@ export class TrackPlayer {
             arrangement.timeParams.length);
         const { secondsPerBar } = this.timeCoordinator.metrics;
         const events: IPerformedEvent[] = [];
+        const markings = arrangement.rangeArticulations?.forTrack(this.track.id) ?? [];
 
         order.forEach((barNumber, index) => {
             const measure = measures[barNumber - 1];
@@ -148,10 +153,16 @@ export class TrackPlayer {
                 return barStart + ((secondsPerBar * event.start.numerator) / event.start.denominator);
             };
 
+            // The dynamics a note sounds at follow the written measure it is written in, so a simile takes the
+            // level of its own bar and every pass over a repeated bar plays its markings again.
+            const factorOf = (event: ISbDmNoteEvent): number => {
+                return RangeArticulations.dynamicsFactor(markings, { bar: measure.number, start: event.start });
+            };
+
             const source = sources[barNumber - 1] ?? measure;
             if (source === measure) {
                 for (const event of measure.noteEvents) {
-                    events.push({ event, realTime: timeOf(event) });
+                    events.push({ event, realTime: timeOf(event), dynamicsFactor: factorOf(event) });
                 }
 
                 return;
@@ -164,7 +175,7 @@ export class TrackPlayer {
                     timing: this.timingForEventStart(event.start, barNumber, measure.meter.stepResolution),
                 };
 
-                events.push({ event: repeated, realTime: timeOf(event) });
+                events.push({ event: repeated, realTime: timeOf(event), dynamicsFactor: factorOf(event) });
             }
         });
 
@@ -275,15 +286,17 @@ export class TrackPlayer {
      *
      * @param event The note event to play.
      * @param realTime The real-time position of the event.
+     * @param dynamicsFactor The dynamic level the note plays at.
      *
      * @returns An audio event for the note.
      */
-    private getAudioEvent = (event: ISbDmNoteEvent, realTime: RealTime): Event => {
+    private getAudioEvent = (event: ISbDmNoteEvent, realTime: RealTime, dynamicsFactor: number): Event => {
         return {
             kind: "audio",
             event,
             realTime,
-            audioBuffer: event.audioData!.audioBuffer!
+            audioBuffer: event.audioData!.audioBuffer!,
+            dynamicsFactor,
         };
     };
 }

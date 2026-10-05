@@ -6,7 +6,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import type { IAudioData, Mutable } from "../../src/core/types/general.js";
-import type { ICallbackEvent, IInterval } from "../../src/player/types.js";
+import type { Event as PlaybackEvent, ICallbackEvent, IInterval } from "../../src/player/types.js";
 
 type CallbackHelper = {
     kind: "callback";
@@ -51,8 +51,13 @@ vi.mock("../../src/player/TimeCoordinator.js", () => {
             // No-op for mock.
         }
 
+        public reset(): void {
+            return;
+        }
+
         public setPerformedBars(count: number): void {
             this.performedBars = count;
+            this.realTimeLength = count;
         }
 
         public get metrics() {
@@ -266,12 +271,12 @@ import {
     type ISbDmTimeParams, type ISbDmTrack, type ISbDmTrackPiece, type ITiming, type RealTime
 } from "../../src/core/ScoreBookDataModel.js";
 import { getNewId } from "../../src/core/utils.js";
-import { ArrangementPlayer } from "../../src/player/ArrangementPlayer.js";
+import { ArrangementPlayer, PlayerPlayState } from "../../src/player/ArrangementPlayer.js";
 import type { TimeCoordinator } from "../../src/player/TimeCoordinator.js";
 import type { TrackPlayer } from "../../src/player/TrackPlayer.js";
 import { requisitions } from "../../src/supplement/Requisitions.js";
 
-describe("ArrangementPlayer", () => {
+describe.sequential("ArrangementPlayer", () => {
     it("creates track players", () => {
         const arrangement = makeArrangement(2);
         const dm = new TestScoreBookDataModel(arrangement);
@@ -373,6 +378,132 @@ describe("ArrangementPlayer", () => {
         const progress = player.convertToLoopProgress(1.02);
         expect(progress).toBeGreaterThan(0.99);
         expect(progress).toBeLessThan(1);
+    });
+
+    it.each([0, 3])("loops the selected bar at %s without playing the following bar", async (start) => {
+        vi.useFakeTimers();
+        vi.setSystemTime(0);
+        const arrangement = makeArrangement(1);
+        arrangement.loop = true;
+        arrangement.timeParams.length = 5;
+        const player = new ArrangementPlayer(new TestScoreBookDataModel(arrangement));
+        const startTimes: number[] = [];
+        const fadeOut = vi.fn();
+        const callback = vi.fn();
+        const scheduler = player as unknown as {
+            audioContext: BaseAudioContext;
+            getEvents: (interval: IInterval) => PlaybackEvent[];
+        };
+        scheduler.audioContext = {
+            get currentTime() {
+                return 10 + (Date.now() / 1000);
+            },
+            destination: {},
+            createBufferSource: () => {
+                return {
+                    start: (time: number) => {
+                        startTimes.push(time);
+                    },
+                    connect: vi.fn(),
+                    addEventListener: vi.fn(),
+                };
+            },
+            createGain: () => {
+                return { gain: { value: 1, setTargetAtTime: fadeOut }, connect: vi.fn() };
+            },
+        } as unknown as BaseAudioContext;
+        const note = arrangement.tracks[0].measures[0].noteEvents[0];
+        const events: PlaybackEvent[] = [
+            { kind: "audio", realTime: start, event: note, audioBuffer: {} as AudioBuffer, dynamicsFactor: 1 },
+            { kind: "audio", realTime: start + 0.95, event: note, audioBuffer: {} as AudioBuffer, dynamicsFactor: 1 },
+            { kind: "audio", realTime: start + 1, event: note, audioBuffer: {} as AudioBuffer, dynamicsFactor: 1 },
+            { kind: "callback", realTime: start, callback },
+        ];
+        const getEvents = vi.spyOn(scheduler, "getEvents").mockImplementation((interval) => {
+            return events.filter(({ realTime }) => {
+                return realTime >= interval.start && realTime < interval.end;
+            });
+        });
+
+        try {
+            await requisitions.execute("playRangeChanged", { from: start + 1, to: start + 1 });
+            await player.play();
+            await vi.advanceTimersByTimeAsync(875);
+
+            expect(startTimes).toEqual([10, 10.95, 11]);
+            expect(fadeOut).not.toHaveBeenCalled();
+            expect(callback).toHaveBeenCalledTimes(1);
+            expect(player.currentTime).toBeCloseTo(start + 0.875);
+            expect(player.state).toBe(PlayerPlayState.Playing);
+
+            await vi.advanceTimersByTimeAsync(125);
+
+            expect(player.currentTime).toBeCloseTo(start);
+            expect(callback).toHaveBeenCalledTimes(2);
+            expect(fadeOut).not.toHaveBeenCalled();
+
+            await vi.advanceTimersByTimeAsync(1000);
+
+            expect(startTimes).toEqual([10, 10.95, 11, 11.95, 12]);
+            expect(callback).toHaveBeenCalledTimes(3);
+            expect(player.currentTime).toBeCloseTo(start);
+            expect(fadeOut).not.toHaveBeenCalled();
+            for (const [interval] of getEvents.mock.calls) {
+                expect(interval.start).toBeGreaterThanOrEqual(start);
+                expect(interval.end).toBeLessThanOrEqual(start + 1);
+            }
+
+            player.stop();
+            await requisitions.execute("playRangeChanged", undefined);
+            getEvents.mockClear();
+            await player.play();
+
+            expect(player.currentTime).toBe(0);
+            expect(getEvents).toHaveBeenCalledWith({ start: 0, end: 0.25 });
+
+            await vi.advanceTimersByTimeAsync(1125);
+
+            expect(player.currentTime).toBeCloseTo(1.125);
+            expect(getEvents.mock.calls.some(([interval]) => {
+                return interval.end > 1;
+            })).toBe(true);
+        } finally {
+            player.stop();
+            player.dispose();
+            vi.useRealTimers();
+        }
+    });
+
+    it("waits for the audio clock to reach the end before stopping non-loop playback", async () => {
+        vi.useFakeTimers();
+        vi.setSystemTime(0);
+        const player = new ArrangementPlayer(new TestScoreBookDataModel(makeArrangement(1)));
+        const scheduler = player as unknown as {
+            audioContext: BaseAudioContext;
+            getEvents: (interval: IInterval) => PlaybackEvent[];
+        };
+        scheduler.audioContext = {
+            get currentTime() {
+                return 10 + (Date.now() / 1000);
+            },
+        } as unknown as BaseAudioContext;
+        vi.spyOn(scheduler, "getEvents").mockReturnValue([]);
+
+        try {
+            await player.play();
+            await vi.advanceTimersByTimeAsync(875);
+
+            expect(player.state).toBe(PlayerPlayState.Playing);
+            expect(player.currentTime).toBeCloseTo(0.875);
+
+            await vi.advanceTimersByTimeAsync(125);
+
+            expect(player.state).toBe(PlayerPlayState.Stopped);
+        } finally {
+            player.stop();
+            player.dispose();
+            vi.useRealTimers();
+        }
     });
 
     it("resolves the order the repeat barlines state and re-reads it when a track changes", () => {

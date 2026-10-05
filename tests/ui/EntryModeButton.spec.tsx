@@ -17,12 +17,11 @@ describe.sequential("EntryModeButton", () => {
      * Renders the button for one mode.
      *
      * @param entryMode The mode the app reports.
-     * @param locked True while the mode cannot be switched, which is the case in the grid view.
      *
      * @returns The button's label element.
      */
-    const renderButton = (entryMode: EditEntryMode, locked = false): HTMLLabelElement => {
-        renderResult = render(<EntryModeButton entryMode={entryMode} locked={locked} />);
+    const renderButton = (entryMode: EditEntryMode): HTMLLabelElement => {
+        renderResult = render(<EntryModeButton entryMode={entryMode} />);
 
         return renderResult.container.querySelector<HTMLLabelElement>(".entryModeButton")!;
     };
@@ -55,10 +54,6 @@ describe.sequential("EntryModeButton", () => {
         unmountButton();
 
         expect(renderButton(EditEntryMode.Overwrite).classList.contains("du-btn-primary")).toBe(true);
-    });
-
-    it("keeps the mark in the grid view, where the mode cannot be switched", () => {
-        expect(renderButton(EditEntryMode.Overwrite, true).classList.contains("du-btn-primary")).toBe(true);
     });
 
     it("posts the mode the user switched to", () => {

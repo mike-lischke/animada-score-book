@@ -9,7 +9,7 @@ import { stringifyPackedArrangement } from "../../src/core/serialisation/snapsho
 import { arrangementSnapshotVersion } from "../../src/core/serialisation/snapshots.js";
 import { EditEntryMode } from "../../src/core/types/general.js";
 import type { IArrangementSnapshot, ITrackPieceSnapshot } from "../../src/core/types/general.js";
-import { routeApi, selectTrackPiece } from "./e2e-test-helpers.js";
+import { routeApi, selectTrackPiece, toolbarButton } from "./e2e-test-helpers.js";
 
 const meter = { beats: 4, beatUnits: 4, stepResolution: 16, beatGroups: [4, 4, 4, 4] };
 
@@ -111,7 +111,7 @@ test("does not offer the mark for a note selection", async ({ page }) => {
 
     await staffBar(page, 1).locator(".staff-note-head-symbol").first().click();
 
-    await expect(page.locator(".subdivisionToolbar button").nth(1)).toBeDisabled();
+    await expect(toolbarButton(page, "One-bar repeat (simile)")).toBeDisabled();
 });
 
 test("sets the mark on a track piece and clears it again", async ({ page }) => {
@@ -122,7 +122,7 @@ test("sets the mark on a track piece and clears it again", async ({ page }) => {
 
     await selectTrackPiece(page, 2);
 
-    const repeat = page.locator(".subdivisionToolbar button").nth(1);
+    const repeat = toolbarButton(page, "One-bar repeat (simile)");
     await expect(repeat).toBeEnabled();
     await repeat.click({ force: true });
 
@@ -142,5 +142,5 @@ test("keeps the mark off a track piece of the first measure", async ({ page }) =
 
     await selectTrackPiece(page, 1);
 
-    await expect(page.locator(".subdivisionToolbar button").nth(1)).toBeDisabled();
+    await expect(toolbarButton(page, "One-bar repeat (simile)")).toBeDisabled();
 });

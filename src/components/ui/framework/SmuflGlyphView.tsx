@@ -53,11 +53,11 @@ export class SmuflGlyphView extends UIComponent<ISmuflGlyphViewProperties> {
     };
 
     public override render(): ComponentChild {
-        const { id, title, alt, style, className, glyph, staffSpace, width = 2, height = 2 } = this.props;
+        const { id, title, alt, style, glyph, staffSpace, width = 2, height = 2 } = this.props;
         const { fontFamily, anchor = GlyphAnchor.Centre } = this.props;
 
         const character = String.fromCodePoint(SmuflGlyphs.definition(glyph).codepoint);
-        const mergedClassName = this.generateFinalClassName(["smufl-glyph-view", className]);
+        const mergedClassName = this.generateFinalClassName(["smufl-glyph-view"]);
         const boxWidth = staffSpace * width;
         const boxHeight = staffSpace * height;
 

@@ -5,13 +5,16 @@
 
 import { describe, expect, it, vi } from "vitest";
 
+import { RangeArticulations } from "../../src/core/RangeArticulations.js";
 import {
     SbDmEntityType, type ISbDmArrangement, type ISbDmInstrument, type ISbDmNoteEvent, type ISbDmTrack,
     type ISbDmTrackPiece, type ITiming, type RealTime
 } from "../../src/core/ScoreBookDataModel.js";
 import type { IAudioData, ITimeParams, Mutable } from "../../src/core/types/general.js";
+import { RangeArticulationKind } from "../../src/core/types/general.js";
 import type { TimeCoordinator } from "../../src/player/TimeCoordinator.js";
 import { TrackPlayer } from "../../src/player/TrackPlayer.js";
+import type { IAudioEvent } from "../../src/player/types.js";
 import { requisitions } from "../../src/supplement/Requisitions.js";
 
 /**
@@ -272,6 +275,30 @@ describe("TrackPlayer", () => {
         });
 
         expect(idsAfter).toEqual(idsBefore);
+
+        player.dispose();
+    });
+
+    it("resolves the dynamic level of a hairpin per note", () => {
+        const track = makeTrack({ instrumentLoaded: true, withPolyrhythmNote: true });
+        const arrangement = track.arrangement;
+        arrangement.rangeArticulations = new RangeArticulations();
+        arrangement.rangeArticulations.add({
+            id: 5,
+            trackId: track.id,
+            kind: RangeArticulationKind.Crescendo,
+            from: { bar: 1, start: { numerator: 0, denominator: 2 } },
+            to: { bar: 1, start: { numerator: 1, denominator: 2 } },
+        });
+
+        const player = new TrackPlayer(track, makeTimeCoordinator());
+        const audio = player.getEvents({ start: 0, end: 1 }).filter((event): event is IAudioEvent => {
+            return event.kind === "audio";
+        });
+
+        expect(audio).toHaveLength(2);
+        expect(audio[0].dynamicsFactor).toBeCloseTo(0.2);
+        expect(audio[1].dynamicsFactor).toBeCloseTo(1);
 
         player.dispose();
     });

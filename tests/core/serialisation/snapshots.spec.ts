@@ -12,6 +12,7 @@ import { stringifyPackedArrangement } from "../../../src/core/serialisation/snap
 import { getArrangementSnapshot, arrangementSnapshotVersion } from "../../../src/core/serialisation/snapshots.js";
 import type { IBananaDrumSnapshot } from "../../../src/core/serialisation/migration/BananaDrumMigrator.js";
 import type { IArrangementSnapshot, IAudioData, Mutable } from "../../../src/core/types/general.js";
+import { RangeArticulationKind } from "../../../src/core/types/general.js";
 import { createInstrument } from "../../unit-test-helpers.js";
 
 describe("snapshots", () => {
@@ -233,5 +234,120 @@ describe("snapshots", () => {
         expect(migrated).toBe(false);
         expect(restored.tracks[0].measures[1].simile).toBe(true);
         expect(getArrangementSnapshot(restored)).toEqual(snapshot);
+    });
+
+    /**
+     * @param bars The number of measures to build.
+     *
+     * @returns A snapshot whose measures each hold two quarter notes and a half rest, which is enough to anchor a
+     * hairpin and an f marking.
+     */
+    const snapshotOfNotes = (bars: number): IArrangementSnapshot => {
+        const measures = Array.from({ length: bars }, (entry, index) => {
+            return {
+                number: index + 1,
+                meter: { beats: 4, beatUnits: 4, stepResolution: 16, beatGroups: [4, 4, 4, 4] },
+                events: [
+                    {
+                        start: { numerator: 0, denominator: 1 },
+                        duration: { numerator: 1, denominator: 4 },
+                        noteStyleId: "1",
+                    },
+                    {
+                        start: { numerator: 1, denominator: 4 },
+                        duration: { numerator: 1, denominator: 4 },
+                        noteStyleId: "1",
+                    },
+                    { start: { numerator: 1, denominator: 2 }, duration: { numerator: 1, denominator: 2 } },
+                ],
+                subdivisions: [],
+            };
+        });
+
+        return {
+            version: arrangementSnapshotVersion,
+            title: "Marked notes",
+            timeParams: { timeSignature: "4/4", tempo: 120, length: bars, pulse: "1/4", stepResolution: 16 },
+            tracks: [{ id: 100, instrumentId: "0", measures }],
+        };
+    };
+
+    it("carries a hairpin over a barline and an f marking through the packed round trip", () => {
+        const instrument = createInstrument("0", 0, 0);
+        const { arrangement } = ArrangementMigrator.migrateToArrangement(snapshotOfNotes(2), [instrument]);
+
+        arrangement.rangeArticulations.add(
+            {
+                id: 9001,
+                trackId: arrangement.tracks[0].id,
+                kind: RangeArticulationKind.Crescendo,
+                from: { bar: 1, start: { numerator: 0, denominator: 1 } },
+                to: { bar: 2, start: { numerator: 0, denominator: 1 } },
+            },
+        );
+        arrangement.rangeArticulations.add(
+            {
+                id: 9002,
+                trackId: arrangement.tracks[0].id,
+                kind: RangeArticulationKind.Forte,
+                at: { bar: 2, start: { numerator: 1, denominator: 2 } },
+            },
+        );
+
+        const snapshot = getArrangementSnapshot(arrangement);
+        expect(snapshot.extensions?.rangeArticulations).toHaveLength(2);
+
+        const packed = stringifyPackedArrangement(snapshot);
+        const { arrangement: restored, migrated } = ArrangementMigrator.migrateToArrangement(packed, [instrument]);
+
+        expect(migrated).toBe(false);
+        expect(restored.rangeArticulations.all).toEqual(arrangement.rangeArticulations.all);
+        expect(getArrangementSnapshot(restored)).toEqual(snapshot);
+    });
+
+    it("drops the range articulations a loaded arrangement cannot resolve", () => {
+        const instrument = createInstrument("0", 0, 0);
+        const snapshot = snapshotOfNotes(2);
+        const trackId = 100;
+
+        snapshot.extensions = {
+            rangeArticulations: [
+                {
+                    id: 9001,
+                    trackId,
+                    kind: RangeArticulationKind.Crescendo,
+                    from: { bar: 1, start: { numerator: 0, denominator: 1 } },
+                    to: { bar: 1, start: { numerator: 1, denominator: 4 } },
+                },
+                // The second half of the second measure is a rest, so no hairpin anchors to it.
+                {
+                    id: 9002,
+                    trackId,
+                    kind: RangeArticulationKind.Decrescendo,
+                    from: { bar: 1, start: { numerator: 0, denominator: 1 } },
+                    to: { bar: 2, start: { numerator: 1, denominator: 2 } },
+                },
+                // A third measure the arrangement does not have.
+                {
+                    id: 9003,
+                    trackId,
+                    kind: RangeArticulationKind.Forte,
+                    at: { bar: 3, start: { numerator: 0, denominator: 1 } },
+                },
+                // A track the arrangement does not have.
+                {
+                    id: 9004,
+                    trackId: 999,
+                    kind: RangeArticulationKind.Forte,
+                    at: { bar: 1, start: { numerator: 1, denominator: 2 } },
+                },
+            ],
+        };
+
+        const { arrangement } = ArrangementMigrator.migrateToArrangement(snapshot, [instrument]);
+
+        expect(arrangement.rangeArticulations.all.map((articulation) => {
+            return articulation.id;
+        })).toEqual([9001]);
     });
 });

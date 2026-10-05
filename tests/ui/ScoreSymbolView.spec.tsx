@@ -104,4 +104,26 @@ describe("ScoreSymbolView", () => {
         expect(path?.getAttribute("fill")).toBe("none");
         expect(path?.getAttribute("stroke")).toBe("currentColor");
     });
+
+    it("draws a barline icon as one svg of strokes and the font's repeat dots", () => {
+        const result = render(<ScoreSymbolView symbol={ScoreSymbol.RepeatStart} staffSpace={staffSpace} icon />);
+        const svg = svgOf(result);
+
+        // The icon is the button's only child, which is what lets a tooltip find it without a wrapper.
+        expect(result.container.children).toHaveLength(1);
+        expect(svg.classList.contains("score-symbol-icon")).toBe(true);
+        expect(svg.classList.contains("barline-icon-start")).toBe(true);
+
+        // A repeat that opens is a thick and a thin stroke and the dots the font draws.
+        expect(svg.querySelectorAll(".barline-icon-stroke")).toHaveLength(2);
+        expect(svg.querySelector(".barline-icon-dots")?.textContent).toBe(String.fromCodePoint(0xE043));
+    });
+
+    it("draws a dynamics glyph as the icon of its button", () => {
+        const result = render(<ScoreSymbolView symbol={ScoreSymbol.Forte} staffSpace={staffSpace} icon />);
+        const svg = svgOf(result);
+
+        expect(svg.classList.contains("score-symbol-icon")).toBe(true);
+        expect(svg.querySelector("text")?.textContent).toBe(String.fromCodePoint(0xE522));
+    });
 });

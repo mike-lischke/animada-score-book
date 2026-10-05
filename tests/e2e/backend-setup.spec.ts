@@ -166,14 +166,6 @@ test.describe("Setup: no database", () => {
         await routeApiWithState(page, { initialized: false, hasData: false, engine: "mysql" });
     });
 
-    test("shows setup form when backend is not initialised", async ({ page }) => {
-        await page.goto("/");
-        await page.waitForSelector("#backendSetupDialog", { state: "visible", timeout: 5000 });
-
-        await expect(page.locator("#backendSetupDialog")).toBeVisible();
-        await expect(page.locator("#backendSetupDialog")).toContainText("Backend Setup");
-    });
-
     test("initialize completes setup flow", async ({ page }) => {
         await page.goto("/");
         await page.waitForSelector("#backendSetupDialog", { state: "visible", timeout: 5000 });

@@ -12,13 +12,16 @@ import {
     type INoteArticulation,
 } from "../../../core/ScoreBookDataModel.js";
 import { ScoreSymbols, ScoreSymbol, ScoreSymbolSource } from "../../../core/ScoreSymbols.js";
+import { RangeArticulations } from "../../../core/RangeArticulations.js";
 import {
     MeasureProjection, NoteGroupKind, ProjectedItemKind, pulseLengthAt,
     type INotationGrid, type IProjectedEvent, type IProjectedItem,
 } from "../../../core/MeasureProjection.js";
 import { staffSpacePx } from "../../../core/MeasureLayout.js";
 import { stemEndVariablePrefix } from "../../../core/smufl/SmuflFontLoader.js";
-import type { IFraction, IAudioData, IRepeatBar, ISubdivision } from "../../../core/types/general.js";
+import type { IFraction, IAudioData, IArticulationPortion, IHairpin, IRangeArticulation, IRepeatBar, ISubdivision }
+    from "../../../core/types/general.js";
+import { RangeArticulationKind } from "../../../core/types/general.js";
 import { beamCountOf, fallbackNoteValue, noteValueForEvent, NoteLength, type INoteValue }
     from "../../../core/rest-notation.js";
 import type { IScoreMetrics } from "../../../player/TimeCoordinator.js";
@@ -48,6 +51,12 @@ export interface IStaffNoteViewerProperties extends ICommonUIProperties {
 
     /** Maximum noteLine value across all variants of the instrument (default 1 = single line). */
     maxNoteLine?: number;
+
+    /**
+     * The hairpins and `f` markings to draw for this bar and track, which the print view supplies. Omitted for the
+     * screen view, whose markings are drawn into the decoration layer of the arrangement viewer.
+     */
+    articulations?: readonly IRangeArticulation[];
 }
 
 /** Discriminator for staff tree nodes. */
@@ -140,10 +149,16 @@ const finalBarlineWidth = ScoreSymbols.inkBox(ScoreSymbol.BarlineFinal).width;
 /** Width the flags occupy right of a notehead, which the stylesheet owns for the same reason. */
 const noteFlagWidth = "var(--note-flag-width)";
 
+/** Height a printed hairpin opens to, in staff spaces; matches the marking band the screen view draws. */
+const printedHairpinOpeningSpaces = 1.2;
+
+/** Smallest width a printed hairpin keeps, as a percentage of the bar, so a nearly closed one stays visible. */
+const minimumPrintedHairpinPercent = 0.5;
+
 export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
     public override render(): ComponentChild {
         const { isLastBar, scoreMetrics, measure, barNumber, trackId, maxNoteLine = 1,
-            scoreElementRegistry, repeatBars } = this.props;
+            scoreElementRegistry, repeatBars, articulations } = this.props;
 
         // A barline sits between two bars, so the marks on both sides of it decide which one it is. A repeat that
         // only opens is the opening barline of the bar it opens, so the bar before it draws none at all.
@@ -209,11 +224,9 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
             );
         }
 
-        // The barline spans the staff lines and reaches one staff space past them. A staff of a single line has
-        // no height of its own, so its barline is a stub of two staff spaces on either side of its line.
-        const barlineHeight = maxNoteLine === 1
-            ? staffSpacePx * 4
-            : Math.max((maxNoteLine - 1) * staffSpacePx, staffSpacePx * 2);
+        // The barline spans the staff lines and reaches one staff space past them; a staff of a single line has no
+        // height of its own, so its barline stays at two staff spaces — the band `barlineShort` covers.
+        const barlineHeight = Math.max((maxNoteLine - 1) * staffSpacePx, staffSpacePx * 2);
 
         // Every track piece closes with a real barline; the repeat marks at its boundary decide which one, and a
         // bar that opens a repeated section draws that barline itself.
@@ -263,6 +276,8 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
         const openingBarlineElement = openingBarline === undefined
             ? null
             : this.renderBarline(openingBarline, staffSpacePx);
+
+        const articulationLayer = this.renderArticulations(articulations ?? [], barNumber, maxNoteLine, centerLine);
 
         return (
             <div
@@ -320,6 +335,7 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                         </div>
                     )
                     : null}
+                {articulationLayer}
                 {closingBarlineElement}
                 {openingBarlineElement}
             </div>
@@ -435,6 +451,16 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
     }
 
     /**
+     * @param bar The one-based bar the fraction lies in.
+     * @param fraction The fraction within that bar.
+     *
+     * @returns The position as a number of bars, so positions in different bars can be compared and interpolated.
+     */
+    private static parameterOf(bar: number, fraction: IFraction): number {
+        return (bar - 1) + (fraction.numerator / fraction.denominator);
+    }
+
+    /**
      * The room the notes of a bar keep before the barline it opens with. A barline a bar opens with reaches into
      * the bar with its dots, so the notes start right of that ink. How far right is the room the bar's last note
      * leaves before the barline it closes with, on top of the room the bar keeps free for that barline, which is
@@ -459,10 +485,11 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
 
         const ink = `calc(${reach} + var(--staff-repeat-dot-gap))`;
 
-        // The room the last note leaves before the barline it closes with, or the barline's own ink when the bar
-        // closes with no note whose room could stand in for it.
+        // The room the last anchor leaves before the barline the bar closes with, or the barline's own ink when the
+        // bar holds no child at all. A rest leaves room the same way a note does — it sits centred in its slot —
+        // so only the barline's own ink is what a bar without a last anchor falls back on.
         const { lastAnchor } = anchors;
-        const room = lastAnchor === undefined || !anchors.lastIsNote
+        const room = lastAnchor === undefined
             ? ink
             : `max(${ink}, calc(${100 - StaffNoteViewer.percentOf(lastAnchor)}% + ${closingRoom}))`;
 
@@ -488,6 +515,114 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
             <span className={`staff-note-viewer-barline staff-note-viewer-barline-${placement}`}>
                 <BarlineView symbol={symbol} staffSpace={staffSpace} />
             </span>
+        );
+    }
+
+    /**
+     * Draws the markings of this bar and track, clipped to the bar, into a pointer-transparent layer. Only the
+     * portion of a hairpin that lies in this bar is drawn, so a hairpin over a barline reads as one line across the
+     * two bars whose parts meet at the barline.
+     *
+     * @param articulations The markings to draw in the bar.
+     * @param barNumber The one-based measure the row draws.
+     * @param maxNoteLine The number of staff lines the row draws.
+     * @param centerLine The line number the notes sit on.
+     *
+     * @returns The marking layer, or null when the bar holds none.
+     */
+    private renderArticulations(articulations: readonly IRangeArticulation[], barNumber: number, maxNoteLine: number,
+        centerLine: number): ComponentChild {
+        const marks: ComponentChild[] = [];
+        const bandOffset = ((maxNoteLine - centerLine) * staffSpacePx) + (staffSpacePx * 2);
+
+        for (const articulation of articulations) {
+            const portion = RangeArticulations.portionInBar(articulation, barNumber);
+            if (portion === undefined) {
+                continue;
+            }
+
+            marks.push(RangeArticulations.isHairpin(articulation)
+                ? this.renderPrintedHairpin(articulation, portion, barNumber, bandOffset)
+                : this.renderPrintedForte(articulation, portion, bandOffset));
+        }
+
+        return marks.length > 0 ? <div className="staff-note-viewer-articulations">{marks}</div> : null;
+    }
+
+    /**
+     * @param hairpin The hairpin to draw.
+     * @param portion The part of the hairpin that lies in this bar.
+     * @param barNumber The one-based measure the row draws.
+     * @param bandOffset The top of the marking band, in px below the notes' line.
+     *
+     * @returns The hairpin portion as scalable line geometry.
+     */
+    private renderPrintedHairpin(hairpin: IHairpin, portion: IArticulationPortion, barNumber: number,
+        bandOffset: number): ComponentChild {
+        const startPercent = StaffNoteViewer.percentOf(portion.start);
+        const endPercent = StaffNoteViewer.percentOf(portion.end);
+        const widthPercent = Math.max(endPercent - startPercent, minimumPrintedHairpinPercent);
+        const opening = staffSpacePx * printedHairpinOpeningSpaces;
+        const topOffset = bandOffset - (opening / 2);
+
+        // The wedge is one line from its tip to its opening. A hairpin over a barline is drawn per bar, so each bar
+        // keeps the opening the wedge has at its own edges, which lets the parts meet at the barlines.
+        const tip = hairpin.kind === RangeArticulationKind.Crescendo ? hairpin.from : hairpin.to;
+        const open = hairpin.kind === RangeArticulationKind.Crescendo ? hairpin.to : hairpin.from;
+        const tipParameter = StaffNoteViewer.parameterOf(tip.bar, tip.start);
+        const openParameter = StaffNoteViewer.parameterOf(open.bar, open.start);
+        const openingAt = (fraction: IFraction): number => {
+            const parameter = StaffNoteViewer.parameterOf(barNumber, fraction);
+            const ratio = (parameter - tipParameter) / (openParameter - tipParameter);
+
+            return Math.min(Math.max(ratio, 0), 1);
+        };
+
+        const leftHalf = openingAt(portion.start) * 50;
+        const rightHalf = openingAt(portion.end) * 50;
+        const path = `M 0 ${50 - leftHalf} L 100 ${50 - rightHalf} M 0 ${50 + leftHalf} L 100 ${50 + rightHalf}`;
+        const style: CSSProperties = {
+            left: `${startPercent}%`,
+            width: `${widthPercent}%`,
+            top: `calc(50% + var(--staff-centre, 32px) + ${topOffset}px)`,
+            height: `${opening}px`,
+        };
+
+        return (
+            <div
+                key={`hairpin-${hairpin.id}`}
+                className="staff-note-viewer-articulation staff-note-viewer-articulation-hairpin"
+                style={style}
+            >
+                <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+                    <path d={path} fill="none" stroke="currentColor" vector-effect="non-scaling-stroke" />
+                </svg>
+            </div>
+        );
+    }
+
+    /**
+     * @param mark The `f` marking to draw.
+     * @param portion The position of the marking in this bar.
+     * @param bandOffset The top of the marking band, in px below the notes' line.
+     *
+     * @returns The `f` glyph, centred on its event.
+     */
+    private renderPrintedForte(mark: IRangeArticulation, portion: IArticulationPortion,
+        bandOffset: number): ComponentChild {
+        const style: CSSProperties = {
+            left: `${StaffNoteViewer.percentOf(portion.start)}%`,
+            top: `calc(50% + var(--staff-centre, 32px) + ${bandOffset}px)`,
+        };
+
+        return (
+            <div
+                key={`forte-${mark.id}`}
+                className="staff-note-viewer-articulation staff-note-viewer-articulation-forte"
+                style={style}
+            >
+                <ScoreSymbolView symbol={ScoreSymbol.Forte} staffSpace={staffSpacePx} inkBox />
+            </div>
         );
     }
 

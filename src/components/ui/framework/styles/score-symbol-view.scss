@@ -12,32 +12,11 @@
     overflow: visible;
 }
 
-/* A symbol drawn as an icon: the box around it states the size, and the ink the font draws is scaled to the larger
- * side of it and stays centred, so an icon shows its symbol at the same size whatever glyph it is and whatever
- * size the font draws it in. The box around the symbol is what carries this class. */
-.score-symbol-view-icon {
-    --icon-spaces: 2;
-
-    width: calc(var(--staff-space) * var(--icon-spaces));
-    height: calc(var(--staff-space) * var(--icon-spaces));
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    .score-symbol-view-ink-box {
-        transform: scale(calc(var(--icon-spaces) / max(var(--symbol-ink-spaces-width), var(--symbol-ink-spaces-height))));
-    }
-
-    /* A barline the score draws states its own size, the staff band its strokes span, which is what the icon scales
-     * down to the box: the parts keep their proportions, so the strokes are scaled with them. */
-    .barline-view {
-        transform: scale(calc(var(--icon-spaces) * var(--staff-space) / (var(--staff-barline-height, calc(var(--staff-space) * 2)) + var(--staff-line-thickness, 1px))));
-    }
-}
-
 /* A symbol drawn in the box of its own ink: the wrapper is the ink box, which the caller sizes, and the
  * glyph box inside it is the box the font draws in, which is wider than the ink. The glyph therefore
- * hangs on the edge its anchor states, so the ink fills the wrapper. */
+ * hangs on the edge its anchor states, so the ink fills the wrapper. Vertically the ink is what is centred,
+ * not the font's drawing box: a glyph whose ink is not symmetric around its baseline — a dynamic mark is
+ * drawn above it — states that asymmetry in `--symbol-ink-offset-y` and is moved down by it. */
 .score-symbol-view-ink-box {
     position: relative;
     display: inline-block;
@@ -45,7 +24,7 @@
     .score-symbol-view {
         position: absolute;
         top: 50%;
-        transform: translateY(-50%);
+        transform: translateY(calc(-50% + var(--symbol-ink-offset-y, 0px)));
     }
 
     &.score-symbol-view-left-edge .score-symbol-view {
@@ -58,6 +37,111 @@
 
     &.score-symbol-view-centre .score-symbol-view {
         left: 50%;
-        transform: translate(-50%, -50%);
+        transform: translate(-50%, calc(-50% + var(--symbol-ink-offset-y, 0px)));
+    }
+}
+
+/* A symbol drawn as the icon of a toolbar button: one svg, with no box around it. The icon holds the symbol's
+ * ink — not the box the font draws it in — centred and scaled until the ink's larger side spans the box. Every
+ * measure of that comes from the font: the loader publishes the ink of a glyph, and the view hands those
+ * properties to this class under the `--ink-*` names. Centring a glyph centres the box the font advances and not
+ * its ink, which is why the glyph is drawn from its pen position (`text-anchor: start`) and moved on by the
+ * distance between the pen and the ink's centre. */
+.score-symbol-icon {
+    width: 24px;
+    height: 24px;
+    display: block;
+
+    /* The side the ink is scaled to, in staff spaces: the box the symbol states, which is what leaves the margin
+     * around the ink. A symbol that reads too large for the row states a smaller side. */
+    --icon-ink-spaces: max(var(--ink-box-width), var(--ink-box-height));
+
+    /* The ink is scaled so its larger side spans that side. */
+    --icon-ink-scale: calc(var(--icon-ink-spaces) / max(var(--ink-width), calc(var(--ink-top) - var(--ink-bottom))));
+
+    text {
+        text-anchor: start;
+        transform-box: view-box;
+        transform-origin: 50% 50%;
+        transform:
+            translate(calc(-1 * var(--icon-ink-scale) * var(--staff-space, 10px) * (var(--ink-pen-x) + var(--ink-left) + (var(--ink-width) / 2) - (var(--ink-box-width) / 2))),
+                calc(var(--icon-ink-scale) * var(--staff-space, 10px) * ((var(--ink-top) + var(--ink-bottom)) / 2 + (var(--ink-box-height) / 2) - var(--ink-pen-y)))) scale(var(--icon-ink-scale));
+    }
+}
+
+/* The barline icons: one stroke per part the barline is assembled from, drawn in the thickness the font states,
+ * and its repeat dots as the font's glyph. The three layouts are the ink of `|:`, `:|` and `:||:`, which each
+ * grow away from the edge they stand on. */
+.score-symbol-icon-barline {
+    .barline-icon-stroke {
+        fill: none;
+        stroke: currentColor;
+        stroke-linecap: butt;
+    }
+
+    .barline-icon-stroke-thin {
+        stroke-width: var(--barline-thin-thickness, 2px);
+    }
+
+    .barline-icon-stroke-thick {
+        stroke-width: var(--barline-thick-thickness, 5px);
+    }
+
+    /* The dots are the font's glyph, at the size the font gives it, moved so the centre of the dots' ink sits
+     * where the layout states it. Centring a glyph centres the box the font advances and not its ink, so the
+     * glyph is drawn from its pen position and moved on by the distance between the pen and the ink's centre. */
+    .barline-icon-dots {
+        fill: currentColor;
+        font-family: var(--music-font-family);
+        text-anchor: start;
+        transform:
+            translate(calc(var(--barline-dots-x, 18px) - (var(--ink-left) + (var(--ink-width) / 2)) * var(--staff-space, 10px)),
+                calc(12px + ((var(--ink-top) + var(--ink-bottom)) / 2) * var(--staff-space, 10px)));
+    }
+
+    &.barline-icon-start {
+        .barline-icon-stroke-thick {
+            transform: translateX(7px);
+        }
+
+        .barline-icon-stroke-thin {
+            transform: translateX(11.5px);
+        }
+    }
+
+    &.barline-icon-end {
+        .barline-icon-stroke-thin {
+            transform: translateX(12.5px);
+        }
+
+        .barline-icon-stroke-thick {
+            transform: translateX(17px);
+        }
+
+        .barline-icon-dots {
+            --barline-dots-x: 6px;
+        }
+    }
+
+    &.barline-icon-centred {
+        .barline-icon-stroke-thin:nth-of-type(1) {
+            transform: translateX(8px);
+        }
+
+        .barline-icon-stroke-thick:nth-of-type(2) {
+            transform: translateX(12.5px);
+        }
+
+        .barline-icon-stroke-thin:nth-of-type(3) {
+            transform: translateX(16.5px);
+        }
+
+        .barline-icon-dots:nth-of-type(1) {
+            --barline-dots-x: 4px;
+        }
+
+        .barline-icon-dots:nth-of-type(2) {
+            --barline-dots-x: 20px;
+        }
     }
 }

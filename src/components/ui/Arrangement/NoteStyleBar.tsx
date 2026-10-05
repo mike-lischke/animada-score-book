@@ -146,14 +146,7 @@ export class NoteStyleBar extends UIComponent<INoteStyleBarProps, INoteStyleBarS
                     void requisitions.execute("restEntryRequested", undefined);
                 }}
             >
-                <span className="score-symbol-view-icon">
-                    <ScoreSymbolView
-                        className="noteStyleRestIcon"
-                        symbol={ScoreSymbol.RestQuarter}
-                        staffSpace={staffSpacePx}
-                        inkBox
-                    />
-                </span>
+                <ScoreSymbolView symbol={ScoreSymbol.RestQuarter} staffSpace={staffSpacePx} icon />
             </Button>
         );
     }

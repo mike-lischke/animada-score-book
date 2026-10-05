@@ -17,6 +17,7 @@ import { GridMeasureEditor } from "../../../ui/GridMeasureEditor.js";
 import { StaffMeasureEditor } from "../../../ui/StaffMeasureEditor.js";
 import type { IMeasureEditorInput } from "../../../ui/MeasureEditor.js";
 import { ScoreElementKind, ScoreElementRegistry } from "../../../ui/ScoreElementRegistry.js";
+import { RangeArticulationView } from "../../../ui/RangeArticulationView.js";
 import { TrackViewerInputController } from "../../../ui/TrackViewerInputController.js";
 import { GridMeasureViewer } from "../Bar/Grid/GridMeasureViewer.js";
 import { StaffMeasureViewer } from "../Bar/Staff/StaffMeasureViewer.js";
@@ -93,6 +94,7 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
     private trackViewerInputController?: TrackViewerInputController;
     private gridEditor?: GridMeasureEditor;
     private staffEditor?: StaffMeasureEditor;
+    private rangeArticulationView?: RangeArticulationView;
     private readonly scoreElementRegistry = new ScoreElementRegistry();
 
     //private animationEngine?: AnimationEngine;
@@ -173,6 +175,8 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
 
         this.trackViewerInputController = new TrackViewerInputController(contentHost);
         this.trackViewerInputController.attach();
+        this.rangeArticulationView = new RangeArticulationView(contentHost, dataModel, selectionManager,
+            this.scoreElementRegistry, this.state.trackViewMode === "staff");
         this.activateViewEditor();
         this.applyEditState();
 
@@ -213,6 +217,7 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         if (viewModeChanged) {
             // View mode switched — the input follows the new view, and its newly mounted components
             // need the current selection state.
+            this.rangeArticulationView?.setStaffMode(trackViewMode === "staff");
             this.activateViewEditor();
             selectionManager.republishSelection();
         }
@@ -253,6 +258,8 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         arrangementPlayer.animationEngine.disconnect(this.autoFollow);
         this.trackViewerInputController?.dispose();
         this.trackViewerInputController = undefined;
+        this.rangeArticulationView?.dispose();
+        this.rangeArticulationView = undefined;
 
         if (this.scrollAnimationFrameId !== 0) {
             cancelAnimationFrame(this.scrollAnimationFrameId);
@@ -352,6 +359,7 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
                     id="trackViewerDecorations"
                     crossAlignment={ChildAlignment.Stretch}
                 >
+                    <div id="rangeArticulationLayer" />
                 </Container>
                 {trackViewMode === "staff" ? renderStaffBars() : renderGridBars()}
                 <Container id="trackViewerDecorationOverlay" >

@@ -7,10 +7,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AppStorage } from "../../src/core/AppStorage.js";
 import { MeasureLayout } from "../../src/core/MeasureLayout.js";
+import { HairpinEnd, RangeArticulations } from "../../src/core/RangeArticulations.js";
 import { ScoreBookDataModel, type ISbDmTrackPiece } from "../../src/core/ScoreBookDataModel.js";
 import { reduceFraction } from "../../src/core/serialisation/numeric-functions.js";
-import type { IFraction, IMeasureEvent } from "../../src/core/types/general.js";
-import { RepeatMark } from "../../src/core/types/general.js";
+import type { IFraction, IMeasureEvent, IRangeArticulation, IRangeArticulationAnchor }
+    from "../../src/core/types/general.js";
+import { RangeArticulationKind, RepeatMark } from "../../src/core/types/general.js";
 import { requisitions } from "../../src/supplement/Requisitions.js";
 import { createInstrument, setCellNote } from "../unit-test-helpers.js";
 
@@ -1805,5 +1807,370 @@ describe.sequential("ScoreBookDataModel repeat barlines", () => {
 
         expect(model.setRepeatBars([2, 4, 0], RepeatMark.End, true)).toBe(false);
         expect(mutatedCalls).toBe(0);
+    });
+});
+
+describe.sequential("ScoreBookDataModel — Range Articulations", () => {
+    let model: ScoreBookDataModel;
+    let mutatedCalls: number;
+
+    /**
+     * @param trackIndex The track to look in.
+     *
+     * @returns The id of that track.
+     */
+    const trackIdOf = (trackIndex: number): number => {
+        return model.arrangement!.tracks[trackIndex].id;
+    };
+
+    /**
+     * @param bar The 1-based measure to look in.
+     * @param trackIndex The track to look in.
+     *
+     * @returns The anchors of that measure's notes, in order.
+     */
+    const noteAnchorsIn = (bar: number, trackIndex: number): IRangeArticulationAnchor[] => {
+        return model.arrangement!.tracks[trackIndex].measures[bar - 1].events.filter((event) => {
+            return event.noteStyleId !== undefined;
+        }).map((event) => {
+            return { bar, start: { ...event.start } };
+        });
+    };
+
+    /**
+     * @param bar The 1-based measure to look in.
+     * @param trackIndex The track to look in.
+     *
+     * @returns The anchor of the first event of that measure that carries no note.
+     */
+    const restAnchorIn = (bar: number, trackIndex: number): IRangeArticulationAnchor => {
+        const rest = model.arrangement!.tracks[trackIndex].measures[bar - 1].events.find((event) => {
+            return event.noteStyleId === undefined;
+        });
+        if (rest === undefined) {
+            throw new Error(`The measure ${bar} of track ${trackIndex} holds no rest.`);
+        }
+
+        return { bar, start: { ...rest.start } };
+    };
+
+    /**
+     * @returns The markings the arrangement holds, in insertion order.
+     */
+    const markings = (): IRangeArticulation[] => {
+        return model.arrangement!.rangeArticulations?.all.slice() ?? [];
+    };
+
+    const mutatedSpy = (): Promise<boolean> => {
+        mutatedCalls++;
+
+        return Promise.resolve(true);
+    };
+
+    beforeEach(() => {
+        mutatedCalls = 0;
+        model = new ScoreBookDataModel();
+        model.startNewArrangement([createInstrument("0", 0, 0), createInstrument("1", 1, 1)], { length: 2 });
+
+        // Every even step of both tracks carries a note, so the odd ones stay rests.
+        for (const trackIndex of [0, 1]) {
+            for (const bar of [1, 2]) {
+                for (let step = 0; step < 16; step += 2) {
+                    setCellNote(model, trackIdOf(trackIndex), bar, step, "1");
+                }
+            }
+        }
+
+        requisitions.register("arrangementMutated", mutatedSpy);
+    });
+
+    afterEach(() => {
+        requisitions.unregister("arrangementMutated", mutatedSpy);
+    });
+
+    it("inserts a hairpin between two notes as one undo step", () => {
+        const notes = noteAnchorsIn(1, 0);
+
+        const hairpin = model.insertHairpin(RangeArticulationKind.Crescendo, trackIdOf(0), notes[0], notes[2]);
+
+        expect(hairpin?.kind).toBe(RangeArticulationKind.Crescendo);
+        expect(hairpin?.trackId).toBe(trackIdOf(0));
+        expect(markings()).toEqual([hairpin]);
+        expect(mutatedCalls).toBe(1);
+    });
+
+    it("refuses a hairpin that rests, overlaps another or runs against its own order", () => {
+        const notes = noteAnchorsIn(1, 0);
+
+        expect(model.insertHairpin(RangeArticulationKind.Crescendo, trackIdOf(0), notes[0], restAnchorIn(1, 0)))
+            .toBeUndefined();
+        expect(model.insertHairpin(RangeArticulationKind.Crescendo, trackIdOf(0), notes[0], notes[2])).toBeDefined();
+
+        mutatedCalls = 0;
+        expect(model.insertHairpin(RangeArticulationKind.Decrescendo, trackIdOf(0), notes[1], notes[3]))
+            .toBeUndefined();
+        expect(model.insertHairpin(RangeArticulationKind.Crescendo, trackIdOf(0), notes[2], notes[0]))
+            .toBeUndefined();
+        expect(mutatedCalls).toBe(0);
+    });
+
+    it("keeps an f out of a hairpin and a hairpin off an f", () => {
+        const notes = noteAnchorsIn(1, 0);
+        const hairpin = model.insertHairpin(RangeArticulationKind.Crescendo, trackIdOf(0), notes[0], notes[4]);
+        if (hairpin === undefined) {
+            throw new Error("Expected the hairpin to be inserted.");
+        }
+
+        mutatedCalls = 0;
+        expect(model.insertForteMark(trackIdOf(0), notes[2])).toBeUndefined();
+
+        model.removeRangeArticulation(hairpin.id);
+        expect(model.insertForteMark(trackIdOf(0), notes[2])).toBeDefined();
+
+        mutatedCalls = 0;
+        expect(model.insertHairpin(RangeArticulationKind.Crescendo, trackIdOf(0), notes[0], notes[4]))
+            .toBeUndefined();
+        expect(model.insertHairpin(RangeArticulationKind.Crescendo, trackIdOf(0), notes[2], notes[6]))
+            .toBeUndefined();
+        expect(mutatedCalls).toBe(0);
+    });
+
+    it("places an f on a rest and refuses a second one on that event", () => {
+        const rest = restAnchorIn(1, 0);
+
+        const mark = model.insertForteMark(trackIdOf(0), rest);
+
+        expect(mark?.kind).toBe(RangeArticulationKind.Forte);
+        expect(mutatedCalls).toBe(1);
+
+        mutatedCalls = 0;
+        expect(model.insertForteMark(trackIdOf(0), rest)).toBeUndefined();
+        expect(mutatedCalls).toBe(0);
+    });
+
+    it("moves one end of a hairpin and turns it around when it passes the other", () => {
+        const notes = noteAnchorsIn(1, 0);
+        const hairpin = model.insertHairpin(RangeArticulationKind.Crescendo, trackIdOf(0), notes[0], notes[4]);
+        if (hairpin === undefined) {
+            throw new Error("Expected the hairpin to be inserted.");
+        }
+
+        mutatedCalls = 0;
+        expect(model.moveHairpinAnchor(hairpin.id, trackIdOf(0), HairpinEnd.From, notes[6])).toBe(true);
+
+        const turned = markings()[0];
+        if (!RangeArticulations.isHairpin(turned)) {
+            throw new Error("Expected the stored marking to be a hairpin.");
+        }
+
+        expect(turned.from).toEqual(notes[4]);
+        expect(turned.to).toEqual(notes[6]);
+        expect(turned.kind).toBe(RangeArticulationKind.Decrescendo);
+        expect(mutatedCalls).toBe(1);
+    });
+
+    it("refuses an end move that would overlap another hairpin or land on a rest", () => {
+        const notes = noteAnchorsIn(1, 0);
+        const first = model.insertHairpin(RangeArticulationKind.Crescendo, trackIdOf(0), notes[0], notes[2]);
+        const second = model.insertHairpin(RangeArticulationKind.Crescendo, trackIdOf(0), notes[4], notes[6]);
+        if (first === undefined || second === undefined) {
+            throw new Error("Expected both hairpins to be inserted.");
+        }
+
+        mutatedCalls = 0;
+        expect(model.moveHairpinAnchor(second.id, trackIdOf(0), HairpinEnd.From, notes[1])).toBe(false);
+        expect(model.moveHairpinAnchor(second.id, trackIdOf(0), HairpinEnd.To, restAnchorIn(1, 0))).toBe(false);
+        expect(mutatedCalls).toBe(0);
+    });
+
+    it("moves a hairpin to another track and frees the notes it covered", () => {
+        const notes = noteAnchorsIn(1, 0);
+        const elsewhere = noteAnchorsIn(1, 1);
+        const hairpin = model.insertHairpin(RangeArticulationKind.Crescendo, trackIdOf(0), notes[0], notes[2]);
+        if (hairpin === undefined) {
+            throw new Error("Expected the hairpin to be inserted.");
+        }
+
+        mutatedCalls = 0;
+        expect(model.moveHairpin(hairpin.id, trackIdOf(1), elsewhere[2], elsewhere[4])).toBe(true);
+
+        expect(markings()[0].trackId).toBe(trackIdOf(1));
+        expect(mutatedCalls).toBe(1);
+
+        expect(model.insertForteMark(trackIdOf(0), notes[1])).toBeDefined();
+    });
+
+    it("moves an f onto another rest and onto another track", () => {
+        const mark = model.insertForteMark(trackIdOf(0), restAnchorIn(1, 0));
+        if (mark === undefined) {
+            throw new Error("Expected the f marking to be inserted.");
+        }
+
+        mutatedCalls = 0;
+        expect(model.moveForteMark(mark.id, trackIdOf(0), restAnchorIn(2, 0))).toBe(true);
+        expect(mutatedCalls).toBe(1);
+
+        expect(model.moveForteMark(mark.id, trackIdOf(1), noteAnchorsIn(1, 1)[0])).toBe(true);
+        expect(markings()[0].trackId).toBe(trackIdOf(1));
+    });
+
+    it("changes nothing when a move names the place a marking already stands at", () => {
+        const notes = noteAnchorsIn(1, 0);
+        const hairpin = model.insertHairpin(RangeArticulationKind.Crescendo, trackIdOf(0), notes[0], notes[2]);
+        const mark = model.insertForteMark(trackIdOf(0), restAnchorIn(2, 0));
+        if (hairpin === undefined || mark === undefined) {
+            throw new Error("Expected both markings to be inserted.");
+        }
+
+        mutatedCalls = 0;
+        expect(model.moveHairpinAnchor(hairpin.id, trackIdOf(0), HairpinEnd.To, notes[2])).toBe(false);
+        expect(model.moveForteMark(mark.id, trackIdOf(0), restAnchorIn(2, 0))).toBe(false);
+        expect(mutatedCalls).toBe(0);
+    });
+
+    it("removes a marking and reports a second removal of it", () => {
+        const notes = noteAnchorsIn(1, 0);
+        const hairpin = model.insertHairpin(RangeArticulationKind.Crescendo, trackIdOf(0), notes[0], notes[2]);
+        if (hairpin === undefined) {
+            throw new Error("Expected the hairpin to be inserted.");
+        }
+
+        mutatedCalls = 0;
+        expect(model.removeRangeArticulation(hairpin.id)).toBe(true);
+        expect(markings()).toHaveLength(0);
+        expect(mutatedCalls).toBe(1);
+
+        mutatedCalls = 0;
+        expect(model.removeRangeArticulation(hairpin.id)).toBe(false);
+        expect(mutatedCalls).toBe(0);
+    });
+
+    it("drops the hairpin whose anchor note is deleted in the same edit", () => {
+        const notes = noteAnchorsIn(1, 0);
+        expect(model.insertHairpin(RangeArticulationKind.Crescendo, trackIdOf(0), notes[0], notes[2]))
+            .toBeDefined();
+
+        mutatedCalls = 0;
+        expect(model.deleteEventWithShift(trackIdOf(0), 1, notes[0].start)).toBe(true);
+
+        expect(markings()).toHaveLength(0);
+        expect(mutatedCalls).toBe(1);
+    });
+
+    it("drops the hairpin whose anchor note becomes a rest", () => {
+        const notes = noteAnchorsIn(1, 0);
+        expect(model.insertHairpin(RangeArticulationKind.Crescendo, trackIdOf(0), notes[0], notes[2]))
+            .toBeDefined();
+
+        mutatedCalls = 0;
+        expect(model.setNoteAt(trackIdOf(0), 1, notes[0].start, { numerator: 1, denominator: 16 }, undefined))
+            .toBe(true);
+
+        expect(markings()).toHaveLength(0);
+        expect(mutatedCalls).toBe(1);
+    });
+
+    it("shifts the markings of the bars a new bar is inserted before", () => {
+        const notes = noteAnchorsIn(2, 0);
+        model.insertHairpin(RangeArticulationKind.Crescendo, trackIdOf(0), notes[0], notes[2]);
+
+        mutatedCalls = 0;
+        model.insertBars(2, 1, true, false);
+
+        const shifted = markings()[0];
+        if (!RangeArticulations.isHairpin(shifted)) {
+            throw new Error("Expected the stored marking to be a hairpin.");
+        }
+
+        expect(shifted.from.bar).toBe(3);
+        expect(shifted.to.bar).toBe(3);
+        expect(mutatedCalls).toBe(1);
+    });
+
+    it("drops the markings of a deleted bar and shifts the later ones", () => {
+        const first = noteAnchorsIn(1, 0);
+        const second = noteAnchorsIn(2, 0);
+        model.insertHairpin(RangeArticulationKind.Crescendo, trackIdOf(0), first[0], first[2]);
+        model.insertHairpin(RangeArticulationKind.Crescendo, trackIdOf(0), second[0], second[2]);
+
+        mutatedCalls = 0;
+        model.deleteBar(1);
+
+        const kept = markings();
+        expect(kept).toHaveLength(1);
+        if (!RangeArticulations.isHairpin(kept[0])) {
+            throw new Error("Expected the stored marking to be a hairpin.");
+        }
+
+        expect(kept[0].from.bar).toBe(1);
+        expect(mutatedCalls).toBe(1);
+    });
+
+    it("copies the markings a duplicated bar holds fully and leaves a reaching hairpin behind", () => {
+        const first = noteAnchorsIn(1, 0);
+        const second = noteAnchorsIn(2, 0);
+        model.insertHairpin(RangeArticulationKind.Crescendo, trackIdOf(0), first[0], first[2]);
+        model.insertHairpin(RangeArticulationKind.Crescendo, trackIdOf(0), first[4], second[0]);
+
+        mutatedCalls = 0;
+        model.duplicateBar(1);
+
+        const toBars: number[] = [];
+        for (const marking of markings()) {
+            if (RangeArticulations.isHairpin(marking)) {
+                toBars.push(marking.to.bar);
+            }
+        }
+
+        expect(toBars.sort((left, right) => {
+            return left - right;
+        })).toEqual([1, 2, 3]);
+        expect(mutatedCalls).toBe(1);
+    });
+
+    it("removes a removed track's markings and copies a duplicate's", () => {
+        const first = noteAnchorsIn(1, 0);
+        const second = noteAnchorsIn(1, 1);
+        model.insertHairpin(RangeArticulationKind.Crescendo, trackIdOf(0), first[0], first[2]);
+        model.insertHairpin(RangeArticulationKind.Crescendo, trackIdOf(1), second[0], second[2]);
+        const secondTrackId = trackIdOf(1);
+
+        mutatedCalls = 0;
+        model.removeTrack(model.arrangement!.tracks[0]);
+
+        expect(markings().map((marking) => {
+            return marking.trackId;
+        })).toEqual([secondTrackId]);
+        expect(mutatedCalls).toBe(1);
+
+        mutatedCalls = 0;
+        const copy = model.duplicateTrack(model.arrangement!.tracks[0]);
+
+        const cloned = markings().find((marking) => {
+            return marking.trackId === copy.id;
+        });
+
+        expect(markings()).toHaveLength(2);
+        expect(cloned).toBeDefined();
+        expect(cloned!.id).not.toBe(markings()[0].id);
+        expect(mutatedCalls).toBe(1);
+    });
+
+    it("drops the markings of a cleared bar and of a cleared track", () => {
+        const notes = noteAnchorsIn(1, 0);
+        model.insertHairpin(RangeArticulationKind.Crescendo, trackIdOf(0), notes[0], notes[2]);
+
+        mutatedCalls = 0;
+        model.clearBar(1);
+        expect(markings()).toHaveLength(0);
+        expect(mutatedCalls).toBe(1);
+
+        const inSecondBar = noteAnchorsIn(2, 0);
+        model.insertHairpin(RangeArticulationKind.Crescendo, trackIdOf(0), inSecondBar[0], inSecondBar[2]);
+
+        mutatedCalls = 0;
+        model.clearTrack(model.arrangement!.tracks[0]);
+        expect(markings()).toHaveLength(0);
+        expect(mutatedCalls).toBe(1);
     });
 });

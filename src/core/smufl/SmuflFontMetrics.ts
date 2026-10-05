@@ -60,6 +60,9 @@ export interface ISmuflEngravingDefaults {
 
     bracketThickness: number;
     tupletBracketThickness: number;
+
+    /** Stroke width of a hairpin, which the score draws as line geometry rather than a glyph. */
+    hairpinThickness: number;
 }
 
 /** The reduced metrics of one font, as `build/generate-smufl-metrics` writes them. */

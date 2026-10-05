@@ -57,6 +57,7 @@ const engravingVariables: ReadonlyArray<readonly [keyof ISmuflEngravingDefaults,
     ["repeatBarlineDotSeparation", "--repeat-dot-separation"],
     ["bracketThickness", "--bracket-thickness"],
     ["tupletBracketThickness", "--tuplet-bracket-thickness"],
+    ["hairpinThickness", "--hairpin-thickness"],
 ];
 
 /**
@@ -534,6 +535,10 @@ export class SmuflFontLoader {
                 style.setProperty(`${glyphInkSpacesVariablePrefix}top-${glyphName}`, `${bBoxNE[1]}`);
                 style.setProperty(`${glyphInkSpacesVariablePrefix}bottom-${glyphName}`, `${bBoxSW[1]}`);
                 style.setProperty(`${glyphInkSpacesVariablePrefix}width-${glyphName}`, `${bBoxNE[0] - bBoxSW[0]}`);
+
+                // Where the ink starts left of the pen position. A drawing that centres the ink rather than the
+                // box the font advances needs it: only the ink's own edges say where the ink sits.
+                style.setProperty(`${glyphInkSpacesVariablePrefix}left-${glyphName}`, `${bBoxSW[0]}`);
             }
 
             if (stemUpNW !== undefined) {

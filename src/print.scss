@@ -284,6 +284,11 @@
         color: #000 !important;
     }
 
+    /* Hairpins and f markings: force black for print. */
+    .staff-note-viewer-articulation {
+        color: #000 !important;
+    }
+
     /*
      * Stem overrides for print: compensate CSS zoom so stems always render at
      * exactly 1 px width.  Without compensation, zoom values like 0.66 shrink a

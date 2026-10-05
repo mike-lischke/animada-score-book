@@ -69,6 +69,9 @@ export enum ScoreSymbol {
     GhostParenthesisRight,
     Accent,
 
+    /** The dynamics: the `f` that restores the normal level. Hairpins are drawn as line geometry. */
+    Forte,
+
     /** The bar lines that close a track piece. */
     BarlineSingle,
     BarlineFinal,
@@ -465,6 +468,12 @@ export class ScoreSymbols {
             source: ScoreSymbolSource.MusicFontGlyph,
             glyph: SmuflGlyph.ArticAccentAbove,
             anchor: GlyphAnchor.LeftEdge,
+        },
+
+        [ScoreSymbol.Forte]: {
+            source: ScoreSymbolSource.MusicFontGlyph,
+            glyph: SmuflGlyph.DynamicForte,
+            anchor: GlyphAnchor.Centre,
         },
 
         // The cross a slap or a rimshot draws over the head. Both are the same 14 x 14 design, scaled into

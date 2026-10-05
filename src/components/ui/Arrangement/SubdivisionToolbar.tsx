@@ -6,6 +6,7 @@
 import type { ComponentChild } from "preact";
 
 import { staffSpacePx } from "../../../core/MeasureLayout.js";
+import { AppStorage } from "../../../core/AppStorage.js";
 import { MeasureProjection } from "../../../core/MeasureProjection.js";
 import { NoteLength, noteLengthDenominator } from "../../../core/rest-notation.js";
 import type { ISbDmTrackPiece, ScoreBookDataModel } from "../../../core/ScoreBookDataModel.js";
@@ -13,13 +14,15 @@ import { ScoreSymbol } from "../../../core/ScoreSymbols.js";
 import { addFractions, compareFractions, subtractFractions } from "../../../core/serialisation/numeric-functions.js";
 import type { IFraction } from "../../../core/types/general.js";
 import { RepeatMark } from "../../../core/types/general.js";
-import { requisitions } from "../../../supplement/Requisitions.js";
+import { requisitions, RangeArticulationTool } from "../../../supplement/Requisitions.js";
 import { maxTupletLevels } from "../../../core/tuplets.js";
 import type { SelectionManager } from "../../../ui/SelectionManager.js";
 import {
     addressesNoteCells, SelectionGranularity, SelectionSerializer, type INoteCellTarget, type ISelectionEntry,
 } from "../../../ui/SelectionSerializer.js";
 import { TupletIcon } from "../Note/TupletIcon.js";
+import { HairpinIcon } from "../Note/HairpinIcon.js";
+import { Separator } from "../Separator.js";
 import { Button } from "../framework/Button.js";
 import { Container } from "../framework/Container.js";
 import { Dropdown, type IDropdownItem } from "../framework/Dropdown.js";
@@ -56,6 +59,12 @@ interface ISubdivisionToolbarState {
 
     /** Whether every addressed bar closes a repeated section. */
     repeatEndActive: boolean;
+
+    /** The placing tool currently in effect. */
+    activeTool: RangeArticulationTool;
+
+    /** True while the staff view is shown, the only view that offers the dynamics and repeat controls. */
+    staffMode: boolean;
 }
 
 interface ISubdivisionOption {
@@ -88,11 +97,14 @@ const subdivisionOptions: ISubdivisionOption[] = [
 /**
  * Toolbar for creating subdivisions. A subdivision is created either from the current cursor
  * position (a single selected note cell) or from a contiguous selection within a single track.
+ * The grid view shows the tuplet dropdown alone; the dynamics and repeat controls belong to the
+ * staff view, which draws what they mark.
  */
 export class SubdivisionToolbar extends UIComponent<ISubdivisionToolbarProps, ISubdivisionToolbarState> {
     public constructor(props: ISubdivisionToolbarProps) {
         super(props);
 
+        const settings = AppStorage.loadUISettings();
         this.state = {
             canCreate: false,
             maxSlots: 1,
@@ -102,6 +114,8 @@ export class SubdivisionToolbar extends UIComponent<ISubdivisionToolbarProps, IS
             canMarkRepeatEnd: false,
             repeatStartActive: false,
             repeatEndActive: false,
+            activeTool: RangeArticulationTool.None,
+            staffMode: (settings?.viewSettings?.arrangementViewSettings?.displayMode ?? "grid") === "staff",
         };
     }
 
@@ -109,6 +123,8 @@ export class SubdivisionToolbar extends UIComponent<ISubdivisionToolbarProps, IS
         requisitions.register("selectionChanged", this.handleSelectionChanged);
         requisitions.register("arrangementReverted", this.handleArrangementReverted);
         requisitions.register("arrangementMutated", this.handleArrangementReverted);
+        requisitions.register("rangeArticulationToolChanged", this.handleToolChanged);
+        requisitions.register("trackViewModeToggled", this.handleViewModeToggled);
         this.refreshState();
     }
 
@@ -116,13 +132,25 @@ export class SubdivisionToolbar extends UIComponent<ISubdivisionToolbarProps, IS
         requisitions.unregister("selectionChanged", this.handleSelectionChanged);
         requisitions.unregister("arrangementReverted", this.handleArrangementReverted);
         requisitions.unregister("arrangementMutated", this.handleArrangementReverted);
+        requisitions.unregister("rangeArticulationToolChanged", this.handleToolChanged);
+        requisitions.unregister("trackViewModeToggled", this.handleViewModeToggled);
+
+        // The toolbar owns the placing mode, so leaving edit mode has to end it. The score view keeps
+        // listening after this component is gone.
+        if (this.state.activeTool !== RangeArticulationTool.None) {
+            void requisitions.execute("rangeArticulationToolChanged", RangeArticulationTool.None);
+        }
     }
 
     public override render(): ComponentChild {
-        const { canCreate, canToggleSimile, simileActive } = this.state;
-        const { canMarkRepeatStart, canMarkRepeatEnd, repeatStartActive, repeatEndActive } = this.state;
+        const { staffMode } = this.state;
 
-        const dropdownItems = this.buildDropdownItems();
+        const tupletGroup = this.renderTupletGroup();
+
+        let repeatGroup: ComponentChild;
+        if (staffMode) {
+            repeatGroup = this.renderRepeatGroup();
+        }
 
         return (
             <Container
@@ -130,18 +158,84 @@ export class SubdivisionToolbar extends UIComponent<ISubdivisionToolbarProps, IS
                 orientation={Orientation.LeftToRight}
                 crossAlignment={ChildAlignment.Center}
             >
-                <GooeyGroup
-                    className="subdivisionToolbar"
-                    background="var(--color-base-200)"
+                {tupletGroup}
+                {repeatGroup}
+            </Container>
+        );
+    }
+
+    /**
+     * Builds the group the grid view keeps: the tuplet dropdown and, in the staff view, the dynamics buttons.
+     *
+     * @returns The group's content.
+     */
+    private renderTupletGroup(): ComponentChild {
+        const { canCreate, staffMode } = this.state;
+        const dropdownItems = this.buildDropdownItems();
+
+        let dynamicsButtons: ComponentChild;
+        if (staffMode) {
+            dynamicsButtons = this.renderDynamicsButtons();
+        }
+
+        return (
+            <GooeyGroup
+                className="subdivisionToolbar"
+                background="var(--color-base-200)"
+            >
+                <Dropdown
+                    icon={<TupletIcon />}
+                    disabled={!canCreate}
+                    closeOnSelect
+                    items={dropdownItems}
+                    data-tooltip="Add subdivision"
+                />
+                {dynamicsButtons}
+            </GooeyGroup>
+        );
+    }
+
+    /**
+     * Builds the dynamics buttons, which start the placing modes the staff view draws.
+     *
+     * @returns The hairpin and forte buttons.
+     */
+    private renderDynamicsButtons(): ComponentChild {
+        const { activeTool } = this.state;
+
+        return (
+            <>
+                <Button
+                    isDefault={activeTool === RangeArticulationTool.Hairpin}
+                    data-tooltip="Draw crescendo / decrescendo hairpin"
+                    onClick={this.handleHairpinClick}
                 >
-                    <Dropdown
-                        icon={<TupletIcon />}
-                        disabled={!canCreate}
-                        closeOnSelect
-                        items={dropdownItems}
-                        data-tooltip="Add subdivision"
-                    />
-                </GooeyGroup>
+                    <HairpinIcon />
+                </Button>
+                <Button
+                    isDefault={activeTool === RangeArticulationTool.Forte}
+                    className="forteButton"
+                    data-tooltip="Place forte (f)"
+                    onClick={this.handleForteClick}
+                >
+                    <ScoreSymbolView symbol={ScoreSymbol.Forte} staffSpace={staffSpacePx} icon />
+                </Button>
+            </>
+        );
+    }
+
+    /**
+     * Builds the repeat group, whose marks the staff view draws on the barlines.
+     *
+     * @returns The separator and the simile and repeat buttons.
+     */
+    private renderRepeatGroup(): ComponentChild {
+        const { canToggleSimile, simileActive } = this.state;
+        const { canMarkRepeatStart, canMarkRepeatEnd, repeatStartActive, repeatEndActive } = this.state;
+
+        return (
+            <>
+                <Separator />
                 <GooeyGroup
                     className="subdivisionToolbar"
                     background="var(--color-base-200)"
@@ -149,12 +243,11 @@ export class SubdivisionToolbar extends UIComponent<ISubdivisionToolbarProps, IS
                     <Button
                         isDefault={simileActive}
                         disabled={!canToggleSimile}
+                        className="simileButton"
                         data-tooltip="One-bar repeat (simile)"
                         onClick={this.handleToggleSimile}
                     >
-                        <span className="score-symbol-view-icon">
-                            <ScoreSymbolView symbol={ScoreSymbol.MeasureRepeat} staffSpace={staffSpacePx} inkBox />
-                        </span>
+                        <ScoreSymbolView symbol={ScoreSymbol.MeasureRepeat} staffSpace={staffSpacePx} icon />
                     </Button>
                     <Button
                         isDefault={repeatStartActive}
@@ -162,9 +255,7 @@ export class SubdivisionToolbar extends UIComponent<ISubdivisionToolbarProps, IS
                         data-tooltip="Repeat start"
                         onClick={this.handleToggleRepeatStart}
                     >
-                        <span className="score-symbol-view-icon">
-                            <ScoreSymbolView symbol={ScoreSymbol.RepeatStart} staffSpace={staffSpacePx} />
-                        </span>
+                        <ScoreSymbolView symbol={ScoreSymbol.RepeatStart} staffSpace={staffSpacePx} icon />
                     </Button>
                     <Button
                         isDefault={repeatEndActive}
@@ -172,12 +263,10 @@ export class SubdivisionToolbar extends UIComponent<ISubdivisionToolbarProps, IS
                         data-tooltip="Repeat end"
                         onClick={this.handleToggleRepeatEnd}
                     >
-                        <span className="score-symbol-view-icon">
-                            <ScoreSymbolView symbol={ScoreSymbol.RepeatEnd} staffSpace={staffSpacePx} />
-                        </span>
+                        <ScoreSymbolView symbol={ScoreSymbol.RepeatEnd} staffSpace={staffSpacePx} icon />
                     </Button>
                 </GooeyGroup>
-            </Container>
+            </>
         );
     }
 
@@ -192,6 +281,37 @@ export class SubdivisionToolbar extends UIComponent<ISubdivisionToolbarProps, IS
 
         return Promise.resolve(true);
     };
+
+    private handleToolChanged = (tool: RangeArticulationTool): Promise<boolean> => {
+        this.setState({ activeTool: tool });
+
+        return Promise.resolve(true);
+    };
+
+    private handleViewModeToggled = (mode: "grid" | "staff"): Promise<boolean> => {
+        this.setState({ staffMode: mode === "staff" });
+
+        return Promise.resolve(true);
+    };
+
+    private handleHairpinClick = (): void => {
+        this.startTool(RangeArticulationTool.Hairpin);
+    };
+
+    private handleForteClick = (): void => {
+        this.startTool(RangeArticulationTool.Forte);
+    };
+
+    /**
+     * Enters the placing mode of a tool. The mode owns the pointer until it is left, so picking a button starts a
+     * mode and never toggles one off.
+     *
+     * @param tool The tool the clicked button stands for.
+     */
+    private startTool(tool: RangeArticulationTool): void {
+        this.setState({ activeTool: tool });
+        void requisitions.execute("rangeArticulationToolChanged", tool);
+    }
 
     private buildDropdownItems(): IDropdownItem[] {
         const { maxSlots } = this.state;

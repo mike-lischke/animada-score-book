@@ -4,6 +4,7 @@
  */
 
 import { MeasureLayout } from "./MeasureLayout.js";
+import { RangeArticulations } from "./RangeArticulations.js";
 import { requisitions } from "../supplement/Requisitions.js";
 import {
     SbDmEntityType, type ISbDmArrangement, type ISbDmInstrument, type ISbDmTrack,
@@ -43,6 +44,12 @@ export class Arrangement implements ISbDmArrangement {
 
     /** Repeat marks of individual measures, keyed by 1-based measure number. */
     public readonly repeatBars = new Map<number, IRepeatBar>();
+
+    /**
+     * Hairpins and `f` markings of the arrangement, in insertion order. Held as a flat list because each
+     * anchor carries the measure it belongs to itself.
+     */
+    public readonly rangeArticulations = new RangeArticulations();
 
     /**
      * Extension chunks of other features or newer builds, kept verbatim so that writing a snapshot never
@@ -197,6 +204,7 @@ export class Arrangement implements ISbDmArrangement {
         const index = this.tracks.indexOf(trackToRemove);
         if (index !== -1) {
             this.tracks.splice(index, 1);
+            this.rangeArticulations.removeTrack(trackToRemove.id);
             void requisitions.execute("arrangementChanged", this.id);
 
             return true;
@@ -244,6 +252,7 @@ export class Arrangement implements ISbDmArrangement {
         }
 
         this.tracks.splice(index + 1, 0, copy);
+        this.rangeArticulations.duplicateTrack(trackToDuplicate.id, copy.id);
         void requisitions.execute("arrangementChanged", this.id);
 
         return copy;
@@ -268,6 +277,15 @@ export class Arrangement implements ISbDmArrangement {
             const concreteTrack = track as Track;
             for (let i = 0; i < count; i++) {
                 concreteTrack.insertMeasure(atIndex + i, source);
+            }
+        }
+
+        // A marking stays with its measure: anchors in the shifted bars move along, and a copied bar takes the
+        // markings the bar it copies holds.
+        this.rangeArticulations.shiftAnchors(atIndex + 1, count);
+        if (copyContent) {
+            for (let i = 1; i <= count; i++) {
+                this.rangeArticulations.copyContained(atIndex, atIndex + i);
             }
         }
 
@@ -311,6 +329,10 @@ export class Arrangement implements ISbDmArrangement {
             (track as Track).deleteMeasure(barNumber - 1);
         }
 
+        // The removed bar takes the markings anchored inside it; the following bars move their anchors left.
+        this.rangeArticulations.dropInBar(barNumber);
+        this.rangeArticulations.shiftAnchors(barNumber + 1, -1);
+
         this.timeParams.length -= 1;
         this.measureWidths.delete(barNumber);
         this.shiftMeasureWidths(barNumber + 1, -1);
@@ -325,6 +347,9 @@ export class Arrangement implements ISbDmArrangement {
      * @param barNumber The 1-based bar to clear.
      */
     public clearBar(barNumber: number): void {
+        // Clearing a bar removes its notes, so a marking anchored inside it loses its anchor.
+        this.rangeArticulations.dropInBar(barNumber);
+
         for (const track of this.tracks) {
             (track as Track).clearMeasure(barNumber - 1);
             void requisitions.execute("trackChanged", track.id);
@@ -342,6 +367,10 @@ export class Arrangement implements ISbDmArrangement {
         for (const track of this.tracks) {
             (track as Track).duplicateMeasure(barNumber - 1);
         }
+
+        // The copy takes the markings fully inside the bar it repeats, and the following bars move right.
+        this.rangeArticulations.shiftAnchors(barNumber + 1, 1);
+        this.rangeArticulations.copyContained(barNumber, barNumber + 1);
 
         this.timeParams.length += 1;
 
@@ -386,8 +415,6 @@ export class Arrangement implements ISbDmArrangement {
         // same TPs. However, applying the full snapshot is required for Undo/Redo.
         this.applyTimeParams(arrangementSnapshot);
 
-        // The bar count is known only after the time params, so the width chunk is filtered against it here.
-        applyArrangementExtensions(this, arrangementSnapshot);
         this.title = arrangementSnapshot.title ?? "Untitled Arrangement";
 
         if (arrangementSnapshot.scoreId !== undefined) {
@@ -422,6 +449,10 @@ export class Arrangement implements ISbDmArrangement {
         }
 
         this.tracks.splice(0, this.tracks.length, ...restoredTracks);
+
+        // The chunks filter against the bar count and resolve their anchors against the restored tracks, so
+        // they are applied after both the time params and the track list.
+        applyArrangementExtensions(this, arrangementSnapshot);
         this.clampMeasureWidths();
         void requisitions.execute("arrangementChanged", this.id);
     };

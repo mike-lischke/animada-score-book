@@ -3,7 +3,7 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { ISbDmTrackPiece } from "../../src/core/ScoreBookDataModel.js";
 import type { IRepeatBar } from "../../src/core/types/general.js";
@@ -61,6 +61,10 @@ const marksOf = (marks: Record<number, IRepeatBar>): Map<number, IRepeatBar> => 
 };
 
 describe("PlaybackOrder.performedBars", () => {
+    afterEach(() => {
+        vi.restoreAllMocks();
+    });
+
     it("plays the bars in the order they are written when no repeat is marked", () => {
         expect(PlaybackOrder.performedBars(marksOf({}), 3)).toEqual([1, 2, 3]);
     });
@@ -105,11 +109,17 @@ describe("PlaybackOrder.performedBars", () => {
             marks[bar] = { end: true };
         }
 
+        const warn = vi.spyOn(console, "warn").mockImplementation(() => {
+            // The warning is what the test asserts; silencing it keeps the test output clean.
+        });
+
         const order = PlaybackOrder.performedBars(marksOf(marks), 40);
 
         expect(order.length).toBe(40 * 16);
         expect(order.every((bar) => {
             return bar >= 1 && bar <= 40;
         })).toBe(true);
+        expect(warn).toHaveBeenCalledOnce();
+        expect(warn).toHaveBeenCalledWith("PlaybackOrder: the repeat marks of 40 bars resolve to more than 640 bars");
     });
 });

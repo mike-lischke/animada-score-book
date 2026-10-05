@@ -17,19 +17,7 @@ export class AnimationEngine {
     private nextAnimationId = 0;
 
     public constructor(private readonly realtimeProvider: IRealtimeProvider) {
-        requisitions.register("playerStateChanged", () => {
-            if (realtimeProvider.state === PlayerPlayState.Playing) {
-                if (this.nextAnimationId === 0) {
-                    this.start();
-                }
-
-                return Promise.resolve(true);
-            }
-
-            this.stop();
-
-            return Promise.resolve(true);
-        });
+        requisitions.register("playerStateChanged", this.handlePlayerStateChanged);
     }
 
     public connect(animation: (realTime: number) => void) {
@@ -42,6 +30,35 @@ export class AnimationEngine {
             this.animations.splice(animationIndex, 1);
         }
     }
+
+    /**
+     * Drops the subscription to the player and ends a running animation. A player disposes its engine when it is
+     * replaced, so an engine must not react to the playback of the player that replaced it.
+     */
+    public dispose(): void {
+        requisitions.unregister("playerStateChanged", this.handlePlayerStateChanged);
+        cancelAnimationFrame(this.nextAnimationId);
+        this.nextAnimationId = 0;
+
+        // No animation runs any more, which the viewer reads as the end of playback.
+        void requisitions.execute("animationStateChanged", PlayerPlayState.Stopped);
+    }
+
+    private handlePlayerStateChanged = (): Promise<boolean> => {
+        const { realtimeProvider } = this;
+
+        if (realtimeProvider.state === PlayerPlayState.Playing) {
+            if (this.nextAnimationId === 0) {
+                this.start();
+            }
+
+            return Promise.resolve(true);
+        }
+
+        this.stop();
+
+        return Promise.resolve(true);
+    };
 
     private start() {
         if (this.realtimeProvider.state === PlayerPlayState.Playing) {

@@ -98,6 +98,10 @@
 
     .grid-measure-row {
         margin: 8px 8px 8px 8px;
+
+        /* A row with cells gets its height from them; a simile row has only the absolutely positioned mark,
+           so it needs this floor to keep its place and not pull the following rows up. */
+        min-height: var(--note-height);
     }
 
     .grid-beat-overlay {

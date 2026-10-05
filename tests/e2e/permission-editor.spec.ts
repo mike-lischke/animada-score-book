@@ -10,10 +10,11 @@ import { expect, test, type Page } from "@playwright/test";
  * Mocks authentication, health, scores, and permission CRUD.
  *
  * @param page The Playwright page to set up routes on.
+ * @param setPermissionsError The error returned when saving permissions fails.
  *
  * @returns An object with access to the captured setPermission calls.
  */
-const setupPermissionApi = async (page: Page): Promise<{
+const setupPermissionApi = async (page: Page, setPermissionsError?: string): Promise<{
     getPermissionCalls: () => Array<Record<string, unknown>>;
 }> => {
     const permissionCalls: Array<Record<string, unknown>> = [];
@@ -145,6 +146,17 @@ const setupPermissionApi = async (page: Page): Promise<{
 
         if (action === "setPermissions") {
             const body = await route.request().postDataJSON() as Record<string, unknown>;
+
+            if (setPermissionsError) {
+                await route.fulfill({
+                    status: 400,
+                    contentType: "application/json",
+                    body: JSON.stringify({ error: setPermissionsError }),
+                });
+
+                return;
+            }
+
             const entityType = body.entityType as string;
             const entityId = body.entityId as number;
             const key = `${entityType}-${entityId}`;
@@ -287,5 +299,18 @@ test.describe("Permission Editor", () => {
             return getPermissionCalls().length;
         }).toBeGreaterThan(0);
         await expect(readZone.locator(".perm-chip").filter({ hasText: "Percussion" })).toBeVisible();
+    });
+
+    test("shows an API error when saving permission changes fails", async ({ page }) => {
+        await setupPermissionApi(page, "Permission denied.");
+        await openGroupAccess(page);
+
+        const percussionChip = page.locator(".perm-chip").filter({ hasText: "Percussion" });
+        const readZone = page.locator(".perm-drop-zone").first();
+
+        await percussionChip.dragTo(readZone);
+
+        await expect(page.locator("#permissionEditor")).toContainText("Permission denied.");
+        await expect(page.locator("#permissionEditor .perm-editor-layout")).toHaveCount(0);
     });
 });

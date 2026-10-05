@@ -75,6 +75,8 @@ All UI components extend `UIComponent<P, S>` (not raw `Component`). Key patterns
 - Solve the actual bug first; only fix tests after the bug is confirmed fixed.
 - Do not spend time on TS/lint/test cleanup before functional fix is validated.
 - Prefer temporary `it.only` debug tests in the actual spec file over external one-off scripts.
+- Always create temporary files inside the project directory, for example in `temp/`, never in system temp directories.
+- Keep temporary-file workflows self-contained within the project; they must not require filesystem access outside it.
 - Systematically fix ALL tests in a file — remove `.only` and work through every failure.
 - When the user says "fix all errors", that means ALL errors: TS, linter, build, unit tests, AND e2e tests — everything must be green.
 - TypeScript/linter/build errors first, then test failures — in that order.

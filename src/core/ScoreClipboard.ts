@@ -16,9 +16,12 @@ import {
 } from "./serialisation/numeric-functions.js";
 import { computeIsTuplet } from "./tuplets.js";
 import {
-    ClipboardContentKind, type IClipboardContent, type IClipboardTrackPiece, type IClipboardTrack,
+    ClipboardContentKind, type IClipboardArticulation, type IClipboardContent, type IClipboardTrackPiece,
+    type IClipboardTrack,
 } from "./types/clipboard.js";
-import type { IFraction, IMeasureEvent, IMeterSnapshot, ISubdivision } from "./types/general.js";
+import type { IFraction, IMeasureEvent, IMeterSnapshot, IRangeArticulationPlacement, ISubdivision }
+    from "./types/general.js";
+import { RangeArticulationKind } from "./types/general.js";
 
 /** The start of a measure as a bar fraction. */
 const zero: IFraction = { numerator: 0, denominator: 1 };
@@ -274,7 +277,7 @@ export class ScoreClipboard {
         const granularity = this.finestGranularity(entries);
         switch (granularity) {
             case SelectionGranularity.Track: {
-                return this.buildTrackContent(entries);
+                return this.buildTrackContent(entries, arrangement);
             }
 
             case SelectionGranularity.Measure: {
@@ -292,8 +295,10 @@ export class ScoreClipboard {
         }
     }
 
-    private buildTrackContent(entries: ISelectionEntry[]): IClipboardContent | undefined {
+    private buildTrackContent(entries: ISelectionEntry[],
+        arrangement: ISbDmArrangement): IClipboardContent | undefined {
         const tracks: IClipboardTrack[] = [];
+        const bars = this.allBars(arrangement);
 
         for (const entry of entries) {
             if (entry.granularity !== SelectionGranularity.Track) {
@@ -307,6 +312,7 @@ export class ScoreClipboard {
                 measures: track.measures.map((measure) => {
                     return this.captureMeasure(measure, true);
                 }),
+                articulations: this.captureArticulations(track, bars),
             });
         }
 
@@ -324,6 +330,7 @@ export class ScoreClipboard {
             return {
                 instrumentTypeId: track.instrument.typeId,
                 measures: this.captureMeasures(track, bars, true),
+                articulations: this.captureArticulations(track, bars),
             };
         });
 
@@ -345,9 +352,14 @@ export class ScoreClipboard {
 
         const tracks: IClipboardTrack[] = [];
         for (const [track, bars] of barsByTrack) {
-            const measures = this.captureMeasures(track, this.uniqueSorted(bars));
+            const scaleBars = this.uniqueSorted(bars);
+            const measures = this.captureMeasures(track, scaleBars);
             if (measures.length > 0) {
-                tracks.push({ instrumentTypeId: track.instrument.typeId, measures });
+                tracks.push({
+                    instrumentTypeId: track.instrument.typeId,
+                    measures,
+                    articulations: this.captureArticulations(track, scaleBars),
+                });
             }
         }
 
@@ -2113,6 +2125,7 @@ export class ScoreClipboard {
             const target = targets[trackIndex];
             const sourceTrack = content.tracks[trackIndex] ?? content.tracks[0];
             const sourceMeasures = sourceTrack.measures;
+            const byBar = new Map<number, ITrackPieceReplace>();
 
             for (let barIndex = 0; barIndex < target.bars.length; barIndex++) {
                 const measure = target.track.measures.at(target.bars[barIndex] - 1);
@@ -2131,7 +2144,7 @@ export class ScoreClipboard {
                     this.dataModel.setMeasureWidth(target.bars[barIndex], sourceMeasure.width);
                 }
 
-                replacements.push({
+                const replacement: ITrackPieceReplace = {
                     trackId: target.track.id,
                     bar: target.bars[barIndex],
                     events: sourceMeasure.events.map((event) => {
@@ -2141,11 +2154,72 @@ export class ScoreClipboard {
                         return { ...subdivision };
                     }),
                     simile: sourceMeasure.simile,
-                });
+                };
+
+                replacements.push(replacement);
+                byBar.set(replacement.bar, replacement);
             }
+
+            this.attachArticulations(target, sourceTrack, byBar);
         }
 
         return this.applyReplacements(replacements);
+    }
+
+    /**
+     * Attaches the markings a copied track carries to the replacements of the bars they land in. A marking whose
+     * anchors do not all land inside the pasted bars is dropped, so a paste never writes a partial marking.
+     *
+     * @param target The resolved paste target.
+     * @param sourceTrack The copied track.
+     * @param byBar The replacements of this target, keyed by their 1-based bar.
+     */
+    private attachArticulations(target: IMeasureTarget, sourceTrack: IClipboardTrack,
+        byBar: Map<number, ITrackPieceReplace>): void {
+        for (const articulation of sourceTrack.articulations ?? []) {
+            const placement = this.placementOf(articulation, target.bars);
+            if (placement === undefined) {
+                continue;
+            }
+
+            const bar = placement.kind === RangeArticulationKind.Forte ? placement.at.bar : placement.from.bar;
+            const replacement = byBar.get(bar);
+            if (replacement !== undefined) {
+                replacement.articulations = [...(replacement.articulations ?? []), placement];
+            }
+        }
+    }
+
+    /**
+     * @param articulation The copied marking.
+     * @param bars The 1-based bars the paste fills.
+     *
+     * @returns The marking with its anchors mapped onto those bars, or undefined when an anchor falls outside them.
+     */
+    private placementOf(articulation: IClipboardArticulation,
+        bars: number[]): IRangeArticulationPlacement | undefined {
+        const barOf = (offset: number): number | undefined => {
+            return offset < bars.length ? bars[offset] : undefined;
+        };
+
+        if (articulation.kind === RangeArticulationKind.Forte) {
+            const bar = barOf(articulation.at.barOffset);
+
+            return bar === undefined
+                ? undefined
+                : { kind: articulation.kind, at: { bar, start: { ...articulation.at.start } } };
+        }
+
+        const from = barOf(articulation.from.barOffset);
+        const to = barOf(articulation.to.barOffset);
+
+        return from === undefined || to === undefined
+            ? undefined
+            : {
+                kind: articulation.kind,
+                from: { bar: from, start: { ...articulation.from.start } },
+                to: { bar: to, start: { ...articulation.to.start } },
+            };
     }
 
     private applyReplacements(replacements: ITrackPieceReplace[]): IPasteResult {
@@ -2186,6 +2260,49 @@ export class ScoreClipboard {
         const result = this.applyReplacements(remaining);
 
         return inserted.length > 0 ? { kind: PasteResultKind.Success } : result;
+    }
+
+    /**
+     * Captures the markings a set of copied bars fully contains, with their anchors kept as offsets into that set,
+     * so a paste can map them onto the bars it fills. A marking that reaches beyond the copied bars is left behind.
+     *
+     * @param track The track the markings belong to.
+     * @param bars The copied 1-based bars, in copied-measure order.
+     *
+     * @returns The captured markings, in arrangement order.
+     */
+    private captureArticulations(track: ISbDmTrack, bars: number[]): IClipboardArticulation[] {
+        const articulations: IClipboardArticulation[] = [];
+
+        for (const articulation of this.dataModel.arrangement?.rangeArticulations?.all ?? []) {
+            if (articulation.trackId !== track.id) {
+                continue;
+            }
+
+            if (articulation.kind === RangeArticulationKind.Forte) {
+                const at = bars.indexOf(articulation.at.bar);
+                if (at >= 0) {
+                    articulations.push({
+                        kind: articulation.kind,
+                        at: { barOffset: at, start: { ...articulation.at.start } },
+                    });
+                }
+
+                continue;
+            }
+
+            const from = bars.indexOf(articulation.from.bar);
+            const to = bars.indexOf(articulation.to.bar);
+            if (from >= 0 && to >= 0) {
+                articulations.push({
+                    kind: articulation.kind,
+                    from: { barOffset: from, start: { ...articulation.from.start } },
+                    to: { barOffset: to, start: { ...articulation.to.start } },
+                });
+            }
+        }
+
+        return articulations;
     }
 
     private captureMeasures(track: ISbDmTrack, bars: number[], withWidth = false): IClipboardTrackPiece[] {

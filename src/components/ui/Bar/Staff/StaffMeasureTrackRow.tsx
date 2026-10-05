@@ -9,6 +9,7 @@ import type {
     ISbDmTrack,
     ITimeParamsView, ScoreBookDataModel
 } from "../../../../core/ScoreBookDataModel.js";
+import type { IRangeArticulation } from "../../../../core/types/general.js";
 import type { ArrangementPlayer } from "../../../../player/ArrangementPlayer.js";
 import type { TrackPlayer } from "../../../../player/TrackPlayer.js";
 import { requisitions } from "../../../../supplement/Requisitions.js";
@@ -26,6 +27,9 @@ export interface IStaffMeasureTrackRowProps extends ICommonUIProperties {
     inEditMode: boolean;
     dataModel: ScoreBookDataModel;
     scoreElementRegistry?: ScoreElementRegistry;
+
+    /** The hairpins and `f` markings to draw for this row, which only the print view supplies. */
+    articulations?: readonly IRangeArticulation[];
 }
 
 interface IStaffMeasureTrackRowState {
@@ -51,7 +55,8 @@ export class StaffMeasureTrackRow extends UIComponent<IStaffMeasureTrackRowProps
     }
 
     public override render(): ComponentChild {
-        const { arrangementPlayer, barNumber, dataModel, timeParams, track, scoreElementRegistry } = this.props;
+        const { arrangementPlayer, barNumber, dataModel, timeParams, track, scoreElementRegistry,
+            articulations } = this.props;
 
         const measure = track.measures[barNumber - 1];
         const baseSteps = measure.meter.stepResolution;
@@ -76,6 +81,7 @@ export class StaffMeasureTrackRow extends UIComponent<IStaffMeasureTrackRowProps
                 maxNoteLine={maxNoteLine}
                 repeatBars={repeatBars}
                 scoreElementRegistry={scoreElementRegistry}
+                articulations={articulations}
             />
         );
     }

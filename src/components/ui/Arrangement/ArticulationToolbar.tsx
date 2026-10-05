@@ -335,18 +335,18 @@ export class ArticulationToolbar extends UIComponent<IArticulationToolbarProps, 
         switch (articulation) {
             case Articulation.Accent: {
                 return (
-                    <svg className="articulation-icon" viewBox="0 0 16 16" width={16} height={16}
-                        fill="none" stroke="currentColor" strokeWidth={2.5}
+                    <svg className="articulation-icon" viewBox="0 0 16 16" width={24} height={24}
+                        fill="none" stroke="currentColor" strokeWidth={1}
                         strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                        <polyline points="4,4 11,8 4,12" />
+                        <polyline points="5,5 12,8 5,12" />
                     </svg>
                 );
             }
 
             case Articulation.Muted: {
                 return (
-                    <svg className="articulation-icon" viewBox="0 0 16 16" width={16} height={16}
-                        stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" aria-hidden="true">
+                    <svg className="articulation-icon" viewBox="0 0 16 16" width={24} height={24}
+                        stroke="currentColor" strokeWidth={1} strokeLinecap="round" aria-hidden="true">
                         <line x1="8" y1="3" x2="8" y2="13" />
                         <line x1="3" y1="8" x2="13" y2="8" />
                     </svg>
@@ -355,8 +355,8 @@ export class ArticulationToolbar extends UIComponent<IArticulationToolbarProps, 
 
             case Articulation.Ghost: {
                 return (
-                    <svg className="articulation-icon" viewBox="0 0 20 16" width={20} height={16}
-                        fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round"
+                    <svg className="articulation-icon" viewBox="-.5 -2 20 20" width={24} height={24}
+                        fill="none" stroke="currentColor" strokeWidth={1} strokeLinecap="round"
                         aria-hidden="true">
                         <path d="M7 2 C4.5 4.5 4.5 11.5 7 14" />
                         <path d="M13 2 C15.5 4.5 15.5 11.5 13 14" />

@@ -14,6 +14,9 @@ export interface IAudioEvent extends IEventDetails {
     kind: "audio";
     audioBuffer: AudioBuffer;
     event: ISbDmNoteEvent;
+
+    /** The dynamic level the note plays at, as a factor on top of the track volume. 1 is the normal level. */
+    dynamicsFactor: number;
 }
 
 export interface ICallbackEvent extends IEventDetails {

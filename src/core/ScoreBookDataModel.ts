@@ -20,11 +20,13 @@ import { requisitions } from "../supplement/Requisitions.js";
 import type { IScoreDBEntry, ISoundLibFsNode } from "./DatabaseTypes.js";
 import { Instrument } from "./Instrument.js";
 import { MeasureLayout } from "./MeasureLayout.js";
+import { HairpinEnd, RangeArticulations } from "./RangeArticulations.js";
 import type {
-    IArrangementExtensions, IArrangementSnapshot, IAudioData, IFraction, IMeasureEvent, IMeterSnapshot,
-    IArticulationSymbol, IRepeatBar, ISubdivision, Mutable
+    IArrangementExtensions, IArrangementSnapshot, IAudioData, IFraction, IForteMark, IHairpin, IMeasureEvent,
+    IMeterSnapshot, IArticulationSymbol, IRangeArticulationAnchor, IRangeArticulationPlacement,
+    IRepeatBar, ISubdivision, Mutable
 } from "./types/general.js";
-import { RepeatMark } from "./types/general.js";
+import { RangeArticulationKind, RepeatMark } from "./types/general.js";
 import { getNewId } from "./utils.js";
 
 /**
@@ -588,6 +590,9 @@ export interface ISbDmArrangement extends ISbDmCommon {
     /** Repeat marks set for individual measures, keyed by 1-based measure number. */
     repeatBars?: Map<number, IRepeatBar>;
 
+    /** Hairpins and `f` markings of the arrangement, in insertion order. */
+    rangeArticulations?: RangeArticulations;
+
     /**
      * Extension chunks of other features or newer builds, kept verbatim so that writing a snapshot never
      * drops data this build does not understand. See {@link IArrangementExtensions}.
@@ -754,6 +759,9 @@ export interface ITrackPieceReplace extends ITrackPieceRange {
 
     /** One-bar repeat (simile) to write. Ignored on the first measure and for a range replacement. */
     simile?: boolean;
+
+    /** Markings to write over a whole-measure replacement, replacing the markings the measure held. */
+    articulations?: IRangeArticulationPlacement[];
 }
 
 /** The replacement events for a fractional range plus the index where they begin. */
@@ -1101,6 +1109,9 @@ export class ScoreBookDataModel {
         if (!this.trackHasContent(track)) {
             return false;
         }
+
+        const arrangement = this.arrangement;
+        arrangement?.rangeArticulations?.removeTrack(track.id);
 
         track.clear();
         void requisitions.execute("arrangementMutated", undefined);
@@ -1592,10 +1603,18 @@ export class ScoreBookDataModel {
                 continue;
             }
 
-            const rangeChanged = replacement.start === undefined && replacement.end === undefined
+            const wholeMeasure = replacement.start === undefined && replacement.end === undefined;
+            const rangeChanged = wholeMeasure
                 ? this.replaceWholeMeasure(measure, replacement.events, replacement.subdivisions)
                 : this.replaceFractionRange(measure, replacement.start ?? barStart, replacement.end ?? barLine,
                     replacement.events, replacement.subdivisions);
+
+            // A whole-measure paste replaces the measure, so the target track's markings give way to the pasted
+            // ones. They are dropped here and written after every bar was replaced, so a marking that reaches over a
+            // barline is not dropped by the bar it reaches into. Markings of other tracks in that bar stay.
+            const articulationsChanged = wholeMeasure && replacement.articulations !== undefined
+                ? (arrangement.rangeArticulations?.dropTrackInBar(replacement.trackId, replacement.bar) ?? false)
+                : false;
 
             // A simile repeats the measure before it, so a paste that would put the mark on the first measure
             // drops it; the pasted content stays.
@@ -1605,9 +1624,18 @@ export class ScoreBookDataModel {
                 measure.simile = simileValue ? true : undefined;
             }
 
-            if (rangeChanged || simileChanged) {
+            if (rangeChanged || simileChanged || articulationsChanged) {
                 changed = true;
                 affectedTracks.add(replacement.trackId);
+            }
+        }
+
+        if (this.addMeasureArticulations(replacements)) {
+            changed = true;
+            for (const replacement of replacements) {
+                if (replacement.articulations !== undefined) {
+                    affectedTracks.add(replacement.trackId);
+                }
             }
         }
 
@@ -1735,6 +1763,235 @@ export class ScoreBookDataModel {
         this.announceTrackEdits(new Set(arrangement.tracks.map((track) => {
             return track.id;
         })));
+
+        return true;
+    }
+
+    /**
+     * Inserts a hairpin between two chronologically ordered sounding note anchors of one track. Fires one
+     * arrangementMutated event (a single undo step) and one trackChanged event.
+     *
+     * @param kind Whether the dynamic level rises or falls from the first to the second anchor.
+     * @param trackId The track the hairpin belongs to.
+     * @param from The chronologically first note anchor.
+     * @param to The chronologically second note anchor.
+     *
+     * @returns The inserted hairpin, or undefined when the placement is invalid.
+     */
+    public insertHairpin(kind: RangeArticulationKind.Crescendo | RangeArticulationKind.Decrescendo,
+        trackId: number, from: IRangeArticulationAnchor, to: IRangeArticulationAnchor): IHairpin | undefined {
+        const arrangement = this.arrangement;
+        const articulations = arrangement?.rangeArticulations;
+        if (!arrangement || !articulations) {
+            return undefined;
+        }
+
+        const hairpin: IHairpin = {
+            id: getNewId(),
+            trackId,
+            kind,
+            from: RangeArticulations.cloneAnchor(from),
+            to: RangeArticulations.cloneAnchor(to),
+        };
+
+        if (!RangeArticulations.isValidHairpin(arrangement, hairpin)
+            || RangeArticulations.conflicts(hairpin, articulations.all)) {
+            return undefined;
+        }
+
+        articulations.add(hairpin);
+        this.announceTrackEdits(new Set([trackId]));
+
+        return hairpin;
+    }
+
+    /**
+     * Inserts an `f` marking at an event position of one track. Fires one arrangementMutated event (a single
+     * undo step) and one trackChanged event.
+     *
+     * @param trackId The track the marking belongs to.
+     * @param at The event position the marking sits at. A note or a rest.
+     *
+     * @returns The inserted marking, or undefined when no event starts at that position.
+     */
+    public insertForteMark(trackId: number, at: IRangeArticulationAnchor): IForteMark | undefined {
+        const arrangement = this.arrangement;
+        const articulations = arrangement?.rangeArticulations;
+        if (!arrangement || !articulations) {
+            return undefined;
+        }
+
+        const mark: IForteMark = {
+            id: getNewId(),
+            trackId,
+            kind: RangeArticulationKind.Forte,
+            at: RangeArticulations.cloneAnchor(at),
+        };
+
+        if (!RangeArticulations.isValidForteMark(arrangement, mark)
+            || RangeArticulations.conflicts(mark, articulations.all)) {
+            return undefined;
+        }
+
+        articulations.add(mark);
+        this.announceTrackEdits(new Set([trackId]));
+
+        return mark;
+    }
+
+    /**
+     * Removes a hairpin or `f` marking by id. Fires one arrangementMutated event (a single undo step) and one
+     * trackChanged event.
+     *
+     * @param id The id of the marking to remove.
+     *
+     * @returns True when a marking was removed.
+     */
+    public removeRangeArticulation(id: number): boolean {
+        const articulations = this.arrangement?.rangeArticulations;
+        const removed = articulations?.remove(id);
+        if (removed === undefined) {
+            return false;
+        }
+
+        this.announceTrackEdits(new Set([removed.trackId]));
+
+        return true;
+    }
+
+    /**
+     * Moves one anchor of a hairpin to a new note anchor. Fires one arrangementMutated event (a single undo
+     * step) and one trackChanged event when the move is valid and actually changes the anchor.
+     *
+     * @param id The id of the hairpin to move.
+     * @param trackId The track the hairpin belongs to after the move.
+     * @param end The end of the hairpin to move.
+     * @param anchor The note anchor to move it to.
+     *
+     * @returns True when the anchor changed.
+     */
+    public moveHairpinAnchor(id: number, trackId: number, end: HairpinEnd,
+        anchor: IRangeArticulationAnchor): boolean {
+        const arrangement = this.arrangement;
+        const articulations = arrangement?.rangeArticulations;
+        if (!arrangement || !articulations) {
+            return false;
+        }
+
+        const existing = articulations.find(id);
+
+        if (existing === undefined || !RangeArticulations.isHairpin(existing)) {
+            return false;
+        }
+
+        const target = RangeArticulations.cloneAnchor(anchor);
+        const current = end === HairpinEnd.From ? existing.from : existing.to;
+        if (RangeArticulations.compareAnchors(current, target) === 0) {
+            return false;
+        }
+
+        const moved = RangeArticulations.withMovedEnd({ ...existing, trackId }, end, anchor);
+
+        if (!RangeArticulations.isValidHairpin(arrangement, moved)) {
+            return false;
+        }
+
+        if (RangeArticulations.conflicts(moved, articulations.all)) {
+            return false;
+        }
+
+        existing.trackId = trackId;
+        existing.kind = moved.kind;
+        existing.from = moved.from;
+        existing.to = moved.to;
+        this.announceTrackEdits(new Set([existing.trackId]));
+
+        return true;
+    }
+
+    /**
+     * Moves both anchors of a hairpin. Fires one arrangementMutated event (a single undo step) and one
+     * trackChanged event when the move is valid and actually changes an anchor.
+     *
+     * @param id The id of the hairpin to move.
+     * @param trackId The track the hairpin belongs to after the move.
+     * @param from The note anchor the first end moves to.
+     * @param to The note anchor the second end moves to.
+     *
+     * @returns True when an anchor changed.
+     */
+    public moveHairpin(id: number, trackId: number, from: IRangeArticulationAnchor,
+        to: IRangeArticulationAnchor): boolean {
+        const arrangement = this.arrangement;
+        const articulations = arrangement?.rangeArticulations;
+        if (!arrangement || !articulations) {
+            return false;
+        }
+
+        const existing = articulations.find(id);
+
+        if (existing === undefined || !RangeArticulations.isHairpin(existing)) {
+            return false;
+        }
+
+        const moved = RangeArticulations.withMovedEnd(
+            { ...existing, trackId, from: RangeArticulations.cloneAnchor(from) }, HairpinEnd.To, to);
+        if (RangeArticulations.compareAnchors(moved.from, existing.from) === 0
+            && RangeArticulations.compareAnchors(moved.to, existing.to) === 0) {
+            return false;
+        }
+
+        if (!RangeArticulations.isValidHairpin(arrangement, moved)
+            || RangeArticulations.conflicts(moved, articulations.all)) {
+            return false;
+        }
+
+        existing.trackId = trackId;
+        existing.kind = moved.kind;
+        existing.from = moved.from;
+        existing.to = moved.to;
+        this.announceTrackEdits(new Set([existing.trackId]));
+
+        return true;
+    }
+
+    /**
+     * Moves an `f` marking to a new event position. Fires one arrangementMutated event (a single undo step) and
+     * one trackChanged event when the move is valid and actually changes the position.
+     *
+     * @param id The id of the marking to move.
+     * @param trackId The track the marking belongs to after the move.
+     * @param anchor The event position to move it to.
+     *
+     * @returns True when the position changed.
+     */
+    public moveForteMark(id: number, trackId: number, anchor: IRangeArticulationAnchor): boolean {
+        const arrangement = this.arrangement;
+        const articulations = arrangement?.rangeArticulations;
+        if (!arrangement || !articulations) {
+            return false;
+        }
+
+        const existing = articulations.find(id);
+
+        if (existing === undefined || RangeArticulations.isHairpin(existing)) {
+            return false;
+        }
+
+        const target = RangeArticulations.cloneAnchor(anchor);
+        if (RangeArticulations.compareAnchors(existing.at, target) === 0) {
+            return false;
+        }
+
+        const moved: IForteMark = { ...existing, trackId, at: target };
+        if (!RangeArticulations.isValidForteMark(arrangement, moved)
+            || RangeArticulations.conflicts(moved, articulations.all)) {
+            return false;
+        }
+
+        existing.trackId = trackId;
+        existing.at = moved.at;
+        this.announceTrackEdits(new Set([existing.trackId]));
 
         return true;
     }
@@ -2440,12 +2697,12 @@ export class ScoreBookDataModel {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(body),
-        });
+        }, true, true);
 
         if (!res?.ok) {
-            const data = await res?.json() as { error?: string; };
+            const data = res ? await res.json() as { error?: string; } : undefined;
 
-            throw new Error(data.error ?? "Failed to set permissions.");
+            throw new Error(data?.error ?? "Failed to set permissions.");
         }
     }
 
@@ -3788,6 +4045,31 @@ export class ScoreBookDataModel {
     }
 
     /**
+     * Writes the markings a whole-measure paste carries, after every replaced bar was cleared of its own markings.
+     * The edit validates them like any other marking once the pasted content is in place.
+     *
+     * @param replacements The replacements of one paste.
+     *
+     * @returns True when at least one marking was written.
+     */
+    private addMeasureArticulations(replacements: ITrackPieceReplace[]): boolean {
+        const articulations = this.arrangement?.rangeArticulations;
+        if (articulations === undefined) {
+            return false;
+        }
+
+        let added = false;
+        for (const replacement of replacements) {
+            for (const placement of replacement.articulations ?? []) {
+                articulations.add(RangeArticulations.materialise(replacement.trackId, placement));
+                added = true;
+            }
+        }
+
+        return added;
+    }
+
+    /**
      * Announces a finished change of one track: the viewers recompute their structure and the undo
      * manager stores one step.
      *
@@ -3807,6 +4089,11 @@ export class ScoreBookDataModel {
         if (trackIds.size === 0) {
             return;
         }
+
+        // An edit that moved or removed an anchor note drops the markings it left without an anchor, in the same
+        // edit rather than its own undo step.
+        const arrangement = this.arrangement;
+        arrangement?.rangeArticulations?.removeInvalid(arrangement, trackIds);
 
         // A measure packed tighter than its width follows its content, in the same edit rather than its own step.
         this.widenMeasuresToFloor();
