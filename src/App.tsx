@@ -542,10 +542,9 @@ export class App extends UIComponent<{}, IAppState> {
                                                             undoManager={this.undoManager!}
                                                         />
                                                         <Separator />
-                                                        <EntryModeButton
-                                                            entryMode={entryMode}
-                                                            locked={trackViewMode !== "staff"}
-                                                        />
+                                                        {trackViewMode === "staff" && (
+                                                            <EntryModeButton entryMode={entryMode} />
+                                                        )}
                                                         <SubdivisionToolbar
                                                             selectionManager={this.selectionManager}
                                                             dataModel={this.dataModel}

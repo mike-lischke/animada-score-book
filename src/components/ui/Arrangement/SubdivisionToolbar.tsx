@@ -63,7 +63,7 @@ interface ISubdivisionToolbarState {
     /** The placing tool currently in effect. */
     activeTool: RangeArticulationTool;
 
-    /** True while the staff view is shown, the only view the dynamics placing modes work in. */
+    /** True while the staff view is shown, the only view that offers the dynamics and repeat controls. */
     staffMode: boolean;
 }
 
@@ -97,6 +97,8 @@ const subdivisionOptions: ISubdivisionOption[] = [
 /**
  * Toolbar for creating subdivisions. A subdivision is created either from the current cursor
  * position (a single selected note cell) or from a contiguous selection within a single track.
+ * The grid view shows the tuplet dropdown alone; the dynamics and repeat controls belong to the
+ * staff view, which draws what they mark.
  */
 export class SubdivisionToolbar extends UIComponent<ISubdivisionToolbarProps, ISubdivisionToolbarState> {
     public constructor(props: ISubdivisionToolbarProps) {
@@ -141,11 +143,14 @@ export class SubdivisionToolbar extends UIComponent<ISubdivisionToolbarProps, IS
     }
 
     public override render(): ComponentChild {
-        const { canCreate, canToggleSimile, simileActive, activeTool, staffMode } = this.state;
-        const { canMarkRepeatStart, canMarkRepeatEnd, repeatStartActive, repeatEndActive } = this.state;
-        const canDraw = staffMode;
+        const { staffMode } = this.state;
 
-        const dropdownItems = this.buildDropdownItems();
+        const tupletGroup = this.renderTupletGroup();
+
+        let repeatGroup: ComponentChild;
+        if (staffMode) {
+            repeatGroup = this.renderRepeatGroup();
+        }
 
         return (
             <Container
@@ -153,35 +158,83 @@ export class SubdivisionToolbar extends UIComponent<ISubdivisionToolbarProps, IS
                 orientation={Orientation.LeftToRight}
                 crossAlignment={ChildAlignment.Center}
             >
-                <GooeyGroup
-                    className="subdivisionToolbar"
-                    background="var(--color-base-200)"
+                {tupletGroup}
+                {repeatGroup}
+            </Container>
+        );
+    }
+
+    /**
+     * Builds the group the grid view keeps: the tuplet dropdown and, in the staff view, the dynamics buttons.
+     *
+     * @returns The group's content.
+     */
+    private renderTupletGroup(): ComponentChild {
+        const { canCreate, staffMode } = this.state;
+        const dropdownItems = this.buildDropdownItems();
+
+        let dynamicsButtons: ComponentChild;
+        if (staffMode) {
+            dynamicsButtons = this.renderDynamicsButtons();
+        }
+
+        return (
+            <GooeyGroup
+                className="subdivisionToolbar"
+                background="var(--color-base-200)"
+            >
+                <Dropdown
+                    icon={<TupletIcon />}
+                    disabled={!canCreate}
+                    closeOnSelect
+                    items={dropdownItems}
+                    data-tooltip="Add subdivision"
+                />
+                {dynamicsButtons}
+            </GooeyGroup>
+        );
+    }
+
+    /**
+     * Builds the dynamics buttons, which start the placing modes the staff view draws.
+     *
+     * @returns The hairpin and forte buttons.
+     */
+    private renderDynamicsButtons(): ComponentChild {
+        const { activeTool } = this.state;
+
+        return (
+            <>
+                <Button
+                    isDefault={activeTool === RangeArticulationTool.Hairpin}
+                    data-tooltip="Draw crescendo / decrescendo hairpin"
+                    onClick={this.handleHairpinClick}
                 >
-                    <Dropdown
-                        icon={<TupletIcon />}
-                        disabled={!canCreate}
-                        closeOnSelect
-                        items={dropdownItems}
-                        data-tooltip="Add subdivision"
-                    />
-                    <Button
-                        isDefault={activeTool === RangeArticulationTool.Hairpin}
-                        disabled={!canDraw}
-                        data-tooltip="Draw crescendo / decrescendo hairpin"
-                        onClick={this.handleHairpinClick}
-                    >
-                        <HairpinIcon />
-                    </Button>
-                    <Button
-                        isDefault={activeTool === RangeArticulationTool.Forte}
-                        disabled={!canDraw}
-                        className="forteButton"
-                        data-tooltip="Place forte (f)"
-                        onClick={this.handleForteClick}
-                    >
-                        <ScoreSymbolView symbol={ScoreSymbol.Forte} staffSpace={staffSpacePx} icon />
-                    </Button>
-                </GooeyGroup>
+                    <HairpinIcon />
+                </Button>
+                <Button
+                    isDefault={activeTool === RangeArticulationTool.Forte}
+                    className="forteButton"
+                    data-tooltip="Place forte (f)"
+                    onClick={this.handleForteClick}
+                >
+                    <ScoreSymbolView symbol={ScoreSymbol.Forte} staffSpace={staffSpacePx} icon />
+                </Button>
+            </>
+        );
+    }
+
+    /**
+     * Builds the repeat group, whose marks the staff view draws on the barlines.
+     *
+     * @returns The separator and the simile and repeat buttons.
+     */
+    private renderRepeatGroup(): ComponentChild {
+        const { canToggleSimile, simileActive } = this.state;
+        const { canMarkRepeatStart, canMarkRepeatEnd, repeatStartActive, repeatEndActive } = this.state;
+
+        return (
+            <>
                 <Separator />
                 <GooeyGroup
                     className="subdivisionToolbar"
@@ -213,7 +266,7 @@ export class SubdivisionToolbar extends UIComponent<ISubdivisionToolbarProps, IS
                         <ScoreSymbolView symbol={ScoreSymbol.RepeatEnd} staffSpace={staffSpacePx} icon />
                     </Button>
                 </GooeyGroup>
-            </Container>
+            </>
         );
     }
 

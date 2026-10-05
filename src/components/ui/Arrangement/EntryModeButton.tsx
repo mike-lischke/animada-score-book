@@ -16,9 +16,6 @@ import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.
 export interface IEntryModeButtonProps extends ICommonUIProperties {
     /** The entry mode that is in effect. The grid view always reports overwrite. */
     entryMode: EditEntryMode;
-
-    /** True while the mode cannot be switched, which is the case in the grid view. */
-    locked?: boolean;
 }
 
 /**
@@ -29,7 +26,7 @@ export interface IEntryModeButtonProps extends ICommonUIProperties {
  */
 export class EntryModeButton extends UIComponent<IEntryModeButtonProps> {
     public render(): ComponentChild {
-        const { entryMode, locked } = this.props;
+        const { entryMode } = this.props;
 
         const isOverwrite = entryMode === EditEntryMode.Overwrite;
         const tooltip = isOverwrite
@@ -43,7 +40,6 @@ export class EntryModeButton extends UIComponent<IEntryModeButtonProps> {
                     className="entryModeButton"
                     isOn={isOverwrite}
                     isMarked={isOverwrite}
-                    disabled={locked}
                     data-tooltip={tooltip}
                     offContent={<Icon src={UIIcon.ArrowExpandRight} width={20} height={20} data-tooltip="inherit" />}
                     onContent={<Icon src={UIIcon.SwapHorizontal} width={20} height={20} data-tooltip="inherit" />}

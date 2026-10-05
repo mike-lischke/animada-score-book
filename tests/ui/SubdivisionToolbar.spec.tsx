@@ -4,9 +4,10 @@
  */
 
 import { cleanup, render, type RenderResult } from "@testing-library/preact";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { SubdivisionToolbar } from "../../src/components/ui/Arrangement/SubdivisionToolbar.js";
+import { AppStorage } from "../../src/core/AppStorage.js";
 import type { ISbDmArrangement, ISbDmTrack, ISbDmTrackPiece } from "../../src/core/ScoreBookDataModel.js";
 import { ScoreBookDataModel } from "../../src/core/ScoreBookDataModel.js";
 import type { IFraction } from "../../src/core/types/general.js";
@@ -29,6 +30,18 @@ const triggerButton = (container: Element): HTMLButtonElement => {
  */
 const buttonWithTooltip = (container: Element, tooltip: string): HTMLButtonElement => {
     return container.querySelector<HTMLButtonElement>(`button[data-tooltip="${tooltip}"]`)!;
+};
+
+/**
+ * Resolves a button of the toolbar by the tooltip that names it, or null when the toolbar does not carry it.
+ *
+ * @param container The rendered toolbar.
+ * @param tooltip The tooltip the button carries.
+ *
+ * @returns The button, or null when it is not rendered.
+ */
+const buttonOrNull = (container: Element, tooltip: string): HTMLButtonElement | null => {
+    return container.querySelector<HTMLButtonElement>(`button[data-tooltip="${tooltip}"]`);
 };
 
 /**
@@ -108,12 +121,18 @@ describe.sequential("SubdivisionToolbar", () => {
         renderResult = null;
         selectionManager = new SelectionManager();
         dataModel = new ScoreBookDataModel();
+
+        // The repeat and dynamics controls belong to the staff view, so the spec runs in it by default.
+        vi.spyOn(AppStorage, "loadUISettings").mockReturnValue({
+            viewSettings: { arrangementViewSettings: { displayMode: "staff" } },
+        });
     });
 
     afterEach(() => {
         renderResult?.unmount();
         cleanup();
         renderResult = null;
+        vi.restoreAllMocks();
     });
 
     it("enables the dropdown for a note inside one tuplet but not inside a nested one", () => {
@@ -450,24 +469,27 @@ describe.sequential("SubdivisionToolbar", () => {
         }
     });
 
-    it("offers the placing buttons in the staff view only", async () => {
+    it("keeps the repeat and dynamics controls out of the grid view", async () => {
         const model = new ScoreBookDataModel();
         model.startNewArrangement([createInstrument("0", 0, 0)]);
 
         renderResult = render(<SubdivisionToolbar selectionManager={selectionManager} dataModel={model} />);
 
-        // The dynamics belong to the staff view, which renders the notes they hang on.
-        expect(buttonWithTooltip(renderResult.container, "Draw crescendo / decrescendo hairpin").disabled).toBe(true);
-        expect(buttonWithTooltip(renderResult.container, "Place forte (f)").disabled).toBe(true);
-
-        void requisitions.execute("trackViewModeToggled", "staff");
-        await Promise.resolve();
+        // The staff view offers the whole toolbar: the repeat marks and the dynamics it draws.
         expect(buttonWithTooltip(renderResult.container, "Draw crescendo / decrescendo hairpin").disabled).toBe(false);
-        expect(buttonWithTooltip(renderResult.container, "Place forte (f)").disabled).toBe(false);
+        expect(buttonWithTooltip(renderResult.container, "One-bar repeat (simile)")).toBeTruthy();
 
         void requisitions.execute("trackViewModeToggled", "grid");
         await Promise.resolve();
-        expect(buttonWithTooltip(renderResult.container, "Draw crescendo / decrescendo hairpin").disabled).toBe(true);
+
+        // The grid keeps the tuplet dropdown alone and drops the controls whose marks it does not draw.
+        expect(buttonOrNull(renderResult.container, "Draw crescendo / decrescendo hairpin")).toBeNull();
+        expect(buttonOrNull(renderResult.container, "Place forte (f)")).toBeNull();
+        expect(buttonOrNull(renderResult.container, "One-bar repeat (simile)")).toBeNull();
+        expect(buttonOrNull(renderResult.container, "Repeat start")).toBeNull();
+        expect(buttonOrNull(renderResult.container, "Repeat end")).toBeNull();
+        expect(buttonOrNull(renderResult.container, "Add subdivision")).not.toBeNull();
+        expect(renderResult.container.querySelectorAll(".subdivisionToolbar")).toHaveLength(1);
     });
 
     it("ends a placing mode when the toolbar goes away", async () => {
