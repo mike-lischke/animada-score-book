@@ -594,7 +594,8 @@ export class ArrangementPlayer {
     }
 
     private scheduleAudioEvent(audioEvent: IAudioEvent): void {
-        const volume = (this.dataModel.arrangement!.mainVolume / 100) * audioEvent.event.track.effectiveVolume;
+        const volume = (this.dataModel.arrangement!.mainVolume / 100) * audioEvent.event.track.effectiveVolume
+            * audioEvent.dynamicsFactor;
         const audioBufferPlayer = new AudioBufferPlayer(audioEvent.audioBuffer, this.audioContext,
             audioEvent.realTime + this.offset, volume);
         const audioEventReference = { audioEvent, audioBufferPlayer };
@@ -710,6 +711,7 @@ export class ArrangementPlayer {
                 realTime,
                 audioBuffer: noteStyle.audioBuffer!,
                 event: tempEvent,
+                dynamicsFactor: 1,
             });
             realTime += metrics.secondsPerBar / 4;
         }

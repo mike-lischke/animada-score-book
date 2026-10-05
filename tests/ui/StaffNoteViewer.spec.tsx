@@ -11,7 +11,10 @@ import {
     Damping, ExcitationMode, HandTechnique, NoteDisplayType, SbDmEntityType, type ISbDmNoteEvent, type ISbDmTrack,
     type ISbDmTrackPiece, type ISampleProfile,
 } from "../../src/core/ScoreBookDataModel.js";
-import type { IAudioData, IFraction, IMeasureEvent, IRepeatBar, ISubdivision } from "../../src/core/types/general.js";
+import type {
+    IAudioData, IFraction, IForteMark, IHairpin, IMeasureEvent, IRangeArticulation, IRepeatBar, ISubdivision,
+} from "../../src/core/types/general.js";
+import { RangeArticulationKind } from "../../src/core/types/general.js";
 import type { IScoreMetrics } from "../../src/player/TimeCoordinator.js";
 import { ScoreElementKind, ScoreElementRegistry } from "../../src/ui/ScoreElementRegistry.js";
 
@@ -937,5 +940,67 @@ describe.sequential("StaffNoteViewer barlines", () => {
         // Its inner half reaches into the bar, so the bar keeps the room of that ink free of notes.
         expect(viewer.style.getPropertyValue("--staff-closing-barline-room"))
             .toContain("var(--barline-repeat-both-width)");
+    });
+});
+
+describe.sequential("StaffNoteViewer printed markings", () => {
+    let renderResult: RenderResult | null;
+
+    afterEach(() => {
+        renderResult?.unmount();
+        cleanup();
+        renderResult = null;
+    });
+
+    /**
+     * @param articulations The markings to draw, or undefined for none.
+     *
+     * @returns The rendered viewer.
+     */
+    const renderWithMarkings = (articulations?: IRangeArticulation[]): RenderResult => {
+        const measure = buildMeasure([event(fraction(0, 1), fraction(1, 1), "1")], []);
+
+        return render(
+            <StaffNoteViewer
+                isLastBar={true}
+                timeSignature="4/4"
+                scoreMetrics={scoreMetrics}
+                baseSteps={16}
+                measure={measure}
+                barNumber={1}
+                trackId={100}
+                articulations={articulations}
+            />,
+        );
+    };
+
+    it("draws a hairpin and an f when markings are given", () => {
+        const hairpin: IHairpin = {
+            id: 1,
+            trackId: 100,
+            kind: RangeArticulationKind.Crescendo,
+            from: { bar: 1, start: fraction(0, 1) },
+            to: { bar: 1, start: fraction(1, 2) },
+        };
+        const forte: IForteMark = {
+            id: 2,
+            trackId: 100,
+            kind: RangeArticulationKind.Forte,
+            at: { bar: 1, start: fraction(3, 4) },
+        };
+
+        renderResult = renderWithMarkings([hairpin, forte]);
+
+        expect(renderResult.container.querySelectorAll(".staff-note-viewer-articulation-hairpin"))
+            .toHaveLength(1);
+        expect(renderResult.container.querySelectorAll(".staff-note-viewer-articulation-hairpin svg path"))
+            .toHaveLength(1);
+        expect(renderResult.container.querySelectorAll(".staff-note-viewer-articulation-forte")).toHaveLength(1);
+    });
+
+    it("draws no marking layer without markings", () => {
+        renderResult = renderWithMarkings();
+
+        expect(renderResult.container.querySelectorAll(".staff-note-viewer-articulations")).toHaveLength(0);
     });
 });

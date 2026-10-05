@@ -23,8 +23,8 @@ import { MeasureLayout } from "./MeasureLayout.js";
 import { HairpinEnd, RangeArticulations } from "./RangeArticulations.js";
 import type {
     IArrangementExtensions, IArrangementSnapshot, IAudioData, IFraction, IForteMark, IHairpin, IMeasureEvent,
-    IMeterSnapshot, IArticulationSymbol, IRangeArticulation, IRangeArticulationAnchor, IRepeatBar, ISubdivision,
-    Mutable
+    IMeterSnapshot, IArticulationSymbol, IRangeArticulationAnchor, IRangeArticulationPlacement,
+    IRepeatBar, ISubdivision, Mutable
 } from "./types/general.js";
 import { RangeArticulationKind, RepeatMark } from "./types/general.js";
 import { getNewId } from "./utils.js";
@@ -591,7 +591,7 @@ export interface ISbDmArrangement extends ISbDmCommon {
     repeatBars?: Map<number, IRepeatBar>;
 
     /** Hairpins and `f` markings of the arrangement, in insertion order. */
-    rangeArticulations?: IRangeArticulation[];
+    rangeArticulations?: RangeArticulations;
 
     /**
      * Extension chunks of other features or newer builds, kept verbatim so that writing a snapshot never
@@ -759,6 +759,9 @@ export interface ITrackPieceReplace extends ITrackPieceRange {
 
     /** One-bar repeat (simile) to write. Ignored on the first measure and for a range replacement. */
     simile?: boolean;
+
+    /** Markings to write over a whole-measure replacement, replacing the markings the measure held. */
+    articulations?: IRangeArticulationPlacement[];
 }
 
 /** The replacement events for a fractional range plus the index where they begin. */
@@ -1106,6 +1109,9 @@ export class ScoreBookDataModel {
         if (!this.trackHasContent(track)) {
             return false;
         }
+
+        const arrangement = this.arrangement;
+        arrangement?.rangeArticulations?.removeTrack(track.id);
 
         track.clear();
         void requisitions.execute("arrangementMutated", undefined);
@@ -1597,10 +1603,18 @@ export class ScoreBookDataModel {
                 continue;
             }
 
-            const rangeChanged = replacement.start === undefined && replacement.end === undefined
+            const wholeMeasure = replacement.start === undefined && replacement.end === undefined;
+            const rangeChanged = wholeMeasure
                 ? this.replaceWholeMeasure(measure, replacement.events, replacement.subdivisions)
                 : this.replaceFractionRange(measure, replacement.start ?? barStart, replacement.end ?? barLine,
                     replacement.events, replacement.subdivisions);
+
+            // A whole-measure paste replaces the measure, so its markings give way to the pasted ones. They are
+            // dropped here and written after every bar was replaced, so a marking that reaches over a barline is
+            // not dropped by the bar it reaches into.
+            const articulationsChanged = wholeMeasure && replacement.articulations !== undefined
+                ? (arrangement.rangeArticulations?.dropInBar(replacement.bar) ?? false)
+                : false;
 
             // A simile repeats the measure before it, so a paste that would put the mark on the first measure
             // drops it; the pasted content stays.
@@ -1610,9 +1624,18 @@ export class ScoreBookDataModel {
                 measure.simile = simileValue ? true : undefined;
             }
 
-            if (rangeChanged || simileChanged) {
+            if (rangeChanged || simileChanged || articulationsChanged) {
                 changed = true;
                 affectedTracks.add(replacement.trackId);
+            }
+        }
+
+        if (this.addMeasureArticulations(replacements)) {
+            changed = true;
+            for (const replacement of replacements) {
+                if (replacement.articulations !== undefined) {
+                    affectedTracks.add(replacement.trackId);
+                }
             }
         }
 
@@ -1772,11 +1795,11 @@ export class ScoreBookDataModel {
         };
 
         if (!RangeArticulations.isValidHairpin(arrangement, hairpin)
-            || RangeArticulations.conflicts(hairpin, articulations)) {
+            || RangeArticulations.conflicts(hairpin, articulations.all)) {
             return undefined;
         }
 
-        articulations.push(hairpin);
+        articulations.add(hairpin);
         this.announceTrackEdits(new Set([trackId]));
 
         return hairpin;
@@ -1806,11 +1829,11 @@ export class ScoreBookDataModel {
         };
 
         if (!RangeArticulations.isValidForteMark(arrangement, mark)
-            || RangeArticulations.conflicts(mark, articulations)) {
+            || RangeArticulations.conflicts(mark, articulations.all)) {
             return undefined;
         }
 
-        articulations.push(mark);
+        articulations.add(mark);
         this.announceTrackEdits(new Set([trackId]));
 
         return mark;
@@ -1826,19 +1849,11 @@ export class ScoreBookDataModel {
      */
     public removeRangeArticulation(id: number): boolean {
         const articulations = this.arrangement?.rangeArticulations;
-        if (!articulations) {
+        const removed = articulations?.remove(id);
+        if (removed === undefined) {
             return false;
         }
 
-        const index = articulations.findIndex((candidate) => {
-            return candidate.id === id;
-        });
-
-        if (index < 0) {
-            return false;
-        }
-
-        const [removed] = articulations.splice(index, 1);
         this.announceTrackEdits(new Set([removed.trackId]));
 
         return true;
@@ -1863,9 +1878,7 @@ export class ScoreBookDataModel {
             return false;
         }
 
-        const existing = articulations.find((candidate) => {
-            return candidate.id === id;
-        });
+        const existing = articulations.find(id);
 
         if (existing === undefined || !RangeArticulations.isHairpin(existing)) {
             return false;
@@ -1883,9 +1896,7 @@ export class ScoreBookDataModel {
             return false;
         }
 
-        if (RangeArticulations.conflicts(moved, articulations.filter((candidate) => {
-            return candidate.id !== id;
-        }))) {
+        if (RangeArticulations.conflicts(moved, articulations.all)) {
             return false;
         }
 
@@ -1917,9 +1928,7 @@ export class ScoreBookDataModel {
             return false;
         }
 
-        const existing = articulations.find((candidate) => {
-            return candidate.id === id;
-        });
+        const existing = articulations.find(id);
 
         if (existing === undefined || !RangeArticulations.isHairpin(existing)) {
             return false;
@@ -1933,9 +1942,7 @@ export class ScoreBookDataModel {
         }
 
         if (!RangeArticulations.isValidHairpin(arrangement, moved)
-            || RangeArticulations.conflicts(moved, articulations.filter((candidate) => {
-                return candidate.id !== id;
-            }))) {
+            || RangeArticulations.conflicts(moved, articulations.all)) {
             return false;
         }
 
@@ -1965,9 +1972,7 @@ export class ScoreBookDataModel {
             return false;
         }
 
-        const existing = articulations.find((candidate) => {
-            return candidate.id === id;
-        });
+        const existing = articulations.find(id);
 
         if (existing === undefined || RangeArticulations.isHairpin(existing)) {
             return false;
@@ -1980,9 +1985,7 @@ export class ScoreBookDataModel {
 
         const moved: IForteMark = { ...existing, trackId, at: target };
         if (!RangeArticulations.isValidForteMark(arrangement, moved)
-            || RangeArticulations.conflicts(moved, articulations.filter((candidate) => {
-                return candidate.id !== id;
-            }))) {
+            || RangeArticulations.conflicts(moved, articulations.all)) {
             return false;
         }
 
@@ -4042,6 +4045,31 @@ export class ScoreBookDataModel {
     }
 
     /**
+     * Writes the markings a whole-measure paste carries, after every replaced bar was cleared of its own markings.
+     * The edit validates them like any other marking once the pasted content is in place.
+     *
+     * @param replacements The replacements of one paste.
+     *
+     * @returns True when at least one marking was written.
+     */
+    private addMeasureArticulations(replacements: ITrackPieceReplace[]): boolean {
+        const articulations = this.arrangement?.rangeArticulations;
+        if (articulations === undefined) {
+            return false;
+        }
+
+        let added = false;
+        for (const replacement of replacements) {
+            for (const placement of replacement.articulations ?? []) {
+                articulations.add(RangeArticulations.materialise(replacement.trackId, placement));
+                added = true;
+            }
+        }
+
+        return added;
+    }
+
+    /**
      * Announces a finished change of one track: the viewers recompute their structure and the undo
      * manager stores one step.
      *
@@ -4061,6 +4089,11 @@ export class ScoreBookDataModel {
         if (trackIds.size === 0) {
             return;
         }
+
+        // An edit that moved or removed an anchor note drops the markings it left without an anchor, in the same
+        // edit rather than its own undo step.
+        const arrangement = this.arrangement;
+        arrangement?.rangeArticulations?.removeInvalid(arrangement, trackIds);
 
         // A measure packed tighter than its width follows its content, in the same edit rather than its own step.
         this.widenMeasuresToFloor();

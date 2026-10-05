@@ -541,7 +541,7 @@ export class RangeArticulationView {
             return false;
         }
 
-        const others = (arrangement.rangeArticulations ?? []).filter((candidate) => {
+        const others = (arrangement.rangeArticulations?.all ?? []).filter((candidate) => {
             return candidate.id !== moved.id;
         });
         const valid = RangeArticulations.isHairpin(moved)
@@ -645,9 +645,7 @@ export class RangeArticulationView {
     }
 
     private articulationById(id: number): IRangeArticulation | undefined {
-        return (this.dataModel.arrangement?.rangeArticulations ?? []).find((candidate) => {
-            return candidate.id === id;
-        });
+        return this.dataModel.arrangement?.rangeArticulations?.find(id);
     }
 
     /**
@@ -723,6 +721,11 @@ export class RangeArticulationView {
                 // A drag is a gesture of its own, so Escape ends it without committing it, like a placing mode does.
                 event.stopPropagation();
                 this.endDrag(true);
+            } else if (this.selectedId !== undefined) {
+                // A selected marking stands in for the score selection, so Escape takes it back the same way it
+                // clears a score selection.
+                this.selectedId = undefined;
+                this.scheduleRefresh();
             }
 
             return;
@@ -848,7 +851,7 @@ export class RangeArticulationView {
         const arrangement = this.dataModel.arrangement;
         const valid = arrangement !== undefined
             && RangeArticulations.isValidHairpin(arrangement, hairpin)
-            && !RangeArticulations.conflicts(hairpin, arrangement.rangeArticulations ?? []);
+            && !RangeArticulations.conflicts(hairpin, arrangement.rangeArticulations?.all ?? []);
 
         return { hairpin, valid };
     }
@@ -877,7 +880,7 @@ export class RangeArticulationView {
         // A move leaves the marking where it is and previews the place it would land at instead.
         const resized = this.resizedMarking(drag);
 
-        for (const articulation of arrangement.rangeArticulations ?? []) {
+        for (const articulation of arrangement.rangeArticulations?.all ?? []) {
             const shown = articulation.id === this.dragId && resized !== undefined ? resized : articulation;
             const element = this.buildMarking(shown);
             if (element !== undefined) {
@@ -1251,7 +1254,7 @@ export class RangeArticulationView {
         };
 
         return RangeArticulations.isValidForteMark(arrangement, mark)
-            && !RangeArticulations.conflicts(mark, arrangement.rangeArticulations ?? []);
+            && !RangeArticulations.conflicts(mark, arrangement.rangeArticulations?.all ?? []);
     }
 
     /**

@@ -350,10 +350,11 @@ describe.sequential("RangeArticulations", () => {
             to: anchorOf(2, 4),
         }];
 
-        const kept = RangeArticulations.validateChunk(chunk, model.arrangement!);
+        const articulations = new RangeArticulations();
+        articulations.load(chunk, model.arrangement!);
 
-        expect(kept).toHaveLength(1);
-        expect(kept[0].id).toBe(hairpinId);
+        expect(articulations.all).toHaveLength(1);
+        expect(articulations.all[0].id).toBe(hairpinId);
     });
 
     it("drops the broken entries of a chunk and keeps the rest", () => {
@@ -411,10 +412,156 @@ describe.sequential("RangeArticulations", () => {
             },
         ];
 
-        const kept = RangeArticulations.validateChunk(chunk, model.arrangement!);
+        const articulations = new RangeArticulations();
+        articulations.load(chunk, model.arrangement!);
 
-        expect(kept.map((articulation) => {
+        expect(articulations.all.map((articulation) => {
             return articulation.id;
         })).toEqual([hairpinId]);
+    });
+
+    describe("dynamic factor", () => {
+        it("plays at the normal level without a marking", () => {
+            expect(RangeArticulations.dynamicsFactor([], anchorOf(1, 0))).toBe(1);
+        });
+
+        it("ramps a crescendo to the full level and keeps it", () => {
+            const markings = [hairpinOf(anchorOf(1, 0), anchorOf(1, 8))];
+
+            expect(RangeArticulations.dynamicsFactor(markings, anchorOf(1, 0))).toBeCloseTo(0.2);
+            expect(RangeArticulations.dynamicsFactor(markings, anchorOf(1, 4))).toBeCloseTo(0.6);
+            expect(RangeArticulations.dynamicsFactor(markings, anchorOf(1, 8))).toBeCloseTo(1);
+            expect(RangeArticulations.dynamicsFactor(markings, anchorOf(2, 0))).toBeCloseTo(1);
+        });
+
+        it("ramps a decrescendo down and keeps the soft level", () => {
+            const markings = [hairpinOf(anchorOf(1, 0), anchorOf(1, 8), RangeArticulationKind.Decrescendo)];
+
+            expect(RangeArticulations.dynamicsFactor(markings, anchorOf(1, 0))).toBeCloseTo(1);
+            expect(RangeArticulations.dynamicsFactor(markings, anchorOf(1, 4))).toBeCloseTo(0.6);
+            expect(RangeArticulations.dynamicsFactor(markings, anchorOf(1, 8))).toBeCloseTo(0.2);
+            expect(RangeArticulations.dynamicsFactor(markings, anchorOf(2, 0))).toBeCloseTo(0.2);
+        });
+
+        it("lets an f restore the normal level and do nothing without a preceding change", () => {
+            const after = [
+                hairpinOf(anchorOf(1, 0), anchorOf(1, 8), RangeArticulationKind.Decrescendo),
+                forteOf(anchorOf(2, 0)),
+            ];
+
+            expect(RangeArticulations.dynamicsFactor(after, anchorOf(1, 8))).toBeCloseTo(0.2);
+            expect(RangeArticulations.dynamicsFactor(after, anchorOf(2, 0))).toBeCloseTo(1);
+            expect(RangeArticulations.dynamicsFactor([forteOf(anchorOf(1, 4))], anchorOf(1, 4))).toBeCloseTo(1);
+        });
+    });
+
+    describe("portion in a bar", () => {
+        it("clips a hairpin to the bars it reaches into", () => {
+            const hairpin = hairpinOf(anchorOf(1, 8), anchorOf(2, 4));
+
+            expect(RangeArticulations.portionInBar(hairpin, 1)).toEqual({
+                start: anchorOf(1, 8).start,
+                end: { numerator: 1, denominator: 1 },
+            });
+            expect(RangeArticulations.portionInBar(hairpin, 2)).toEqual({
+                start: { numerator: 0, denominator: 1 },
+                end: anchorOf(2, 4).start,
+            });
+            expect(RangeArticulations.portionInBar(hairpin, 3)).toBeUndefined();
+        });
+
+        it("keeps a hairpin of one bar whole and an f a bare point", () => {
+            const hairpin = hairpinOf(anchorOf(1, 0), anchorOf(1, 8));
+
+            expect(RangeArticulations.portionInBar(hairpin, 1)).toEqual({
+                start: anchorOf(1, 0).start,
+                end: anchorOf(1, 8).start,
+            });
+            expect(RangeArticulations.portionInBar(forteOf(anchorOf(1, 4)), 1)).toEqual({
+                start: anchorOf(1, 4).start,
+                end: anchorOf(1, 4).start,
+            });
+            expect(RangeArticulations.portionInBar(forteOf(anchorOf(1, 4)), 2)).toBeUndefined();
+        });
+    });
+
+    describe("the marking list", () => {
+        it("adds, finds, sizes, iterates and clears markings", () => {
+            const articulations = new RangeArticulations();
+            const hairpin = hairpinOf(anchorOf(1, 0), anchorOf(1, 8));
+
+            articulations.add(hairpin);
+            expect(articulations.size).toBe(1);
+            expect(articulations.all).toEqual([hairpin]);
+            expect(articulations.find(hairpinId)).toBe(hairpin);
+            expect([...articulations]).toEqual([hairpin]);
+
+            expect(articulations.remove(hairpinId)).toBe(hairpin);
+            expect(articulations.remove(hairpinId)).toBeUndefined();
+
+            articulations.add(hairpin);
+            articulations.clear();
+            expect(articulations.size).toBe(0);
+        });
+
+        it("moves the anchors from a bar on", () => {
+            const articulations = new RangeArticulations();
+            articulations.add(hairpinOf(anchorOf(1, 0), anchorOf(2, 0)));
+
+            articulations.shiftAnchors(2, 1);
+
+            expect(articulations.all[0]).toMatchObject({ from: { bar: 1 }, to: { bar: 3 } });
+        });
+
+        it("copies a contained marking and leaves a reaching hairpin behind", () => {
+            const articulations = new RangeArticulations();
+            articulations.add(hairpinOf(anchorOf(1, 0), anchorOf(1, 8)));
+            articulations.add({ ...hairpinOf(anchorOf(1, 8), anchorOf(2, 4)), id: hairpinId + 1 });
+
+            articulations.copyContained(1, 3);
+
+            expect(articulations.size).toBe(3);
+            expect(articulations.all[2]).toMatchObject({ from: { bar: 3 }, to: { bar: 3 } });
+        });
+
+        it("drops every marking anchored in a bar", () => {
+            const articulations = new RangeArticulations();
+            articulations.add(hairpinOf(anchorOf(1, 0), anchorOf(1, 8)));
+            articulations.add({ ...hairpinOf(anchorOf(1, 8), anchorOf(2, 4)), id: hairpinId + 1 });
+
+            expect(articulations.dropInBar(2)).toBe(true);
+            expect(articulations.size).toBe(1);
+            expect(articulations.all[0].id).toBe(hairpinId);
+        });
+
+        it("drops a removed track's markings and copies a duplicate's with fresh ids", () => {
+            const articulations = new RangeArticulations();
+            articulations.add(hairpinOf(anchorOf(1, 0), anchorOf(1, 8)));
+            articulations.add(forteOf(anchorOf(1, 4), 1));
+            const secondTrackId = trackIdOf(1);
+
+            expect(articulations.removeTrack(trackIdOf(0))).toBe(true);
+            expect(articulations.all.map((articulation) => {
+                return articulation.trackId;
+            })).toEqual([secondTrackId]);
+
+            articulations.duplicateTrack(secondTrackId, 77);
+            expect(articulations.size).toBe(2);
+            expect(articulations.all[1]).toMatchObject({ trackId: 77 });
+            expect(articulations.all[1].id).not.toBe(articulations.all[0].id);
+        });
+
+        it("drops a hairpin whose anchor note became a rest", () => {
+            const articulations = new RangeArticulations();
+            const notes = anchorsIn(1, 0, true);
+            articulations.add(hairpinOf(notes[0], notes[2]));
+            const trackIds = new Set([trackIdOf(0)]);
+
+            expect(articulations.removeInvalid(model.arrangement!, trackIds)).toBe(false);
+
+            eventsIn(1, 0)[0].noteStyleId = undefined;
+            expect(articulations.removeInvalid(model.arrangement!, trackIds)).toBe(true);
+            expect(articulations.size).toBe(0);
+        });
     });
 });

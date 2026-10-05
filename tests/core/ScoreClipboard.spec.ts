@@ -6,12 +6,14 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { Arrangement } from "../../src/core/Arrangement.js";
+import { RangeArticulations } from "../../src/core/RangeArticulations.js";
 import { ScoreBookDataModel, type ISbDmInstrument, type ISbDmTrack, type ISbDmTrackPiece }
     from "../../src/core/ScoreBookDataModel.js";
 import {
     PasteOverflowMode, PasteResultKind, ScoreClipboard, SubdivisionPasteMode,
 } from "../../src/core/ScoreClipboard.js";
 import { addFractions, compareFractions } from "../../src/core/serialisation/numeric-functions.js";
+import { RangeArticulationKind } from "../../src/core/types/general.js";
 import { type ISelectionEntry } from "../../src/ui/SelectionSerializer.js";
 import {
     createInstrument, hydrateMeasureEvents, measureEntry, noteEntry, runEntry, setCellNote, trackEntry,
@@ -1609,5 +1611,60 @@ describe("ScoreClipboard", () => {
             }, { numerator: 0, denominator: 1 });
             expect(compareFractions(measureLength, { numerator: 1, denominator: 1 })).toBe(0);
         }
+    });
+
+    it("carries the markings a copied measure holds onto the paste target", () => {
+        model.startNewArrangement([instrumentA()], { length: 2 });
+        const [track] = model.arrangement!.tracks;
+
+        model.setNoteAt(track.id, 1, { numerator: 0, denominator: 16 }, { numerator: 1, denominator: 16 }, "1");
+        model.setNoteAt(track.id, 1, { numerator: 4, denominator: 16 }, { numerator: 1, denominator: 16 }, "1");
+        model.setNoteAt(track.id, 1, { numerator: 8, denominator: 16 }, { numerator: 1, denominator: 16 }, "1");
+        hydrateMeasureEvents(model.arrangement! as Arrangement);
+
+        const source = track.measures[0];
+        model.insertHairpin(RangeArticulationKind.Crescendo, track.id,
+            { bar: 1, start: { numerator: 0, denominator: 16 } },
+            { bar: 1, start: { numerator: 4, denominator: 16 } });
+        model.insertForteMark(track.id, { bar: 1, start: { numerator: 8, denominator: 16 } });
+
+        const originalIds = new Set(model.arrangement!.rangeArticulations!.all.map((marking) => {
+            return marking.id;
+        }));
+
+        clipboard.copy([measureEntry(source)]);
+        const result = clipboard.paste([measureEntry(track.measures[1])]);
+
+        expect(result.kind).toBe(PasteResultKind.Success);
+
+        const pasted = model.arrangement!.rangeArticulations!.all.filter((marking) => {
+            const bar = RangeArticulations.isHairpin(marking) ? marking.from.bar : marking.at.bar;
+
+            return bar === 2;
+        });
+
+        expect(pasted).toHaveLength(2);
+        expect(pasted.every((marking) => {
+            return !originalIds.has(marking.id);
+        })).toBe(true);
+    });
+
+    it("does not carry a hairpin that reaches beyond the copied bar", () => {
+        model.startNewArrangement([instrumentA()], { length: 2 });
+        const [track] = model.arrangement!.tracks;
+
+        model.setNoteAt(track.id, 1, { numerator: 0, denominator: 16 }, { numerator: 1, denominator: 16 }, "1");
+        model.setNoteAt(track.id, 2, { numerator: 0, denominator: 16 }, { numerator: 1, denominator: 16 }, "1");
+        hydrateMeasureEvents(model.arrangement! as Arrangement);
+
+        model.insertHairpin(RangeArticulationKind.Crescendo, track.id,
+            { bar: 1, start: { numerator: 0, denominator: 16 } },
+            { bar: 2, start: { numerator: 0, denominator: 16 } });
+
+        clipboard.copy([measureEntry(track.measures[0])]);
+        const result = clipboard.paste([measureEntry(track.measures[1])]);
+
+        expect(result.kind).toBe(PasteResultKind.Success);
+        expect(model.arrangement!.rangeArticulations!.size).toBe(1);
     });
 });

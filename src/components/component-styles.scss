@@ -1984,6 +1984,34 @@
     transform: none;
 }
 
+/* The markings of a printed staff row, laid out from the bar geometry rather than measured from the DOM. The
+ * layer is pointer-transparent: a printed marking is never editable. */
+.staff-note-viewer-articulations {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+}
+
+.staff-note-viewer-articulation {
+    position: absolute;
+    color: var(--color-base-content);
+}
+
+.staff-note-viewer-articulation-hairpin svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+
+    path {
+        stroke-width: var(--hairpin-thickness, 1px);
+    }
+}
+
+/* The f glyph is centred on the event position it sits at. */
+.staff-note-viewer-articulation-forte {
+    transform: translate(-50%, -50%);
+}
+
 /* While a placing mode is active, the mode owns the pointer: every other part of the app stays inert, so a press
  * cannot leave the mode or change anything else. The score keeps its pointer events, which is where the mode
  * works. */

@@ -3,7 +3,8 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import type { IMeasureEvent, IMeterSnapshot, ISubdivision } from "./general.js";
+import type { IFraction, IMeasureEvent, IMeterSnapshot, ISubdivision } from "./general.js";
+import { RangeArticulationKind } from "./general.js";
 
 /** Describes what kind of score content a clipboard entry represents. */
 export enum ClipboardContentKind {
@@ -48,6 +49,24 @@ export interface IClipboardTrackPiece {
     mixed?: boolean;
 }
 
+/**
+ * An anchor of a copied marking: a copied measure by its 0-based offset within the copied measures, and a fraction
+ * inside it.
+ */
+export interface IClipboardAnchor {
+    barOffset: number;
+    start: IFraction;
+}
+
+/** A marking carried by the clipboard, its anchors kept in copied-measure coordinates. */
+export type IClipboardArticulation =
+    | {
+        kind: RangeArticulationKind.Crescendo | RangeArticulationKind.Decrescendo;
+        from: IClipboardAnchor;
+        to: IClipboardAnchor;
+    }
+    | { kind: RangeArticulationKind.Forte; at: IClipboardAnchor; };
+
 /** The clipboard content of one track, ordered along the measure dimension. */
 export interface IClipboardTrack {
     /** The source instrument type, used to reject pastes into a different instrument. */
@@ -55,6 +74,9 @@ export interface IClipboardTrack {
 
     /** The copied measures, forming the repeat unit along the measure dimension. */
     measures: IClipboardTrackPiece[];
+
+    /** The markings fully contained in the copied measures, in copied-measure coordinates. */
+    articulations?: IClipboardArticulation[];
 }
 
 /**

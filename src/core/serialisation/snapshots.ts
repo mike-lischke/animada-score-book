@@ -98,8 +98,8 @@ export const collectArrangementExtensions = (
     }
 
     const articulations = arrangementView.rangeArticulations;
-    if (articulations !== undefined && articulations.length > 0) {
-        chunks[rangeArticulationsChunk] = articulations.map((articulation) => {
+    if (articulations !== undefined && articulations.size > 0) {
+        chunks[rangeArticulationsChunk] = articulations.all.map((articulation) => {
             return RangeArticulations.clone(articulation);
         });
     }
@@ -200,13 +200,7 @@ const applyRepeatBars = (arrangementView: ISbDmArrangement, chunk: unknown): voi
  * @param chunk The range articulation chunk of a snapshot, as it was written.
  */
 const applyRangeArticulations = (arrangementView: ISbDmArrangement, chunk: unknown): void => {
-    const articulations = arrangementView.rangeArticulations;
-    if (articulations === undefined) {
-        return;
-    }
-
-    const validated = RangeArticulations.validateChunk(chunk, arrangementView);
-    articulations.splice(0, articulations.length, ...validated);
+    arrangementView.rangeArticulations?.load(chunk, arrangementView);
 };
 
 const getTrackSnapshot = (track: ISbDmTrack): ITrackSnapshot => {

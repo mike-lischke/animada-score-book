@@ -8,6 +8,7 @@ import type { ComponentChild } from "preact";
 import type { ISbDmArrangement, ISbDmTrack, ISbDmTrackPiece, ScoreBookDataModel }
     from "../../../../core/ScoreBookDataModel.js";
 import { MeasureLayout, staffSpacePx } from "../../../../core/MeasureLayout.js";
+import { RangeArticulations } from "../../../../core/RangeArticulations.js";
 import type { ArrangementPlayer } from "../../../../player/ArrangementPlayer.js";
 import {
     MeasureProjection, NoteGroupKind, type INoteGroup, type INotationGrid,
@@ -94,6 +95,12 @@ export interface IStaffMeasureViewerProps extends ICommonUIProperties {
      * Used by the print feature to limit output to the user's selection.
      */
     tracks?: ISbDmTrack[];
+
+    /**
+     * True to draw the hairpins and `f` markings of each row. The print view sets this; the screen view leaves it
+     * off, because its markings are drawn into the viewer's decoration layer instead.
+     */
+    showRangeArticulations?: boolean;
 }
 
 interface IStaffMeasureViewerState {
@@ -325,7 +332,7 @@ export class StaffMeasureViewer extends UIComponent<IStaffMeasureViewerProps, IS
 
     public override render(): ComponentChild {
         const { barNumber, arrangement, arrangementPlayer, inEditMode,
-            dataModel, scoreElementRegistry, style } = this.props;
+            dataModel, scoreElementRegistry, style, showRangeArticulations } = this.props;
         const { tracks } = this.state;
 
         // The barline closing the column is the resize handle, so it exists only where resizing is allowed.
@@ -357,6 +364,13 @@ export class StaffMeasureViewer extends UIComponent<IStaffMeasureViewerProps, IS
                         return null;
                     }
 
+                    const articulations = showRangeArticulations
+                        ? (arrangement.rangeArticulations?.all ?? []).filter((articulation) => {
+                            return articulation.trackId === track.id
+                                && RangeArticulations.portionInBar(articulation, barNumber) !== undefined;
+                        })
+                        : undefined;
+
                     return (
                         <StaffMeasureTrackRow
                             key={track.id}
@@ -368,6 +382,7 @@ export class StaffMeasureViewer extends UIComponent<IStaffMeasureViewerProps, IS
                             inEditMode={inEditMode}
                             dataModel={dataModel}
                             scoreElementRegistry={scoreElementRegistry}
+                            articulations={articulations}
                         />
                     );
                 })}

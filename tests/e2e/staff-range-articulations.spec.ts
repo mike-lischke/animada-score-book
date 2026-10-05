@@ -364,3 +364,26 @@ test("places an f marking and drags it onto a rest", async ({ page }) => {
 
     expect(Math.abs(after.x - before.x)).toBeGreaterThan(10);
 });
+
+test("clears the marking selection with escape", async ({ page }) => {
+    await placeMarking(page, snapshotOf(quarterEvents), "Draw crescendo / decrescendo hairpin", 1, 0);
+
+    await page.locator(".range-articulation").click();
+    await expect(page.locator(".range-articulation-handle")).toHaveCount(2);
+
+    // Escape takes the selection back from the marking, the way it does from the notes.
+    await page.keyboard.press("Escape");
+    await expect(page.locator(".range-articulation-handle")).toHaveCount(0);
+    await expect(page.locator(".range-articulation")).toHaveCount(1);
+});
+
+test("removes a hairpin when its anchor note is deleted", async ({ page }) => {
+    await placeMarking(page, snapshotOf(quarterEvents), "Draw crescendo / decrescendo hairpin", 1, 0);
+    await expect(page.locator(".range-articulation")).toHaveCount(1);
+
+    // Delete the note the hairpin starts on; the marking loses its anchor and goes with it.
+    await page.locator(".staff-measure-viewer").first().locator(".staff-note-head-symbol").first().click();
+    await page.keyboard.press("Delete");
+
+    await expect(page.locator(".range-articulation")).toHaveCount(0);
+});

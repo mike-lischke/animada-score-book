@@ -276,7 +276,7 @@ describe("snapshots", () => {
         const instrument = createInstrument("0", 0, 0);
         const { arrangement } = ArrangementMigrator.migrateToArrangement(snapshotOfNotes(2), [instrument]);
 
-        arrangement.rangeArticulations.push(
+        arrangement.rangeArticulations.add(
             {
                 id: 9001,
                 trackId: arrangement.tracks[0].id,
@@ -284,6 +284,8 @@ describe("snapshots", () => {
                 from: { bar: 1, start: { numerator: 0, denominator: 1 } },
                 to: { bar: 2, start: { numerator: 0, denominator: 1 } },
             },
+        );
+        arrangement.rangeArticulations.add(
             {
                 id: 9002,
                 trackId: arrangement.tracks[0].id,
@@ -299,7 +301,7 @@ describe("snapshots", () => {
         const { arrangement: restored, migrated } = ArrangementMigrator.migrateToArrangement(packed, [instrument]);
 
         expect(migrated).toBe(false);
-        expect(restored.rangeArticulations).toEqual(arrangement.rangeArticulations);
+        expect(restored.rangeArticulations.all).toEqual(arrangement.rangeArticulations.all);
         expect(getArrangementSnapshot(restored)).toEqual(snapshot);
     });
 
@@ -344,7 +346,7 @@ describe("snapshots", () => {
 
         const { arrangement } = ArrangementMigrator.migrateToArrangement(snapshot, [instrument]);
 
-        expect(arrangement.rangeArticulations.map((articulation) => {
+        expect(arrangement.rangeArticulations.all.map((articulation) => {
             return articulation.id;
         })).toEqual([9001]);
     });

@@ -135,6 +135,20 @@ export interface IForteMark extends IRangeArticulationBase {
 export type IRangeArticulation = IHairpin | IForteMark;
 
 /**
+ * A marking a paste writes: the same shape as {@link IRangeArticulation} without the id and track, which the paste
+ * target supplies when it mints the stored marking.
+ */
+export type IRangeArticulationPlacement =
+    | Omit<IHairpin, "id" | "trackId">
+    | Omit<IForteMark, "id" | "trackId">;
+
+/** The part of a marking that lies in one bar, as a start and an end fraction of that bar. */
+export interface IArticulationPortion {
+    start: IFraction;
+    end: IFraction;
+}
+
+/**
  * Optional, feature-owned data of an arrangement snapshot, keyed by chunk name.
  *
  * A chunk carries everything one feature needs beyond the core of a snapshot (version, time params,
