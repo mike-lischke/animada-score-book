@@ -1,6 +1,15 @@
 # Animada Score Book Release Notes
 
-Version history, newest first. The current release is **1.4.0**.
+Version history, newest first. The current release is **1.5.0**.
+
+## 1.5.0
+
+- Range dynamics: add crescendo and decrescendo hairpins and forte markings in the staff view, with support for
+  editing, playback, clipboard operations, snapshots, undo and redo, and printing.
+- Score editing: preserve articulations when pasting and fix selection looping.
+- Editor polish: hide controls unavailable in the grid view, separate repeat controls, and improve toolbar spacing
+  and the grid-view simile sign.
+- Reliability: dispose animation engines cleanly and surface permission errors.
 
 ## 1.4.0
 
