@@ -60,6 +60,9 @@ export class SelectionManager {
     /** Debounce timer id for persisting the selection to localStorage. */
     private saveDebounceId?: ReturnType<typeof setTimeout>;
 
+    /** Pending score-load callbacks that restore selection after the viewer renders. */
+    private readonly scoreBookLoadedTimers = new Set<ReturnType<typeof setTimeout>>();
+
     /**
      * Tracks whether the first scoreBookLoaded event (app startup) has already been processed.
      * On the first load the persisted selection is restored; on subsequent loads (user opens a
@@ -101,8 +104,23 @@ export class SelectionManager {
     }
 
     public dispose(): void {
+        requisitions.unregister("selectionRectChanged", this.handleSelectionRectChanged);
+        requisitions.unregister("playerStateChanged", this.handlePlayerStateChanged);
+        requisitions.unregister("scoreBookLoaded", this.handleScoreBookLoaded);
+        requisitions.unregister("arrangementReverted", this.handleArrangementReverted);
         requisitions.unregister("editModeChanged", this.handleEditModeChanged);
         requisitions.unregister("editEntryModeChanged", this.handleEntryModeChanged);
+
+        if (this.saveDebounceId !== undefined) {
+            clearTimeout(this.saveDebounceId);
+            this.saveDebounceId = undefined;
+        }
+
+        for (const timerId of this.scoreBookLoadedTimers) {
+            clearTimeout(timerId);
+        }
+
+        this.scoreBookLoadedTimers.clear();
 
         if (this.view) {
             this.view.dispose();
@@ -1085,7 +1103,9 @@ export class SelectionManager {
 
         // Delay slightly so the arrangement viewer has time to render its DOM before selection overlays
         // are applied.
-        setTimeout(() => {
+        const timerId = setTimeout(() => {
+            this.scoreBookLoadedTimers.delete(timerId);
+
             if (this.firstLoadDone) {
                 if (reason === ScoreBookChangeReason.ScoreLoaded) {
                     this.clearSelection();
@@ -1095,6 +1115,7 @@ export class SelectionManager {
                 this.restorePersistedSelection();
             }
         }, 100);
+        this.scoreBookLoadedTimers.add(timerId);
 
         return Promise.resolve(true);
     };

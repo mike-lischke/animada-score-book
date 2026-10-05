@@ -241,6 +241,8 @@ export class App extends UIComponent<{}, IAppState> {
     }
 
     public override componentWillUnmount() {
+        this.selectionManager.dispose();
+
         requisitions.unregister("timeParamsChanged", this.handleTimeParamsChange);
         this.systemThemeQuery.removeEventListener("change", this.handleSystemThemeChange);
         window.removeEventListener("afterprint", this.handleAfterPrint);

@@ -132,6 +132,7 @@ describe("SubdivisionToolbar", { concurrent: false }, () => {
         renderResult?.unmount();
         cleanup();
         renderResult = null;
+        selectionManager.dispose();
         vi.restoreAllMocks();
     });
 
