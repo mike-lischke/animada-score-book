@@ -6,7 +6,7 @@
 import { requisitions } from "../supplement/Requisitions.js";
 import type { ISbDmNoteEvent, ISbDmTrack, ITiming, RealTime, ScoreBookDataModel } from "../core/ScoreBookDataModel.js";
 import { getSharedAudioContext } from "../core/audio-context.js";
-import { sleep, waitFor } from "../core/utils.js";
+import { waitFor } from "../core/utils.js";
 import { AnimationEngine } from "../ui/AnimationEngine.js";
 import { AudioBufferPlayer } from "./AudioBufferPlayer.js";
 import { Metronome } from "./Metronome.js";
@@ -48,13 +48,14 @@ export class ArrangementPlayer {
     private audioContext: BaseAudioContext = getSharedAudioContext();
 
     private nextIterationId?: ReturnType<typeof setTimeout>;
-    private loopBoundaryTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
     /**
      * We use the AudioContext (which always runs) to move forward in time.
      * The offset gives us a starting point in the AudioContext time which corresponds to 0 in our score time.
      */
     private offset = 0;
+
+    private playbackOffset = 0;
 
     /** The time point in score time, for which we already have scheduled events. */
     private timeCovered = 0;
@@ -67,6 +68,8 @@ export class ArrangementPlayer {
 
     /** The part of the song we want to play (in score time). If not set, the entire song is played. */
     private currentInterval?: IInterval;
+
+    private selectedPlayRange?: { from: number; to: number; };
 
     private scheduledAudioEvents: Array<{ audioEvent: IAudioEvent, audioBufferPlayer: AudioBufferPlayer; }> = [];
     private scheduledCallbackEvents: Array<{
@@ -94,6 +97,7 @@ export class ArrangementPlayer {
         this.updateCallbackEvents();
         requisitions.register("timeParamsChanged", this.handleTimeParamsChanged);
         requisitions.register("trackChanged", this.handleTrackChanged);
+        requisitions.register("playRangeChanged", this.handlePlayRangeChanged);
 
         this.animationEngine = new AnimationEngine(this);
         this.metronome = new Metronome(this.timeCoordinator);
@@ -179,6 +183,7 @@ export class ArrangementPlayer {
         requisitions.unregister("arrangementChanged", this.handleArrangementChanged);
         requisitions.unregister("timeParamsChanged", this.handleTimeParamsChanged);
         requisitions.unregister("trackChanged", this.handleTrackChanged);
+        requisitions.unregister("playRangeChanged", this.handlePlayRangeChanged);
 
         this.metronome.dispose();
         this.trackPlayers.clear();
@@ -214,10 +219,18 @@ export class ArrangementPlayer {
      * Plays the entire score or the specified interval in real time.
      *
      * @param interval An optional interval to play instead of the entire score.
+     *
+     * @returns Resolves once playback has started.
      */
     public async play(interval?: IInterval): Promise<void> {
         if (this.disposed) {
             return;
+        }
+
+        if (interval === undefined && this.selectedPlayRange !== undefined) {
+            const { from, to } = this.selectedPlayRange;
+
+            return this.playBars(from, to - from + 1);
         }
 
         await this.ensureContextIsRunning();
@@ -247,6 +260,7 @@ export class ArrangementPlayer {
         // If an interval is given, pretend we started earlier by setting the offset back in time.
         // We never access time before the current audio time.
         this.offset = this.audioContext.currentTime - (interval?.start ?? 0);
+        this.playbackOffset = this.offset;
         this.endOffset = interval?.end ?? this.timeCoordinator.metrics.realTimeLength;
 
         // Pretend we have covered all events before the interval start.
@@ -264,14 +278,11 @@ export class ArrangementPlayer {
 
         this.timeCoordinator.reset();
         this.offset = 0;
+        this.playbackOffset = 0;
 
         if (this.nextIterationId) {
             clearTimeout(this.nextIterationId);
             this.nextIterationId = undefined;
-            if (this.loopBoundaryTimeoutId !== null) {
-                clearTimeout(this.loopBoundaryTimeoutId);
-                this.loopBoundaryTimeoutId = null;
-            }
         }
 
         if (this.#state !== PlayerPlayState.Stopped) { // Playing or counting.
@@ -284,7 +295,14 @@ export class ArrangementPlayer {
 
     public get currentTime(): number {
         if (this.#state === PlayerPlayState.Playing) {
-            return this.audioContext.currentTime - this.offset;
+            const realTime = this.audioContext.currentTime - this.playbackOffset;
+            const start = this.currentInterval?.start ?? 0;
+            const duration = this.endOffset - start;
+            if (this.dataModel.arrangement!.loop && duration > 0 && realTime >= this.endOffset) {
+                return start + ((realTime - start) % duration);
+            }
+
+            return realTime;
         }
 
         return -1;
@@ -339,32 +357,38 @@ export class ArrangementPlayer {
      * @returns A promise that resolves when the current play iteration finishes.
      */
     private async iteration(): Promise<void> {
-        // We look for events in a small interval in the future (0.25s) to give ourselves time to schedule them.
-        const intervalEnd = Math.min(this.currentTime + 0.25, this.endOffset);
-        const interval: IInterval = { start: this.timeCovered, end: intervalEnd };
+        if (this.#state !== PlayerPlayState.Playing) {
+            return;
+        }
 
-        // Stop playback if the covered time has reached the end of the current interval.
-        if (interval.start >= this.endOffset) {
-            // We stop playback here, but wait for the next run-loop to let the last events fire.
-            await sleep(10);
+        const start = this.currentInterval?.start ?? 0;
+        const duration = this.endOffset - start;
+        if (duration <= 0 || (!this.dataModel.arrangement!.loop && this.currentTime >= this.endOffset)) {
             this.stop();
-
-            // If we were supposed to loop, start again immediately.
-            if (this.dataModel.arrangement!.loop) {
-                return this.play(this.currentInterval);
-            }
 
             return;
         }
 
-        // Get and schedule events in the upcoming interval, then schedule the next loop iteration.
-        this.scheduleEvents(interval);
+        const horizon = this.audioContext.currentTime + 0.25;
+        while (this.offset + this.timeCovered < horizon) {
+            if (this.timeCovered >= this.endOffset) {
+                if (!this.dataModel.arrangement!.loop) {
+                    break;
+                }
+
+                this.offset += duration;
+                this.timeCovered = start;
+            }
+
+            const intervalEnd = Math.min(horizon - this.offset, this.endOffset);
+            this.scheduleEvents({ start: this.timeCovered, end: intervalEnd });
+            this.timeCovered = intervalEnd;
+        }
 
         return new Promise((resolve) => {
             this.nextIterationId = setTimeout(() => {
                 void this.iteration().then(resolve);
             }, 125); // Schedule the next iteration after 125ms.
-            this.timeCovered = intervalEnd;
         });
     }
 
@@ -439,6 +463,12 @@ export class ArrangementPlayer {
      */
     private handleTrackChanged = (): Promise<boolean> => {
         this.refreshPerformance();
+
+        return Promise.resolve(true);
+    };
+
+    private handlePlayRangeChanged = (range?: { from: number; to: number; }): Promise<boolean> => {
+        this.selectedPlayRange = range;
 
         return Promise.resolve(true);
     };
@@ -689,7 +719,7 @@ export class ArrangementPlayer {
     }
 
     private getMsFromNow(time: number): number {
-        return (time - this.currentTime) * 1000;
+        return (this.offset + time - this.audioContext.currentTime) * 1000;
     }
 
     private hasStarted(

@@ -1609,11 +1609,11 @@ export class ScoreBookDataModel {
                 : this.replaceFractionRange(measure, replacement.start ?? barStart, replacement.end ?? barLine,
                     replacement.events, replacement.subdivisions);
 
-            // A whole-measure paste replaces the measure, so its markings give way to the pasted ones. They are
-            // dropped here and written after every bar was replaced, so a marking that reaches over a barline is
-            // not dropped by the bar it reaches into.
+            // A whole-measure paste replaces the measure, so the target track's markings give way to the pasted
+            // ones. They are dropped here and written after every bar was replaced, so a marking that reaches over a
+            // barline is not dropped by the bar it reaches into. Markings of other tracks in that bar stay.
             const articulationsChanged = wholeMeasure && replacement.articulations !== undefined
-                ? (arrangement.rangeArticulations?.dropInBar(replacement.bar) ?? false)
+                ? (arrangement.rangeArticulations?.dropTrackInBar(replacement.trackId, replacement.bar) ?? false)
                 : false;
 
             // A simile repeats the measure before it, so a paste that would put the mark on the first measure

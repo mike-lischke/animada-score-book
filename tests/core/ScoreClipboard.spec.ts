@@ -1667,4 +1667,31 @@ describe("ScoreClipboard", () => {
         expect(result.kind).toBe(PasteResultKind.Success);
         expect(model.arrangement!.rangeArticulations!.size).toBe(1);
     });
+
+    it("keeps the source marking when a track piece is copied onto another track", () => {
+        model.startNewArrangement([instrumentA(), instrumentA()], { length: 2 });
+        const [source, target] = model.arrangement!.tracks;
+
+        model.setNoteAt(source.id, 1, { numerator: 0, denominator: 16 }, { numerator: 1, denominator: 4 }, "1");
+        model.setNoteAt(source.id, 1, { numerator: 4, denominator: 16 }, { numerator: 1, denominator: 4 }, "1");
+        hydrateMeasureEvents(model.arrangement! as Arrangement);
+
+        model.insertHairpin(RangeArticulationKind.Crescendo, source.id,
+            { bar: 1, start: { numerator: 0, denominator: 16 } },
+            { bar: 1, start: { numerator: 4, denominator: 16 } });
+
+        clipboard.copy([trackPieceEntry(source, source.measures[0])]);
+        const result = clipboard.paste([trackPieceEntry(target, target.measures[0])]);
+
+        expect(result.kind).toBe(PasteResultKind.Success);
+
+        // The paste copies the hairpin onto the target track and leaves the source track's marking in place.
+        const markings = model.arrangement!.rangeArticulations!.all;
+        expect(markings.filter((marking) => {
+            return marking.trackId === source.id;
+        })).toHaveLength(1);
+        expect(markings.filter((marking) => {
+            return marking.trackId === target.id;
+        })).toHaveLength(1);
+    });
 });

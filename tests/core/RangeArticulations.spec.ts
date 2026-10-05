@@ -534,6 +534,17 @@ describe.sequential("RangeArticulations", () => {
             expect(articulations.all[0].id).toBe(hairpinId);
         });
 
+        it("drops only one track's markings in a bar", () => {
+            const articulations = new RangeArticulations();
+            articulations.add(hairpinOf(anchorOf(1, 0), anchorOf(1, 8)));
+            articulations.add(forteOf(anchorOf(1, 4), 1));
+
+            expect(articulations.dropTrackInBar(trackIdOf(0), 1)).toBe(true);
+            expect(articulations.all.map((articulation) => {
+                return articulation.trackId;
+            })).toEqual([trackIdOf(1)]);
+        });
+
         it("drops a removed track's markings and copies a duplicate's with fresh ids", () => {
             const articulations = new RangeArticulations();
             articulations.add(hairpinOf(anchorOf(1, 0), anchorOf(1, 8)));

@@ -537,6 +537,21 @@ export class RangeArticulations implements Iterable<IRangeArticulation> {
     }
 
     /**
+     * Drops the markings of one track that have an anchor inside the given bar, which is what replaces the markings
+     * of a measure a paste overwrote. Markings of other tracks in that bar stay.
+     *
+     * @param trackId The track whose markings give way.
+     * @param bar The 1-based bar to drop from.
+     *
+     * @returns True when at least one marking was dropped.
+     */
+    public dropTrackInBar(trackId: number, bar: number): boolean {
+        return this.retain(this.items.filter((articulation) => {
+            return articulation.trackId !== trackId || !RangeArticulations.anchorInBar(articulation, bar);
+        }));
+    }
+
+    /**
      * Drops every marking of a removed track.
      *
      * @param trackId The id of the removed track.
