@@ -90,7 +90,7 @@ interface IGridCellProperties {
 
 /** A dialog to edit multiple values. */
 export class ValueDialog extends UIComponent<{}, IValueDialogState> {
-    private dialogRef = createRef<Dialog>();
+    private dialogRef = createRef<Dialog | null>();
     private signal?: Semaphore<IDialogResponse>;
 
     public constructor(props: {}) {

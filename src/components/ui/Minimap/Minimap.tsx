@@ -37,13 +37,13 @@ interface IViewportDomRefs {
 }
 
 export class Minimap extends UIComponent<IMinimapProps> {
-    private minimapRef = createRef<HTMLDivElement>();
-    private minimapScrollHostRef = createRef<HTMLDivElement>();
-    private contentHostRef = createRef<HTMLDivElement>();
-    private zoomHostRef = createRef<HTMLDivElement>();
-    private viewportMarkerRef = createRef<HTMLDivElement>();
-    private viewportLabelRef = createRef<HTMLDivElement>();
-    private barNumberRef = createRef<HTMLSpanElement>();
+    private minimapRef = createRef<HTMLDivElement | null>();
+    private minimapScrollHostRef = createRef<HTMLDivElement | null>();
+    private contentHostRef = createRef<HTMLDivElement | null>();
+    private zoomHostRef = createRef<HTMLDivElement | null>();
+    private viewportMarkerRef = createRef<HTMLDivElement | null>();
+    private viewportLabelRef = createRef<HTMLDivElement | null>();
+    private barNumberRef = createRef<HTMLSpanElement | null>();
 
     private viewportMarkerAnimationFrame?: number;
     private viewportDomRefs?: IViewportDomRefs;

@@ -150,7 +150,7 @@ const rectOf = (x: number, y: number, width: number, height: number): DOMRect =>
         toJSON: () => {
             return {};
         },
-    } as DOMRect;
+    };
 };
 
 /**
@@ -162,7 +162,7 @@ const clickRect = (): DOMRect => {
     return rectOf(0, 0, 1, 1);
 };
 
-describe.sequential("SelectionManager (class)", () => {
+describe("SelectionManager (class)", { concurrent: false }, () => {
     let manager: SelectionManager;
     let track: ISbDmTrack;
     let noteA: Mutable<ISbDmNoteEvent>;
@@ -282,7 +282,7 @@ describe.sequential("SelectionManager (class)", () => {
     });
 });
 
-describe.sequential("SelectionManager click resolution", () => {
+describe("SelectionManager click resolution", { concurrent: false }, () => {
     let manager: SelectionManager;
     let track: ISbDmTrack;
     let referenceMeasure: ISbDmTrackPiece;
@@ -359,7 +359,7 @@ describe.sequential("SelectionManager click resolution", () => {
     });
 });
 
-describe.sequential("SelectionManager note groups", () => {
+describe("SelectionManager note groups", { concurrent: false }, () => {
     /**
      * Builds a measure holding five sixteenths, which is what the group fixtures address.
      *
@@ -443,7 +443,7 @@ describe.sequential("SelectionManager note groups", () => {
     });
 });
 
-describe.sequential("SelectionManager re-validation after undo/redo", () => {
+describe("SelectionManager re-validation after undo/redo", { concurrent: false }, () => {
     /**
      * Builds an arrangement with one track of two measures, each holding a single event.
      *

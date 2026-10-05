@@ -15,7 +15,7 @@ const makeRect = (x: number, y: number, width: number, height: number): DOMRect 
         toJSON: () => {
             return {};
         },
-    } as DOMRect;
+    };
 };
 
 const createSteps = (): ITutorialStep[] => {
@@ -93,10 +93,10 @@ const installSynchronousSetState = (wizard: TestableTutorialWizard): void => {
     ) => {
         instance.state = { ...instance.state, ...update };
         callback?.();
-    }) as typeof instance.setState;
+    });
 };
 
-describe.sequential("TutorialWizard", () => {
+describe("TutorialWizard", { concurrent: false }, () => {
     const createWizard = (steps: ITutorialStep[]): TestableTutorialWizard => {
         const onClose = vi.fn();
         const onStepChange = vi.fn();

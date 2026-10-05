@@ -69,20 +69,15 @@ interface ISplitContainerProperties extends ICommonUIProperties {
     /** The thickness of the splitter (separator). */
     splitterSize?: number;
 
-    innerRef?: preact.RefObject<HTMLElement>;
+    innerRef?: preact.RefObject<HTMLElement | null>;
 
     onPaneResized?: (info: ISplitterPaneSizeInfo[]) => void;
 }
 
 export class SplitContainer extends UIComponent<ISplitContainerProperties> {
 
-    public static override defaultProps = {
-        orientation: Orientation.LeftToRight,
-        splitterSize: 4,
-    };
-
-    private sashContainerRef = createRef<HTMLDivElement>();
-    private contentContainerRef = createRef<HTMLDivElement>();
+    private sashContainerRef = createRef<HTMLDivElement | null>();
+    private contentContainerRef = createRef<HTMLDivElement | null>();
 
     private paneData: IPanePositionData[] = [];
     private currentSashIndex = -1; // The index of the sash currently being dragged (or -1 if no dragging is going on).
@@ -92,13 +87,13 @@ export class SplitContainer extends UIComponent<ISplitContainerProperties> {
     private lastMouseX = 0; // Last mouse position when starting resize with a sash.
     private lastMouseY = 0;
 
-    private containerRef: preact.RefObject<HTMLElement>;
+    private containerRef: preact.RefObject<HTMLElement | null>;
     private resizeTimer: ReturnType<typeof setTimeout> | null = null;
 
     public constructor(props: ISplitContainerProperties) {
         super(props);
 
-        this.containerRef = props.innerRef ?? createRef<HTMLElement>();
+        this.containerRef = props.innerRef ?? createRef<HTMLElement | null>();
 
         // Initial pane layout.
         this.updatePaneData();
@@ -162,7 +157,7 @@ export class SplitContainer extends UIComponent<ISplitContainerProperties> {
     }
 
     public render(): ComponentChild {
-        const { id, panes, splitterSize } = this.props;
+        const { id, panes, splitterSize = 4 } = this.props;
 
         const className = this.generateFinalClassName(["splitContainer"]);
 
@@ -197,7 +192,7 @@ export class SplitContainer extends UIComponent<ISplitContainerProperties> {
         return (
             <div
                 id={id}
-                ref={this.containerRef as preact.RefObject<HTMLDivElement>}
+                ref={this.containerRef as preact.RefObject<HTMLDivElement | null>}
                 className={className}
             >
                 <div
@@ -225,7 +220,7 @@ export class SplitContainer extends UIComponent<ISplitContainerProperties> {
     }
 
     private get isHorizontal(): boolean {
-        const { orientation } = this.props;
+        const { orientation = Orientation.LeftToRight } = this.props;
 
         return orientation === Orientation.LeftToRight || orientation === Orientation.RightToLeft;
     }

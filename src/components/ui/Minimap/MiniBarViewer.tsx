@@ -3,7 +3,7 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import type { ComponentChild } from "preact";
+import { createRef, type ComponentChild } from "preact";
 
 import type { ISbDmArrangement } from "../../../core/ScoreBookDataModel.js";
 import { requisitions } from "../../../supplement/Requisitions.js";
@@ -32,6 +32,7 @@ interface IMiniBarViewerState {
 
 export class MiniBarViewer extends UIComponent<IMiniBarViewerProps, IMiniBarViewerState>
     implements ISelectionHitTester {
+    private readonly rootRef = createRef<HTMLDivElement | null>();
 
     public constructor(props: IMiniBarViewerProps) {
         super(props);
@@ -53,7 +54,7 @@ export class MiniBarViewer extends UIComponent<IMiniBarViewerProps, IMiniBarView
 
     public hitTest(rect: DOMRect): ISelectionHitEntry[] {
         const { barNumber, arrangement } = this.props;
-        const element = this.base as HTMLElement | null;
+        const element = this.rootRef.current;
         if (!element) {
             return [];
         }
@@ -82,7 +83,7 @@ export class MiniBarViewer extends UIComponent<IMiniBarViewerProps, IMiniBarView
         const className = this.generateFinalClassName(["mini-bar-viewer"]);
 
         return (
-            <div className={className}>
+            <div ref={this.rootRef} className={className}>
                 {measureSelected && <div className="mini-bar-selection-overlay" />}
                 {arrangement.tracks.map((track) => {
                     const measure = barNumber - 1 < track.measures.length

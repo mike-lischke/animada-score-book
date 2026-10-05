@@ -10,7 +10,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { ConfirmDialog } from "../../src/components/ui/composites/ConfirmDialog.js";
 import { DialogResponseClosure } from "../../src/components/ui/framework/Dialog.js";
 
-describe.sequential("ConfirmDialog", () => {
+describe("ConfirmDialog", { concurrent: false }, () => {
     let renderResult: RenderResult | null;
 
     beforeEach(() => {
@@ -31,7 +31,7 @@ describe.sequential("ConfirmDialog", () => {
 
         renderResult = render(<Wrapper />);
 
-        return ref.current!;
+        return ref.current;
     };
 
     const show = (dialog: ConfirmDialog,

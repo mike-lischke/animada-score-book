@@ -157,7 +157,7 @@ const selectSingleNote = (selectionManager: SelectionManager): void => {
     selectionManager.replaceSelection([noteEntry(measure, { numerator: 0, denominator: 1 })]);
 };
 
-describe.sequential("NoteLengthToolbar", () => {
+describe("NoteLengthToolbar", { concurrent: false }, () => {
     let renderResult: RenderResult | null;
     let selectionManager: SelectionManager;
 

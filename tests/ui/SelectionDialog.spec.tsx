@@ -17,7 +17,7 @@ interface IShowOptions {
     defaultItemId?: string;
 }
 
-describe.sequential("SelectionDialog", () => {
+describe("SelectionDialog", { concurrent: false }, () => {
     let renderResult: RenderResult | null;
 
     const items: ISelectionDialogItem[] = [
@@ -44,7 +44,7 @@ describe.sequential("SelectionDialog", () => {
 
         renderResult = render(<Wrapper />);
 
-        return ref.current!;
+        return ref.current;
     };
 
     const show = (dialog: SelectionDialog, options: IShowOptions = {}): Promise<ISelectionDialogResult | undefined> => {

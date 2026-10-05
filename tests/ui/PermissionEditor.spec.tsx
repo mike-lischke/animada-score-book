@@ -61,7 +61,7 @@ const createScoreEntry = (overrides?: Partial<ISbDmScore>): ISbDmScore => {
         state: { initialized: true, isLeaf: true, expanded: true, expandedOnce: true },
         perm: { isOwner: true, canRead: true, canWrite: true, isWorld: true, groupIds: [1, 3] },
         ...overrides,
-    } as ISbDmScore;
+    };
 };
 
 /**

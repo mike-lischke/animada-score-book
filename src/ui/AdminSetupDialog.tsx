@@ -37,8 +37,8 @@ interface IAdminSetupDialogState {
  * First-time setup dialog: creates the initial admin user when no users exist yet.
  */
 export class AdminSetupDialog extends UIComponent<IAdminSetupDialogProperties, IAdminSetupDialogState> {
-    private dialogRef = createRef<Dialog>();
-    private displayNameRef = createRef<HTMLElement>();
+    private dialogRef = createRef<Dialog | null>();
+    private displayNameRef = createRef<HTMLElement | null>();
     private setupSucceeded = false;
 
     public constructor(props: IAdminSetupDialogProperties) {

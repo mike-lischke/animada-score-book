@@ -22,7 +22,7 @@ interface IStatusBarState {
     items: IStatusBarItem[];
 }
 
-const singleton = createRef<Statusbar>();
+const singleton = createRef<Statusbar | null>();
 
 /**
  * A status bar component for displaying permanent and temporary status information.

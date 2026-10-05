@@ -101,8 +101,17 @@ export default defineConfig(({ command }) => {
                     // stays inside the size warning limit and a library update no longer invalidates it.
                     // Libraries the app imports on demand (the MP3 encoder, the score library's table) are not
                     // listed here, so they keep the chunk their dynamic import gave them.
-                    manualChunks: {
-                        vendor: ["preact", "@mdi/js", "classnames"],
+                    manualChunks: (id) => {
+                        const normalizedId = id.replaceAll("\\", "/");
+                        const isVendorModule = [
+                            "/node_modules/preact/",
+                            "/node_modules/@mdi/js/",
+                            "/node_modules/classnames/",
+                        ].some((packagePath) => normalizedId.includes(packagePath));
+
+                        if (isVendorModule) {
+                            return "vendor";
+                        }
                     },
                 },
             },

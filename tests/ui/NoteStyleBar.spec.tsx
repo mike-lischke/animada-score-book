@@ -146,7 +146,7 @@ const noteEntryOf = (track: ISbDmTrack): ISelectionEntry => {
     return noteEntry(measure, { numerator: 0, denominator: measure.meter.stepResolution });
 };
 
-describe.sequential("NoteStyleBar", () => {
+describe("NoteStyleBar", { concurrent: false }, () => {
     let renderResult: RenderResult | null;
     let selectionManager: SelectionManager;
 

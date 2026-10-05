@@ -112,7 +112,7 @@ const cell = (step: number): IFraction => {
     return { numerator: step, denominator: 16 };
 };
 
-describe.sequential("SubdivisionToolbar", () => {
+describe("SubdivisionToolbar", { concurrent: false }, () => {
     let renderResult: RenderResult | null;
     let selectionManager: SelectionManager;
     let dataModel: ScoreBookDataModel;

@@ -7,6 +7,7 @@ import type {
     IArrangementExtensions, IArrangementSnapshot, IMeasureEvent, IMeterSnapshot, ISubdivision, ITimeParamsBase,
     ITrackPieceSnapshot, ITrackSnapshot
 } from "../types/general.js";
+import type { Damping } from "../ScoreBookDataModel.js";
 import { addFractions } from "./numeric-functions.js";
 import { arrangementSnapshotVersion, isNaturalNumber, isReadableSnapshotVersion } from "./snapshots.js";
 
@@ -59,7 +60,7 @@ export type PackedMeter = [
 export type PackedEvent = [
     duration: [number, number],
     noteStyleId: string,
-    articulation?: [number, boolean, boolean],
+    articulation?: [Damping, boolean, boolean],
 ];
 
 export type PackedSubdivision = [

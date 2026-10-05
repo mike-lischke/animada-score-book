@@ -46,7 +46,7 @@ const noteAtStep = (measure: ISbDmTrackPiece, step: number): string | undefined 
     return event?.noteStyleId;
 };
 
-describe.sequential("GridMeasureEditor clearSelection", () => {
+describe("GridMeasureEditor clearSelection", { concurrent: false }, () => {
     let model: ScoreBookDataModel;
     let editor: GridMeasureEditor;
     let mutatedCalls: number;
@@ -168,7 +168,7 @@ describe.sequential("GridMeasureEditor clearSelection", () => {
     });
 });
 
-describe.sequential("GridMeasureEditor setSelectionNoteStyle", () => {
+describe("GridMeasureEditor setSelectionNoteStyle", { concurrent: false }, () => {
     let model: ScoreBookDataModel;
     let editor: GridMeasureEditor;
     let mutatedCalls: number;
@@ -271,7 +271,7 @@ describe.sequential("GridMeasureEditor setSelectionNoteStyle", () => {
     });
 });
 
-describe.sequential("GridMeasureEditor note length entry", () => {
+describe("GridMeasureEditor note length entry", { concurrent: false }, () => {
     let model: ScoreBookDataModel;
     let editor: GridMeasureEditor;
 
@@ -368,7 +368,7 @@ describe.sequential("GridMeasureEditor note length entry", () => {
     });
 });
 
-describe.sequential("GridMeasureEditor subdivision editing", () => {
+describe("GridMeasureEditor subdivision editing", { concurrent: false }, () => {
     let model: ScoreBookDataModel;
     let editor: GridMeasureEditor;
     let mutatedCalls: number;
@@ -577,7 +577,7 @@ describe.sequential("GridMeasureEditor subdivision editing", () => {
     });
 });
 
-describe.sequential("GridMeasureEditor input", () => {
+describe("GridMeasureEditor input", { concurrent: false }, () => {
     let model: ScoreBookDataModel;
     let editor: GridMeasureEditor;
     let input: IMeasureEditorInput;

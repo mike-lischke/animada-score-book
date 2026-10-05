@@ -27,7 +27,7 @@ interface IPopupProperties extends IPortalProperties {
     /** Flex orientation of the popup content. */
     orientation?: Orientation;
 
-    innerRef?: preact.RefObject<HTMLDivElement>;
+    innerRef?: preact.RefObject<HTMLDivElement | null>;
 }
 
 interface IPopupState {
@@ -46,28 +46,21 @@ interface IPopupState {
  * ## Usage
  *
  * ```ts
- * const popupRef = createRef<Popup>();
+ * const popupRef = createRef<Popup | null>();
  * popupRef.current?.open(targetRect, placement);
  * ```
  */
 export class Popup extends UIComponent<IPopupProperties, IPopupState> {
 
-    public static override defaultProps = {
-        placement: ComponentPlacement.TopLeft,
-        pinned: false,
-        showArrow: true,
-        orientation: Orientation.TopDown,
-    };
-
-    private portalRef = createRef<Portal>();
-    private containerRef: preact.RefObject<HTMLDivElement>;
+    private portalRef = createRef<Portal | null>();
+    private containerRef: preact.RefObject<HTMLDivElement | null>;
     private resizeObserver?: ResizeObserver;
 
     public constructor(props: IPopupProperties) {
         super(props);
 
         this.state = { hidden: false };
-        this.containerRef = props.innerRef ?? createRef<HTMLDivElement>();
+        this.containerRef = props.innerRef ?? createRef<HTMLDivElement | null>();
     }
 
     public override componentWillUnmount(): void {
@@ -75,7 +68,10 @@ export class Popup extends UIComponent<IPopupProperties, IPopupState> {
     }
 
     public render(): ComponentChild {
-        const { id, children, header, showArrow, orientation, placement } = this.props;
+        const {
+            id, children, header, showArrow = true, orientation = Orientation.TopDown,
+            placement = ComponentPlacement.TopLeft,
+        } = this.props;
 
         const className = this.generateFinalClassName([
             "popup",
@@ -166,9 +162,13 @@ export class Popup extends UIComponent<IPopupProperties, IPopupState> {
     };
 
     private positionPopup(target: DOMRect): void {
-        const { placement, showArrow, pinned } = this.props;
+        const {
+            placement = ComponentPlacement.TopLeft,
+            showArrow = true,
+            pinned = false,
+        } = this.props;
 
-        if (this.containerRef.current && placement) {
+        if (this.containerRef.current) {
             const { left, top } = computeContentPosition(placement, this.containerRef.current, target,
                 showArrow ? 10 : 0, !pinned);
             this.containerRef.current.style.left = `${left}px`;

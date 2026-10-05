@@ -44,7 +44,7 @@ interface IScoreLibraryState {
  * The user can select one score to load it into the player/editor.
  */
 export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLibraryState> {
-    private scoreTableRef = createRef<TreeGrid>();
+    private scoreTableRef = createRef<TreeGrid | null>();
 
     public constructor(props: IScoreLibraryProperties) {
         super(props);

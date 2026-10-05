@@ -64,7 +64,7 @@ interface IBackendSetupDialogProperties extends ICommonUIProperties {
 }
 
 export class BackendSetupDialog extends UIComponent<IBackendSetupDialogProperties, IBackendSetupDialogState> {
-    private dialogRef = createRef<Dialog>();
+    private dialogRef = createRef<Dialog | null>();
     private signal?: Semaphore<"done" | "reset">;
 
     public constructor(props: IBackendSetupDialogProperties) {

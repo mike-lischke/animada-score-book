@@ -11,7 +11,7 @@ import {
 } from "../../src/components/ui/NotificationCenter/NotificationCenter.js";
 import { requisitions } from "../../src/supplement/Requisitions.js";
 
-describe.sequential("NotificationCenter", () => {
+describe("NotificationCenter", { concurrent: false }, () => {
     beforeEach(() => {
         vi.useFakeTimers();
         vi.restoreAllMocks();

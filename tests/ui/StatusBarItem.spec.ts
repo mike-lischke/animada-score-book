@@ -9,7 +9,7 @@ import {
     StatusBarAlignment, StatusBarItem, type UpdateFunction
 } from "../../src/components/ui/Statusbar/StatusBarItem.js";
 
-describe.sequential("StatusBarItem", () => {
+describe("StatusBarItem", { concurrent: false }, () => {
     let update: ReturnType<typeof vi.fn<UpdateFunction>>;
 
     beforeEach(() => {

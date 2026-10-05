@@ -36,7 +36,7 @@ interface IDropdownState {
 export class Dropdown extends UIComponent<IDropdownProperties, IDropdownState> {
     private anchorName = `--anchor-${getNewId()}`;
     private popoverId = `popover-${getNewId()}`;
-    private listRef = createRef<HTMLUListElement>();
+    private listRef = createRef<HTMLUListElement | null>();
 
     public constructor(props: IDropdownProperties) {
         super(props);

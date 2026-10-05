@@ -43,13 +43,14 @@ export class GridMeasureViewer extends UIComponent<IGridMeasureViewerProperties,
     implements ISelectionHitTester {
     public override state: IGridMeasureViewerState = { beatPositions: [] };
 
+    private viewerElement?: HTMLDivElement;
     private resizeObserver?: ResizeObserver;
 
     public override componentDidMount(): void {
         const { selectionManager } = this.props;
         selectionManager.registerHitTester(this);
 
-        const viewer = this.base as HTMLElement | null;
+        const viewer = this.viewerElement;
         if (!viewer) {
             return;
         }
@@ -85,7 +86,7 @@ export class GridMeasureViewer extends UIComponent<IGridMeasureViewerProperties,
      */
     public hitTest(rect: DOMRect): ISelectionHitEntry[] {
         const { measureNumber, dataModel, scoreElementRegistry, tracks: tracksOverride } = this.props;
-        const element = this.base as HTMLElement | null;
+        const element = this.viewerElement;
         if (!element) {
             return [];
         }
@@ -213,17 +214,22 @@ export class GridMeasureViewer extends UIComponent<IGridMeasureViewerProperties,
             flex: 1,
             minWidth: `calc(${baseSteps} * var(--note-height))`,
         };
+        const registryRef = scoreElementRegistry?.createRef({
+            kind: ScoreElementKind.BarContainer,
+            bar: measureNumber,
+            trackId: 0,
+        });
+        const setViewerRef = (element: HTMLDivElement | null): void => {
+            this.viewerElement = element ?? undefined;
+            registryRef?.(element);
+        };
 
         return (
             <Container
                 className={className}
                 orientation={Orientation.TopDown}
                 crossAlignment={ChildAlignment.Stretch}
-                innerRef={scoreElementRegistry?.createRef({
-                    kind: ScoreElementKind.BarContainer,
-                    bar: measureNumber,
-                    trackId: 0,
-                })}
+                innerRef={setViewerRef}
                 style={viewerStyle}
             >
                 <GridMeasureBeam
@@ -237,7 +243,7 @@ export class GridMeasureViewer extends UIComponent<IGridMeasureViewerProperties,
     }
 
     private updateBeatPositions(): void {
-        const viewer = this.base as HTMLElement | undefined;
+        const viewer = this.viewerElement;
         if (!viewer) {
             return;
         }

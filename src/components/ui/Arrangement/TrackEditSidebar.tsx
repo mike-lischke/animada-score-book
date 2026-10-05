@@ -26,8 +26,8 @@ export interface ITrackEditSidebarProps extends ICommonUIProperties {
  * delete, insert below, duplicate, clear.
  */
 export class TrackEditSidebar extends UIComponent<ITrackEditSidebarProps> {
-    private radialMenuRef = createRef<RadialMenu>();
-    private selectionDialogRef = createRef<SelectionDialog>();
+    private radialMenuRef = createRef<RadialMenu | null>();
+    private selectionDialogRef = createRef<SelectionDialog | null>();
 
     public render(): ComponentChild {
         const { tracks } = this.props;

@@ -325,7 +325,7 @@ export class ScoreRoutes {
             return;
         }
 
-        const entityType = type as EntityType;
+        const entityType = type === "folder" ? EntityType.Folder : EntityType.Score;
 
         const allowed = await this.ctx.auth.checkPermission(user, entityType, id, AccessLevel.Write);
 
@@ -478,7 +478,7 @@ export class ScoreRoutes {
                 return;
             }
 
-            const entityType = type as EntityType;
+            const entityType = EntityType.Folder;
 
             const allowed = await this.ctx.auth.checkPermission(user, entityType, id, AccessLevel.Write);
 

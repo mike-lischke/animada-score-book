@@ -68,9 +68,9 @@ export interface ISettingsDialogProperties extends ICommonUIProperties {
 }
 
 export class SettingsDialog extends UIComponent<ISettingsDialogProperties, ISettingsDialogState> {
-    private dialogRef = createRef<Dialog>();
-    private fontInfoPopupRef = createRef<Popup>();
-    private fontInfoTargetRef = createRef<HTMLDivElement>();
+    private dialogRef = createRef<Dialog | null>();
+    private fontInfoPopupRef = createRef<Popup | null>();
+    private fontInfoTargetRef = createRef<HTMLDivElement | null>();
 
     public constructor(props: ISettingsDialogProperties) {
         super(props);

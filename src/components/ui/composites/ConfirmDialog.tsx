@@ -33,7 +33,7 @@ interface IConfirmDialogState {
 }
 
 export class ConfirmDialog extends UIComponent<{}, IConfirmDialogState> {
-    private dialogRef = createRef<Dialog>();
+    private dialogRef = createRef<Dialog | null>();
     private signal?: Semaphore<DialogResponseClosure>;
 
     public constructor(props: {}) {

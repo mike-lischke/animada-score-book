@@ -19,6 +19,7 @@
         "git merge": true,
         "git commit": true,
         "git rev-parse": true,
-        "mysql": true
+        "mysql": true,
+        "gh": true
     },
 }

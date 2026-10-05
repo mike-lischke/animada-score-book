@@ -136,19 +136,19 @@ interface IAppState {
 }
 
 export class App extends UIComponent<{}, IAppState> {
-    private scoreLibraryRef = createRef<DrawerSidebar>();
-    private settingsDialogRef = createRef<SettingsDialog>();
-    private backendSetupDialogRef = createRef<BackendSetupDialog>();
-    private backendDisconnectedDialogRef = createRef<BackendDisconnectedDialog>();
-    private loginDialogRef = createRef<LoginDialog>();
-    private adminSetupDialogRef = createRef<AdminSetupDialog>();
-    private userGroupEditorRef = createRef<UserGroupEditor>();
-    private permissionEditorRef = createRef<PermissionEditor>();
-    private printDialogRef = createRef<PrintDialog>();
-    private tutorialWizardRef = createRef<TutorialWizard>();
-    private valueDialogRef = createRef<ValueDialog>();
-    private confirmDialogRef = createRef<ConfirmDialog>();
-    private newScoreDialogRef = createRef<NewScoreDialog>();
+    private scoreLibraryRef = createRef<DrawerSidebar | null>();
+    private settingsDialogRef = createRef<SettingsDialog | null>();
+    private backendSetupDialogRef = createRef<BackendSetupDialog | null>();
+    private backendDisconnectedDialogRef = createRef<BackendDisconnectedDialog | null>();
+    private loginDialogRef = createRef<LoginDialog | null>();
+    private adminSetupDialogRef = createRef<AdminSetupDialog | null>();
+    private userGroupEditorRef = createRef<UserGroupEditor | null>();
+    private permissionEditorRef = createRef<PermissionEditor | null>();
+    private printDialogRef = createRef<PrintDialog | null>();
+    private tutorialWizardRef = createRef<TutorialWizard | null>();
+    private valueDialogRef = createRef<ValueDialog | null>();
+    private confirmDialogRef = createRef<ConfirmDialog | null>();
+    private newScoreDialogRef = createRef<NewScoreDialog | null>();
 
     /** Saved theme/title to restore after the print job finishes. */
     private printRestoreState?: { theme: string; documentTitle: string; };

@@ -4,7 +4,7 @@
  */
 
 import { createPool } from "mysql2/promise";
-import type { Pool, RowDataPacket, ResultSetHeader } from "mysql2/promise";
+import type { ExecuteValues, Pool, RowDataPacket, ResultSetHeader } from "mysql2/promise";
 
 import type { DbRow, IDatabaseAdapter, IDatabaseConfig, IDbExecuteResult, ITestConnectionResult } from "./database.js";
 
@@ -95,14 +95,14 @@ export class MySqlAdapter implements IDatabaseAdapter {
 
     public async query<T extends DbRow = DbRow>(sql: string, params?: unknown[]): Promise<T[]> {
         const pool = this.getPoolOrThrow();
-        const [rows] = await pool.execute<RowDataPacket[]>(sql, params);
+        const [rows] = await pool.execute<RowDataPacket[]>(sql, params as ExecuteValues[] | undefined);
 
         return rows as T[];
     }
 
     public async execute(sql: string, params?: unknown[]): Promise<IDbExecuteResult> {
         const pool = this.getPoolOrThrow();
-        const [result] = await pool.execute<ResultSetHeader>(sql, params);
+        const [result] = await pool.execute<ResultSetHeader>(sql, params as ExecuteValues[] | undefined);
 
         return { affectedRows: result.affectedRows, insertId: result.insertId };
     }

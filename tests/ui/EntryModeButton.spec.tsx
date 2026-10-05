@@ -10,7 +10,7 @@ import { EntryModeButton } from "../../src/components/ui/Arrangement/EntryModeBu
 import { EditEntryMode } from "../../src/core/types/general.js";
 import { requisitions } from "../../src/supplement/Requisitions.js";
 
-describe.sequential("EntryModeButton", () => {
+describe("EntryModeButton", { concurrent: false }, () => {
     let renderResult: RenderResult | null = null;
 
     /**

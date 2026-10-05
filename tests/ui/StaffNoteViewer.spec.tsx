@@ -171,7 +171,7 @@ const buildFullBarEndingInThirtySecond = (): ISbDmTrackPiece => {
     return buildMeasure(events, []);
 };
 
-describe.sequential("StaffNoteViewer beams", () => {
+describe("StaffNoteViewer beams", { concurrent: false }, () => {
     let renderResult: RenderResult | null;
 
     afterEach(() => {
@@ -831,7 +831,7 @@ describe.sequential("StaffNoteViewer beams", () => {
     });
 });
 
-describe.sequential("StaffNoteViewer barlines", () => {
+describe("StaffNoteViewer barlines", { concurrent: false }, () => {
     let renderResult: RenderResult | null;
 
     afterEach(() => {
@@ -943,7 +943,7 @@ describe.sequential("StaffNoteViewer barlines", () => {
     });
 });
 
-describe.sequential("StaffNoteViewer printed markings", () => {
+describe("StaffNoteViewer printed markings", { concurrent: false }, () => {
     let renderResult: RenderResult | null;
 
     afterEach(() => {

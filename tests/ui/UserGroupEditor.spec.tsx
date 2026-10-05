@@ -79,7 +79,7 @@ const sampleGroups: IGroupRow[] = [
 // Tests
 // ---------------------------------------------------------------------------------------------------------------------
 
-describe.sequential("UserGroupEditor", () => {
+describe("UserGroupEditor", { concurrent: false }, () => {
     let renderResult: RenderResult | null;
 
     beforeEach(() => {
@@ -119,7 +119,7 @@ describe.sequential("UserGroupEditor", () => {
         };
 
         renderResult = render(<Wrapper />);
-        ref.current!.open();
+        ref.current.open();
 
         await waitFor(() => {
             expect(document.body.querySelector("#userGroupEditorDialog")).toBeTruthy();
@@ -144,7 +144,7 @@ describe.sequential("UserGroupEditor", () => {
         };
 
         renderResult = render(<Wrapper />);
-        ref.current!.open();
+        ref.current.open();
 
         await waitFor(() => {
             expect(document.body.querySelector("#userGroupEditorDialog")).toBeTruthy();
@@ -168,7 +168,7 @@ describe.sequential("UserGroupEditor", () => {
         };
 
         renderResult = render(<Wrapper />);
-        ref.current!.open();
+        ref.current.open();
 
         await waitFor(() => {
             const dialog = document.body.querySelector("#userGroupEditorDialog");
@@ -194,7 +194,7 @@ describe.sequential("UserGroupEditor", () => {
         };
 
         renderResult = render(<Wrapper />);
-        ref.current!.open();
+        ref.current.open();
 
         await waitFor(() => {
             const dialog = document.body.querySelector("#userGroupEditorDialog")!;
@@ -217,7 +217,7 @@ describe.sequential("UserGroupEditor", () => {
         };
 
         renderResult = render(<Wrapper />);
-        ref.current!.open();
+        ref.current.open();
 
         await waitFor(() => {
             const dialog = document.body.querySelector("#userGroupEditorDialog")!;
@@ -237,7 +237,7 @@ describe.sequential("UserGroupEditor", () => {
         };
 
         renderResult = render(<Wrapper />);
-        ref.current!.open();
+        ref.current.open();
 
         await waitFor(() => {
             const dialog = document.body.querySelector("#userGroupEditorDialog")!;
@@ -259,7 +259,7 @@ describe.sequential("UserGroupEditor", () => {
         };
 
         renderResult = render(<Wrapper />);
-        ref.current!.open();
+        ref.current.open();
 
         await waitFor(() => {
             const dialog = document.body.querySelector("#userGroupEditorDialog")!;
@@ -284,7 +284,7 @@ describe.sequential("UserGroupEditor", () => {
         };
 
         renderResult = render(<Wrapper />);
-        ref.current!.open();
+        ref.current.open();
 
         await waitFor(() => {
             const dialog = document.body.querySelector("#userGroupEditorDialog")!;
@@ -309,7 +309,7 @@ describe.sequential("UserGroupEditor", () => {
         };
 
         renderResult = render(<Wrapper />);
-        ref.current!.open();
+        ref.current.open();
 
         await waitFor(() => {
             const dialog = document.body.querySelector("#userGroupEditorDialog")!;
@@ -331,7 +331,7 @@ describe.sequential("UserGroupEditor", () => {
         };
 
         renderResult = render(<Wrapper />);
-        ref.current!.open();
+        ref.current.open();
 
         await waitFor(() => {
             const dialog = document.body.querySelector("#userGroupEditorDialog")!;
@@ -353,7 +353,7 @@ describe.sequential("UserGroupEditor", () => {
         };
 
         renderResult = render(<Wrapper />);
-        ref.current!.open();
+        ref.current.open();
 
         await waitFor(() => {
             expect(document.body.querySelector("#ug-add-user")).toBeTruthy();
@@ -385,7 +385,7 @@ describe.sequential("UserGroupEditor", () => {
         };
 
         renderResult = render(<Wrapper />);
-        ref.current!.open();
+        ref.current.open();
 
         await waitFor(() => {
             expect(document.body.querySelector("#ug-add-group")).toBeTruthy();
@@ -419,7 +419,7 @@ describe.sequential("UserGroupEditor", () => {
         };
 
         renderResult = render(<Wrapper />);
-        ref.current!.open();
+        ref.current.open();
 
         await waitFor(() => {
             expect(document.body.querySelector("#ug-add-group")).toBeTruthy();
@@ -466,7 +466,7 @@ describe.sequential("UserGroupEditor", () => {
         };
 
         renderResult = render(<Wrapper />);
-        ref.current!.open();
+        ref.current.open();
 
         await waitFor(() => {
             expect(document.body.querySelector("#ug-add-group")).toBeTruthy();
@@ -507,7 +507,7 @@ describe.sequential("UserGroupEditor", () => {
         };
 
         renderResult = render(<Wrapper />);
-        ref.current!.open();
+        ref.current.open();
 
         await waitFor(() => {
             expect(document.body.querySelector("#ug-add-group")).toBeTruthy();
@@ -558,7 +558,7 @@ describe.sequential("UserGroupEditor", () => {
         };
 
         renderResult = render(<Wrapper />);
-        ref.current!.open();
+        ref.current.open();
 
         await waitFor(() => {
             expect(document.body.querySelector("#ug-add-group")).toBeTruthy();
@@ -604,7 +604,7 @@ describe.sequential("UserGroupEditor", () => {
         };
 
         renderResult = render(<Wrapper />);
-        ref.current!.open();
+        ref.current.open();
 
         await waitFor(() => {
             expect(document.body.querySelector("#userGroupEditorDialog")).toBeTruthy();

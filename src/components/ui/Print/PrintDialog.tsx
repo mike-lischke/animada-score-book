@@ -39,7 +39,7 @@ interface IPrintDialogProps extends ICommonUIProperties {
  * Modal dialog that lets the user configure the print / PDF export.
  */
 export class PrintDialog extends UIComponent<IPrintDialogProps, IPrintDialogState> {
-    private dialogRef = createRef<Dialog>();
+    private dialogRef = createRef<Dialog | null>();
 
     public constructor(props: IPrintDialogProps) {
         super(props);

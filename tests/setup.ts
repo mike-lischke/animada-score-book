@@ -3,6 +3,8 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
+import "preact/compat";
+
 import { beforeEach, vi } from "vitest";
 
 // Required by auth.ts — the JWT secret is mandatory.

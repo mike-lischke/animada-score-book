@@ -81,16 +81,16 @@ interface IArrangementViewerState {
 }
 
 export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArrangementViewerState> {
-    private arrangementViewerRef = createRef<HTMLDivElement>();
-    private viewerRef = createRef<HTMLDivElement>();
-    private playBeamRef = createRef<HTMLDivElement>();
-    private trackViewerContainerRef = createRef<HTMLDivElement>();
-    private trackControlsRef = createRef<HTMLDivElement>();
-    private viewerContentHostRef = createRef<HTMLDivElement>();
-    private minimapRef = createRef<Minimap>();
-    private insertBarsDialogRef = createRef<InsertBarsDialog>();
-    private barActionStripRef = createRef<BarActionStrip>();
-    private gridRadialMenuRef = createRef<RadialMenu>();
+    private arrangementViewerRef = createRef<HTMLDivElement | null>();
+    private viewerRef = createRef<HTMLDivElement | null>();
+    private playBeamRef = createRef<HTMLDivElement | null>();
+    private trackViewerContainerRef = createRef<HTMLDivElement | null>();
+    private trackControlsRef = createRef<HTMLDivElement | null>();
+    private viewerContentHostRef = createRef<HTMLDivElement | null>();
+    private minimapRef = createRef<Minimap | null>();
+    private insertBarsDialogRef = createRef<InsertBarsDialog | null>();
+    private barActionStripRef = createRef<BarActionStrip | null>();
+    private gridRadialMenuRef = createRef<RadialMenu | null>();
     private trackViewerInputController?: TrackViewerInputController;
     private gridEditor?: GridMeasureEditor;
     private staffEditor?: StaffMeasureEditor;

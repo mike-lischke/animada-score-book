@@ -71,7 +71,7 @@ const startsOf = (registry: ScoreElementRegistry, cells: HTMLElement[]): string[
     });
 };
 
-describe.sequential("GridMeasureRow", () => {
+describe("GridMeasureRow", { concurrent: false }, () => {
     afterEach(() => {
         cleanup();
     });

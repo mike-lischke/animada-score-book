@@ -36,7 +36,7 @@ interface IPermissionEditorProperties extends ICommonUIProperties {
     onSaved: (entry: ISbDmScoreFolder | ISbDmScore) => void;
 
     /** Ref to the app-level ConfirmDialog for confirmation prompts. */
-    confirmRef: RefObject<ConfirmDialog>;
+    confirmRef: RefObject<ConfirmDialog | null>;
 }
 
 interface IPermissionEditorState {
@@ -61,7 +61,7 @@ interface IPermissionEditorState {
 const dragType = "application/x-perm-group";
 
 export class PermissionEditor extends UIComponent<IPermissionEditorProperties, IPermissionEditorState> {
-    private popupRef = createRef<Popup>();
+    private popupRef = createRef<Popup | null>();
     private dragGroupId: number | undefined;
 
     public constructor(props: IPermissionEditorProperties) {

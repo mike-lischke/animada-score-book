@@ -58,7 +58,7 @@ const instrumentWithNoteStyles = (
                 id,
                 instrument,
                 audioBuffer: null,
-                sampleProfile: { builtInDamping: 0, builtInAccent: false, ghost: false },
+                sampleProfile: { builtInDamping: Damping.Open, builtInAccent: false, ghost: false },
                 ...style,
             } as IAudioData];
         }),

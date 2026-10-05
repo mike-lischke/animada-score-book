@@ -23,7 +23,7 @@ interface ISplitSliderProperties extends ICommonUIProperties {
 
 /** Slider with a visual split marker that divides the track into two zones. */
 export class SplitSlider extends UIComponent<ISplitSliderProperties> {
-    private trackRef = createRef<HTMLDivElement>();
+    private trackRef = createRef<HTMLDivElement | null>();
 
     public render(): ComponentChild {
         const {

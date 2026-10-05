@@ -43,6 +43,14 @@ export interface ISubdivisionSlotContent {
     articulation?: INoteArticulation;
 }
 
+interface IScoreLockResult {
+    success: boolean;
+    token?: string;
+    locked?: boolean;
+    username?: string;
+    lockedAt?: string;
+}
+
 /** One bar, the unit of a track's timeline. */
 const barLength: IFraction = { numerator: 1, denominator: 1 };
 
@@ -3234,9 +3242,7 @@ export class ScoreBookDataModel {
      *
      * @returns Lock result with token or conflict details.
      */
-    public async lockScore(scoreId: number, prevToken?: string): Promise<{
-        success: boolean; token?: string; locked?: boolean; username?: string; lockedAt?: string;
-    }> {
+    public async lockScore(scoreId: number, prevToken?: string): Promise<IScoreLockResult> {
         const body: Record<string, unknown> = { scoreId };
 
         if (prevToken) {
@@ -3253,10 +3259,7 @@ export class ScoreBookDataModel {
             return { success: false };
         }
 
-        return res.json() as unknown as {
-            success: boolean; token?: string; locked?: boolean; username?: string;
-            lockedAt?: string;
-        };
+        return await res.json() as IScoreLockResult;
     }
 
     /**

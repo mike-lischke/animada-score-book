@@ -7,7 +7,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { RangeArticulations } from "../../src/core/RangeArticulations.js";
 import {
-    SbDmEntityType, type ISbDmArrangement, type ISbDmInstrument, type ISbDmNoteEvent, type ISbDmTrack,
+    Damping, SbDmEntityType, type ISbDmArrangement, type ISbDmInstrument, type ISbDmNoteEvent, type ISbDmTrack,
     type ISbDmTrackPiece, type ITiming, type RealTime
 } from "../../src/core/ScoreBookDataModel.js";
 import type { IAudioData, ITimeParams, Mutable } from "../../src/core/types/general.js";
@@ -161,7 +161,7 @@ const makeTrack = (opts?: {
         audioBuffer: {} as AudioBuffer,
         instrument: track.instrument,
 
-        sampleProfile: { builtInDamping: 0, builtInAccent: false, ghost: false }
+        sampleProfile: { builtInDamping: Damping.Open, builtInAccent: false, ghost: false }
 
     } as IAudioData;
 

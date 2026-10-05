@@ -48,7 +48,7 @@ interface INotificationToast {
     /** Used when removing the toast. First it is hidden and in a second step it is removed from the list. */
     state: "normal" | "adding" | "removing";
 
-    ref: RefObject<HTMLDivElement>;
+    ref: RefObject<HTMLDivElement | null>;
 
     /** The resolver to call when the toast is closed. */
     resolve: (value: string | undefined) => void;
@@ -83,7 +83,7 @@ interface INotificationCenterState {
     silent: boolean;
 }
 
-const singleton = createRef<NotificationCenter>();
+const singleton = createRef<NotificationCenter | null>();
 
 /**
  * A class for displaying unobtrusive messages to the user. It also allows the user to dismiss the message
@@ -101,7 +101,7 @@ export class NotificationCenter extends UIComponent<ICommonUIProperties, INotifi
     private static nextToastId = 0;
 
     private autoHideTimeout = 15000; // 15 seconds to hide any unhandled message.
-    private containerRef = createRef<HTMLDivElement>();
+    private containerRef = createRef<HTMLDivElement | null>();
 
     public constructor(props: ICommonUIProperties) {
         super(props);
@@ -428,7 +428,7 @@ export class NotificationCenter extends UIComponent<ICommonUIProperties, INotifi
             isNew: true,
             details,
             state: "normal",
-            ref: createRef<HTMLDivElement>(),
+            ref: createRef<HTMLDivElement | null>(),
             resolve,
         };
         history.unshift(historyToast);
@@ -439,7 +439,7 @@ export class NotificationCenter extends UIComponent<ICommonUIProperties, INotifi
                 id: historyToast.id,
                 details,
                 state: "adding",
-                ref: createRef<HTMLDivElement>(),
+                ref: createRef<HTMLDivElement | null>(),
                 resolve,
             };
 

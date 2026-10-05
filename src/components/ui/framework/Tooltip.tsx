@@ -40,7 +40,7 @@ interface ITooltipProviderState {
 export class TooltipProvider extends UIComponent<ITooltipProviderProperties, ITooltipProviderState> {
 
     private tooltipTimer: ReturnType<typeof setTimeout> | null = null;
-    private innerRef = createRef<HTMLDivElement>();
+    private innerRef = createRef<HTMLDivElement | null>();
 
     public constructor(props: ITooltipProviderProperties) {
         super(props);

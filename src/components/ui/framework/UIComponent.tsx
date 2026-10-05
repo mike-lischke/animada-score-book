@@ -60,7 +60,7 @@ export enum ComponentPlacement {
     LeftBottom = "left-end",
 }
 
-export interface ICommonUIProperties {
+export interface ICommonUIProperties<TRole = AriaRole> {
     children?: ComponentChildren;
 
     /** Properties that are available on any HTML element: */
@@ -71,7 +71,7 @@ export interface ICommonUIProperties {
     tabIndex?: number;
     draggable?: boolean;
     disabled?: boolean;
-    role?: AriaRole;
+    role?: TRole;
     type?: string;
 
     /** For OS style tooltips. */
@@ -103,7 +103,7 @@ export interface ICommonUIProperties {
     onWheel?: WheelEventHandler<HTMLElement>;
 }
 
-export abstract class UIComponent<P extends ICommonUIProperties = {}, S = {}>
+export abstract class UIComponent<P extends ICommonUIProperties<unknown> = {}, S = {}>
     extends Component<P, S> {
 
     /**
@@ -176,6 +176,6 @@ export abstract class UIComponent<P extends ICommonUIProperties = {}, S = {}>
             Object.entries(this.props).filter(([key]) => {
                 return key.startsWith("data-");
             }),
-        ) as Record<string, string | number | undefined>;
+        );
     }
 }

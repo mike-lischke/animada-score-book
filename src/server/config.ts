@@ -8,7 +8,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-import { DatabaseEngine, type IDatabaseConfig } from "./database.js";
+import { DatabaseEngine, isValidDatabaseEngine, type IDatabaseConfig } from "./database.js";
 
 const configPath = resolve(process.cwd(), "backend-config.json");
 export const uploadsPath = resolve(process.cwd(), "public", "uploads", "instruments");
@@ -48,8 +48,9 @@ export const loadConfig = (): IServerConfig => {
             ? process.env.TRUST_PROXY === "true"
             : (raw.trustProxy ?? false),
         database: {
-            engine: (process.env.DB_ENGINE as DatabaseEngine | undefined)
-                ?? raw.database?.engine ?? DatabaseEngine.MySQL,
+            engine: process.env.DB_ENGINE && isValidDatabaseEngine(process.env.DB_ENGINE)
+                ? process.env.DB_ENGINE
+                : raw.database?.engine ?? DatabaseEngine.MySQL,
             host: process.env.DB_HOST ?? raw.database?.host ?? "",
             port: process.env.DB_PORT ? Number(process.env.DB_PORT) : (raw.database?.port ?? 0),
             database: process.env.DB_NAME ?? raw.database?.database ?? "",

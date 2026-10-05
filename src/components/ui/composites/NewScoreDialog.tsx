@@ -60,7 +60,7 @@ interface INewScoreDialogState {
 }
 
 export class NewScoreDialog extends UIComponent<{}, INewScoreDialogState> {
-    private dialogRef = createRef<Dialog>();
+    private dialogRef = createRef<Dialog | null>();
     private signal?: Semaphore<INewScoreResult>;
 
     public constructor(props: {}) {
@@ -196,7 +196,7 @@ export class NewScoreDialog extends UIComponent<{}, INewScoreDialogState> {
                             id="newScoreTimeSignature"
                             className="du-select du-select-bordered du-select-sm"
                             value={timeSignature}
-                            onChange={this.handleTimeSignatureChange}
+                            onInput={this.handleTimeSignatureChange}
                         >
                             {signatureOptions}
                         </select>

@@ -34,7 +34,7 @@ const collectAnimationStates = (): PlayerPlayState[] => {
     return states;
 };
 
-describe.sequential("AnimationEngine", () => {
+describe("AnimationEngine", { concurrent: false }, () => {
     afterEach(() => {
         requisitions.unregister();
     });

@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 
 import { Arrangement } from "../../../../src/core/Arrangement.js";
 import { Track } from "../../../../src/core/Track.js";
-import type { ISbDmInstrument } from "../../../../src/core/ScoreBookDataModel.js";
+import { Damping, type ISbDmInstrument } from "../../../../src/core/ScoreBookDataModel.js";
 import { ArrangementMigrator } from "../../../../src/core/serialisation/migration/ArrangementMigrator.js";
 import type { IBananaDrumSnapshot } from "../../../../src/core/serialisation/migration/BananaDrumMigrator.js";
 import { getArrangementSnapshot } from "../../../../src/core/serialisation/snapshots.js";
@@ -98,7 +98,7 @@ describe("ArrangementMigrator", () => {
             id: "1",
             audioBuffer: null,
             instrument,
-            sampleProfile: { builtInDamping: 0, builtInAccent: false, ghost: false }
+            sampleProfile: { builtInDamping: Damping.Open, builtInAccent: false, ghost: false }
         } as IAudioData;
         (instrument as Mutable<ISbDmInstrument>).noteStyles = { "1": hitStyle };
 
@@ -144,7 +144,7 @@ describe("ArrangementMigrator", () => {
         (instrument as Mutable<ISbDmInstrument>).noteStyles = {
             "1": {
                 id: "1", audioBuffer: null, instrument,
-                sampleProfile: { builtInDamping: 0, builtInAccent: false, ghost: false }
+                sampleProfile: { builtInDamping: Damping.Open, builtInAccent: false, ghost: false }
             } as IAudioData,
         };
 

@@ -102,7 +102,7 @@ const makeDataModel = (tracks: ISbDmTrack[]): ScoreBookDataModel => {
     return modelStub;
 };
 
-describe.sequential("ArticulationToolbar", () => {
+describe("ArticulationToolbar", { concurrent: false }, () => {
     let renderResult: RenderResult | null;
     let selectionManager: SelectionManager;
 

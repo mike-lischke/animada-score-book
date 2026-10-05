@@ -122,10 +122,10 @@ const installSynchronousSetState = (dialog: TestableSettingsDialog): void => {
     instance.setState = ((update: Partial<SettingsDialog["state"]>, callback?: () => void) => {
         instance.state = { ...instance.state, ...update };
         callback?.();
-    }) as typeof instance.setState;
+    });
 };
 
-describe.sequential("SettingsDialog (class)", () => {
+describe("SettingsDialog (class)", { concurrent: false }, () => {
     let renderResult: RenderResult | null;
 
     const createDialog = (fontLoader?: SmuflFontLoader): TestableSettingsDialog => {
@@ -149,13 +149,13 @@ describe.sequential("SettingsDialog (class)", () => {
         };
 
         renderResult = render(<Wrapper />);
-        dialogRef.current?.open();
+        dialogRef.current.open();
 
         await waitFor(() => {
             expect(document.body.querySelector("#settingsDialog")).toBeTruthy();
         });
 
-        return dialogRef.current!;
+        return dialogRef.current;
     };
 
     beforeEach(() => {

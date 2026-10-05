@@ -6,7 +6,7 @@
 import { describe, expect, it } from "vitest";
 
 import { Arrangement } from "../../../src/core/Arrangement.js";
-import type { ISbDmInstrument } from "../../../src/core/ScoreBookDataModel.js";
+import { Damping, type ISbDmInstrument } from "../../../src/core/ScoreBookDataModel.js";
 import { ArrangementMigrator } from "../../../src/core/serialisation/migration/ArrangementMigrator.js";
 import { stringifyPackedArrangement } from "../../../src/core/serialisation/snapshot-packing.js";
 import { getArrangementSnapshot, arrangementSnapshotVersion } from "../../../src/core/serialisation/snapshots.js";
@@ -22,7 +22,7 @@ describe("snapshots", () => {
             id: "1",
             audioBuffer: null,
             instrument,
-            sampleProfile: { builtInDamping: 0, builtInAccent: false, ghost: false }
+            sampleProfile: { builtInDamping: Damping.Open, builtInAccent: false, ghost: false }
         } as IAudioData;
 
         (instrument as Mutable<ISbDmInstrument>).noteStyles = { "1": noteStyle };

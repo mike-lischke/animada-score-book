@@ -219,7 +219,7 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                 <div
                     key={`staff-line-${i}`}
                     className="staff-note-viewer-line"
-                    style={{ "--staff-line-offset": `${offset}px` } as CSSProperties}
+                    style={{ "--staff-line-offset": `${offset}px` }}
                 />,
             );
         }
@@ -294,7 +294,7 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                     "--staff-opening-barline-room": openingRoom,
                     "--staff-closing-barline-room": closingRoom,
                     "--staff-note-clearance": clearance,
-                } as CSSProperties}
+                }}
                 aria-hidden
                 {...this.dataAttributes}
             >
@@ -1182,7 +1182,7 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
         return {
             "--flag-stem-x": `var(${stemEndVariablePrefix}x-${glyphName}, 0px)`,
             "--flag-stem-y": `var(${stemEndVariablePrefix}y-${glyphName}, 0px)`,
-        } as CSSProperties;
+        };
     }
 
     /**

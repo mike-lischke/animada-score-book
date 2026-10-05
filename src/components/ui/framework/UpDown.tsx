@@ -26,7 +26,7 @@ export interface IUpDownProperties extends ICommonUIProperties {
     value?: number;
     textAlignment?: TextAlignment;
 
-    innerRef?: preact.RefObject<HTMLDivElement>;
+    innerRef?: preact.RefObject<HTMLDivElement | null>;
 
     onChange?: (value: number, props: IUpDownProperties) => void;
     onConfirm?: (value: number, props: IUpDownProperties) => void;
@@ -34,16 +34,12 @@ export interface IUpDownProperties extends ICommonUIProperties {
 }
 
 export class UpDown extends UIComponent<IUpDownProperties> {
-    public static override defaultProps = {
-        textAlignment: TextAlignment.End,
-    };
-
-    private containerRef: preact.RefObject<HTMLDivElement>;
+    private containerRef: preact.RefObject<HTMLDivElement | null>;
 
     public constructor(props: IUpDownProperties) {
         super(props);
 
-        this.containerRef = props.innerRef ?? createRef<HTMLDivElement>();
+        this.containerRef = props.innerRef ?? createRef<HTMLDivElement | null>();
     }
 
     public override componentDidMount(): void {
@@ -55,7 +51,7 @@ export class UpDown extends UIComponent<IUpDownProperties> {
     }
 
     public render(): ComponentChild {
-        const { id, disabled = false, textAlignment, value = 0 } = this.props;
+        const { id, disabled = false, textAlignment = TextAlignment.End, value = 0 } = this.props;
 
         const className = this.generateFinalClassName(["upDown"]);
 

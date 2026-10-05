@@ -3,7 +3,7 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import { ComponentChild, type RefObject } from "preact";
+import { ComponentChild, type JSX, type RefObject } from "preact";
 import { UIComponent, type ICommonUIProperties } from "./UIComponent.js";
 
 export enum PredefinedImage {
@@ -27,7 +27,7 @@ export interface IImageUrlProps extends IImageBaseProps {
      * The image source. Can be a URL string or base64 encoded string.
      */
     src: string;
-    innerRef?: RefObject<HTMLImageElement>;
+    innerRef?: RefObject<HTMLImageElement | null>;
 }
 
 /** Variant: predefined SVG icon */
@@ -36,7 +36,7 @@ export interface IImagePredefinedProps extends IImageBaseProps {
      * The image source. Can be a predefined image from the `PredefinedImage` enum.
      */
     src: PredefinedImage;
-    innerRef?: RefObject<SVGSVGElement>;
+    innerRef?: RefObject<SVGSVGElement | null>;
 }
 
 export type IImageProperties = IImageUrlProps | IImagePredefinedProps;
@@ -46,10 +46,6 @@ interface IImageState {
 }
 
 export class Image extends UIComponent<IImageProperties, IImageState> {
-    public static override defaultProps = {
-        disabled: false,
-    };
-
     /** Holds loaded SVG image ids for re-use. */
     private static readonly registeredSymbols = new Set<string>();
 
@@ -62,7 +58,7 @@ export class Image extends UIComponent<IImageProperties, IImageState> {
     };
 
     public render(): ComponentChild {
-        const { id, title, disabled, src, alt, width, height, innerRef } = this.props;
+        const { id, title, disabled = false, src, alt, width, height, innerRef } = this.props;
         const { loaded } = this.state;
 
         const className = this.generateFinalClassName([
@@ -71,14 +67,22 @@ export class Image extends UIComponent<IImageProperties, IImageState> {
         ]);
 
         if (typeof src === "string") {
+            let accessibleName: JSX.IntrinsicElements["img"];
+            if (alt !== undefined) {
+                accessibleName = { alt };
+            } else if (title !== undefined) {
+                accessibleName = { title };
+            } else {
+                accessibleName = { role: "presentation" };
+            }
+
             return (
                 <img
                     ref={innerRef}
                     id={id}
-                    title={title}
                     className={className}
                     src={src}
-                    alt={alt}
+                    {...accessibleName}
                     width={width}
                     height={height}
                 />

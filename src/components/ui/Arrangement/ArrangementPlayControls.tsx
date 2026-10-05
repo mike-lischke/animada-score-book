@@ -47,7 +47,7 @@ interface IArrangementPlayControlsState {
 
 export class ArrangementPlayControls
     extends UIComponent<IArrangementPlayControlsProperties, IArrangementPlayControlsState> {
-    private recordingDialogRef = createRef<Dialog>();
+    private recordingDialogRef = createRef<Dialog | null>();
 
     public constructor(props: IArrangementPlayControlsProperties) {
         super(props);

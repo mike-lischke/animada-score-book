@@ -19,16 +19,10 @@ interface ISliderProperties extends ICommonUIProperties {
 }
 
 export class Slider extends UIComponent<ISliderProperties> {
-
-    public static override defaultProps = {
-        disabled: false,
-        vertical: false,
-    };
-
-    private sliderRef = createRef<HTMLInputElement>();
+    private sliderRef = createRef<HTMLInputElement | null>();
 
     public render(): ComponentChild {
-        const { id, vertical, min, max, value, style, onChange } = this.props;
+        const { id, vertical = false, min, max, value, style, onChange } = this.props;
 
         const className = this.generateFinalClassName([
             "range",

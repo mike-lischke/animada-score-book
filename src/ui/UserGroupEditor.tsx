@@ -79,9 +79,9 @@ interface IUserGroupEditorState {
 }
 
 export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUserGroupEditorState> {
-    private dialogRef = createRef<Dialog>();
-    private confirmDialogRef = createRef<ConfirmDialog>();
-    private popupRef = createRef<Popup>();
+    private dialogRef = createRef<Dialog | null>();
+    private confirmDialogRef = createRef<ConfirmDialog | null>();
+    private popupRef = createRef<Popup | null>();
 
     /** Counter for generating temporary negative IDs for pending groups. */
     private pendingIdCounter = -1;

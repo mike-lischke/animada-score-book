@@ -6,6 +6,7 @@
 import { describe, expect, it } from "vitest";
 
 import { Arrangement } from "../../src/core/Arrangement.js";
+import { Damping } from "../../src/core/ScoreBookDataModel.js";
 import { TimeParams } from "../../src/core/TimeParams.js";
 import { Track } from "../../src/core/Track.js";
 import { ArrangementMigrator } from "../../src/core/serialisation/migration/ArrangementMigrator.js";
@@ -36,7 +37,7 @@ describe("Track", () => {
             id: "accent",
             instrument,
             audioBuffer: null,
-            sampleProfile: { builtInDamping: 0, builtInAccent: false, ghost: false }
+            sampleProfile: { builtInDamping: Damping.Open, builtInAccent: false, ghost: false }
         } as IAudioData;
 
         instrument.noteStyles[noteStyle.id] = noteStyle;
@@ -114,7 +115,7 @@ describe("Track", () => {
             id: "accent",
             instrument,
             audioBuffer: null,
-            sampleProfile: { builtInDamping: 0, builtInAccent: false, ghost: false }
+            sampleProfile: { builtInDamping: Damping.Open, builtInAccent: false, ghost: false }
         } as IAudioData;
         instrument.noteStyles[noteStyle.id] = noteStyle;
 
@@ -177,7 +178,7 @@ describe("Track", () => {
             id: "accent",
             instrument,
             audioBuffer: null,
-            sampleProfile: { builtInDamping: 0, builtInAccent: false, ghost: false }
+            sampleProfile: { builtInDamping: Damping.Open, builtInAccent: false, ghost: false }
         } as IAudioData;
         instrument.noteStyles[noteStyle.id] = noteStyle;
 

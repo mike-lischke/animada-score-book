@@ -9,7 +9,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { GridMeasureRow } from "../../src/components/ui/Bar/Grid/GridMeasureRow.js";
 import { Arrangement } from "../../src/core/Arrangement.js";
 import {
-    ScoreBookDataModel, type ISbDmArrangement, type ISbDmInstrument
+    Damping, ScoreBookDataModel, type ISbDmArrangement, type ISbDmInstrument
 } from "../../src/core/ScoreBookDataModel.js";
 import { ArrangementMigrator } from "../../src/core/serialisation/migration/ArrangementMigrator.js";
 import {
@@ -52,7 +52,7 @@ const createInstrumentWithNoteStyle = (typeId: string, id: number, displayOrder:
         id: "1",
         audioBuffer: null,
         instrument,
-        sampleProfile: { builtInDamping: 0, builtInAccent: false, ghost: false }
+        sampleProfile: { builtInDamping: Damping.Open, builtInAccent: false, ghost: false }
     } as IAudioData;
 
     return instrument;
@@ -94,7 +94,7 @@ const notesWithHits = (length: number, hitIndices: number[]): string[] => {
     });
 };
 
-describe.sequential("Polyrhythm UI Integration", () => {
+describe("Polyrhythm UI Integration", { concurrent: false }, () => {
     afterEach(() => {
         cleanup();
     });

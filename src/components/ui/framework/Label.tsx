@@ -34,18 +34,18 @@ export interface ILabelProperties extends ICommonUIProperties {
     wrap?: boolean;
 
     /** An optional reference object to hold the ref to the generated HTML element. */
-    innerRef?: preact.RefObject<HTMLLabelElement>;
+    innerRef?: preact.RefObject<HTMLLabelElement | null>;
 }
 
 export class Label extends UIComponent<ILabelProperties> {
 
-    private labelRef: preact.RefObject<HTMLLabelElement>;
+    private labelRef: preact.RefObject<HTMLLabelElement | null>;
 
     public constructor(props: ILabelProperties) {
         super(props);
 
         this.state = {};
-        this.labelRef = props.innerRef ?? createRef<HTMLLabelElement>();
+        this.labelRef = props.innerRef ?? createRef<HTMLLabelElement | null>();
     }
 
     public render(): ComponentChild {

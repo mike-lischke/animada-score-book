@@ -11,7 +11,7 @@ import { StatusBarAlignment } from "../../src/components/ui/Statusbar/StatusBarI
 import type { IStatusBarDisposable } from "../../src/components/ui/Statusbar/Statusbar.js";
 import { requisitions } from "../../src/supplement/Requisitions.js";
 
-describe.sequential("Statusbar", () => {
+describe("Statusbar", { concurrent: false }, () => {
     beforeEach(() => {
         vi.useFakeTimers();
         vi.restoreAllMocks();

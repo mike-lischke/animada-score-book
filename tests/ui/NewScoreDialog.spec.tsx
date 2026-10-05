@@ -13,7 +13,7 @@ import {
 } from "../../src/components/ui/composites/NewScoreDialog.js";
 import { DialogResponseClosure } from "../../src/components/ui/framework/Dialog.js";
 
-describe.sequential("NewScoreDialog", () => {
+describe("NewScoreDialog", { concurrent: false }, () => {
     let renderResult: RenderResult | null;
 
     const items: ISelectionDialogItem[] = [
@@ -40,7 +40,7 @@ describe.sequential("NewScoreDialog", () => {
 
         renderResult = render(<Wrapper />);
 
-        return ref.current!;
+        return ref.current;
     };
 
     const show = (dialog: NewScoreDialog, options?: INewScoreShowOptions): Promise<INewScoreResult | undefined> => {
@@ -86,8 +86,7 @@ describe.sequential("NewScoreDialog", () => {
         fireEvent.input(barsInput, { target: { value: "4" } });
 
         const signatureSelect = document.body.querySelector<HTMLSelectElement>("#newScoreTimeSignature")!;
-        signatureSelect.value = "6/8";
-        fireEvent.change(signatureSelect);
+        fireEvent.input(signatureSelect, { target: { value: "6/8" } });
 
         // All instruments are selected by default; deselect Caixa.
         fireEvent.click(document.body.querySelector("[data-selection-id='b']")!);

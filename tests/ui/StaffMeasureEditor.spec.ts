@@ -91,7 +91,7 @@ const durationAt = (measure: ISbDmTrackPiece, start: IFraction): IFraction | und
     return event === undefined ? undefined : { ...event.duration };
 };
 
-describe.sequential("StaffMeasureEditor", () => {
+describe("StaffMeasureEditor", { concurrent: false }, () => {
     let model: ScoreBookDataModel;
     let editor: StaffMeasureEditor;
     let trackId: number;
@@ -398,7 +398,7 @@ describe.sequential("StaffMeasureEditor", () => {
     });
 });
 
-describe.sequential("StaffMeasureEditor input", () => {
+describe("StaffMeasureEditor input", { concurrent: false }, () => {
     let model: ScoreBookDataModel;
     let editor: StaffMeasureEditor;
     let input: IMeasureEditorInput;

@@ -3,7 +3,7 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import type { ComponentChild, CSSProperties } from "preact";
+import type { ComponentChild } from "preact";
 
 import { staffSpacePx } from "../../../../core/MeasureLayout.js";
 import type { ISbDmArrangement, ISbDmTrack } from "../../../../core/ScoreBookDataModel.js";
@@ -58,7 +58,7 @@ export class StaffPrefixViewer extends UIComponent<IStaffPrefixViewerProps> {
             const offset = (i - centerLine) * staffSpacePx;
             staffLines.push(
                 <div key={`prefix-line-${i}`} className="staff-note-viewer-line"
-                    style={{ "--staff-line-offset": `${offset}px` } as CSSProperties} />,
+                    style={{ "--staff-line-offset": `${offset}px` }} />,
             );
         }
 

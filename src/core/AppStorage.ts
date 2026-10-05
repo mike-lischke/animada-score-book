@@ -458,7 +458,7 @@ export class AppStorage {
             }
         }
 
-        return result as IUISettings;
+        return result;
     }
 
     /**

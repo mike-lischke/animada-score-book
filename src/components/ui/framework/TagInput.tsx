@@ -50,7 +50,7 @@ interface ITagInputState {
  * for adding new tags by typing and pressing Enter.
  */
 export class TagInput extends UIComponent<ITagInputProperties, ITagInputState> {
-    private inputRef = createRef<HTMLInputElement>();
+    private inputRef = createRef<HTMLInputElement | null>();
 
     public constructor(props: ITagInputProperties) {
         super(props);

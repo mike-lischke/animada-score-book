@@ -172,7 +172,7 @@ export class TreeGrid<TRow extends object = {}> extends UIComponent<ITreeGridPro
     /** A counter to manage redraw blocks (public for testing). */
     public updateLockCount = 0;
 
-    private hostRef = createRef<HTMLDivElement>();
+    private hostRef = createRef<HTMLDivElement | null>();
     private tabulator?: Tabulator;
     private tableReady = false;
     private timeoutId: ReturnType<typeof setTimeout> | null = null;

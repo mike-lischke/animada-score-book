@@ -9,7 +9,7 @@ import { UIComponent, type ICommonUIProperties } from "./UIComponent.js";
 import { convertPropValue } from "../../../core/utils.js";
 
 interface IGridProperties extends ICommonUIProperties {
-    innerRef?: preact.RefObject<HTMLElement>;
+    innerRef?: preact.RefObject<HTMLElement | null>;
 
     /** The distance between rows in the grid */
     rowGap?: string | number;
@@ -56,7 +56,7 @@ export class Grid extends UIComponent<IGridProperties> {
         return (
             <div
                 id={id}
-                ref={innerRef as preact.RefObject<HTMLDivElement>}
+                ref={innerRef as preact.RefObject<HTMLDivElement | null>}
                 className={className}
                 style={newStyle}
                 {...this.dataAttributes}

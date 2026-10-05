@@ -13,7 +13,9 @@ import { resolve } from "node:path";
 import { runMigrations } from "../../build/migration.js";
 import { convertErrorToString } from "../core/utils.js";
 import { Auth } from "./Auth.js";
-import { DatabaseEngine, type IDatabaseAdapter, type IDatabaseConfig } from "./database.js";
+import {
+    DatabaseEngine, isValidDatabaseEngine, type IDatabaseAdapter, type IDatabaseConfig,
+} from "./database.js";
 import { MySqlAdapter } from "./mysql-adapter.js";
 import { PostgresAdapter } from "./postgres-adapter.js";
 import { type IServerConfig } from "./config.js";
@@ -548,8 +550,9 @@ export class Router {
 
         // Merge incoming config with defaults.
         this.config.database = {
-            engine: typeof body.engine === "string"
-                ? body.engine as DatabaseEngine : this.config.database.engine,
+            engine: typeof body.engine === "string" && isValidDatabaseEngine(body.engine)
+                ? body.engine
+                : this.config.database.engine,
             host: typeof body.host === "string" ? body.host : this.config.database.host,
             port: typeof body.port === "number" ? body.port : this.config.database.port,
             database: typeof body.database === "string" ? body.database : this.config.database.database,
@@ -632,7 +635,9 @@ export class Router {
         const body = await this.ctx.readJsonBody(req);
 
         const testConfig: IDatabaseConfig = {
-            engine: typeof body.engine === "string" ? body.engine as DatabaseEngine : DatabaseEngine.MySQL,
+            engine: typeof body.engine === "string" && isValidDatabaseEngine(body.engine)
+                ? body.engine
+                : DatabaseEngine.MySQL,
             host: typeof body.host === "string" ? body.host : "127.0.0.1",
             port: typeof body.port === "number" ? body.port : 3306,
             database: typeof body.database === "string" ? body.database : "",

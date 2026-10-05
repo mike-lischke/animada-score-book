@@ -29,7 +29,7 @@ interface ITutorialWizardState {
 }
 
 export class TutorialWizard extends Component<ITutorialWizardProps, ITutorialWizardState> {
-    private portalRef = createRef<Portal>();
+    private portalRef = createRef<Portal | null>();
     private resizeObserver?: ResizeObserver;
     private observedElement?: Element;
 

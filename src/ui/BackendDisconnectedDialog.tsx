@@ -43,7 +43,7 @@ const reconnectedDisplayMs = 1500;
 export class BackendDisconnectedDialog
     extends UIComponent<IBackendDisconnectedDialogProperties, IBackendDisconnectedDialogState> {
 
-    private statusRef = createRef<StatusDialog>();
+    private statusRef = createRef<StatusDialog | null>();
     private pollTimer: ReturnType<typeof setInterval> | undefined;
     private dismissTimer: ReturnType<typeof setTimeout> | undefined;
     private closingIntentionally = false;

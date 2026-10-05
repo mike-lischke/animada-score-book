@@ -226,7 +226,7 @@ class TestableMinimap extends Minimap {
     }
 }
 
-describe.sequential("Minimap (component)", () => {
+describe("Minimap (component)", { concurrent: false }, () => {
     let result: RenderResult | null;
     let arrangement: ISbDmArrangement;
     let scoreMetrics: IScoreMetrics;
@@ -297,7 +297,7 @@ describe.sequential("Minimap (component)", () => {
                 toJSON: () => {
                     return {};
                 },
-            } as DOMRect;
+            };
         });
 
         contentHost.getBoundingClientRect = (() => {
@@ -313,7 +313,7 @@ describe.sequential("Minimap (component)", () => {
                 toJSON: () => {
                     return {};
                 },
-            } as DOMRect;
+            };
         });
 
         return {

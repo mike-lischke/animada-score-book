@@ -25,15 +25,9 @@ interface IPopoverSliderState {
 }
 
 export class PopoverSlider extends UIComponent<IPopoverSliderProperties, IPopoverSliderState> {
-    public static override defaultProps = {
-        min: 10,
-        max: 300,
-        step: 5,
-    };
-
-    private triggerRef = createRef<HTMLButtonElement>();
-    private sliderRef = createRef<HTMLInputElement>();
-    private popoverRef = createRef<HTMLDivElement>();
+    private triggerRef = createRef<HTMLButtonElement | null>();
+    private sliderRef = createRef<HTMLInputElement | null>();
+    private popoverRef = createRef<HTMLDivElement | null>();
 
     public constructor(props: IPopoverSliderProperties) {
         super(props);
@@ -62,7 +56,7 @@ export class PopoverSlider extends UIComponent<IPopoverSliderProperties, IPopove
     }
 
     public override render(): ComponentChild {
-        const { min = 0, max = 1, step = 0.1, style } = this.props;
+        const { min = 10, max = 300, step = 5, style } = this.props;
         const { open, internalValue } = this.state;
 
         if (!open) {

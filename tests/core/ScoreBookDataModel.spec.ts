@@ -76,7 +76,7 @@ const noteSpans = (measure: ISbDmTrackPiece): string[] => {
     });
 };
 
-describe.sequential("ScoreBookDataModel — Auth State", () => {
+describe("ScoreBookDataModel — Auth State", { concurrent: false }, () => {
     let model: ScoreBookDataModel;
     let authChangedCalls: number;
     let authChangedHandler: () => Promise<boolean>;
@@ -239,7 +239,7 @@ describe.sequential("ScoreBookDataModel — Auth State", () => {
     });
 });
 
-describe.sequential("ScoreBookDataModel track actions", () => {
+describe("ScoreBookDataModel track actions", { concurrent: false }, () => {
     let model: ScoreBookDataModel;
     let mutatedCalls: number;
 
@@ -1575,7 +1575,7 @@ const sixteenthNotes = (): IMeasureEvent[] => {
     });
 };
 
-describe.sequential("ScoreBookDataModel measure widths", () => {
+describe("ScoreBookDataModel measure widths", { concurrent: false }, () => {
     let model: ScoreBookDataModel;
     let widths: Map<number, number>;
     let mutatedCalls: number;
@@ -1672,7 +1672,7 @@ describe.sequential("ScoreBookDataModel measure widths", () => {
     });
 });
 
-describe.sequential("ScoreBookDataModel one-bar repeat (simile)", () => {
+describe("ScoreBookDataModel one-bar repeat (simile)", { concurrent: false }, () => {
     let model: ScoreBookDataModel;
     let trackId: number;
     let mutatedCalls: number;
@@ -1758,7 +1758,7 @@ describe.sequential("ScoreBookDataModel one-bar repeat (simile)", () => {
     });
 });
 
-describe.sequential("ScoreBookDataModel repeat barlines", () => {
+describe("ScoreBookDataModel repeat barlines", { concurrent: false }, () => {
     let model: ScoreBookDataModel;
     let mutatedCalls: number;
 
@@ -1810,7 +1810,7 @@ describe.sequential("ScoreBookDataModel repeat barlines", () => {
     });
 });
 
-describe.sequential("ScoreBookDataModel — Range Articulations", () => {
+describe("ScoreBookDataModel — Range Articulations", { concurrent: false }, () => {
     let model: ScoreBookDataModel;
     let mutatedCalls: number;
 

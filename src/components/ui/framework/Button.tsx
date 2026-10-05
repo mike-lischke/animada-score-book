@@ -3,13 +3,13 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import { ComponentChild, createRef } from "preact";
+import { ComponentChild, createRef, type JSX } from "preact";
 
 import { type ICommonUIProperties, type MouseEventCallback, UIComponent } from "./UIComponent.js";
 import type { Orientation } from "./ui-types.js";
 
-export interface IButtonProperties extends ICommonUIProperties {
-    innerRef?: preact.RefObject<HTMLButtonElement>;
+export interface IButtonProperties extends ICommonUIProperties<JSX.IntrinsicElements["button"]["role"]> {
+    innerRef?: preact.RefObject<HTMLButtonElement | null>;
 
     /** The caption of the button. Alternatively you can add a text child instead. */
     caption?: string;
@@ -47,12 +47,12 @@ export interface IButtonProperties extends ICommonUIProperties {
 }
 
 export class Button extends UIComponent<IButtonProperties> {
-    private buttonRef: preact.RefObject<HTMLButtonElement>;
+    private buttonRef: preact.RefObject<HTMLButtonElement | null>;
 
     public constructor(props: IButtonProperties) {
         super(props);
 
-        this.buttonRef = props.innerRef ?? createRef<HTMLButtonElement>();
+        this.buttonRef = props.innerRef ?? createRef<HTMLButtonElement | null>();
     }
 
     public render(): ComponentChild {

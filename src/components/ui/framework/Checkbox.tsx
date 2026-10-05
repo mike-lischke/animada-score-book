@@ -13,17 +13,12 @@ interface ICheckboxProperties extends ICommonUIProperties {
 }
 
 export class Checkbox extends UIComponent<ICheckboxProperties> {
-
-    public static override defaultProps = {
-        disabled: false,
-    };
-
     public constructor(props: ICheckboxProperties) {
         super(props);
     }
 
     public render(): ComponentChild {
-        const { id, checked, disabled, style } = this.props;
+        const { id, checked, disabled = false, style } = this.props;
         const className = this.generateFinalClassName(["checkbox"]);
 
         return (

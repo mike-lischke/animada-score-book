@@ -28,7 +28,7 @@ export interface IInputProperties extends ICommonUIProperties {
     /** Shows a toggle button to reveal the password in plain text. */
     showPasswordToggle?: boolean;
 
-    innerRef?: preact.RefObject<HTMLElement>;
+    innerRef?: preact.RefObject<HTMLElement | null>;
 
     onChange?: (e: InputEvent, props: IInputProperties) => void;
     onConfirm?: (e: KeyboardEvent, props: IInputProperties) => void;
@@ -41,17 +41,12 @@ interface IInputState {
 }
 
 export class Input extends UIComponent<IInputProperties, IInputState> {
-
-    public static override defaultProps = {
-        spellCheck: true,
-    };
-
-    private inputRef: preact.RefObject<HTMLElement>;
+    private inputRef: preact.RefObject<HTMLElement | null>;
 
     public constructor(props: IInputProperties) {
         super(props);
 
-        this.inputRef = props.innerRef ?? createRef<HTMLElement>();
+        this.inputRef = props.innerRef ?? createRef<HTMLElement | null>();
         this.state = { passwordVisible: false };
     }
 
@@ -87,7 +82,7 @@ export class Input extends UIComponent<IInputProperties, IInputState> {
 
     public render(): ComponentChild {
         const {
-            id, password, showPasswordToggle, textAlignment, value, spellCheck, readOnly, disabled, style,
+            id, password, showPasswordToggle, textAlignment, value, spellCheck = true, readOnly, disabled, style,
             placeholder,
         } = this.props;
         const { passwordVisible } = this.state;
@@ -102,23 +97,26 @@ export class Input extends UIComponent<IInputProperties, IInputState> {
 
         const inputType = password && !passwordVisible ? "password" : "text";
 
-        const inputElement = (
-            <input
-                id={id}
-                ref={this.inputRef as preact.Ref<HTMLInputElement>}
-                onInput={this.handleInput}
-                onKeyDown={this.handleKeyDown}
-                onBlur={this.handleBlur}
-                className={className}
-                type={inputType}
-                value={value}
-                spellcheck={spellCheck}
-                style={password && showPasswordToggle ? { ...newStyle, paddingRight: "28px" } : newStyle}
-                readOnly={readOnly}
-                disabled={disabled}
-                placeholder={placeholder}
-            />
-        );
+        const inputProps = {
+            id,
+            ref: this.inputRef as preact.Ref<HTMLInputElement>,
+            onInput: this.handleInput,
+            onKeyDown: this.handleKeyDown,
+            onBlur: this.handleBlur,
+            className,
+            value,
+            spellcheck: spellCheck,
+            style: password && showPasswordToggle ? { ...newStyle, paddingRight: "28px" } : newStyle,
+            readOnly,
+            disabled,
+            placeholder,
+        };
+        let inputElement: ComponentChild;
+        if (inputType === "password") {
+            inputElement = <input {...inputProps} type="password" />;
+        } else {
+            inputElement = <input {...inputProps} type="text" />;
+        }
 
         if (password && showPasswordToggle) {
             return (

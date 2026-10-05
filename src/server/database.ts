@@ -10,6 +10,12 @@ export enum DatabaseEngine {
     Postgres = "postgres",
 }
 
+const databaseEngineValues = Object.values(DatabaseEngine) as string[];
+
+export const isValidDatabaseEngine = (value: string): value is DatabaseEngine => {
+    return databaseEngineValues.includes(value);
+};
+
 export interface IDatabaseConfig {
     engine: DatabaseEngine;
     host: string;

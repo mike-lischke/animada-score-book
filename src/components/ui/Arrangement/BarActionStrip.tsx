@@ -25,7 +25,7 @@ export interface IBarActionStripProps extends ICommonUIProperties {
     canDelete: boolean;
 
     /** The horizontally scrolling host that contains the bar columns. */
-    scrollHostRef: preact.RefObject<HTMLDivElement>;
+    scrollHostRef: preact.RefObject<HTMLDivElement | null>;
 
     /**
      * Supplies the horizontal center of every measure column, in px at 100% zoom. The staff view renders only a
@@ -44,7 +44,7 @@ export interface IBarActionStripProps extends ICommonUIProperties {
  * natively together with the bar columns.
  */
 export class BarActionStrip extends UIComponent<IBarActionStripProps> {
-    private stripRef = createRef<HTMLDivElement>();
+    private stripRef = createRef<HTMLDivElement | null>();
     private resizeObserver?: ResizeObserver;
 
     public override componentDidMount(): void {

@@ -110,6 +110,8 @@ interface IStaffMeasureViewerState {
 /** Renders the staff-mode measure column with track rows only. */
 export class StaffMeasureViewer extends UIComponent<IStaffMeasureViewerProps, IStaffMeasureViewerState>
     implements ISelectionHitTester {
+    private viewerElement?: HTMLDivElement;
+
     public constructor(props: IStaffMeasureViewerProps) {
         super(props);
 
@@ -151,7 +153,7 @@ export class StaffMeasureViewer extends UIComponent<IStaffMeasureViewerProps, IS
      */
     public hitTest(rect: DOMRect): ISelectionHitEntry[] {
         const { barNumber, arrangement, arrangementPlayer, scoreElementRegistry } = this.props;
-        const element = this.base as HTMLElement | null;
+        const element = this.viewerElement;
         if (!element) {
             return [];
         }
@@ -347,15 +349,21 @@ export class StaffMeasureViewer extends UIComponent<IStaffMeasureViewerProps, IS
             );
         }
 
+        const registryRef = scoreElementRegistry?.createRef({
+            kind: ScoreElementKind.BarContainer,
+            bar: barNumber,
+            trackId: 0,
+        });
+        const setViewerRef = (element: HTMLDivElement | null): void => {
+            this.viewerElement = element ?? undefined;
+            registryRef?.(element);
+        };
+
         return (
             <div
                 className="staff-measure-viewer"
                 style={style}
-                ref={scoreElementRegistry?.createRef({
-                    kind: ScoreElementKind.BarContainer,
-                    bar: barNumber,
-                    trackId: 0,
-                })}
+                ref={setViewerRef}
             >
                 <div className="staff-measure-number">{barNumber}</div>
                 {tracks.map((track) => {

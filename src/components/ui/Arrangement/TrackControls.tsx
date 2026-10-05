@@ -24,7 +24,7 @@ import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.
 export interface ITrackControlsProperties extends ICommonUIProperties {
     tracks: ISbDmTrack[];
     selectionManager: SelectionManager;
-    innerRef?: preact.RefObject<HTMLDivElement>;
+    innerRef?: preact.RefObject<HTMLDivElement | null>;
 }
 
 interface ITrackControlsState {
@@ -73,8 +73,8 @@ export class TrackControls extends UIComponent<ITrackControlsProperties, ITrackC
     }
 
     public hitTest(rect: DOMRect): ISelectionHitEntry[] {
-        const { tracks } = this.props;
-        const element = this.base as HTMLElement | null;
+        const { tracks, innerRef } = this.props;
+        const element = innerRef?.current;
         if (!element) {
             return [];
         }

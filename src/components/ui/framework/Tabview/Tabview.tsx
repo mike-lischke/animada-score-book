@@ -39,7 +39,7 @@ export interface ITabviewPage {
 
 interface ITabviewProperties extends ICommonUIProperties {
     /** If specified this gets the reference to the outermost HTML element, hosting this component. */
-    innerRef?: preact.RefObject<HTMLElement>;
+    innerRef?: preact.RefObject<HTMLElement | null>;
 
     /** The tab page to make active initially. */
     selectedId?: string;
@@ -90,16 +90,9 @@ interface ITabviewState {
  */
 export class Tabview extends UIComponent<ITabviewProperties, ITabviewState> {
 
-    public static override defaultProps = {
-        tabPosition: TabPosition.Top,
-        stretchTabs: true,
-        hideSingleTab: false,
-        showTabs: true,
-    };
-
-    private contentRef = createRef<HTMLDivElement>();
-    private sliderRef = createRef<HTMLDivElement>();
-    private tabAreaRef = createRef<HTMLDivElement>();
+    private contentRef = createRef<HTMLDivElement | null>();
+    private sliderRef = createRef<HTMLDivElement | null>();
+    private tabAreaRef = createRef<HTMLDivElement | null>();
 
     private trackingSliderMove = false;
     private lastSliderPosition = 0;
@@ -152,8 +145,9 @@ export class Tabview extends UIComponent<ITabviewProperties, ITabviewState> {
 
     public render(): ComponentChild {
         const {
-            id, tabPosition, stretchTabs, hideSingleTab, pages, tabBorderWidth, style, contentSeparatorWidth,
-            selectedId, showTabs, canReorderTabs, auxiliary,
+            id, tabPosition = TabPosition.Top, stretchTabs = true, hideSingleTab = false,
+            pages, tabBorderWidth, style, contentSeparatorWidth, selectedId, showTabs = true,
+            canReorderTabs, auxiliary,
         } = this.props;
 
         const className = this.generateFinalClassName([

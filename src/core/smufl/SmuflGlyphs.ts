@@ -112,7 +112,7 @@ export interface ISmuflGlyphDefinition {
 /** The vocabulary of SMuFL symbols the score draws, and what a font has to provide for them. */
 export class SmuflGlyphs {
     /** Every glyph the score draws. */
-    public static readonly all: readonly SmuflGlyph[] = Object.values(SmuflGlyph) as SmuflGlyph[];
+    public static readonly all: readonly SmuflGlyph[] = Object.values(SmuflGlyph);
 
     /** The symbol families the score draws from. */
     public static readonly families: readonly SmuflGlyphFamily[];

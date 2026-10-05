@@ -58,7 +58,7 @@ const createEditorStub = () => {
 
 type EditorStub = ReturnType<typeof createEditorStub>;
 
-describe.sequential("TrackViewerInputController", () => {
+describe("TrackViewerInputController", { concurrent: false }, () => {
     let container: HTMLElement;
     let controller: TrackViewerInputController;
     let editor: EditorStub;

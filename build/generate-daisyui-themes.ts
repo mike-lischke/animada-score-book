@@ -11,7 +11,7 @@ import { escapeCssIdent } from "../src/components/ui/framework/css-helpers.js";
 interface VSTheme {
     name: string;
     type: "light" | "dark" | "hc";
-    colors?: Record<string, string>;
+    colors?: Record<string, string | undefined>;
 }
 
 const sharedValues = `
@@ -39,7 +39,7 @@ const files = readdirSync(srcDir).filter((f) => {
 });
 
 const mapVsThemeToDaisyTheme = (theme: VSTheme): string => {
-    const c = theme.colors ?? {} as Record<string, string | undefined>;
+    const c = theme.colors ?? {};
     const type = theme.type === "dark" ? "dark" : "light";
 
     // Base colors.

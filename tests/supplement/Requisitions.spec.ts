@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { IUISettings } from "../../src/core/AppStorage.js";
 import { requisitions } from "../../src/supplement/Requisitions.js";
 
-describe.sequential("Requisitions (class)", () => {
+describe("Requisitions (class)", { concurrent: false }, () => {
     beforeEach(() => {
         requisitions.unregister();
         vi.restoreAllMocks();

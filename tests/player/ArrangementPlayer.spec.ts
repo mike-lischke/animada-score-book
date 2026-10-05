@@ -4,6 +4,7 @@
  */
 
 import { describe, expect, it, vi } from "vitest";
+import { Damping } from "../../src/core/ScoreBookDataModel.js";
 
 import type { IAudioData, Mutable } from "../../src/core/types/general.js";
 import type { Event as PlaybackEvent, ICallbackEvent, IInterval } from "../../src/player/types.js";
@@ -96,7 +97,7 @@ vi.mock("../../src/player/TrackPlayer.js", () => {
             }
 
             if (firstEvent) {
-                events.push({ realTime: t, audioBuffer: {} as AudioBuffer, event: firstEvent });
+                events.push({ realTime: t, audioBuffer: {}, event: firstEvent });
             }
 
             events.push({
@@ -215,14 +216,14 @@ const makeArrangement = (trackCount: number): ISbDmArrangement => {
 
         const noteStyle: IAudioData = {
             id: "x",
-            instrument: instrument as unknown as IAudioData["instrument"],
+            instrument: instrument,
             audioBuffer: {} as AudioBuffer,
-            sampleProfile: { builtInDamping: 0, builtInAccent: false, ghost: false }
+            sampleProfile: { builtInDamping: Damping.Open, builtInAccent: false, ghost: false }
         } as IAudioData;
 
         const sourceNote = makeNote(track, { bar: 1, step: 1 }, noteStyle);
         notes.push(sourceNote);
-        const measure = makeMeasure(track as unknown as ISbDmTrack, 1);
+        const measure = makeMeasure(track, 1);
         measure.events.push({
             start: { numerator: 0, denominator: 1 },
             duration: { numerator: 1, denominator: 1 },
@@ -234,7 +235,7 @@ const makeArrangement = (trackCount: number): ISbDmArrangement => {
             measure,
             start: { numerator: 0, denominator: 1 },
             duration: { numerator: 1, denominator: 1 },
-            track: track as unknown as ISbDmTrack,
+            track: track,
             timing: { bar: 1, step: 1 },
             audioData: sourceNote.audioData,
         });
@@ -276,7 +277,7 @@ import type { TimeCoordinator } from "../../src/player/TimeCoordinator.js";
 import type { TrackPlayer } from "../../src/player/TrackPlayer.js";
 import { requisitions } from "../../src/supplement/Requisitions.js";
 
-describe.sequential("ArrangementPlayer", () => {
+describe("ArrangementPlayer", { concurrent: false }, () => {
     it("creates track players", () => {
         const arrangement = makeArrangement(2);
         const dm = new TestScoreBookDataModel(arrangement);
@@ -506,7 +507,7 @@ describe.sequential("ArrangementPlayer", () => {
         }
     });
 
-    it("resolves the order the repeat barlines state and re-reads it when a track changes", () => {
+    it("resolves the order the repeat bar lines state and re-reads it when a track changes", () => {
         const arrangement = makeArrangement(1);
         arrangement.repeatBars = new Map([[1, { start: true, end: true }]]);
         const dm = new TestScoreBookDataModel(arrangement);

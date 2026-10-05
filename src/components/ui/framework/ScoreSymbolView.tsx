@@ -144,7 +144,7 @@ export class ScoreSymbolView extends UIComponent<IScoreSymbolViewProperties> {
             "--ink-box-height": boxHeight,
             "--ink-pen-x": penX,
             "--ink-pen-y": boxHeight / 2,
-        } as CSSProperties;
+        };
     }
 
     private renderOwnPath(path: IOwnPathDefinition, className: string): ComponentChild {

@@ -42,9 +42,9 @@ describe("GooeyGroup", () => {
         const filterId = filter!.getAttribute("id");
         expect(filterId).toMatch(/^gooey-\d+$/);
 
-        const wrapper = renderResult.container.querySelector(".gooey-group");
+        const wrapper = renderResult.container.querySelector<HTMLElement>(".gooey-group");
         expect(wrapper).toBeTruthy();
-        expect(wrapper!.getAttribute("style")).toContain(`url(#${filterId})`);
+        expect(wrapper!.style.filter).toBe(`url("#${filterId}")`);
     });
 
     it("merges className and forwards data attributes to the wrapper", () => {

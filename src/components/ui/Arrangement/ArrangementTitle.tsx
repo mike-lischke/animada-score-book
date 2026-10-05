@@ -22,7 +22,7 @@ interface IArrangementTitleState {
 }
 
 export class ArrangementTitle extends UIComponent<IArrangementTitleProperties, IArrangementTitleState> {
-    private inputRef = createRef<HTMLInputElement>();
+    private inputRef = createRef<HTMLInputElement | null>();
 
     public constructor(props: IArrangementTitleProperties) {
         super(props);
