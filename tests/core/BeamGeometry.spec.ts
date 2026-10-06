@@ -24,6 +24,16 @@ const note = (anchor: number, noteLine: number, beamCount = 1): IBeamNote => {
 };
 
 describe("BeamGeometry", () => {
+    it("stacks beam levels by the SMuFL thickness and spacing", () => {
+        // One level is the beam's own thickness, every further level adds a gap and another beam.
+        expect(BeamGeometry.stackDepthSpaces(1)).toBeCloseTo(0.5);
+        expect(BeamGeometry.stackDepthSpaces(2)).toBeCloseTo(1.25);
+        expect(BeamGeometry.stackDepthSpaces(3)).toBeCloseTo(2);
+
+        // A note without beams keeps one beam's depth, so an ink bound never collapses.
+        expect(BeamGeometry.stackDepthSpaces(0)).toBeCloseTo(0.5);
+    });
+
     it("keeps a group of equal notes horizontal with normal stems", () => {
         const plans = BeamGeometry.plan([
             note(0, 1),
@@ -159,6 +169,26 @@ describe("BeamGeometry", () => {
         expect(eighthRise).toBeCloseTo(sixteenthRise * 2);
 
         // No stem is shorter than the normal length.
+        expect(Math.min(...plans.map((plan) => {
+            return plan.stemLengthPx;
+        }))).toBeCloseTo(normalStemPx);
+    });
+
+    it("keeps a squeezed group connected with normal stems", () => {
+        // A narrow measure leaves a fifth of the room per step, so the clamped slope has to hold the
+        // whole group together instead of only the pair of notes it spans.
+        const plans = BeamGeometry.plan([
+            note(0, 3, 1),
+            note(1 / 16, 2, 2),
+            note(2 / 16, 1, 2),
+        ], { centerLine: 2, rowWidthPx: 240 });
+
+        // The shared strokes meet at the same heights, and the beam still rises along the contour.
+        expect(plans[0].strokes[0].rightPx).toBeCloseTo(plans[1].strokes[0].leftPx);
+        expect(plans[1].strokes[0].rightPx).toBeCloseTo(plans[2].strokes[0].rightPx);
+        expect(plans[0].strokes[0].leftPx).toBeGreaterThan(plans[0].strokes[0].rightPx);
+
+        // The beam is translated so the shortest stem keeps the normal length.
         expect(Math.min(...plans.map((plan) => {
             return plan.stemLengthPx;
         }))).toBeCloseTo(normalStemPx);
