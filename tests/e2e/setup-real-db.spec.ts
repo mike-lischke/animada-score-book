@@ -30,8 +30,9 @@ const waitForBackend = async (timeoutMs = 30000): Promise<void> => {
     while (Date.now() - start < timeoutMs) {
         try {
             const response = await fetch(`${testBackendUrl}/api?action=health`);
+            const health = await response.json() as { initialized?: boolean; };
 
-            if (response.ok) {
+            if (response.ok && health.initialized) {
                 return;
             }
         } catch {
