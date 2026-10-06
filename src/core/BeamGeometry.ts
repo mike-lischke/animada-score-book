@@ -18,6 +18,12 @@ export const maximumBeamSlope = 0.25;
 /** Length a partial beam reaches beyond its note's stem, in staff spaces. */
 export const partialBeamLengthSpaces = 1.2;
 
+/** Beam thickness the SMuFL defaults state, in staff spaces, which the ink bounds approximate. */
+const beamThicknessSpaces = 0.5;
+
+/** Space between two beam levels that the SMuFL defaults state, in staff spaces. */
+const beamSpacingSpaces = 0.25;
+
 /** How one beam stroke attaches to the notes around it. */
 export enum BeamSegmentKind {
     /** The stroke bridges the gap to the next note, which carries the same level. */
@@ -79,6 +85,15 @@ export interface IBeamGeometryOptions {
  * {@link maximumBeamSlope}, and is translated so that the shortest stem keeps the normal length.
  */
 export class BeamGeometry {
+    /**
+     * @param levels The number of beam levels the note carries.
+     *
+     * @returns The distance from a beam's outer edge to the far edge of its stack, in staff spaces.
+     */
+    public static stackDepthSpaces(levels: number): number {
+        return beamThicknessSpaces + ((Math.max(levels, 1) - 1) * (beamThicknessSpaces + beamSpacingSpaces));
+    }
+
     /**
      * @param notes The notes of one beam group, in measure order.
      * @param options The row the group is drawn in.

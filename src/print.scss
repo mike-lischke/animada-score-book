@@ -217,7 +217,7 @@
         }
 
         .print-instrument-cell {
-            height: calc(var(--note-height) + 20px);
+            height: calc(var(--note-height) + 20px + var(--staff-below-reserve, 0px));
         }
     }
 

@@ -147,8 +147,13 @@ export class StaffMeasureViewer extends UIComponent<IStaffMeasureViewerProps, IS
         }
 
         const elRect = element.getBoundingClientRect();
-        if (rect.right < elRect.left || rect.left > elRect.right
-            || rect.bottom < elRect.top || rect.top > elRect.bottom) {
+
+        // A measure draws its tuplet markers beside the note band, and a marker below the notation reaches
+        // into the room the row keeps for it, which lies outside the measure's own box. A rectangle that
+        // touches only such a marker still addresses the tuplet it belongs to, and nothing else.
+        const insideMeasure = StaffMeasureViewer.rectsIntersect(rect, elRect.left, elRect.top, elRect.right,
+            elRect.bottom, 0);
+        if (!insideMeasure && !StaffMeasureViewer.touchesTupletMarker(rect, element)) {
             return [];
         }
 
@@ -310,6 +315,11 @@ export class StaffMeasureViewer extends UIComponent<IStaffMeasureViewerProps, IS
             return trackPieceEntries;
         }
 
+        // Only a marker reaches outside the measure's box; a rectangle there addresses no measure.
+        if (!insideMeasure) {
+            return [];
+        }
+
         const measure = SelectionSerializer.measureOfBar(arrangement, barNumber);
         if (measure === undefined) {
             return [];
@@ -388,6 +398,29 @@ export class StaffMeasureViewer extends UIComponent<IStaffMeasureViewerProps, IS
                 {resizeHandle}
             </div>
         );
+    }
+
+    /**
+     * @param selection The selection rectangle in viewport coordinates.
+     * @param bar The bar element to inspect.
+     *
+     * @returns Whether the rectangle touches a tuplet marker the bar draws, which may sit outside the
+     *          bar's own box in the room a row keeps below its notation.
+     */
+    private static touchesTupletMarker(selection: DOMRect, bar: HTMLElement): boolean {
+        const markers = bar.querySelectorAll<HTMLElement>(
+            ".staff-note-viewer-tuplet-number, .staff-note-viewer-tuplet-bracket",
+        );
+
+        for (const marker of markers) {
+            const number = marker.querySelector<HTMLElement>(".staff-note-viewer-tuplet-text");
+            if (StaffMeasureViewer.touchesElement(selection, marker)
+                || (number !== null && StaffMeasureViewer.touchesElement(selection, number))) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

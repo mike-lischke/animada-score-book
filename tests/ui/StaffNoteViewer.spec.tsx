@@ -76,11 +76,12 @@ const buildMeasure = (events: IMeasureEvent[], subdivisions: ISubdivision[],
         sampleProfile,
     } as unknown as IAudioData;
 
-    const track = { id: 100 } as ISbDmTrack;
+    const track = { id: 100, measures: [] as ISbDmTrackPiece[] };
+    const trackEntity = track as unknown as ISbDmTrack;
     const measure: ISbDmTrackPiece = {
         type: SbDmEntityType.TrackPiece,
         id: 13,
-        track,
+        track: trackEntity,
         number: 1,
         meter: {
             beats: 4,
@@ -100,13 +101,14 @@ const buildMeasure = (events: IMeasureEvent[], subdivisions: ISubdivision[],
             measure,
             start: { ...measureEvent.start },
             duration: { ...measureEvent.duration },
-            track,
+            track: trackEntity,
             timing: { bar: 1, step: 0 },
             audioData: measureEvent.noteStyleId !== undefined ? audioData : undefined,
         };
     });
 
     measure.noteEvents.push(...noteEvents);
+    track.measures.push(measure);
 
     return measure;
 };

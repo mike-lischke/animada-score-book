@@ -25,6 +25,15 @@ export const noteHeightPx = 80;
 /** Height of one staff space in px at 100% zoom. Four of them make a SMuFL em. */
 export const staffSpacePx = 10;
 
+/**
+ * Distance from the middle of a staff row to the line its notes are drawn on, in px at 100% zoom.
+ * Mirrors `--staff-centre` in component-styles, which a test asserts.
+ */
+export const staffCentrePx = 32;
+
+/** Space a staff row keeps below itself before the next row, in px at 100% zoom. Mirrors its `margin-bottom`. */
+export const staffRowGapPx = 20;
+
 /** Steps a measure is laid out for when it carries no width of its own. Mirrors `--steps-per-bar` in CSS. */
 const defaultStepsPerMeasure = 16;
 

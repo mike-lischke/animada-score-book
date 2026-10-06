@@ -8,6 +8,7 @@ import type { ComponentChild } from "preact";
 import { staffSpacePx } from "../../../../core/MeasureLayout.js";
 import type { ISbDmArrangement, ISbDmTrack } from "../../../../core/ScoreBookDataModel.js";
 import { ScoreSymbols, ScoreSymbol } from "../../../../core/ScoreSymbols.js";
+import { StaffInk } from "../../../../core/StaffInk.js";
 import { Container } from "../../framework/Container.js";
 import { ScoreSymbolView } from "../../framework/ScoreSymbolView.js";
 import { UIComponent, type ICommonUIProperties } from "../../framework/UIComponent.js";
@@ -68,6 +69,7 @@ export class StaffPrefixViewer extends UIComponent<IStaffPrefixViewerProps> {
                 orientation={Orientation.LeftToRight}
                 crossAlignment={ChildAlignment.Center}
                 className="staff-prefix-row"
+                style={{ "--staff-below-reserve": `${StaffInk.belowReservePx(track)}px` }}
                 aria-hidden
             >
                 {staffLines}

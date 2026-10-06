@@ -7,6 +7,7 @@ import { type ComponentChild } from "preact";
 
 import type { Arrangement } from "../../../core/Arrangement.js";
 import { MeasureLayout } from "../../../core/MeasureLayout.js";
+import { StaffInk } from "../../../core/StaffInk.js";
 import type { ISbDmTrack, ScoreBookDataModel } from "../../../core/ScoreBookDataModel.js";
 import type { ArrangementPlayer } from "../../../player/ArrangementPlayer.js";
 import type { SelectionManager } from "../../../ui/SelectionManager.js";
@@ -295,7 +296,8 @@ export class PrintView extends UIComponent<IPrintViewProps> {
                 <div className="print-instrument-beam-spacer" />
                 {tracks.map((track) => {
                     return (
-                        <div key={`icon-${track.id}`} className="print-instrument-cell">
+                        <div key={`icon-${track.id}`} className="print-instrument-cell"
+                            style={{ "--staff-below-reserve": `${StaffInk.belowReservePx(track)}px` }}>
                             <Icon
                                 className="print-instrument-icon"
                                 src={track.instrument.image.filePath}

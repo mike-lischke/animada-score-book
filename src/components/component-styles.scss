@@ -1088,7 +1088,9 @@
     min-height: var(--note-height);
     margin: 0;
     padding-top: 22px;
-    margin-bottom: 20px;
+
+    /* The prefix column states the same room as the note rows, so their rows stay aligned. */
+    margin-bottom: calc(20px + var(--staff-below-reserve, 0px));
 }
 
 .staff-prefix-middle-line {
@@ -1152,6 +1154,17 @@
        holds stems, beams and tuplet brackets. */
     --staff-centre: 32px;
 
+    /* Room the notation takes above and below the line the notes are drawn on. The viewer states it from
+       the noteheads, the stems and the beam stacks, and the tuplet markers are placed by it. */
+    --staff-ink-top: 0px;
+    --staff-ink-bottom: 0px;
+
+    /* Room the row keeps below itself for a marker drawn below the notation, which the viewer states. */
+    --staff-below-reserve: 0px;
+
+    /* Gap a tuplet marker keeps from the notation. Mirrors `tupletGapPx` in StaffInk.ts. */
+    --tuplet-marker-gap: 6px;
+
     /* A final barline joins the outer staff lines. The viewer states the height it draws with; this value is
        the fallback for the time before a viewer rendered. */
     --staff-barline-height: max((var(--staff-line-count, 1) - 1) * var(--staff-space), var(--staff-space) * 2);
@@ -1193,7 +1206,10 @@
     position: relative;
     width: 100%;
     min-height: var(--note-height);
-    margin-bottom: 20px;
+
+    /* The row keeps the room a marker below the notation needs, so the marker stays clear of the row that
+       follows. The prefix column states the same room, so the two columns keep their rows aligned. */
+    margin-bottom: calc(20px + var(--staff-below-reserve));
 }
 
 .staff-note-viewer-line {
@@ -1355,11 +1371,11 @@
 }
 
 .staff-note-viewer-tuplet-number.staff-note-viewer-tuplet-above {
-    top: calc(50% - 34px);
+    top: max(0px, calc(50% + var(--staff-centre) - var(--staff-ink-top) - var(--tuplet-marker-gap) - 10px));
 }
 
 .staff-note-viewer-tuplet-number.staff-note-viewer-tuplet-below {
-    top: calc(50% + 59px);
+    top: calc(50% + var(--staff-centre) + var(--staff-ink-bottom) + var(--tuplet-marker-gap) + 14px);
 }
 
 /*
@@ -1397,7 +1413,7 @@
 }
 
 .staff-note-viewer-tuplet-bracket.staff-note-viewer-tuplet-above {
-    top: calc(50% - 24px);
+    top: max(0px, calc(50% + var(--staff-centre) - var(--staff-ink-top) - var(--tuplet-marker-gap)));
 
     &::before,
     &::after {
@@ -1407,7 +1423,7 @@
 }
 
 .staff-note-viewer-tuplet-bracket.staff-note-viewer-tuplet-below {
-    top: calc(50% + 45px);
+    top: calc(50% + var(--staff-centre) + var(--staff-ink-bottom) + var(--tuplet-marker-gap));
 
     &::before,
     &::after {

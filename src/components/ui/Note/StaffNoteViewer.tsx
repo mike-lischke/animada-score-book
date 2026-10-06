@@ -6,8 +6,9 @@
 import { type ComponentChild, type CSSProperties, type VNode } from "preact";
 
 import { articulationFromSampleProfile } from "../../../core/articulation.js";
-import { BeamGeometry, BeamSegmentKind, partialBeamLengthSpaces, type IBeamNotePlan }
+import { BeamGeometry, BeamSegmentKind, normalStemLengthSpaces, partialBeamLengthSpaces, type IBeamNotePlan }
     from "../../../core/BeamGeometry.js";
+import { StaffInk, type IStaffInk, type IStaffInkNote } from "../../../core/StaffInk.js";
 import type { ISbDmTrackPiece } from "../../../core/ScoreBookDataModel.js";
 import {
     Damping, ExcitationMode, HandTechnique, NoteDisplayType, StickTechnique,
@@ -282,6 +283,11 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
 
         const articulationLayer = this.renderArticulations(articulations ?? [], barNumber, maxNoteLine, centerLine);
 
+        // The stylesheet places the tuplet markers and the room below the row by the notation's own
+        // bounds, so a marker follows the notes instead of a fixed height.
+        const ink = this.rowInk(nodes, beamSpans, centerLine);
+        const belowReservePx = StaffInk.belowReservePx(measure.track);
+
         return (
             <div
                 className={className}
@@ -297,6 +303,9 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                     "--staff-opening-barline-room": openingRoom,
                     "--staff-closing-barline-room": closingRoom,
                     "--staff-note-clearance": clearance,
+                    "--staff-ink-top": StaffNoteViewer.formatPx(ink.topPx),
+                    "--staff-ink-bottom": StaffNoteViewer.formatPx(ink.bottomPx),
+                    "--staff-below-reserve": StaffNoteViewer.formatPx(belowReservePx),
                 }}
                 aria-hidden
                 {...this.dataAttributes}
@@ -719,6 +728,31 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                 ? articulationFromSampleProfile(audioData.sampleProfile)
                 : undefined),
         };
+    }
+
+    /**
+     * @param nodes The nodes the row draws.
+     * @param beamSpans The beam engraving of the row's beamed notes.
+     * @param centerLine The line the row is drawn around.
+     *
+     * @returns The room the row's notation takes around its reference line.
+     */
+    private rowInk(nodes: IStaffTreeNode[], beamSpans: Map<number, IBeamNotePlan>, centerLine: number): IStaffInk {
+        const notes = this.collectNotes(nodes).map((note): IStaffInkNote => {
+            const plan = beamSpans.get(note.eventIndex);
+            const hasStem = plan !== undefined
+                || (note.noteStyle !== undefined && note.glyph.length !== NoteLength.Whole);
+
+            return {
+                noteLine: note.noteStyle === undefined ? undefined : (note.noteLine ?? 1),
+                stemLengthSpaces: plan !== undefined
+                    ? plan.stemLengthPx / staffSpacePx
+                    : (hasStem ? normalStemLengthSpaces : undefined),
+                beamCount: plan?.strokes.length ?? 0,
+            };
+        });
+
+        return StaffInk.ofRow(notes, centerLine);
     }
 
     /**
