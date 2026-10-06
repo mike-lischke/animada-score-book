@@ -220,10 +220,10 @@ export class StaffMeasureEditor extends MeasureEditor {
     }
 
     /**
-     * Creates a subdivision over the events the selection addresses. The span from the first to the
-     * last addressed event becomes the subdivision's grid span, and the selected note styles are
-     * copied into its leading slots — the same edit the grid performs for a cell selection. The span
-     * must cover whole grid steps, since a subdivision replaces steps.
+     * Creates a subdivision over the events the selection addresses. The subdivision spans from the
+     * start of the first to the end of the last addressed event and replaces the parent slots it
+     * covers, so an event inside a subdivision yields a nested one. The selected note styles are
+     * copied into its leading slots — the same edit the grid performs for a cell selection.
      *
      * @param entries The selection entries defining the subdivision span.
      * @param actual The number of equal slots the subdivision contains.
@@ -242,14 +242,15 @@ export class StaffMeasureEditor extends MeasureEditor {
 
         const start = { ...first.start };
         const end = addFractions(last.start, last.duration);
-        const steps = this.stepSpanOf(start, end, measure);
-        if (steps === undefined) {
-            void requisitions.execute("showWarning", "This selection does not cover whole grid steps.");
+        const created = this.dataModel.createSubdivisionOverSpan(measure.track.id, measure.number, start, end,
+            actual, events);
+        if (!created) {
+            void requisitions.execute("showWarning", "This selection does not cover whole subdivision units.");
 
             return false;
         }
 
-        return this.dataModel.createSubdivision(measure.track.id, measure.number, start, end, actual, steps, events);
+        return true;
     }
 
     /**
@@ -500,23 +501,6 @@ export class StaffMeasureEditor extends MeasureEditor {
         const [measure] = measures;
 
         return measures.size === 1 ? measure : undefined;
-    }
-
-    /**
-     * Resolves the number of grid steps a fractional span covers.
-     *
-     * @param start The span start as a fraction of the measure.
-     * @param end The span end as a fraction of the measure.
-     * @param measure The measure supplying the step resolution.
-     *
-     * @returns The step count, or undefined when the span does not run from step boundary to step boundary.
-     */
-    private stepSpanOf(start: IFraction, end: IFraction, measure: ISbDmTrackPiece): number | undefined {
-        const stepsPerBar = measure.meter.stepResolution;
-        const from = (start.numerator * stepsPerBar) / start.denominator;
-        const to = (end.numerator * stepsPerBar) / end.denominator;
-
-        return Number.isInteger(from) && Number.isInteger(to) && to - from >= 1 ? to - from : undefined;
     }
 
     /**

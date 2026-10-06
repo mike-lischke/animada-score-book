@@ -382,6 +382,42 @@ describe("StaffMeasureEditor", { concurrent: false }, () => {
         expect(measure.subdivisions).toHaveLength(0);
     });
 
+    it("nests a subdivision inside a slot of an existing subdivision", () => {
+        setEvents(model, [
+            { start: { numerator: 0, denominator: 1 }, duration: { numerator: 1, denominator: 4 }, noteStyleId: "1" },
+            { start: { numerator: 1, denominator: 4 }, duration: { numerator: 3, denominator: 4 } },
+        ]);
+        model.createSubdivision(trackId, 1, { numerator: 0, denominator: 1 }, { numerator: 1, denominator: 4 },
+            3, 4);
+        const entries = [runEntry(measure, measure.events[0])];
+
+        expect(editor.createSubdivisionForSelection(entries, 3)).toBe(true);
+
+        // The inner triplet replaces one slot of the outer one, so its normal counts parent slots and
+        // both levels carry a bracket.
+        expect(measure.subdivisions).toEqual([
+            { startIndex: 0, actual: 3, normal: 4, isTuplet: true },
+            { startIndex: 0, actual: 3, normal: 1, isTuplet: true },
+        ]);
+        expect(durationAt(measure, { numerator: 0, denominator: 1 })).toEqual({ numerator: 1, denominator: 36 });
+        expect(durationAt(measure, { numerator: 1, denominator: 36 })).toEqual({ numerator: 1, denominator: 36 });
+        expect(durationAt(measure, { numerator: 1, denominator: 12 })).toEqual({ numerator: 1, denominator: 12 });
+    });
+
+    it("rejects a subdivision span that leaves the subdivision it starts in", () => {
+        setEvents(model, [
+            { start: { numerator: 0, denominator: 1 }, duration: { numerator: 1, denominator: 4 }, noteStyleId: "1" },
+            { start: { numerator: 1, denominator: 4 }, duration: { numerator: 3, denominator: 4 } },
+        ]);
+        model.createSubdivision(trackId, 1, { numerator: 0, denominator: 1 }, { numerator: 1, denominator: 4 },
+            3, 4);
+        const entries = [runEntry(measure, measure.events[0]), runEntry(measure, measure.events[3])];
+
+        // The first slot and the rest behind the triplet: the span crosses out of the subdivision.
+        expect(editor.createSubdivisionForSelection(entries, 3)).toBe(false);
+        expect(measure.subdivisions).toEqual([{ startIndex: 0, actual: 3, normal: 4, isTuplet: true }]);
+    });
+
     it("accepts a note value that lands between two grid steps", () => {
         // The staff has no raster: a thirty-second is a plain length, written where it fits.
         const thirtySecond = { numerator: 1, denominator: 32 };

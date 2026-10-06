@@ -89,3 +89,27 @@ test("applies a length to a note beside a subdivision", async ({ page }) => {
 
     await expect(page.locator(".noteLengthToolbar .noteDotButton.du-btn-primary")).toBeVisible();
 });
+
+test("nests a subdivision inside a slot of the subdivision around it", async ({ page }) => {
+    const runsBefore = await page.locator(".staff-note-viewer-run").count();
+
+    await page.locator(".staff-measure-track-row .staff-note-head-symbol").first().click();
+    await page.locator(".subdivisionToolbar button").first().click();
+    await page.locator(".subdivisionToolbar .du-dropdown li", { hasText: "Triplet" }).locator("a")
+        .click({ force: true });
+
+    // The triplet's second slot is a rest, so the run stands in for the slot's note head.
+    await page.locator(".staff-note-viewer-run").nth(1).click();
+    await page.locator(".subdivisionToolbar button").first().click();
+    await page.locator(".subdivisionToolbar .du-dropdown li", { hasText: "Triplet" }).locator("a")
+        .click({ force: true });
+
+    // The nested triplet and the two slots beside it are four runs more than the measure held before.
+    await expect.poll(() => {
+        return page.locator(".staff-note-viewer-run").count();
+    }).toBe(runsBefore + 4);
+
+    // The outer tuplet is labelled above the notes, the nested one below them.
+    await expect(page.locator(".staff-note-viewer-tuplet-above .staff-note-viewer-tuplet-text")).toHaveText("3");
+    await expect(page.locator(".staff-note-viewer-tuplet-below .staff-note-viewer-tuplet-text")).toHaveText("3");
+});

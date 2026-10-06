@@ -2087,6 +2087,42 @@ export class ScoreBookDataModel {
     }
 
     /**
+     * Creates a subdivision over a fractional span, resolving the number of parent units it replaces
+     * from the span itself. A parent unit is a slot of the subdivision the span lies in, or the
+     * measure's base subdivision outside any, so a caller that addresses events by fraction — the
+     * staff editor, which has no grid positions — can place a subdivision inside another one. Fires
+     * one arrangementMutated event (a single undo step) and one trackChanged event.
+     *
+     * @param trackId The track containing the measure.
+     * @param bar The one-based measure number.
+     * @param start The exact start position of the subdivision (inclusive).
+     * @param end The exact end position of the subdivision (exclusive).
+     * @param actual The number of equal slots the subdivision contains.
+     * @param initialEvents Optional content copied into the first subdivision slots.
+     *
+     * @returns True when the subdivision was created.
+     */
+    public createSubdivisionOverSpan(trackId: number, bar: number, start: IFraction, end: IFraction,
+        actual: number, initialEvents?: Array<ISubdivisionSlotContent | undefined>): boolean {
+        const arrangement = this.arrangement;
+        const track = arrangement?.tracks.find((candidate) => {
+            return candidate.id === trackId;
+        });
+
+        const measure = track?.measures[bar - 1];
+        if (!measure) {
+            return false;
+        }
+
+        const units = this.parentUnitCountOf(measure, start, end);
+        if (units === undefined) {
+            return false;
+        }
+
+        return this.createSubdivision(trackId, bar, start, end, actual, units, initialEvents);
+    }
+
+    /**
      * Deletes the subdivision whose first event starts at the given position, replacing its span
      * with plain rest slots while preserving all other subdivisions. The span is resolved through
      * the measure projection so nested subdivisions are handled correctly. Fires one
@@ -3971,6 +4007,57 @@ export class ScoreBookDataModel {
         }
 
         return undefined;
+    }
+
+    /**
+     * Finds the innermost projected subdivision whose span contains the given fraction.
+     *
+     * @param items The projected items to search.
+     * @param start The exact start fraction to contain.
+     *
+     * @returns The containing subdivision, or undefined when none contains the fraction.
+     */
+    private findContainingSubdivision(items: IProjectedItem[], start: IFraction):
+        IProjectedSubdivision | undefined {
+        for (const item of items) {
+            if (item.kind !== ProjectedItemKind.Subdivision) {
+                continue;
+            }
+
+            const end = addFractions(item.start, item.span);
+            if (compareFractions(start, item.start) < 0 || compareFractions(start, end) >= 0) {
+                continue;
+            }
+
+            return this.findContainingSubdivision(item.items, start) ?? item;
+        }
+
+        return undefined;
+    }
+
+    /**
+     * Resolves how many parent units a fractional span covers, where a parent unit is a slot of the
+     * subdivision the span lies in, or the measure's base subdivision outside any.
+     *
+     * @param measure The measure the span lies in.
+     * @param start The span start.
+     * @param end The span end.
+     *
+     * @returns The unit count, or undefined when the span leaves its subdivision or covers no whole unit.
+     */
+    private parentUnitCountOf(measure: ISbDmTrackPiece, start: IFraction, end: IFraction): number | undefined {
+        const enclosing = this.findContainingSubdivision(MeasureProjection.project(measure), start);
+        if (enclosing && compareFractions(end, addFractions(enclosing.start, enclosing.span)) > 0) {
+            return undefined;
+        }
+
+        const unit = enclosing
+            ? divideFraction(enclosing.span, enclosing.actual)
+            : { numerator: 1, denominator: measure.meter.stepResolution };
+        const span = subtractFractions(end, start);
+        const ratio = reduceFraction(span.numerator * unit.denominator, span.denominator * unit.numerator);
+
+        return ratio.denominator === 1 && ratio.numerator >= 1 ? ratio.numerator : undefined;
     }
 
     /**
