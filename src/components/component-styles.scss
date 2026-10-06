@@ -1322,9 +1322,10 @@
     justify-content: flex-start;
 }
 
-/* Beam stroke attached to a beamed note. Position (top, left/right, width) is set inline by
-   StaffNoteViewer.renderBeamSegments per beam segment (shared vs partial, level 1..3). The primary
-   beam sits on the stem tips, its thickness reaching down towards the heads. */
+/* Beam stroke attached to a beamed note. Position, size and the sloped shape are set inline by
+ * StaffNoteViewer.renderBeamSegments per stroke (shared vs partial, level 1..3): the stroke is a
+ * parallelogram on the group's shared beam line, its top edge the line itself and its vertical
+ * thickness reaching down towards the heads. */
 .staff-note-viewer-beam {
     position: absolute;
     height: var(--beam-thickness, 4px);

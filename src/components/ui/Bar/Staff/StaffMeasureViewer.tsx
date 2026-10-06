@@ -97,6 +97,12 @@ export interface IStaffMeasureViewerProps extends ICommonUIProperties {
     tracks?: ISbDmTrack[];
 
     /**
+     * The column's layout width in px at 100 % zoom, which the note rows derive their beam slopes from.
+     * The print view states its halved width, so the same engraving rules hold on paper.
+     */
+    measureWidth: number;
+
+    /**
      * True to draw the hairpins and `f` markings of each row. The print view sets this; the screen view leaves it
      * off, because its markings are drawn into the viewer's decoration layer instead.
      */
@@ -334,7 +340,7 @@ export class StaffMeasureViewer extends UIComponent<IStaffMeasureViewerProps, IS
 
     public override render(): ComponentChild {
         const { barNumber, arrangement, arrangementPlayer, inEditMode,
-            dataModel, scoreElementRegistry, style, showRangeArticulations } = this.props;
+            dataModel, measureWidth, scoreElementRegistry, style, showRangeArticulations } = this.props;
         const { tracks } = this.state;
 
         // The barline closing the column is the resize handle, so it exists only where resizing is allowed.
@@ -389,6 +395,7 @@ export class StaffMeasureViewer extends UIComponent<IStaffMeasureViewerProps, IS
                             arrangementPlayer={arrangementPlayer}
                             inEditMode={inEditMode}
                             dataModel={dataModel}
+                            measureWidth={measureWidth}
                             scoreElementRegistry={scoreElementRegistry}
                             articulations={articulations}
                         />

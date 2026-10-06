@@ -294,7 +294,7 @@ test.describe("Staff view multi-line rendering", () => {
         await expect(page.locator("#trackViewerHost")).toBeVisible();
         await expect(page.locator(".staff-measure-track-row").first()).toBeVisible();
 
-        const { beamTops, stemTops, lineOffsets } = await page.evaluate(() => {
+        const { beamTops, beamBottoms, stemTops, stemHeights, lineOffsets } = await page.evaluate(() => {
             const row = document.querySelector(".staff-measure-track-row");
             const runs = [...(row?.querySelectorAll(".staff-note-viewer-note-run") ?? [])];
 
@@ -302,12 +302,22 @@ test.describe("Staff view multi-line rendering", () => {
                 beamTops: runs.map((run) => {
                     const beam = run.querySelector(".staff-note-viewer-beam");
 
-                    return beam === null ? null : Math.round(beam.getBoundingClientRect().top);
+                    return beam === null ? null : beam.getBoundingClientRect().top;
+                }),
+                beamBottoms: runs.map((run) => {
+                    const beam = run.querySelector(".staff-note-viewer-beam");
+
+                    return beam === null ? null : beam.getBoundingClientRect().bottom;
                 }),
                 stemTops: runs.map((run) => {
                     const stem = run.querySelector(".staff-note-viewer-custom-stem");
 
-                    return stem === null ? null : Math.round(stem.getBoundingClientRect().top);
+                    return stem === null ? null : stem.getBoundingClientRect().top;
+                }),
+                stemHeights: runs.map((run) => {
+                    const stem = run.querySelector(".staff-note-viewer-custom-stem");
+
+                    return stem === null ? null : stem.getBoundingClientRect().height;
                 }),
                 lineOffsets: runs.map((run) => {
                     const head = run.querySelector<HTMLElement>(".staff-note-head");
@@ -320,10 +330,18 @@ test.describe("Staff view multi-line rendering", () => {
         // The four notes sit on the four lines of the 4-bell agogo, lowest first.
         expect(lineOffsets).toEqual(["15px", "5px", "-5px", "-15px"]);
 
-        // One beam line spans the group, and every stem ends on it instead of above its own notehead.
-        expect(new Set(beamTops).size).toBe(1);
-        beamTops.forEach((beamTop, index) => {
-            expect(Math.abs((stemTops[index] ?? 0) - (beamTop ?? 0))).toBeLessThanOrEqual(1);
+        // The group's one beam line rises with the pitch: the last stroke sits higher on screen than the
+        // first. No stem passes above its stroke, and each one reaches into it, so all of them connect.
+        expect(beamTops[0] ?? 0).toBeGreaterThan(beamTops[3] ?? 0);
+        stemTops.forEach((stemTop, index) => {
+            expect(stemTop ?? 0).toBeGreaterThanOrEqual((beamTops[index] ?? 0) - 2);
+            expect(stemTop ?? 0).toBeLessThanOrEqual((beamBottoms[index] ?? 0) + 2);
+        });
+
+        // The notes lie on one evenly spaced line, so the beam follows it and every stem keeps the same
+        // length. A horizontal beam would leave the low notes with longer stems than the high ones.
+        stemHeights.forEach((height) => {
+            expect(Math.abs((height ?? 0) - (stemHeights[0] ?? 0))).toBeLessThanOrEqual(1);
         });
     });
 

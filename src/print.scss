@@ -306,7 +306,10 @@
 
     .staff-note-viewer-beam {
         background: #000 !important;
-        height: calc(3px / var(--print-zoom, 1)) !important;
+
+        /* The stroke's own box spans the beam line's rise, so its height may not be overridden:
+           the thickness the inline geometry builds on is what print has to pin to whole pixels. */
+        --beam-thickness: calc(3px / var(--print-zoom, 1));
     }
 
     /*

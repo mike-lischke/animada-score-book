@@ -22,6 +22,9 @@ export interface IStaffMeasureTrackRowProps extends ICommonUIProperties {
     barNumber: number;
     timeParams: ITimeParamsView;
 
+    /** The measure column's layout width in px at 100 % zoom, which a beam's slope is derived from. */
+    measureWidth: number;
+
     trackPlayer: TrackPlayer;
     arrangementPlayer: ArrangementPlayer;
     inEditMode: boolean;
@@ -55,7 +58,7 @@ export class StaffMeasureTrackRow extends UIComponent<IStaffMeasureTrackRowProps
     }
 
     public override render(): ComponentChild {
-        const { arrangementPlayer, barNumber, dataModel, timeParams, track, scoreElementRegistry,
+        const { arrangementPlayer, barNumber, dataModel, measureWidth, timeParams, track, scoreElementRegistry,
             articulations } = this.props;
 
         const measure = track.measures[barNumber - 1];
@@ -79,6 +82,7 @@ export class StaffMeasureTrackRow extends UIComponent<IStaffMeasureTrackRowProps
                 barNumber={barNumber}
                 trackId={track.id}
                 maxNoteLine={maxNoteLine}
+                measureWidth={measureWidth}
                 repeatBars={repeatBars}
                 scoreElementRegistry={scoreElementRegistry}
                 articulations={articulations}

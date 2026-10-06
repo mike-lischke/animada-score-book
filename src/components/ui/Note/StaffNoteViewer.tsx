@@ -6,6 +6,8 @@
 import { type ComponentChild, type CSSProperties, type VNode } from "preact";
 
 import { articulationFromSampleProfile } from "../../../core/articulation.js";
+import { BeamGeometry, BeamSegmentKind, partialBeamLengthSpaces, type IBeamNotePlan }
+    from "../../../core/BeamGeometry.js";
 import type { ISbDmTrackPiece } from "../../../core/ScoreBookDataModel.js";
 import {
     Damping, ExcitationMode, HandTechnique, NoteDisplayType, StickTechnique,
@@ -17,7 +19,7 @@ import {
     MeasureProjection, NoteGroupKind, ProjectedItemKind, pulseLengthAt,
     type INotationGrid, type IProjectedEvent, type IProjectedItem,
 } from "../../../core/MeasureProjection.js";
-import { staffSpacePx } from "../../../core/MeasureLayout.js";
+import { MeasureLayout, staffMeasureInsets, staffSpacePx } from "../../../core/MeasureLayout.js";
 import { stemEndVariablePrefix } from "../../../core/smufl/SmuflFontLoader.js";
 import type { IFraction, IAudioData, IArticulationPortion, IHairpin, IRangeArticulation, IRepeatBar, ISubdivision }
     from "../../../core/types/general.js";
@@ -51,6 +53,13 @@ export interface IStaffNoteViewerProperties extends ICommonUIProperties {
 
     /** Maximum noteLine value across all variants of the instrument (default 1 = single line). */
     maxNoteLine?: number;
+
+    /**
+     * The measure column's layout width in px at 100 % zoom, which a beam's slope is derived from.
+     * Omitted falls back to the default measure width, which a test that does not render a full
+     * column uses.
+     */
+    measureWidth?: number;
 
     /**
      * The hairpins and `f` markings to draw for this bar and track, which the print view supplies. Omitted for the
@@ -104,35 +113,6 @@ interface IStaffSubdivisionNode {
 
 type IStaffTreeNode = IStaffNoteNode | IStaffSubdivisionNode;
 
-interface IBeamInfo {
-    segments: IBeamSegment[];
-
-    /** Distance from the note's own line up to the beam's outer edge, in staff spaces. */
-    stemLengthSpaces: number;
-
-    /** Distance from the row's reference line up to the beam's outer edge, in staff spaces. */
-    beamTopSpaces: number;
-}
-
-interface IBeamSegment {
-    /** 1-based beam level: 1 = eighth, 2 = sixteenth, 3 = thirty-second. */
-    level: number;
-
-    kind: "shared-right" | "partial-left" | "partial-right";
-}
-
-/**
- * The single beam line a beam group shares. Both the beam strokes and the stem endpoints are derived
- * from it, so no note draws its own beam height.
- */
-interface IBeamGroupGeometry {
-    /** Line of the highest note in the group, which the beam sits above. */
-    highestLine: number;
-
-    /** Distance from the row's reference line up to the beam's outer edge, in staff spaces. */
-    beamTopSpaces: number;
-}
-
 interface ITupletLabel {
     /** The tuplet the label belongs to, which is what the label addresses in a hit test. */
     group: ISubdivision;
@@ -173,13 +153,11 @@ const printedHairpinOpeningSpaces = 1.2;
 /** Smallest width a printed hairpin keeps, as a percentage of the bar, so a nearly closed one stays visible. */
 const minimumPrintedHairpinPercent = 0.5;
 
-/** Stem length a beamed note keeps at least, in staff spaces: one octave, the engraving's normal length. */
-const normalStemLengthSpaces = 3.5;
-
 export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
     public override render(): ComponentChild {
         const { isLastBar, scoreMetrics, measure, barNumber, trackId, maxNoteLine = 1,
-            scoreElementRegistry, repeatBars, articulations } = this.props;
+            scoreElementRegistry, repeatBars, articulations,
+            measureWidth = MeasureLayout.defaultWidth() } = this.props;
 
         // A barline sits between two bars, so the marks on both sides of it decide which one it is. A repeat that
         // only opens is the opening barline of the bar it opens, so the bar before it draws none at all.
@@ -203,7 +181,11 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
 
         const centerLine = (maxNoteLine + 1) / 2;
 
-        const beamSpans = this.computeBeamSpans(nodes, scoreMetrics, centerLine);
+        // The row spans the measure column's content box. A beam's slope is a rise over this width, so
+        // the view states it as data instead of measuring the rendered row.
+        const rowWidthPx = Math.max(1, measureWidth - staffMeasureInsets);
+
+        const beamSpans = this.computeBeamSpans(nodes, scoreMetrics, centerLine, rowWidthPx);
         const tupletLabels = this.computeTupletLabels(nodes, scoreMetrics.stepsPerBar);
 
         const hasAnyNote = nodes.some((node) => {
@@ -465,10 +447,28 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
     /**
      * @param fraction The fraction to read.
      *
+     * @returns The fraction as a number.
+     */
+    private static fractionValue(fraction: IFraction): number {
+        return fraction.numerator / fraction.denominator;
+    }
+
+    /**
+     * @param value The length in px to format.
+     *
+     * @returns The length as CSS, rounded to two decimals so the emitted style stays compact.
+     */
+    private static formatPx(value: number): string {
+        return `${Math.round(value * 100) / 100}px`;
+    }
+
+    /**
+     * @param fraction The fraction to read.
+     *
      * @returns The fraction as a percentage of the whole.
      */
     private static percentOf(fraction: IFraction): number {
-        return (fraction.numerator / fraction.denominator) * 100;
+        return StaffNoteViewer.fractionValue(fraction) * 100;
     }
 
     /**
@@ -722,23 +722,24 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
     }
 
     /**
-     * Assigns beam spans from the measure's beam groups. Which events share a beam is a composition
-     * rule of the measure and not of the rendering, so the groups come from `MeasureProjection`;
-     * this method only resolves the strokes to draw for the notes of each group. The group's beam
-     * line sits one normal stem length above its highest note, so every stem reaches one shared line
-     * instead of ending at a height of its own.
+     * Resolves the beam engraving of every note from the measure's beam groups. Which events share a
+     * beam is a composition rule of the measure and not of the rendering, so the groups come from
+     * `MeasureProjection`; `BeamGeometry` then derives the one line a group shares and the strokes and
+     * stem endpoints that follow from it.
      *
      * @param nodes The nodes holding the render data of the measure's events.
      * @param scoreMetrics Timing metrics for the grouping rules.
-     * @param centerLine The line the row is drawn around, which the beam line is measured from.
+     * @param centerLine The line the row is drawn around.
+     * @param rowWidthPx The row's content width in px, which a beam's slope is derived from.
      *
-     * @returns Map of note event indices to beam info.
+     * @returns Map of note event indices to their beam engraving.
      */
     private computeBeamSpans(nodes: IStaffTreeNode[], scoreMetrics: IScoreMetrics,
-        centerLine: number): Map<number, IBeamInfo> {
+        centerLine: number, rowWidthPx: number): Map<number, IBeamNotePlan> {
         const { measure } = this.props;
-        const target = new Map<number, IBeamInfo>();
+        const target = new Map<number, IBeamNotePlan>();
         const notesByEvent = new Map<number, IStaffNoteNode>();
+        const halfStep = 1 / (2 * scoreMetrics.stepsPerBar);
 
         for (const note of this.collectNotes(nodes)) {
             notesByEvent.set(note.eventIndex, note);
@@ -761,15 +762,17 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                 continue;
             }
 
-            const highestLine = Math.min(...run.map((note) => {
-                return note.noteLine ?? 1;
-            }));
-            const geometry: IBeamGroupGeometry = {
-                highestLine,
-                beamTopSpaces: (centerLine - highestLine) + normalStemLengthSpaces,
-            };
+            const plans = BeamGeometry.plan(run.map((note) => {
+                return {
+                    anchor: StaffNoteViewer.fractionValue(note.start) + halfStep,
+                    noteLine: note.noteLine ?? 1,
+                    beamCount: note.beamCount,
+                };
+            }), { centerLine, rowWidthPx });
 
-            this.assignBeamSegments(run, target, geometry);
+            run.forEach((note, index) => {
+                target.set(note.eventIndex, plans[index]);
+            });
         }
 
         return target;
@@ -787,37 +790,6 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
         }
 
         return notes;
-    }
-
-    private assignBeamSegments(run: IStaffNoteNode[], target: Map<number, IBeamInfo>,
-        geometry: IBeamGroupGeometry): void {
-        for (let i = 0; i < run.length; i++) {
-            const note = run[i];
-            const segments: IBeamSegment[] = [];
-
-            for (let level = 1; level <= note.beamCount; level++) {
-                const hasRight = i + 1 < run.length && run[i + 1].beamCount >= level;
-                const hasLeft = i > 0 && run[i - 1].beamCount >= level;
-
-                if (hasRight) {
-                    segments.push({ level, kind: "shared-right" });
-                } else if (hasLeft) {
-                    segments.push({ level, kind: "partial-left" });
-                } else if (i === 0) {
-                    segments.push({ level, kind: "partial-right" });
-                } else {
-                    segments.push({ level, kind: "partial-left" });
-                }
-            }
-
-            const stemLengthSpaces = ((note.noteLine ?? 1) - geometry.highestLine) + normalStemLengthSpaces;
-
-            target.set(note.eventIndex, {
-                segments,
-                stemLengthSpaces,
-                beamTopSpaces: geometry.beamTopSpaces,
-            });
-        }
     }
 
     /**
@@ -917,7 +889,7 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
      *
      * @returns List of VNodes representing the rendered items at this level.
      */
-    private renderItems(nodes: IStaffTreeNode[], beamSpans: Map<number, IBeamInfo>,
+    private renderItems(nodes: IStaffTreeNode[], beamSpans: Map<number, IBeamNotePlan>,
         keyPrefix: string, centerLine: number, restLineOffset: number, containerSpan = 1,
         atMeasureEnd = true): ComponentChild[] {
         const { scoreMetrics, measure, barNumber, trackId, scoreElementRegistry } = this.props;
@@ -977,9 +949,8 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                 minWidth: 0,
                 "--note-anchor": anchor,
                 ...(beamInfo === undefined ? {} : {
-                    // The stem ends on the group's shared beam line, and the beam sits on that same line.
-                    "--stem-tip": `calc(var(--staff-space) * ${beamInfo.stemLengthSpaces})`,
-                    "--beam-top": `calc(var(--staff-space) * ${beamInfo.beamTopSpaces})`,
+                    // The stem ends on the group's beam line at this note's own horizontal position.
+                    "--stem-tip": StaffNoteViewer.formatPx(beamInfo.stemLengthPx),
                 }),
             } as CSSProperties;
             const stepIndex = Math.floor(
@@ -1120,65 +1091,60 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
     }
 
     /**
-     * Renders the beam strokes attached to a single note inside a beam group. All notes share one
-     * beam line, which the run states as `--beam-top`: a shared stroke bridges the full slot width to
-     * the next notehead and partial stubs occupy a fixed pixel width on the stem side.
+     * Renders the beam strokes attached to a single note inside a beam group. Every stroke is a
+     * parallelogram on the group's shared beam line: a shared stroke bridges the full slot width to
+     * the next notehead, and a partial stub reaches a staff-space based length from the stem. Each end
+     * carries the line's height at its own horizontal position, so all strokes of a group stay
+     * collinear, without a kink or a seam.
      *
      * @param stepIndex The note event index to render beams for (used for keying).
-     * @param info The beam info for this note, including the segments to render.
+     * @param plan The beam engraving of this note.
      *
-     * @returns List of VNodes representing the beam segments attached to this note.
+     * @returns List of VNodes representing the beam strokes attached to this note.
      */
-    private renderBeamSegments(stepIndex: number, info: IBeamInfo): VNode[] {
-        // Further beams hang below the primary one in the font's own rhythm: one beam thickness plus
-        // one beam space per level.
-        const beamOffset = "(var(--beam-thickness, 4px) + var(--beam-spacing, 2px))";
+    private renderBeamSegments(stepIndex: number, plan: IBeamNotePlan): VNode[] {
+        // Further beam levels hang below the primary one in the font's own rhythm: one beam thickness
+        // plus one beam space per level. The stroke box spans the beam line's own rise, so the
+        // parallelogram is one line and its vertical thickness hangs from that line.
+        const beamAdvance = "(var(--beam-thickness, 4px) + var(--beam-spacing, 2px))";
+        const beamThickness = "var(--beam-thickness, 4px)";
         const halfStem = "var(--stem-half-width, 1px)";
-        const partialPixels = 12;
-        const stubWidth = `calc(${partialPixels}px + var(--stem-right-edge, 0px))`;
+        const stubWidth = `calc(var(--staff-space) * ${partialBeamLengthSpaces} + var(--stem-right-edge, 0px))`;
 
-        return info.segments.map((segment) => {
-            // The primary beam sits on the group's shared beam line, which is also where every stem ends.
-            const top = `calc(50% - var(--beam-top, var(--stem-tip, 35px)) + ${segment.level - 1} * ${beamOffset})`;
-            const key = `beam-${stepIndex}-${segment.level}-${segment.kind}`;
+        return plan.strokes.map((stroke) => {
+            const boxTopPx = Math.min(stroke.leftPx, stroke.rightPx);
+            const leftLocal = StaffNoteViewer.formatPx(stroke.leftPx - boxTopPx);
+            const rightLocal = StaffNoteViewer.formatPx(stroke.rightPx - boxTopPx);
+            const clipPath = `polygon(0 ${leftLocal}, 100% ${rightLocal},`
+                + ` 100% calc(${rightLocal} + ${beamThickness}), 0 calc(${leftLocal} + ${beamThickness}))`;
+            const top = `calc(50% + ${StaffNoteViewer.formatPx(boxTopPx)} + ${stroke.level - 1} * ${beamAdvance})`;
+            const height = `calc(${StaffNoteViewer.formatPx(Math.abs(stroke.rightPx - stroke.leftPx))}`
+                + ` + ${beamThickness})`;
+            const key = `beam-${stepIndex}-${stroke.level}-${stroke.kind}`;
 
-            if (segment.kind === "shared-right") {
-                return (
-                    <span
-                        key={key}
-                        className="staff-note-viewer-beam"
-                        style={{
-                            top,
-                            left: `calc(var(--note-anchor) - ${halfStem})`,
-                            width: "100%",
-                        }}
-                    />
-                );
+            let left: string;
+            let width: string;
+            if (stroke.kind === BeamSegmentKind.SharedRight) {
+                left = `calc(var(--note-anchor) - ${halfStem})`;
+                width = "100%";
+            } else if (stroke.kind === BeamSegmentKind.PartialRight) {
+                left = `calc(var(--note-anchor) - ${halfStem})`;
+                width = stubWidth;
+            } else {
+                left = `calc(var(--note-anchor) - var(--staff-space) * ${partialBeamLengthSpaces})`;
+                width = stubWidth;
             }
 
-            if (segment.kind === "partial-right") {
-                return (
-                    <span
-                        key={key}
-                        className="staff-note-viewer-beam"
-                        style={{
-                            top,
-                            left: `calc(var(--note-anchor) - ${halfStem})`,
-                            width: stubWidth,
-                        }}
-                    />
-                );
-            }
-
-            // partial-left: stub pointing from the notehead towards the previous note.
             return (
                 <span
                     key={key}
                     className="staff-note-viewer-beam"
                     style={{
                         top,
-                        left: `calc(var(--note-anchor) - ${partialPixels}px)`,
-                        width: stubWidth,
+                        left,
+                        width,
+                        height,
+                        clipPath,
                     }}
                 />
             );

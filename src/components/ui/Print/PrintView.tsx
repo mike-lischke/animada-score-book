@@ -327,6 +327,7 @@ export class PrintView extends UIComponent<IPrintViewProps> {
                 selectionManager={selectionManager}
                 dataModel={dataModel}
                 tracks={tracks}
+                measureWidth={width}
                 showRangeArticulations
                 style={measureStyle}
             />

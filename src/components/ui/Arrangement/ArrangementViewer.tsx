@@ -326,6 +326,7 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
                         key={bar}
                         barNumber={bar}
                         {...barViewerProps}
+                        measureWidth={MeasureLayout.widthOf(bar, arrangement.measureWidths)}
                         scoreElementRegistry={this.scoreElementRegistry}
                         style={{
                             flex: `0 0 ${MeasureLayout.widthOf(bar, arrangement.measureWidths)}px`,

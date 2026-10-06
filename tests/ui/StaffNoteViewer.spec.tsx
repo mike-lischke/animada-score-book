@@ -22,8 +22,8 @@ const fraction = (numerator: number, denominator: number): IFraction => {
     return { numerator, denominator };
 };
 
-/** Width of a partial beam: its fixed length plus the stem's right edge, which it ends on. */
-const beamStubWidth = "calc(12px + var(--stem-right-edge, 0px))";
+/** Width of a partial beam: its staff-space based length plus the stem's right edge, which it ends on. */
+const beamStubWidth = "calc(var(--staff-space) * 1.2 + var(--stem-right-edge, 0px))";
 
 /**
  * @param barline The barline element to read.
@@ -448,12 +448,12 @@ describe("StaffNoteViewer beams", { concurrent: false }, () => {
             { left: "calc(var(--note-anchor) - var(--stem-half-width, 1px))", width: "100%" },
         ]);
         expect(beams[2]).toEqual([
-            { left: "calc(var(--note-anchor) - 12px)", width: beamStubWidth },
-            { left: "calc(var(--note-anchor) - 12px)", width: beamStubWidth },
+            { left: "calc(var(--note-anchor) - var(--staff-space) * 1.2)", width: beamStubWidth },
+            { left: "calc(var(--note-anchor) - var(--staff-space) * 1.2)", width: beamStubWidth },
         ]);
     });
 
-    it("ends every stem of a group on one shared beam line across staff lines", () => {
+    it("applies one shared beam line to the runs of a group across staff lines", () => {
         // Four sixteenths of one beam group, on four different lines. The group draws one beam line for
         // all of them, so each stem ends where that line is instead of above its own notehead.
         const measure = buildMultiLineBeamMeasure([1, 3, 2, 4]);
@@ -468,6 +468,7 @@ describe("StaffNoteViewer beams", { concurrent: false }, () => {
                 barNumber={1}
                 trackId={100}
                 maxNoteLine={4}
+                measureWidth={1624}
             />,
         );
 
@@ -476,26 +477,18 @@ describe("StaffNoteViewer beams", { concurrent: false }, () => {
         ];
         expect(runs).toHaveLength(4);
 
-        // The centre line is 2.5 and the highest note sits on line 1, so the shared beam line lies
-        // 2.5 - 1 + 3.5 = 5 staff spaces above the reference line for every note of the group.
-        expect(runs.map((run) => {
-            return run.style.getPropertyValue("--beam-top");
-        })).toEqual([
-            "calc(var(--staff-space) * 5)",
-            "calc(var(--staff-space) * 5)",
-            "calc(var(--staff-space) * 5)",
-            "calc(var(--staff-space) * 5)",
-        ]);
-
-        // Each stem reaches that one line from its own note's line: (line - 1) + 3.5 staff spaces.
+        // The row is 1600 px wide and the centre line is 2.5. The group's lines are [1, 3, 2, 4], so the
+        // beam line rises by 0.1 per px and its base keeps the shortest stem at 35 px: 45, 55, 35, 45 px.
         expect(runs.map((run) => {
             return run.style.getPropertyValue("--stem-tip");
-        })).toEqual([
-            "calc(var(--staff-space) * 3.5)",
-            "calc(var(--staff-space) * 5.5)",
-            "calc(var(--staff-space) * 4.5)",
-            "calc(var(--staff-space) * 6.5)",
-        ]);
+        })).toEqual(["45px", "55px", "35px", "45px"]);
+
+        // The first shared stroke starts at the group's line and rises 10 px over one sixteenth.
+        const stroke = runs[0].querySelector<HTMLElement>(".staff-note-viewer-beam");
+        expect(stroke?.style.top).toBe(
+            "calc(50% + -60px + 0 * (var(--beam-thickness, 4px) + var(--beam-spacing, 2px)))",
+        );
+        expect(stroke?.style.height).toBe("calc(10px + var(--beam-thickness, 4px))");
     });
 
     it("draws adjacent rests in one pulse as the measure holds them", () => {
