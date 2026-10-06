@@ -55,6 +55,93 @@ const selectedNoteCount = async (page: Page): Promise<number> => {
     });
 };
 
+/** The id of the instrument the sloped beam fixtures use: the 4-Bell Agogo, whose styles sit on four lines. */
+const fourLineInstrument = "a";
+
+/**
+ * Builds a one-bar arrangement with beamed sixteenths, each on the staff line its note style gives,
+ * so the beam slopes with the contour.
+ *
+ * @param noteStyleIds The note style of each sixteenth, in measure order.
+ *
+ * @returns The snapshot to seed.
+ */
+const slopedBeamSnapshot = (noteStyleIds: string[]) => {
+    return {
+        version: arrangementSnapshotVersion,
+        title: "E2E Sloped Beam",
+        timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4", stepResolution: 16 },
+        tracks: [{
+            id: 100,
+            instrumentId: fourLineInstrument,
+            measures: [{
+                number: 1,
+                meter: { beats: 4, beatUnits: 4, stepResolution: 16, beatGroups: [4, 4, 4, 4] },
+                events: [
+                    ...noteStyleIds.map((noteStyleId, index) => {
+                        return {
+                            start: { numerator: index, denominator: 16 },
+                            duration: { numerator: 1, denominator: 16 },
+                            noteStyleId,
+                        };
+                    }),
+                    {
+                        start: { numerator: noteStyleIds.length, denominator: 16 },
+                        duration: { numerator: 16 - noteStyleIds.length, denominator: 16 },
+                    },
+                ],
+                subdivisions: [],
+            }],
+        }],
+    };
+};
+
+/**
+ * Opens the staff view on a sloped beam arrangement.
+ *
+ * @param page The page to seed.
+ * @param noteStyleIds The note style of each sixteenth, in measure order.
+ * @param sessionId The session to seed the arrangement under.
+ */
+const openSlopedBeamStaff = async (page: Page, noteStyleIds: string[], sessionId: string): Promise<void> => {
+    const packed = stringifyPackedArrangement(slopedBeamSnapshot(noteStyleIds));
+
+    await page.addInitScript((data: { packed: string; sessionId: string; }) => {
+        window.history.replaceState({ ...(window.history.state ?? {}), sessionId: data.sessionId }, "");
+        window.sessionStorage.setItem("asb-session-id", data.sessionId);
+        window.localStorage.setItem(`asb-ui-settings-session-${data.sessionId}`, JSON.stringify({
+            currentScore: data.packed,
+            viewSettings: { arrangementViewSettings: { displayMode: "staff" } },
+        }));
+    }, { packed, sessionId });
+
+    await page.goto("/");
+    await expect(page.locator(".staff-measure-track-row").first()).toBeVisible();
+};
+
+/**
+ * @param page The page to inspect.
+ *
+ * @returns How far the widest selection overlay reaches across the measure, from 0 to 1. A beam group
+ *          covers only its own runs, while the row or the measure covers the whole column.
+ */
+const selectionReach = async (page: Page): Promise<number> => {
+    return page.evaluate(() => {
+        const measure = document.querySelector<HTMLElement>(".staff-measure-viewer");
+        const overlays = [...document.querySelectorAll<HTMLElement>(".selection-overlay")];
+        if (measure === null || overlays.length === 0) {
+            return 0;
+        }
+
+        const measureRect = measure.getBoundingClientRect();
+        const right = Math.max(...overlays.map((overlay) => {
+            return overlay.getBoundingClientRect().right;
+        }));
+
+        return (right - measureRect.left) / measureRect.width;
+    });
+};
+
 test.beforeEach(async ({ page }) => {
     await routeApi(page);
 });
@@ -466,5 +553,63 @@ test.describe("Staff view selection", () => {
 
         // The note-selected class should be gone.
         await expect(page.locator(".staff-note-viewer-run.note-selected")).toHaveCount(0);
+    });
+});
+
+test.describe("Staff view sloped beam selection", () => {
+    test("selects a rising beam group through its strokes", async ({ page }) => {
+        // Four sixteenths on the four lines of the 4-Bell Agogo, lowest first, so the beam rises with the
+        // pitch. Every stroke of the group, at any level, addresses the whole group.
+        await openSlopedBeamStaff(page, ["1", "2", "3", "4"], "e2e-sloped-beam-rising");
+
+        const strokes = page.locator(".staff-note-viewer-beam");
+        await expect(strokes.first()).toBeVisible();
+
+        // The primary beam of the first note.
+        await clickCenter(page, strokes.first());
+        expect(await selectionReach(page)).toBeLessThan(0.5);
+        expect(await selectedNoteCount(page)).toBe(4);
+
+        // The secondary level above the first note.
+        await clickCenter(page, strokes.nth(1));
+        expect(await selectionReach(page)).toBeLessThan(0.5);
+
+        // The partial stub that closes the group.
+        await clickCenter(page, strokes.last());
+        expect(await selectionReach(page)).toBeLessThan(0.5);
+    });
+
+    test("selects a falling beam group through its stroke", async ({ page }) => {
+        // The same four sixteenths, highest line first, so the beam falls.
+        await openSlopedBeamStaff(page, ["4", "3", "2", "1"], "e2e-sloped-beam-falling");
+
+        const strokes = page.locator(".staff-note-viewer-beam");
+        await expect(strokes.first()).toBeVisible();
+
+        await clickCenter(page, strokes.first());
+        expect(await selectionReach(page)).toBeLessThan(0.5);
+        expect(await selectedNoteCount(page)).toBe(4);
+    });
+
+    test("does not address a beam group from the empty room inside a stroke's box", async ({ page }) => {
+        // Two sixteenths a tenth apart, so the beam's box spans a wide rise around a thin stroke.
+        await openSlopedBeamStaff(page, ["1", "4"], "e2e-sloped-beam-room");
+
+        const stroke = page.locator(".staff-note-viewer-beam").first();
+        await expect(stroke).toBeVisible();
+
+        const box = await stroke.boundingBox();
+        if (!box) {
+            throw new Error("The beam stroke has no bounding box.");
+        }
+
+        // The stroke runs through the middle of its box: clicking there addresses the group.
+        await page.mouse.click(box.x + (box.width / 2), box.y + (box.height / 2));
+        expect(await selectionReach(page)).toBeLessThan(0.5);
+
+        // The box's top-left corner is empty room above the line the stroke runs on. A click there must
+        // not address the group: the row's own zone answers instead and covers the whole column.
+        await page.mouse.click(box.x + 2, box.y + 2);
+        expect(await selectionReach(page)).toBeGreaterThan(0.5);
     });
 });
