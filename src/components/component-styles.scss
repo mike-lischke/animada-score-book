@@ -1165,9 +1165,9 @@
     --staff-repeat-dot-gap: 2px;
 
     /*
-     * Where an up-stem ends: this far above its note's staff line. It is the outer edge of the beam
-     * for a beamed note and the same height for an unbeamed one, so both kinds of stem end on one
-     * line. A stem is one octave (three and a half staff spaces) long by convention.
+     * Where an unbeamed up-stem ends: this far above its note's own staff line, one octave (three and
+     * a half staff spaces) by convention. A beamed note overrides it per group with the distance up to
+     * the beam line the whole group shares, so every stem of the group ends on that one line.
      */
     --stem-tip: calc(var(--staff-space) * 3.5);
 

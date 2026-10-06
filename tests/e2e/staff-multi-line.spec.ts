@@ -252,6 +252,81 @@ test.describe("Staff view multi-line rendering", () => {
         })).toEqual(["15px", "5px", "-5px", "-15px"]);
     });
 
+    test("connects every stem of a beam group to one shared beam line across staff lines", async ({ page }) => {
+        // Four sixteenths in the first pulse, each on another line of the 4-Bell Agogo, drawn as one beam
+        // group. The group has one beam line, so every stem must reach it and none may pass above it.
+        const snapshot = {
+            version: arrangementSnapshotVersion,
+            title: "E2E Multi-Line Beam",
+            timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4", stepResolution: 16 },
+            tracks: [{
+                id: 100,
+                instrumentId: "a",
+                measures: [{
+                    number: 1,
+                    meter: { beats: 4, beatUnits: 4, stepResolution: 16, beatGroups: [4, 4, 4, 4] },
+                    events: [
+                        ...[1, 2, 3, 4].map((noteStyleId, index) => {
+                            return {
+                                start: { numerator: index, denominator: 16 },
+                                duration: { numerator: 1, denominator: 16 },
+                                noteStyleId: noteStyleId.toString(),
+                            };
+                        }),
+                        { start: { numerator: 4, denominator: 16 }, duration: { numerator: 12, denominator: 16 } },
+                    ],
+                    subdivisions: [],
+                }],
+            }],
+        };
+
+        await page.addInitScript((packed: string) => {
+            const sessionId = "e2e-staff-multi-line-beam";
+            window.history.replaceState({ ...(window.history.state ?? {}), sessionId }, "");
+            window.sessionStorage.setItem("asb-session-id", sessionId);
+            window.localStorage.setItem(`asb-ui-settings-session-${sessionId}`, JSON.stringify({
+                currentScore: packed,
+                viewSettings: { arrangementViewSettings: { displayMode: "staff" } },
+            }));
+        }, stringifyPackedArrangement(snapshot));
+
+        await page.goto("/");
+        await expect(page.locator("#trackViewerHost")).toBeVisible();
+        await expect(page.locator(".staff-measure-track-row").first()).toBeVisible();
+
+        const { beamTops, stemTops, lineOffsets } = await page.evaluate(() => {
+            const row = document.querySelector(".staff-measure-track-row");
+            const runs = [...(row?.querySelectorAll(".staff-note-viewer-note-run") ?? [])];
+
+            return {
+                beamTops: runs.map((run) => {
+                    const beam = run.querySelector(".staff-note-viewer-beam");
+
+                    return beam === null ? null : Math.round(beam.getBoundingClientRect().top);
+                }),
+                stemTops: runs.map((run) => {
+                    const stem = run.querySelector(".staff-note-viewer-custom-stem");
+
+                    return stem === null ? null : Math.round(stem.getBoundingClientRect().top);
+                }),
+                lineOffsets: runs.map((run) => {
+                    const head = run.querySelector<HTMLElement>(".staff-note-head");
+
+                    return head === null ? null : getComputedStyle(head).getPropertyValue("--note-line-offset").trim();
+                }),
+            };
+        });
+
+        // The four notes sit on the four lines of the 4-bell agogo, lowest first.
+        expect(lineOffsets).toEqual(["15px", "5px", "-5px", "-15px"]);
+
+        // One beam line spans the group, and every stem ends on it instead of above its own notehead.
+        expect(new Set(beamTops).size).toBe(1);
+        beamTops.forEach((beamTop, index) => {
+            expect(Math.abs((stemTops[index] ?? 0) - (beamTop ?? 0))).toBeLessThanOrEqual(1);
+        });
+    });
+
     test("staff prefix viewer renders matching lines for multi-line instruments", async ({ page }) => {
         const snapshot = buildSnapshot("a", "E2E Prefix Lines");
 

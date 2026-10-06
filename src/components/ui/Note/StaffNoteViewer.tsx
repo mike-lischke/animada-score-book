@@ -106,6 +106,12 @@ type IStaffTreeNode = IStaffNoteNode | IStaffSubdivisionNode;
 
 interface IBeamInfo {
     segments: IBeamSegment[];
+
+    /** Distance from the note's own line up to the beam's outer edge, in staff spaces. */
+    stemLengthSpaces: number;
+
+    /** Distance from the row's reference line up to the beam's outer edge, in staff spaces. */
+    beamTopSpaces: number;
 }
 
 interface IBeamSegment {
@@ -113,6 +119,18 @@ interface IBeamSegment {
     level: number;
 
     kind: "shared-right" | "partial-left" | "partial-right";
+}
+
+/**
+ * The single beam line a beam group shares. Both the beam strokes and the stem endpoints are derived
+ * from it, so no note draws its own beam height.
+ */
+interface IBeamGroupGeometry {
+    /** Line of the highest note in the group, which the beam sits above. */
+    highestLine: number;
+
+    /** Distance from the row's reference line up to the beam's outer edge, in staff spaces. */
+    beamTopSpaces: number;
 }
 
 interface ITupletLabel {
@@ -155,6 +173,9 @@ const printedHairpinOpeningSpaces = 1.2;
 /** Smallest width a printed hairpin keeps, as a percentage of the bar, so a nearly closed one stays visible. */
 const minimumPrintedHairpinPercent = 0.5;
 
+/** Stem length a beamed note keeps at least, in staff spaces: one octave, the engraving's normal length. */
+const normalStemLengthSpaces = 3.5;
+
 export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
     public override render(): ComponentChild {
         const { isLastBar, scoreMetrics, measure, barNumber, trackId, maxNoteLine = 1,
@@ -180,7 +201,9 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
         const items = usesSimile ? [] : MeasureProjection.project(measure);
         const nodes = this.buildNodes(items, scoreMetrics);
 
-        const beamSpans = this.computeBeamSpans(nodes, scoreMetrics);
+        const centerLine = (maxNoteLine + 1) / 2;
+
+        const beamSpans = this.computeBeamSpans(nodes, scoreMetrics, centerLine);
         const tupletLabels = this.computeTupletLabels(nodes, scoreMetrics.stepsPerBar);
 
         const hasAnyNote = nodes.some((node) => {
@@ -194,8 +217,6 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
             return node.kind === StaffNodeKind.Subdivision;
         });
         const usesWholeBarRest = !hasAnyNote && !hasAnySubdivision && measure.events.length <= 1;
-
-        const centerLine = (maxNoteLine + 1) / 2;
 
         // Whole and half rests sit on the centre line (odd count) or the line just below it (even count).
         const restNoteLine = Math.ceil(centerLine);
@@ -703,14 +724,18 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
     /**
      * Assigns beam spans from the measure's beam groups. Which events share a beam is a composition
      * rule of the measure and not of the rendering, so the groups come from `MeasureProjection`;
-     * this method only resolves the strokes to draw for the notes of each group.
+     * this method only resolves the strokes to draw for the notes of each group. The group's beam
+     * line sits one normal stem length above its highest note, so every stem reaches one shared line
+     * instead of ending at a height of its own.
      *
      * @param nodes The nodes holding the render data of the measure's events.
      * @param scoreMetrics Timing metrics for the grouping rules.
+     * @param centerLine The line the row is drawn around, which the beam line is measured from.
      *
      * @returns Map of note event indices to beam info.
      */
-    private computeBeamSpans(nodes: IStaffTreeNode[], scoreMetrics: IScoreMetrics): Map<number, IBeamInfo> {
+    private computeBeamSpans(nodes: IStaffTreeNode[], scoreMetrics: IScoreMetrics,
+        centerLine: number): Map<number, IBeamInfo> {
         const { measure } = this.props;
         const target = new Map<number, IBeamInfo>();
         const notesByEvent = new Map<number, IStaffNoteNode>();
@@ -732,7 +757,19 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                 }
             }
 
-            this.assignBeamSegments(run, target);
+            if (run.length === 0) {
+                continue;
+            }
+
+            const highestLine = Math.min(...run.map((note) => {
+                return note.noteLine ?? 1;
+            }));
+            const geometry: IBeamGroupGeometry = {
+                highestLine,
+                beamTopSpaces: (centerLine - highestLine) + normalStemLengthSpaces,
+            };
+
+            this.assignBeamSegments(run, target, geometry);
         }
 
         return target;
@@ -752,7 +789,8 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
         return notes;
     }
 
-    private assignBeamSegments(run: IStaffNoteNode[], target: Map<number, IBeamInfo>): void {
+    private assignBeamSegments(run: IStaffNoteNode[], target: Map<number, IBeamInfo>,
+        geometry: IBeamGroupGeometry): void {
         for (let i = 0; i < run.length; i++) {
             const note = run[i];
             const segments: IBeamSegment[] = [];
@@ -772,7 +810,13 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                 }
             }
 
-            target.set(note.eventIndex, { segments });
+            const stemLengthSpaces = ((note.noteLine ?? 1) - geometry.highestLine) + normalStemLengthSpaces;
+
+            target.set(note.eventIndex, {
+                segments,
+                stemLengthSpaces,
+                beamTopSpaces: geometry.beamTopSpaces,
+            });
         }
     }
 
@@ -932,6 +976,11 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                 flex: `${grow} 1 0`,
                 minWidth: 0,
                 "--note-anchor": anchor,
+                ...(beamInfo === undefined ? {} : {
+                    // The stem ends on the group's shared beam line, and the beam sits on that same line.
+                    "--stem-tip": `calc(var(--staff-space) * ${beamInfo.stemLengthSpaces})`,
+                    "--beam-top": `calc(var(--staff-space) * ${beamInfo.beamTopSpaces})`,
+                }),
             } as CSSProperties;
             const stepIndex = Math.floor(
                 (node.start.numerator * scoreMetrics.stepsPerBar) / node.start.denominator,
@@ -1071,9 +1120,9 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
     }
 
     /**
-     * Renders the beam strokes attached to a single note inside a beam group. All notes share the
-     * same onset anchor (event start + half a step), so a shared stroke bridges the full slot width
-     * to the next notehead and partial stubs occupy a fixed pixel width on the stem side.
+     * Renders the beam strokes attached to a single note inside a beam group. All notes share one
+     * beam line, which the run states as `--beam-top`: a shared stroke bridges the full slot width to
+     * the next notehead and partial stubs occupy a fixed pixel width on the stem side.
      *
      * @param stepIndex The note event index to render beams for (used for keying).
      * @param info The beam info for this note, including the segments to render.
@@ -1089,8 +1138,8 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
         const stubWidth = `calc(${partialPixels}px + var(--stem-right-edge, 0px))`;
 
         return info.segments.map((segment) => {
-            // The primary beam sits on the stem tips, which is the height the stems are drawn to.
-            const top = `calc(50% - var(--stem-tip, 35px) + ${segment.level - 1} * ${beamOffset})`;
+            // The primary beam sits on the group's shared beam line, which is also where every stem ends.
+            const top = `calc(50% - var(--beam-top, var(--stem-tip, 35px)) + ${segment.level - 1} * ${beamOffset})`;
             const key = `beam-${stepIndex}-${segment.level}-${segment.kind}`;
 
             if (segment.kind === "shared-right") {

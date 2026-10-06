@@ -171,6 +171,33 @@ const buildFullBarEndingInThirtySecond = (): ISbDmTrackPiece => {
     return buildMeasure(events, []);
 };
 
+/**
+ * Builds a measure with one beamed group of sixteenths, each note on the staff line the caller
+ * gives, followed by a rest so the group ends there.
+ *
+ * @param noteLines The staff line of each note, in measure order.
+ *
+ * @returns The measure with resolved note events.
+ */
+const buildMultiLineBeamMeasure = (noteLines: number[]): ISbDmTrackPiece => {
+    const events = [
+        ...noteLines.map((_, index) => {
+            return event(fraction(index, 16), fraction(1, 16), "1");
+        }),
+        event(fraction(noteLines.length, 16), fraction(16 - noteLines.length, 16)),
+    ];
+
+    const measure = buildMeasure(events, []);
+
+    measure.noteEvents.forEach((noteEvent, index) => {
+        if (noteEvent.audioData !== undefined) {
+            noteEvent.audioData = { ...noteEvent.audioData, noteLine: noteLines[index] };
+        }
+    });
+
+    return measure;
+};
+
 describe("StaffNoteViewer beams", { concurrent: false }, () => {
     let renderResult: RenderResult | null;
 
@@ -423,6 +450,51 @@ describe("StaffNoteViewer beams", { concurrent: false }, () => {
         expect(beams[2]).toEqual([
             { left: "calc(var(--note-anchor) - 12px)", width: beamStubWidth },
             { left: "calc(var(--note-anchor) - 12px)", width: beamStubWidth },
+        ]);
+    });
+
+    it("ends every stem of a group on one shared beam line across staff lines", () => {
+        // Four sixteenths of one beam group, on four different lines. The group draws one beam line for
+        // all of them, so each stem ends where that line is instead of above its own notehead.
+        const measure = buildMultiLineBeamMeasure([1, 3, 2, 4]);
+
+        renderResult = render(
+            <StaffNoteViewer
+                isLastBar={false}
+                timeSignature="4/4"
+                scoreMetrics={scoreMetrics}
+                baseSteps={16}
+                measure={measure}
+                barNumber={1}
+                trackId={100}
+                maxNoteLine={4}
+            />,
+        );
+
+        const runs = [
+            ...renderResult.container.querySelectorAll<HTMLElement>(".staff-note-viewer-note-run"),
+        ];
+        expect(runs).toHaveLength(4);
+
+        // The centre line is 2.5 and the highest note sits on line 1, so the shared beam line lies
+        // 2.5 - 1 + 3.5 = 5 staff spaces above the reference line for every note of the group.
+        expect(runs.map((run) => {
+            return run.style.getPropertyValue("--beam-top");
+        })).toEqual([
+            "calc(var(--staff-space) * 5)",
+            "calc(var(--staff-space) * 5)",
+            "calc(var(--staff-space) * 5)",
+            "calc(var(--staff-space) * 5)",
+        ]);
+
+        // Each stem reaches that one line from its own note's line: (line - 1) + 3.5 staff spaces.
+        expect(runs.map((run) => {
+            return run.style.getPropertyValue("--stem-tip");
+        })).toEqual([
+            "calc(var(--staff-space) * 3.5)",
+            "calc(var(--staff-space) * 5.5)",
+            "calc(var(--staff-space) * 4.5)",
+            "calc(var(--staff-space) * 6.5)",
         ]);
     });
 
