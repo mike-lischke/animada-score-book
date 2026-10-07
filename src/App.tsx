@@ -105,7 +105,6 @@ interface IAppState {
     phase: AppPhase;
     editMode: boolean;
     sidebarOpen: boolean;
-    headerCollapsed: boolean;
 
     /** The active arrangement view mode (grid or staff notation). */
     trackViewMode: "grid" | "staff";
@@ -171,9 +170,6 @@ export class App extends UIComponent<{}, IAppState> {
 
     private currentTutorialStep = 0;
 
-    /** Scroll offset (px) at which the header starts collapsing. */
-    private readonly headerCollapseThreshold = 16;
-
     public constructor(props: {}) {
         super(props);
 
@@ -181,7 +177,6 @@ export class App extends UIComponent<{}, IAppState> {
             phase: AppPhase.Checking,
             editMode: false,
             sidebarOpen: false,
-            headerCollapsed: false,
             trackViewMode: AppStorage.loadUISettings()?.viewSettings?.arrangementViewSettings?.displayMode ?? "grid",
             preferredEntryMode: AppStorage.loadUISettings()?.entryMode ?? EditEntryMode.Insert,
             printing: false,
@@ -218,12 +213,11 @@ export class App extends UIComponent<{}, IAppState> {
     }
 
     public override shouldComponentUpdate(nextProps: {}, nextState: IAppState): boolean {
-        const { editMode, sidebarOpen, phase, headerCollapsed, trackViewMode, printing, backendUnreachable,
+        const { editMode, sidebarOpen, phase, trackViewMode, printing, backendUnreachable,
             startupError, preferredEntryMode } = this.state;
 
         return editMode !== nextState.editMode
             || sidebarOpen !== nextState.sidebarOpen || phase !== nextState.phase
-            || headerCollapsed !== nextState.headerCollapsed
             || trackViewMode !== nextState.trackViewMode
             || preferredEntryMode !== nextState.preferredEntryMode
             || printing !== nextState.printing
@@ -262,12 +256,10 @@ export class App extends UIComponent<{}, IAppState> {
     }
 
     public render() {
-        const { phase, editMode, sidebarOpen, headerCollapsed, trackViewMode, instrumentEditorEnabled,
+        const { phase, editMode, sidebarOpen, trackViewMode, instrumentEditorEnabled,
             printing, printOptions, backendUnreachable, startupError, preferredEntryMode } = this.state;
         const entryMode = this.effectiveEntryMode(trackViewMode, preferredEntryMode);
         const isRunning = phase === AppPhase.Running;
-        const headerClassName = `rounded-3xl shadow-md border border-base-200/70 gap-4`
-            + (headerCollapsed ? " collapsed" : "");
 
         let splashContent: ComponentChild;
         switch (phase) {
@@ -311,7 +303,6 @@ export class App extends UIComponent<{}, IAppState> {
         let breadcrumb: ComponentChild;
         let userButton: ComponentChild;
         let editModeButton;
-        let newSongButton;
         let isAdmin = false;
         if (isRunning) {
             isAdmin = this.dataModel.user?.isAdmin ?? false;
@@ -319,27 +310,11 @@ export class App extends UIComponent<{}, IAppState> {
             userButton = this.renderUserButton();
 
             if (this.arrangementPlayer) {
-                newSongButton = <Button
-                    plain
-                    data-role="new-song"
-                    className="editSaveButton large"
-                    disabled={editMode}
-                    data-tooltip="New Song"
-                    onClick={() => {
-                        void this.handleNewSong();
-                    }}
-                >
-                    <Icon
-                        src={UIIcon.Add}
-                        width={24}
-                        height={24}
-                        data-tooltip="inherit"
-                    />
-                </Button>;
-
                 editModeButton = <Button
                     plain
-                    className="editSaveButton large"
+                    compact
+                    imageOnly
+                    className="editSaveButton"
                     data-tooltip={editMode ? "Exit Edit Mode" : "Enter Edit Mode"}
                     onClick={this.handleEditModeToggle}
                 >
@@ -353,42 +328,45 @@ export class App extends UIComponent<{}, IAppState> {
             }
         }
 
-        let saveButton: ComponentChild;
         let printButton: ComponentChild;
+        let headerOverflowMenu: ComponentChild;
         if (isRunning && this.arrangementPlayer) {
-            saveButton = <Button
-                plain
-                data-role="save-score"
-                className="editSaveButton"
-                disabled={!this.undoManager?.canUndo}
-                data-tooltip="Save Score (Ctrl+S)"
-                onClick={() => {
-                    void this.saveScore();
-                }}
-            >
-                <Icon
-                    src={UIIcon.Save}
-                    width={24}
-                    height={24}
-                    data-tooltip="inherit"
-                />
-            </Button>;
-
             printButton = <Button
-                plain
                 id="printButton"
+                plain
+                compact
+                imageOnly
                 className="editSaveButton"
                 data-tooltip="Print / Export to PDF"
                 data-tutorial="print"
                 onClick={this.handlePrintClick}
             >
-                <Icon
-                    src={UIIcon.Printer}
-                    width={24}
-                    height={24}
-                    data-tooltip="inherit"
-                />
+                <Icon src={UIIcon.Printer} data-tooltip="inherit" />
             </Button>;
+
+            headerOverflowMenu = <Dropdown
+                id="headerOverflowMenu"
+                caption="More"
+                compact
+                items={[
+                    {
+                        label: "Save Score",
+                        disabled: !this.undoManager?.canUndo,
+                        onClick: () => {
+                            void this.saveScore();
+                        },
+                    },
+                    { label: "Display Options", onClick: this.handleDisplayOptionsClick },
+                    {
+                        label: "New Score",
+                        disabled: editMode,
+                        onClick: () => {
+                            void this.handleNewSong();
+                        },
+                    },
+                ]}
+                closeOnSelect
+            />;
         }
 
         let instrumentEditorButton: ComponentChild;
@@ -396,6 +374,7 @@ export class App extends UIComponent<{}, IAppState> {
             instrumentEditorButton = <Button
                 id="instrumentEditor"
                 imageOnly
+                compact
                 className="du-btn-ghost"
                 data-tooltip="Instrument Editor"
                 disabled
@@ -428,6 +407,55 @@ export class App extends UIComponent<{}, IAppState> {
             }
         }
 
+        const headerNavigation = (
+            <Container
+                id="mainToolbarButtons"
+                orientation={Orientation.LeftToRight}
+                crossAlignment={ChildAlignment.Center}
+            >
+                <img id="titleLogo" src="/logo.svg" />
+                <Button
+                    imageOnly
+                    compact
+                    className="du-btn-ghost displayOptionsButton"
+                    data-tooltip="Display Options"
+                    data-tutorial="display-options"
+                    onClick={this.handleDisplayOptionsClick}
+                >
+                    <Icon src={UIIcon.Gear} data-tooltip="inherit" />
+                </Button>
+                <Button
+                    id="scoreLibraryButton"
+                    imageOnly
+                    compact
+                    className="du-btn-ghost"
+                    data-tooltip="Score Library"
+                    data-tutorial="score-library"
+                    onClick={this.handleScoreLibraryClick}
+                >
+                    <Icon src={UIIcon.Library} data-tooltip="inherit" />
+                </Button>
+                {instrumentEditorButton}
+            </Container>
+        );
+
+        const headerActions = (
+            <Container
+                id="headerActions"
+                orientation={Orientation.LeftToRight}
+                crossAlignment={ChildAlignment.Center}
+            >
+                <GooeyGroup className="editSaveGooey">
+                    {printButton}
+                    {editModeButton}
+                </GooeyGroup>
+                {headerOverflowMenu}
+                {userButton}
+            </Container>
+        );
+        const appHeader = this.renderAppHeader(headerNavigation, breadcrumb, headerActions);
+        const editControls = this.renderEditControls(entryMode, trackViewMode);
+
         return (
             <>
                 {isRunning && (
@@ -459,129 +487,30 @@ export class App extends UIComponent<{}, IAppState> {
                             >
                                 <Container
                                     id="appContent"
+                                    className={editMode ? "score-editing" : undefined}
                                     orientation={Orientation.TopDown}
                                     crossAlignment={ChildAlignment.Stretch}
-                                    style={{ height: "100dvh", minHeight: 0, overflow: "hidden" }}
+                                    style={{
+                                        flex: "1 1 auto",
+                                        minHeight: 0,
+                                        overflow: "hidden",
+                                        position: "relative",
+                                    }}
                                 >
-                                    <Container
-                                        id="headerContent"
-                                        orientation={Orientation.LeftToRight}
-                                        className={headerClassName}
-                                    >
-                                        <Container
-                                            id="mainToolbarButtons"
-                                            orientation={Orientation.TopDown}
-                                            mainAlignment={ChildAlignment.Start}
-                                            className="bg-base-100/80 p-2"
-                                        >
-                                            <img id="titleLogo" src="/logo.svg" />
-                                            <Container
-                                                className="header-toolbar-extra"
-                                                orientation={Orientation.TopDown}
-                                                mainAlignment={ChildAlignment.Center}
-                                                crossAlignment={ChildAlignment.Stretch}
-                                            >
-                                                <Button
-                                                    imageOnly
-                                                    className="du-btn-ghost"
-                                                    data-tooltip="Display Options"
-                                                    data-tutorial="display-options"
-                                                    onClick={this.handleDisplayOptionsClick}
-                                                >
-                                                    <Icon
-                                                        src={UIIcon.Gear}
-                                                        data-tooltip="inherit"
-                                                    />
-                                                </Button>
-                                                <Button
-                                                    id="scoreLibraryButton"
-                                                    imageOnly
-                                                    className="du-btn-ghost"
-                                                    data-tooltip="Score Library"
-                                                    data-tutorial="score-library"
-                                                    onClick={this.handleScoreLibraryClick}
-                                                >
-                                                    <Icon
-                                                        src={UIIcon.Library}
-                                                        data-tooltip="inherit"
-                                                    />
-                                                </Button>
-                                                {instrumentEditorButton}
-                                                {userButton}
-                                            </Container>
-                                        </Container>
-                                        <Container
-                                            className="header-content-rows"
-                                            orientation={Orientation.TopDown}
-                                            crossAlignment={ChildAlignment.Stretch}
-                                        >
-                                            {breadcrumb}
+                                    {appHeader}
+                                    <div id="appOverlay">
+                                        {editControls}
+                                        <div id="playbackControlsHost">
                                             <ArrangementPlayControls
                                                 arrangementPlayer={this.arrangementPlayer!}
                                                 dataModel={this.dataModel}
                                                 editMode={editMode}
                                                 data-tutorial="playback"
                                             />
-                                            <Container
-                                                id="editControlsHost"
-                                                orientation={Orientation.LeftToRight}
-                                                mainAlignment={ChildAlignment.Start}
-                                                crossAlignment={ChildAlignment.Center}
-                                            >
-                                                <GooeyGroup
-                                                    className="editSaveGooey"
-                                                    background="var(--color-base-200)"
-                                                >
-                                                    {newSongButton}
-                                                    {editModeButton}
-                                                    {saveButton}
-                                                    {printButton}
-                                                </GooeyGroup>
-                                                {editMode && (
-                                                    <>
-                                                        <Separator />
-                                                        <UndoRedoControls
-                                                            undoManager={this.undoManager!}
-                                                        />
-                                                        <Separator />
-                                                        {trackViewMode === "staff" && (
-                                                            <EntryModeButton entryMode={entryMode} />
-                                                        )}
-                                                        <SubdivisionToolbar
-                                                            selectionManager={this.selectionManager}
-                                                            dataModel={this.dataModel}
-                                                        />
-                                                        {trackViewMode === "staff" && (
-                                                            <>
-                                                                <Separator />
-                                                                <NoteLengthToolbar
-                                                                    dataModel={this.dataModel}
-                                                                    selectionManager={this.selectionManager}
-                                                                    entryMode={entryMode}
-                                                                />
-                                                            </>
-                                                        )}
-                                                        <Separator />
-                                                        <ArticulationToolbar
-                                                            dataModel={this.dataModel}
-                                                            selectionManager={this.selectionManager}
-                                                            entryMode={entryMode}
-                                                        />
-                                                        <Separator />
-                                                        <NoteStyleBar
-                                                            dataModel={this.dataModel}
-                                                            selectionManager={this.selectionManager}
-                                                            trackViewMode={trackViewMode}
-                                                            entryMode={entryMode}
-                                                        />
-                                                    </>)}
-                                            </Container>
-                                        </Container>
-                                    </Container>
+                                        </div>
+                                    </div>
                                     <div
                                         id="viewerScrollHost"
-                                        onScroll={this.handleViewerScroll}
-                                        onWheel={this.handleViewerWheel}
                                         style={{
                                             flex: "1 1 auto",
                                             minHeight: 0,
@@ -683,6 +612,75 @@ export class App extends UIComponent<{}, IAppState> {
         });
     };
 
+    private renderAppHeader(
+        navigation: ComponentChild,
+        identity: ComponentChild,
+        actions: ComponentChild,
+    ): ComponentChild {
+        return (
+            <Container
+                id="headerContent"
+                orientation={Orientation.LeftToRight}
+                crossAlignment={ChildAlignment.Center}
+            >
+                {navigation}
+                {identity}
+                {actions}
+            </Container>
+        );
+    }
+
+    private renderEditControls(entryMode: EditEntryMode, trackViewMode: "grid" | "staff"): ComponentChild {
+        const { editMode } = this.state;
+        if (!editMode || !this.undoManager) {
+            return undefined;
+        }
+
+        let entryModeButton: ComponentChild;
+        let noteLengthToolbar: ComponentChild;
+        if (trackViewMode === "staff") {
+            entryModeButton = <EntryModeButton entryMode={entryMode} />;
+            noteLengthToolbar = (
+                <NoteLengthToolbar
+                    dataModel={this.dataModel}
+                    selectionManager={this.selectionManager}
+                    entryMode={entryMode}
+                />
+            );
+        }
+
+        return (
+            <Container
+                id="editControlsHost"
+                orientation={Orientation.LeftToRight}
+                mainAlignment={ChildAlignment.Start}
+                crossAlignment={ChildAlignment.Center}
+            >
+                <UndoRedoControls undoManager={this.undoManager} />
+                <Separator />
+                {entryModeButton}
+                <SubdivisionToolbar
+                    selectionManager={this.selectionManager}
+                    dataModel={this.dataModel}
+                />
+                {noteLengthToolbar}
+                <Separator />
+                <ArticulationToolbar
+                    dataModel={this.dataModel}
+                    selectionManager={this.selectionManager}
+                    entryMode={entryMode}
+                />
+                <Separator />
+                <NoteStyleBar
+                    dataModel={this.dataModel}
+                    selectionManager={this.selectionManager}
+                    trackViewMode={trackViewMode}
+                    entryMode={entryMode}
+                />
+            </Container>
+        );
+    }
+
     private renderHeaderBreadcrumb(): ComponentChild {
         const { editMode } = this.state;
         const arrangement = this.dataModel.arrangement!;
@@ -714,6 +712,7 @@ export class App extends UIComponent<{}, IAppState> {
             return <Dropdown
                 id="userMenu"
                 icon={<Icon src={UIIcon.Account} />}
+                compact
                 items={this.buildUserMenuItems()}
                 closeOnSelect
                 style={{ backgroundColor: isAdmin ? "tomato" : undefined }}
@@ -723,6 +722,7 @@ export class App extends UIComponent<{}, IAppState> {
         return <Button
             id="signInButton"
             imageOnly
+            compact
             className="du-btn-ghost"
             data-tooltip="Sign In"
             onClick={this.handleSignInClick}
@@ -733,35 +733,6 @@ export class App extends UIComponent<{}, IAppState> {
             />
         </Button>;
     }
-
-    private handleViewerScroll = (event: Event): void => {
-        const host = event.currentTarget as HTMLElement;
-        const { headerCollapsed } = this.state;
-
-        const hasOverflow = host.scrollHeight > host.clientHeight;
-
-        if (headerCollapsed) {
-            // Expand on a real scroll back to the top of a still-overflowing host. When the
-            // content fits after collapsing, the browser clamps scrollTop to 0; that event must
-            // not re-expand the header (the wheel handler covers that case).
-            if (host.scrollTop === 0 && hasOverflow) {
-                this.setState({ headerCollapsed: false });
-            }
-        } else if (host.scrollTop > this.headerCollapseThreshold) {
-            this.setState({ headerCollapsed: true });
-        }
-    };
-
-    private handleViewerWheel = (event: WheelEvent): void => {
-        const host = event.currentTarget as HTMLElement;
-        const { headerCollapsed } = this.state;
-
-        // With no scrollbar (content fits when collapsed) scroll events never fire, so a
-        // wheel-up gesture is the only way to re-expand the header.
-        if (headerCollapsed && event.deltaY < 0 && host.scrollHeight <= host.clientHeight) {
-            this.setState({ headerCollapsed: false });
-        }
-    };
 
     private renderBackendUnreachable(): ComponentChild {
         return (

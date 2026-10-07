@@ -9,6 +9,22 @@
     min-width: 0;
 }
 
+.btn.compact {
+    box-sizing: border-box;
+    height: 40px;
+    min-height: 40px;
+}
+
+.btn.imageOnly.compact {
+    width: 40px;
+    min-width: 40px;
+    padding: 2px;
+}
+
+.btn.compact .icon {
+    font-size: 24px;
+}
+
 .btn.default {
     background-color: var(--color-primary);
     color: var(--color-primary-content);

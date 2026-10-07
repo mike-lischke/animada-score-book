@@ -24,6 +24,7 @@ export interface IDropdownProperties extends ICommonUIProperties {
     icon?: ComponentChild;
     selectedItem?: string;
     items: IDropdownItem[];
+    compact?: boolean;
 
     /** If true, the dropdown closes automatically after an item is selected. Defaults to false. */
     closeOnSelect?: boolean;
@@ -45,7 +46,7 @@ export class Dropdown extends UIComponent<IDropdownProperties, IDropdownState> {
     }
 
     public render(): ComponentChild {
-        const { id, caption, disabled, icon, items, selectedItem, style } = this.props;
+        const { id, caption, disabled, icon, items, selectedItem, style, compact } = this.props;
         const { activeIndex } = this.state;
 
         const children = items.map((item, index) => {
@@ -86,6 +87,7 @@ export class Dropdown extends UIComponent<IDropdownProperties, IDropdownState> {
             <div id={id} className={className}>
                 <Button
                     className="du-btn-ghost"
+                    compact={compact}
                     popoverTarget={disabled ? undefined : this.popoverId}
                     style={{ ...style, anchorName: this.anchorName }}
                     imageOnly={!caption && icon !== undefined}

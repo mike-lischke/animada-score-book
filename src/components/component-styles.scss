@@ -37,8 +37,6 @@
 .editSaveButton,
 #recordButton,
 #pauseButton {
-    height: 36px;
-    width: 36px;
     padding: 0;
     border-radius: 50%;
     background-color: var(--color-base-100);
@@ -49,9 +47,12 @@
     }
 }
 
-.editSaveButton.large {
-    height: 44px;
-    width: 44px;
+.playStopButton,
+.undoRedoButton,
+#recordButton,
+#pauseButton {
+    height: 36px;
+    width: 36px;
 }
 
 .editSaveButton,

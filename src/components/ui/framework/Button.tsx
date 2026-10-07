@@ -21,6 +21,9 @@ export interface IButtonProperties extends ICommonUIProperties<JSX.IntrinsicElem
     round?: boolean;
     orientation?: Orientation;
 
+    /** Uses a compact, stable 40 px control height. Image-only buttons are square. */
+    compact?: boolean;
+
     /** When set it is assumed there's only a single (image) child. Different styling rules apply. */
     imageOnly?: boolean;
 
@@ -57,7 +60,7 @@ export class Button extends UIComponent<IButtonProperties> {
 
     public render(): ComponentChild {
         const {
-            id, children, caption, style, orientation, round, imageOnly, disabled, isDefault, title, role,
+            id, children, caption, style, orientation, round, compact, imageOnly, disabled, isDefault, title, role,
             name, type, value, popoverTarget, onClick, plain
         } = this.props;
 
@@ -65,6 +68,7 @@ export class Button extends UIComponent<IButtonProperties> {
             "btn",
             "du-btn",
             this.classFromProperty(!plain && round, "du-btn-circle"),
+            this.classFromProperty(compact, "compact"),
             this.classFromProperty(imageOnly, "imageOnly"),
             this.classFromProperty(!plain && disabled, "du-btn-disabled"),
             this.classFromProperty(!plain && isDefault, "du-btn-primary"),

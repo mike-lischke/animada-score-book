@@ -194,7 +194,7 @@ export class ArrangementPlayControls
                 orientation={Orientation.LeftToRight}
                 mainAlignment={ChildAlignment.Start}
                 crossAlignment={ChildAlignment.Center}
-                style={{ width: "100%" }}
+                style={{ width: "max-content" }}
                 {...this.dataAttributes}
             >
                 <Label caption="Playback" className="header-row-label" />
