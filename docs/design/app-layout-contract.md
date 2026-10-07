@@ -36,6 +36,20 @@ Offer only the group applicable to the current selection, using the existing eli
 Each action completes on activation and leaves score input in its normal state. The selection popover remains the
 single contextual surface; it adapts its action groups instead of opening a second toolbar or nested popover.
 
+## Floating Surface Lifecycle
+
+Persistent shell controls stay outside the portal stack and coexist without outside-click or Escape dismissal. Native
+`popover="auto"` menus keep the browser's light-dismiss behavior. Only one framework `Popup` is active at a time;
+opening another replaces it. Modal `Dialog` portals keep their backdrop and stack behavior, with only the topmost portal
+handling Escape.
+
+Contextual `Popup` surfaces are nonmodal: a pointer press or keyboard-activated click outside closes the popup without
+blocking the target action. Escape and programmatic close restore focus to the trigger; outside-click close leaves focus
+with the clicked target.
+Interactive popups may focus their first control on open. Prefer live elements as anchors so placement follows
+scrolling, resizing, orientation, and visual-viewport changes; removing an anchor closes the popup. If neither side has
+room on mobile, attach the popup to the bottom edge and scroll its contents.
+
 ## Header and Responsive Priorities
 
 - **Desktop:** keep library access, arrangement identity/save state, primary playback, and frequent editing actions

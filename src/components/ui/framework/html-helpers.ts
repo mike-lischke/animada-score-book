@@ -113,7 +113,15 @@ export const computeContentPosition = (placement: ComponentPlacement, content: H
     offset: number, canFlip: boolean, container: HTMLElement = document.body): { left: number; top: number; } => {
     let { left, top } = computePositionForPlacement(placement, content, reference, offset);
     const { width, height } = content.getBoundingClientRect();
-    const containerBounds = container.getBoundingClientRect();
+    const viewport = container === document.body ? window.visualViewport : undefined;
+    const containerBounds = viewport
+        ? {
+            left: viewport.offsetLeft,
+            top: viewport.offsetTop,
+            right: viewport.offsetLeft + viewport.width,
+            bottom: viewport.offsetTop + viewport.height,
+        }
+        : container.getBoundingClientRect();
 
     const right = left + width;
     const bottom = top + height;
@@ -122,11 +130,11 @@ export const computeContentPosition = (placement: ComponentPlacement, content: H
         // Automatically flip or shift the popup to avoid container overlap.
         // The closures return true if the popup was flipped, which requires to update the placement class.
         const checkTop = (newPlacement: ComponentPlacement): boolean => {
-            if (top < 0) {
+            if (top < containerBounds.top) {
                 const { top: tc } = computePositionForPlacement(newPlacement, content, reference, offset);
                 if (tc + height > containerBounds.bottom) {
                     // Would move the popup too far down, so move it to the top of the container.
-                    top = 0;
+                    top = containerBounds.top;
                 } else {
                     top = tc;
 
@@ -140,7 +148,7 @@ export const computeContentPosition = (placement: ComponentPlacement, content: H
         const checkRight = (newPlacement: ComponentPlacement): boolean => {
             if (right > containerBounds.right) {
                 const { left: lc } = computePositionForPlacement(newPlacement, content, reference, offset);
-                if (lc < 0) {
+                if (lc < containerBounds.left) {
                     // Would move the popup too far left, so move it to the right edge of the container.
                     left = containerBounds.right - width;
                 } else {
@@ -156,7 +164,7 @@ export const computeContentPosition = (placement: ComponentPlacement, content: H
         const checkBottom = (newPlacement: ComponentPlacement): boolean => {
             if (bottom > containerBounds.bottom) {
                 const { top: tc } = computePositionForPlacement(newPlacement, content, reference, offset);
-                if (tc < 0) {
+                if (tc < containerBounds.top) {
                     top = containerBounds.bottom - height;
                 } else {
                     top = tc;
@@ -169,7 +177,7 @@ export const computeContentPosition = (placement: ComponentPlacement, content: H
         };
 
         const checkLeft = (newPlacement: ComponentPlacement): boolean => {
-            if (left < 0) {
+            if (left < containerBounds.left) {
                 const { left: lc } = computePositionForPlacement(newPlacement, content, reference, offset);
                 if (lc + width > containerBounds.right) {
                     left = containerBounds.right - width;
@@ -354,6 +362,13 @@ export const computeContentPosition = (placement: ComponentPlacement, content: H
                 break;
             }
         }
+    }
+
+    if (canFlip) {
+        const maxLeft = Math.max(containerBounds.left, containerBounds.right - width);
+        const maxTop = Math.max(containerBounds.top, containerBounds.bottom - height);
+        left = Math.min(Math.max(left, containerBounds.left), maxLeft);
+        top = Math.min(Math.max(top, containerBounds.top), maxTop);
     }
 
     return { left, top };

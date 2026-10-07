@@ -392,6 +392,7 @@ export class SettingsDialog extends UIComponent<ISettingsDialogProperties, ISett
                     id="musicFontInfo"
                     header={<Label caption={currentFont.name} />}
                     showArrow
+                    restoreFocusOnClose={false}
                     placement={ComponentPlacement.BottomLeft}
                 >
                     {this.renderFontInfo(currentFont)}
@@ -536,7 +537,7 @@ export class SettingsDialog extends UIComponent<ISettingsDialogProperties, ISett
         const target = this.fontInfoTargetRef.current;
         if (target !== null) {
             // The tip only informs, so it may not block what the user does next.
-            this.fontInfoPopupRef.current?.open(target.getBoundingClientRect(), { blockMouseEvents: false });
+            this.fontInfoPopupRef.current?.open(target);
         }
     };
 

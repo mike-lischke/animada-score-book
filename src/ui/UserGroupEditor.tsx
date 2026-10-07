@@ -316,6 +316,7 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
                 <Popup
                     ref={this.popupRef}
                     showArrow={true}
+                    focusOnOpen
                     placement={ComponentPlacement.TopCenter}
                 >
                     {editorMode !== EditorMode.None && this.renderEditorForm()}
@@ -1112,7 +1113,7 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
     }
 
     private openEditorPopup(target: HTMLElement): void {
-        this.popupRef.current?.open(target.getBoundingClientRect());
+        this.popupRef.current?.open(target);
     }
 
     /**

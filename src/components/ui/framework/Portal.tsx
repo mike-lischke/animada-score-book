@@ -26,6 +26,13 @@ export interface IPortalOptions {
     blockMouseEvents?: boolean;
 }
 
+export enum PortalCloseReason {
+    Escape,
+    OutsideClick,
+    Replaced,
+    Programmatic,
+}
+
 export interface IPortalProperties extends ICommonUIProperties {
     /**
      * The element that hosts the portal. Defaults to document.body.
@@ -33,7 +40,7 @@ export interface IPortalProperties extends ICommonUIProperties {
     container?: HTMLElement;
 
     onOpen?: (props: IPortalProperties) => void;
-    onClose?: (cancelled: boolean, props: IPortalProperties) => void;
+    onClose?: (cancelled: boolean, props: IPortalProperties, reason: PortalCloseReason) => void;
 
     /** Called when Enter is pressed while this is the topmost portal. */
     onEnter?: (event: KeyboardEvent) => void;
@@ -90,7 +97,6 @@ export class Portal extends UIComponent<IPortalProperties, IPortalState> {
                 );
 
                 this.host.addEventListener("mousedown", this.handlePortalMouseDown);
-                this.host.addEventListener("wheel", this.handlePortalMouseWheel);
                 container.appendChild(this.host);
             }
 
@@ -104,6 +110,13 @@ export class Portal extends UIComponent<IPortalProperties, IPortalState> {
     public override componentWillUnmount(): void {
         this.host?.remove();
         this.host = undefined;
+
+        const index = Portal.portalStack.findIndex((portal) => {
+            return portal === this;
+        });
+        if (index >= 0) {
+            Portal.portalStack.splice(index, 1);
+        }
     }
 
     public render(): ComponentChild {
@@ -136,13 +149,13 @@ export class Portal extends UIComponent<IPortalProperties, IPortalState> {
         }
     }
 
-    public close(cancelled: boolean): void {
+    public close(cancelled: boolean, reason = PortalCloseReason.Programmatic): void {
         const { open } = this.state;
 
         if (open) {
             const { onClose } = this.props;
 
-            onClose?.(cancelled, this.props);
+            onClose?.(cancelled, this.props, reason);
 
             this.setState({ open: false, options: {} });
             const index = Portal.portalStack.findIndex((portal) => {
@@ -166,16 +179,7 @@ export class Portal extends UIComponent<IPortalProperties, IPortalState> {
         const { open, options } = this.state;
 
         if (open && options.closeOnPortalClick && event.target === this.host) {
-            this.close(true);
-        }
-    };
-
-    private handlePortalMouseWheel = (event: WheelEvent): void => {
-        const { open, options } = this.state;
-
-        if (open && !options.blockMouseEvents) {
-            event.preventDefault();
-            event.stopPropagation();
+            this.close(true, PortalCloseReason.OutsideClick);
         }
     };
 
@@ -199,7 +203,7 @@ export class Portal extends UIComponent<IPortalProperties, IPortalState> {
                 if (options.closeOnEscape) {
                     e.stopImmediatePropagation();
                     e.stopPropagation();
-                    portal.close(true);
+                    portal.close(true, PortalCloseReason.Escape);
                 }
 
                 return;

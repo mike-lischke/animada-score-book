@@ -89,9 +89,7 @@ export class PermissionEditor extends UIComponent<IPermissionEditorProperties, I
         const entityType = entry.type === SbDmEntityType.ScoreFolder ? "folder" : "score";
 
         this.setState({ errorMessage: "", entry }, () => {
-            const rect = target instanceof DOMRect ? target : target.getBoundingClientRect();
-
-            this.popupRef.current?.open(rect);
+            this.popupRef.current?.open(target);
         });
 
         try {
@@ -173,6 +171,7 @@ export class PermissionEditor extends UIComponent<IPermissionEditorProperties, I
                 id="permissionEditor"
                 ref={this.popupRef}
                 showArrow
+                focusOnOpen
                 header={<Label id="permissionEditorHeader" caption={`Owner: ${ownerName}`} />}
                 placement={ComponentPlacement.RightCenter}
             >

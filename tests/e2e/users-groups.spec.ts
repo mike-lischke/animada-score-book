@@ -456,6 +456,54 @@ test.describe("Users & Groups Dialog", () => {
         await expect(popup.locator("button").filter({ hasText: "Create" })).toBeVisible();
     });
 
+    test("Escape closes the popup and restores focus to its trigger", async ({ page }) => {
+        await page.goto("/");
+        await openUsersGroupsDialog(page);
+
+        const trigger = page.locator("#ug-add-user");
+        await trigger.click();
+
+        const popup = page.locator(".popup");
+        await expect(popup).toBeVisible();
+        await expect(popup.locator("input").first()).toBeFocused();
+
+        await page.keyboard.press("Escape");
+
+        await expect(popup).not.toBeVisible();
+        await expect(trigger).toBeFocused();
+    });
+
+    test("outside click dismisses the popup without dismissing its modal dialog", async ({ page }) => {
+        await page.goto("/");
+        await openUsersGroupsDialog(page);
+
+        await page.locator("#ug-add-user").click();
+        const popup = page.locator(".popup");
+        await expect(popup).toContainText("Username");
+
+        await page.locator("#userGroupEditorDialog").click({ position: { x: 20, y: 20 } });
+
+        await expect(popup).not.toBeVisible();
+        await expect(page.locator("#userGroupEditorDialog")).toBeVisible();
+    });
+
+    test("attaches the popup to the viewport edge when there is not enough room", async ({ page }) => {
+        await page.setViewportSize({ width: 320, height: 360 });
+        await page.goto("/");
+        await openUsersGroupsDialog(page);
+        await page.locator("#ug-add-user").click();
+
+        const popup = page.locator(".popup");
+        await expect(popup).toBeVisible();
+        await expect(popup).toHaveClass(/edgeAttached/);
+
+        const bounds = await popup.boundingBox();
+        expect(bounds).toBeTruthy();
+        expect(bounds!.x).toBeGreaterThanOrEqual(0);
+        expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(320);
+        expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(360);
+    });
+
     test("creates a new user and shows it in the list", async ({ page }) => {
         await page.goto("/");
         await openUsersGroupsDialog(page);

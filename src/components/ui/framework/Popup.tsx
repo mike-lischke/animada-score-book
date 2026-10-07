@@ -6,7 +6,9 @@
 import { ComponentChild, createRef } from "preact";
 
 import { Container } from "./Container.js";
-import { Portal, type IPortalOptions, type IPortalProperties } from "./Portal.js";
+import {
+    Portal, PortalCloseReason, type IPortalOptions, type IPortalProperties,
+} from "./Portal.js";
 import { ComponentPlacement, UIComponent } from "./UIComponent.js";
 import { computeContentPosition } from "./html-helpers.js";
 import { Orientation } from "./ui-types.js";
@@ -21,6 +23,15 @@ interface IPopupProperties extends IPortalProperties {
     /** If set no automatic repositioning takes place. */
     pinned?: boolean;
 
+    /** Focus the first interactive popup element when opened. */
+    focusOnOpen?: boolean;
+
+    /** Restore focus to the popup trigger after Escape or programmatic close. */
+    restoreFocusOnClose?: boolean;
+
+    /** Close when a pointer press starts outside the popup. Defaults to true. */
+    dismissOnOutsideClick?: boolean;
+
     /** Whether to show the CSS arrow pointer. */
     showArrow?: boolean;
 
@@ -31,12 +42,11 @@ interface IPopupProperties extends IPortalProperties {
 }
 
 interface IPopupState {
-    /** Used to temporarily hide the popup on scroll. */
-    hidden: boolean;
-
     /** The area for placement computation. */
     currentTarget?: DOMRect;
 }
+
+export type PopupAnchor = HTMLElement | DOMRect;
 
 /**
  * A positioned popup built on {@link Portal}. Renders into a managed
@@ -51,20 +61,28 @@ interface IPopupState {
  * ```
  */
 export class Popup extends UIComponent<IPopupProperties, IPopupState> {
+    private static activePopup?: Popup;
 
     private portalRef = createRef<Portal | null>();
     private containerRef: preact.RefObject<HTMLDivElement | null>;
     private resizeObserver?: ResizeObserver;
+    private anchorObserver?: MutationObserver;
+    private anchorElement?: HTMLElement;
+    private returnFocusElement?: HTMLElement;
+    private positionFrame?: number;
 
     public constructor(props: IPopupProperties) {
         super(props);
 
-        this.state = { hidden: false };
+        this.state = {};
         this.containerRef = props.innerRef ?? createRef<HTMLDivElement | null>();
     }
 
     public override componentWillUnmount(): void {
-        this.stopResizeObserver();
+        this.stopPositionTracking();
+        if (Popup.activePopup === this) {
+            Popup.activePopup = undefined;
+        }
     }
 
     public render(): ComponentChild {
@@ -108,22 +126,50 @@ export class Popup extends UIComponent<IPopupProperties, IPopupState> {
      * Opens the popup positioned relative to the given target rectangle.
      * Positioning is deferred until after the Portal has rendered the DOM.
      *
-     * @param currentTarget The target element's bounding rectangle.
+     * @param target The anchor element or its bounding rectangle.
      * @param options Additional options for the portal.
      */
-    public open(currentTarget: DOMRect, options?: IPortalOptions): void {
+    public open(target: PopupAnchor, options?: IPortalOptions): void {
+        const anchorElement = target instanceof HTMLElement ? target : undefined;
+        const currentTarget = anchorElement?.getBoundingClientRect() ?? target as DOMRect;
+        const { restoreFocusOnClose = true } = this.props;
+
+        this.anchorElement = anchorElement;
+        this.returnFocusElement = restoreFocusOnClose
+            ? anchorElement ?? (document.activeElement instanceof HTMLElement ? document.activeElement : undefined)
+            : undefined;
+
         this.setState({ currentTarget }, () => {
-            this.portalRef.current?.open({
+            const portal = this.portalRef.current;
+            if (!portal) {
+                return;
+            }
+
+            if (Popup.activePopup && Popup.activePopup !== this) {
+                Popup.activePopup.closeWithReason(true, PortalCloseReason.Replaced);
+            }
+
+            Popup.activePopup = this;
+
+            if (portal.isOpen) {
+                this.startPositionTracking();
+                this.schedulePositionUpdate();
+
+                return;
+            }
+
+            portal.open({
                 closeOnEscape: true,
-                closeOnPortalClick: true,
+                closeOnPortalClick: false,
                 backgroundOpacity: 0,
+                blockMouseEvents: false,
                 ...options,
             });
         });
     }
 
     public close(cancelled: boolean): void {
-        this.portalRef.current?.close(cancelled);
+        this.closeWithReason(cancelled, PortalCloseReason.Programmatic);
     }
 
     public get clientRect(): DOMRect | undefined {
@@ -134,16 +180,37 @@ export class Popup extends UIComponent<IPopupProperties, IPopupState> {
         return undefined;
     }
 
-    public updatePosition(newTarget: DOMRect): void {
-        this.setState({ currentTarget: newTarget }, this.handlePortalOpen);
+    public updatePosition(target: PopupAnchor): void {
+        this.anchorElement = target instanceof HTMLElement ? target : undefined;
+        const currentTarget = this.anchorElement?.getBoundingClientRect() ?? target as DOMRect;
+        this.setState({ currentTarget }, this.schedulePositionUpdate);
     }
 
-    private handlePortalClose = (cancelled: boolean): void => {
-        this.stopResizeObserver();
+    private handlePortalClose = (cancelled: boolean, _portalProperties: IPortalProperties,
+        reason: PortalCloseReason): void => {
+        this.stopPositionTracking();
+
+        if (Popup.activePopup === this) {
+            Popup.activePopup = undefined;
+        }
+
+        const { restoreFocusOnClose = true } = this.props;
+        const returnFocusElement = this.returnFocusElement;
+        this.returnFocusElement = undefined;
+        this.anchorElement = undefined;
+
+        if (restoreFocusOnClose && reason !== PortalCloseReason.OutsideClick
+            && reason !== PortalCloseReason.Replaced && returnFocusElement?.isConnected) {
+            requestAnimationFrame(() => {
+                if (returnFocusElement.isConnected) {
+                    returnFocusElement.focus({ preventScroll: true });
+                }
+            });
+        }
 
         const { onClose } = this.props;
 
-        onClose?.(cancelled, this.props);
+        onClose?.(cancelled, this.props, reason);
 
     };
 
@@ -156,7 +223,8 @@ export class Popup extends UIComponent<IPopupProperties, IPopupState> {
 
             if (this.containerRef.current) {
                 this.positionPopup(currentTarget);
-                this.startResizeObserver(currentTarget);
+                this.startPositionTracking();
+                this.focusPopup();
             }
         }
     };
@@ -168,27 +236,167 @@ export class Popup extends UIComponent<IPopupProperties, IPopupState> {
             pinned = false,
         } = this.props;
 
-        if (this.containerRef.current) {
-            const { left, top } = computeContentPosition(placement, this.containerRef.current, target,
-                showArrow ? 10 : 0, !pinned);
-            this.containerRef.current.style.left = `${left}px`;
-            this.containerRef.current.style.top = `${top}px`;
+        const popup = this.containerRef.current;
+        if (!popup) {
+            return;
         }
+
+        const viewport = window.visualViewport;
+        const viewportWidth = viewport?.width ?? window.innerWidth;
+        const viewportHeight = viewport?.height ?? window.innerHeight;
+        popup.style.setProperty("--popup-viewport-width", `${viewportWidth}px`);
+        popup.style.setProperty("--popup-viewport-height", `${viewportHeight}px`);
+        popup.classList.remove("edgeAttached", ...Object.values(ComponentPlacement));
+        popup.classList.add(placement);
+
+        if (!pinned && this.shouldAttachToEdge(target, popup)) {
+            popup.classList.add("edgeAttached");
+            popup.style.removeProperty("left");
+            popup.style.removeProperty("top");
+
+            return;
+        }
+
+        const { left, top } = computeContentPosition(placement, popup, target, showArrow ? 10 : 0, !pinned);
+        popup.style.left = `${left}px`;
+        popup.style.top = `${top}px`;
     }
 
-    private startResizeObserver(target: DOMRect): void {
-        this.stopResizeObserver();
+    private shouldAttachToEdge(target: DOMRect, popup: HTMLElement): boolean {
+        const viewportWidth = window.visualViewport?.width ?? window.innerWidth;
+        if (viewportWidth > 600) {
+            return false;
+        }
+
+        const viewportHeight = window.visualViewport?.height ?? window.innerHeight;
+        const spaceAbove = Math.max(0, target.top - 8);
+        const spaceBelow = Math.max(0, viewportHeight - target.bottom - 8);
+
+        return popup.scrollHeight > Math.max(spaceAbove, spaceBelow);
+    }
+
+    private startPositionTracking(): void {
+        this.stopPositionTracking();
+
+        const { pinned = false } = this.props;
+        document.addEventListener("pointerdown", this.handleOutsidePointerDown, true);
+        document.addEventListener("click", this.handleOutsideClick, true);
+
+        if (pinned) {
+            return;
+        }
+
+        document.addEventListener("scroll", this.handleViewportChange, true);
+        window.addEventListener("resize", this.handleViewportChange);
+        window.addEventListener("orientationchange", this.handleViewportChange);
+        window.visualViewport?.addEventListener("resize", this.handleViewportChange);
+        window.visualViewport?.addEventListener("scroll", this.handleViewportChange);
 
         if (this.containerRef.current) {
-            this.resizeObserver = new ResizeObserver(() => {
-                this.positionPopup(target);
-            });
+            this.resizeObserver = new ResizeObserver(this.schedulePositionUpdate);
             this.resizeObserver.observe(this.containerRef.current);
+            if (this.anchorElement) {
+                this.resizeObserver.observe(this.anchorElement);
+                this.anchorObserver = new MutationObserver(() => {
+                    if (this.anchorElement && !this.anchorElement.isConnected) {
+                        this.close(true);
+                    }
+                });
+                this.anchorObserver.observe(document.body, { childList: true, subtree: true });
+            }
         }
     }
 
-    private stopResizeObserver(): void {
+    private stopPositionTracking(): void {
+        document.removeEventListener("pointerdown", this.handleOutsidePointerDown, true);
+        document.removeEventListener("click", this.handleOutsideClick, true);
+        document.removeEventListener("scroll", this.handleViewportChange, true);
+        window.removeEventListener("resize", this.handleViewportChange);
+        window.removeEventListener("orientationchange", this.handleViewportChange);
+        window.visualViewport?.removeEventListener("resize", this.handleViewportChange);
+        window.visualViewport?.removeEventListener("scroll", this.handleViewportChange);
         this.resizeObserver?.disconnect();
         this.resizeObserver = undefined;
+        this.anchorObserver?.disconnect();
+        this.anchorObserver = undefined;
+
+        if (this.positionFrame !== undefined) {
+            cancelAnimationFrame(this.positionFrame);
+            this.positionFrame = undefined;
+        }
+    }
+
+    private closeWithReason(cancelled: boolean, reason: PortalCloseReason): void {
+        this.portalRef.current?.close(cancelled, reason);
+    }
+
+    private handleOutsidePointerDown = (event: PointerEvent): void => {
+        this.dismissFromOutside(event);
+    };
+
+    private handleOutsideClick = (event: MouseEvent): void => {
+        this.dismissFromOutside(event);
+    };
+
+    private dismissFromOutside(event: Event): void {
+        const popup = this.containerRef.current;
+        if (!popup || event.composedPath().includes(popup)) {
+            return;
+        }
+
+        const { dismissOnOutsideClick = true } = this.props;
+        if (dismissOnOutsideClick) {
+            this.closeWithReason(true, PortalCloseReason.OutsideClick);
+        }
+    }
+
+    private handleViewportChange = (): void => {
+        this.schedulePositionUpdate();
+    };
+
+    private schedulePositionUpdate = (): void => {
+        if (this.positionFrame !== undefined) {
+            return;
+        }
+
+        this.positionFrame = requestAnimationFrame(() => {
+            this.positionFrame = undefined;
+
+            if (!this.portalRef.current?.isOpen) {
+                return;
+            }
+
+            if (this.anchorElement && !this.anchorElement.isConnected) {
+                this.close(true);
+
+                return;
+            }
+
+            const target = this.anchorElement?.getBoundingClientRect() ?? this.state.currentTarget;
+            if (target) {
+                this.positionPopup(target);
+            }
+        });
+    };
+
+    private focusPopup(): void {
+        const { focusOnOpen = false } = this.props;
+        const popup = this.containerRef.current;
+
+        if (!focusOnOpen || !popup) {
+            return;
+        }
+
+        const focusTarget = popup.querySelector<HTMLElement>(
+            "[autofocus], button:not(:disabled), input:not(:disabled), select:not(:disabled), "
+            + "textarea:not(:disabled), a[href], [tabindex]:not([tabindex='-1'])",
+        );
+
+        if (focusTarget) {
+            focusTarget.focus({ preventScroll: true });
+        } else {
+            popup.tabIndex = -1;
+            popup.focus({ preventScroll: true });
+        }
     }
 };
