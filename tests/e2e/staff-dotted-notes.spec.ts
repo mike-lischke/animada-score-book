@@ -67,13 +67,13 @@ test.beforeEach(async ({ page }) => {
     await expect(page.locator("#trackViewerHost")).toBeVisible();
     await expect(page.locator(".staff-measure-track-row").first()).toBeVisible();
     await page.locator(".editSaveGooey button").nth(1).click({ force: true });
-    await expect(page.locator("#editControlsHost .noteLengthToolbar")).toBeVisible();
 });
 
 test("dots the selected note and takes the dot away again", async ({ page }) => {
     const dot = page.locator(".noteDotButton");
 
     await page.locator(".staff-measure-track-row .staff-note-head-symbol").first().click();
+    await expect(page.locator("#selectionEditPopup .noteLengthToolbar")).toBeVisible();
     await expect(page.locator(".staff-note-viewer-run.note-selected")).toHaveCount(1);
     await expect(page.locator(".noteLengthButton.du-btn-primary")).toHaveCount(1);
     await expect(dot).not.toHaveClass(/du-btn-primary/);

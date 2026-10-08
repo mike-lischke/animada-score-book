@@ -6,9 +6,10 @@
 import { type ComponentChild, createRef } from "preact";
 
 import { Container } from "../framework/Container.js";
-import { GooeyGroup } from "../framework/GooeyGroup.js";
+import { Dropdown, type IDropdownItem } from "../framework/Dropdown.js";
 import { Icon } from "../framework/Icon.js";
 import { UIIcon } from "../framework/UIIcon.js";
+import { ChildAlignment } from "../framework/ui-types.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
 
 /** The bar-level actions offered by the strip. */
@@ -40,8 +41,7 @@ export interface IBarActionStripProps extends ICommonUIProperties {
 }
 
 /**
- * Strip of per-bar action buttons rendered inside the scroll host above the bars, so it scrolls
- * natively together with the bar columns.
+ * Per-bar action menus rendered inside the scroll host above the bars.
  */
 export class BarActionStrip extends UIComponent<IBarActionStripProps> {
     private stripRef = createRef<HTMLDivElement | null>();
@@ -92,52 +92,44 @@ export class BarActionStrip extends UIComponent<IBarActionStripProps> {
 
         const actionDefinitions = [{
             kind: BarActionKind.InsertLeft,
-            icon: UIIcon.ArrowLeft,
             "data-tooltip": "Insert bars to the left",
         }, {
             kind: BarActionKind.Clear,
-            icon: UIIcon.ClearAll,
             "data-tooltip": "Clear bar",
         }, {
             kind: BarActionKind.Delete,
-            icon: UIIcon.Trash,
             "data-tooltip": "Delete bar",
         }, {
             kind: BarActionKind.Duplicate,
-            icon: UIIcon.Copy,
             "data-tooltip": "Duplicate bar",
         }, {
             kind: BarActionKind.InsertRight,
-            icon: UIIcon.ArrowRight,
             "data-tooltip": "Insert bars to the right",
         }];
 
         const groups: ComponentChild[] = [];
         for (let barNumber = 1; barNumber <= barCount; barNumber++) {
-            const buttons: ComponentChild[] = [];
-            for (const action of actionDefinitions) {
-                const disabled = action.kind === BarActionKind.Delete && !canDelete;
-                buttons.push(
-                    <button
-                        key={action.kind}
-                        type="button"
-                        className="bar-action-button"
-                        data-tooltip={action["data-tooltip"]}
-                        aria-label={action["data-tooltip"]}
-                        disabled={disabled}
-                        onClick={() => {
-                            onBarAction(barNumber, action.kind);
-                        }}
-                    >
-                        <Icon src={action.icon} width={16} height={16} alt={action["data-tooltip"]} />
-                    </button>,
-                );
-            }
+            const items: IDropdownItem[] = actionDefinitions.map((action) => {
+                return {
+                    label: action["data-tooltip"],
+                    disabled: action.kind === BarActionKind.Delete && !canDelete,
+                    onClick: () => {
+                        onBarAction(barNumber, action.kind);
+                    },
+                };
+            });
 
             groups.push(
-                <GooeyGroup key={barNumber} className="bar-action-group" background="var(--color-base-200)">
-                    {buttons}
-                </GooeyGroup>,
+                <Container key={barNumber} className="bar-action-group" crossAlignment={ChildAlignment.Center}>
+                    <Dropdown
+                        className="bar-action-menu"
+                        icon={<Icon src={UIIcon.KebabVertical} width={16} height={16} alt="Bar actions" />}
+                        items={items}
+                        closeOnSelect
+                        compact
+                        data-tooltip={`Bar ${barNumber} actions`}
+                    />
+                </Container>,
             );
         }
 

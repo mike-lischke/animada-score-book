@@ -30,6 +30,7 @@ import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.
 import { Minimap, type IVisibleBarRange } from "../Minimap/Minimap.js";
 import { InsertBarsDialog } from "../composites/InsertBarsDialog.js";
 import { BarActionKind, BarActionStrip } from "./BarActionStrip.js";
+import { SelectionEditPopup } from "./SelectionEditPopup.js";
 import { TrackControls } from "./TrackControls.js";
 import { TrackEditSidebar } from "./TrackEditSidebar.js";
 
@@ -402,6 +403,14 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
                     >
                         <TrackControls innerRef={this.trackControlsRef} tracks={arrangement.tracks}
                             selectionManager={selectionManager} />
+                        <SelectionEditPopup
+                            dataModel={dataModel}
+                            selectionManager={selectionManager}
+                            scoreElementRegistry={this.scoreElementRegistry}
+                            editMode={inEditMode}
+                            entryMode={this.props.entryMode}
+                            trackViewMode={trackViewMode}
+                        />
                         <Container
                             id="trackViewerHost"
                             innerRef={this.viewerRef}

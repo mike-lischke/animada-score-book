@@ -9,9 +9,13 @@ import { stringifyPackedArrangement } from "../../src/core/serialisation/snapsho
 import { arrangementSnapshotVersion } from "../../src/core/serialisation/snapshots.js";
 import type { IArrangementSnapshot, IMeasureEvent } from "../../src/core/types/general.js";
 import { EditEntryMode } from "../../src/core/types/general.js";
-import { routeApi, toolbarButton } from "./e2e-test-helpers.js";
+import { routeApi } from "./e2e-test-helpers.js";
 
 const meter = { beats: 4, beatUnits: 4, stepResolution: 16, beatGroups: [4, 4, 4, 4] };
+
+const rangeToolButton = (page: Page, tooltip: string) => {
+    return page.locator(`#rangeArticulationToolbarHost button[data-tooltip="${tooltip}"]`);
+};
 
 /** A point on the page, in viewport px. */
 interface IPagePoint {
@@ -98,7 +102,7 @@ const seedScore = async (page: Page, snapshot: IArrangementSnapshot): Promise<vo
  */
 const openToolbar = async (page: Page): Promise<void> => {
     await page.locator(".editSaveGooey button").nth(1).click({ force: true });
-    await expect(page.locator("#editControlsHost .subdivisionToolbarHost")).toBeVisible();
+    await expect(page.locator("#rangeArticulationToolbarHost .rangeArticulationToolbar")).toBeVisible();
 };
 
 /**
@@ -179,7 +183,7 @@ const placeMarking = async (page: Page, snapshot: IArrangementSnapshot, tooltip:
     await seedScore(page, snapshot);
     await openToolbar(page);
 
-    await toolbarButton(page, tooltip).click();
+    await rangeToolButton(page, tooltip).click();
     const point = await bandPointOfNote(page, barNumber, noteIndex);
     await page.mouse.click(point.x, point.y);
 
@@ -223,7 +227,7 @@ test("ends the placing mode with escape, without placing anything", async ({ pag
     await seedScore(page, snapshotOf(quarterEvents));
     await openToolbar(page);
 
-    await toolbarButton(page, "Draw crescendo / decrescendo hairpin").click();
+    await rangeToolButton(page, "Draw crescendo / decrescendo hairpin").click();
     await expect(page.locator("body")).toHaveClass(/range-articulation-mode/);
 
     await page.keyboard.press("Escape");
@@ -233,6 +237,21 @@ test("ends the placing mode with escape, without placing anything", async ({ pag
     const point = await bandPointOfNote(page, 1, 0);
     await page.mouse.click(point.x, point.y);
     await expect(page.locator(".range-articulation")).toHaveCount(0);
+});
+
+test("cancels the placing mode from its floating status", async ({ page }) => {
+    await seedScore(page, snapshotOf(quarterEvents));
+    await openToolbar(page);
+
+    await rangeToolButton(page, "Place forte (f)").click();
+    const modeStatus = page.locator(".rangeArticulationModeStatus");
+    await expect(modeStatus).toContainText("Click a note or rest to place forte");
+
+    await modeStatus.getByRole("button", { name: "Cancel" }).click();
+
+    await expect(page.locator("body")).not.toHaveClass(/range-articulation-mode/);
+    await expect(page.locator(".range-articulation")).toHaveCount(0);
+    await expect(modeStatus).not.toBeVisible();
 });
 
 test("shows the handles of the selected marking and hands the selection back to the score", async ({ page }) => {

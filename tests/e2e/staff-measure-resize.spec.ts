@@ -116,6 +116,22 @@ test.beforeEach(async ({ page }) => {
     await routeApi(page);
 });
 
+test("opens bar actions at each measure and duplicates the selected measure", async ({ page }) => {
+    await openScore(page);
+    await page.locator(".editSaveGooey button").nth(1).click({ force: true });
+
+    const triggers = page.locator(".bar-action-menu button");
+    await expect(triggers).toHaveCount(barCount);
+    await triggers.nth(1).click({ force: true });
+
+    const menu = page.locator(".bar-action-menu ul[popover]").nth(1);
+    await expect(menu).toBeVisible();
+    await expect(menu).toContainText("Clear bar");
+    await menu.getByText("Duplicate bar", { exact: true }).click();
+
+    await expect(page.locator(".staff-measure-viewer")).toHaveCount(barCount + 1);
+});
+
 test("opens the barline as a resize handle in edit mode only", async ({ page }) => {
     await openScore(page);
 
@@ -272,14 +288,12 @@ test("widens the overlay of a selected measure while the barline is dragged", as
     await openScore(page, EditEntryMode.Overwrite);
     await page.locator(".editSaveGooey button").nth(1).click({ force: true });
 
-    // The bar action strip pushes the staff down, so waiting for it keeps the measured row box current.
-    await expect(page.locator("#editControlsHost .articulationToolbar")).toBeVisible();
-
     const row = page.locator(".staff-measure-track-row").first();
     const rowBox = (await row.boundingBox())!;
 
     // In the measure's head room, above the first staff: the click selects the whole measure.
     await page.mouse.click(rowBox.x + (rowBox.width / 2), rowBox.y - 5);
+    await expect(page.locator("#selectionEditPopup .subdivisionToolbarHost")).toBeVisible();
 
     const overlay = page.locator(".selection-overlay");
     await expect(overlay).toHaveCount(1);

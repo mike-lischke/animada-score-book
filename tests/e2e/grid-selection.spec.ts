@@ -59,5 +59,5 @@ test("clicking a trailing cell of a spanning note selects that cell", async ({ p
     expect(overlayBox).not.toBeNull();
     expect(overlayBox!.x).toBeLessThanOrEqual(cellBox!.x);
     expect(overlayBox!.x + overlayBox!.width).toBeGreaterThanOrEqual(cellBox!.x + cellBox!.width);
-    await expect(page.locator(".selection-delete-button")).toHaveCount(0);
+    await expect(page.locator("#selectionEditPopup .selectionDeleteButton")).toHaveCount(0);
 });

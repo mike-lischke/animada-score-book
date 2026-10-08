@@ -272,36 +272,15 @@ test("keeps the whole-measure rest of a bar centred under a repeat barline", asy
     expect(await restCentre(page, 1)).toBeCloseTo(0.5, 2);
 });
 
-test("offers the repeat marks as unavailable for a selection that is not whole bars", async ({ page }) => {
+test("hides repeat marks for a note selection", async ({ page }) => {
     await seedScore(page, snapshotWith(3, {}));
 
     await page.locator(".editSaveGooey button").nth(1).click({ force: true });
-    await expect(page.locator("#editControlsHost .subdivisionToolbarHost")).toBeVisible();
 
     // A note is not a bar, so neither mark can be set on the selection.
     await staffBar(page, 2).locator(".staff-note-head-symbol").first().click();
+    await expect(page.locator("#selectionEditPopup .subdivisionToolbarHost")).toBeVisible();
 
-    await expect(toolbarButton(page, "Repeat start")).toBeDisabled();
-    await expect(toolbarButton(page, "Repeat end")).toBeDisabled();
-
-    // The strokes of the drawn barline follow the colour of their icon, and the framework fades that colour for a
-    // disabled button, which is what greys the mark out next to an enabled one.
-    await expect.poll(() => {
-        return page.evaluate(() => {
-            const iconOf = (tooltip: string): SVGSVGElement | null => {
-                return document.querySelector<SVGSVGElement>(
-                    `.subdivisionToolbar button[data-tooltip="${tooltip}"] > svg`);
-            };
-
-            const disabled = iconOf("Repeat start");
-            const enabled = iconOf("Draw crescendo / decrescendo hairpin");
-            const stroke = disabled?.querySelector<SVGElement>(".barline-icon-stroke");
-            if (disabled === null || enabled === null || stroke === null || stroke === undefined) {
-                return false;
-            }
-
-            return getComputedStyle(stroke).stroke === getComputedStyle(disabled).color
-                && getComputedStyle(disabled).color !== getComputedStyle(enabled).color;
-        });
-    }).toBe(true);
+    await expect(toolbarButton(page, "Repeat start")).toHaveCount(0);
+    await expect(toolbarButton(page, "Repeat end")).toHaveCount(0);
 });

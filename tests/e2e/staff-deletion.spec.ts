@@ -62,7 +62,6 @@ test.beforeEach(async ({ page }) => {
 
     // Deletion is an edit, so the editor only reacts in edit mode.
     await page.locator(".editSaveGooey button").nth(1).click({ force: true });
-    await expect(page.locator("#editControlsHost .articulationToolbar")).toBeVisible();
 });
 
 test("backspace removes the event before the cursor and pulls the rest left", async ({ page }) => {

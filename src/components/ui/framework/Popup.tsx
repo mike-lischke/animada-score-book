@@ -70,6 +70,7 @@ export class Popup extends UIComponent<IPopupProperties, IPopupState> {
     private anchorElement?: HTMLElement;
     private returnFocusElement?: HTMLElement;
     private positionFrame?: number;
+    private outsideClickTimer?: ReturnType<typeof setTimeout>;
 
     public constructor(props: IPopupProperties) {
         super(props);
@@ -280,7 +281,12 @@ export class Popup extends UIComponent<IPopupProperties, IPopupState> {
 
         const { pinned = false } = this.props;
         document.addEventListener("pointerdown", this.handleOutsidePointerDown, true);
-        document.addEventListener("click", this.handleOutsideClick, true);
+        this.outsideClickTimer = setTimeout(() => {
+            this.outsideClickTimer = undefined;
+            if (this.portalRef.current?.isOpen) {
+                document.addEventListener("click", this.handleOutsideClick, true);
+            }
+        }, 0);
 
         if (pinned) {
             return;
@@ -310,6 +316,11 @@ export class Popup extends UIComponent<IPopupProperties, IPopupState> {
     private stopPositionTracking(): void {
         document.removeEventListener("pointerdown", this.handleOutsidePointerDown, true);
         document.removeEventListener("click", this.handleOutsideClick, true);
+        if (this.outsideClickTimer !== undefined) {
+            clearTimeout(this.outsideClickTimer);
+            this.outsideClickTimer = undefined;
+        }
+
         document.removeEventListener("scroll", this.handleViewportChange, true);
         window.removeEventListener("resize", this.handleViewportChange);
         window.removeEventListener("orientationchange", this.handleViewportChange);
@@ -340,7 +351,9 @@ export class Popup extends UIComponent<IPopupProperties, IPopupState> {
 
     private dismissFromOutside(event: Event): void {
         const popup = this.containerRef.current;
-        if (!popup || event.composedPath().includes(popup)) {
+        const eventPath = event.composedPath();
+        if (!popup || eventPath.includes(popup)
+            || this.isAnchorInteraction(event, eventPath)) {
             return;
         }
 
@@ -348,6 +361,26 @@ export class Popup extends UIComponent<IPopupProperties, IPopupState> {
         if (dismissOnOutsideClick) {
             this.closeWithReason(true, PortalCloseReason.OutsideClick);
         }
+    }
+
+    private isAnchorInteraction(event: Event, eventPath: EventTarget[]): boolean {
+        const anchor = this.anchorElement;
+        if (!anchor) {
+            return false;
+        }
+
+        if (eventPath.includes(anchor)) {
+            return true;
+        }
+
+        if (!(event instanceof MouseEvent)) {
+            return false;
+        }
+
+        const bounds = anchor.getBoundingClientRect();
+
+        return event.clientX >= bounds.left && event.clientX <= bounds.right
+            && event.clientY >= bounds.top && event.clientY <= bounds.bottom;
     }
 
     private handleViewportChange = (): void => {

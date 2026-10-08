@@ -95,7 +95,6 @@ export class SelectionView {
     private autoScrollDY = 0;
     private editMode: boolean;
     private entryMode: EditEntryMode;
-    private selectionDeleteButtonCreated = false;
     private selectionRefreshFrame?: number;
 
     /**
@@ -865,10 +864,6 @@ export class SelectionView {
                 cursor.style.display = "none";
             }
 
-            overlayContainer?.querySelectorAll<HTMLElement>(".selection-delete-button").forEach((button) => {
-                button.remove();
-            });
-            this.selectionDeleteButtonCreated = false;
         }
 
         this.updateTrackViewerOverlays();
@@ -903,8 +898,6 @@ export class SelectionView {
         overlayContainer.querySelectorAll(`.${selectionOverlayClass}`).forEach((el) => {
             el.remove();
         });
-        this.selectionDeleteButtonCreated = false;
-
         const cursor = this.getSelectionCursor(overlayContainer);
         cursor.style.display = "none";
 
@@ -1853,20 +1846,6 @@ export class SelectionView {
         overlay.style.top = `${rect.y}px`;
         overlay.style.width = `${rect.width + 4}px`;
         overlay.style.height = `${rect.height}px`;
-
-        if (this.editMode && !this.selectionDeleteButtonCreated) {
-            const deleteButton = document.createElement("button");
-            deleteButton.type = "button";
-            deleteButton.className = "selection-delete-button";
-            deleteButton.setAttribute("aria-label", "Clear selection");
-            deleteButton.setAttribute("data-tooltip", "Clear selection");
-            deleteButton.addEventListener("click", (event) => {
-                event.stopPropagation();
-                void requisitions.execute("selectionDeleteRequested", undefined);
-            });
-            overlay.appendChild(deleteButton);
-            this.selectionDeleteButtonCreated = true;
-        }
 
         container.appendChild(overlay);
     }

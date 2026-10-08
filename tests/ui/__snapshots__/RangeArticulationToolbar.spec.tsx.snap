@@ -1,0 +1,356 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`RangeArticulationToolbar > matches the baseline snapshot with all props set 1`] = `
+<div
+  class="container rangeArticulationSurface custom-range-tools custom-range-tools"
+  data-testid="range-tools"
+  id="rangeArticulationToolbarHost"
+  style="flex-direction: column; align-items: flex-end;"
+>
+  <svg
+    aria-hidden="true"
+    class="gooey-filter-svg"
+  >
+    <defs>
+      <filter
+        color-interpolation-filters="sRGB"
+        height="150%"
+        id="gooey-1"
+        width="150%"
+        x="-25%"
+        y="-25%"
+      >
+        <femorphology
+          in="SourceGraphic"
+          operator="dilate"
+          radius="4"
+          result="dilated"
+        />
+        <fegaussianblur
+          in="dilated"
+          result="blur"
+          stdDeviation="6"
+        />
+        <fecolormatrix
+          in="blur"
+          result="gooShape"
+          type="matrix"
+          values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 18 -7"
+        />
+        <feflood
+          flood-color="var(--color-base-200)"
+          result="bgColor"
+        />
+        <fecomposite
+          in="bgColor"
+          in2="gooShape"
+          operator="in"
+          result="goo"
+        />
+        <feoffset
+          dx="0"
+          dy="3"
+          in="goo"
+          result="shadowOffset"
+        />
+        <fegaussianblur
+          in="shadowOffset"
+          result="shadowBlur"
+          stdDeviation="1"
+        />
+        <fecomposite
+          in="goo"
+          in2="shadowBlur"
+          operator="out"
+          result="shadowMask"
+        />
+        <feflood
+          flood-color="#000"
+          flood-opacity="0.1"
+          result="shadowColor"
+        />
+        <fecomposite
+          in="shadowColor"
+          in2="shadowMask"
+          operator="in"
+          result="innerShadow"
+        />
+        <fecomposite
+          in="innerShadow"
+          in2="goo"
+          operator="over"
+          result="blobShadowed"
+        />
+        <feoffset
+          dx="0"
+          dy="-1"
+          in="blobShadowed"
+          result="highlightOffset"
+        />
+        <fegaussianblur
+          in="highlightOffset"
+          result="highlightBlur"
+          stdDeviation="0.5"
+        />
+        <fecomposite
+          in="blobShadowed"
+          in2="highlightBlur"
+          operator="out"
+          result="highlightMask"
+        />
+        <feflood
+          flood-color="#fff"
+          flood-opacity="0.18"
+          result="highlightColor"
+        />
+        <fecomposite
+          in="highlightColor"
+          in2="highlightMask"
+          operator="in"
+          result="innerHighlight"
+        />
+        <fecomposite
+          in="innerHighlight"
+          in2="blobShadowed"
+          operator="over"
+          result="blob"
+        />
+        <fecomposite
+          in="SourceGraphic"
+          in2="blob"
+          operator="over"
+        />
+      </filter>
+    </defs>
+  </svg>
+  <div
+    class="gooey-group rangeArticulationToolbar"
+    style="filter: url("#gooey-1");"
+  >
+    <button
+      class="btn du-btn"
+      data-tooltip="Draw crescendo / decrescendo hairpin"
+    >
+      <svg
+        aria-hidden="true"
+        class="hairpin-icon"
+        fill="none"
+        height="100%"
+        stroke="currentColor"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        stroke-width="2"
+        viewBox="0 0 24 24"
+        width="100%"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <path
+          d="M20 4 L4 7.5 L20 11"
+        />
+        <path
+          d="M4 13 L20 16.5 L4 20"
+        />
+      </svg>
+    </button>
+    <button
+      class="btn du-btn forteButton"
+      data-tooltip="Place forte (f)"
+    >
+      <svg
+        aria-hidden="true"
+        class="smufl-glyph-view score-symbol-icon"
+        height="20"
+        style="--ink-left: var(--glyph-ink-spaces-left-dynamicforte, 0); --ink-width: var(--glyph-ink-spaces-width-dynamicforte, 0); --ink-top: var(--glyph-ink-spaces-top-dynamicforte, 0); --ink-bottom: var(--glyph-ink-spaces-bottom-dynamicforte, 0); --ink-box-width: 2; --ink-box-height: 2; --ink-pen-x: 1; --ink-pen-y: 1;"
+        viewBox="0 0 20 20"
+        width="20"
+      >
+        <text
+          font-size="40"
+          text-anchor="middle"
+          x="10"
+          y="10"
+        >
+          
+        </text>
+      </svg>
+    </button>
+  </div>
+</div>
+`;
+
+exports[`RangeArticulationToolbar > matches the baseline snapshot with minimal props 1`] = `
+<div
+  class="container rangeArticulationSurface"
+  id="rangeArticulationToolbarHost"
+  style="flex-direction: column; align-items: flex-end;"
+>
+  <svg
+    aria-hidden="true"
+    class="gooey-filter-svg"
+  >
+    <defs>
+      <filter
+        color-interpolation-filters="sRGB"
+        height="150%"
+        id="gooey-0"
+        width="150%"
+        x="-25%"
+        y="-25%"
+      >
+        <femorphology
+          in="SourceGraphic"
+          operator="dilate"
+          radius="4"
+          result="dilated"
+        />
+        <fegaussianblur
+          in="dilated"
+          result="blur"
+          stdDeviation="6"
+        />
+        <fecolormatrix
+          in="blur"
+          result="gooShape"
+          type="matrix"
+          values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 18 -7"
+        />
+        <feflood
+          flood-color="var(--color-base-200)"
+          result="bgColor"
+        />
+        <fecomposite
+          in="bgColor"
+          in2="gooShape"
+          operator="in"
+          result="goo"
+        />
+        <feoffset
+          dx="0"
+          dy="3"
+          in="goo"
+          result="shadowOffset"
+        />
+        <fegaussianblur
+          in="shadowOffset"
+          result="shadowBlur"
+          stdDeviation="1"
+        />
+        <fecomposite
+          in="goo"
+          in2="shadowBlur"
+          operator="out"
+          result="shadowMask"
+        />
+        <feflood
+          flood-color="#000"
+          flood-opacity="0.1"
+          result="shadowColor"
+        />
+        <fecomposite
+          in="shadowColor"
+          in2="shadowMask"
+          operator="in"
+          result="innerShadow"
+        />
+        <fecomposite
+          in="innerShadow"
+          in2="goo"
+          operator="over"
+          result="blobShadowed"
+        />
+        <feoffset
+          dx="0"
+          dy="-1"
+          in="blobShadowed"
+          result="highlightOffset"
+        />
+        <fegaussianblur
+          in="highlightOffset"
+          result="highlightBlur"
+          stdDeviation="0.5"
+        />
+        <fecomposite
+          in="blobShadowed"
+          in2="highlightBlur"
+          operator="out"
+          result="highlightMask"
+        />
+        <feflood
+          flood-color="#fff"
+          flood-opacity="0.18"
+          result="highlightColor"
+        />
+        <fecomposite
+          in="highlightColor"
+          in2="highlightMask"
+          operator="in"
+          result="innerHighlight"
+        />
+        <fecomposite
+          in="innerHighlight"
+          in2="blobShadowed"
+          operator="over"
+          result="blob"
+        />
+        <fecomposite
+          in="SourceGraphic"
+          in2="blob"
+          operator="over"
+        />
+      </filter>
+    </defs>
+  </svg>
+  <div
+    class="gooey-group rangeArticulationToolbar"
+    style="filter: url("#gooey-0");"
+  >
+    <button
+      class="btn du-btn"
+      data-tooltip="Draw crescendo / decrescendo hairpin"
+    >
+      <svg
+        aria-hidden="true"
+        class="hairpin-icon"
+        fill="none"
+        height="100%"
+        stroke="currentColor"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        stroke-width="2"
+        viewBox="0 0 24 24"
+        width="100%"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <path
+          d="M20 4 L4 7.5 L20 11"
+        />
+        <path
+          d="M4 13 L20 16.5 L4 20"
+        />
+      </svg>
+    </button>
+    <button
+      class="btn du-btn forteButton"
+      data-tooltip="Place forte (f)"
+    >
+      <svg
+        aria-hidden="true"
+        class="smufl-glyph-view score-symbol-icon"
+        height="20"
+        style="--ink-left: var(--glyph-ink-spaces-left-dynamicforte, 0); --ink-width: var(--glyph-ink-spaces-width-dynamicforte, 0); --ink-top: var(--glyph-ink-spaces-top-dynamicforte, 0); --ink-bottom: var(--glyph-ink-spaces-bottom-dynamicforte, 0); --ink-box-width: 2; --ink-box-height: 2; --ink-pen-x: 1; --ink-pen-y: 1;"
+        viewBox="0 0 20 20"
+        width="20"
+      >
+        <text
+          font-size="40"
+          text-anchor="middle"
+          x="10"
+          y="10"
+        >
+          
+        </text>
+      </svg>
+    </button>
+  </div>
+</div>
+`;

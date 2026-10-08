@@ -202,7 +202,6 @@ test("the clear button of a measure selection stays inside the overlay container
     await openStaffScore(page, twoTrackSnapshot, "e2e-staff-measure-clear");
 
     await page.locator(".editSaveGooey button").nth(1).click({ force: true });
-    await expect(page.locator("#editControlsHost .articulationToolbar")).toBeVisible();
 
     const rows = page.locator(".staff-measure-track-row");
     const first = await rows.nth(0).boundingBox();
@@ -211,12 +210,13 @@ test("the clear button of a measure selection stays inside the overlay container
     // In the measure's head room, above the first staff: a measure selection in both the old and the new bounds.
     await page.mouse.click(first!.x + (first!.width / 2), first!.y - 20);
 
-    const button = page.locator(".selection-delete-button");
+    const popup = page.locator("#selectionEditPopup");
+    const button = popup.locator(".selectionDeleteButton");
+    await expect(popup).toBeVisible();
     await expect(button).toBeVisible();
 
-    // The overlay container clips its content, so the button has to start below the container's top.
     const buttonBox = await button.boundingBox();
-    const containerBox = await page.locator("#trackViewerDecorationOverlay").boundingBox();
+    const containerBox = await popup.boundingBox();
     expect(buttonBox).not.toBeNull();
     expect(containerBox).not.toBeNull();
     expect(buttonBox!.y).toBeGreaterThanOrEqual(containerBox!.y);

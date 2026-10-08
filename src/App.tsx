@@ -28,11 +28,8 @@ import { StatusBarAlignment, type IStatusBarItem } from "./components/ui/Statusb
 import { ArrangementPlayControls } from "./components/ui/Arrangement/ArrangementPlayControls.js";
 import { ArrangementTitle } from "./components/ui/Arrangement/ArrangementTitle.js";
 import { ArrangementViewer } from "./components/ui/Arrangement/ArrangementViewer.js";
-import { ArticulationToolbar } from "./components/ui/Arrangement/ArticulationToolbar.js";
 import { EntryModeButton } from "./components/ui/Arrangement/EntryModeButton.js";
-import { NoteLengthToolbar } from "./components/ui/Arrangement/NoteLengthToolbar.js";
-import { NoteStyleBar } from "./components/ui/Arrangement/NoteStyleBar.js";
-import { SubdivisionToolbar } from "./components/ui/Arrangement/SubdivisionToolbar.js";
+import { RangeArticulationToolbar } from "./components/ui/Arrangement/RangeArticulationToolbar.js";
 import { UndoRedoControls } from "./components/ui/Arrangement/UndoRedoControls.js";
 import { ConfirmDialog } from "./components/ui/composites/ConfirmDialog.js";
 import { NewScoreDialog } from "./components/ui/composites/NewScoreDialog.js";
@@ -455,6 +452,10 @@ export class App extends UIComponent<{}, IAppState> {
         );
         const appHeader = this.renderAppHeader(headerNavigation, breadcrumb, headerActions);
         const editControls = this.renderEditControls(entryMode, trackViewMode);
+        let rangeArticulationToolbar: ComponentChild;
+        if (editMode && trackViewMode === "staff") {
+            rangeArticulationToolbar = <RangeArticulationToolbar />;
+        }
 
         return (
             <>
@@ -500,6 +501,7 @@ export class App extends UIComponent<{}, IAppState> {
                                     {appHeader}
                                     <div id="appOverlay">
                                         {editControls}
+                                        {rangeArticulationToolbar}
                                         <div id="playbackControlsHost">
                                             <ArrangementPlayControls
                                                 arrangementPlayer={this.arrangementPlayer!}
@@ -637,16 +639,8 @@ export class App extends UIComponent<{}, IAppState> {
         }
 
         let entryModeButton: ComponentChild;
-        let noteLengthToolbar: ComponentChild;
         if (trackViewMode === "staff") {
             entryModeButton = <EntryModeButton entryMode={entryMode} />;
-            noteLengthToolbar = (
-                <NoteLengthToolbar
-                    dataModel={this.dataModel}
-                    selectionManager={this.selectionManager}
-                    entryMode={entryMode}
-                />
-            );
         }
 
         return (
@@ -659,24 +653,6 @@ export class App extends UIComponent<{}, IAppState> {
                 <UndoRedoControls undoManager={this.undoManager} />
                 <Separator />
                 {entryModeButton}
-                <SubdivisionToolbar
-                    selectionManager={this.selectionManager}
-                    dataModel={this.dataModel}
-                />
-                {noteLengthToolbar}
-                <Separator />
-                <ArticulationToolbar
-                    dataModel={this.dataModel}
-                    selectionManager={this.selectionManager}
-                    entryMode={entryMode}
-                />
-                <Separator />
-                <NoteStyleBar
-                    dataModel={this.dataModel}
-                    selectionManager={this.selectionManager}
-                    trackViewMode={trackViewMode}
-                    entryMode={entryMode}
-                />
             </Container>
         );
     }

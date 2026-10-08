@@ -12,7 +12,7 @@ import type { ISbDmArrangement, ISbDmTrack, ISbDmTrackPiece } from "../../src/co
 import { ScoreBookDataModel } from "../../src/core/ScoreBookDataModel.js";
 import type { IFraction } from "../../src/core/types/general.js";
 import { RepeatMark } from "../../src/core/types/general.js";
-import { requisitions, RangeArticulationTool } from "../../src/supplement/Requisitions.js";
+import { requisitions } from "../../src/supplement/Requisitions.js";
 import { SelectionManager } from "../../src/ui/SelectionManager.js";
 import { createInstrument, measureEntry, noteEntry, runEntry, trackPieceEntry } from "../unit-test-helpers.js";
 
@@ -445,79 +445,31 @@ describe("SubdivisionToolbar", { concurrent: false }, () => {
         expect(start.classList.contains("du-btn-primary")).toBe(false);
     });
 
-    it("announces the placing tool of a clicked button", async () => {
-        const model = new ScoreBookDataModel();
-        model.startNewArrangement([createInstrument("0", 0, 0)]);
-        const announced: RangeArticulationTool[] = [];
-        const spy = (tool: RangeArticulationTool): Promise<boolean> => {
-            announced.push(tool);
-
-            return Promise.resolve(true);
-        };
-
-        requisitions.register("rangeArticulationToolChanged", spy);
-        try {
-            renderResult = render(<SubdivisionToolbar selectionManager={selectionManager} dataModel={model} />);
-            void requisitions.execute("trackViewModeToggled", "staff");
-            await Promise.resolve();
-
-            buttonWithTooltip(renderResult.container, "Draw crescendo / decrescendo hairpin").click();
-            buttonWithTooltip(renderResult.container, "Place forte (f)").click();
-
-            expect(announced).toEqual([RangeArticulationTool.Hairpin, RangeArticulationTool.Forte]);
-        } finally {
-            requisitions.unregister("rangeArticulationToolChanged", spy);
-        }
-    });
-
-    it("keeps the repeat and dynamics controls out of the grid view", async () => {
+    it("keeps tuplets in grid and exposes repeat marks only in staff", async () => {
         const model = new ScoreBookDataModel();
         model.startNewArrangement([createInstrument("0", 0, 0)]);
 
         renderResult = render(<SubdivisionToolbar selectionManager={selectionManager} dataModel={model} />);
+        void requisitions.execute("trackViewModeToggled", "grid");
+        await Promise.resolve();
 
-        // The staff view offers the whole toolbar: the repeat marks and the dynamics it draws.
-        expect(buttonWithTooltip(renderResult.container, "Draw crescendo / decrescendo hairpin").disabled).toBe(false);
+        expect(buttonWithTooltip(renderResult.container, "Add subdivision")).toBeTruthy();
+        expect(buttonOrNull(renderResult.container, "One-bar repeat (simile)")).toBeNull();
+
+        void requisitions.execute("trackViewModeToggled", "staff");
+        await Promise.resolve();
+
         expect(buttonWithTooltip(renderResult.container, "One-bar repeat (simile)")).toBeTruthy();
+        expect(buttonWithTooltip(renderResult.container, "Repeat start")).toBeTruthy();
+        expect(buttonWithTooltip(renderResult.container, "Repeat end")).toBeTruthy();
+        expect(renderResult.container.querySelectorAll(".subdivisionToolbar")).toHaveLength(3);
 
         void requisitions.execute("trackViewModeToggled", "grid");
         await Promise.resolve();
 
-        // The grid keeps the tuplet dropdown alone and drops the controls whose marks it does not draw.
-        expect(buttonOrNull(renderResult.container, "Draw crescendo / decrescendo hairpin")).toBeNull();
-        expect(buttonOrNull(renderResult.container, "Place forte (f)")).toBeNull();
+        expect(buttonWithTooltip(renderResult.container, "Add subdivision")).toBeTruthy();
         expect(buttonOrNull(renderResult.container, "One-bar repeat (simile)")).toBeNull();
         expect(buttonOrNull(renderResult.container, "Repeat start")).toBeNull();
         expect(buttonOrNull(renderResult.container, "Repeat end")).toBeNull();
-        expect(buttonOrNull(renderResult.container, "Add subdivision")).not.toBeNull();
-        expect(renderResult.container.querySelectorAll(".subdivisionToolbar")).toHaveLength(1);
-    });
-
-    it("ends a placing mode when the toolbar goes away", async () => {
-        const model = new ScoreBookDataModel();
-        model.startNewArrangement([createInstrument("0", 0, 0)]);
-        const announced: RangeArticulationTool[] = [];
-        const spy = (tool: RangeArticulationTool): Promise<boolean> => {
-            announced.push(tool);
-
-            return Promise.resolve(true);
-        };
-
-        requisitions.register("rangeArticulationToolChanged", spy);
-        try {
-            renderResult = render(<SubdivisionToolbar selectionManager={selectionManager} dataModel={model} />);
-            void requisitions.execute("trackViewModeToggled", "staff");
-            await Promise.resolve();
-
-            buttonWithTooltip(renderResult.container, "Place forte (f)").click();
-            await Promise.resolve();
-
-            renderResult.unmount();
-            renderResult = null;
-
-            expect(announced).toEqual([RangeArticulationTool.Forte, RangeArticulationTool.None]);
-        } finally {
-            requisitions.unregister("rangeArticulationToolChanged", spy);
-        }
     });
 });

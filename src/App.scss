@@ -328,6 +328,41 @@ h6 {
     touch-action: pan-x;
 }
 
+#rangeArticulationToolbarHost {
+    position: absolute;
+    top: 8px;
+    right: 12px;
+    gap: 8px;
+    pointer-events: none;
+
+    .rangeArticulationToolbar,
+    .rangeArticulationModeStatus {
+        pointer-events: auto;
+    }
+}
+
+#rangeArticulationToolbarHost .rangeArticulationModeStatus {
+    max-width: min(420px, calc(100vw - 24px));
+    padding: 8px;
+    border: 1px solid var(--color-base-200);
+    border-radius: 6px;
+    background: var(--color-base-100);
+    box-shadow: 0 4px 16px rgba(15, 23, 42, 0.12);
+}
+
+#selectionEditActions {
+    min-width: 0;
+    gap: 8px;
+}
+
+#selectionEditActions .selectionNoteTools {
+    min-width: 0;
+}
+
+#selectionEditActions .selectionDeleteButton {
+    align-self: flex-end;
+}
+
 #playbackControlsHost {
     position: absolute;
     right: 12px;
@@ -391,6 +426,10 @@ h6 {
     #editControlsHost {
         left: 4px;
         max-width: calc(100% - 8px);
+    }
+
+    #rangeArticulationToolbarHost {
+        right: 4px;
     }
 
     #playbackControlsHost {

@@ -107,20 +107,20 @@ test("does not offer the mark for a note selection", async ({ page }) => {
     await seedScore(page, snapshotWith([notePiece, restPiece]));
 
     await page.locator(".editSaveGooey button").nth(1).click({ force: true });
-    await expect(page.locator("#editControlsHost .subdivisionToolbarHost")).toBeVisible();
 
     await staffBar(page, 1).locator(".staff-note-head-symbol").first().click();
+    await expect(page.locator("#selectionEditPopup .subdivisionToolbarHost")).toBeVisible();
 
-    await expect(toolbarButton(page, "One-bar repeat (simile)")).toBeDisabled();
+    await expect(toolbarButton(page, "One-bar repeat (simile)")).toHaveCount(0);
 });
 
 test("sets the mark on a track piece and clears it again", async ({ page }) => {
     await seedScore(page, snapshotWith([notePiece, restPiece]));
 
     await page.locator(".editSaveGooey button").nth(1).click({ force: true });
-    await expect(page.locator("#editControlsHost .subdivisionToolbarHost")).toBeVisible();
 
     await selectTrackPiece(page, 2);
+    await expect(page.locator("#selectionEditPopup .subdivisionToolbarHost")).toBeVisible();
 
     const repeat = toolbarButton(page, "One-bar repeat (simile)");
     await expect(repeat).toBeEnabled();
@@ -129,8 +129,12 @@ test("sets the mark on a track piece and clears it again", async ({ page }) => {
     const mark = staffBar(page, 2).locator(".staff-note-viewer-simile");
     await expect(mark).toBeVisible();
 
+    // The score mutation replaces the popup's rendered anchor, so selecting the track piece again opens its context.
+    await selectTrackPiece(page, 2);
+    await expect(page.locator("#selectionEditPopup .subdivisionToolbarHost")).toBeVisible();
+
     // The toggle clears the mark again, which leaves the piece empty rather than restoring its content.
-    await repeat.click({ force: true });
+    await toolbarButton(page, "One-bar repeat (simile)").click({ force: true });
     await expect(mark).toHaveCount(0);
 });
 
@@ -138,9 +142,9 @@ test("keeps the mark off a track piece of the first measure", async ({ page }) =
     await seedScore(page, snapshotWith([notePiece, restPiece]));
 
     await page.locator(".editSaveGooey button").nth(1).click({ force: true });
-    await expect(page.locator("#editControlsHost .subdivisionToolbarHost")).toBeVisible();
 
     await selectTrackPiece(page, 1);
+    await expect(page.locator("#selectionEditPopup .subdivisionToolbarHost")).toBeVisible();
 
     await expect(toolbarButton(page, "One-bar repeat (simile)")).toBeDisabled();
 });
