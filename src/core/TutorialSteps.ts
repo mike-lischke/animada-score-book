@@ -39,8 +39,8 @@ export const tutorialSteps: ITutorialStep[] = [
         targetSelector: "[data-tutorial=\"playback\"]",
         markerShape: "rect",
         description: "Press the play button to start playback. You can select a range of measures"
-            + " to play only that section. Loop, count-in, and metronome controls"
-            + " are always visible in the playback bar.",
+            + " to play only that section. Loop and metronome are in the playback bar,"
+            + " count-in is in its settings menu.",
     },
     {
         title: "Mixer",
@@ -60,9 +60,9 @@ export const tutorialSteps: ITutorialStep[] = [
     },
     {
         title: "MP3 Export",
-        targetSelector: "#recordButton",
+        targetSelector: "#exportButton",
         markerShape: "circle",
-        description: "Click the record button to export your arrangement as an MP3 file."
+        description: "Click the Export button to export your arrangement as an MP3 file."
             + " The app renders the full arrangement with all instruments"
             + " and gives you an MP3 file to download.",
     },

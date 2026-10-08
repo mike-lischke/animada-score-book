@@ -61,7 +61,7 @@ test.beforeEach(async ({ page }) => {
     await expect(page.locator(".staff-measure-track-row").first()).toBeVisible();
 
     // Deletion is an edit, so the editor only reacts in edit mode.
-    await page.locator(".editSaveGooey button").nth(1).click({ force: true });
+    await page.locator("#editModeButton").click({ force: true });
 });
 
 test("backspace removes the event before the cursor and pulls the rest left", async ({ page }) => {

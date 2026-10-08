@@ -7,8 +7,6 @@ import "./App.scss";
 import "./print.scss";
 import "./tailwind.css";
 
-import timbauImage from "./assets/images/instrument-icons/timbau.svg";
-
 import { createRef, type ComponentChild } from "preact";
 import { lazy, Suspense } from "preact/compat";
 
@@ -16,29 +14,27 @@ import { ErrorBoundary } from "./components/ui/ErrorBoundary.js";
 import { Button } from "./components/ui/framework/Button.js";
 import { Container } from "./components/ui/framework/Container.js";
 import { Dropdown, type IDropdownItem } from "./components/ui/framework/Dropdown.js";
-import { GooeyGroup } from "./components/ui/framework/GooeyGroup.js";
-import { Label } from "./components/ui/framework/Label.js";
 import { ProgressIndicator } from "./components/ui/framework/ProgressIndicator.js";
 import { ChildAlignment, Orientation } from "./components/ui/framework/ui-types.js";
 import { UIComponent } from "./components/ui/framework/UIComponent.js";
-import { renderNotificationCenter } from "./components/ui/NotificationCenter/NotificationCenter.js";
-import { renderStatusBar, Statusbar } from "./components/ui/Statusbar/Statusbar.js";
-import { StatusBarAlignment, type IStatusBarItem } from "./components/ui/Statusbar/StatusBarItem.js";
+import { NotificationCenter, renderNotificationCenter } from "./components/ui/NotificationCenter/NotificationCenter.js";
+import { AppFooter } from "./components/ui/Navigation/AppFooter.js";
+import { ArrangementIdentity, ArrangementSaveState } from "./components/ui/Header/ArrangementIdentity.js";
 
 import { ArrangementPlayControls } from "./components/ui/Arrangement/ArrangementPlayControls.js";
-import { ArrangementTitle } from "./components/ui/Arrangement/ArrangementTitle.js";
 import { ArrangementViewer } from "./components/ui/Arrangement/ArrangementViewer.js";
-import { EntryModeButton } from "./components/ui/Arrangement/EntryModeButton.js";
 import { RangeArticulationToolbar } from "./components/ui/Arrangement/RangeArticulationToolbar.js";
 import { UndoRedoControls } from "./components/ui/Arrangement/UndoRedoControls.js";
 import { ConfirmDialog } from "./components/ui/composites/ConfirmDialog.js";
 import { NewScoreDialog } from "./components/ui/composites/NewScoreDialog.js";
+import { ReleaseNotesDialog } from "./components/ui/composites/ReleaseNotesDialog.js";
 import {
     ValueDialog, ValueEditorEntryType, type IValueEditorValueEntry
 } from "./components/ui/composites/ValueDialog.js";
-import { DialogResponseClosure } from "./components/ui/framework/Dialog.js";
+import { Dialog, DialogResponseClosure } from "./components/ui/framework/Dialog.js";
 import { DrawerSidebar } from "./components/ui/framework/DrawerSidebar.js";
 import { Icon } from "./components/ui/framework/Icon.js";
+import { Label } from "./components/ui/framework/Label.js";
 import { TooltipProvider } from "./components/ui/framework/Tooltip.js";
 import { UIIcon } from "./components/ui/framework/UIIcon.js";
 import { PrintDialog } from "./components/ui/Print/PrintDialog.js";
@@ -63,7 +59,7 @@ import { convertErrorToString } from "./core/utils.js";
 import { ArrangementPlayer } from "./player/ArrangementPlayer.js";
 import { AudioBufferPlayer } from "./player/AudioBufferPlayer.js";
 import { escapeStack } from "./supplement/EscapeStack.js";
-import { requisitions } from "./supplement/Requisitions.js";
+import { requisitions, type INotificationState } from "./supplement/Requisitions.js";
 import { AdminSetupDialog } from "./ui/AdminSetupDialog.js";
 import { BackendDisconnectedDialog } from "./ui/BackendDisconnectedDialog.js";
 import { BackendSetupDialog, BackendSetupMode } from "./ui/BackendSetupDialog.js";
@@ -73,7 +69,7 @@ import { SelectionManager } from "./ui/SelectionManager.js";
 import { SettingsDialog } from "./ui/SettingsDialog.js";
 import { TutorialWizard } from "./ui/TutorialWizard.js";
 import { UserGroupEditor } from "./ui/UserGroupEditor.js";
-import { Separator } from "./components/ui/Separator.js";
+import { isMobile } from "./ui/index.js";
 
 const ScoreLibrary = lazy(() => {
     return import("./ui/ScoreLibrary.js").then((m) => {
@@ -122,7 +118,14 @@ interface IAppState {
     printing: boolean;
     printOptions?: IPrintOptions;
 
-    instrumentEditorEnabled: boolean;
+    /** The notification center's summary, for the footer's notification button. */
+    notificationState: INotificationState;
+
+    /** Track viewer zoom in percent, mirrored from the UI settings. */
+    zoom: number;
+
+    /** True once the current score was saved during this session. */
+    scoreSaved: boolean;
 
     /** When true, the backend health endpoint was unreachable. */
     backendUnreachable: boolean;
@@ -141,10 +144,12 @@ export class App extends UIComponent<{}, IAppState> {
     private userGroupEditorRef = createRef<UserGroupEditor | null>();
     private permissionEditorRef = createRef<PermissionEditor | null>();
     private printDialogRef = createRef<PrintDialog | null>();
+    private exportDialogRef = createRef<Dialog | null>();
     private tutorialWizardRef = createRef<TutorialWizard | null>();
     private valueDialogRef = createRef<ValueDialog | null>();
     private confirmDialogRef = createRef<ConfirmDialog | null>();
     private newScoreDialogRef = createRef<NewScoreDialog | null>();
+    private releaseNotesDialogRef = createRef<ReleaseNotesDialog | null>();
 
     /** Saved theme/title to restore after the print job finishes. */
     private printRestoreState?: { theme: string; documentTitle: string; };
@@ -157,13 +162,15 @@ export class App extends UIComponent<{}, IAppState> {
     private arrangementPlayer?: ArrangementPlayer;
     private undoManager?: UndoManager;
 
-    private currentPlayRange?: { startBar: number; endBar: number; };
     private selectedThemePreference = "Light+";
     private systemThemeQuery = window.matchMedia("(prefers-color-scheme: dark)");
     private signInFromRunning = false;
-    private statsItem?: IStatusBarItem;
-    private notificationItem?: IStatusBarItem;
-    private versionItem?: IStatusBarItem;
+
+    /** The arrangement the save state refers to, so a newly loaded score starts as unchanged. */
+    private currentArrangementId?: number;
+
+    /** True while an MP3 export is running, to keep the export button disabled. */
+    private exporting = false;
 
     private currentTutorialStep = 0;
 
@@ -177,7 +184,9 @@ export class App extends UIComponent<{}, IAppState> {
             trackViewMode: AppStorage.loadUISettings()?.viewSettings?.arrangementViewSettings?.displayMode ?? "grid",
             preferredEntryMode: AppStorage.loadUISettings()?.entryMode ?? EditEntryMode.Insert,
             printing: false,
-            instrumentEditorEnabled: false,
+            notificationState: { newCount: 0, totalCount: 0, silent: false, showHistory: false },
+            zoom: AppStorage.loadUISettings()?.viewSettings?.arrangementViewSettings?.zoomLevel ?? 100,
+            scoreSaved: false,
             backendUnreachable: false,
         };
 
@@ -194,8 +203,8 @@ export class App extends UIComponent<{}, IAppState> {
         escapeStack.attach();
 
         requisitions.register("settingsChanged", this.handleSettingsChanged);
-        requisitions.register("playRangeChanged", this.handlePlayRangeChanged);
         requisitions.register("notificationStateChanged", this.handleNotificationStateChanged);
+        requisitions.register("arrangementChanged", this.handleArrangementChanged);
         requisitions.register("backendDisconnected", this.handleBackendDisconnected);
         requisitions.register("authChanged", this.handleAuthChanged);
         requisitions.register("notesClicked", this.handleNoteClicked);
@@ -211,7 +220,7 @@ export class App extends UIComponent<{}, IAppState> {
 
     public override shouldComponentUpdate(nextProps: {}, nextState: IAppState): boolean {
         const { editMode, sidebarOpen, phase, trackViewMode, printing, backendUnreachable,
-            startupError, preferredEntryMode } = this.state;
+            startupError, preferredEntryMode, notificationState, zoom, scoreSaved } = this.state;
 
         return editMode !== nextState.editMode
             || sidebarOpen !== nextState.sidebarOpen || phase !== nextState.phase
@@ -219,16 +228,10 @@ export class App extends UIComponent<{}, IAppState> {
             || preferredEntryMode !== nextState.preferredEntryMode
             || printing !== nextState.printing
             || backendUnreachable !== nextState.backendUnreachable
-            || startupError !== nextState.startupError;
-    }
-
-    public override componentDidUpdate(prevProps: {}, prevState: IAppState): void {
-        const { phase } = this.state;
-
-        if (prevState.phase !== AppPhase.Running && phase === AppPhase.Running) {
-            this.updateStatsItem();
-            this.updateVersionItem();
-        }
+            || startupError !== nextState.startupError
+            || notificationState !== nextState.notificationState
+            || zoom !== nextState.zoom
+            || scoreSaved !== nextState.scoreSaved;
     }
 
     public override componentWillUnmount() {
@@ -240,8 +243,8 @@ export class App extends UIComponent<{}, IAppState> {
         escapeStack.detach();
 
         requisitions.unregister("settingsChanged", this.handleSettingsChanged);
-        requisitions.unregister("playRangeChanged", this.handlePlayRangeChanged);
         requisitions.unregister("notificationStateChanged", this.handleNotificationStateChanged);
+        requisitions.unregister("arrangementChanged", this.handleArrangementChanged);
         requisitions.unregister("backendDisconnected", this.handleBackendDisconnected);
         requisitions.unregister("authChanged", this.handleAuthChanged);
         requisitions.unregister("notesClicked", this.handleNoteClicked);
@@ -253,7 +256,7 @@ export class App extends UIComponent<{}, IAppState> {
     }
 
     public render() {
-        const { phase, editMode, sidebarOpen, trackViewMode, instrumentEditorEnabled,
+        const { phase, editMode, sidebarOpen, trackViewMode, notificationState, zoom,
             printing, printOptions, backendUnreachable, startupError, preferredEntryMode } = this.state;
         const entryMode = this.effectiveEntryMode(trackViewMode, preferredEntryMode);
         const isRunning = phase === AppPhase.Running;
@@ -297,93 +300,95 @@ export class App extends UIComponent<{}, IAppState> {
                 break;
         }
 
-        let breadcrumb: ComponentChild;
         let userButton: ComponentChild;
-        let editModeButton;
-        let isAdmin = false;
+        let saveButton: ComponentChild;
+        let newScoreButton: ComponentChild;
+        let headerUndoRedo: ComponentChild;
+        let editModeButton: ComponentChild;
+        let printButton: ComponentChild;
+        let exportButton: ComponentChild;
         if (isRunning) {
-            isAdmin = this.dataModel.user?.isAdmin ?? false;
-            breadcrumb = this.renderHeaderBreadcrumb();
             userButton = this.renderUserButton();
+
+            saveButton = <Button
+                id="saveButton"
+                imageOnly
+                compact
+                className="du-btn-ghost"
+                data-tooltip="Save Score"
+                disabled={!this.undoManager?.canUndo}
+                onClick={this.handleSaveClick}
+            >
+                <Icon src={UIIcon.Save} data-tooltip="inherit" />
+            </Button>;
+
+            newScoreButton = <Button
+                id="newScoreButton"
+                imageOnly
+                compact
+                className="du-btn-ghost"
+                data-tooltip="New Score"
+                disabled={editMode}
+                onClick={this.handleNewScoreClick}
+            >
+                <Icon src={UIIcon.NewFile} data-tooltip="inherit" />
+            </Button>;
 
             if (this.arrangementPlayer) {
                 editModeButton = <Button
-                    plain
+                    id="editModeButton"
                     compact
-                    imageOnly
-                    className="editSaveButton"
+                    className="headerActionButton"
                     data-tooltip={editMode ? "Exit Edit Mode" : "Enter Edit Mode"}
                     onClick={this.handleEditModeToggle}
                 >
-                    <Icon
-                        src={UIIcon.Edit}
-                        width={24}
-                        height={24}
-                        data-tooltip="inherit"
-                    />
+                    <Icon src={UIIcon.Edit} data-tooltip="inherit" />
+                    <span>{editMode ? "Editing" : "Edit Mode"}</span>
+                </Button>;
+
+                printButton = <Button
+                    id="printButton"
+                    compact
+                    className="headerActionButton"
+                    data-tooltip="Print / Export to PDF"
+                    data-tutorial="print"
+                    onClick={this.handlePrintClick}
+                >
+                    <Icon src={UIIcon.Printer} data-tooltip="inherit" />
+                    <span>Print</span>
+                </Button>;
+
+                exportButton = <Button
+                    id="exportButton"
+                    compact
+                    className="headerActionButton du-btn-primary"
+                    data-tooltip="Export as MP3"
+                    data-tutorial="export"
+                    disabled={this.exporting}
+                    onClick={() => {
+                        void this.handleExportClick();
+                    }}
+                >
+                    <Icon src={UIIcon.Export} data-tooltip="inherit" />
+                    <span>{this.exporting ? "Exporting…" : "Export"}</span>
                 </Button>;
             }
         }
 
-        let printButton: ComponentChild;
-        let headerOverflowMenu: ComponentChild;
-        if (isRunning && this.arrangementPlayer) {
-            printButton = <Button
-                id="printButton"
-                plain
-                compact
-                imageOnly
-                className="editSaveButton"
-                data-tooltip="Print / Export to PDF"
-                data-tutorial="print"
-                onClick={this.handlePrintClick}
-            >
-                <Icon src={UIIcon.Printer} data-tooltip="inherit" />
-            </Button>;
-
-            headerOverflowMenu = <Dropdown
-                id="headerOverflowMenu"
-                caption="More"
-                compact
-                items={[
-                    {
-                        label: "Save Score",
-                        disabled: !this.undoManager?.canUndo,
-                        onClick: () => {
-                            void this.saveScore();
-                        },
-                    },
-                    { label: "Display Options", onClick: this.handleDisplayOptionsClick },
-                    {
-                        label: "New Score",
-                        disabled: editMode,
-                        onClick: () => {
-                            void this.handleNewSong();
-                        },
-                    },
-                ]}
-                closeOnSelect
-            />;
+        if (isRunning && this.undoManager) {
+            headerUndoRedo = <UndoRedoControls undoManager={this.undoManager} />;
         }
 
-        let instrumentEditorButton: ComponentChild;
-        if (isAdmin && instrumentEditorEnabled) {
-            instrumentEditorButton = <Button
-                id="instrumentEditor"
-                imageOnly
-                compact
-                className="du-btn-ghost"
-                data-tooltip="Instrument Editor"
-                disabled
-                onClick={this.handleInstrumentEditorClick}
-            >
-                <Icon
-                    src={timbauImage}
-                    width={24}
-                    height={24}
-                    data-tooltip="inherit"
-                />
-            </Button>;
+        let arrangementIdentity: ComponentChild;
+        const currentArrangement = this.dataModel.arrangement;
+        if (isRunning && currentArrangement) {
+            arrangementIdentity = <ArrangementIdentity
+                arrangement={currentArrangement}
+                dataModel={this.dataModel}
+                editMode={editMode}
+                stats={this.arrangementStats()}
+                saveState={this.arrangementSaveState()}
+            />;
         }
 
         let checkingContent: ComponentChild;
@@ -432,7 +437,7 @@ export class App extends UIComponent<{}, IAppState> {
                 >
                     <Icon src={UIIcon.Library} data-tooltip="inherit" />
                 </Button>
-                {instrumentEditorButton}
+                {userButton}
             </Container>
         );
 
@@ -442,16 +447,15 @@ export class App extends UIComponent<{}, IAppState> {
                 orientation={Orientation.LeftToRight}
                 crossAlignment={ChildAlignment.Center}
             >
-                <GooeyGroup className="editSaveGooey">
-                    {printButton}
-                    {editModeButton}
-                </GooeyGroup>
-                {headerOverflowMenu}
-                {userButton}
+                {saveButton}
+                {newScoreButton}
+                {headerUndoRedo}
+                {editModeButton}
+                {printButton}
+                {exportButton}
             </Container>
         );
-        const appHeader = this.renderAppHeader(headerNavigation, breadcrumb, headerActions);
-        const editControls = this.renderEditControls(entryMode, trackViewMode);
+        const appHeader = this.renderAppHeader(headerNavigation, arrangementIdentity, headerActions);
         let rangeArticulationToolbar: ComponentChild;
         if (editMode && trackViewMode === "staff") {
             rangeArticulationToolbar = <RangeArticulationToolbar />;
@@ -500,7 +504,6 @@ export class App extends UIComponent<{}, IAppState> {
                                 >
                                     {appHeader}
                                     <div id="appOverlay">
-                                        {editControls}
                                         {rangeArticulationToolbar}
                                         <div id="playbackControlsHost">
                                             <ArrangementPlayControls
@@ -530,7 +533,16 @@ export class App extends UIComponent<{}, IAppState> {
                                     </div>
                                 </Container>
                             </DrawerSidebar>
-                            {renderStatusBar()}
+                            <AppFooter
+                                barCount={this.arrangementPlayer?.scoreMetrics.bars ?? 0}
+                                measureWidths={this.dataModel.arrangement?.measureWidths}
+                                zoom={zoom}
+                                version={appVersion}
+                                notifications={notificationState}
+                                onZoomChange={this.handleZoomChange}
+                                onToggleNotifications={this.handleToggleNotifications}
+                                onShowReleaseNotes={this.handleShowReleaseNotes}
+                            />
                             {renderNotificationCenter()}
                         </Container>
                         <TooltipProvider />
@@ -588,6 +600,22 @@ export class App extends UIComponent<{}, IAppState> {
 
                 <ConfirmDialog ref={this.confirmDialogRef} />
                 <NewScoreDialog ref={this.newScoreDialogRef} />
+                <ReleaseNotesDialog ref={this.releaseNotesDialogRef} />
+                <Dialog
+                    id="exportDialog"
+                    ref={this.exportDialogRef}
+                    caption="Exporting Arrangement"
+                    onClose={this.handleExportDialogClose}
+                >
+                    <Container
+                        orientation={Orientation.TopDown}
+                        gap={10}
+                        style={{ minWidth: "280px" }}
+                    >
+                        <Label caption="Please wait while the MP3 file is being created..." />
+                        <ProgressIndicator linear indicatorHeight={8} style={{ flex: "0 0 auto" }} />
+                    </Container>
+                </Dialog>
 
                 {checkingContent}
 
@@ -628,55 +656,6 @@ export class App extends UIComponent<{}, IAppState> {
                 {navigation}
                 {identity}
                 {actions}
-            </Container>
-        );
-    }
-
-    private renderEditControls(entryMode: EditEntryMode, trackViewMode: "grid" | "staff"): ComponentChild {
-        const { editMode } = this.state;
-        if (!editMode || !this.undoManager) {
-            return undefined;
-        }
-
-        let entryModeButton: ComponentChild;
-        if (trackViewMode === "staff") {
-            entryModeButton = <EntryModeButton entryMode={entryMode} />;
-        }
-
-        return (
-            <Container
-                id="editControlsHost"
-                orientation={Orientation.LeftToRight}
-                mainAlignment={ChildAlignment.Start}
-                crossAlignment={ChildAlignment.Center}
-            >
-                <UndoRedoControls undoManager={this.undoManager} />
-                <Separator />
-                {entryModeButton}
-            </Container>
-        );
-    }
-
-    private renderHeaderBreadcrumb(): ComponentChild {
-        const { editMode } = this.state;
-        const arrangement = this.dataModel.arrangement!;
-
-        return (
-            <Container
-                className="header-breadcrumb"
-                orientation={Orientation.LeftToRight}
-                mainAlignment={ChildAlignment.Start}
-                crossAlignment={ChildAlignment.Center}
-                gap={4}
-            >
-                <Label className="header-breadcrumb-root" caption="Score Library" />
-                <Icon src={UIIcon.ChevronRight} width={16} height={16} />
-                <ArrangementTitle
-                    id="header-breadcrumb-title"
-                    arrangement={arrangement}
-                    dataModel={this.dataModel}
-                    editMode={editMode}
-                />
             </Container>
         );
     }
@@ -1132,12 +1111,16 @@ export class App extends UIComponent<{}, IAppState> {
         });
     };
 
-    private handleInstrumentEditorClick = () => {
-        alert("Instrument Editor is not yet implemented.");
-    };
-
     private handlePrintClick = () => {
         this.openPrintDialog();
+    };
+
+    private handleSaveClick = (): void => {
+        void this.saveScore();
+    };
+
+    private handleNewScoreClick = (): void => {
+        void this.handleNewSong();
     };
 
     private handleSignInClick = () => {
@@ -1159,11 +1142,6 @@ export class App extends UIComponent<{}, IAppState> {
 
         this.undoManager?.dispose();
         this.undoManager = undefined;
-
-        // Clear status bar item references — they belong to the old (now-unmounted) Statusbar.
-        this.statsItem = undefined;
-        this.notificationItem = undefined;
-        this.versionItem = undefined;
 
         this.setState({ phase: AppPhase.Login }, () => {
             void this.loginDialogRef.current?.show().then(this.handleLoginDialogResult);
@@ -1360,6 +1338,11 @@ export class App extends UIComponent<{}, IAppState> {
 
     private handleSettingsChanged = (settings: IUISettings): Promise<boolean> => {
         this.applyThemePreference(settings.theme);
+
+        const zoom = settings.viewSettings?.arrangementViewSettings?.zoomLevel ?? 100;
+        if (zoom !== this.state.zoom) {
+            this.setState({ zoom });
+        }
 
         return Promise.resolve(true);
     };
@@ -1719,10 +1702,7 @@ export class App extends UIComponent<{}, IAppState> {
 
         this.forceUpdate();
 
-        const { phase, editMode } = this.state;
-        if (phase === AppPhase.Running) {
-            this.updateStatsItem();
-        }
+        const { editMode } = this.state;
 
         const settings = AppStorage.loadUISettings();
         if (settings?.editMode && !editMode) {
@@ -2093,11 +2073,6 @@ export class App extends UIComponent<{}, IAppState> {
 
         this.forceUpdate();
 
-        const { phase } = this.state;
-        if (phase === AppPhase.Running) {
-            this.updateStatsItem();
-        }
-
         void requisitions.execute("editModeChanged", true);
     }
 
@@ -2201,6 +2176,7 @@ export class App extends UIComponent<{}, IAppState> {
                 AppStorage.saveSetting("currentScore", content);
                 this.undoManager.clearHistory();
 
+                this.setState({ scoreSaved: true });
                 void requisitions.execute("showInfo", "Score saved.");
 
                 return true;
@@ -2219,14 +2195,12 @@ export class App extends UIComponent<{}, IAppState> {
 
     private handleTimeParamsChange = (): Promise<boolean> => {
         this.forceUpdate();
-        this.updateStatsItem();
 
         return Promise.resolve(true);
     };
 
     private handleArrangementMutated = (): Promise<boolean> => {
         this.dataModel.persistCurrentScore();
-        this.updateStatsItem();
 
         return Promise.resolve(true);
     };
@@ -2237,120 +2211,126 @@ export class App extends UIComponent<{}, IAppState> {
         return Promise.resolve(true);
     };
 
-    private handlePlayRangeChanged = (range: { from: number; to: number; } | undefined): Promise<boolean> => {
-        this.currentPlayRange = range ? { startBar: range.from, endBar: range.to } : undefined;
+    private handleArrangementChanged = (arrangementId: number): Promise<boolean> => {
+        if (arrangementId !== this.currentArrangementId) {
+            this.currentArrangementId = arrangementId;
+            this.setState({ scoreSaved: false });
+        }
+
+        return Promise.resolve(true);
+    };
+
+    private handleNotificationStateChanged = (state: INotificationState): Promise<boolean> => {
+        this.setState({ notificationState: state });
+
+        return Promise.resolve(true);
+    };
+
+    private handleToggleNotifications = (): void => {
+        NotificationCenter.toggleHistory();
+    };
+
+    private handleZoomChange = (zoom: number): void => {
+        const settings = AppStorage.loadUISettings() ?? {};
+        settings.viewSettings ??= {};
+        settings.viewSettings.arrangementViewSettings ??= {};
+        settings.viewSettings.arrangementViewSettings.zoomLevel = zoom;
+        AppStorage.saveUISettings(settings);
+        this.setState({ zoom });
+        void requisitions.execute("settingsChanged", settings);
+    };
+
+    private handleShowReleaseNotes = (): void => {
+        this.releaseNotesDialogRef.current?.open();
+    };
+
+    private handleExportClick = async (): Promise<void> => {
+        const { arrangementPlayer } = this;
+        const arrangement = this.dataModel.arrangement;
+        if (!arrangementPlayer || !arrangement || this.exporting) {
+            return;
+        }
+
+        this.exporting = true;
+        this.exportDialogRef.current?.open();
         this.forceUpdate();
 
-        return Promise.resolve(true);
-    };
-
-    /**
-     * Creates or updates the status bar item that shows the metrics of the performance (time signature, the bars it
-     * plays, duration) on the right side of the status bar.
-     */
-    private updateStatsItem(): void {
-        const player = this.arrangementPlayer;
-        if (!player) {
-            return;
-        }
-
-        const metrics = player.scoreMetrics;
-        const bars = metrics.performedBars === 1 ? "1 bar" : `${metrics.performedBars} bars`;
-        const text = `${metrics.beatsPerBar}/${metrics.beatUnit} • ${bars} • ` +
-            `${Math.round(100 * metrics.realTimeLength) / 100} s`;
-
-        if (!this.statsItem) {
-            try {
-                this.statsItem = Statusbar.createStatusBarItem({
-                    id: "scoreStats",
-                    text,
-                    alignment: StatusBarAlignment.Right,
-                    priority: 10,
-                });
-            } catch {
-                // Statusbar is not mounted yet — the item will be created on
-                // the next updateStatsItem call (e.g. when timeParamsChanged fires).
-                return;
-            }
-        } else {
-            this.statsItem.text = text;
-        }
-    }
-
-    /**
-     * Creates the fixed status bar item that shows the app version. The item is created once per
-     * Statusbar mount and survives because it never expires.
-     */
-    private updateVersionItem(): void {
-        if (this.versionItem) {
-            return;
-        }
-
         try {
-            this.versionItem = Statusbar.createStatusBarItem({
-                id: "appVersion",
-                text: `v${appVersion}`,
-                tooltip: "Animada Score Book version",
-                alignment: StatusBarAlignment.Right,
-                priority: -10,
-            });
-        } catch {
-            // Statusbar is not mounted yet — it will be created on the next transition to Running.
+            const blob = await arrangementPlayer.renderToBlob();
+            const fileName = `${arrangement.title}.mp3`;
+
+            if (isMobile && typeof navigator.share === "function" && typeof navigator.canShare === "function") {
+                const exportFile = new File([blob], fileName, { type: "audio/mpeg" });
+                if (navigator.canShare({ files: [exportFile] })) {
+                    try {
+                        await navigator.share({ files: [exportFile], title: fileName });
+
+                        return;
+                    } catch (error) {
+                        if (!(error instanceof DOMException) || error.name !== "AbortError") {
+                            console.warn("File share failed, falling back to direct download.", error);
+                        } else {
+                            return;
+                        }
+                    }
+                }
+            }
+
+            const url = URL.createObjectURL(blob);
+            const anchor = document.createElement("a");
+            anchor.href = url;
+            anchor.download = fileName;
+            anchor.rel = "noopener";
+            anchor.target = "_blank";
+            anchor.click();
+
+            // Keep the URL alive briefly so Safari can consume it before revoking.
+            setTimeout(() => {
+                URL.revokeObjectURL(url);
+            }, 1000);
+        } catch (error) {
+            console.error("MP3 export failed", error);
+            void requisitions.execute("showError", "The MP3 could not be exported. Please try again.");
+        } finally {
+            this.exporting = false;
+            this.exportDialogRef.current?.close(true);
+            this.forceUpdate();
         }
+    };
+
+    /** Keeps the waiting dialog open while an export is still running. */
+    private handleExportDialogClose = (): void => {
+        if (this.exporting) {
+            setTimeout(() => {
+                this.exportDialogRef.current?.open();
+            }, 0);
+        }
+    };
+
+    /**
+     * @returns The arrangement's performance metrics as a single caption line.
+     */
+    private arrangementStats(): string {
+        const metrics = this.arrangementPlayer?.scoreMetrics;
+        if (!metrics) {
+            return "";
+        }
+
+        const bars = metrics.performedBars === 1 ? "1 bar" : `${metrics.performedBars} bars`;
+        const duration = Math.round(100 * metrics.realTimeLength) / 100;
+
+        return `${metrics.beatsPerBar}/${metrics.beatUnit} • ${bars} • ${duration} s`;
     }
 
-    private handleNotificationStateChanged = (state: {
-        newCount: number; totalCount: number; silent: boolean; showHistory: boolean;
-    }): Promise<boolean> => {
-        const { newCount, totalCount, silent, showHistory } = state;
-
-        let text: string;
-        let tooltip: string;
-        let icon: ComponentChild;
-
-        if (showHistory) {
-            tooltip = "Hide Notifications";
-            text = "";
-            icon = <Icon src={silent ? UIIcon.BellSlash : UIIcon.Bell} width="16px" height="16px" />;
-        } else {
-            if (silent) {
-                icon = <Icon src={newCount === 0 ? UIIcon.BellSlash : UIIcon.BellSlashDot}
-                    width="16px" height="16px" />;
-            } else {
-                icon = <Icon src={newCount === 0 ? UIIcon.Bell : UIIcon.BellDot}
-                    width="16px" height="16px" />;
-            }
-
-            text = newCount === 0 ? "" : newCount.toString();
-            tooltip = newCount === 0 ? "No" : newCount.toString();
-            if (newCount === 0) {
-                if (totalCount > 0) {
-                    tooltip += " New Notifications";
-                } else {
-                    tooltip += " Notifications";
-                }
-            } else {
-                tooltip += " New Notification" + (newCount > 1 ? "s" : "");
-            }
+    /**
+     * @returns How the current score stands towards the backend: unsaved changes win over a prior save.
+     */
+    private arrangementSaveState(): ArrangementSaveState {
+        if (this.undoManager?.canUndo) {
+            return ArrangementSaveState.Unsaved;
         }
 
-        if (!this.notificationItem) {
-            this.notificationItem = Statusbar.createStatusBarItem({
-                id: "showNotificationHistory",
-                text,
-                icon,
-                tooltip,
-                command: "notifications:toggleHistory",
-                alignment: StatusBarAlignment.Right,
-                priority: 0,
-            });
-        } else {
-            this.notificationItem.text = text;
-            this.notificationItem.icon = icon;
-            this.notificationItem.tooltip = tooltip;
-        }
-
-        return Promise.resolve(true);
-    };
+        return this.state.scoreSaved ? ArrangementSaveState.Saved : ArrangementSaveState.Unchanged;
+    }
 
 }

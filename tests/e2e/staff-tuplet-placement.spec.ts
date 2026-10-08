@@ -126,7 +126,7 @@ test("keeps the below marker clear of the notes when the measure is widened", as
     const before = await belowMarkerClearance(page);
     const widthBefore = (await page.locator(".staff-measure-viewer").first().boundingBox())?.width ?? 0;
 
-    await page.locator(".editSaveGooey button").nth(1).click({ force: true });
+    await page.locator("#editModeButton").click({ force: true });
     const handle = page.locator(".staff-measure-resize-handle").first();
     await expect(handle).toBeVisible();
 

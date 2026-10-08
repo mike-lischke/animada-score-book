@@ -31,7 +31,7 @@ Animada Score Book is your ensemble's digital home for rhythm — a rich, browse
 - **Metronome & Count-In.** Toggle the built-in metronome on and off, with an optional count-in to lead you in.
 - **Multi-Track.** View and play back multiple tracks simultaneously — one instrument per track.
 - **Per-Track Mixer.** Fine-tune each track's volume independently with a continuous slider mixer.
-- **Minimap.** A bird's-eye overview for navigating long scores quickly.
+- **Score navigator.** A compact strip in the footer for navigating long scores quickly.
 - **Horizontal Bar Layout.** Bars flow horizontally with smooth automatic scrolling during playback.
 - **MP3 Export.** Export the full arrangement as an MP3 file, respecting all playback settings — tempo, volume,
   count-in, and more (loop excluded).

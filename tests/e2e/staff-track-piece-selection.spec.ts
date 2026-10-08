@@ -201,7 +201,7 @@ test("a track-piece overlay reaches past the barline closing the staff", async (
 test("the clear button of a measure selection stays inside the overlay container", async ({ page }) => {
     await openStaffScore(page, twoTrackSnapshot, "e2e-staff-measure-clear");
 
-    await page.locator(".editSaveGooey button").nth(1).click({ force: true });
+    await page.locator("#editModeButton").click({ force: true });
 
     const rows = page.locator(".staff-measure-track-row");
     const first = await rows.nth(0).boundingBox();

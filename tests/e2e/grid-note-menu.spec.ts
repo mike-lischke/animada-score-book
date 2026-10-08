@@ -57,7 +57,7 @@ test.beforeEach(async ({ page }) => {
     await expect(page.locator(".grid-measure-row .note-viewer").first()).toBeVisible();
 
     // The note menu is an edit, so the editor only reacts in edit mode.
-    await page.locator(".editSaveGooey button").nth(1).click({ force: true });
+    await page.locator("#editModeButton").click({ force: true });
 });
 
 test("the secondary button opens the note menu and writes the picked style", async ({ page }) => {

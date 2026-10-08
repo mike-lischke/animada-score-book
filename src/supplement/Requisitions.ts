@@ -38,6 +38,36 @@ export interface IMeasureVisibilityRequest {
     position?: IFraction;
 }
 
+/** The visible viewport of the score, normalized to its scrollable content. */
+export interface IScoreViewport {
+    /** Left edge of the visible range, 0..1 over the scrollable range. */
+    position: number;
+
+    /** Width of the visible range, 0..1 of the total content width. */
+    width: number;
+
+    /** 1-based first visible measure. */
+    startBar: number;
+
+    /** 1-based last visible measure. */
+    endBar: number;
+}
+
+/** The notification center's current summary, used to render its entry point. */
+export interface INotificationState {
+    /** Number of notifications the user has not seen yet. */
+    newCount: number;
+
+    /** Total number of notifications in the history. */
+    totalCount: number;
+
+    /** When true, only errors and the history list are shown. */
+    silent: boolean;
+
+    /** Whether the history list is open. */
+    showHistory: boolean;
+}
+
 /** A generic type to extract the (single) callback parameter type from the callback map. */
 export type IRequisitionCallbackValues<K extends keyof IRequestTypeMap> = Parameters<IRequestTypeMap[K]>[0];
 
@@ -68,17 +98,19 @@ export interface IRequestTypeMap {
 
     /** Brings the given measure into the viewport, even when it is not rendered at the moment. */
     "measureVisibilityRequested": (request: IMeasureVisibilityRequest) => Promise<boolean>;
+
+    /** Reports the score viewport that is visible now, so a navigator can follow it. */
+    "scoreViewportChanged": (viewport: IScoreViewport) => Promise<boolean>;
+
+    /** Requests scrolling the score viewport to the given position, 0..1 over the scrollable range. */
+    "scoreViewportMoveRequested": (position: number) => Promise<boolean>;
     "selectionRectChanged": (data: ISelectionRectChange) => Promise<boolean>;
     "errorLogChanged": SimpleCallback;
-
-    "statusBarItemClicked": (data: { command: string; event: MouseEvent | KeyboardEvent; }) => Promise<boolean>;
 
     "showInfo": (text: string) => Promise<boolean>;
     "showWarning": (text: string) => Promise<boolean>;
     "showError": (text: string) => Promise<boolean>;
-    "notificationStateChanged": (state: {
-        newCount: number; totalCount: number; silent: boolean; showHistory: boolean;
-    }) => Promise<boolean>;
+    "notificationStateChanged": (state: INotificationState) => Promise<boolean>;
 
     "backendDisconnected": SimpleCallback;
 

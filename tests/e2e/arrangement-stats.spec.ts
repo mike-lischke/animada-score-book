@@ -32,7 +32,7 @@ const restPiece = (number: number): ITrackPieceSnapshot => {
 const repeatedSnapshot = (): IArrangementSnapshot => {
     return {
         version: arrangementSnapshotVersion,
-        title: "E2E status bar repeat",
+        title: "E2E arrangement stats repeat",
         timeParams: { timeSignature: "4/4", tempo: 120, length: 3, pulse: "1/4", stepResolution: 16 },
         tracks: [{ id: 300, instrumentId: "0", measures: [restPiece(1), restPiece(2), restPiece(3)] }],
         extensions: { repeatBars: { 2: { start: true, end: true } } },
@@ -47,7 +47,7 @@ const repeatedSnapshot = (): IArrangementSnapshot => {
  */
 const seedScore = async (page: Page, score: IArrangementSnapshot): Promise<void> => {
     await page.addInitScript((packed: string) => {
-        const sessionId = "e2e-status-bar-repeat";
+        const sessionId = "e2e-arrangement-stats-repeat";
         window.history.replaceState({ ...(window.history.state ?? {}), sessionId }, "");
         window.sessionStorage.setItem("asb-session-id", sessionId);
         window.localStorage.setItem(`asb-ui-settings-session-${sessionId}`, JSON.stringify({
@@ -63,31 +63,17 @@ test.beforeEach(async ({ page }) => {
     await routeApi(page);
 });
 
-test.describe("Status bar", () => {
-    test("shows arrangement stats on the right side", async ({ page }) => {
+test.describe("Arrangement stats", () => {
+    test("shows the performance metrics below the arrangement name", async ({ page }) => {
         await page.goto(beijaFlorImportPath);
         await expectImportedPolyrhythmSong(page);
 
-        const rightItems = page.locator(".statusbar-right .statusbar-item");
+        const stats = page.locator("#scoreStats");
 
-        // The stats item should be the rightmost item.
-        await expect(rightItems.first()).toBeVisible();
-
-        const statsText = await rightItems.first().textContent();
+        await expect(stats).toBeVisible();
 
         // Expected format: "4/4 • 14 bars • X s"
-        expect(statsText).toMatch(/4\/4\s*•\s*14\s+bars\s*•\s*[\d.]+\s*s/);
-    });
-
-    test("stats item has no button role (not clickable)", async ({ page }) => {
-        await page.goto(beijaFlorImportPath);
-        await expectImportedPolyrhythmSong(page);
-
-        const statsItem = page.locator("#scoreStats");
-
-        await expect(statsItem).toBeVisible();
-        await expect(statsItem).not.toHaveAttribute("role", "button");
-        await expect(statsItem).not.toHaveClass(/statusbar-item-clickable/);
+        await expect(stats).toHaveText(/4\/4\s*•\s*14\s+bars\s*•\s*[\d.]+\s*s/);
     });
 
     test("counts the bars a repeat plays in the stats", async ({ page }) => {
@@ -99,5 +85,4 @@ test.describe("Status bar", () => {
         // Four bars of two seconds each, twice as long as the three written bars would take.
         await expect(page.locator("#scoreStats")).toHaveText(/•\s*8(\.0+)?\s*s/);
     });
-
 });

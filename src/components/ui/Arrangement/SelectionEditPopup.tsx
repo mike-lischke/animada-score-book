@@ -13,6 +13,7 @@ import type { SelectionManager } from "../../../ui/SelectionManager.js";
 import { ScoreElementRegistry } from "../../../ui/ScoreElementRegistry.js";
 import { SelectionGranularity } from "../../../ui/SelectionSerializer.js";
 import { ArticulationToolbar } from "./ArticulationToolbar.js";
+import { EntryModeButton } from "./EntryModeButton.js";
 import { NoteLengthToolbar } from "./NoteLengthToolbar.js";
 import { NoteStyleBar } from "./NoteStyleBar.js";
 import { SubdivisionToolbar } from "./SubdivisionToolbar.js";
@@ -144,6 +145,21 @@ export class SelectionEditPopup extends UIComponent<ISelectionEditPopupProps> {
             );
         }
 
+        // The insert/overwrite choice only exists in the staff view, so the grid view gets no header row.
+        let headerRow: ComponentChild;
+        if (trackViewMode === "staff") {
+            headerRow = (
+                <Container
+                    className="selectionEditHeader"
+                    orientation={Orientation.LeftToRight}
+                    mainAlignment={ChildAlignment.End}
+                    crossAlignment={ChildAlignment.Center}
+                >
+                    <EntryModeButton entryMode={entryMode} />
+                </Container>
+            );
+        }
+
         let content: ComponentChild;
         if (editMode && entries.length > 0) {
             content = (
@@ -154,6 +170,7 @@ export class SelectionEditPopup extends UIComponent<ISelectionEditPopupProps> {
                     crossAlignment={ChildAlignment.Stretch}
                     gap={8}
                 >
+                    {headerRow}
                     {noteTools}
                     {noteLengthTools}
                     {structureTools}
@@ -177,6 +194,10 @@ export class SelectionEditPopup extends UIComponent<ISelectionEditPopupProps> {
 
     private handleSelectionChanged = (): Promise<boolean> => {
         this.updatePopup();
+
+        // The rendered content follows the selection, which the popup reads while rendering. Opening the popup
+        // does not re-render this component, so the new selection has to be drawn again explicitly.
+        this.forceUpdate();
 
         return Promise.resolve(true);
     };

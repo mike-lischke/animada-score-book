@@ -84,7 +84,7 @@ test("selects the whole-measure rest of a silent bar", async ({ page }) => {
 });
 
 test("subdivides the whole-measure rest into visible slots", async ({ page }) => {
-    await page.locator(".editSaveGooey button").nth(1).click({ force: true });
+    await page.locator("#editModeButton").click({ force: true });
 
     await selectWholeRest(page);
     await expect(page.locator("#selectionEditPopup .noteLengthToolbar")).toBeVisible();
@@ -100,7 +100,7 @@ test("subdivides the whole-measure rest into visible slots", async ({ page }) =>
 });
 
 test("splits the whole-measure rest into two half rests with the length toolbar", async ({ page }) => {
-    await page.locator(".editSaveGooey button").nth(1).click({ force: true });
+    await page.locator("#editModeButton").click({ force: true });
 
     await selectWholeRest(page);
     await expect(page.locator("#selectionEditPopup .noteLengthToolbar")).toBeVisible();

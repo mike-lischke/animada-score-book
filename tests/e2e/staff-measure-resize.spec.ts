@@ -118,7 +118,7 @@ test.beforeEach(async ({ page }) => {
 
 test("opens bar actions at each measure and duplicates the selected measure", async ({ page }) => {
     await openScore(page);
-    await page.locator(".editSaveGooey button").nth(1).click({ force: true });
+    await page.locator("#editModeButton").click({ force: true });
 
     const triggers = page.locator(".bar-action-menu button");
     await expect(triggers).toHaveCount(barCount);
@@ -137,7 +137,7 @@ test("opens the barline as a resize handle in edit mode only", async ({ page }) 
 
     await expect(page.locator(".staff-measure-resize-handle")).toHaveCount(0);
 
-    await page.locator(".editSaveGooey button").nth(1).click({ force: true });
+    await page.locator("#editModeButton").click({ force: true });
     await expect(page.locator(".staff-measure-resize-handle")).toHaveCount(barCount);
     await expect(page.locator(".staff-measure-resize-handle").first()).toHaveCSS("cursor", "col-resize");
 
@@ -149,7 +149,7 @@ test("opens the barline as a resize handle in edit mode only", async ({ page }) 
 
 test("dragging the barline widens its measure, and one undo step restores it", async ({ page }) => {
     await openScore(page);
-    await page.locator(".editSaveGooey button").nth(1).click({ force: true });
+    await page.locator("#editModeButton").click({ force: true });
 
     const measure = page.locator(".staff-measure-viewer").first();
     expect((await measure.boundingBox())!.width).toBe(measureWidthPx);
@@ -180,7 +180,7 @@ test("dragging the barline widens its measure, and one undo step restores it", a
 
 test("resets the measure width with a double click on its barline", async ({ page }) => {
     await openScore(page);
-    await page.locator(".editSaveGooey button").nth(1).click({ force: true });
+    await page.locator("#editModeButton").click({ force: true });
 
     const measure = page.locator(".staff-measure-viewer").first();
     const handle = page.locator(".staff-measure-resize-handle").first();
@@ -241,7 +241,7 @@ test("resets the measure width with a double click on its barline", async ({ pag
 
 test("widens a shrunk measure when an entry packs it tighter", async ({ page }) => {
     await openScore(page);
-    await page.locator(".editSaveGooey button").nth(1).click({ force: true });
+    await page.locator("#editModeButton").click({ force: true });
 
     const measure = page.locator(".staff-measure-viewer").first();
 
@@ -286,7 +286,7 @@ test("places the play head for the view that is shown", async ({ page }) => {
 
 test("widens the overlay of a selected measure while the barline is dragged", async ({ page }) => {
     await openScore(page, EditEntryMode.Overwrite);
-    await page.locator(".editSaveGooey button").nth(1).click({ force: true });
+    await page.locator("#editModeButton").click({ force: true });
 
     const row = page.locator(".staff-measure-track-row").first();
     const rowBox = (await row.boundingBox())!;

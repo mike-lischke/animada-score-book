@@ -13,7 +13,7 @@
 | Instrument sidebar | Instrument icons; per-track mixer | Icons visible; mixer collapsed by default. |
 | Range tools | Hairpin and forte (`f`) | Floating actions start staff placing mode. |
 | Selection popover | Note and selection-based structure actions | Temporary; groups follow selection. |
-| Status/navigation | Status, section/position, minimap, zoom | Outside score content; coordinated group. |
+| Status/navigation | Status, section/position, score navigator, zoom | Outside score content; coordinated group. |
 
 Persistent toolbars are app-shell surfaces, not score children: score zoom and scrolling must not move or resize them.
 Secondary playback controls may collapse, but must remain easy to reach on every platform.
@@ -88,7 +88,7 @@ reinterpret timing.
 - Editing: entry mode, note length, articulation and note style in context.
 - Selection actions: tuplets, simile and repeat marks share that contextual surface.
 - Range tools: a separate floating toolbar offers only hairpin and forte (`f`).
-- Score context: track/measure actions, selection actions, minimap, viewport navigation and zoom.
+- Score context: track/measure actions, selection actions, score navigator, viewport navigation and zoom.
 - Status: notifications, statistics/version, save/connectivity messages.
 
 ## Details to Refine

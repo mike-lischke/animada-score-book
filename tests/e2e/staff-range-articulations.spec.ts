@@ -101,7 +101,7 @@ const seedScore = async (page: Page, snapshot: IArrangementSnapshot): Promise<vo
  * @returns Nothing, the notation toolbar is visible.
  */
 const openToolbar = async (page: Page): Promise<void> => {
-    await page.locator(".editSaveGooey button").nth(1).click({ force: true });
+    await page.locator("#editModeButton").click({ force: true });
     await expect(page.locator("#rangeArticulationToolbarHost .rangeArticulationToolbar")).toBeVisible();
 };
 

@@ -5,11 +5,12 @@
 
 .notificationCenter {
     width: 500px;
+    max-width: calc(100vw - 16px);
     position: absolute;
-    right: 8px;
+    left: 8px;
 
-    /* Have to take the status bar into account here. */
-    bottom: 32px;
+    /* Keep clear of the footer below. */
+    bottom: 40px;
 
     overflow: hidden;
 

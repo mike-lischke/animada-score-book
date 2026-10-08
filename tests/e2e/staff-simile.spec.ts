@@ -106,7 +106,7 @@ test("keeps a mark the snapshot puts on the first measure off", async ({ page })
 test("does not offer the mark for a note selection", async ({ page }) => {
     await seedScore(page, snapshotWith([notePiece, restPiece]));
 
-    await page.locator(".editSaveGooey button").nth(1).click({ force: true });
+    await page.locator("#editModeButton").click({ force: true });
 
     await staffBar(page, 1).locator(".staff-note-head-symbol").first().click();
     await expect(page.locator("#selectionEditPopup .subdivisionToolbarHost")).toBeVisible();
@@ -117,7 +117,7 @@ test("does not offer the mark for a note selection", async ({ page }) => {
 test("sets the mark on a track piece and clears it again", async ({ page }) => {
     await seedScore(page, snapshotWith([notePiece, restPiece]));
 
-    await page.locator(".editSaveGooey button").nth(1).click({ force: true });
+    await page.locator("#editModeButton").click({ force: true });
 
     await selectTrackPiece(page, 2);
     await expect(page.locator("#selectionEditPopup .subdivisionToolbarHost")).toBeVisible();
@@ -141,7 +141,7 @@ test("sets the mark on a track piece and clears it again", async ({ page }) => {
 test("keeps the mark off a track piece of the first measure", async ({ page }) => {
     await seedScore(page, snapshotWith([notePiece, restPiece]));
 
-    await page.locator(".editSaveGooey button").nth(1).click({ force: true });
+    await page.locator("#editModeButton").click({ force: true });
 
     await selectTrackPiece(page, 1);
     await expect(page.locator("#selectionEditPopup .subdivisionToolbarHost")).toBeVisible();

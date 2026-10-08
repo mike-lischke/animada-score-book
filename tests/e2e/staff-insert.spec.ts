@@ -67,7 +67,7 @@ const openInEditMode = async (page: Page, snapshot: IArrangementSnapshot, sessio
     await expect(page.locator("#trackViewerHost")).toBeVisible();
     await expect(page.locator(".staff-measure-track-row").first()).toBeVisible();
 
-    await page.locator(".editSaveGooey button").nth(1).click({ force: true });
+    await page.locator("#editModeButton").click({ force: true });
 };
 
 /**

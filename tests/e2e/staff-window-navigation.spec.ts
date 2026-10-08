@@ -42,9 +42,6 @@ interface IStaffGeometry {
 
     /** Height of the mixer panel beside the viewer, which stretches to the height of the viewer. */
     controlsHeight: number;
-
-    /** Distance between the minimap's top edge and the viewport's top edge. */
-    minimapTop: number;
 }
 
 test.beforeEach(async ({ page }) => {
@@ -162,12 +159,9 @@ const selectionState = (page: Page): Promise<ISelectionState> => {
  */
 const staffGeometry = (page: Page): Promise<IStaffGeometry> => {
     return page.evaluate(() => {
-        const minimap = document.querySelector<HTMLElement>(".minimap");
-
         return {
             contentHeight: document.getElementById("trackViewerContentHost")?.offsetHeight ?? -1,
             controlsHeight: document.querySelector<HTMLElement>(".trackControlsList")?.offsetHeight ?? -1,
-            minimapTop: Math.round(minimap?.getBoundingClientRect().top ?? -1),
         };
     });
 };
@@ -215,8 +209,7 @@ test("navigation steps over a measure boundary and anchors that measure in the v
 
 // The staff prefix column is taller than a measure column, because its rows start below the head room a measure
 // reserves for its number and label. A window that leaves measure 1 behind therefore has to keep the prefix
-// mounted: dropping it would shrink the staff content while scrolling, and the minimap below the viewer would
-// move up with it.
+// mounted: dropping it would shrink the staff content while scrolling and shift every row below it upwards.
 test("the staff content keeps its height while the window leaves the prefix behind", async ({ page }) => {
     await openScore(page);
 

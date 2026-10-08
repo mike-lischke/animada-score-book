@@ -112,7 +112,7 @@ test.beforeEach(async ({ page }) => {
     await page.goto("/");
     await expect(page.locator("#trackViewerHost")).toBeVisible();
     await expect(page.locator(".staff-measure-track-row").first()).toBeVisible();
-    await page.locator(".editSaveGooey button").nth(1).click({ force: true });
+    await page.locator("#editModeButton").click({ force: true });
 
     // Select the quarter rest between the two beamed groups.
     await page.locator(".staff-measure-track-row .staff-note-viewer-run").nth(4).click();

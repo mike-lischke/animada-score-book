@@ -275,7 +275,7 @@ test("keeps the whole-measure rest of a bar centred under a repeat barline", asy
 test("hides repeat marks for a note selection", async ({ page }) => {
     await seedScore(page, snapshotWith(3, {}));
 
-    await page.locator(".editSaveGooey button").nth(1).click({ force: true });
+    await page.locator("#editModeButton").click({ force: true });
 
     // A note is not a bar, so neither mark can be set on the selection.
     await staffBar(page, 2).locator(".staff-note-head-symbol").first().click();

@@ -134,19 +134,22 @@ export class NotificationCenter extends UIComponent<ICommonUIProperties, INotifi
         });
     }
 
+    /** Toggles the history list, the action the footer's notification button triggers. */
+    public static toggleHistory(): void {
+        singleton.current?.toggleHistory();
+    }
+
     public override componentDidMount(): void {
         document.addEventListener("keydown", this.handleKeyDown);
-        requisitions.register("statusBarItemClicked", this.statusBarButtonClick);
         requisitions.register("showInfo", this.handleShowInfo);
         requisitions.register("showWarning", this.handleShowWarning);
         requisitions.register("showError", this.handleShowError);
 
-        this.updateStatusBarItem();
+        this.publishState();
     }
 
     public override componentWillUnmount(): void {
         document.removeEventListener("keydown", this.handleKeyDown);
-        requisitions.unregister("statusBarItemClicked", this.statusBarButtonClick);
         requisitions.unregister("showInfo", this.handleShowInfo);
         requisitions.unregister("showWarning", this.handleShowWarning);
         requisitions.unregister("showError", this.handleShowError);
@@ -194,7 +197,7 @@ export class NotificationCenter extends UIComponent<ICommonUIProperties, INotifi
         }
 
         this.setState({ history, showHistory: !showHistory }, () => {
-            this.updateStatusBarItem();
+            this.publishState();
         });
     };
 
@@ -225,7 +228,7 @@ export class NotificationCenter extends UIComponent<ICommonUIProperties, INotifi
         });
 
         this.setState({ history: [], mainList: newMainList }, () => {
-            this.updateStatusBarItem();
+            this.publishState();
         });
     };
 
@@ -409,7 +412,7 @@ export class NotificationCenter extends UIComponent<ICommonUIProperties, INotifi
     private toggleSilentMode = (): void => {
         const { silent } = this.state;
         this.setState({ silent: !silent }, () => {
-            this.updateStatusBarItem();
+            this.publishState();
         });
     };
 
@@ -466,7 +469,7 @@ export class NotificationCenter extends UIComponent<ICommonUIProperties, INotifi
             // Add the new toast to the list and trigger a re-render to bring the toast to the screen,
             // but in a hidden state so we can get its height.
             this.setState({ mainList }, () => {
-                this.updateStatusBarItem();
+                this.publishState();
 
                 // Rendering of the new toast is done. Now we can animate it.
                 const toast = mainList[0];
@@ -489,7 +492,7 @@ export class NotificationCenter extends UIComponent<ICommonUIProperties, INotifi
                 }
             });
         } else {
-            this.updateStatusBarItem();
+            this.publishState();
             if (showHistory) {
                 this.forceUpdate();
             }
@@ -556,7 +559,7 @@ export class NotificationCenter extends UIComponent<ICommonUIProperties, INotifi
             toast.resolve(value);
 
             this.setState({ mainList: ml, history }, () => {
-                this.updateStatusBarItem();
+                this.publishState();
             });
         };
 
@@ -588,7 +591,7 @@ export class NotificationCenter extends UIComponent<ICommonUIProperties, INotifi
         }
     };
 
-    private updateStatusBarItem(): void {
+    private publishState(): void {
         const { history, silent, showHistory } = this.state;
         const newCount = history.filter((toast) => {
             return toast.isNew;
@@ -601,17 +604,6 @@ export class NotificationCenter extends UIComponent<ICommonUIProperties, INotifi
             showHistory,
         });
     }
-
-    private statusBarButtonClick = (
-        data: { command: string; event: MouseEvent | KeyboardEvent; }): Promise<boolean> => {
-        if (data.command === "notifications:toggleHistory") {
-            this.toggleHistory();
-
-            return Promise.resolve(true);
-        }
-
-        return Promise.resolve(false);
-    };
 
     private handleShowInfo = (text: string): Promise<boolean> => {
         void this.showNotification({

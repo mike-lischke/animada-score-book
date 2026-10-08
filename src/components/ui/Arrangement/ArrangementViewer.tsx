@@ -27,7 +27,6 @@ import { DialogResponseClosure } from "../framework/Dialog.js";
 import { RadialMenu } from "../framework/RadialMenu.js";
 import { ChildAlignment, Orientation } from "../framework/ui-types.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
-import { Minimap, type IVisibleBarRange } from "../Minimap/Minimap.js";
 import { InsertBarsDialog } from "../composites/InsertBarsDialog.js";
 import { BarActionKind, BarActionStrip } from "./BarActionStrip.js";
 import { SelectionEditPopup } from "./SelectionEditPopup.js";
@@ -42,6 +41,12 @@ const staffWindowOverscan = 1;
 
 /** Distance in px a requested position keeps from the viewport edge, so a note head is not cut off. */
 const staffVisibilityMargin = 24;
+
+/** The range of measures that is visible in the score viewport. */
+interface IVisibleBarRange {
+    startBar: number;
+    endBar: number;
+}
 
 /** The measure column the play head is in, in layout px at 100% zoom. */
 interface IPlayheadColumn {
@@ -88,7 +93,6 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
     private trackViewerContainerRef = createRef<HTMLDivElement | null>();
     private trackControlsRef = createRef<HTMLDivElement | null>();
     private viewerContentHostRef = createRef<HTMLDivElement | null>();
-    private minimapRef = createRef<Minimap | null>();
     private insertBarsDialogRef = createRef<InsertBarsDialog | null>();
     private barActionStripRef = createRef<BarActionStrip | null>();
     private gridRadialMenuRef = createRef<RadialMenu | null>();
@@ -187,6 +191,7 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         requisitions.register("animationStateChanged", this.handleAnimationStateChanged);
         requisitions.register("arrangementChanged", this.handleArrangementChanged);
         requisitions.register("measureVisibilityRequested", this.handleMeasureVisibilityRequested);
+        requisitions.register("scoreViewportMoveRequested", this.handleScoreViewportMoveRequested);
 
         setTimeout(this.handleResize, 0);
         this.resizeObserver.observe(this.viewerRef.current!);
@@ -273,6 +278,7 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         requisitions.unregister("animationStateChanged", this.handleAnimationStateChanged);
         requisitions.unregister("arrangementChanged", this.handleArrangementChanged);
         requisitions.unregister("measureVisibilityRequested", this.handleMeasureVisibilityRequested);
+        requisitions.unregister("scoreViewportMoveRequested", this.handleScoreViewportMoveRequested);
     }
 
     public override render(): JSX.Element {
@@ -341,7 +347,7 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
             // mounted when the window has moved past measure 1, where it sits off-screen to the left: the prefix
             // column is taller than a measure column, because its rows start below the measure head room, so
             // dropping it would shrink the height of the content while scrolling and push everything below the
-            // viewer — the minimap in particular — upwards.
+            // viewer — the track controls in particular — upwards.
             const prefix = (
                 <StaffPrefixViewer arrangement={arrangement} timeSignature={arrangement.timeParams.timeSignature} />
             );
@@ -430,13 +436,6 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
                         </Container>
                         {editSidebar}
                     </Container>
-                    <Minimap
-                        ref={this.minimapRef}
-                        arrangement={arrangement}
-                        scoreMetrics={arrangementPlayer.scoreMetrics}
-                        selectionManager={selectionManager}
-                        onViewportMoved={this.handleViewportMoved}
-                    />
                     <InsertBarsDialog ref={this.insertBarsDialogRef} />
                 </Container>
                 <RadialMenu ref={this.gridRadialMenuRef} />
@@ -815,11 +814,14 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         return Promise.resolve(true);
     };
 
-    private handleViewportMoved = (newScrollLeft: number) => {
-        if (this.viewerRef.current) {
-            const scrollRange = this.viewerRef.current.scrollWidth - this.viewerRef.current.clientWidth;
-            this.viewerRef.current.scrollLeft = clampValue(newScrollLeft * scrollRange, 0, scrollRange);
+    private handleScoreViewportMoveRequested = (position: number): Promise<boolean> => {
+        const host = this.viewerRef.current;
+        if (host) {
+            const scrollRange = host.scrollWidth - host.clientWidth;
+            host.scrollLeft = clampValue(position * scrollRange, 0, scrollRange);
         }
+
+        return Promise.resolve(true);
     };
 
     private handleTrackViewModeToggled = (newTrackViewMode: "grid" | "staff") => {
@@ -964,7 +966,12 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         const viewportWidth = totalContentWidth > 0 ? visibleContentWidth / totalContentWidth : 1;
 
         const viewportPosition = maxScrollLeft > 0 ? host.scrollLeft / maxScrollLeft : 0;
-        this.minimapRef.current?.handleTrackViewerScrolled(viewportWidth, viewportPosition, bars);
+        void requisitions.execute("scoreViewportChanged", {
+            position: viewportPosition,
+            width: viewportWidth,
+            startBar: bars.startBar,
+            endBar: bars.endBar,
+        });
     };
 
     private getVisibleBarRange(scrollHost: HTMLElement, leftPadding: number): IVisibleBarRange | null {
