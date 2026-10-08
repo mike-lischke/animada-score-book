@@ -21,6 +21,17 @@ import { StaffMeasureEditor } from "../src/ui/StaffMeasureEditor.js";
 import { PlayerPlayState } from "../src/player/ArrangementPlayer.js";
 import { TimeCoordinator } from "../src/player/TimeCoordinator.js";
 import { TrackPlayer } from "../src/player/TrackPlayer.js";
+import { afterEach } from "vitest";
+
+const selectionManagers = new Set<SelectionManager>();
+
+afterEach(() => {
+    for (const manager of selectionManagers) {
+        manager.dispose();
+    }
+
+    selectionManagers.clear();
+});
 
 /**
  * Builds a note value, undotted unless a dot is asked for.
@@ -292,9 +303,12 @@ export const emptyMeasureTrack = (id: number, instrumentId: string, stepsPerBar 
  * @returns The input of the editor.
  */
 export const createEditorInput = (model: ScoreBookDataModel): IMeasureEditorInput => {
+    const selectionManager = new SelectionManager(model);
+    selectionManagers.add(selectionManager);
+
     return {
         eventContainer: document.createElement("div"),
-        selectionManager: new SelectionManager(model),
+        selectionManager,
         scoreElementRegistry: new ScoreElementRegistry(),
     };
 };
