@@ -76,7 +76,10 @@ export interface IRequestTypeMap {
     "settingsChanged": (settings: IUISettings) => Promise<boolean>;
     "trackViewModeToggled": (mode: "grid" | "staff") => Promise<boolean>;
 
-    /** The set of measures the staff view renders changed, so decoration of rendered measures has to be redone. */
+    /**
+     * The measures the staff view renders were laid out again — a new window of measures arrived, or the rows of the
+     * rendered measures moved — so decoration of rendered measures has to be redone.
+     */
     "staffWindowChanged": SimpleCallback;
 
     "playRangeChanged": (range?: { from: number; to: number; }) => Promise<boolean>;

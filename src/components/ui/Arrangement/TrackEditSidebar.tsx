@@ -6,6 +6,7 @@
 import { type ComponentChild, createRef } from "preact";
 
 import type { ISbDmInstrument, ISbDmTrack, ScoreBookDataModel } from "../../../core/ScoreBookDataModel.js";
+import { StaffRowGeometry, type IStaffRowGeometry } from "../../../core/StaffRowGeometry.js";
 import { DialogResponseClosure } from "../framework/Dialog.js";
 import { Container } from "../framework/Container.js";
 import { Icon } from "../framework/Icon.js";
@@ -18,6 +19,12 @@ import { SelectionDialog } from "../composites/SelectionDialog.js";
 export interface ITrackEditSidebarProps extends ICommonUIProperties {
     tracks: ISbDmTrack[];
     dataModel: ScoreBookDataModel;
+
+    /**
+     * The shared row geometry of every track, so the sidebar rows line up with the staff rows they belong to.
+     * Omitted in grid mode, where the rows keep the grid cell height.
+     */
+    rowGeometries?: ReadonlyMap<number, IStaffRowGeometry>;
 }
 
 /**
@@ -30,7 +37,7 @@ export class TrackEditSidebar extends UIComponent<ITrackEditSidebarProps> {
     private selectionDialogRef = createRef<SelectionDialog | null>();
 
     public render(): ComponentChild {
-        const { tracks } = this.props;
+        const { tracks, rowGeometries } = this.props;
 
         const className = this.generateFinalClassName([
             "trackEditSidebar",
@@ -38,12 +45,21 @@ export class TrackEditSidebar extends UIComponent<ITrackEditSidebarProps> {
         ]);
 
         const trackRows = tracks.map((track) => {
+            const geometry = rowGeometries?.get(track.id);
+            const rowStyle = geometry === undefined
+                ? undefined
+                : {
+                    "--track-row-height": StaffRowGeometry.formatPx(geometry.heightPx),
+                    "--staff-centre": StaffRowGeometry.formatPx(geometry.centrePx),
+                };
+
             return (
                 <Container
                     key={track.id}
                     className="trackEditRow"
                     orientation={Orientation.LeftToRight}
                     crossAlignment={ChildAlignment.Center}
+                    style={rowStyle}
                 >
                     <button
                         className="trackEditTrigger"

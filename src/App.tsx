@@ -2108,6 +2108,26 @@ export class App extends UIComponent<{}, IAppState> {
 
                     return Promise.resolve(true);
                 }
+
+                // The backend refused the lock for a reason of its own. Editing without it would only fail at the
+                // save, so the mode stays off and the reason is stated. A session that ended can be renewed with a
+                // login; a missing permission cannot.
+                if (data.status === 401) {
+                    AppStorage.saveSetting("editMode", false);
+                    this.setState({ editMode: false });
+                    void requisitions.execute("showWarning", "Your session has ended. Log in again to edit.");
+                    void this.loginDialogRef.current?.show().then(this.handleLoginDialogResult);
+
+                    return Promise.resolve(true);
+                }
+
+                if (data.status === 403) {
+                    AppStorage.saveSetting("editMode", false);
+                    this.setState({ editMode: false });
+                    void requisitions.execute("showError", "You do not have permission to edit this score.");
+
+                    return Promise.resolve(true);
+                }
             }
 
             this.setState({ editMode: true });
@@ -2182,7 +2202,8 @@ export class App extends UIComponent<{}, IAppState> {
                 return true;
             }
 
-            void requisitions.execute("showError", "Save failed — backend returned no content.");
+            // The backend refused the save without content, which only happens when it could not be reached.
+            void requisitions.execute("showError", "Save failed — the backend could not be reached.");
 
             return false;
         } catch (error) {

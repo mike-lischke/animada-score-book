@@ -49,6 +49,9 @@ interface IScoreLockResult {
     locked?: boolean;
     username?: string;
     lockedAt?: string;
+
+    /** HTTP status the backend refused the lock with, or undefined when it was granted or unreachable. */
+    status?: number;
 }
 
 /** One bar, the unit of a track's timeline. */
@@ -661,6 +664,12 @@ export interface IUserInfo {
     isAdmin: boolean;
 }
 
+/** The group a session logs in through, which is all a session needs to know about it. */
+export interface IGroupInfo {
+    id: number;
+    name: string;
+}
+
 /** A user row as returned by listUsers. */
 export interface IUserRow {
     id: number;
@@ -703,10 +712,7 @@ interface ILoginResponse {
     user: IUserInfo;
 
     /** Set when the user authenticated via a group password. */
-    group?: {
-        id: number;
-        name: string;
-    };
+    group?: IGroupInfo;
 
     capabilities: ICapabilities;
 }
@@ -716,7 +722,7 @@ interface IWhoamiResponse {
     user?: IUserInfo;
 
     /** Set when authenticated via group shared password. */
-    group?: { id: number; name: string; };
+    group?: IGroupInfo;
 
     capabilities: ICapabilities;
 }
@@ -853,7 +859,7 @@ export class ScoreBookDataModel {
      *
      * @returns The active group, or undefined if logged in as a user or anonymously.
      */
-    public get activeGroup(): { id: number; name: string; } | undefined {
+    public get activeGroup(): IGroupInfo | undefined {
         return this.currentGroup;
     }
 
@@ -865,8 +871,14 @@ export class ScoreBookDataModel {
     public lockToken?: string;
 
     private accessToken: string | undefined;
+
+    /** True while a token refresh runs, which keeps a nested refusal from starting another one. */
+    private refreshing = false;
+
+    /** True once a refresh failed, so refusals do not repeat a futile attempt before the next login. */
+    private sessionRefreshFailed = false;
     private currentUser: IUserInfo | undefined;
-    private currentGroup: { id: number; name: string; } | undefined;
+    private currentGroup: IGroupInfo | undefined;
     private currentCapabilities: ICapabilities = {
         canEditScores: false,
         canManageUsers: false,
@@ -2759,11 +2771,7 @@ export class ScoreBookDataModel {
      * @param capabilities The capabilities.
      */
     public setSession(token: string, user: IUserInfo, capabilities: ICapabilities): void {
-        this.accessToken = token;
-        this.currentUser = user;
-        this.currentCapabilities = capabilities;
-
-        void requisitions.execute("authChanged", undefined);
+        this.applySession(token, user, capabilities);
     }
 
     /**
@@ -2801,15 +2809,7 @@ export class ScoreBookDataModel {
 
         const data = await res.json() as ILoginResponse;
 
-        this.accessToken = data.token;
-        this.currentUser = data.user;
-        this.currentGroup = undefined;
-        this.currentCapabilities = data.capabilities;
-
-        sessionStorage.removeItem("authType");
-        sessionStorage.removeItem("groupId");
-
-        void requisitions.execute("authChanged", undefined);
+        this.applySession(data.token, data.user, data.capabilities);
 
         return true;
     }
@@ -2835,15 +2835,7 @@ export class ScoreBookDataModel {
 
         const data = await res.json() as ILoginResponse;
 
-        this.accessToken = data.token;
-        this.currentUser = data.user;
-        this.currentGroup = data.group;
-        this.currentCapabilities = data.capabilities;
-
-        sessionStorage.setItem("authType", "group");
-        sessionStorage.setItem("groupId", String(data.group?.id ?? ""));
-
-        void requisitions.execute("authChanged", undefined);
+        this.applySession(data.token, data.user, data.capabilities, data.group);
 
         return true;
     }
@@ -2855,20 +2847,7 @@ export class ScoreBookDataModel {
         // Notify the backend to clear the refresh token cookie.
         await this.fetchApi("/api?action=logout", { method: "POST" });
 
-        this.accessToken = undefined;
-        this.currentUser = undefined;
-        this.currentGroup = undefined;
-        this.currentCapabilities = {
-            canEditScores: false,
-            canManageUsers: false,
-            canManageInstruments: false,
-            canExportMP3: false,
-        };
-
-        sessionStorage.removeItem("authType");
-        sessionStorage.removeItem("groupId");
-
-        void requisitions.execute("authChanged", undefined);
+        this.clearAuthState();
     }
 
     /**
@@ -2883,20 +2862,7 @@ export class ScoreBookDataModel {
             instruments: [],
         };
 
-        this.accessToken = undefined;
-        this.currentUser = undefined;
-        this.currentGroup = undefined;
-        this.currentCapabilities = {
-            canEditScores: false,
-            canManageUsers: false,
-            canManageInstruments: false,
-            canExportMP3: false,
-        };
-
-        sessionStorage.removeItem("authType");
-        sessionStorage.removeItem("groupId");
-
-        void requisitions.execute("authChanged", undefined);
+        this.clearAuthState();
     }
 
     /**
@@ -3295,7 +3261,10 @@ export class ScoreBookDataModel {
             return { success: false };
         }
 
-        return await res.json() as IScoreLockResult;
+        const result = await res.json() as IScoreLockResult;
+
+        // A refusal keeps the status, which tells a session that ended from a score this account may not write.
+        return res.ok ? result : { ...result, success: false, status: res.status };
     }
 
     /**
@@ -3398,13 +3367,34 @@ export class ScoreBookDataModel {
         }
 
         if (!res.ok) {
-            return undefined;
+            throw new Error(await ScoreBookDataModel.saveFailureMessage(res));
         }
 
         // Keep the score library entry name in sync with the arrangement title.
         await this.syncScoreLibName(arrangement.id, arrangement.title);
 
         return content;
+    }
+
+    /**
+     * @param res The response the backend refused a save with.
+     *
+     * @returns The reason the save failed, stated with the status the backend answered with.
+     */
+    private static async saveFailureMessage(res: Response): Promise<string> {
+        if (res.status === 401) {
+            return "Your session has ended — log in again to save this score.";
+        }
+
+        if (res.status === 403) {
+            return "You do not have permission to save this score.";
+        }
+
+        const data = await res.json().catch(() => {
+            return undefined;
+        }) as { error?: string; } | undefined;
+
+        return data?.error ?? `Saving failed: HTTP ${res.status} ${res.statusText}`;
     }
 
     /**
@@ -3417,6 +3407,53 @@ export class ScoreBookDataModel {
      */
     private static timelineSignature(items: IAbsoluteTrackItem[]): string {
         return JSON.stringify(items);
+    }
+
+    /**
+     * Drops the session state and tells the app about it, so it can ask for a login again.
+     */
+    private clearAuthState(): void {
+        this.accessToken = undefined;
+        this.currentUser = undefined;
+        this.currentGroup = undefined;
+        this.currentCapabilities = {
+            canEditScores: false,
+            canManageUsers: false,
+            canManageInstruments: false,
+            canExportMP3: false,
+        };
+
+        sessionStorage.removeItem("authType");
+        sessionStorage.removeItem("groupId");
+
+        void requisitions.execute("authChanged", undefined);
+    }
+
+    /**
+     * @param token The access token to authenticate with.
+     * @param user The user the session belongs to.
+     * @param capabilities What the session may do.
+     * @param group The group the session logged in through, or undefined for a plain login.
+     */
+    private applySession(token: string, user: IUserInfo, capabilities: ICapabilities,
+        group?: IGroupInfo): void {
+        this.accessToken = token;
+        this.currentUser = user;
+        this.currentGroup = group;
+        this.currentCapabilities = capabilities;
+
+        // A login ends the state a failed refresh left behind, so the next expired token is refreshed again.
+        this.sessionRefreshFailed = false;
+
+        if (group === undefined) {
+            sessionStorage.removeItem("authType");
+            sessionStorage.removeItem("groupId");
+        } else {
+            sessionStorage.setItem("authType", "group");
+            sessionStorage.setItem("groupId", String(group.id));
+        }
+
+        void requisitions.execute("authChanged", undefined);
     }
 
     /**
@@ -5247,6 +5284,14 @@ export class ScoreBookDataModel {
         }, false);
 
         if (!res) {
+            // A session that no longer refreshes has ended, which the app has to know so it can ask for a login
+            // again. An anonymous session holds no access token to lose, so nothing changes there.
+            this.sessionRefreshFailed = true;
+
+            if (this.accessToken !== undefined) {
+                this.clearAuthState();
+            }
+
             return false;
         }
 
@@ -5327,13 +5372,20 @@ export class ScoreBookDataModel {
             return undefined;
         }
 
-        // Auto-refresh on 401 and retry once.
-        if (res.status === 401 && attachAuth && this.accessToken) {
-            const refreshed = await this.refreshAccessToken();
+        // A refusal for authentication is answered once with a fresh token, which the refresh cookie may still
+        // supply: a reload, or a module update in development, drops the token this model holds in memory.
+        if (res.status === 401 && attachAuth && !this.refreshing && !this.sessionRefreshFailed) {
+            this.refreshing = true;
+            let refreshed: boolean;
+
+            try {
+                refreshed = await this.refreshAccessToken();
+            } finally {
+                this.refreshing = false;
+            }
 
             if (refreshed) {
-                (mergedOptions.headers as Record<string, string>).Authorization =
-                    `Bearer ${this.accessToken}`;
+                (mergedOptions.headers as Record<string, string>).Authorization = `Bearer ${this.accessToken}`;
 
                 try {
                     res = await fetch(url, mergedOptions);

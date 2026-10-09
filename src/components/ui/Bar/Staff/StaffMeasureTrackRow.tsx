@@ -9,6 +9,7 @@ import type {
     ISbDmTrack,
     ITimeParamsView, ScoreBookDataModel
 } from "../../../../core/ScoreBookDataModel.js";
+import { StaffRowGeometry, type IStaffRowGeometry } from "../../../../core/StaffRowGeometry.js";
 import type { IRangeArticulation } from "../../../../core/types/general.js";
 import type { ArrangementPlayer } from "../../../../player/ArrangementPlayer.js";
 import type { TrackPlayer } from "../../../../player/TrackPlayer.js";
@@ -24,6 +25,9 @@ export interface IStaffMeasureTrackRowProps extends ICommonUIProperties {
 
     /** The measure column's layout width in px at 100 % zoom, which a beam's slope is derived from. */
     measureWidth: number;
+
+    /** The track's shared row geometry, so every measure lays the track out at the same height. */
+    rowGeometry: IStaffRowGeometry;
 
     trackPlayer: TrackPlayer;
     arrangementPlayer: ArrangementPlayer;
@@ -58,15 +62,13 @@ export class StaffMeasureTrackRow extends UIComponent<IStaffMeasureTrackRowProps
     }
 
     public override render(): ComponentChild {
-        const { arrangementPlayer, barNumber, dataModel, measureWidth, timeParams, track, scoreElementRegistry,
-            articulations } = this.props;
+        const { arrangementPlayer, barNumber, dataModel, measureWidth, rowGeometry, timeParams, track,
+            scoreElementRegistry, articulations } = this.props;
 
         const measure = track.measures[barNumber - 1];
         const baseSteps = measure.meter.stepResolution;
 
-        const maxNoteLine = Math.max(1, ...Object.values(track.instrument.noteStyles).map((ns) => {
-            return ns.noteLine ?? 1;
-        }));
+        const maxNoteLine = StaffRowGeometry.maxNoteLineOf(track);
 
         const rowClassName = this.generateFinalClassName(["staff-measure-track-row"]);
         const repeatBars = dataModel.arrangement?.repeatBars;
@@ -83,6 +85,7 @@ export class StaffMeasureTrackRow extends UIComponent<IStaffMeasureTrackRowProps
                 trackId={track.id}
                 maxNoteLine={maxNoteLine}
                 measureWidth={measureWidth}
+                rowGeometry={rowGeometry}
                 repeatBars={repeatBars}
                 scoreElementRegistry={scoreElementRegistry}
                 articulations={articulations}

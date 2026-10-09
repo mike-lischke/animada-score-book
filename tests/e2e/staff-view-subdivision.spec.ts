@@ -299,8 +299,8 @@ test.describe("Staff view subdivision rendering", () => {
 
         await expect(page.locator(".staff-note-viewer-tuplet-bracket").first()).toBeVisible();
 
-        // A bracket tick sits on the glyph of the slot it marks, so both ends have to land on the
-        // centre of an outer rest.
+        // A bracket covers the group it spans, so its ends stand the bracket's air beyond the centre of an outer
+        // rest, the same amount on both sides.
         const offsets = await page.evaluate(() => {
             const bracket = document.querySelector<HTMLElement>(".staff-note-viewer-tuplet-bracket");
             const rests = [...document.querySelectorAll<HTMLElement>(".staff-note-viewer-rest-symbol")];
@@ -318,6 +318,9 @@ test.describe("Staff view subdivision rendering", () => {
             return {
                 left: bracketRect.left - centerOf(rests[0]),
                 right: bracketRect.right - centerOf(rests[1]),
+                halfRest: Math.max(...rests.map((rest) => {
+                    return rest.getBoundingClientRect().width;
+                })) / 2,
             };
         });
 
@@ -327,7 +330,12 @@ test.describe("Staff view subdivision rendering", () => {
             return;
         }
 
-        expect(Math.abs(offsets.left)).toBeLessThan(2);
-        expect(Math.abs(offsets.right)).toBeLessThan(2);
+        // The ends stand the bracket's air beyond the outer edge of the rests it covers: a rest is anchored at its
+        // middle, so half of its ink lies beyond that anchor, and the air comes on top.
+        expect(offsets.left).toBeLessThan(0);
+        expect(offsets.right).toBeGreaterThan(0);
+        expect(offsets.left).toBeCloseTo(-offsets.right, 1);
+        expect(-offsets.left).toBeGreaterThan(offsets.halfRest - 1);
+        expect(-offsets.left).toBeLessThan(offsets.halfRest + 6);
     });
 });

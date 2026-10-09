@@ -112,15 +112,6 @@ export class RangeArticulationView {
     /** Ratio of viewport pixels to the content's own pixels, which the CSS zoom of the viewer decides. */
     private zoomFactor = 1;
 
-    /**
-     * Distance from the bottom line of a system to the middle of the marking band, in px. Every marking of a row
-     * stands at that line, whatever note line the notes of the row use, so they never follow a note up.
-     */
-    private bandOffset = staffSpacePx * 2;
-
-    /** Height of the band a marking is placed in, which hangs below the row its notes belong to. */
-    private bandHeight = staffSpacePx * 2;
-
     private strokeWidth = staffSpacePx * 0.16;
     private lastPointerX = 0;
     private lastPointerY = 0;
@@ -500,10 +491,9 @@ export class RangeArticulationView {
                 continue;
             }
 
-            const bandBottom = rect.bottom + this.bandHeight;
             const distance = clientY < rect.top
                 ? rect.top - clientY
-                : clientY > bandBottom ? clientY - bandBottom : 0;
+                : clientY > rect.bottom ? clientY - rect.bottom : 0;
 
             if (distance >= bestDistance) {
                 continue;
@@ -924,6 +914,31 @@ export class RangeArticulationView {
     /**
      * @param row The track row to measure.
      *
+     * @returns The middle of the row's marking band, in the content's own pixel space. The row geometry states it as
+     *          the band's offset from the row's middle, which sits below the notation's ink so a hairpin clears the
+     *          accents. Falls back to the band below the staff for a row that states none.
+     */
+    private bandMiddleOf(row: HTMLElement): number | undefined {
+        const bandCentre = Number.parseFloat(
+            getComputedStyle(row).getPropertyValue("--staff-band-centre"),
+        );
+        const hostRect = this.contentHost.getBoundingClientRect();
+
+        if (Number.isFinite(bandCentre)) {
+            const rect = row.getBoundingClientRect();
+
+            return ((rect.top - hostRect.top) / this.zoomFactor)
+                + ((rect.height / this.zoomFactor) / 2) + bandCentre;
+        }
+
+        const bottom = this.staffBottomOf(row);
+
+        return bottom === undefined ? undefined : bottom + (staffSpacePx * 2);
+    }
+
+    /**
+     * @param row The track row to measure.
+     *
      * @returns The bottom edge of the row's staff, in the content's own pixel space: the lowest line the row
      * draws, which is what every marking of the row stands below.
      */
@@ -945,7 +960,7 @@ export class RangeArticulationView {
      * @param trackId The track to search in.
      * @param anchor The anchor to resolve.
      *
-     * @returns The point an anchor's event is drawn at, in the content's own pixel space.
+     * @returns The point in the row's marking band above the anchor's event, in the content's own pixel space.
      */
     private anchorPoint(bar: number, trackId: number, anchor: IRangeArticulationAnchor): IPoint | undefined {
         const runs = this.registry.findElements(ScoreElementKind.StaffRun, bar, trackId);
@@ -960,11 +975,11 @@ export class RangeArticulationView {
             const symbol = run.querySelector<HTMLElement>(".staff-note-head, .staff-note-viewer-rest-symbol") ?? run;
             const rect = symbol.getBoundingClientRect();
             const row = run.closest<HTMLElement>(".staff-measure-track-row");
+            const bandY = row === null ? undefined : this.bandMiddleOf(row);
 
             return {
                 x: (rect.left + (rect.width / 2) - hostRect.left) / this.zoomFactor,
-                y: (row === null ? undefined : this.staffBottomOf(row))
-                    ?? (rect.bottom - hostRect.top) / this.zoomFactor,
+                y: bandY ?? (rect.bottom - hostRect.top) / this.zoomFactor,
             };
         }
 
@@ -975,8 +990,8 @@ export class RangeArticulationView {
      * @param clientX The pointer's viewport x.
      * @param clientY The pointer's viewport y.
      *
-     * @returns The track row whose band holds the position, or undefined outside a band. A marking stands below the
-     * row its notes belong to, in the band the accent marks use, which is why hit testing the point finds nothing.
+     * @returns The track row whose band holds the position, or undefined outside a band. A marking stands in the
+     * band the row geometry places below the row's notation, so the row's own box holds it.
      */
     private locateRow(clientX: number, clientY: number): ILocatedRow | undefined {
         for (const row of this.contentHost.querySelectorAll<HTMLElement>(".staff-measure-track-row")) {
@@ -985,7 +1000,7 @@ export class RangeArticulationView {
                 continue;
             }
 
-            if (clientY < rect.bottom || clientY > rect.bottom + this.bandHeight) {
+            if (clientY < rect.top || clientY > rect.bottom) {
                 continue;
             }
 
@@ -1094,7 +1109,7 @@ export class RangeArticulationView {
         handle.dataset.articulationId = `${id}`;
         handle.dataset.end = end;
         handle.style.left = `${point.x}px`;
-        handle.style.top = `${point.y + this.bandOffset}px`;
+        handle.style.top = `${point.y}px`;
 
         return handle;
     }
@@ -1103,7 +1118,7 @@ export class RangeArticulationView {
         const element = document.createElement("div");
         element.className = className;
         element.style.left = `${point.x}px`;
-        element.style.top = `${point.y + this.bandOffset}px`;
+        element.style.top = `${point.y}px`;
         render(createElement(ScoreSymbolView, {
             symbol: ScoreSymbol.Forte,
             staffSpace: staffSpacePx,
@@ -1133,7 +1148,7 @@ export class RangeArticulationView {
         const element = this.buildHairpinGeometry(kind, width, opening, this.strokeWidth);
         element.className = className;
         element.style.left = `${Math.min(tip.x, open.x)}px`;
-        element.style.top = `${tip.y + this.bandOffset - (opening / 2)}px`;
+        element.style.top = `${tip.y - (opening / 2)}px`;
 
         return element;
     }

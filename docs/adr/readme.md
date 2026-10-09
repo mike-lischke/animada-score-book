@@ -37,3 +37,4 @@ hard to infer from code alone.
 | ADR-0014 | accepted | Draw standard score symbols as glyphs of a user-selectable SMuFL font | score rendering, notation symbols, noteheads, rests, clef, time signature, fonts, settings, print, engraving metrics |
 | ADR-0016 | accepted | Assemble barlines from pixel-snapped strokes measured against the font's barline glyphs (supersedes part of ADR-0014) | score rendering, barlines, repeat barlines, final barline, fonts, engraving metrics, staff view |
 | ADR-0017 | accepted | Play an arrangement in the order its repeat barlines state, not along the written timeline | playback, repeat barlines, transport, play range, playhead, score length, status bar, simile |
+| ADR-0018 | accepted | Size each staff row from the notation its track holds, and share that geometry across the view | staff view, staff row heights, track heights, measure columns, prefix column, track controls, print layout, note ink, beams, tuplet markers |

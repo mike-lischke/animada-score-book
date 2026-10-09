@@ -8,18 +8,43 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { normalStemLengthSpaces } from "../../src/core/BeamGeometry.js";
 import { staffSpacePx } from "../../src/core/MeasureLayout.js";
 import { ScoreBookDataModel, type ISbDmTrack } from "../../src/core/ScoreBookDataModel.js";
-import { StaffInk } from "../../src/core/StaffInk.js";
+import { HeadMark, StaffInk } from "../../src/core/StaffInk.js";
 import type { IAudioData } from "../../src/core/types/general.js";
 import { createInstrument } from "../unit-test-helpers.js";
 
 describe("StaffInk", () => {
     describe("ink bounds of a row", () => {
-        it("states the head ink for a row without stems", () => {
+        it("states the head ink for a row without stems or marks", () => {
             const ink = StaffInk.ofRow([{ noteLine: 1, beamCount: 0 }], 1);
 
-            // A head takes half a staff space around its line, its marks hang one and a half below it.
+            // A head takes half a staff space around its line, and nothing hangs below it.
             expect(ink.topPx).toBeCloseTo(5);
-            expect(ink.bottomPx).toBeCloseTo(20);
+            expect(ink.bottomPx).toBeCloseTo(5);
+        });
+
+        it("reserves the room of the deepest mark a note carries", () => {
+            const dot = StaffInk.ofRow([{ noteLine: 1, beamCount: 0, marks: [HeadMark.Dot] }], 1);
+            const ghost = StaffInk.ofRow([{ noteLine: 1, beamCount: 0, marks: [HeadMark.GhostParenthesis] }], 1);
+            const accent = StaffInk.ofRow([{ noteLine: 1, beamCount: 0, marks: [HeadMark.Accent] }], 1);
+            const both = StaffInk.ofRow([
+                { noteLine: 1, beamCount: 0, marks: [HeadMark.Dot, HeadMark.Accent] },
+            ], 1);
+
+            // A dot and a parenthesis reach a quarter space below the head's ink, an accent two and a half.
+            expect(dot.bottomPx).toBeCloseTo(7.5);
+            expect(ghost.bottomPx).toBeCloseTo(7.5);
+            expect(accent.bottomPx).toBeCloseTo(29);
+            expect(both.bottomPx).toBeCloseTo(29);
+        });
+
+        it("lets the deepest note state the bounds, its marks included", () => {
+            const ink = StaffInk.ofRow([
+                { noteLine: 3, beamCount: 0, marks: [HeadMark.Accent] },
+                { noteLine: 1, beamCount: 0 },
+            ], 2);
+
+            // The accent of the higher note reaches deeper than the head of the lower one.
+            expect(ink.bottomPx).toBeCloseTo(39);
         });
 
         it("reaches up to the beam line, not beyond it, while the stack stays above the head", () => {
@@ -29,15 +54,15 @@ describe("StaffInk", () => {
 
             expect(ink.topPx).toBeCloseTo(normalStemLengthSpaces * staffSpacePx);
 
-            // The two-level stack (1.25 spaces) ends above the head, so the marks state the bottom.
-            expect(ink.bottomPx).toBeCloseTo(20);
+            // The two-level stack (1.25 spaces) ends above the head, so the head's own bottom states the ink.
+            expect(ink.bottomPx).toBeCloseTo(5);
         });
 
         it("counts a beam stack that hangs below its head on a short stem", () => {
             const ink = StaffInk.ofRow([{ noteLine: 1, stemLengthSpaces: 0.5, beamCount: 3 }], 1);
 
-            // The three-level stack (2 spaces) reaches deeper than the head's own half space.
-            expect(ink.bottomPx).toBeCloseTo(30);
+            // The three-level stack (1.5 spaces) reaches deeper than the head's own half space.
+            expect(ink.bottomPx).toBeCloseTo(15);
         });
 
         it("takes the bounds of the whole row, not of one note", () => {
@@ -46,13 +71,13 @@ describe("StaffInk", () => {
                 { noteLine: 4, stemLengthSpaces: normalStemLengthSpaces, beamCount: 1 },
             ], 2.5);
 
-            // The highest stem states the top, the deepest head states the bottom.
+            // The lowest note's stem states the top, the highest note's head the bottom.
             expect(ink.topPx).toBeCloseTo(50);
-            expect(ink.bottomPx).toBeCloseTo(35);
+            expect(ink.bottomPx).toBeCloseTo(20);
         });
     });
 
-    describe("room a row keeps below itself", () => {
+    describe("room a tuplet marker needs beside the notation", () => {
         let track: ISbDmTrack;
 
         beforeEach(() => {
@@ -62,20 +87,26 @@ describe("StaffInk", () => {
             track.instrument.noteStyles["1"] = { id: "1", noteLine: 4 } as IAudioData;
         });
 
-        it("reserves nothing while a measure labels only one tuplet", () => {
-            track.measures[0].subdivisions.push({ startIndex: 0, actual: 3, normal: 2, isTuplet: true });
-
-            expect(StaffInk.belowReservePx(track)).toBe(0);
+        it("keeps no room while a measure labels no tuplet", () => {
+            expect(StaffInk.aboveMarkerRoomPx(track)).toBe(0);
+            expect(StaffInk.belowMarkerRoomPx(track)).toBe(0);
         });
 
-        it("reserves the room the nested tuplet's label needs below the notation", () => {
+        it("keeps room above the notation for the outermost tuplet's label", () => {
+            track.measures[0].subdivisions.push({ startIndex: 0, actual: 3, normal: 2, isTuplet: true });
+
+            expect(StaffInk.aboveMarkerRoomPx(track)).toBeGreaterThan(0);
+            expect(StaffInk.belowMarkerRoomPx(track)).toBe(0);
+        });
+
+        it("keeps room below the notation for the label of a nested tuplet", () => {
             track.measures[0].subdivisions.push(
                 { startIndex: 0, actual: 3, normal: 4, isTuplet: true },
                 { startIndex: 0, actual: 3, normal: 1, isTuplet: true },
             );
 
-            // The label of the inner tuplet is drawn below the notation, which needs room on a four-line staff.
-            expect(StaffInk.belowReservePx(track)).toBeGreaterThan(0);
+            expect(StaffInk.aboveMarkerRoomPx(track)).toBeGreaterThan(0);
+            expect(StaffInk.belowMarkerRoomPx(track)).toBeGreaterThan(0);
         });
     });
 });

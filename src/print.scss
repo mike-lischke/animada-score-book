@@ -61,6 +61,12 @@
     background: white;
     font-family: system-ui, "Open Sans", "Helvetica Neue", "Segoe UI", Roboto, sans-serif;
 
+    /*
+     * Size of an instrument icon in the printed instrument column, in px. The icon belongs to the printed layout
+     * and not to the grid, whose cell size states nothing about how large a printed track is drawn.
+     */
+    --print-instrument-icon-size: 57px;
+
     .print-header {
         margin-bottom: 8mm;
 
@@ -100,9 +106,9 @@
      * play head, so the same content fits into half the horizontal space.
      */
     .staff-measure-viewer {
-        --bar-step-width: calc((var(--note-height) + 5px) / 2);
+        --bar-step-width: calc((var(--measure-step-width) + 5px) / 2);
 
-        min-width: calc(var(--steps-per-bar) * var(--note-height) / 2);
+        min-width: calc(var(--steps-per-bar) * var(--measure-step-width) / 2);
     }
 
     /* Pin the bar number inside the bar instead of right-anchored against the icon column. */
@@ -201,15 +207,19 @@
     }
 
     .print-instrument-icon {
-        width: calc(var(--note-height) * 0.7 + 1px);
-        height: calc(var(--note-height) * 0.7 + 1px);
+        width: var(--print-instrument-icon-size);
+        height: var(--print-instrument-icon-size);
         object-fit: contain;
+
+        /* The icon sits on the printed staff line of its track. A centred item moves by half its top margin. */
+        margin-top: calc(var(--staff-centre, 0px) * 2);
     }
 
     /* Staff rows have no beam strip and a different stride than grid rows. */
     &.view-staff {
         .print-instrument-column {
-            margin-top: 30px;
+            /* The printed staff column keeps the same head room above its first row. */
+            margin-top: 24px;
         }
 
         .print-instrument-beam-spacer {
@@ -217,7 +227,8 @@
         }
 
         .print-instrument-cell {
-            height: calc(var(--note-height) + 20px + var(--staff-below-reserve, 0px));
+            /* The row geometry states each track's height; the gap below matches the printed staff rows. */
+            height: calc(var(--staff-row-height, var(--note-height)) + 20px);
         }
     }
 

@@ -107,17 +107,22 @@ test("keeps a below tuplet marker clear of the notes on the lowest staff line", 
     await openNestedTuplets(page, "e2e-below-tuplet-marker");
 
     // The row reserves the room the below marker needs, so the marker stays clear of the row that follows.
-    const reserve = await page.evaluate(() => {
+    const markerInsideRow = await page.evaluate(() => {
         const row = document.querySelector<HTMLElement>(".staff-note-viewer");
+        const marker = document.querySelector<HTMLElement>(".staff-note-viewer-tuplet-below");
+        if (!row || !marker) {
+            return Number.NaN;
+        }
 
-        return getComputedStyle(row!).getPropertyValue("--staff-below-reserve").trim();
+        return row.getBoundingClientRect().bottom - marker.getBoundingClientRect().bottom;
     });
-    expect(parseFloat(reserve)).toBeGreaterThan(0);
+    expect(markerInsideRow).toBeGreaterThanOrEqual(0);
 
-    // The marker hangs below the deepest noteheads instead of crossing them.
+    // The marker hangs below the deepest noteheads instead of crossing them, and keeps its own gap
+    // (`--tuplet-marker-gap`) to their ink.
     const clearance = await belowMarkerClearance(page);
     expect(Number.isFinite(clearance)).toBe(true);
-    expect(clearance).toBeGreaterThan(8);
+    expect(clearance).toBeGreaterThan(4);
 });
 
 test("keeps the below marker clear of the notes when the measure is widened", async ({ page }) => {

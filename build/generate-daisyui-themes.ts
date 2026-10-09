@@ -56,7 +56,7 @@ const mapVsThemeToDaisyTheme = (theme: VSTheme): string => {
     const success = c["gitDecoration.addedResourceForeground"] ?? c["minimapGutter.addedBackground"] ??
         c["charts.green"] ?? "#81b88b";
 
-    // Own color definitions. They are not used in daisyUI themes, but we can use them for for our
+    // Own color definitions. They are not used in daisyUI themes, but we can use them for our
     // own components, to achieve a more consistent look.
     /*const selectionBg =
         c["editor.selectionBackground"] ??

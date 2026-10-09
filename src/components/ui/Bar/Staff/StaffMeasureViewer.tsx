@@ -9,6 +9,7 @@ import type { ISbDmArrangement, ISbDmTrack, ISbDmTrackPiece, ScoreBookDataModel 
     from "../../../../core/ScoreBookDataModel.js";
 import { MeasureLayout, staffSpacePx } from "../../../../core/MeasureLayout.js";
 import { RangeArticulations } from "../../../../core/RangeArticulations.js";
+import { StaffRowGeometry, type IStaffRowGeometry } from "../../../../core/StaffRowGeometry.js";
 import type { ArrangementPlayer } from "../../../../player/ArrangementPlayer.js";
 import {
     MeasureProjection, NoteGroupKind, type INoteGroup, type INotationGrid,
@@ -83,7 +84,8 @@ export interface IStaffMeasureViewerProps extends ICommonUIProperties {
      * The print view states its halved width, so the same engraving rules hold on paper.
      */
     measureWidth: number;
-
+    /** The shared row geometry of every track, so all measures and side controls lay a track out alike. */
+    rowGeometries?: ReadonlyMap<number, IStaffRowGeometry>;
     /**
      * True to draw the hairpins and `f` markings of each row. The print view sets this; the screen view leaves it
      * off, because its markings are drawn into the viewer's decoration layer instead.
@@ -334,7 +336,7 @@ export class StaffMeasureViewer extends UIComponent<IStaffMeasureViewerProps, IS
 
     public override render(): ComponentChild {
         const { barNumber, arrangement, arrangementPlayer, inEditMode,
-            dataModel, measureWidth, scoreElementRegistry, style, showRangeArticulations } = this.props;
+            dataModel, measureWidth, rowGeometries, scoreElementRegistry, style, showRangeArticulations } = this.props;
         const { tracks } = this.state;
 
         // The barline closing the column is the resize handle, so it exists only where resizing is allowed.
@@ -359,6 +361,39 @@ export class StaffMeasureViewer extends UIComponent<IStaffMeasureViewerProps, IS
             registryRef?.(element);
         };
 
+        const trackRows = tracks.map((track) => {
+            const trackPlayer = arrangementPlayer.trackPlayers.get(track);
+            if (!trackPlayer) {
+                return null;
+            }
+
+            const articulations = showRangeArticulations
+                ? (arrangement.rangeArticulations?.all ?? []).filter((articulation) => {
+                    return articulation.trackId === track.id
+                        && RangeArticulations.portionInBar(articulation, barNumber) !== undefined;
+                })
+                : undefined;
+            const rowGeometry = rowGeometries?.get(track.id)
+                ?? StaffRowGeometry.ofTrack(track, arrangement, arrangementPlayer.scoreMetrics);
+
+            return (
+                <StaffMeasureTrackRow
+                    key={track.id}
+                    track={track}
+                    barNumber={barNumber}
+                    timeParams={arrangement.timeParams}
+                    trackPlayer={trackPlayer}
+                    arrangementPlayer={arrangementPlayer}
+                    inEditMode={inEditMode}
+                    dataModel={dataModel}
+                    measureWidth={measureWidth}
+                    rowGeometry={rowGeometry}
+                    scoreElementRegistry={scoreElementRegistry}
+                    articulations={articulations}
+                />
+            );
+        });
+
         return (
             <div
                 className="staff-measure-viewer"
@@ -366,35 +401,7 @@ export class StaffMeasureViewer extends UIComponent<IStaffMeasureViewerProps, IS
                 ref={setViewerRef}
             >
                 <div className="staff-measure-number">{barNumber}</div>
-                {tracks.map((track) => {
-                    const trackPlayer = arrangementPlayer.trackPlayers.get(track);
-                    if (!trackPlayer) {
-                        return null;
-                    }
-
-                    const articulations = showRangeArticulations
-                        ? (arrangement.rangeArticulations?.all ?? []).filter((articulation) => {
-                            return articulation.trackId === track.id
-                                && RangeArticulations.portionInBar(articulation, barNumber) !== undefined;
-                        })
-                        : undefined;
-
-                    return (
-                        <StaffMeasureTrackRow
-                            key={track.id}
-                            track={track}
-                            barNumber={barNumber}
-                            timeParams={arrangement.timeParams}
-                            trackPlayer={trackPlayer}
-                            arrangementPlayer={arrangementPlayer}
-                            inEditMode={inEditMode}
-                            dataModel={dataModel}
-                            measureWidth={measureWidth}
-                            scoreElementRegistry={scoreElementRegistry}
-                            articulations={articulations}
-                        />
-                    );
-                })}
+                {trackRows}
                 {resizeHandle}
             </div>
         );

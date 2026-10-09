@@ -547,13 +547,42 @@
 #trackViewerContainer {
     --bar-action-strip-height: 44px;
 
-    &.edit-mode {
+    /* Height of the block above a side panel, which its first row is offset by: 1px border + 7px padding +
+       30px header + 16px gap. Keep in step with `.trackControlsList` / `.trackEditSidebar`. */
+    --track-panel-head: 54px;
 
-        .trackControlsPanel,
-        .trackEditSidebarPanel {
-            /* 8px is the top margin of the action strip. */
-            padding-top: calc(var(--bar-action-strip-height) + 8px);
-        }
+    /* Room the action strip band above the score takes, which the panel's header block sits in. The strip's top
+       and bottom margin make up the 9px. */
+    --score-strip-band: 0px;
+
+    /* Distance from the top of the score content to the first row of a column. The side panels state the same
+       offset, so their rows line up with the rows they belong to. The staff columns keep their own head room in
+       edit mode, where the action strip already provides the band; a grid column carries its beat strip inside
+       it — 20pt plus its margins and the first row's top margin. */
+    --score-row-top: 24px;
+
+    .trackControlsPanel,
+    .trackEditSidebarPanel {
+        margin-top: calc(var(--score-strip-band) + var(--score-row-top) - var(--track-panel-head));
+    }
+
+    .staff-measure-viewer,
+    .staff-prefix-viewer {
+        padding-top: var(--score-row-top, 24px);
+    }
+
+    &:not(.edit-mode) {
+        /* No action strip precedes the score, so the staff columns leave the panel's header block its room, which
+           keeps the score's first row level with the panels' first row. */
+        --score-row-top: var(--track-panel-head);
+    }
+
+    &.view-grid {
+        --score-row-top: calc(20pt + 24px);
+    }
+
+    &.edit-mode {
+        --score-strip-band: calc(var(--bar-action-strip-height) + 9px);
     }
 
     #trackViewerHost {
@@ -659,10 +688,16 @@
         .trackControls {
             align-self: flex-end;
             width: calc(var(--track-controls-expanded-width) - 20px);
-            height: var(--note-height);
+            height: var(--track-row-height, var(--note-height));
             margin-bottom: 20px;
 
             flex-shrink: 0;
+
+            /* The icons and sliders sit on the staff line of the track they belong to, which the row geometry
+               states as the line's offset from the row's middle. A centred item moves by half its top margin. */
+            > * {
+                margin-top: calc(var(--staff-centre, 0px) * 2);
+            }
 
             &:last-child {
                 margin-bottom: 0;
@@ -854,7 +889,7 @@
 
 .trackEditRow {
     align-self: stretch;
-    height: var(--note-height);
+    height: var(--track-row-height, var(--note-height));
     margin-bottom: 20px;
     padding: 0 8px;
     cursor: default;
@@ -862,6 +897,12 @@
 
     &:last-child {
         margin-bottom: 0;
+    }
+
+    .trackEditTrigger {
+        /* The button sits on the staff line of the track it belongs to, which the row geometry states as the
+           line's offset from the row's middle. A centred item moves by half its top margin. */
+        margin-top: calc(var(--staff-centre, 0px) * 2);
     }
 }
 
@@ -991,7 +1032,7 @@
 
 /* StaffMeasureViewer: one column per measure, laid out horizontally */
 .staff-measure-viewer {
-    --bar-step-width: calc(var(--note-height) + 5px);
+    --bar-step-width: calc(var(--measure-step-width) + 5px);
 
     /* Will be updated when rendering the measure viewer. */
     --steps-per-bar: 16;
@@ -999,7 +1040,7 @@
     display: flex;
     flex-direction: column;
     flex: 1;
-    min-width: calc(var(--steps-per-bar) * var(--note-height));
+    min-width: calc(var(--steps-per-bar) * var(--measure-step-width));
     border-right: 2px solid var(--color-base-300);
 
     /* Keeps the barline of a track piece clear of the column separator, which gets the same room on both sides. */
@@ -1027,11 +1068,9 @@
     flex-shrink: 0;
     width: 48px;
     margin: 0 -8px 0 8px;
-    padding-top: 44px;
 
-    /* The prefix rows sit twenty px lower than the note rows they belong to, so the line their staffs are
-       drawn around is twenty px higher in them. */
-    --staff-centre: 12px;
+    /* The prefix starts at the measure column's head room, so its first row lines up with the note rows. */
+    padding-top: 24px;
 }
 
 .staff-measure-number {
@@ -1050,12 +1089,22 @@
 }
 
 .staff-prefix-row {
-    min-height: var(--note-height);
-    margin: 0;
-    padding-top: 22px;
+    /* The prefix row states the same height as the note rows beside it, so their staff lines line up. */
+    height: var(--staff-row-height, auto);
+    margin: 0 0 20px 0;
+}
 
-    /* The prefix column states the same room as the note rows, so their rows stay aligned. */
-    margin-bottom: calc(20px + var(--staff-below-reserve, 0px));
+/* The clef and time signature are centred on the staff line, which the row geometry places. */
+.staff-prefix-content {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: calc(50% + var(--staff-centre, 0px));
+    transform: translateY(-50%);
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-start;
 }
 
 .staff-prefix-middle-line {
@@ -1115,17 +1164,14 @@
 .staff-note-viewer {
     --staff-note-prefix-width: 58px;
 
-    /* The line the notes are drawn around sits this far below the middle of the row; the space above it
-       holds stems, beams and tuplet brackets. */
-    --staff-centre: 32px;
+    /* Distance from the row's middle to the line notes are drawn on, stated by the row geometry; the space
+       above it holds stems, beams and tuplet brackets. */
+    --staff-centre: 0px;
 
     /* Room the notation takes above and below the line the notes are drawn on. The viewer states it from
        the noteheads, the stems and the beam stacks, and the tuplet markers are placed by it. */
     --staff-ink-top: 0px;
     --staff-ink-bottom: 0px;
-
-    /* Room the row keeps below itself for a marker drawn below the notation, which the viewer states. */
-    --staff-below-reserve: 0px;
 
     /* Gap a tuplet marker keeps from the notation. Mirrors `tupletGapPx` in StaffInk.ts. */
     --tuplet-marker-gap: 6px;
@@ -1170,11 +1216,11 @@
 
     position: relative;
     width: 100%;
-    min-height: var(--note-height);
 
-    /* The row keeps the room a marker below the notation needs, so the marker stays clear of the row that
-       follows. The prefix column states the same room, so the two columns keep their rows aligned. */
-    margin-bottom: calc(20px + var(--staff-below-reserve));
+    /* The row geometry states the height, so a track with taller notation gets a taller row. The gap below
+       keeps the rows apart; the side controls state the same height and gap, which keeps the columns aligned. */
+    height: var(--staff-row-height, auto);
+    margin-bottom: 20px;
 }
 
 .staff-note-viewer-line {
@@ -1316,6 +1362,12 @@
 }
 
 .staff-note-viewer-tuplets {
+    /*
+     * Depth of a bracket's hooks. An above bracket draws its line on the box's top edge and lets the hooks reach
+     * down from it, so the line itself has to stand that much further from the notation.
+     */
+    --tuplet-bracket-depth: 9px;
+
     position: absolute;
     inset: 0;
     pointer-events: none;
@@ -1323,7 +1375,6 @@
 
 .staff-note-viewer-tuplet-number {
     position: absolute;
-    transform: translateX(-50%);
     display: inline-block;
     min-width: 11px;
     text-align: center;
@@ -1335,12 +1386,18 @@
     z-index: 2;
 }
 
+/*
+ * A number sits in the gap the line of a bracket leaves free, its middle on the line's level. A number without a
+ * bracket stands where that line would be, so both shapes place the number the same way.
+ */
 .staff-note-viewer-tuplet-number.staff-note-viewer-tuplet-above {
-    top: max(0px, calc(50% + var(--staff-centre) - var(--staff-ink-top) - var(--tuplet-marker-gap) - 10px));
+    top: max(0px, calc(50% + var(--staff-centre) - var(--staff-ink-top) - var(--tuplet-marker-gap) - var(--tuplet-bracket-depth)));
+    transform: translate(-50%, -50%);
 }
 
 .staff-note-viewer-tuplet-number.staff-note-viewer-tuplet-below {
-    top: calc(50% + var(--staff-centre) + var(--staff-ink-bottom) + var(--tuplet-marker-gap) + 14px);
+    top: calc(50% + var(--staff-centre) + var(--staff-ink-bottom) + var(--tuplet-marker-gap) + var(--tuplet-bracket-depth));
+    transform: translate(-50%, -50%);
 }
 
 /*
@@ -1352,7 +1409,7 @@
     --tuplet-number-gap: 17px;
 
     position: absolute;
-    height: 9px;
+    height: var(--tuplet-bracket-depth);
     border-left: var(--tuplet-bracket-thickness, 1.5px) solid var(--color-base-content);
     border-right: var(--tuplet-bracket-thickness, 1.5px) solid var(--color-base-content);
     box-sizing: border-box;
@@ -1378,7 +1435,7 @@
 }
 
 .staff-note-viewer-tuplet-bracket.staff-note-viewer-tuplet-above {
-    top: max(0px, calc(50% + var(--staff-centre) - var(--staff-ink-top) - var(--tuplet-marker-gap)));
+    top: max(0px, calc(50% + var(--staff-centre) - var(--staff-ink-top) - var(--tuplet-marker-gap) - var(--tuplet-bracket-depth)));
 
     &::before,
     &::after {
@@ -1407,12 +1464,15 @@
     padding: 0 3px;
 }
 
+/* The number of a bracket hangs on the line's level: the line is the bracket box's own edge. */
 .staff-note-viewer-tuplet-bracket.staff-note-viewer-tuplet-above > .staff-note-viewer-tuplet-text {
-    top: -10px;
+    top: 0;
+    transform: translate(-50%, -50%);
 }
 
 .staff-note-viewer-tuplet-bracket.staff-note-viewer-tuplet-below > .staff-note-viewer-tuplet-text {
-    bottom: -10px;
+    bottom: 0;
+    transform: translate(-50%, 50%);
 }
 
 /* ---------------------------------------------------------------------------

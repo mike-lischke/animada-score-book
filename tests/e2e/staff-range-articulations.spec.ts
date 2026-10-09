@@ -111,7 +111,8 @@ const openToolbar = async (page: Page): Promise<void> => {
  * @param selector The symbol to aim at, the noteheads or the rests of the row.
  * @param index The zero-based index of that symbol in the measure's first track row.
  *
- * @returns The point in the marking band below that symbol, which is where a marking is dropped.
+ * @returns The point in the marking band of that symbol's row, which is where a marking is dropped. The row states
+ *          its band as a distance from its middle, and a row that carries no marking yet is named by its middle.
  */
 const bandPointOf = (page: Page, barNumber: number, selector: string, index: number): Promise<IPagePoint> => {
     return page.evaluate(({ bar, symbol, position }) => {
@@ -124,9 +125,10 @@ const bandPointOf = (page: Page, barNumber: number, selector: string, index: num
 
         const symbolRect = symbolElement.getBoundingClientRect();
         const rowRect = row.getBoundingClientRect();
+        const bandCentre = Number.parseFloat(getComputedStyle(row).getPropertyValue("--staff-band-centre"));
+        const bandOffset = Number.isFinite(bandCentre) ? bandCentre : 0;
 
-        // A marking stands in the band below its row, which is where the accent marks are placed.
-        return { x: symbolRect.left + (symbolRect.width / 2), y: rowRect.bottom + 10 };
+        return { x: symbolRect.left + (symbolRect.width / 2), y: rowRect.top + (rowRect.height / 2) + bandOffset };
     }, { bar: barNumber, symbol: selector, position: index });
 };
 

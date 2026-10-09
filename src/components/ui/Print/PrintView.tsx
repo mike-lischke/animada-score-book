@@ -7,8 +7,8 @@ import { type ComponentChild } from "preact";
 
 import type { Arrangement } from "../../../core/Arrangement.js";
 import { MeasureLayout } from "../../../core/MeasureLayout.js";
-import { StaffInk } from "../../../core/StaffInk.js";
 import type { ISbDmTrack, ScoreBookDataModel } from "../../../core/ScoreBookDataModel.js";
+import { StaffRowGeometry, type IStaffRowGeometry } from "../../../core/StaffRowGeometry.js";
 import type { ArrangementPlayer } from "../../../player/ArrangementPlayer.js";
 import type { SelectionManager } from "../../../ui/SelectionManager.js";
 import { GridMeasureViewer } from "../Bar/Grid/GridMeasureViewer.js";
@@ -72,6 +72,12 @@ export class PrintView extends UIComponent<IPrintViewProps> {
         const tracks = this.getSelectedTracks();
         const blocks = this.buildBarBlocks();
 
+        // The printed staff lays its measures out half as wide, so the row geometry is measured for those widths
+        // too, which keeps the rows of a printed page from colliding. The grid view keeps its cell heights.
+        const rowGeometries = options.viewMode === "staff"
+            ? StaffRowGeometry.ofArrangement(arrangement, this.props.arrangementPlayer.scoreMetrics, printWidthScale)
+            : undefined;
+
         // print.scss scales the whole document with one CSS zoom, so the zoom makes the widest row fill the
         // printable page. It follows the measures' widths, which is what keeps a row of narrow measures from
         // leaving most of the page empty.
@@ -98,20 +104,21 @@ export class PrintView extends UIComponent<IPrintViewProps> {
                                     crossAlignment={ChildAlignment.Stretch}
                                     className="print-bar-row"
                                 >
-                                    {options.viewMode === "grid" && this.renderInstrumentColumn(tracks)}
+                                    {options.viewMode === "grid" && this.renderInstrumentColumn(tracks, rowGeometries)}
                                     {options.viewMode === "staff" && (
                                         <>
-                                            {this.renderInstrumentColumn(tracks)}
+                                            {this.renderInstrumentColumn(tracks, rowGeometries)}
                                             <StaffPrefixViewer
                                                 arrangement={arrangement}
                                                 timeSignature={arrangement.timeParams.timeSignature}
                                                 tracks={tracks}
+                                                rowGeometries={rowGeometries}
                                             />
                                         </>
                                     )}
                                     {block.map((barNumber) => {
                                         return options.viewMode === "staff"
-                                            ? this.renderStaffMeasure(barNumber, tracks)
+                                            ? this.renderStaffMeasure(barNumber, tracks, rowGeometries)
                                             : this.renderGridBar(barNumber, tracks);
                                     })}
                                 </Container>
@@ -287,17 +294,28 @@ export class PrintView extends UIComponent<IPrintViewProps> {
      * `GridMeasureViewer`.
      *
      * @param tracks The tracks to render icons for, in the same order as the rows.
+     * @param rowGeometries The staff row geometry per track, so the icons line up with the staff rows. Omitted
+     *                      in grid mode, where the cells keep the grid cell height.
+     *
      * @returns A column container with the per-track icons.
      */
-    private renderInstrumentColumn(tracks: ISbDmTrack[]): ComponentChild {
+    private renderInstrumentColumn(tracks: ISbDmTrack[],
+        rowGeometries?: ReadonlyMap<number, IStaffRowGeometry>): ComponentChild {
         return (
             <div className="print-instrument-column" aria-hidden="true">
                 {/* Spacer matching the grid-measure-beam strip above the first row. */}
                 <div className="print-instrument-beam-spacer" />
                 {tracks.map((track) => {
+                    const geometry = rowGeometries?.get(track.id);
+                    const cellStyle = geometry === undefined
+                        ? undefined
+                        : {
+                            "--staff-row-height": StaffRowGeometry.formatPx(geometry.heightPx),
+                            "--staff-centre": StaffRowGeometry.formatPx(geometry.centrePx),
+                        };
+
                     return (
-                        <div key={`icon-${track.id}`} className="print-instrument-cell"
-                            style={{ "--staff-below-reserve": `${StaffInk.belowReservePx(track)}px` }}>
+                        <div key={`icon-${track.id}`} className="print-instrument-cell" style={cellStyle}>
                             <Icon
                                 className="print-instrument-icon"
                                 src={track.instrument.image.filePath}
@@ -311,7 +329,8 @@ export class PrintView extends UIComponent<IPrintViewProps> {
         );
     }
 
-    private renderStaffMeasure(barNumber: number, tracks: ISbDmTrack[]): ComponentChild {
+    private renderStaffMeasure(barNumber: number, tracks: ISbDmTrack[],
+        rowGeometries: ReadonlyMap<number, IStaffRowGeometry> | undefined): ComponentChild {
         const { arrangement, arrangementPlayer, dataModel, selectionManager } = this.props;
 
         // The print stylesheet lays a measure out half as wide as on screen, so a stored width is halved with
@@ -330,6 +349,7 @@ export class PrintView extends UIComponent<IPrintViewProps> {
                 dataModel={dataModel}
                 tracks={tracks}
                 measureWidth={width}
+                rowGeometries={rowGeometries}
                 showRangeArticulations
                 style={measureStyle}
             />

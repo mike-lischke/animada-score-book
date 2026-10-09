@@ -30,7 +30,12 @@
     /* The SMuFL unit. Mirrors `staffSpacePx` in MeasureLayout.ts, which a test asserts. */
     --staff-space: 10px;
 
+    /* Note height: the grid cell size. */
     --note-height: 80px;
+
+    /* Width of one base-grid step, which a measure column is laid out for. Mirrors `measureStepWidthPx` in
+       MeasureLayout.ts. It is independent of the grid cell height, which the staff geometry relies on. */
+    --measure-step-width: 80px;
 }
 
 body {

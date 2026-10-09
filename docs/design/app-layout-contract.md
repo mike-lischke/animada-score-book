@@ -102,5 +102,6 @@ specification.
 
 Layout changes preserve viewer-local score element identity (ADR-0002), requisition-based cross-module state
 (ADR-0004), data-driven measure widths and staff windowing (ADR-0009), and shared repeat-aware playback semantics
-(ADR-0017). This document does not decide staff geometry or persistence for track heights; those belong to the
-later geometry phases and their own agreed contract. Decide automatic versus manual staff heights in phase 6.
+(ADR-0017). Staff row geometry is decided in ADR-0018: each staff row is sized from the notation its track holds,
+shared across the note rows, prefix column, side controls and print; the grid keeps its own cell height. Manual
+track resizing is deferred — heights are automatic for now.

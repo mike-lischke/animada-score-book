@@ -6,6 +6,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AppStorage } from "../../src/core/AppStorage.js";
+import { Arrangement } from "../../src/core/Arrangement.js";
 import { MeasureLayout } from "../../src/core/MeasureLayout.js";
 import { HairpinEnd, RangeArticulations } from "../../src/core/RangeArticulations.js";
 import { ScoreBookDataModel, type ISbDmTrackPiece } from "../../src/core/ScoreBookDataModel.js";
@@ -2172,5 +2173,144 @@ describe("ScoreBookDataModel — Range Articulations", { concurrent: false }, ()
         model.clearTrack(model.arrangement!.tracks[0]);
         expect(markings()).toHaveLength(0);
         expect(mutatedCalls).toBe(1);
+    });
+});
+
+/**
+ * @param status The HTTP status the backend answers with.
+ * @param body The JSON body the backend answers with.
+ *
+ * @returns A response the model can read, so a test states the status it exercises.
+ */
+const responseOf = (status: number, body: unknown = {}): Response => {
+    return {
+        ok: status >= 200 && status < 300,
+        status,
+        statusText: "",
+        json: () => {
+            return Promise.resolve(body);
+        },
+    } as unknown as Response;
+};
+
+describe("ScoreBookDataModel — Saving and locking", { concurrent: false }, () => {
+    let model: ScoreBookDataModel;
+    let authChangedCalls: number;
+    let authChangedHandler: () => Promise<boolean>;
+
+    /** What the backend answers a login with, for an account that may edit scores. */
+    const sessionBody = {
+        token: "test-token",
+        user: { id: 1, username: "u", displayName: "U", isAdmin: false },
+        capabilities: {
+            canEditScores: true, canManageUsers: false, canManageInstruments: false, canExportMP3: false,
+        },
+    };
+
+    beforeEach(() => {
+        vi.restoreAllMocks();
+        model = new ScoreBookDataModel();
+        model.startNewArrangement([createInstrument("a", 0, 0)]);
+
+        // A DB-backed id, which puts the model on its "update an existing score" path.
+        (model.arrangement as Arrangement).id = 10996;
+
+        authChangedCalls = 0;
+        authChangedHandler = () => {
+            authChangedCalls++;
+
+            return Promise.resolve(true);
+        };
+
+        requisitions.register("authChanged", authChangedHandler);
+    });
+
+    afterEach(() => {
+        requisitions.unregister("authChanged", authChangedHandler);
+    });
+
+    it("answers the stored content when the backend accepts the save", async () => {
+        vi.spyOn(globalThis, "fetch").mockResolvedValue(responseOf(200, { success: true }));
+
+        const content = await model.saveArrangement();
+
+        expect(content).toBeTruthy();
+    });
+
+    it("claims the missing permission when the backend refuses the save with 403", async () => {
+        vi.spyOn(globalThis, "fetch").mockResolvedValue(responseOf(403, { error: "Forbidden" }));
+
+        await expect(model.saveArrangement()).rejects.toThrow(/permission/i);
+    });
+
+    it("states an ended session when the backend refuses the save with 401", async () => {
+        vi.spyOn(globalThis, "fetch").mockResolvedValue(responseOf(401, { error: "Authentication required." }));
+
+        await expect(model.saveArrangement()).rejects.toThrow(/log in again/i);
+    });
+
+    it("states the backend's own reason when the save fails for another status", async () => {
+        vi.spyOn(globalThis, "fetch").mockResolvedValue(responseOf(500, { error: "Database is gone" }));
+
+        await expect(model.saveArrangement()).rejects.toThrow(/Database is gone/);
+    });
+
+    it("reports the status the backend refused a lock with", async () => {
+        vi.spyOn(globalThis, "fetch").mockResolvedValue(responseOf(401, { error: "Authentication required." }));
+
+        const result = await model.lockScore(10996);
+
+        expect(result.success).toBe(false);
+        expect(result.status).toBe(401);
+    });
+
+    it("answers a refused request with a token from the refresh cookie", async () => {
+        vi.spyOn(globalThis, "fetch")
+            .mockResolvedValueOnce(responseOf(401, { error: "Authentication required." }))
+            .mockResolvedValueOnce(responseOf(200, { token: "fresh-token" }))
+            .mockResolvedValueOnce(responseOf(200, { authenticated: true, ...sessionBody }))
+            .mockResolvedValueOnce(responseOf(200, { success: true, token: "lock-token" }));
+
+        const result = await model.lockScore(10996);
+
+        expect(result.success).toBe(true);
+        expect(result.token).toBe("lock-token");
+        expect(model.authenticated).toBe(true);
+    });
+
+    it("ends a session the refresh cookie cannot renew", async () => {
+        vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(responseOf(200, sessionBody));
+        await model.login("u", "p");
+        expect(model.authenticated).toBe(true);
+
+        authChangedCalls = 0;
+        vi.spyOn(globalThis, "fetch").mockResolvedValue(responseOf(401, { error: "No refresh token" }));
+
+        const result = await model.lockScore(10996);
+
+        expect(result.status).toBe(401);
+        expect(model.authenticated).toBe(false);
+        expect(authChangedCalls).toBe(1);
+    });
+
+    it("refreshes the session again after a new login", async () => {
+        // A refusal whose refresh fails leaves the model knowing that this path does not work.
+        vi.spyOn(globalThis, "fetch")
+            .mockResolvedValueOnce(responseOf(401, { error: "Authentication required." }))
+            .mockResolvedValueOnce(responseOf(401, { error: "No refresh token" }));
+        await model.lockScore(10996);
+
+        // A login clears that state, so the next refusal is answered with a refresh again.
+        vi.spyOn(globalThis, "fetch")
+            .mockResolvedValueOnce(responseOf(200, sessionBody))
+            .mockResolvedValueOnce(responseOf(401, { error: "Authentication required." }))
+            .mockResolvedValueOnce(responseOf(200, { token: "fresh-token" }))
+            .mockResolvedValueOnce(responseOf(200, { authenticated: true, ...sessionBody }))
+            .mockResolvedValueOnce(responseOf(200, { success: true, token: "lock-token" }));
+        await model.login("u", "p");
+
+        const result = await model.lockScore(10996);
+
+        expect(result.token).toBe("lock-token");
     });
 });

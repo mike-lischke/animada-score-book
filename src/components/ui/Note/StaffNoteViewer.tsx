@@ -5,10 +5,7 @@
 
 import { type ComponentChild, type CSSProperties, type VNode } from "preact";
 
-import { articulationFromSampleProfile } from "../../../core/articulation.js";
-import { BeamGeometry, BeamSegmentKind, normalStemLengthSpaces, partialBeamLengthSpaces, type IBeamNotePlan }
-    from "../../../core/BeamGeometry.js";
-import { StaffInk, type IStaffInk, type IStaffInkNote } from "../../../core/StaffInk.js";
+import { BeamSegmentKind, partialBeamLengthSpaces, type IBeamNotePlan } from "../../../core/BeamGeometry.js";
 import type { ISbDmTrackPiece } from "../../../core/ScoreBookDataModel.js";
 import {
     Damping, ExcitationMode, HandTechnique, NoteDisplayType, StickTechnique,
@@ -16,17 +13,17 @@ import {
 } from "../../../core/ScoreBookDataModel.js";
 import { ScoreSymbols, ScoreSymbol, ScoreSymbolSource } from "../../../core/ScoreSymbols.js";
 import { RangeArticulations } from "../../../core/RangeArticulations.js";
-import {
-    MeasureProjection, NoteGroupKind, ProjectedItemKind, pulseLengthAt,
-    type INotationGrid, type IProjectedEvent, type IProjectedItem,
-} from "../../../core/MeasureProjection.js";
 import { MeasureLayout, staffMeasureInsets, staffSpacePx } from "../../../core/MeasureLayout.js";
+import { noteValueForEvent, NoteLength } from "../../../core/rest-notation.js";
+import { StaffRowGeometry, type IStaffRowGeometry } from "../../../core/StaffRowGeometry.js";
+import { HeadMark } from "../../../core/StaffInk.js";
+import {
+    StaffNotation, StaffNodeKind, type IStaffNoteNode, type IStaffSubdivisionNode, type IStaffTreeNode,
+} from "../../../core/StaffNotation.js";
 import { stemEndVariablePrefix } from "../../../core/smufl/SmuflFontLoader.js";
 import type { IFraction, IAudioData, IArticulationPortion, IHairpin, IRangeArticulation, IRepeatBar, ISubdivision }
     from "../../../core/types/general.js";
 import { RangeArticulationKind } from "../../../core/types/general.js";
-import { beamCountOf, fallbackNoteValue, noteValueForEvent, NoteLength, type INoteValue }
-    from "../../../core/rest-notation.js";
 import type { IScoreMetrics } from "../../../player/TimeCoordinator.js";
 import { addFractions, compareFractions, divideFraction, subtractFractions }
     from "../../../core/serialisation/numeric-functions.js";
@@ -67,52 +64,14 @@ export interface IStaffNoteViewerProperties extends ICommonUIProperties {
      * screen view, whose markings are drawn into the decoration layer of the arrangement viewer.
      */
     articulations?: readonly IRangeArticulation[];
+
+    /**
+     * The row's vertical geometry, which decides its height and where its staff line sits. Omitted by a row
+     * that is rendered on its own; the read view states the track's shared geometry, so a row does not resize
+     * as the score scrolls.
+     */
+    rowGeometry?: IStaffRowGeometry;
 }
-
-/** Discriminator for staff tree nodes. */
-export enum StaffNodeKind {
-    Note,
-    Subdivision,
-}
-
-interface IStaffNoteNode {
-    kind: StaffNodeKind.Note;
-
-    /** Index of this note's event in `ISbDmTrackPiece.events`, matching the resolved note events 1:1. */
-    eventIndex: number;
-
-    /** Absolute start within the measure, as a fraction of the whole bar. */
-    start: IFraction;
-
-    duration: IFraction;
-
-    /** Tuplet nesting depth (0 at the top level). */
-    depth: number;
-
-    glyph: INoteValue;
-    beamCount: number;
-    displayType: NoteDisplayType;
-    noteLine?: number;
-    noteStyle?: IAudioData;
-    articulation?: INoteArticulation;
-}
-
-interface IStaffSubdivisionNode {
-    kind: StaffNodeKind.Subdivision;
-
-    /** The subdivision group in the model, which identifies the group a click addresses. */
-    group: ISubdivision;
-
-    start: IFraction;
-    span: IFraction;
-    actual: number;
-    normal: number;
-    isTuplet: boolean;
-    depth: number;
-    children: IStaffTreeNode[];
-}
-
-type IStaffTreeNode = IStaffNoteNode | IStaffSubdivisionNode;
 
 interface ITupletLabel {
     /** The tuplet the label belongs to, which is what the label addresses in a hit test. */
@@ -123,6 +82,12 @@ interface ITupletLabel {
     text: string;
     bracket: boolean;
     placement: "above" | "below";
+
+    /** How far the first child's ink reaches left of the span's start, as a CSS length. */
+    firstReach?: string;
+
+    /** How far the last child's ink reaches right of the span's end, as a CSS length. */
+    lastReach?: string;
 }
 
 interface IDrawnAnchors {
@@ -132,11 +97,17 @@ interface IDrawnAnchors {
     /** Whether the first anchor belongs to a notehead, which reaches left of its anchor. */
     firstIsNote: boolean;
 
+    /** How far the first node's ink reaches left of its anchor, as a CSS length. */
+    firstReach?: string;
+
     /** Drawn position of the last anchor, as a fraction of the whole bar. */
     lastAnchor?: IFraction;
 
     /** Whether the last anchor belongs to a notehead, which ends on its anchor. */
     lastIsNote: boolean;
+
+    /** How far the last node's ink reaches right of its anchor, as a CSS length. */
+    lastReach?: string;
 }
 
 /**
@@ -154,10 +125,16 @@ const printedHairpinOpeningSpaces = 1.2;
 /** Smallest width a printed hairpin keeps, as a percentage of the bar, so a nearly closed one stays visible. */
 const minimumPrintedHairpinPercent = 0.5;
 
+/**
+ * Air a tuplet bracket keeps beyond the noteheads it spans, in staff spaces, so its hooks do not sit on their ink.
+ * The bracket encloses the group, so the margin is the same on both of its ends.
+ */
+const tupletBracketMarginSpaces = 0.5;
+
 export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
     public override render(): ComponentChild {
         const { isLastBar, scoreMetrics, measure, barNumber, trackId, maxNoteLine = 1,
-            scoreElementRegistry, repeatBars, articulations,
+            scoreElementRegistry, repeatBars, articulations, rowGeometry,
             measureWidth = MeasureLayout.defaultWidth() } = this.props;
 
         // A barline sits between two bars, so the marks on both sides of it decide which one it is. A repeat that
@@ -174,19 +151,13 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
             this.classFromProperty(isLastBar, "last-bar"),
         ]);
 
-        // A simile holds no content of its own; its mark replaces the notes the measure would draw.
-        const usesSimile = measure.simile === true;
-
-        const items = usesSimile ? [] : MeasureProjection.project(measure);
-        const nodes = this.buildNodes(items, scoreMetrics);
-
         const centerLine = (maxNoteLine + 1) / 2;
 
         // The row spans the measure column's content box. A beam's slope is a rise over this width, so
         // the view states it as data instead of measuring the rendered row.
         const rowWidthPx = Math.max(1, measureWidth - staffMeasureInsets);
 
-        const beamSpans = this.computeBeamSpans(nodes, scoreMetrics, centerLine, rowWidthPx);
+        const { nodes, beamSpans } = StaffNotation.project(measure, scoreMetrics, centerLine, rowWidthPx);
         const tupletLabels = this.computeTupletLabels(nodes, scoreMetrics.stepsPerBar);
 
         const hasAnyNote = nodes.some((node) => {
@@ -204,6 +175,9 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
         // Whole and half rests sit on the centre line (odd count) or the line just below it (even count).
         const restNoteLine = Math.ceil(centerLine);
         const restLineOffset = (restNoteLine - centerLine) * staffSpacePx;
+
+        // A simile holds no content of its own; its mark replaces the notes the measure would draw.
+        const usesSimile = measure.simile === true;
 
         let runs: ComponentChild[];
         if (usesSimile) {
@@ -281,12 +255,29 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
             ? null
             : this.renderBarline(openingBarline, staffSpacePx);
 
-        const articulationLayer = this.renderArticulations(articulations ?? [], barNumber, maxNoteLine, centerLine);
+        // The band the row's range markings stand in, measured from the notes' line: the row geometry places it
+        // below the notation's ink, so a hairpin clears the accents that hang below the noteheads. A row rendered
+        // without a geometry keeps the band the notation views have always used.
+        const bandOffset = rowGeometry?.bandCentrePx === undefined
+            ? ((maxNoteLine - centerLine) * staffSpacePx) + (staffSpacePx * 2)
+            : rowGeometry.bandCentrePx - rowGeometry.centrePx;
 
-        // The stylesheet places the tuplet markers and the room below the row by the notation's own
-        // bounds, so a marker follows the notes instead of a fixed height.
-        const ink = this.rowInk(nodes, beamSpans, centerLine);
-        const belowReservePx = StaffInk.belowReservePx(measure.track);
+        const articulationLayer = this.renderArticulations(articulations ?? [], barNumber, bandOffset);
+
+        // The stylesheet places the tuplet markers by the row's own ink, so it states the bounds the notation takes
+        // around the staff line. The row's height and the line's place in it come from the row geometry, which
+        // measures the whole track so a row does not resize as the score scrolls.
+        const ink = StaffNotation.rowInk(nodes, beamSpans, centerLine);
+
+        // The row geometry states the row's height, the place of its staff line and the band its range markings
+        // stand in; a row rendered on its own states none of them, and the stylesheet falls back to its own values.
+        const geometryStyle = rowGeometry === undefined ? {} : {
+            "--staff-centre": StaffRowGeometry.formatPx(rowGeometry.centrePx),
+            "--staff-row-height": StaffRowGeometry.formatPx(rowGeometry.heightPx),
+            "--staff-band-centre": rowGeometry.bandCentrePx === undefined
+                ? undefined
+                : StaffRowGeometry.formatPx(rowGeometry.bandCentrePx),
+        };
 
         return (
             <div
@@ -297,15 +288,15 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                     trackId,
                 })}
                 style={{
+                    ...geometryStyle,
                     "--staff-line-count": `${maxNoteLine}`,
                     "--staff-barline-height": `${barlineHeight}px`,
                     "--staff-barline-width": closingInkWidth,
                     "--staff-opening-barline-room": openingRoom,
                     "--staff-closing-barline-room": closingRoom,
                     "--staff-note-clearance": clearance,
-                    "--staff-ink-top": StaffNoteViewer.formatPx(ink.topPx),
-                    "--staff-ink-bottom": StaffNoteViewer.formatPx(ink.bottomPx),
-                    "--staff-below-reserve": StaffNoteViewer.formatPx(belowReservePx),
+                    "--staff-ink-top": StaffRowGeometry.formatPx(ink.topPx),
+                    "--staff-ink-bottom": StaffRowGeometry.formatPx(ink.bottomPx),
                 }}
                 aria-hidden
                 {...this.dataAttributes}
@@ -324,9 +315,7 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                                 const placementCls = label.placement === "below"
                                     ? "staff-note-viewer-tuplet-below"
                                     : "staff-note-viewer-tuplet-above";
-                                const style = label.bracket
-                                    ? { left: `${label.leftPercent}%`, width: `${label.widthPercent}%` }
-                                    : { left: `${label.leftPercent + (label.widthPercent / 2)}%` };
+                                const style = this.tupletLabelStyle(label);
 
                                 return (
                                     <span
@@ -395,10 +384,10 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
      * nodes hold no child.
      */
     private static drawnAnchors(nodes: IStaffTreeNode[], halfStep: IFraction): IDrawnAnchors {
+        let firstNode: IStaffNoteNode | undefined;
         let firstAnchor: IFraction | undefined;
-        let firstIsNote = false;
+        let lastNode: IStaffNoteNode | undefined;
         let lastAnchor: IFraction | undefined;
-        let lastIsNote = false;
 
         const walk = (items: IStaffTreeNode[]): void => {
             for (const item of items) {
@@ -410,12 +399,12 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
 
                     if (firstAnchor === undefined || compareFractions(anchor, firstAnchor) < 0) {
                         firstAnchor = anchor;
-                        firstIsNote = isNote;
+                        firstNode = item;
                     }
 
                     if (lastAnchor === undefined || compareFractions(anchor, lastAnchor) > 0) {
                         lastAnchor = anchor;
-                        lastIsNote = isNote;
+                        lastNode = item;
                     }
                 } else {
                     walk(item.children);
@@ -425,7 +414,46 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
 
         walk(nodes);
 
-        return { firstAnchor, firstIsNote, lastAnchor, lastIsNote };
+        return {
+            firstAnchor,
+            firstIsNote: firstNode?.noteStyle !== undefined,
+            firstReach: StaffNoteViewer.firstReachOf(firstNode),
+            lastAnchor,
+            lastIsNote: lastNode?.noteStyle !== undefined,
+            lastReach: StaffNoteViewer.lastReachOf(lastNode),
+        };
+    }
+
+    /**
+     * @param node The node a group starts with.
+     *
+     * @returns How far that node's ink reaches left of its anchor, as a CSS length: a notehead spans its whole ink
+     *          width behind its anchor, a rest is centred on it.
+     */
+    private static firstReachOf(node: IStaffNoteNode | undefined): string | undefined {
+        if (node === undefined) {
+            return undefined;
+        }
+
+        if (node.noteStyle !== undefined) {
+            return ScoreSymbols.inkBox(ScoreSymbols.notehead(node.displayType, node.glyph.length)).width;
+        }
+
+        return `calc(${ScoreSymbols.inkBox(ScoreSymbols.rest(node.glyph.length)).width} / 2)`;
+    }
+
+    /**
+     * @param node The node a group ends with.
+     *
+     * @returns How far that node's ink reaches right of its anchor, as a CSS length: a notehead ends on its anchor,
+     *          a rest is centred on it.
+     */
+    private static lastReachOf(node: IStaffNoteNode | undefined): string | undefined {
+        if (node === undefined || node.noteStyle !== undefined) {
+            return undefined;
+        }
+
+        return `calc(${ScoreSymbols.inkBox(ScoreSymbols.rest(node.glyph.length)).width} / 2)`;
     }
 
     /**
@@ -460,15 +488,6 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
      */
     private static fractionValue(fraction: IFraction): number {
         return fraction.numerator / fraction.denominator;
-    }
-
-    /**
-     * @param value The length in px to format.
-     *
-     * @returns The length as CSS, rounded to two decimals so the emitted style stays compact.
-     */
-    private static formatPx(value: number): string {
-        return `${Math.round(value * 100) / 100}px`;
     }
 
     /**
@@ -555,15 +574,13 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
      *
      * @param articulations The markings to draw in the bar.
      * @param barNumber The one-based measure the row draws.
-     * @param maxNoteLine The number of staff lines the row draws.
-     * @param centerLine The line number the notes sit on.
+     * @param bandOffset The middle of the marking band, in px below the notes' line.
      *
      * @returns The marking layer, or null when the bar holds none.
      */
-    private renderArticulations(articulations: readonly IRangeArticulation[], barNumber: number, maxNoteLine: number,
-        centerLine: number): ComponentChild {
+    private renderArticulations(articulations: readonly IRangeArticulation[], barNumber: number,
+        bandOffset: number): ComponentChild {
         const marks: ComponentChild[] = [];
-        const bandOffset = ((maxNoteLine - centerLine) * staffSpacePx) + (staffSpacePx * 2);
 
         for (const articulation of articulations) {
             const portion = RangeArticulations.portionInBar(articulation, barNumber);
@@ -657,176 +674,6 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
     }
 
     /**
-     * Converts projected render items into the staff tree, enriching note events with glyph,
-     * beam and style data resolved from the measure's note events.
-     *
-     * @param items The projected items to convert.
-     * @param grid The timing of the arrangement.
-     * @param depth The subdivision nesting depth (0 at the top level).
-     *
-     * @returns The staff tree nodes.
-     */
-    private buildNodes(items: IProjectedItem[], grid: INotationGrid, depth = 0): IStaffTreeNode[] {
-        return items.map((item) => {
-            if (item.kind === ProjectedItemKind.Subdivision) {
-                return {
-                    kind: StaffNodeKind.Subdivision,
-                    group: item.group,
-                    start: { ...item.start },
-                    span: { ...item.span },
-                    actual: item.actual,
-                    normal: item.normal,
-                    isTuplet: item.isTuplet,
-                    depth,
-                    children: this.buildNodes(item.items, grid, depth + 1),
-                };
-            }
-
-            return this.buildNoteNode(item, grid, depth);
-        });
-    }
-
-    private buildNoteNode(item: IProjectedEvent, grid: INotationGrid, depth: number): IStaffNoteNode {
-        const { measure } = this.props;
-
-        const event = item.event;
-        const audioData = event.noteStyleId !== undefined
-            ? measure.noteEvents[item.eventIndex]?.audioData
-            : undefined;
-
-        let glyph: INoteValue = fallbackNoteValue;
-        let beamCount = 0;
-
-        if (audioData) {
-            // A slot of a plain subdivision can hold a length the grid cannot address — a 2:1 split
-            // of a step holds thirty-seconds — and must keep the beams of that length.
-            glyph = noteValueForEvent(event.duration, depth, grid.stepsPerBar,
-                pulseLengthAt(event.start, grid)) ?? fallbackNoteValue;
-            beamCount = beamCountOf(glyph.length);
-        }
-
-        let displayType = NoteDisplayType.Oval;
-        let noteLine: number | undefined;
-
-        if (audioData) {
-            displayType = this.resolveDisplayType(audioData);
-            noteLine = audioData.noteLine;
-        }
-
-        return {
-            kind: StaffNodeKind.Note,
-            eventIndex: item.eventIndex,
-            start: { ...event.start },
-            duration: { ...event.duration },
-            depth,
-            glyph,
-            beamCount,
-            displayType,
-            noteLine,
-            noteStyle: audioData,
-            articulation: event.articulation ?? (audioData
-                ? articulationFromSampleProfile(audioData.sampleProfile)
-                : undefined),
-        };
-    }
-
-    /**
-     * @param nodes The nodes the row draws.
-     * @param beamSpans The beam engraving of the row's beamed notes.
-     * @param centerLine The line the row is drawn around.
-     *
-     * @returns The room the row's notation takes around its reference line.
-     */
-    private rowInk(nodes: IStaffTreeNode[], beamSpans: Map<number, IBeamNotePlan>, centerLine: number): IStaffInk {
-        const notes = this.collectNotes(nodes).map((note): IStaffInkNote => {
-            const plan = beamSpans.get(note.eventIndex);
-            const hasStem = plan !== undefined
-                || (note.noteStyle !== undefined && note.glyph.length !== NoteLength.Whole);
-
-            return {
-                noteLine: note.noteStyle === undefined ? undefined : (note.noteLine ?? 1),
-                stemLengthSpaces: plan !== undefined
-                    ? plan.stemLengthPx / staffSpacePx
-                    : (hasStem ? normalStemLengthSpaces : undefined),
-                beamCount: plan?.strokes.length ?? 0,
-            };
-        });
-
-        return StaffInk.ofRow(notes, centerLine);
-    }
-
-    /**
-     * Resolves the beam engraving of every note from the measure's beam groups. Which events share a
-     * beam is a composition rule of the measure and not of the rendering, so the groups come from
-     * `MeasureProjection`; `BeamGeometry` then derives the one line a group shares and the strokes and
-     * stem endpoints that follow from it.
-     *
-     * @param nodes The nodes holding the render data of the measure's events.
-     * @param scoreMetrics Timing metrics for the grouping rules.
-     * @param centerLine The line the row is drawn around.
-     * @param rowWidthPx The row's content width in px, which a beam's slope is derived from.
-     *
-     * @returns Map of note event indices to their beam engraving.
-     */
-    private computeBeamSpans(nodes: IStaffTreeNode[], scoreMetrics: IScoreMetrics,
-        centerLine: number, rowWidthPx: number): Map<number, IBeamNotePlan> {
-        const { measure } = this.props;
-        const target = new Map<number, IBeamNotePlan>();
-        const notesByEvent = new Map<number, IStaffNoteNode>();
-        const halfStep = 1 / (2 * scoreMetrics.stepsPerBar);
-
-        for (const note of this.collectNotes(nodes)) {
-            notesByEvent.set(note.eventIndex, note);
-        }
-
-        for (const group of MeasureProjection.noteGroups(measure, scoreMetrics)) {
-            if (group.kind !== NoteGroupKind.Beam) {
-                continue;
-            }
-
-            const run: IStaffNoteNode[] = [];
-            for (const eventIndex of group.eventIndexes) {
-                const note = notesByEvent.get(eventIndex);
-                if (note !== undefined) {
-                    run.push(note);
-                }
-            }
-
-            if (run.length === 0) {
-                continue;
-            }
-
-            const plans = BeamGeometry.plan(run.map((note) => {
-                return {
-                    anchor: StaffNoteViewer.fractionValue(note.start) + halfStep,
-                    noteLine: note.noteLine ?? 1,
-                    beamCount: note.beamCount,
-                };
-            }), { centerLine, rowWidthPx });
-
-            run.forEach((note, index) => {
-                target.set(note.eventIndex, plans[index]);
-            });
-        }
-
-        return target;
-    }
-
-    private collectNotes(nodes: IStaffTreeNode[]): IStaffNoteNode[] {
-        const notes: IStaffNoteNode[] = [];
-
-        for (const node of nodes) {
-            if (node.kind === StaffNodeKind.Note) {
-                notes.push(node);
-            } else {
-                notes.push(...this.collectNotes(node.children));
-            }
-        }
-
-        return notes;
-    }
-
-    /**
      * Computes bracket/number labels for tuplet groups. A marker spans from the first to the last
      * child of the group, its rests included, so it covers the whole group and not only its
      * sounding notes.
@@ -855,6 +702,8 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                                 text: item.actual.toString(),
                                 bracket: this.tupletNeedsBracket(item, items),
                                 placement: depth % 2 === 0 ? "above" : "below",
+                                firstReach: bounds.firstReach,
+                                lastReach: bounds.lastReach,
                             });
                         }
 
@@ -869,6 +718,31 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
         walk(nodes, 0);
 
         return labels;
+    }
+
+    /**
+     * @param label The label to place.
+     *
+     * @returns The style that places the label. A bracket spans from the first child's ink to the last child's, and a
+     *          number states the middle of that span.
+     */
+    private tupletLabelStyle(label: ITupletLabel): CSSProperties {
+        const firstReach = label.firstReach ?? "0px";
+        const lastReach = label.lastReach ?? "0px";
+        const margin = `calc(var(--staff-space) * ${tupletBracketMarginSpaces})`;
+
+        if (!label.bracket) {
+            return {
+                left: `calc(${label.leftPercent + (label.widthPercent / 2)}% - ${firstReach} / 2 + ${lastReach} / 2)`,
+            };
+        }
+
+        // The bracket encloses the group: its left hook clears the first child's ink, its right hook the last
+        // child's, and both keep the margin.
+        return {
+            left: `calc(${label.leftPercent}% - ${firstReach} - ${margin})`,
+            width: `calc(${label.widthPercent}% + ${firstReach} + ${lastReach} + (${margin} * 2))`,
+        };
     }
 
     private tupletNeedsBracket(node: IStaffSubdivisionNode, siblings: IStaffTreeNode[]): boolean {
@@ -984,7 +858,7 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                 "--note-anchor": anchor,
                 ...(beamInfo === undefined ? {} : {
                     // The stem ends on the group's beam line at this note's own horizontal position.
-                    "--stem-tip": StaffNoteViewer.formatPx(beamInfo.stemLengthPx),
+                    "--stem-tip": StaffRowGeometry.formatPx(beamInfo.stemLengthPx),
                 }),
             } as CSSProperties;
             const stepIndex = Math.floor(
@@ -1004,7 +878,9 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                     headWrapperClasses.push(this.headTypeClassName(headType));
                 }
 
-                if (node.glyph.dotted) {
+                // The marks of the note are what the renderer draws and what the ink bounds reserve room for.
+                const marks = StaffNotation.headMarksOf(node);
+                if (marks.includes(HeadMark.Dot)) {
                     headWrapperClasses.push("staff-note-head-dotted");
                 }
 
@@ -1022,14 +898,14 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                         symbol={flagSymbol}
                         staffSpace={staffSpacePx}
                     />;
-                const dotElement = node.glyph.dotted
+                const dotElement = marks.includes(HeadMark.Dot)
                     ? <ScoreSymbolView
                         className="staff-note-head-dot"
                         symbol={ScoreSymbol.AugmentationDot}
                         staffSpace={staffSpacePx}
                     />
                     : null;
-                const accentElement = node.articulation?.accent
+                const accentElement = marks.includes(HeadMark.Accent)
                     ? <ScoreSymbolView
                         className="staff-note-head-accent"
                         symbol={ScoreSymbol.Accent}
@@ -1076,7 +952,7 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                             {hasBeam ? <span className="staff-note-viewer-custom-stem" /> : null}
                             {flagElement}
                             {dotElement}
-                            {this.renderGhostParentheses(node.articulation)}
+                            {marks.includes(HeadMark.GhostParenthesis) ? this.renderGhostParentheses() : null}
                             {this.renderNoteDecorations(node.noteStyle, node.articulation)}
                             {accentElement}
                         </span>
@@ -1147,12 +1023,12 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
 
         return plan.strokes.map((stroke) => {
             const boxTopPx = Math.min(stroke.leftPx, stroke.rightPx);
-            const leftLocal = StaffNoteViewer.formatPx(stroke.leftPx - boxTopPx);
-            const rightLocal = StaffNoteViewer.formatPx(stroke.rightPx - boxTopPx);
+            const leftLocal = StaffRowGeometry.formatPx(stroke.leftPx - boxTopPx);
+            const rightLocal = StaffRowGeometry.formatPx(stroke.rightPx - boxTopPx);
             const clipPath = `polygon(0 ${leftLocal}, 100% ${rightLocal},`
                 + ` 100% calc(${rightLocal} + ${beamThickness}), 0 calc(${leftLocal} + ${beamThickness}))`;
-            const top = `calc(50% + ${StaffNoteViewer.formatPx(boxTopPx)} + ${stroke.level - 1} * ${beamAdvance})`;
-            const height = `calc(${StaffNoteViewer.formatPx(Math.abs(stroke.rightPx - stroke.leftPx))}`
+            const top = `calc(50% + ${StaffRowGeometry.formatPx(boxTopPx)} + ${stroke.level - 1} * ${beamAdvance})`;
+            const height = `calc(${StaffRowGeometry.formatPx(Math.abs(stroke.rightPx - stroke.leftPx))}`
                 + ` + ${beamThickness})`;
             const key = `beam-${stepIndex}-${stroke.level}-${stroke.kind}`;
 
@@ -1189,15 +1065,9 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
      * Renders the parentheses a ghost note is wrapped in. They hang on the head's ink box, so they fit any
      * head shape without an offset tuned to one of them.
      *
-     * @param articulation The note's articulation.
-     *
-     * @returns The two parentheses, or null for a note that is not a ghost note.
+     * @returns The two parentheses.
      */
-    private renderGhostParentheses(articulation?: INoteArticulation): ComponentChild {
-        if (articulation?.ghost !== true) {
-            return null;
-        }
-
+    private renderGhostParentheses(): ComponentChild {
         return (
             <>
                 <ScoreSymbolView
@@ -1315,14 +1185,6 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
         }
 
         return NoteLength.ThirtySecond;
-    }
-
-    private resolveDisplayType(noteStyle: IAudioData): NoteDisplayType {
-        if ("mainDisplayType" in noteStyle.characteristics) {
-            return noteStyle.characteristics.mainDisplayType!;
-        }
-
-        return NoteDisplayType.Oval;
     }
 
     /**

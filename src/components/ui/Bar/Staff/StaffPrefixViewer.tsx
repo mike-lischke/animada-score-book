@@ -8,7 +8,7 @@ import type { ComponentChild } from "preact";
 import { staffSpacePx } from "../../../../core/MeasureLayout.js";
 import type { ISbDmArrangement, ISbDmTrack } from "../../../../core/ScoreBookDataModel.js";
 import { ScoreSymbols, ScoreSymbol } from "../../../../core/ScoreSymbols.js";
-import { StaffInk } from "../../../../core/StaffInk.js";
+import { StaffRowGeometry, type IStaffRowGeometry } from "../../../../core/StaffRowGeometry.js";
 import { Container } from "../../framework/Container.js";
 import { ScoreSymbolView } from "../../framework/ScoreSymbolView.js";
 import { UIComponent, type ICommonUIProperties } from "../../framework/UIComponent.js";
@@ -17,6 +17,9 @@ import { ChildAlignment, Orientation } from "../../framework/ui-types.js";
 export interface IStaffPrefixViewerProps extends ICommonUIProperties {
     arrangement: ISbDmArrangement;
     timeSignature: string;
+
+    /** The shared row geometry of every track, so the prefix rows line up with the note rows beside them. */
+    rowGeometries?: ReadonlyMap<number, IStaffRowGeometry>;
 
     /**
      * Optional override for the list of tracks to render rows for. When omitted, all tracks
@@ -28,11 +31,11 @@ export interface IStaffPrefixViewerProps extends ICommonUIProperties {
 /** Renders a dedicated staff prefix column (clef + time signature) before bar 1. */
 export class StaffPrefixViewer extends UIComponent<IStaffPrefixViewerProps> {
     public override render(): ComponentChild {
-        const { arrangement, timeSignature, tracks: tracksOverride } = this.props;
+        const { arrangement, rowGeometries, timeSignature, tracks: tracksOverride } = this.props;
         const tracks = tracksOverride ?? arrangement.tracks;
 
         const rows = tracks.map((track) => {
-            return this.renderTrackRow(track, timeSignature);
+            return this.renderTrackRow(track, timeSignature, rowGeometries);
         });
 
         return (
@@ -46,15 +49,14 @@ export class StaffPrefixViewer extends UIComponent<IStaffPrefixViewerProps> {
         );
     }
 
-    private renderTrackRow(track: ISbDmTrack, timeSignature: string): ComponentChild {
-        const maxNoteLine = Math.max(1, ...Object.values(track.instrument.noteStyles).map((noteStyle) => {
-            return noteStyle.noteLine ?? 1;
-        }));
+    private renderTrackRow(track: ISbDmTrack, timeSignature: string,
+        rowGeometries: ReadonlyMap<number, IStaffRowGeometry> | undefined): ComponentChild {
+        const maxNoteLine = StaffRowGeometry.maxNoteLineOf(track);
         const centerLine = (maxNoteLine + 1) / 2;
         const staffLines: ComponentChild[] = [];
 
         // The staff lines match those of the note viewer: they are drawn around the line this row's staff
-        // sits on, which the prefix viewer states for its rows.
+        // sits on, which the shared row geometry states for the row.
         for (let i = 1; i <= maxNoteLine; i++) {
             const offset = (i - centerLine) * staffSpacePx;
             staffLines.push(
@@ -63,20 +65,28 @@ export class StaffPrefixViewer extends UIComponent<IStaffPrefixViewerProps> {
             );
         }
 
+        const geometry = rowGeometries?.get(track.id);
+
         return (
             <Container
                 key={track.id}
-                orientation={Orientation.LeftToRight}
-                crossAlignment={ChildAlignment.Center}
                 className="staff-prefix-row"
-                style={{ "--staff-below-reserve": `${StaffInk.belowReservePx(track)}px` }}
+                orientation={Orientation.LeftToRight}
+                style={{
+                    "--staff-centre": geometry === undefined ? undefined : StaffRowGeometry.formatPx(geometry.centrePx),
+                    "--staff-row-height": geometry === undefined
+                        ? undefined
+                        : StaffRowGeometry.formatPx(geometry.heightPx),
+                }}
                 aria-hidden
             >
                 {staffLines}
-                <div className="staff-prefix-clef">
-                    <ScoreSymbolView symbol={ScoreSymbol.PercussionClef} staffSpace={staffSpacePx} />
+                <div className="staff-prefix-content">
+                    <div className="staff-prefix-clef">
+                        <ScoreSymbolView symbol={ScoreSymbol.PercussionClef} staffSpace={staffSpacePx} />
+                    </div>
+                    {this.renderTimeSignature(timeSignature)}
                 </div>
-                {this.renderTimeSignature(timeSignature)}
             </Container>
         );
     }

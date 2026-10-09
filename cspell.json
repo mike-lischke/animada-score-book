@@ -122,6 +122,7 @@
         "oklab",
         "oklch",
         "parentid",
+        "prefersdark",
         "repeatdots",
         "rgba",
         "svgs",

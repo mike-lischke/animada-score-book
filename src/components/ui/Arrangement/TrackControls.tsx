@@ -5,6 +5,7 @@
 
 import { AppStorage } from "../../../core/AppStorage.js";
 import type { ISbDmTrack } from "../../../core/ScoreBookDataModel.js";
+import { StaffRowGeometry, type IStaffRowGeometry } from "../../../core/StaffRowGeometry.js";
 import type { Mutable } from "../../../core/types/general.js";
 import { requisitions } from "../../../supplement/Requisitions.js";
 import type { SelectionManager } from "../../../ui/SelectionManager.js";
@@ -25,6 +26,12 @@ export interface ITrackControlsProperties extends ICommonUIProperties {
     tracks: ISbDmTrack[];
     selectionManager: SelectionManager;
     innerRef?: preact.RefObject<HTMLDivElement | null>;
+
+    /**
+     * The shared row geometry of every track, so the controls line up with the staff rows they belong to.
+     * Omitted in grid mode, where the controls keep the grid cell height.
+     */
+    rowGeometries?: ReadonlyMap<number, IStaffRowGeometry>;
 }
 
 interface ITrackControlsState {
@@ -99,7 +106,7 @@ export class TrackControls extends UIComponent<ITrackControlsProperties, ITrackC
     }
 
     public render() {
-        const { tracks, innerRef } = this.props;
+        const { tracks, rowGeometries, innerRef } = this.props;
         const { mixerExpanded, trackViewMode, selectedTrackIds } = this.state;
 
         const listClassName = this.generateFinalClassName([
@@ -112,6 +119,13 @@ export class TrackControls extends UIComponent<ITrackControlsProperties, ITrackC
             const instrumentName = track.instrument.displayName;
             const iconPath = track.instrument.image.filePath;
             const isSelected = selectedTrackIds.has(track.id);
+            const geometry = rowGeometries?.get(track.id);
+            const rowStyle = geometry === undefined
+                ? undefined
+                : {
+                    "--track-row-height": StaffRowGeometry.formatPx(geometry.heightPx),
+                    "--staff-centre": StaffRowGeometry.formatPx(geometry.centrePx),
+                };
 
             return (
                 <Container
@@ -119,6 +133,7 @@ export class TrackControls extends UIComponent<ITrackControlsProperties, ITrackC
                     className="trackControls"
                     orientation={Orientation.LeftToRight}
                     crossAlignment={ChildAlignment.Center}
+                    style={rowStyle}
                 >
                     <Container
                         className="trackSliderArea"

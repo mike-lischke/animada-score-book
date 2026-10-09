@@ -26,6 +26,18 @@ const fraction = (numerator: number, denominator: number): IFraction => {
 const beamStubWidth = "calc(var(--staff-space) * 1.2 + var(--stem-right-edge, 0px))";
 
 /**
+ * @param value The style value of a tuplet label.
+ *
+ * @returns The percentage the value states, which is the span the label anchors, without the ink and the air the
+ *          label adds beyond it.
+ */
+const percentOf = (value: string): number => {
+    const match = /([\d.]+)%/.exec(value);
+
+    return match === null ? Number.NaN : Number.parseFloat(match[1]);
+};
+
+/**
  * @param barline The barline element to read.
  *
  * @returns The parts the barline is drawn from, in drawing order.
@@ -278,11 +290,13 @@ describe("StaffNoteViewer beams", { concurrent: false }, () => {
             return;
         }
 
-        // First note starts at 1/2, last at 5/6; both noteheads sit half a step (1/32) later.
-        const leftPercent = parseFloat(bracket.style.left);
-        const widthPercent = parseFloat(bracket.style.width);
-        expect(leftPercent).toBeCloseTo(53.125, 3);
-        expect(widthPercent).toBeCloseTo(33.333, 3);
+        // First note starts at 1/2, last at 5/6; both noteheads sit half a step (1/32) later. The bracket extends
+        // that span: a notehead reaches left of its anchor, and the bracket keeps its air beyond both heads.
+        expect(percentOf(bracket.style.left)).toBeCloseTo(53.125, 3);
+        expect(percentOf(bracket.style.width)).toBeCloseTo(33.333, 3);
+        expect(bracket.style.left).toContain("var(--glyph-ink-width-");
+        expect(bracket.style.width).toContain("var(--glyph-ink-width-");
+        expect(bracket.style.left).toContain("--staff-space");
     });
 
     it("brackets a tuplet over its rests, not only over its notes", () => {
@@ -319,11 +333,12 @@ describe("StaffNoteViewer beams", { concurrent: false }, () => {
 
         // The 3:8 group holds a single note between two rests. The bracket has to span the whole
         // group — from the first rest's position to the last rest's — and not only the note. A rest
-        // sits centred in its slot, so the bracket runs from 7/12 to 11/12.
-        const leftPercent = parseFloat(bracket.style.left);
-        const widthPercent = parseFloat(bracket.style.width);
-        expect(leftPercent).toBeCloseTo(58.333, 3);
-        expect(widthPercent).toBeCloseTo(33.333, 3);
+        // sits centred in its slot, so the bracket runs from 7/12 to 11/12 and reaches half a rest beyond that.
+        expect(percentOf(bracket.style.left)).toBeCloseTo(58.333, 3);
+        expect(percentOf(bracket.style.width)).toBeCloseTo(33.333, 3);
+        expect(bracket.style.left).toContain("var(--glyph-ink-width-rest");
+        expect(bracket.style.left).toContain("/ 2");
+        expect(bracket.style.left).not.toContain("--glyph-ink-width-notehead");
     });
 
     it("beams a pair of thirty-seconds outside a subdivision", () => {

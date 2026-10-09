@@ -5,15 +5,37 @@
 
 import type { ISbDmTrack } from "./ScoreBookDataModel.js";
 import { BeamGeometry, normalStemLengthSpaces } from "./BeamGeometry.js";
-import { noteHeightPx, staffRowGapPx, staffSpacePx } from "./MeasureLayout.js";
+import { staffSpacePx } from "./MeasureLayout.js";
 
 /** Room a notehead's ink takes around its staff line, in staff spaces. */
 const headInkHalfSpaces = 0.5;
 
-/** Room the marks below a head — its dot, its accent — hang into, in staff spaces. */
-const noteMarkSpaces = 1.5;
+/** A mark a notehead can carry. */
+export enum HeadMark {
+    /** The augmentation dot, drawn in the space right of the head. */
+    Dot,
 
-/** Gap a tuplet marker keeps from the notation, in px. Mirrors `--tuplet-bracket-gap` in the stylesheet. */
+    /** The parentheses a ghost note is wrapped in. */
+    GhostParenthesis,
+
+    /** The accent, drawn under the head. */
+    Accent,
+}
+
+/**
+ * Room each mark a head can carry takes below the head's own ink, in staff spaces. How deep a mark reaches follows
+ * from the rule that places it: the stylesheet stands an accent's box 0.4 spaces under the head and that box is 2
+ * spaces tall, while the dot and the parentheses are drawn around the head's centre and reach a quarter space under
+ * the head's ink. Every mark a row may hold states its room here, which is what lets a row reserve the room without
+ * a change to the geometry.
+ */
+const headMarkRoomSpaces: Record<HeadMark, number> = {
+    [HeadMark.Dot]: 0.25,
+    [HeadMark.GhostParenthesis]: 0.25,
+    [HeadMark.Accent]: 2.4,
+};
+
+/** Gap a tuplet marker keeps from the notation, in px. Mirrors `--tuplet-marker-gap` in the stylesheet. */
 const tupletGapPx = 6;
 
 /** Distance a tuplet number sits beyond its bracket, or beyond the notation when it has none, in px. */
@@ -21,6 +43,9 @@ const tupletNumberOffsetPx = 14;
 
 /** Height a tuplet number's line box takes, in px. */
 const tupletNumberHeightPx = 16;
+
+/** How far a marker drawn above the notation reaches beyond the bracket line, in px. Mirrors its `top` offset. */
+const tupletAboveOverhangPx = 10;
 
 /** One note of a row, as the ink bounds see it. */
 export interface IStaffInkNote {
@@ -32,6 +57,9 @@ export interface IStaffInkNote {
 
     /** Number of beam levels the note carries. */
     beamCount: number;
+
+    /** The marks the note carries, every one of which hangs below its head. */
+    marks?: readonly HeadMark[];
 }
 
 /** The room a row's notation takes above and below its reference line. */
@@ -74,43 +102,64 @@ export class StaffInk {
                 ? headBottom
                 : stemTop + BeamGeometry.stackDepthSpaces(note.beamCount);
 
+            // The marks of the note state how deep it reaches below its head.
+            const belowSpaces = Math.max(headBottom, stackBottom) + StaffInk.markRoomSpaces(note.marks);
+
             topSpaces = Math.min(topSpaces, stemTop);
-            bottomSpaces = Math.max(bottomSpaces, headBottom, stackBottom);
+            bottomSpaces = Math.max(bottomSpaces, belowSpaces);
         }
 
         return {
             topPx: -topSpaces * staffSpacePx,
-            bottomPx: (bottomSpaces + noteMarkSpaces) * staffSpacePx,
+            bottomPx: bottomSpaces * staffSpacePx,
         };
     }
 
     /**
      * @param track The track whose rows are measured.
      *
-     * @returns The extra room the track's rows keep below them, so a tuplet marker drawn below the
-     *          notation clears the notation and stays clear of the row that follows.
+     * @returns The room the track's notation keeps above its own ink for a tuplet marker drawn above,
+     *          or 0 when no measure of the track labels one.
      */
-    public static belowReservePx(track: ISbDmTrack): number {
-        if (!StaffInk.labelsBelow(track)) {
-            return 0;
+    public static aboveMarkerRoomPx(track: ISbDmTrack): number {
+        return StaffInk.labelsAbove(track) ? tupletGapPx + tupletAboveOverhangPx : 0;
+    }
+
+    /**
+     * @param track The track whose rows are measured.
+     *
+     * @returns The room the track's notation keeps below its own ink for a tuplet marker drawn below,
+     *          or 0 when no measure of the track labels one.
+     */
+    public static belowMarkerRoomPx(track: ISbDmTrack): number {
+        return StaffInk.labelsBelow(track) ? tupletGapPx + tupletNumberOffsetPx + tupletNumberHeightPx : 0;
+    }
+
+    /**
+     * @param marks The marks a note carries.
+     *
+     * @returns The room the deepest of those marks takes below the head's ink, in staff spaces.
+     */
+    private static markRoomSpaces(marks: readonly HeadMark[] | undefined): number {
+        let room = 0;
+        for (const mark of marks ?? []) {
+            room = Math.max(room, headMarkRoomSpaces[mark]);
         }
 
-        const lines = Object.values(track.instrument.noteStyles).map((noteStyle) => {
-            return noteStyle.noteLine ?? 1;
+        return room;
+    }
+
+    /**
+     * @param track The track to inspect.
+     *
+     * @returns Whether the track labels a tuplet above the notation, which the outermost tuplet of a measure is.
+     */
+    private static labelsAbove(track: ISbDmTrack): boolean {
+        return track.measures.some((measure) => {
+            return measure.subdivisions.some((subdivision) => {
+                return subdivision.isTuplet;
+            });
         });
-        const maxLine = Math.max(1, ...lines);
-        const centerLine = (maxLine + 1) / 2;
-
-        // The room a row keeps below its reference line, plus the room the row after it leaves above its
-        // own reference line. A marker beyond that reaches the notation of the next row.
-        const ink = StaffInk.ofRow([
-            { noteLine: 1, stemLengthSpaces: normalStemLengthSpaces, beamCount: 1 },
-            { noteLine: maxLine, stemLengthSpaces: normalStemLengthSpaces, beamCount: 1 },
-        ], centerLine);
-        const availablePx = noteHeightPx - ink.topPx + staffRowGapPx;
-        const neededPx = ink.bottomPx + tupletGapPx + tupletNumberOffsetPx + tupletNumberHeightPx;
-
-        return Math.max(0, neededPx - availablePx);
     }
 
     /**
