@@ -52,7 +52,7 @@ describe("Popup", { concurrent: false }, () => {
 
         renderResult = render(<Wrapper />);
         await act(() => {
-            popupRef.current.open(rectOf(24, 40, 80, 24));
+            popupRef.current.openAtRect(rectOf(24, 40, 80, 24));
         });
 
         const popup = await waitFor(() => {
@@ -101,7 +101,7 @@ describe("Popup", { concurrent: false }, () => {
 
         renderResult = render(<Wrapper />);
         await act(() => {
-            popupRef.current.open(rectOf(40, 60, 100, 28));
+            popupRef.current.openAtRect(rectOf(40, 60, 100, 28));
         });
 
         const popup = await waitFor(() => {
@@ -125,7 +125,7 @@ describe("Popup", { concurrent: false }, () => {
 
         renderResult = render(<Wrapper />);
         await act(() => {
-            popupRef.current.open(rectOf(12, 18, 64, 24));
+            popupRef.current.openAtRect(rectOf(12, 18, 64, 24));
         });
 
         const popup = await waitFor(() => {
@@ -164,14 +164,14 @@ describe("Popup", { concurrent: false }, () => {
 
         renderResult = render(<Wrapper />);
         await act(() => {
-            firstRef.current.open(rectOf(10, 10, 40, 20));
+            firstRef.current.openAtRect(rectOf(10, 10, 40, 20));
         });
         await waitFor(() => {
             expect(document.body.querySelector(".popup")?.textContent).toContain("First popup");
         });
 
         await act(() => {
-            secondRef.current.open(rectOf(80, 80, 40, 20));
+            secondRef.current.openAtRect(rectOf(80, 80, 40, 20));
         });
 
         await waitFor(() => {

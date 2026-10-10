@@ -239,6 +239,56 @@ describe("SelectionManager (class)", { concurrent: false }, () => {
         expect(removed).toEqual([note]);
     });
 
+    it("publishes the pointer-down hit and only changed drag-selection entries", async () => {
+        const first = cellEntry(noteA, { numerator: 0, denominator: 1 });
+        const second = cellEntry(noteB, { numerator: 2, denominator: 16 });
+        const previous = cellEntry(noteB, { numerator: 4, denominator: 16 });
+        const firstHit: ISelectionHitEntry = { ...first, rect: rectOf(0, 0, 1, 1) };
+        const secondHit: ISelectionHitEntry = { ...second, rect: rectOf(0, 0, 1, 1) };
+        const deltas: ISelectionDelta[] = [];
+        const spy = (delta: ISelectionDelta): Promise<boolean> => {
+            deltas.push(delta);
+
+            return Promise.resolve(true);
+        };
+
+        manager.registerHitTester({
+            hitTest: (rect) => {
+                return rect.width > 1 ? [firstHit, secondHit] : [firstHit];
+            },
+        });
+        requisitions.register("selectionChanged", spy);
+
+        try {
+            manager.replaceSelection([previous]);
+            deltas.length = 0;
+
+            manager.beginSelection(SelectionMode.New, clickRect());
+
+            expect(deltas).toEqual([
+                { added: [], removed: [previous] },
+                { added: [first], removed: [] },
+            ]);
+
+            const dragRect = rectOf(0, 0, 10, 10);
+            await requisitions.execute("selectionRectChanged", { rect: dragRect });
+
+            expect(deltas).toEqual([
+                { added: [], removed: [previous] },
+                { added: [first], removed: [] },
+                { added: [second], removed: [] },
+            ]);
+
+            await requisitions.execute("selectionRectChanged", { rect: dragRect });
+            manager.finishSelection();
+
+            expect(deltas).toHaveLength(3);
+        } finally {
+            requisitions.unregister("selectionChanged", spy);
+            manager.dispose();
+        }
+    });
+
     it("keeps note selections for subdivision slots after note ids are cleared", () => {
         const entries: ISelectionEntry[] = [0, 1, 2].map((slot) => {
             return cellEntry(noteA, { numerator: slot, denominator: 3 });

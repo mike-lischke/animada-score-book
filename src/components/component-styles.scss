@@ -551,14 +551,12 @@
        30px header + 16px gap. Keep in step with `.trackControlsList` / `.trackEditSidebar`. */
     --track-panel-head: 54px;
 
-    /* Room the action strip band above the score takes, which the panel's header block sits in. The strip's top
-       and bottom margin make up the 9px. */
+    /* Additional toolbar room inside the score columns. The fixed action bar lives above this container. */
     --score-strip-band: 0px;
 
     /* Distance from the top of the score content to the first row of a column. The side panels state the same
-       offset, so their rows line up with the rows they belong to. The staff columns keep their own head room in
-       edit mode, where the action strip already provides the band; a grid column carries its beat strip inside
-       it — 20pt plus its margins and the first row's top margin. */
+    offset, so their rows line up with the rows they belong to. Staff columns keep their own head room; a grid
+    column carries its beat strip inside it — 20pt plus its margins and the first row's top margin. */
     --score-row-top: 24px;
 
     .trackControlsPanel,
@@ -581,10 +579,6 @@
         --score-row-top: calc(20pt + 24px);
     }
 
-    &.edit-mode {
-        --score-strip-band: calc(var(--bar-action-strip-height) + 9px);
-    }
-
     #trackViewerHost {
         margin-bottom: 35px;
         overflow-x: auto;
@@ -603,7 +597,8 @@
             min-width: 100%;
 
             #trackViewerDecorations,
-            #trackViewerDecorationOverlay {
+            #trackViewerDecorationOverlay,
+            #trackViewerPlayheadOverlay {
                 position: absolute;
                 flex-grow: 1;
                 overflow: hidden;
@@ -616,6 +611,10 @@
                 pointer-events: none;
             }
 
+            #trackViewerPlayheadOverlay {
+                z-index: 10;
+            }
+
             #playBeam {
                 width: 4px;
                 border: none;
@@ -624,6 +623,7 @@
                 position: absolute;
                 top: 0;
                 bottom: 0;
+                will-change: transform;
 
                 /* The beam marks playback, so it only appears while playback runs. */
                 visibility: hidden;
@@ -654,9 +654,6 @@
     }
 
     .trackControlsList {
-        --track-controls-collapsed-width: 90px;
-        --track-controls-expanded-width: clamp(200px, 24vw, 300px);
-
         overflow: hidden;
         gap: 16px;
 
@@ -768,79 +765,11 @@
         }
     }
 
-    .trackControlsHeader {
+    .trackControlsHeaderSpacer {
         height: 30px;
         min-width: 0;
     }
 
-    .trackControlsToggle {
-        height: 24px;
-        min-height: 24px;
-        justify-content: flex-start;
-    }
-
-    .trackViewModeToggleGroup {
-        margin-left: 8px;
-    }
-
-    .trackViewModeIcons {
-        height: 32px;
-        margin-top: 3px;
-    }
-
-    .trackViewModeGridIcon {
-        width: 8px;
-        height: 8px;
-        flex: 0 0 auto;
-        border: 1px dashed currentColor;
-    }
-
-    /* The note stands for the staff view the way the dashed square stands for the grid, so it is drawn
-       with the same means. */
-    .trackViewModeStaffIcon {
-        position: relative;
-        width: 12px;
-        height: 18px;
-        flex: 0 0 auto;
-        color: inherit;
-    }
-
-    .trackViewModeStaffIconHead {
-        position: absolute;
-        left: 0;
-        bottom: 0;
-        width: 7px;
-        height: 5px;
-        border-radius: 50%;
-        background: currentColor;
-        transform: rotate(-20deg);
-    }
-
-    .trackViewModeStaffIconStem {
-        position: absolute;
-        right: 5px;
-        top: 0;
-        width: 1px;
-        height: 14px;
-        background: currentColor;
-    }
-
-    .trackViewModeToggle {
-        margin: 0;
-    }
-
-    .trackViewModeToggle input[type="checkbox"] {
-        width: 32px;
-        height: 18px;
-    }
-
-    .trackViewModeToggle.toggle-vertical {
-        // daisyUI's toggle is horizontal. Rotate it 90° clockwise so the handle
-        // moves vertically. With this rotation, the unchecked handle sits at the
-        // top and the checked handle at the bottom.
-        transform: rotate(90deg);
-        margin-right: -2px;
-    }
 }
 
 .trackEditSidebar {
@@ -935,7 +864,8 @@
 .bar-action-strip {
     flex-shrink: 0;
     pointer-events: none;
-    margin: 5px 0 4px 0;
+    margin: 0;
+    position: relative;
 }
 
 .bar-action-group {
@@ -951,8 +881,128 @@
     transform: translateX(-50%);
 }
 
-.bar-action-group .dropdownHost {
+.bar-action-group .bar-action-button {
+    flex: 0 0 40px;
+    height: 40px;
     pointer-events: auto;
+}
+
+.bar-action-insert-icon {
+    gap: 0;
+}
+
+.arrangementViewer {
+    --track-controls-collapsed-width: 90px;
+    --track-controls-expanded-width: clamp(200px, 24vw, 300px);
+
+    padding: 15px;
+    overflow-x: clip;
+    user-select: none;
+    min-height: 100%;
+
+    .arrangement-action-bar {
+        position: sticky;
+        top: 0;
+        z-index: 20;
+        display: flex;
+        flex: 0 0 var(--arrangement-action-bar-height, 44px);
+        height: var(--arrangement-action-bar-height, 44px);
+        min-height: var(--arrangement-action-bar-height, 44px);
+        margin: -15px -15px 15px;
+        border-bottom: 1px solid var(--color-base-200);
+        background: var(--color-base-100);
+        pointer-events: none;
+    }
+
+    .arrangement-action-controls {
+        flex: 0 0 var(--track-controls-collapsed-width);
+        width: var(--track-controls-expanded-width);
+        min-width: 0;
+        height: 100%;
+        padding: 0 10px;
+        gap: 8px;
+        pointer-events: none;
+
+        &.expanded {
+            flex-basis: var(--track-controls-expanded-width);
+        }
+
+        .trackControlsToggle {
+            height: 24px;
+            min-height: 24px;
+            justify-content: flex-start;
+            pointer-events: auto;
+        }
+
+        .trackViewModeToggleGroup {
+            margin-left: 8px;
+            pointer-events: auto;
+        }
+
+        .trackViewModeIcons {
+            height: 32px;
+            margin-top: 3px;
+        }
+
+        .trackViewModeGridIcon {
+            width: 8px;
+            height: 8px;
+            flex: 0 0 auto;
+            border: 1px dashed currentColor;
+        }
+
+        .trackViewModeStaffIcon {
+            position: relative;
+            width: 12px;
+            height: 18px;
+            flex: 0 0 auto;
+            color: inherit;
+        }
+
+        .trackViewModeStaffIconHead {
+            position: absolute;
+            left: 0;
+            bottom: 0;
+            width: 7px;
+            height: 5px;
+            border-radius: 50%;
+            background: currentColor;
+            transform: rotate(-20deg);
+        }
+
+        .trackViewModeStaffIconStem {
+            position: absolute;
+            right: 5px;
+            top: 0;
+            width: 1px;
+            height: 14px;
+            background: currentColor;
+        }
+
+        .trackViewModeToggle {
+            margin: 0;
+        }
+
+        .trackViewModeToggle input[type="checkbox"] {
+            width: 32px;
+            height: 18px;
+        }
+
+        .trackViewModeToggle.toggle-vertical {
+            transform: rotate(90deg);
+            margin-right: -2px;
+        }
+    }
+
+    .bar-action-strip-viewport {
+        position: relative;
+        flex: 1 1 auto;
+        min-width: 0;
+        height: 100%;
+        overflow: hidden;
+        pointer-events: none;
+    }
+
 }
 
 .selectionDialogList {
@@ -2265,11 +2315,4 @@ body.range-articulation-mode #rangeArticulationToolbarHost * {
     letter-spacing: 0.04em;
     color: color-mix(in srgb, var(--color-base-content) 60%, transparent);
     margin: 12px 4px 4px 4px;
-}
-
-.arrangementViewer {
-    padding: 15px;
-    overflow-x: hidden;
-    user-select: none;
-    min-height: 100%;
 }

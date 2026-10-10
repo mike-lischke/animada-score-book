@@ -103,15 +103,12 @@ const openScore = async (page: Page, answers: Record<string, IApiAnswer | IApiAn
  * @param page The page under test.
  */
 const editSomething = async (page: Page): Promise<void> => {
+    await expect(page.locator("#arrangementActionBar")).toBeVisible();
     await page.locator("#editModeButton").click({ force: true });
 
-    const triggers = page.locator(".bar-action-menu button");
-    await expect(triggers).toHaveCount(1);
-    await triggers.first().click({ force: true });
-
-    const menu = page.locator(".bar-action-menu ul[popover]").first();
-    await expect(menu).toBeVisible();
-    await menu.getByText("Duplicate bar", { exact: true }).click();
+    await expect(page.locator(".bar-action-group")).toHaveCount(1);
+    await expect(page.locator(".bar-action-button")).toHaveCount(5);
+    await page.locator('.bar-action-button[data-action="duplicate"]').click();
 
     await expect(page.locator(".staff-measure-viewer")).toHaveCount(2);
 };

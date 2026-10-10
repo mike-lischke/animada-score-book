@@ -112,7 +112,7 @@ const openWithScore = async (overrides?: {
 
     document.body.appendChild(target);
 
-    await ref.current!.open(target, entry);
+    await ref.current!.open(target.getBoundingClientRect(), entry);
     document.body.removeChild(target);
 
     return { ref, renderResult, onSaved };

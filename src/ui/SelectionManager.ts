@@ -54,6 +54,8 @@ export class SelectionManager {
     /** Hit-test result from the previous rect change, used for differential updates. */
     private previousEntries: ISelectionEntry[] = [];
 
+    private selectionGestureActive = false;
+
     /** Saved selection before playback started, for restoration on stop. */
     private originalSelection?: Map<string, ISelectionEntry>;
 
@@ -206,21 +208,50 @@ export class SelectionManager {
     }
 
     /**
-     * Called by the SelectionView when a new drag selection begins, to allow the manager to reset state if needed.
-     * The current selection is only cleared if the current selection mode is New.
+     * Begins a pointer selection, clears the old selection if needed, and defers the first hit's delta.
      *
-     * @param selectionMode The selection mode to use for the new selection. If omitted, the current mode is used.
+     * @param selectionMode The selection mode to use, or the current mode when omitted.
+     * @param initialRect The pointer-down hit area, when selection is enabled.
      */
-    public beginSelection(selectionMode?: SelectionMode): void {
+    public beginSelection(selectionMode?: SelectionMode, initialRect?: DOMRect): void {
+        if (this.selectionGestureActive) {
+            this.finishSelection();
+        }
+
         this.previousEntries = [];
 
-        if (selectionMode) {
+        if (selectionMode !== undefined) {
             this.currentSelectionMode = selectionMode;
         }
 
+        this.selectionGestureActive = true;
         if (this.currentSelectionMode === SelectionMode.New) {
             this.internalClearSelection();
         }
+
+        if (initialRect === undefined) {
+            return;
+        }
+
+        const entries = SelectionManager.closestToClick(initialRect, this.resolveEntries(initialRect));
+        if (this.currentSelection.size > 0 && this.currentSelectionMode !== SelectionMode.New
+            && this.wouldMixGranularities(entries)) {
+            return;
+        }
+
+        this.previousEntries = entries;
+        if (this.applySelection(entries)) {
+            this.publishPlayRange();
+        }
+    }
+
+    public finishSelection(): void {
+        if (!this.selectionGestureActive) {
+            return;
+        }
+
+        this.selectionGestureActive = false;
+        this.previousEntries = [];
     }
 
     /**
@@ -235,13 +266,18 @@ export class SelectionManager {
     }
 
     /**
-     * Called by the SelectionView when a click (pointer down + up without significant movement) ends the interaction.
-     * Runs a hit-test at the click position and applies the result using the current {@link selectionMode}.
+     * Finishes a pointer selection or resolves a cursor-only click.
      *
      * @param clickRect A tiny rect at the click position.
      * @param cursorOnly True in insert mode, where a click only places the cursor instead of selecting.
      */
     public endSelection(clickRect: DOMRect, cursorOnly = false): void {
+        if (this.selectionGestureActive) {
+            this.finishSelection();
+
+            return;
+        }
+
         this.previousEntries = [];
 
         const rawEntries = this.collectEntries(clickRect);
@@ -548,8 +584,10 @@ export class SelectionManager {
      * (added/removed), and publishes the change.
      *
      * @param incoming The entries to apply (typically from a hit-test result).
+     *
+     * @returns Whether the current selection changed.
      */
-    private applySelection(incoming: ISelectionEntry[]): void {
+    private applySelection(incoming: ISelectionEntry[]): boolean {
         const added: ISelectionEntry[] = [];
         const removed: ISelectionEntry[] = [];
 
@@ -589,11 +627,14 @@ export class SelectionManager {
             }
         }
 
-        if (added.length > 0 || removed.length > 0) {
+        const changed = added.length > 0 || removed.length > 0;
+        if (changed) {
             void requisitions.execute("selectionChanged", { added, removed });
         }
 
         this.schedulePersist();
+
+        return changed;
     }
 
     /**
@@ -857,9 +898,9 @@ export class SelectionManager {
 
         this.previousEntries = currentEntries;
         if (toggleEntries.length > 0) {
-            this.applySelection(toggleEntries);
-
-            this.publishPlayRange();
+            if (this.applySelection(toggleEntries)) {
+                this.publishPlayRange();
+            }
         }
 
         return Promise.resolve(true);

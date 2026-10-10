@@ -24,6 +24,11 @@ import { Separator } from "../Separator.js";
 import { ChildAlignment, Orientation } from "../framework/ui-types.js";
 import { ComponentPlacement, UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
 
+interface ISelectionPopupGeometry {
+    anchor: HTMLElement;
+    bounds: DOMRect;
+}
+
 export interface ISelectionEditPopupProps extends ICommonUIProperties {
     dataModel: ScoreBookDataModel;
     selectionManager: SelectionManager;
@@ -36,9 +41,11 @@ export interface ISelectionEditPopupProps extends ICommonUIProperties {
 /** Hosts note and selection-structure tools at the currently selected score elements. */
 export class SelectionEditPopup extends UIComponent<ISelectionEditPopupProps> {
     private popupRef = createRef<Popup | null>();
+    private selectionGestureInProgress = false;
 
     public override componentDidMount(): void {
         requisitions.register("selectionChanged", this.handleSelectionChanged);
+        requisitions.register("selectionGestureChanged", this.handleSelectionGestureChanged);
         this.updatePopup();
     }
 
@@ -53,6 +60,7 @@ export class SelectionEditPopup extends UIComponent<ISelectionEditPopupProps> {
 
     public override componentWillUnmount(): void {
         requisitions.unregister("selectionChanged", this.handleSelectionChanged);
+        requisitions.unregister("selectionGestureChanged", this.handleSelectionGestureChanged);
         this.popupRef.current?.close(true);
     }
 
@@ -185,6 +193,8 @@ export class SelectionEditPopup extends UIComponent<ISelectionEditPopupProps> {
                 ref={this.popupRef}
                 className="selection-edit-popup"
                 placement={ComponentPlacement.BottomCenter}
+                offset={8}
+                boundsProvider={this.selectionBounds}
                 showArrow={false}
             >
                 {content}
@@ -192,7 +202,15 @@ export class SelectionEditPopup extends UIComponent<ISelectionEditPopupProps> {
         );
     }
 
+    private selectionBounds = (): DOMRect | undefined => {
+        return this.selectionGeometry()?.bounds;
+    };
+
     private handleSelectionChanged = (): Promise<boolean> => {
+        if (this.selectionGestureInProgress) {
+            return Promise.resolve(true);
+        }
+
         this.updatePopup();
 
         // The rendered content follows the selection, which the popup reads while rendering. Opening the popup
@@ -202,24 +220,28 @@ export class SelectionEditPopup extends UIComponent<ISelectionEditPopupProps> {
         return Promise.resolve(true);
     };
 
+    private handleSelectionGestureChanged = (active: boolean): Promise<boolean> => {
+        this.selectionGestureInProgress = active;
+        if (active) {
+            this.popupRef.current?.close(true);
+        } else {
+            this.updatePopup();
+            this.forceUpdate();
+        }
+
+        return Promise.resolve(true);
+    };
+
     private updatePopup(): void {
-        const { editMode, selectionManager, scoreElementRegistry } = this.props;
-        const entries = [...selectionManager.currentSelection.values()];
-        if (!editMode || entries.length === 0) {
+        const { editMode, selectionManager } = this.props;
+        if (!editMode || selectionManager.currentSelection.size === 0 || this.selectionGestureInProgress) {
             this.popupRef.current?.close(true);
 
             return;
         }
 
-        let anchor: HTMLElement | undefined;
-        for (let index = entries.length - 1; index >= 0 && anchor === undefined; index--) {
-            const elements = scoreElementRegistry.findTargetElements(entries[index].target);
-            anchor = elements.find((element) => {
-                return element.isConnected;
-            });
-        }
-
-        if (anchor === undefined) {
+        const geometry = this.selectionGeometry();
+        if (geometry === undefined) {
             this.popupRef.current?.close(true);
 
             return;
@@ -231,9 +253,41 @@ export class SelectionEditPopup extends UIComponent<ISelectionEditPopupProps> {
         }
 
         if (popup.isOpen) {
-            popup.updatePosition(anchor);
+            popup.updatePosition(geometry.anchor);
         } else {
-            popup.open(anchor);
+            popup.open(geometry.anchor);
         }
+    }
+
+    private selectionGeometry(): ISelectionPopupGeometry | undefined {
+        const { selectionManager, scoreElementRegistry } = this.props;
+        const entries = [...selectionManager.currentSelection.values()];
+        let anchor: HTMLElement | undefined;
+        let left = Infinity;
+        let top = Infinity;
+        let right = -Infinity;
+        let bottom = -Infinity;
+
+        for (let index = entries.length - 1; index >= 0; index--) {
+            const elements = scoreElementRegistry.findTargetElements(entries[index].target);
+            for (const element of elements) {
+                if (!element.isConnected) {
+                    continue;
+                }
+
+                anchor ??= element;
+                const rect = element.getBoundingClientRect();
+                left = Math.min(left, rect.left);
+                top = Math.min(top, rect.top);
+                right = Math.max(right, rect.right);
+                bottom = Math.max(bottom, rect.bottom);
+            }
+        }
+
+        if (anchor === undefined) {
+            return undefined;
+        }
+
+        return { anchor, bounds: new DOMRect(left, top, right - left, bottom - top) };
     }
 }

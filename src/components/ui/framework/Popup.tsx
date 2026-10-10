@@ -13,6 +13,9 @@ import { ComponentPlacement, UIComponent } from "./UIComponent.js";
 import { computeContentPosition } from "./html-helpers.js";
 import { Orientation } from "./ui-types.js";
 
+/** Supplies live placement bounds while a popup remains anchored to a DOM element. */
+export type PopupBoundsProvider = () => DOMRect | undefined;
+
 interface IPopupProperties extends IPortalProperties {
     /** Optional header rendered above the content. */
     header?: ComponentChild;
@@ -35,6 +38,12 @@ interface IPopupProperties extends IPortalProperties {
     /** Whether to show the CSS arrow pointer. */
     showArrow?: boolean;
 
+    /** Distance between the popup and its target, in px. */
+    offset?: number;
+
+    /** Supplies live placement bounds while the popup remains anchored to a DOM element. */
+    boundsProvider?: PopupBoundsProvider;
+
     /** Flex orientation of the popup content. */
     orientation?: Orientation;
 
@@ -46,8 +55,6 @@ interface IPopupState {
     currentTarget?: DOMRect;
 }
 
-export type PopupAnchor = HTMLElement | DOMRect;
-
 /**
  * A positioned popup built on {@link Portal}. Renders into a managed
  * DOM node in `document.body` with automatic stacking above
@@ -57,7 +64,8 @@ export type PopupAnchor = HTMLElement | DOMRect;
  *
  * ```ts
  * const popupRef = createRef<Popup | null>();
- * popupRef.current?.open(targetRect, placement);
+ * popupRef.current?.open(targetElement);
+ * popupRef.current?.openAtRect(targetRect);
  * ```
  */
 export class Popup extends UIComponent<IPopupProperties, IPopupState> {
@@ -124,17 +132,52 @@ export class Popup extends UIComponent<IPopupProperties, IPopupState> {
     }
 
     /**
-     * Opens the popup positioned relative to the given target rectangle.
+     * Opens the popup positioned relative to the given live target element.
      * Positioning is deferred until after the Portal has rendered the DOM.
      *
-     * @param target The anchor element or its bounding rectangle.
+     * @param target The live DOM element the popup is anchored to.
      * @param options Additional options for the portal.
      */
-    public open(target: PopupAnchor, options?: IPortalOptions): void {
-        const anchorElement = target instanceof HTMLElement ? target : undefined;
-        const currentTarget = anchorElement?.getBoundingClientRect() ?? target as DOMRect;
+    public open(target: HTMLElement, options?: IPortalOptions): void {
+        const { boundsProvider, restoreFocusOnClose = true } = this.props;
+        const currentTarget = boundsProvider?.() ?? target.getBoundingClientRect();
+
+        this.openPopup(currentTarget, target, options, restoreFocusOnClose);
+    }
+
+    /**
+     * Opens the popup relative to static viewport bounds without a live DOM anchor.
+     *
+     * @param target The viewport rectangle for placement.
+     * @param options Additional options for the portal.
+     */
+    public openAtRect(target: DOMRect, options?: IPortalOptions): void {
         const { restoreFocusOnClose = true } = this.props;
 
+        this.openPopup(target, undefined, options, restoreFocusOnClose);
+    }
+
+    public close(cancelled: boolean): void {
+        this.closeWithReason(cancelled, PortalCloseReason.Programmatic);
+    }
+
+    public get clientRect(): DOMRect | undefined {
+        if (this.containerRef.current) {
+            return this.containerRef.current.getBoundingClientRect();
+        }
+
+        return undefined;
+    }
+
+    public updatePosition(target: HTMLElement): void {
+        const { boundsProvider } = this.props;
+        this.anchorElement = target;
+        const currentTarget = boundsProvider?.() ?? target.getBoundingClientRect();
+        this.setState({ currentTarget }, this.schedulePositionUpdate);
+    }
+
+    private openPopup(currentTarget: DOMRect, anchorElement: HTMLElement | undefined,
+        options: IPortalOptions | undefined, restoreFocusOnClose: boolean): void {
         this.anchorElement = anchorElement;
         this.returnFocusElement = restoreFocusOnClose
             ? anchorElement ?? (document.activeElement instanceof HTMLElement ? document.activeElement : undefined)
@@ -169,33 +212,16 @@ export class Popup extends UIComponent<IPopupProperties, IPopupState> {
         });
     }
 
-    public close(cancelled: boolean): void {
-        this.closeWithReason(cancelled, PortalCloseReason.Programmatic);
-    }
-
-    public get clientRect(): DOMRect | undefined {
-        if (this.containerRef.current) {
-            return this.containerRef.current.getBoundingClientRect();
-        }
-
-        return undefined;
-    }
-
-    public updatePosition(target: PopupAnchor): void {
-        this.anchorElement = target instanceof HTMLElement ? target : undefined;
-        const currentTarget = this.anchorElement?.getBoundingClientRect() ?? target as DOMRect;
-        this.setState({ currentTarget }, this.schedulePositionUpdate);
-    }
-
     private handlePortalClose = (cancelled: boolean, _portalProperties: IPortalProperties,
         reason: PortalCloseReason): void => {
+        const popupProperties = this.props;
+        const { restoreFocusOnClose = true, onClose } = popupProperties;
         this.stopPositionTracking();
 
         if (Popup.activePopup === this) {
             Popup.activePopup = undefined;
         }
 
-        const { restoreFocusOnClose = true } = this.props;
         const returnFocusElement = this.returnFocusElement;
         this.returnFocusElement = undefined;
         this.anchorElement = undefined;
@@ -209,18 +235,17 @@ export class Popup extends UIComponent<IPopupProperties, IPopupState> {
             });
         }
 
-        const { onClose } = this.props;
-
-        onClose?.(cancelled, this.props, reason);
+        onClose?.(cancelled, popupProperties, reason);
 
     };
 
     private handlePortalOpen = (): void => {
-        const { onOpen } = this.props;
+        const popupProperties = this.props;
+        const { onOpen } = popupProperties;
         const { currentTarget } = this.state;
 
         if (currentTarget) {
-            onOpen?.(this.props);
+            onOpen?.(popupProperties);
 
             if (this.containerRef.current) {
                 this.positionPopup(currentTarget);
@@ -235,6 +260,7 @@ export class Popup extends UIComponent<IPopupProperties, IPopupState> {
             placement = ComponentPlacement.TopLeft,
             showArrow = true,
             pinned = false,
+            offset = showArrow ? 10 : 0,
         } = this.props;
 
         const popup = this.containerRef.current;
@@ -258,7 +284,7 @@ export class Popup extends UIComponent<IPopupProperties, IPopupState> {
             return;
         }
 
-        const { left, top } = computeContentPosition(placement, popup, target, showArrow ? 10 : 0, !pinned);
+        const { left, top } = computeContentPosition(placement, popup, target, offset, !pinned);
         popup.style.left = `${left}px`;
         popup.style.top = `${top}px`;
     }
@@ -364,6 +390,7 @@ export class Popup extends UIComponent<IPopupProperties, IPopupState> {
     }
 
     private isAnchorInteraction(event: Event, eventPath: EventTarget[]): boolean {
+        const { boundsProvider } = this.props;
         const anchor = this.anchorElement;
         if (!anchor) {
             return false;
@@ -377,7 +404,7 @@ export class Popup extends UIComponent<IPopupProperties, IPopupState> {
             return false;
         }
 
-        const bounds = anchor.getBoundingClientRect();
+        const bounds = boundsProvider?.() ?? anchor.getBoundingClientRect();
 
         return event.clientX >= bounds.left && event.clientX <= bounds.right
             && event.clientY >= bounds.top && event.clientY <= bounds.bottom;
@@ -393,6 +420,7 @@ export class Popup extends UIComponent<IPopupProperties, IPopupState> {
         }
 
         this.positionFrame = requestAnimationFrame(() => {
+            const { boundsProvider } = this.props;
             this.positionFrame = undefined;
 
             if (!this.portalRef.current?.isOpen) {
@@ -405,7 +433,8 @@ export class Popup extends UIComponent<IPopupProperties, IPopupState> {
                 return;
             }
 
-            const target = this.anchorElement?.getBoundingClientRect() ?? this.state.currentTarget;
+            const target = boundsProvider?.() ?? this.anchorElement?.getBoundingClientRect()
+                ?? this.state.currentTarget;
             if (target) {
                 this.positionPopup(target);
             }

@@ -85,11 +85,12 @@ export class StaffRowGeometry {
      * @param grid The arrangement's timing grid, which the notation rules work on.
      * @param widthScale Factor the measure widths are divided by, which the print view states for its halved
      *                   layout.
+     * @param measureWidths Optional display widths for the measure columns.
      *
      * @returns The row geometry of the track, derived from the notation of every measure it holds.
      */
     public static ofTrack(track: ISbDmTrack, arrangement: ISbDmArrangement, grid: INotationGrid,
-        widthScale = 1): IStaffRowGeometry {
+        widthScale = 1, measureWidths?: ReadonlyMap<number, number>): IStaffRowGeometry {
         const centerLine = (StaffRowGeometry.maxNoteLineOf(track) + 1) / 2;
         const baseline = StaffInk.ofRow([], centerLine);
 
@@ -97,7 +98,7 @@ export class StaffRowGeometry {
         let inkBottomPx = baseline.bottomPx;
 
         for (let bar = 1; bar <= track.measures.length; bar++) {
-            const width = MeasureLayout.widthOf(bar, arrangement.measureWidths) / widthScale;
+            const width = MeasureLayout.widthOf(bar, measureWidths ?? arrangement.measureWidths) / widthScale;
             const rowWidthPx = Math.max(1, width - staffMeasureInsets);
             const { nodes, beamSpans } = StaffNotation.project(track.measures[bar - 1], grid, centerLine, rowWidthPx);
             const ink = StaffNotation.rowInk(nodes, beamSpans, centerLine);

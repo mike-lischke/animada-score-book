@@ -75,7 +75,10 @@ export class PrintView extends UIComponent<IPrintViewProps> {
         // The printed staff lays its measures out half as wide, so the row geometry is measured for those widths
         // too, which keeps the rows of a printed page from colliding. The grid view keeps its cell heights.
         const rowGeometries = options.viewMode === "staff"
-            ? StaffRowGeometry.ofArrangement(arrangement, this.props.arrangementPlayer.scoreMetrics, printWidthScale)
+            ? new Map(tracks.map((track): [number, IStaffRowGeometry] => {
+                return [track.id, StaffRowGeometry.ofTrack(track, arrangement,
+                    this.props.arrangementPlayer.scoreMetrics, printWidthScale)];
+            }))
             : undefined;
 
         // print.scss scales the whole document with one CSS zoom, so the zoom makes the widest row fill the

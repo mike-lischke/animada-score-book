@@ -22,6 +22,7 @@ import { AppFooter } from "./components/ui/Navigation/AppFooter.js";
 import { ArrangementIdentity, ArrangementSaveState } from "./components/ui/Header/ArrangementIdentity.js";
 
 import { ArrangementPlayControls } from "./components/ui/Arrangement/ArrangementPlayControls.js";
+import { AnimationDiagnostics } from "./components/ui/Arrangement/AnimationDiagnostics.js";
 import { ArrangementViewer } from "./components/ui/Arrangement/ArrangementViewer.js";
 import { RangeArticulationToolbar } from "./components/ui/Arrangement/RangeArticulationToolbar.js";
 import { UndoRedoControls } from "./components/ui/Arrangement/UndoRedoControls.js";
@@ -260,6 +261,13 @@ export class App extends UIComponent<{}, IAppState> {
             printing, printOptions, backendUnreachable, startupError, preferredEntryMode } = this.state;
         const entryMode = this.effectiveEntryMode(trackViewMode, preferredEntryMode);
         const isRunning = phase === AppPhase.Running;
+        const showAnimationDiagnostics = import.meta.env.DEV
+            && new URLSearchParams(window.location.search).get("debugAnimation") === "1";
+
+        let animationDiagnostics: ComponentChild;
+        if (showAnimationDiagnostics && this.arrangementPlayer !== undefined) {
+            animationDiagnostics = <AnimationDiagnostics engine={this.arrangementPlayer.animationEngine} />;
+        }
 
         let splashContent: ComponentChild;
         switch (phase) {
@@ -505,6 +513,7 @@ export class App extends UIComponent<{}, IAppState> {
                                     {appHeader}
                                     <div id="appOverlay">
                                         {rangeArticulationToolbar}
+                                        {animationDiagnostics}
                                         <div id="playbackControlsHost">
                                             <ArrangementPlayControls
                                                 arrangementPlayer={this.arrangementPlayer!}
@@ -1620,8 +1629,7 @@ export class App extends UIComponent<{}, IAppState> {
                 );
 
                 if (row) {
-                    const rowRect = row.getBoundingClientRect();
-                    void this.permissionEditorRef.current.open(rowRect, data);
+                    void this.permissionEditorRef.current.open(row.getBoundingClientRect(), data);
                 }
 
                 return false;

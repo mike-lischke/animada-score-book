@@ -180,16 +180,10 @@ export class StaffMeasureViewer extends UIComponent<IStaffMeasureViewerProps, IS
                 return candidate.id === trackId;
             });
             const measure = track?.measures[barNumber - 1];
-            // Notes are translated vertically per staff line, so the note symbol can extend below the
-            // row. Expand the coarse row bounds by the maximum line spread and by the room a note's marks
-            // hang into below its head, so noteheads on the lowest line and a note's accent stay reachable.
-            // The fine-grained checks below do the precise hit-testing.
-            const lineSpread = ((this.maxNoteLineForTrack(trackId) - 1) / 2) * staffSpacePx;
-            const expandedTop = rowRect.top - lineSpread;
-            const expandedBottom = rowRect.bottom + lineSpread + (staffSpacePx * 2);
+            const pieceBottom = rowRect.bottom + (parseFloat(getComputedStyle(row).marginBottom) || 0);
 
-            if (!StaffMeasureViewer.rectsIntersect(rect, rowRect.left, expandedTop, rowRect.right, expandedBottom,
-                0)) {
+            // The shared row geometry reserves notation ink; its bottom margin belongs to the track piece.
+            if (!StaffMeasureViewer.rectsIntersect(rect, rowRect.left, rowRect.top, rowRect.right, pieceBottom, 0)) {
                 continue;
             }
 
@@ -266,10 +260,7 @@ export class StaffMeasureViewer extends UIComponent<IStaffMeasureViewerProps, IS
                 }
             }
 
-            // A track piece owns the room below it: the row's box plus its bottom margin, which is what
-            // separates it from the next piece. The expanded bounds above and below only reach the notes
-            // drawn outside the row, so a rectangle above the piece addresses the measure.
-            const pieceBottom = rowRect.bottom + (parseFloat(getComputedStyle(row).marginBottom) || 0);
+            // A track piece also owns the gap below its row, which separates it from the next piece.
             const hitsTrackPiece = StaffMeasureViewer.rectsIntersect(rect, rowRect.left, rowRect.top, rowRect.right,
                 pieceBottom, 0);
 
@@ -708,20 +699,6 @@ export class StaffMeasureViewer extends UIComponent<IStaffMeasureViewerProps, IS
             dataModel.commitMeasureWidths();
         }
     };
-
-    private maxNoteLineForTrack(trackId: number): number {
-        const { arrangement } = this.props;
-        const track = arrangement.tracks.find((candidate) => {
-            return candidate.id === trackId;
-        });
-        if (!track) {
-            return 1;
-        }
-
-        return Math.max(1, ...Object.values(track.instrument.noteStyles).map((noteStyle) => {
-            return noteStyle.noteLine ?? 1;
-        }));
-    }
 
     /**
      * Resolves the note groups a selection rectangle addresses, per track. A beam group is addressed

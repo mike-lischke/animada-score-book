@@ -212,7 +212,7 @@ export class GridMeasureViewer extends UIComponent<IGridMeasureViewerProperties,
 
         const viewerStyle = {
             flex: 1,
-            minWidth: `calc(${baseSteps} * var(--note-height))`,
+            minWidth: `max(calc(${baseSteps} * var(--note-height)), var(--bar-action-min-width, 0px))`,
         };
         const registryRef = scoreElementRegistry?.createRef({
             kind: ScoreElementKind.BarContainer,

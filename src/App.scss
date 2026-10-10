@@ -247,10 +247,27 @@ h6 {
 }
 
 #appContent {
+    --arrangement-action-bar-height: 44px;
     flex: 1 1 auto;
     min-height: 0;
     overflow: hidden;
     position: relative;
+}
+
+.animation-diagnostics {
+    position: fixed;
+    top: 64px;
+    left: 8px;
+    z-index: 10000;
+    display: grid;
+    gap: 2px;
+    padding: 6px 8px;
+    border: 1px solid var(--color-base-300);
+    border-radius: 4px;
+    color: var(--color-base-content);
+    background: color-mix(in srgb, var(--color-base-100) 94%, transparent);
+    font: 12px/1.35 ui-monospace, SFMono-Regular, Menlo, monospace;
+    pointer-events: none;
 }
 
 #titleLogo {
@@ -346,7 +363,7 @@ h6 {
 
 #rangeArticulationToolbarHost {
     position: absolute;
-    top: 8px;
+    top: calc(var(--arrangement-action-bar-height) + 8px);
     right: 12px;
     gap: 8px;
     pointer-events: none;
@@ -401,10 +418,6 @@ h6 {
 #viewerScrollHost {
     box-sizing: border-box;
     padding-bottom: 64px;
-}
-
-#appContent.score-editing #viewerScrollHost {
-    padding-top: 64px;
 }
 
 @media (max-width: 600px) {

@@ -55,18 +55,21 @@ const snapshot = {
  * @param page The page to open the score in.
  * @param entryMode The entry mode to start in. Insert mode ignores a click in edit mode, so tests that
  *                  select with a click ask for overwrite mode.
+ * @param zoomLevel The score zoom level to seed.
  */
-const openScore = async (page: Page, entryMode?: EditEntryMode): Promise<void> => {
-    await page.addInitScript((data: { packed: string; entryMode?: number; }) => {
+const openScore = async (page: Page, entryMode?: EditEntryMode, zoomLevel = 100): Promise<void> => {
+    await page.addInitScript((data: { packed: string; entryMode?: number; zoomLevel: number; }) => {
         const sessionId = "e2e-staff-measure-resize";
         window.history.replaceState({ ...(window.history.state ?? {}), sessionId }, "");
         window.sessionStorage.setItem("asb-session-id", sessionId);
         window.localStorage.setItem(`asb-ui-settings-session-${sessionId}`, JSON.stringify({
             currentScore: data.packed,
             entryMode: data.entryMode,
-            viewSettings: { arrangementViewSettings: { displayMode: "staff" } },
+            viewSettings: {
+                arrangementViewSettings: { displayMode: "staff", zoomLevel: data.zoomLevel },
+            },
         }));
-    }, { packed: stringifyPackedArrangement(snapshot), entryMode });
+    }, { packed: stringifyPackedArrangement(snapshot), entryMode, zoomLevel });
 
     await page.goto("/");
     await expect(page.locator("#trackViewerHost")).toBeVisible();
@@ -116,20 +119,40 @@ test.beforeEach(async ({ page }) => {
     await routeApi(page);
 });
 
-test("opens bar actions at each measure and duplicates the selected measure", async ({ page }) => {
+test("shows per-measure actions in the persistent toolbar only in edit mode", async ({ page }) => {
     await openScore(page);
+    await expect(page.locator("#arrangementActionBar")).toBeVisible();
+    await expect(page.locator(".bar-action-button")).toHaveCount(0);
+
     await page.locator("#editModeButton").click({ force: true });
 
-    const triggers = page.locator(".bar-action-menu button");
-    await expect(triggers).toHaveCount(barCount);
-    await triggers.nth(1).click({ force: true });
+    const groups = page.locator(".bar-action-group");
+    await expect(groups).toHaveCount(barCount);
+    await expect(page.locator(".bar-action-button")).toHaveCount(barCount * 5);
+    await groups.nth(1).locator('[data-action="duplicate"]').click();
 
-    const menu = page.locator(".bar-action-menu ul[popover]").nth(1);
-    await expect(menu).toBeVisible();
-    await expect(menu).toContainText("Clear bar");
-    await menu.getByText("Duplicate bar", { exact: true }).click();
+    await expect(page.locator("#scoreStats")).toContainText(`${barCount + 1} bars`);
+});
 
-    await expect(page.locator(".staff-measure-viewer")).toHaveCount(barCount + 1);
+test("keeps fixed per-measure actions aligned at reduced score zoom", async ({ page }) => {
+    await openScore(page, undefined, 50);
+    await page.locator("#editModeButton").click({ force: true });
+
+    const groups = page.locator(".bar-action-group");
+    const buttons = groups.first().locator(".bar-action-button");
+    await expect(buttons).toHaveCount(5);
+
+    const buttonBox = await buttons.first().boundingBox();
+    const groupBox = await groups.first().boundingBox();
+    const measureBox = await page.locator(".staff-measure-viewer").first().boundingBox();
+    expect(buttonBox).not.toBeNull();
+    expect(groupBox).not.toBeNull();
+    expect(measureBox).not.toBeNull();
+    expect(buttonBox!.width).toBe(40);
+    expect(measureBox!.width).toBeGreaterThanOrEqual(groupBox!.width - 1);
+
+    const centres = await toolbarAndMeasureCentres(page);
+    expect(Math.abs(centres.toolbar - centres.measure)).toBeLessThan(2);
 });
 
 test("opens the barline as a resize handle in edit mode only", async ({ page }) => {
@@ -240,7 +263,7 @@ test("resets the measure width with a double click on its barline", async ({ pag
 });
 
 test("widens a shrunk measure when an entry packs it tighter", async ({ page }) => {
-    await openScore(page);
+    await openScore(page, EditEntryMode.Overwrite);
     await page.locator("#editModeButton").click({ force: true });
 
     const measure = page.locator(".staff-measure-viewer").first();
@@ -258,7 +281,7 @@ test("widens a shrunk measure when an entry packs it tighter", async ({ page }) 
     }).toBe(barActionStripWidth);
 
     // A quadruplet splits a quarter note into sixteenths, which need more room between their anchors.
-    await page.locator(".staff-measure-track-row .staff-note-head-symbol").first().click();
+    await page.locator(".staff-measure-track-row .staff-note-head-symbol").nth(1).click();
     await page.locator(".subdivisionToolbar button").first().click();
     await page.locator(".subdivisionToolbar .du-dropdown li", { hasText: "Quadruplet" }).locator("a")
         .click({ force: true });

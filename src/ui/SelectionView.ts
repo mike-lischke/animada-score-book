@@ -83,6 +83,7 @@ export class SelectionView {
 
     private dragPending = false;
     private isDragging = false;
+    private selectionGestureActive = false;
     private startX = 0;
     private startY = 0;
     private startScrollLeft = 0;
@@ -191,6 +192,15 @@ export class SelectionView {
             (half * 2) + 1, (half * 2) + 1);
         this.manager.previewNote(clickRect);
 
+        if (!this.showsCursorOnly) {
+            const selectionMode = event.shiftKey || event.altKey || event.metaKey
+                ? this.selectionModeFromEvent(event)
+                : undefined;
+            this.selectionGestureActive = true;
+            void requisitions.execute("selectionGestureChanged", true);
+            this.manager.beginSelection(selectionMode, clickRect);
+        }
+
         if (this.horizontalScrollHost) {
             this.startScrollLeft = this.horizontalScrollHost.scrollLeft;
             this.startScrollTop = this.horizontalScrollHost.scrollTop;
@@ -224,13 +234,8 @@ export class SelectionView {
         const rect = this.rectElement.getBoundingClientRect();
         if (rect.width > 2 || rect.height > 2) {
             if (this.dragPending) {
-                const selectionMode = event.shiftKey || event.altKey || event.metaKey
-                    ? this.selectionModeFromEvent(event)
-                    : undefined;
-                this.manager.beginSelection(selectionMode);
-
-                this.dragPending = false;
                 this.isDragging = true;
+                this.dragPending = false;
             }
 
             void requisitions.execute("selectionRectChanged", { rect });
@@ -681,6 +686,8 @@ export class SelectionView {
     }
 
     private cancelDrag(): void {
+        const wasSelectionGesture = this.selectionGestureActive;
+        this.selectionGestureActive = false;
         this.isDragging = false;
         this.dragPending = false;
         this.stopAutoScroll();
@@ -702,6 +709,11 @@ export class SelectionView {
             this.captureElement.removeEventListener("pointerup", this.handlePointerUp);
             this.captureElement.removeEventListener("lostpointercapture", this.handlePointerUp);
             this.captureElement = undefined;
+        }
+
+        if (wasSelectionGesture) {
+            this.manager.finishSelection();
+            void requisitions.execute("selectionGestureChanged", false);
         }
     }
 
@@ -1058,10 +1070,8 @@ export class SelectionView {
                     continue;
                 }
 
-                // A group covers the note band of the row its runs live in: a row holds one viewer, whose
-                // height makes up that band, while the runs are only as tall as the line they sit on. The
-                // band reaches below the row by the room a note's marks hang into — its dot, its accent —
-                // so a group whose notes carry marks is still covered by its own band.
+                // Shared row geometry includes the ink and marks of every note, so the group overlay uses the row's
+                // full height.
                 const row = runs[0].closest<HTMLElement>(".staff-measure-track-row");
                 if (row === null) {
                     continue;
@@ -1111,7 +1121,7 @@ export class SelectionView {
                     x: (minLeft - containerRect.left) / z,
                     y: (rowRect.top - containerRect.top) / z,
                     width: ((maxRight - minLeft) / z) + bandWidth,
-                    height: (rowRect.height / z) + (staffSpacePx * 2),
+                    height: rowRect.height / z,
                 });
             }
 

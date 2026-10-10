@@ -76,10 +76,7 @@ export interface IRequestTypeMap {
     "settingsChanged": (settings: IUISettings) => Promise<boolean>;
     "trackViewModeToggled": (mode: "grid" | "staff") => Promise<boolean>;
 
-    /**
-     * The measures the staff view renders were laid out again — a new window of measures arrived, or the rows of the
-     * rendered measures moved — so decoration of rendered measures has to be redone.
-     */
+    /** Refresh staff decorations after a new measure window arrives or rendered rows move. */
     "staffWindowChanged": SimpleCallback;
 
     "playRangeChanged": (range?: { from: number; to: number; }) => Promise<boolean>;
@@ -97,6 +94,10 @@ export interface IRequestTypeMap {
     "undoStackChanged": SimpleCallback;
 
     "selectionChanged": (delta: ISelectionDelta) => Promise<boolean>;
+
+    /** Whether a rectangle-selection drag is currently active. */
+    "selectionGestureChanged": (active: boolean) => Promise<boolean>;
+
     "selectionDeleteRequested": SimpleCallback;
 
     /** Brings the given measure into the viewport, even when it is not rendered at the moment. */
@@ -107,6 +108,7 @@ export interface IRequestTypeMap {
 
     /** Requests scrolling the score viewport to the given position, 0..1 over the scrollable range. */
     "scoreViewportMoveRequested": (position: number) => Promise<boolean>;
+
     "selectionRectChanged": (data: ISelectionRectChange) => Promise<boolean>;
     "errorLogChanged": SimpleCallback;
 
@@ -123,11 +125,7 @@ export interface IRequestTypeMap {
 
     "editModeChanged": (enabled: boolean) => Promise<boolean>;
 
-    /**
-     * The entry mode that is in effect. Posted by the entry mode button and applied by the app; it is
-     * also the channel through which listeners learn the mode. The grid view offers no insert mode, so
-     * the mode only ever changes while the staff view is active.
-     */
+    /** The effective entry mode, published by its button and applied by the app; insert is staff-only. */
     "editEntryModeChanged": (mode: EditEntryMode) => Promise<boolean>;
 
     "insertTrackRequested": (track: ISbDmTrack) => Promise<boolean>;
@@ -141,10 +139,7 @@ export interface IRequestTypeMap {
     /** Fired by the subdivision toolbar to create a subdivision at the cursor or selection. */
     "subdivisionCreationRequested": (request: ISubdivisionCreationRequest) => Promise<boolean>;
 
-    /**
-     * The range articulation placing tool that is in effect. Posted by the toolbar and applied by the staff
-     * view, which also posts it to exit the mode after a completed or cancelled gesture.
-     */
+    /** Active range-articulation tool; toolbar selects it, staff view clears it after placement or cancellation. */
     "rangeArticulationToolChanged": (tool: RangeArticulationTool) => Promise<boolean>;
 
     /** Fired by the note length toolbar to change the length, including its dot, of subsequently entered notes. */
@@ -153,16 +148,10 @@ export interface IRequestTypeMap {
     /** Fired by the articulation toolbar to change the articulation of subsequently entered notes. */
     "articulationChanged": (articulation: Articulation) => Promise<boolean>;
 
-    /**
-     * Fired by ScoreBookDataModel after any mutation to the arrangement.
-     * The UndoManager listens to this to record undo/redo snapshots.
-     */
+    /** Posted after arrangement mutations so UndoManager can record undo/redo snapshots. */
     "arrangementMutated": SimpleCallback;
 
-    /**
-     * Fired by UndoManager after an undo/redo navigation, so the selection can be re-validated and the
-     * cursor restored. The selection state is the one the restored arrangement was last edited in.
-     */
+    /** Posted after undo/redo to revalidate the selection and restore its state from the restored arrangement. */
     "arrangementReverted": (selectionState?: string) => Promise<boolean>;
 }
 

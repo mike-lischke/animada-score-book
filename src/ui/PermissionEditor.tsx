@@ -80,16 +80,15 @@ export class PermissionEditor extends UIComponent<IPermissionEditorProperties, I
     /**
      * Opens the permission editor for the given score library entry.
      *
-     * @param target The DOM element or rect to anchor the popup to.
-     * @param entry  The data model entry whose permissions are being edited.
+     * @param target The viewport rectangle of the score entry.
+     * @param entry The data model entry whose permissions are being edited.
      */
-    public async open(target: HTMLElement | DOMRect,
-        entry: ISbDmScoreFolder | ISbDmScore): Promise<void> {
+    public async open(target: DOMRect, entry: ISbDmScoreFolder | ISbDmScore): Promise<void> {
         const { dataModel } = this.props;
         const entityType = entry.type === SbDmEntityType.ScoreFolder ? "folder" : "score";
 
         this.setState({ errorMessage: "", entry }, () => {
-            this.popupRef.current?.open(target);
+            this.popupRef.current?.openAtRect(target);
         });
 
         try {
