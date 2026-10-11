@@ -81,8 +81,8 @@ describe("ArrangementIdentity", { concurrent: false }, () => {
             return renderIdentity(false, state).querySelector<HTMLElement>(".arrangementSaveChip")!;
         };
 
-        expect(chipOf(ArrangementSaveState.Unchanged).classList.contains("arrangementSaveChip-unchanged")).toBe(true);
-        expect(chipOf(ArrangementSaveState.Saved).classList.contains("arrangementSaveChip-saved")).toBe(true);
-        expect(chipOf(ArrangementSaveState.Unsaved).classList.contains("arrangementSaveChip-unsaved")).toBe(true);
+        expect(chipOf(ArrangementSaveState.Unchanged).classList.contains("uiBadge-neutral")).toBe(true);
+        expect(chipOf(ArrangementSaveState.Saved).classList.contains("uiBadge-success")).toBe(true);
+        expect(chipOf(ArrangementSaveState.Unsaved).classList.contains("uiBadge-warning")).toBe(true);
     });
 });

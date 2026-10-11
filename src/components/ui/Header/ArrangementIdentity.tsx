@@ -7,6 +7,7 @@ import { type ComponentChild } from "preact";
 
 import type { ISbDmArrangement, ScoreBookDataModel } from "../../../core/ScoreBookDataModel.js";
 import { ArrangementTitle } from "../Arrangement/ArrangementTitle.js";
+import { Badge, BadgeVariant } from "../framework/Badge.js";
 import { Container } from "../framework/Container.js";
 import { Label } from "../framework/Label.js";
 import { ChildAlignment, Orientation } from "../framework/ui-types.js";
@@ -42,25 +43,25 @@ export class ArrangementIdentity extends UIComponent<IArrangementIdentityProps> 
         const { className, arrangement, dataModel, editMode, stats, saveState } = this.props;
 
         let saveCaption: string;
-        let saveClass: string;
+        let badgeVariant: BadgeVariant;
         switch (saveState) {
             case ArrangementSaveState.Saved: {
                 saveCaption = "Saved";
-                saveClass = "arrangementSaveChip-saved";
+                badgeVariant = BadgeVariant.Success;
 
                 break;
             }
 
             case ArrangementSaveState.Unsaved: {
                 saveCaption = "Unsaved changes";
-                saveClass = "arrangementSaveChip-unsaved";
+                badgeVariant = BadgeVariant.Warning;
 
                 break;
             }
 
             default: {
                 saveCaption = "Unchanged";
-                saveClass = "arrangementSaveChip-unchanged";
+                badgeVariant = BadgeVariant.Neutral;
 
                 break;
             }
@@ -79,13 +80,15 @@ export class ArrangementIdentity extends UIComponent<IArrangementIdentityProps> 
                     orientation={Orientation.LeftToRight}
                     crossAlignment={ChildAlignment.Center}
                 >
+                    <Label className="arrangementIdentitySection" caption="Score Library" />
+                    <Label className="arrangementIdentityChevron" caption={"\u203a"} />
                     <ArrangementTitle
                         id="arrangementIdentityTitle"
                         arrangement={arrangement}
                         dataModel={dataModel}
                         editMode={editMode}
                     />
-                    <Label className={`arrangementSaveChip ${saveClass}`} caption={saveCaption} />
+                    <Badge className="arrangementSaveChip" variant={badgeVariant} caption={saveCaption} />
                 </Container>
                 <Label id="scoreStats" className="arrangementIdentityStats" caption={stats} />
             </Container>

@@ -320,9 +320,7 @@ export class App extends UIComponent<{}, IAppState> {
 
             saveButton = <Button
                 id="saveButton"
-                imageOnly
-                compact
-                className="du-btn-ghost"
+                className="headerIconButton"
                 data-tooltip="Save Score"
                 disabled={!this.undoManager?.canUndo}
                 onClick={this.handleSaveClick}
@@ -332,9 +330,7 @@ export class App extends UIComponent<{}, IAppState> {
 
             newScoreButton = <Button
                 id="newScoreButton"
-                imageOnly
-                compact
-                className="du-btn-ghost"
+                className="headerIconButton"
                 data-tooltip="New Score"
                 disabled={editMode}
                 onClick={this.handleNewScoreClick}
@@ -343,33 +339,34 @@ export class App extends UIComponent<{}, IAppState> {
             </Button>;
 
             if (this.arrangementPlayer) {
+                const editModeButtonClass = editMode
+                    ? "headerActionButton headerSwitcherButton is-active"
+                    : "headerActionButton headerSwitcherButton";
+
                 editModeButton = <Button
                     id="editModeButton"
-                    compact
-                    className="headerActionButton"
+                    className={editModeButtonClass}
                     data-tooltip={editMode ? "Exit Edit Mode" : "Enter Edit Mode"}
                     onClick={this.handleEditModeToggle}
                 >
-                    <Icon src={UIIcon.Edit} data-tooltip="inherit" />
-                    <span>{editMode ? "Editing" : "Edit Mode"}</span>
+                    <span className="headerModeDot" />
+                    <span className="headerActionLabel">{editMode ? "Editing" : "Edit Mode"}</span>
                 </Button>;
 
                 printButton = <Button
                     id="printButton"
-                    compact
                     className="headerActionButton"
                     data-tooltip="Print / Export to PDF"
                     data-tutorial="print"
                     onClick={this.handlePrintClick}
                 >
                     <Icon src={UIIcon.Printer} data-tooltip="inherit" />
-                    <span>Print</span>
+                    <span className="headerActionLabel">Print</span>
                 </Button>;
 
                 exportButton = <Button
                     id="exportButton"
-                    compact
-                    className="headerActionButton du-btn-primary"
+                    className="headerActionButton is-emphasis"
                     data-tooltip="Export as MP3"
                     data-tutorial="export"
                     disabled={this.exporting}
@@ -378,7 +375,7 @@ export class App extends UIComponent<{}, IAppState> {
                     }}
                 >
                     <Icon src={UIIcon.Export} data-tooltip="inherit" />
-                    <span>{this.exporting ? "Exporting…" : "Export"}</span>
+                    <span className="headerActionLabel">{this.exporting ? "Exporting…" : "Export"}</span>
                 </Button>;
             }
         }
@@ -425,8 +422,6 @@ export class App extends UIComponent<{}, IAppState> {
             >
                 <img id="titleLogo" src="/logo.svg" />
                 <Button
-                    imageOnly
-                    compact
                     className="du-btn-ghost displayOptionsButton"
                     data-tooltip="Display Options"
                     data-tutorial="display-options"
@@ -436,8 +431,6 @@ export class App extends UIComponent<{}, IAppState> {
                 </Button>
                 <Button
                     id="scoreLibraryButton"
-                    imageOnly
-                    compact
                     className="du-btn-ghost"
                     data-tooltip="Score Library"
                     data-tutorial="score-library"
@@ -459,6 +452,7 @@ export class App extends UIComponent<{}, IAppState> {
                 {newScoreButton}
                 {headerUndoRedo}
                 {editModeButton}
+                <div className="headerSeparator" />
                 {printButton}
                 {exportButton}
             </Container>
@@ -663,6 +657,7 @@ export class App extends UIComponent<{}, IAppState> {
                 crossAlignment={ChildAlignment.Center}
             >
                 {navigation}
+                <div className="headerSeparator" />
                 {identity}
                 {actions}
             </Container>
@@ -673,13 +668,22 @@ export class App extends UIComponent<{}, IAppState> {
         const isAdmin = this.dataModel.user?.isAdmin ?? false;
 
         if (this.dataModel.authenticated) {
+            // The identity accent is a fixed brand pair, so its foreground is fixed as well instead of following
+            // the theme's text colour.
+            const userMenuStyle = isAdmin
+                ? {
+                    backgroundColor: "var(--color-identity)",
+                    color: "var(--color-identity-content)",
+                }
+                : undefined;
+
             return <Dropdown
                 id="userMenu"
                 icon={<Icon src={UIIcon.Account} />}
                 compact
                 items={this.buildUserMenuItems()}
                 closeOnSelect
-                style={{ backgroundColor: isAdmin ? "tomato" : undefined }}
+                style={userMenuStyle}
             />;
         }
 

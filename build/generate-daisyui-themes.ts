@@ -7,7 +7,6 @@ import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { escapeCssIdent } from "../src/components/ui/framework/css-helpers.js";
 interface VSTheme {
     name: string;
     type: "light" | "dark" | "hc";
@@ -16,7 +15,7 @@ interface VSTheme {
 
 const sharedValues = `
     --radius-selector: 0.5rem;
-    --radius-field: 0.25rem;
+    --radius-field: 0.375rem;
     --radius-box: 0.5rem;
 
     --size-selector: 0.25rem;
@@ -56,17 +55,25 @@ const mapVsThemeToDaisyTheme = (theme: VSTheme): string => {
     const success = c["gitDecoration.addedResourceForeground"] ?? c["minimapGutter.addedBackground"] ??
         c["charts.green"] ?? "#81b88b";
 
-    // Own color definitions. They are not used in daisyUI themes, but we can use them for our
-    // own components, to achieve a more consistent look.
-    /*const selectionBg =
-        c["editor.selectionBackground"] ??
+    // App tokens that extend the daisyUI set, so our own surfaces follow the active theme.
+    const selection = c["editor.selectionBackground"] ??
         c["terminal.selectionBackground"] ??
         c["list.activeSelectionBackground"] ??
-        "#264f78";*/
+        "#264f78";
+    const shadow = c["widget.shadow"] ?? "#00000033";
+
+    // `--color-info` is a surface color, so it is unsuitable as a foreground; this is the icon/text color.
+    const infoForeground = c["notificationsInfoIcon.foreground"] ?? "#3794ff";
+
+    // The accent of a user's own identity marker, e.g. the avatar background of an administrator.
+    // Background and content are a deliberately fixed brand pair; the red is the lightest tone that still
+    // reaches a 3:1 contrast with the white content.
+    const identity = "#fc6246";
+    const identityContent = "#ffffff";
 
     return `@plugin "daisyui/theme" {
     /* Meta data */
-    name: "${escapeCssIdent(theme.name)}";
+    name: "${theme.name}";
     default: ${theme.name === "Light+" ? "true" : "false"};
     prefersdark: ${theme.name === "Dark+" ? "true" : "false"};
     color-scheme: ${type};
@@ -102,6 +109,13 @@ const mapVsThemeToDaisyTheme = (theme: VSTheme): string => {
     --color-warning-content: ${c.foreground ?? "#ffffff"};
     --color-error: ${error};
     --color-error-content: ${c.foreground ?? "#ffffff"};
+
+    /* Selection highlight, overlay shadow, info foreground and identity accent, used by our own components. */
+    --color-selection: ${selection};
+    --shadow-color: ${shadow};
+    --color-info-foreground: ${infoForeground};
+    --color-identity: ${identity};
+    --color-identity-content: ${identityContent};
 
     ${sharedValues}
 }`;

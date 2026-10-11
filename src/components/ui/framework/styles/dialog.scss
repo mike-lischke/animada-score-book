@@ -21,7 +21,7 @@
 
     background-color: var(--color-base-100);
     color: var(--color-base-content);
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 4px 20px var(--shadow-color);
 
     .dialog-caption {
         display: flex;

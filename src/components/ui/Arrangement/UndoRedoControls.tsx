@@ -8,10 +8,11 @@ import type { ComponentChild } from "preact";
 import type { UndoManager } from "../../../core/UndoManager.js";
 import { requisitions } from "../../../supplement/Requisitions.js";
 import { Button } from "../framework/Button.js";
+import { Container } from "../framework/Container.js";
 import { UIIcon } from "../framework/UIIcon.js";
-import { GooeyGroup } from "../framework/GooeyGroup.js";
 import { Icon } from "../framework/Icon.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
+import { ChildAlignment, Orientation } from "../framework/ui-types.js";
 
 export interface IUndoRedoProps extends ICommonUIProperties {
     undoManager: UndoManager;
@@ -61,10 +62,15 @@ export class UndoRedoControls extends UIComponent<IUndoRedoProps, IUndoRedoState
         // const state = undoManager.currentState;
 
         return (
-            <GooeyGroup className="undoRedoGooey" background="var(--color-base-200)">
+            <Container
+                className="undoRedoGroup"
+                orientation={Orientation.LeftToRight}
+                crossAlignment={ChildAlignment.Center}
+            >
                 <Button
+                    id="undoButton"
                     plain
-                    className="undoRedoButton"
+                    className="headerIconButton"
                     disabled={!canUndo}
                     onClick={undoManager.undo}
                     data-tooltip="Revert your last change"
@@ -72,15 +78,16 @@ export class UndoRedoControls extends UIComponent<IUndoRedoProps, IUndoRedoState
                     <Icon src={UIIcon.Discard} width={20} height={20} data-tooltip="inherit" />
                 </Button>
                 <Button
+                    id="redoButton"
                     plain
-                    className="undoRedoButton"
+                    className="headerIconButton"
                     disabled={!canRedo}
                     onClick={undoManager.redo}
                     data-tooltip="Redo the last change you reverted"
                 >
                     <Icon src={UIIcon.Redo} width={20} height={20} data-tooltip="inherit" />
                 </Button>
-            </GooeyGroup>
+            </Container>
         );
     }
 

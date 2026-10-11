@@ -33,7 +33,6 @@
 }
 
 .playStopButton,
-.undoRedoButton,
 #pauseButton {
     padding: 0;
     border-radius: 50%;
@@ -46,13 +45,11 @@
 }
 
 .playStopButton,
-.undoRedoButton,
 #pauseButton {
     height: 36px;
     width: 36px;
 }
 
-.undoRedoButton,
 .noteStyleButton {
     border: 1px solid color-mix(in srgb, var(--color-base-content) 30%, transparent);
 }
@@ -63,11 +60,9 @@
     width: 36px;
 }
 
-.undoRedoGooey {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
+.undoRedoGroup {
+    flex: 0 0 auto;
+    gap: 4px;
 }
 
 .noteStyleBarHost {
@@ -1873,7 +1868,7 @@
     overflow-x: hidden;
 
     margin: 2px;
-    border: 1px solid rgba(0, 0, 0, 0.08);
+    border: 1px solid color-mix(in srgb, var(--color-base-content) 8%, transparent);
     border-radius: 8px;
 }
 
@@ -2237,7 +2232,7 @@ body.range-articulation-mode #rangeArticulationToolbarHost * {
     border: 1px solid var(--color-base-300);
     background-color: color-mix(in srgb, var(--color-base-100) 70%, transparent);
     backdrop-filter: blur(10px);
-    box-shadow: var(--shadow-lg, 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1));
+    box-shadow: var(--shadow-lg, 0 10px 15px -3px var(--shadow-color), 0 4px 6px -4px var(--shadow-color));
 }
 
 /* Keyboard navigation highlight for dropdown menus and completion lists. */

@@ -95,9 +95,9 @@
         margin-top: -1px;
         transform: translateY(-50%);
         font-size: 11px;
-        background: rgba(0, 0, 0, 0.75);
+        background: var(--color-neutral);
         padding: 2px;
-        color: #ddd;
+        color: var(--color-neutral-content);
     }
 
     #time {

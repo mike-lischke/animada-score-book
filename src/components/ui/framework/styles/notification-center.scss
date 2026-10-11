@@ -83,7 +83,7 @@
         }
 
         &.info > .container > .icon {
-            color: #3b82f6;
+            color: var(--color-info-foreground);
         }
 
         &.warning > .container > .icon {

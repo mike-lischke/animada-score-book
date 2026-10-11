@@ -58,19 +58,19 @@
 
     &.error {
         padding: 0 4px;
-        background-color: hsla(14, 88%, 42%, 0.1);
+        background-color: color-mix(in srgb, var(--color-error) 10%, transparent);
         color: var(--color-error);
     }
 
     &.warning {
         padding: 0 4px;
-        background-color: hsla(54, 88%, 42%, 0.1);
+        background-color: color-mix(in srgb, var(--color-warning) 10%, transparent);
         color: var(--color-warning);
     }
 
     &.info {
         padding: 0 4px;
-        color: var(--color-info);
+        color: var(--color-info-foreground);
     }
 
     &.success {

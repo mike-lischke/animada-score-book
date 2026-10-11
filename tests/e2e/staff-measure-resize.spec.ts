@@ -195,7 +195,7 @@ test("dragging the barline widens its measure, and one undo step restores it", a
     }).toBe(measureWidthPx + dragPx);
 
     // The whole drag is a single edit.
-    await page.locator("button.undoRedoButton").first().click({ force: true });
+    await page.locator("#undoButton").click({ force: true });
     await expect.poll(async () => {
         return (await measure.boundingBox())!.width;
     }).toBe(measureWidthPx);
