@@ -111,15 +111,15 @@ export class BarActionStrip extends UIComponent<IBarActionStripProps> {
         const insertLeftIcon = (
             <Container className="bar-action-insert-icon" orientation={Orientation.LeftToRight}
                 crossAlignment={ChildAlignment.Center}>
-                <Icon src={UIIcon.ArrowLeft} width={14} height={14} />
-                <Icon src={UIIcon.Add} width={12} height={12} />
+                <Icon src={UIIcon.ArrowLeft} width={16} height={16} />
+                <Icon src={UIIcon.Add} width={13} height={13} />
             </Container>
         );
         const insertRightIcon = (
             <Container className="bar-action-insert-icon" orientation={Orientation.LeftToRight}
                 crossAlignment={ChildAlignment.Center}>
-                <Icon src={UIIcon.Add} width={12} height={12} />
-                <Icon src={UIIcon.ArrowRight} width={14} height={14} />
+                <Icon src={UIIcon.Add} width={13} height={13} />
+                <Icon src={UIIcon.ArrowRight} width={16} height={16} />
             </Container>
         );
         const actionDefinitions: IBarActionDefinition[] = [{
@@ -157,8 +157,6 @@ export class BarActionStrip extends UIComponent<IBarActionStripProps> {
                     <Button
                         key={action.key}
                         className="bar-action-button"
-                        imageOnly
-                        compact
                         data-action={action.key}
                         data-tooltip={action.label}
                         aria-label={`${action.label}, bar ${barNumber}`}

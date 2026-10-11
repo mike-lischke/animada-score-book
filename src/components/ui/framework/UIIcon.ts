@@ -6,6 +6,7 @@
 import {
     mdiAccountGroupOutline,
     mdiAccountOutline,
+    mdiAccountVoice,
     mdiAlertCircleOutline,
     mdiAlertOutline,
     mdiArrowDown,
@@ -95,6 +96,7 @@ import {
     mdiPulse,
     mdiRedo,
     mdiRefresh,
+    mdiRepeat,
     mdiReplyOutline,
     mdiRocketLaunchOutline,
     mdiServer,
@@ -123,6 +125,7 @@ import {
 export enum UIIcon {
     Undefined,
     Account,
+    AccountVoice,
     Add,
     ArrowDown,
     ArrowExpandRight,
@@ -206,6 +209,7 @@ export enum UIIcon {
     Redo,
     Refresh,
     Rename,
+    Repeat,
     Reply,
     Rocket,
     Run,
@@ -246,6 +250,7 @@ export enum UIIcon {
 /** Maps UIIcon enum members to Material Design Icon SVG path strings (outline variants preferred). */
 export const uiIconToMdiMap = new Map<UIIcon, string>([
     [UIIcon.Account, mdiAccountOutline],
+    [UIIcon.AccountVoice, mdiAccountVoice],
     [UIIcon.Add, mdiPlus],
     [UIIcon.ArrowDown, mdiArrowDown],
     [UIIcon.ArrowExpandRight, mdiArrowExpandRight],
@@ -329,6 +334,7 @@ export const uiIconToMdiMap = new Map<UIIcon, string>([
     [UIIcon.Redo, mdiRedo],
     [UIIcon.Refresh, mdiRefresh],
     [UIIcon.Rename, mdiPencilOutline],
+    [UIIcon.Repeat, mdiRepeat],
     [UIIcon.Reply, mdiReplyOutline],
     [UIIcon.Rocket, mdiRocketLaunchOutline],
     [UIIcon.Run, mdiPlay],

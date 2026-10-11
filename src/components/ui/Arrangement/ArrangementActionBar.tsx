@@ -44,7 +44,9 @@ export class ArrangementActionBar extends UIComponent<IArrangementActionBarProps
         const controls = this.controlsRef.current;
         const trackControls = trackControlsRef.current;
         if (controls !== null && trackControls !== null) {
-            const width = trackControls.getBoundingClientRect().width;
+            // The bar spans the whole frame while the track controls sit inside the padding of the viewer, so the
+            // cell starts at the bar's edge and ends on the panel's right edge.
+            const width = trackControls.getBoundingClientRect().right - controls.getBoundingClientRect().left;
             controls.style.flexBasis = `${width}px`;
             controls.style.width = `${width}px`;
         }
@@ -85,8 +87,6 @@ export class ArrangementActionBar extends UIComponent<IArrangementActionBarProps
                 >
                     <Button
                         className="trackControlsToggle"
-                        imageOnly
-                        compact
                         data-tooltip={mixerExpanded ? "Collapse mixer" : "Expand mixer"}
                         onClick={this.handleMixerToggle}
                     >

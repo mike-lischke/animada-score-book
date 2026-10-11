@@ -500,7 +500,6 @@ export class App extends UIComponent<{}, IAppState> {
                                     style={{
                                         flex: "1 1 auto",
                                         minHeight: 0,
-                                        overflow: "hidden",
                                         position: "relative",
                                     }}
                                 >
@@ -523,7 +522,6 @@ export class App extends UIComponent<{}, IAppState> {
                                             flex: "1 1 auto",
                                             minHeight: 0,
                                             overflow: "auto",
-                                            overscrollBehaviorX: "none",
                                         }}
                                     >
                                         {this.arrangementPlayer && <ArrangementViewer

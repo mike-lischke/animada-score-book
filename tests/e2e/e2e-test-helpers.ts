@@ -5,6 +5,9 @@
 
 import { expect, type Locator, type Page } from "@playwright/test";
 
+import { stringifyPackedArrangement } from "../../src/core/serialisation/snapshot-packing.js";
+import { arrangementSnapshotVersion } from "../../src/core/serialisation/snapshots.js";
+
 const normalizeWhitespace = (value: string): string => {
     return value.trim().replace(/\s+/g, " ");
 };
@@ -336,7 +339,7 @@ export const expectPlaybackToMove = async (page: Page): Promise<void> => {
     };
 
     await playButton.click();
-    await expect(playbackToggle).toBeChecked();
+    await expect(playbackToggle).toHaveAttribute("aria-pressed", "true");
     await expect(playBeam).toBeVisible();
 
     const initialX = await readBeamX();
@@ -349,8 +352,79 @@ export const expectPlaybackToMove = async (page: Page): Promise<void> => {
     }).toBeGreaterThan(1);
 
     await playButton.click();
-    await expect(playbackToggle).not.toBeChecked();
+    await expect(playbackToggle).toHaveAttribute("aria-pressed", "false");
     await expect(playBeam).toBeHidden();
+};
+
+/**
+ * A measure of a seeded staff score, filled with quarter notes.
+ *
+ * @param number The 1-based measure number.
+ *
+ * @returns The measure.
+ */
+const seededMeasure = (number: number) => {
+    return {
+        number,
+        meter: { beats: 4, beatUnits: 4, stepResolution: 16, beatGroups: [4, 4, 4, 4] },
+        events: [0, 1, 2, 3].map((beat) => {
+            return {
+                start: { numerator: beat, denominator: 4 },
+                duration: { numerator: 1, denominator: 4 },
+                noteStyleId: "1",
+            };
+        }),
+        subdivisions: [],
+    };
+};
+
+/**
+ * @param trackCount The number of tracks to seed.
+ * @param measureCount The number of measures each track gets.
+ *
+ * @returns The snapshot of a score with that many tracks and measures.
+ */
+const seededScoreSnapshot = (trackCount: number, measureCount: number) => {
+    const tracks = Array.from({ length: trackCount }, (_, track) => {
+        return {
+            id: 300 + track,
+            instrumentId: "0",
+            measures: Array.from({ length: measureCount }, (_, measure) => {
+                return seededMeasure(measure + 1);
+            }),
+        };
+    });
+
+    return {
+        version: arrangementSnapshotVersion,
+        title: "E2E Seeded Score",
+        timeParams: { timeSignature: "4/4", tempo: 120, length: measureCount, pulse: "1/4", stepResolution: 16 },
+        tracks,
+    };
+};
+
+/**
+ * Opens the app on a seeded score in staff mode. The score is built instead of loaded from the backend, so a test can
+ * state how much content the viewer has to show.
+ *
+ * @param page The page under test.
+ * @param trackCount The number of tracks to seed. They drive the vertical extent of the score.
+ * @param measureCount The number of measures to seed.
+ */
+export const openSeededStaffScore = async (page: Page, trackCount: number, measureCount: number): Promise<void> => {
+    await page.addInitScript((data: { packed: string; }) => {
+        const sessionId = "e2e-seeded-score";
+        window.history.replaceState({ ...(window.history.state ?? {}), sessionId }, "");
+        window.sessionStorage.setItem("asb-session-id", sessionId);
+        window.localStorage.setItem(`asb-ui-settings-session-${sessionId}`, JSON.stringify({
+            currentScore: data.packed,
+            viewSettings: { arrangementViewSettings: { displayMode: "staff" } },
+        }));
+    }, { packed: stringifyPackedArrangement(seededScoreSnapshot(trackCount, measureCount)) });
+
+    await page.goto("/");
+    await expect(page.locator("#trackViewerHost")).toBeVisible();
+    await expect(page.locator(".staff-measure-viewer")).toHaveCount(measureCount);
 };
 
 export const readStoredCurrentScore = async (page: Page): Promise<string> => {

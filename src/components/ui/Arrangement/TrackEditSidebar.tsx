@@ -39,10 +39,7 @@ export class TrackEditSidebar extends UIComponent<ITrackEditSidebarProps> {
     public render(): ComponentChild {
         const { tracks, rowGeometries } = this.props;
 
-        const className = this.generateFinalClassName([
-            "trackEditSidebar",
-            "rounded-xl shadow-md border border-base-200",
-        ]);
+        const className = this.generateFinalClassName(["trackEditSidebar"]);
 
         const trackRows = tracks.map((track) => {
             const geometry = rowGeometries?.get(track.id);

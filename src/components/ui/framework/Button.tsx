@@ -38,6 +38,9 @@ export interface IButtonProperties extends ICommonUIProperties<JSX.IntrinsicElem
 
     value?: string;
 
+    /** Pressed state of a toggle button. Rendered as the `aria-pressed` attribute. */
+    "aria-pressed"?: boolean;
+
     popoverTarget?: string;
 
     /**
@@ -61,7 +64,7 @@ export class Button extends UIComponent<IButtonProperties> {
     public render(): ComponentChild {
         const {
             id, children, caption, style, orientation, round, compact, imageOnly, disabled, isDefault, title, role,
-            name, type, value, popoverTarget, onClick, plain
+            name, type, value, popoverTarget, onClick, plain, "aria-pressed": ariaPressed
         } = this.props;
 
         const className = this.generateFinalClassName([
@@ -91,6 +94,7 @@ export class Button extends UIComponent<IButtonProperties> {
             role={role}
             name={name}
             value={value}
+            aria-pressed={ariaPressed}
             {...this.dataAttributes}
             popoverTarget={popoverTarget}
             onClick={onClick}

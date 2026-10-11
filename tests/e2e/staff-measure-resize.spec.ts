@@ -148,7 +148,7 @@ test("keeps fixed per-measure actions aligned at reduced score zoom", async ({ p
     expect(buttonBox).not.toBeNull();
     expect(groupBox).not.toBeNull();
     expect(measureBox).not.toBeNull();
-    expect(buttonBox!.width).toBe(40);
+    expect(buttonBox!.width).toBe(34); // `--control-size` of the app shell.
     expect(measureBox!.width).toBeGreaterThanOrEqual(groupBox!.width - 1);
 
     const centres = await toolbarAndMeasureCentres(page);

@@ -71,6 +71,11 @@ const mapVsThemeToDaisyTheme = (theme: VSTheme): string => {
     const identity = "#fc6246";
     const identityContent = "#ffffff";
 
+    // The accent of the playback controls, i.e. the play glyph and their engaged state. Another fixed pair,
+    // because these controls are inverted surfaces: the mint reads on the dark pill of a light theme, the
+    // deep green on the light pill of a dark theme.
+    const playbackAccent = type === "dark" ? "#2a6140" : "#89cc9e";
+
     return `@plugin "daisyui/theme" {
     /* Meta data */
     name: "${theme.name}";
@@ -116,6 +121,7 @@ const mapVsThemeToDaisyTheme = (theme: VSTheme): string => {
     --color-info-foreground: ${infoForeground};
     --color-identity: ${identity};
     --color-identity-content: ${identityContent};
+    --color-playback-accent: ${playbackAccent};
 
     ${sharedValues}
 }`;

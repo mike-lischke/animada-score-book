@@ -101,7 +101,6 @@ export class TrackControls extends UIComponent<ITrackControlsProperties, ITrackC
         const listClassName = this.generateFinalClassName([
             "trackControlsList",
             this.classFromProperty(mixerExpanded, "expanded"),
-            "rounded-xl shadow-md border border-base-200",
         ]);
 
         const controls = tracks.map((track) => {
