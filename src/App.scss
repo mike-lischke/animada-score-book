@@ -761,36 +761,112 @@ h6 {
 }
 
 /* Footer: status and navigation strip. It is the last section of the app frame. */
-.appFooter {
-    flex: 0 0 32px;
-    gap: 8px;
-    padding: 0 8px;
+#appFooter {
+    --footer-chip-surface: color-mix(in srgb, var(--color-base-content) 8%, transparent);
+
+    flex: 0 0 40px;
+    gap: 12px;
+    padding: 0 16px;
     border-top: 1px solid var(--border-subtle);
     color: var(--color-base-content);
-    font-size: 12px;
+    font-size: 11px;
     user-select: none;
-}
 
-.appFooterRange {
-    flex: 0 0 auto;
-    white-space: nowrap;
-    opacity: 0.85;
-}
+    .appFooterRange {
+        flex: 0 0 auto;
+        white-space: nowrap;
+        color: color-mix(in srgb, var(--color-base-content) 70%, transparent);
+    }
 
-.appFooterNavigator {
-    flex: 1 1 auto;
-    min-width: 40px;
-}
+    .appFooterNavigator {
+        flex: 1 1 auto;
+        min-width: 40px;
+    }
 
-.appFooterActions {
-    flex: 0 0 auto;
-    gap: 4px;
-}
+    .appFooterActions {
+        flex: 0 0 auto;
+        gap: 8px;
 
-.appFooterZoomValue {
-    min-width: 40px;
-    text-align: center;
-    white-space: nowrap;
+        .btn {
+            height: 25px;
+            min-height: 25px;
+            padding: 0 10px;
+            font-size: 11px;
+            font-weight: 600;
+            border: none;
+            border-radius: var(--radius-frame);
+            background: var(--footer-chip-surface);
+            color: var(--color-base-content);
+        }
+
+        /* The zoom controls share one chip, so the value reads as the step between the two ends. */
+        .appFooterZoom {
+            flex: 0 0 auto;
+            gap: 2px;
+            height: 25px;
+            padding: 0 3px;
+            border-radius: var(--radius-frame);
+            background: var(--footer-chip-surface);
+
+            .btn {
+                width: 21px;
+                min-width: 21px;
+                padding: 0;
+                background: transparent;
+
+                /* The framework's icons take a 16 px floor, which is too wide for this chip. */
+                .icon {
+                    width: 10px;
+                    min-width: 10px;
+                    height: 10px;
+                    min-height: 10px;
+                }
+            }
+        }
+
+        .appFooterZoomValue {
+            min-width: 32px;
+            text-align: center;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
+        .appFooterDivider {
+            flex: 0 0 auto;
+            width: 1px;
+            height: 15px;
+            background: var(--border-subtle);
+        }
+
+        .appFooterNotificationButton {
+            position: relative;
+            width: 25px;
+            min-width: 25px;
+            padding: 0;
+            background: transparent;
+
+            .icon {
+                font-size: 18px;
+            }
+        }
+
+        /* The count of new notifications sits on the bell's shoulder, as the mockup draws it. */
+        .appFooterNotificationBadge {
+            position: absolute;
+            top: -3px;
+            right: -3px;
+            min-width: 14px;
+            height: 14px;
+            padding: 0 3px;
+            border-radius: 9999px;
+            background: var(--color-error);
+            color: var(--color-base-100);
+            font-size: 9px;
+            font-weight: 600;
+            line-height: 14px;
+            text-align: center;
+        }
+    }
 }
 
 .scoreNavigator {

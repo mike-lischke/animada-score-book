@@ -95,8 +95,14 @@ export class AppFooter extends UIComponent<IAppFooterProps, IAppFooterState> {
                 ? totalCount > 0 ? "Notifications" : "No notifications"
                 : `${newCount} new notification${newCount > 1 ? "s" : ""}`;
 
+        let newCountBadge: ComponentChild;
+        if (newCount > 0) {
+            newCountBadge = <span className="appFooterNotificationBadge">{newCount}</span>;
+        }
+
         return (
             <Container
+                id="appFooter"
                 className={this.generateFinalClassName(["appFooter", className])}
                 orientation={Orientation.LeftToRight}
                 crossAlignment={ChildAlignment.Center}
@@ -115,39 +121,44 @@ export class AppFooter extends UIComponent<IAppFooterProps, IAppFooterState> {
                     orientation={Orientation.LeftToRight}
                     crossAlignment={ChildAlignment.Center}
                 >
+                    <Container
+                        className="appFooterZoom"
+                        orientation={Orientation.LeftToRight}
+                        crossAlignment={ChildAlignment.Center}
+                    >
+                        <Button
+                            className="appFooterZoomButton"
+                            title="Zoom out"
+                            disabled={zoom <= zoomMin}
+                            onClick={this.handleZoomOut}
+                        >
+                            <Icon src={UIIcon.HorizontalRule} />
+                        </Button>
+                        <Label className="appFooterZoomValue" caption={`${zoom}%`} />
+                        <Button
+                            className="appFooterZoomButton"
+                            title="Zoom in"
+                            disabled={zoom >= zoomMax}
+                            onClick={this.handleZoomIn}
+                        >
+                            <Icon src={UIIcon.Add} />
+                        </Button>
+                    </Container>
+                    <span className="appFooterDivider" />
                     <Button
-                        compact
-                        className="appFooterZoomButton"
-                        caption="-"
-                        data-tooltip="Zoom out"
-                        disabled={zoom <= zoomMin}
-                        onClick={this.handleZoomOut}
-                    />
-                    <Label className="appFooterZoomValue" caption={`${zoom}%`} />
-                    <Button
-                        compact
-                        className="appFooterZoomButton"
-                        caption="+"
-                        data-tooltip="Zoom in"
-                        disabled={zoom >= zoomMax}
-                        onClick={this.handleZoomIn}
-                    />
-                    <Button
-                        compact
                         className="appFooterVersionButton"
                         caption={`v${version}`}
-                        data-tooltip="Release Notes"
+                        title="Release Notes"
                         onClick={this.props.onShowReleaseNotes}
                     />
                     <Button
                         id="showNotificationHistory"
-                        compact
-                        imageOnly
                         className="appFooterNotificationButton"
-                        data-tooltip={notificationCaption}
+                        title={notificationCaption}
                         onClick={this.props.onToggleNotifications}
                     >
                         {notificationIcon}
+                        {newCountBadge}
                     </Button>
                 </Container>
             </Container>
