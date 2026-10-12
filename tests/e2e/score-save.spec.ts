@@ -8,7 +8,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { stringifyPackedArrangement } from "../../src/core/serialisation/snapshot-packing.js";
 import { arrangementSnapshotVersion } from "../../src/core/serialisation/snapshots.js";
 import { EditEntryMode } from "../../src/core/types/general.js";
-import { routeApi } from "./e2e-test-helpers.js";
+import { routeApi, scrollClearOfToolsBar } from "./e2e-test-helpers.js";
 
 /** Four quarter notes, which give an edit something to remove. */
 const snapshot = {
@@ -108,7 +108,11 @@ const editSomething = async (page: Page): Promise<void> => {
 
     await expect(page.locator(".bar-action-group")).toHaveCount(1);
     await expect(page.locator(".bar-action-button")).toHaveCount(5);
-    await page.locator('.bar-action-button[data-action="duplicate"]').click();
+
+    // The tools bar overlaps the band's right end, so the bar's actions have to be scrolled out first.
+    const duplicate = page.locator('.bar-action-button[data-action="duplicate"]');
+    await scrollClearOfToolsBar(page, duplicate);
+    await duplicate.click();
 
     await expect(page.locator(".staff-measure-viewer")).toHaveCount(2);
 };

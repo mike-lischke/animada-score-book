@@ -49,10 +49,13 @@ test("scrolls the score vertically with the wheel", async ({ page }) => {
     await expect.poll(scrollTop).toBe(0);
 });
 
-test("blocks the overscroll on the viewer's outer scroll port only", async ({ page }) => {
+test("blocks the overscroll per axis, so the vertical wheel keeps passing through", async ({ page }) => {
     await openSeededStaffScore(page, seededTracks, seededMeasures);
 
-    // An inner scroll container must keep passing the wheel on, or the score cannot be scrolled at all.
+    // The score is the host's horizontal scroller, so a swipe past its end stops there. Vertically the host has to
+    // keep passing the wheel on to the outer port, which is where the viewer's own overscroll is blocked.
+    await expect(page.locator("#trackViewerHost")).toHaveCSS("overscroll-behavior-x", "none");
     await expect(page.locator("#trackViewerHost")).toHaveCSS("overscroll-behavior-y", "auto");
+    await expect(page.locator("#viewerScrollHost")).toHaveCSS("overscroll-behavior-x", "none");
     await expect(page.locator("#viewerScrollHost")).toHaveCSS("overscroll-behavior-y", "none");
 });

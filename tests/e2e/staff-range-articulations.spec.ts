@@ -14,7 +14,7 @@ import { routeApi } from "./e2e-test-helpers.js";
 const meter = { beats: 4, beatUnits: 4, stepResolution: 16, beatGroups: [4, 4, 4, 4] };
 
 const rangeToolButton = (page: Page, tooltip: string) => {
-    return page.locator(`#rangeArticulationToolbarHost button[data-tooltip="${tooltip}"]`);
+    return page.locator(`#toolsBarHost button[data-tooltip="${tooltip}"]`);
 };
 
 /** A point on the page, in viewport px. */
@@ -102,7 +102,7 @@ const seedScore = async (page: Page, snapshot: IArrangementSnapshot): Promise<vo
  */
 const openToolbar = async (page: Page): Promise<void> => {
     await page.locator("#editModeButton").click({ force: true });
-    await expect(page.locator("#rangeArticulationToolbarHost .rangeArticulationToolbar")).toBeVisible();
+    await expect(page.locator("#toolsBarHost .toolsBar")).toBeVisible();
 };
 
 /**
@@ -219,7 +219,7 @@ test.beforeEach(async ({ page }) => {
 });
 
 test("places a hairpin on a clicked note and ends the placing mode", async ({ page }) => {
-    await placeMarking(page, snapshotOf(quarterEvents), "Draw crescendo / decrescendo hairpin", 1, 0);
+    await placeMarking(page, snapshotOf(quarterEvents), "Draw a crescendo hairpin", 1, 0);
 
     // The hairpin is drawn as the line geometry of the score, not as a stretched glyph.
     await expect(page.locator(".range-articulation svg")).toHaveCount(1);
@@ -229,7 +229,7 @@ test("ends the placing mode with escape, without placing anything", async ({ pag
     await seedScore(page, snapshotOf(quarterEvents));
     await openToolbar(page);
 
-    await rangeToolButton(page, "Draw crescendo / decrescendo hairpin").click();
+    await rangeToolButton(page, "Draw a crescendo hairpin").click();
     await expect(page.locator("body")).toHaveClass(/range-articulation-mode/);
 
     await page.keyboard.press("Escape");
@@ -246,7 +246,7 @@ test("cancels the placing mode from its floating status", async ({ page }) => {
     await openToolbar(page);
 
     await rangeToolButton(page, "Place forte (f)").click();
-    const modeStatus = page.locator(".rangeArticulationModeStatus");
+    const modeStatus = page.locator(".toolsModeStatus");
     await expect(modeStatus).toContainText("Click a note or rest to place forte");
 
     await modeStatus.getByRole("button", { name: "Cancel" }).click();
@@ -256,8 +256,24 @@ test("cancels the placing mode from its floating status", async ({ page }) => {
     await expect(modeStatus).not.toBeVisible();
 });
 
+test("reports the placing mode with the dot of the editing switch", async ({ page }) => {
+    await seedScore(page, snapshotOf(quarterEvents));
+    await openToolbar(page);
+
+    // The dot of the editing switch marks a mode, so the status of a placing tool carries the same one.
+    const switchDot = await page.locator("#editModeButton .headerModeDot").evaluate((dot) => {
+        return getComputedStyle(dot).backgroundColor;
+    });
+
+    await rangeToolButton(page, "Draw a crescendo hairpin").click();
+
+    const statusDot = page.locator(".toolsModeStatusDot");
+    await expect(statusDot).toBeVisible();
+    await expect(statusDot).toHaveCSS("background-color", switchDot);
+});
+
 test("shows the handles of the selected marking and hands the selection back to the score", async ({ page }) => {
-    await placeMarking(page, snapshotOf(quarterEvents), "Draw crescendo / decrescendo hairpin", 1, 0);
+    await placeMarking(page, snapshotOf(quarterEvents), "Draw a crescendo hairpin", 1, 0);
 
     await page.locator(".range-articulation").click();
     await expect(page.locator(".range-articulation-handle")).toHaveCount(2);
@@ -268,7 +284,7 @@ test("shows the handles of the selected marking and hands the selection back to 
 });
 
 test("deletes the selected marking and leaves its notes alone", async ({ page }) => {
-    await placeMarking(page, snapshotOf(quarterEvents), "Draw crescendo / decrescendo hairpin", 1, 0);
+    await placeMarking(page, snapshotOf(quarterEvents), "Draw a crescendo hairpin", 1, 0);
 
     await page.locator(".range-articulation").click();
     await page.keyboard.press("Delete");
@@ -279,7 +295,7 @@ test("deletes the selected marking and leaves its notes alone", async ({ page })
 });
 
 test("grows a hairpin when its end handle is dragged to a later note", async ({ page }) => {
-    await placeMarking(page, snapshotOf(quarterEvents), "Draw crescendo / decrescendo hairpin", 1, 0);
+    await placeMarking(page, snapshotOf(quarterEvents), "Draw a crescendo hairpin", 1, 0);
 
     const marking = page.locator(".range-articulation");
     await marking.click();
@@ -304,7 +320,7 @@ test("grows a hairpin when its end handle is dragged to a later note", async ({ 
 });
 
 test("moves a hairpin as a whole when its body is dragged", async ({ page }) => {
-    await placeMarking(page, snapshotOf(quarterEvents), "Draw crescendo / decrescendo hairpin", 1, 0);
+    await placeMarking(page, snapshotOf(quarterEvents), "Draw a crescendo hairpin", 1, 0);
 
     const marking = page.locator(".range-articulation");
     await marking.click();
@@ -332,7 +348,7 @@ test("moves a hairpin as a whole when its body is dragged", async ({ page }) => 
 });
 
 test("leaves a hairpin untouched when the drag is cancelled", async ({ page }) => {
-    await placeMarking(page, snapshotOf(quarterEvents), "Draw crescendo / decrescendo hairpin", 1, 0);
+    await placeMarking(page, snapshotOf(quarterEvents), "Draw a crescendo hairpin", 1, 0);
 
     const marking = page.locator(".range-articulation");
     await marking.click();
@@ -387,7 +403,7 @@ test("places an f marking and drags it onto a rest", async ({ page }) => {
 });
 
 test("clears the marking selection with escape", async ({ page }) => {
-    await placeMarking(page, snapshotOf(quarterEvents), "Draw crescendo / decrescendo hairpin", 1, 0);
+    await placeMarking(page, snapshotOf(quarterEvents), "Draw a crescendo hairpin", 1, 0);
 
     await page.locator(".range-articulation").click();
     await expect(page.locator(".range-articulation-handle")).toHaveCount(2);
@@ -399,7 +415,7 @@ test("clears the marking selection with escape", async ({ page }) => {
 });
 
 test("removes a hairpin when its anchor note is deleted", async ({ page }) => {
-    await placeMarking(page, snapshotOf(quarterEvents), "Draw crescendo / decrescendo hairpin", 1, 0);
+    await placeMarking(page, snapshotOf(quarterEvents), "Draw a crescendo hairpin", 1, 0);
     await expect(page.locator(".range-articulation")).toHaveCount(1);
 
     // Delete the note the hairpin starts on; the marking loses its anchor and goes with it.

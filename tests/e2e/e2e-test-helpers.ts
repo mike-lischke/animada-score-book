@@ -106,6 +106,50 @@ export const beijaFlorQuery = "t=Beija%20Flor%202004%20%20-%20%20Bossa%201%20(H-
 export const beijaFlorImportPath = `/?${beijaFlorQuery}`;
 
 /**
+ * Scrolls the score until the given element is clear of the floating tools bar. The bar overlaps the right end of
+ * the action bar to save space, so a per-measure button underneath it has to be scrolled out from under it the way
+ * a user would.
+ *
+ * @param page The page under test.
+ * @param element The element that has to become clickable.
+ */
+export const scrollClearOfToolsBar = async (page: Page, element: Locator): Promise<void> => {
+    for (let attempt = 0; attempt < 8; attempt++) {
+        const bar = await page.locator("#toolsBarHost").boundingBox();
+        const box = await element.boundingBox();
+        if (!bar || !box || box.x + box.width <= bar.x) {
+            return;
+        }
+
+        const overlap = Math.ceil((box.x + box.width) - bar.x);
+        const scrolled = await page.evaluate(async (distance) => {
+            const host = document.querySelector<HTMLElement>("#trackViewerHost");
+            if (!host) {
+                return false;
+            }
+
+            const before = host.scrollLeft;
+            host.scrollLeft = before + distance;
+
+            // The strip follows the scroll event, so the next two frames carry the buttons to their new place.
+            await new Promise<void>((resolve) => {
+                requestAnimationFrame(() => {
+                    requestAnimationFrame(() => {
+                        resolve();
+                    });
+                });
+            });
+
+            return host.scrollLeft > before;
+        }, overlap + 16);
+
+        if (!scrolled) {
+            return;
+        }
+    }
+};
+
+/**
  * Sets up API mocks so that the session appears already authenticated
  * (whoami returns an admin user, refresh returns a token).
  * The login dialog will not appear.

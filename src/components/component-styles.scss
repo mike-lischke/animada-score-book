@@ -601,8 +601,11 @@
         flex: 1 1 auto;
         min-width: 600px;
         scrollbar-width: none;
-        -ms-overflow-style: none;
         touch-action: pan-x;
+
+        /* This host scrolls the score sideways, so a swipe past its end must stop here. The vertical wheel
+           has to keep passing through to #viewerScrollHost, hence the x axis alone. */
+        overscroll-behavior-x: none;
 
         &::-webkit-scrollbar {
             display: none;
@@ -2139,8 +2142,8 @@ body.range-articulation-mode #trackViewerContentHost * {
     pointer-events: auto;
 }
 
-body.range-articulation-mode #rangeArticulationToolbarHost,
-body.range-articulation-mode #rangeArticulationToolbarHost * {
+body.range-articulation-mode #toolsBarHost,
+body.range-articulation-mode #toolsBarHost * {
     pointer-events: auto;
 }
 

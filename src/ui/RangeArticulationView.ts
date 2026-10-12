@@ -767,10 +767,9 @@ export class RangeArticulationView {
      */
     private placeMarking(clientX: number, clientY: number): void {
         const row = this.locateRow(clientX, clientY);
-        const notesOnly = this.tool === RangeArticulationTool.Hairpin;
         const anchor = row === undefined
             ? undefined
-            : this.nearestAnchor(row.bar, row.trackId, clientX, notesOnly);
+            : this.nearestAnchor(row.bar, row.trackId, clientX, this.placesHairpin());
         if (row === undefined || anchor === undefined) {
             return;
         }
@@ -778,7 +777,10 @@ export class RangeArticulationView {
         if (this.tool === RangeArticulationTool.Forte) {
             this.dataModel.insertForteMark(row.trackId, anchor);
         } else {
-            const hairpin = this.initialHairpin(row.trackId, anchor);
+            const kind = this.tool === RangeArticulationTool.Crescendo
+                ? RangeArticulationKind.Crescendo
+                : RangeArticulationKind.Decrescendo;
+            const hairpin = this.initialHairpin(row.trackId, anchor, kind);
             if (hairpin !== undefined) {
                 this.dataModel.insertHairpin(hairpin.kind, row.trackId, hairpin.from, hairpin.to);
             }
@@ -788,14 +790,25 @@ export class RangeArticulationView {
     }
 
     /**
+     * @returns True while the active tool places a hairpin, which starts and ends on notes and therefore ignores
+     * rests.
+     */
+    private placesHairpin(): boolean {
+        return this.tool === RangeArticulationTool.Crescendo || this.tool === RangeArticulationTool.Decrescendo;
+    }
+
+    /**
      * @param trackId The track the clicked anchor belongs to.
      * @param from The anchor the click named.
+     * @param kind The hairpin the tool places, which decides whether the second anchor is looked for after the
+     * clicked note or before it.
      *
-     * @returns The hairpin a click places: it opens towards the nearest note after the clicked one, and towards the
-     * nearest note before it when nothing after it works. The next note may lie in a following measure, so a
-     * hairpin may reach over the barline. Undefined when the track holds no such note.
+     * @returns The hairpin a click places: a crescendo reaches from the clicked note to the nearest note after it,
+     * a decrescendo reaches from the nearest note before it to the clicked note. That note may lie in a following
+     * or preceding measure, so a hairpin may reach over the barline. Undefined when the track holds no such note.
      */
-    private initialHairpin(trackId: number, from: IRangeArticulationAnchor): IHairpin | undefined {
+    private initialHairpin(trackId: number, from: IRangeArticulationAnchor,
+        kind: RangeArticulationKind): IHairpin | undefined {
         const anchors = this.noteAnchorsOf(trackId);
         const index = anchors.findIndex((candidate) => {
             return RangeArticulations.compareAnchors(candidate, from) === 0;
@@ -804,8 +817,9 @@ export class RangeArticulationView {
             return undefined;
         }
 
-        // The nearest note after the clicked one first, then the nearest one before it.
-        const candidates = [...anchors.slice(index + 1), ...anchors.slice(0, index).reverse()];
+        const candidates = kind === RangeArticulationKind.Crescendo
+            ? anchors.slice(index + 1)
+            : anchors.slice(0, index).reverse();
 
         for (const candidate of candidates) {
             const draft = this.hairpinDraft(from, candidate, trackId);
@@ -1199,10 +1213,9 @@ export class RangeArticulationView {
         }
 
         const row = this.locateRow(this.lastPointerX, this.lastPointerY);
-        const notesOnly = this.tool === RangeArticulationTool.Hairpin;
         const anchor = row === undefined
             ? undefined
-            : this.nearestAnchor(row.bar, row.trackId, this.lastPointerX, notesOnly);
+            : this.nearestAnchor(row.bar, row.trackId, this.lastPointerX, this.placesHairpin());
         if (row === undefined || anchor === undefined) {
             return;
         }
@@ -1217,7 +1230,10 @@ export class RangeArticulationView {
             return;
         }
 
-        const hairpin = this.initialHairpin(row.trackId, anchor);
+        const kind = this.tool === RangeArticulationTool.Crescendo
+            ? RangeArticulationKind.Crescendo
+            : RangeArticulationKind.Decrescendo;
+        const hairpin = this.initialHairpin(row.trackId, anchor, kind);
         if (hairpin === undefined) {
             return;
         }

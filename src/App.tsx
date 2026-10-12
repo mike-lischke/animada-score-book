@@ -24,7 +24,7 @@ import { ArrangementIdentity, ArrangementSaveState } from "./components/ui/Heade
 import { ArrangementPlayControls } from "./components/ui/Arrangement/ArrangementPlayControls.js";
 import { AnimationDiagnostics } from "./components/ui/Arrangement/AnimationDiagnostics.js";
 import { ArrangementViewer } from "./components/ui/Arrangement/ArrangementViewer.js";
-import { RangeArticulationToolbar } from "./components/ui/Arrangement/RangeArticulationToolbar.js";
+import { ToolsBar } from "./components/ui/Arrangement/ToolsBar.js";
 import { UndoRedoControls } from "./components/ui/Arrangement/UndoRedoControls.js";
 import { ConfirmDialog } from "./components/ui/composites/ConfirmDialog.js";
 import { NewScoreDialog } from "./components/ui/composites/NewScoreDialog.js";
@@ -458,9 +458,9 @@ export class App extends UIComponent<{}, IAppState> {
             </Container>
         );
         const appHeader = this.renderAppHeader(headerNavigation, arrangementIdentity, headerActions);
-        let rangeArticulationToolbar: ComponentChild;
+        let toolsBar: ComponentChild;
         if (editMode && trackViewMode === "staff") {
-            rangeArticulationToolbar = <RangeArticulationToolbar />;
+            toolsBar = <ToolsBar />;
         }
 
         return (
@@ -505,7 +505,7 @@ export class App extends UIComponent<{}, IAppState> {
                                 >
                                     {appHeader}
                                     <div id="appOverlay">
-                                        {rangeArticulationToolbar}
+                                        {toolsBar}
                                         {animationDiagnostics}
                                         <div id="playbackControlsHost">
                                             <ArrangementPlayControls

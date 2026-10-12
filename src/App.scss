@@ -486,26 +486,126 @@ h6 {
     pointer-events: none;
 }
 
-#rangeArticulationToolbarHost {
+/* The tools bar floats on the action bar's right end, the way the mockup shows it on the score's top edge. */
+#toolsBarHost {
     position: absolute;
-    top: calc(var(--tool-row-height) + 8px);
+    top: 6px;
     right: 12px;
     gap: 8px;
     pointer-events: none;
 
-    .rangeArticulationToolbar,
-    .rangeArticulationModeStatus {
+    .toolsBar,
+    .toolsModeStatus {
         pointer-events: auto;
     }
-}
 
-#rangeArticulationToolbarHost .rangeArticulationModeStatus {
-    max-width: min(420px, calc(100vw - 24px));
-    padding: 8px;
-    border: 1px solid var(--color-base-200);
-    border-radius: 6px;
-    background: var(--color-base-100);
-    box-shadow: 0 4px 16px var(--shadow-color);
+    /* The bar is the gray surface, its tools are the light controls sitting on it. */
+    .toolsBar {
+        height: calc(var(--control-size) + 8px);
+        padding: 0 10px;
+        border: 1px solid var(--border-subtle);
+        border-radius: 10px;
+        background: color-mix(in srgb, var(--color-base-content) 3%, var(--color-base-100));
+        box-shadow: 0 4px 16px var(--shadow-color);
+    }
+
+    .toolsBarHeading {
+        font-size: 10px;
+        font-weight: 600;
+        text-transform: uppercase;
+        color: color-mix(in srgb, var(--color-base-content) 40%, transparent);
+    }
+
+    .toolsBarDivider {
+        flex: 0 0 auto;
+        width: 1px;
+        height: 20px;
+        background: var(--border-subtle);
+    }
+
+    .toolsBarTool {
+        height: var(--control-size);
+        gap: 6px;
+        padding: 0 12px;
+        font-size: 13px;
+        font-weight: 600;
+        border: 1px solid var(--border-subtle);
+        background: var(--color-base-100);
+
+        .icon {
+            font-size: 16px;
+        }
+
+        /* The mockup draws the dynamic `f` at about the caption's height. The ink states the side it is scaled
+           to in staff spaces, so a smaller side shrinks the `f` alone and leaves the notation untouched. */
+        .score-symbol-icon {
+            --icon-ink-spaces: 0.9;
+
+            /* The glyph is narrower than its icon box, so the box's empty side holds the caption off. */
+            margin-right: -4px;
+        }
+    }
+
+    .toolsBarTool.is-active {
+        border-color: color-mix(in srgb, var(--color-primary) 55%, transparent);
+        background: color-mix(in srgb, var(--color-primary) 8%, var(--color-base-100));
+
+        .toolsBarToolDot {
+            background: var(--color-primary);
+        }
+    }
+
+    /* The dot marks the active tool, so only that one carries it. */
+    .toolsBarToolDot {
+        flex: 0 0 auto;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+    }
+
+    /* An active tool reports itself in the mockup's black mode popup: an inverted surface, the hint in bold and
+       the cancel action as a lighter pill sitting on it. */
+    .toolsModeStatus {
+        max-width: min(420px, calc(100vw - 24px));
+        height: 40px;
+        padding: 0 8px 0 14px;
+        gap: 8px;
+        border-radius: 8px;
+        background: var(--color-base-content);
+        color: var(--color-base-100);
+        box-shadow: 0 4px 16px var(--shadow-color);
+
+        /* The dot carries the mode, so it sits on the hint; the action stands apart from both. */
+        .toolsModeStatusDot {
+            flex: 0 0 auto;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--color-primary);
+        }
+
+        .label {
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .btn {
+            height: 28px;
+            min-height: 28px;
+            margin-left: 8px;
+            padding: 0 12px;
+            border: none;
+            border-radius: var(--radius-frame);
+            background: color-mix(in srgb, var(--color-base-100) 14%, transparent);
+            color: var(--color-base-100);
+            font-size: 12px;
+            font-weight: 600;
+        }
+    }
+
+    .toolsBarToolCaption {
+        font-size: 11px;
+    }
 }
 
 #selectionEditActions {
@@ -622,9 +722,6 @@ h6 {
     box-sizing: border-box;
     padding-bottom: 64px;
 
-    /* The framed action bar sits on the score's top edge, so the score must not overscroll beyond its own
-       scroll Erledport. This lives here, on the viewer's outermost scroll container: a block further inside would
-       swallow the wheel before it reaches this one. */
     overscroll-behavior: none;
 }
 
@@ -644,7 +741,7 @@ h6 {
         display: none;
     }
 
-    #rangeArticulationToolbarHost {
+    #toolsBarHost {
         right: 4px;
     }
 

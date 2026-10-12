@@ -11,7 +11,7 @@ import {
 import { stringifyPackedArrangement } from "../../src/core/serialisation/snapshot-packing.js";
 import { arrangementSnapshotVersion } from "../../src/core/serialisation/snapshots.js";
 import { EditEntryMode } from "../../src/core/types/general.js";
-import { routeApi } from "./e2e-test-helpers.js";
+import { routeApi, scrollClearOfToolsBar } from "./e2e-test-helpers.js";
 
 const barCount = 2;
 
@@ -129,7 +129,11 @@ test("shows per-measure actions in the persistent toolbar only in edit mode", as
     const groups = page.locator(".bar-action-group");
     await expect(groups).toHaveCount(barCount);
     await expect(page.locator(".bar-action-button")).toHaveCount(barCount * 5);
-    await groups.nth(1).locator('[data-action="duplicate"]').click();
+
+    // The tools bar overlaps the band's right end, so the second bar's actions have to be scrolled out first.
+    const duplicate = groups.nth(1).locator('[data-action="duplicate"]');
+    await scrollClearOfToolsBar(page, duplicate);
+    await duplicate.click();
 
     await expect(page.locator("#scoreStats")).toContainText(`${barCount + 1} bars`);
 });

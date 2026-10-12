@@ -22,10 +22,11 @@ export interface ISubdivisionCreationRequest {
     normal: number;
 }
 
-/** The placing tool the staff view is in: none, placing a hairpin, or placing an `f`. */
+/** The placing tool the staff view is in: none, placing a crescendo or a decrescendo hairpin, or placing an `f`. */
 export enum RangeArticulationTool {
     None,
-    Hairpin,
+    Crescendo,
+    Decrescendo,
     Forte,
 }
 
