@@ -537,6 +537,7 @@ export class App extends UIComponent<{}, IAppState> {
                             <AppFooter
                                 barCount={this.arrangementPlayer?.scoreMetrics.bars ?? 0}
                                 measureWidths={this.dataModel.arrangement?.measureWidths}
+                                tracks={this.dataModel.arrangement?.tracks ?? []}
                                 zoom={zoom}
                                 version={appVersion}
                                 notifications={notificationState}

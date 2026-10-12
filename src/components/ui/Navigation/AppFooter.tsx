@@ -5,6 +5,7 @@
 
 import { type ComponentChild } from "preact";
 
+import type { ISbDmTrack } from "../../../core/ScoreBookDataModel.js";
 import { clampValue } from "../../../core/utils.js";
 import { requisitions, type INotificationState, type IScoreViewport } from "../../../supplement/Requisitions.js";
 import { Button } from "../framework/Button.js";
@@ -35,6 +36,9 @@ export interface IAppFooterProps extends ICommonUIProperties {
 
     /** Column widths set for individual measures, keyed by 1-based measure number. */
     measureWidths?: ReadonlyMap<number, number>;
+
+    /** Arrangement tracks shown in the score navigator. */
+    tracks?: readonly ISbDmTrack[];
 
     /** Track viewer zoom in percent. */
     zoom: number;
@@ -72,7 +76,7 @@ export class AppFooter extends UIComponent<IAppFooterProps, IAppFooterState> {
     }
 
     public override render(): ComponentChild {
-        const { className, barCount, measureWidths, zoom, version, notifications } = this.props;
+        const { className, barCount, measureWidths, tracks, zoom, version, notifications } = this.props;
         const { viewport } = this.state;
 
         const rangeCaption = viewport.startBar === viewport.endBar
@@ -113,6 +117,7 @@ export class AppFooter extends UIComponent<IAppFooterProps, IAppFooterState> {
                     className="appFooterNavigator"
                     barCount={barCount}
                     measureWidths={measureWidths}
+                    tracks={tracks}
                     viewport={viewport}
                     onMove={this.handleNavigatorMove}
                 />

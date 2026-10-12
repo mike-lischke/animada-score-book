@@ -6,7 +6,9 @@
 import { createRef, type ComponentChild } from "preact";
 
 import { MeasureLayout } from "../../../core/MeasureLayout.js";
+import type { ISbDmTrack } from "../../../core/ScoreBookDataModel.js";
 import { clampValue } from "../../../core/utils.js";
+import { PlaybackOrder } from "../../../player/PlaybackOrder.js";
 import type { IScoreViewport } from "../../../supplement/Requisitions.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
 
@@ -17,6 +19,9 @@ export interface IScoreNavigatorProps extends ICommonUIProperties {
     /** Column widths set for individual measures, keyed by 1-based measure number. */
     measureWidths?: ReadonlyMap<number, number>;
 
+    /** Arrangement tracks whose instrument occupancy is shown in each measure. */
+    tracks?: readonly ISbDmTrack[];
+
     /** The visible viewport of the score. */
     viewport: IScoreViewport;
 
@@ -25,8 +30,7 @@ export interface IScoreNavigatorProps extends ICommonUIProperties {
 }
 
 /**
- * A compact map of the score with a draggable viewport window. It navigates the score by scrolling and shows
- * no tracks, notes or selection, so it stays a thin navigation strip.
+ * A compact map of the score with a draggable viewport window and each measure's active instruments.
  */
 export class ScoreNavigator extends UIComponent<IScoreNavigatorProps> {
     private railRef = createRef<HTMLDivElement | null>();
@@ -42,19 +46,52 @@ export class ScoreNavigator extends UIComponent<IScoreNavigatorProps> {
 
     public override render(): ComponentChild {
         const { className, barCount, measureWidths, viewport } = this.props;
+        const tracks = this.props.tracks ?? [];
 
         const columns = MeasureLayout.columns(barCount, measureWidths);
         const offsets = MeasureLayout.offsets(columns);
         const totalWidth = MeasureLayout.totalWidth(offsets) || 1;
+        const contentSources = tracks.map((track) => {
+            return { track, measures: PlaybackOrder.sourcesOf(track.measures) };
+        });
 
         const ticks: ComponentChild[] = [];
         for (let bar = 1; bar <= barCount; bar++) {
+            const bands: ComponentChild[] = [];
+            const instrumentIds = new Set<number>();
+            const measureTitle: string[] = [];
+
+            for (const { track, measures } of contentSources) {
+                const measure = measures[bar - 1];
+                if (!measure || !measure.events.some((event) => {
+                    return event.noteStyleId !== undefined;
+                }) || instrumentIds.has(track.instrument.id)) {
+                    continue;
+                }
+
+                instrumentIds.add(track.instrument.id);
+                measureTitle.push(track.instrument.displayName);
+                bands.push(
+                    <div
+                        key={track.instrument.id}
+                        className="scoreNavigatorBand"
+                        title={track.instrument.displayName}
+                        style={{ backgroundColor: track.instrument.color }}
+                    />,
+                );
+            }
+
+            const left = (offsets[bar - 1] / totalWidth) * 100;
+            const width = ((offsets[bar] - offsets[bar - 1]) / totalWidth) * 100;
             ticks.push(
                 <div
                     key={bar}
-                    className="scoreNavigatorTick"
-                    style={{ left: `${(offsets[bar - 1] / totalWidth) * 100}%` }}
-                />,
+                    className="scoreNavigatorMeasure"
+                    title={measureTitle.length > 0 ? measureTitle.join(", ") : "Pause"}
+                    style={{ left: `${left}%`, width: `${width}%` }}
+                >
+                    {bands}
+                </div>,
             );
         }
 
