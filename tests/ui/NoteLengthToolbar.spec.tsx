@@ -183,7 +183,7 @@ describe("NoteLengthToolbar", { concurrent: false }, () => {
         );
 
         const marked = renderResult.container.querySelector(".noteLengthButton.du-btn-primary");
-        expect(marked?.getAttribute("data-tooltip")).toBe("Quarter note (Alt/Cmd+3)");
+        expect(marked?.getAttribute("title")).toBe("Quarter note (Alt/Cmd+3)");
     });
 
     it("restores the stored value in insert mode", () => {
@@ -200,7 +200,7 @@ describe("NoteLengthToolbar", { concurrent: false }, () => {
         );
 
         const marked = renderResult.container.querySelector(".noteLengthButton.du-btn-primary");
-        expect(marked?.getAttribute("data-tooltip")).toBe("Eighth note (Alt/Cmd+4)");
+        expect(marked?.getAttribute("title")).toBe("Eighth note (Alt/Cmd+4)");
         expect(renderResult.container.querySelector(".noteDotButton.du-btn-primary")).not.toBeNull();
     });
 
@@ -246,7 +246,7 @@ describe("NoteLengthToolbar", { concurrent: false }, () => {
 
         const selected = renderResult.container.querySelector(".noteLengthButton.du-btn-primary");
 
-        expect(selected?.getAttribute("data-tooltip")).toBe("Quarter note (Alt/Cmd+3)");
+        expect(selected?.getAttribute("title")).toBe("Quarter note (Alt/Cmd+3)");
     });
 
     it("marks the length of a selected rest", () => {
@@ -259,7 +259,7 @@ describe("NoteLengthToolbar", { concurrent: false }, () => {
 
         const selected = renderResult.container.querySelector(".noteLengthButton.du-btn-primary");
 
-        expect(selected?.getAttribute("data-tooltip")).toBe("Quarter note (Alt/Cmd+3)");
+        expect(selected?.getAttribute("title")).toBe("Quarter note (Alt/Cmd+3)");
     });
 
     it("renders the dot behind the lengths", () => {
@@ -286,7 +286,7 @@ describe("NoteLengthToolbar", { concurrent: false }, () => {
 
         const marked = renderResult.container.querySelector(".noteLengthButton.du-btn-primary");
 
-        expect(marked?.getAttribute("data-tooltip")).toBe("Half note (Alt/Cmd+2)");
+        expect(marked?.getAttribute("title")).toBe("Half note (Alt/Cmd+2)");
         expect(renderResult.container.querySelector(".noteDotButton.du-btn-primary")).not.toBeNull();
     });
 
@@ -391,7 +391,7 @@ describe("NoteLengthToolbar", { concurrent: false }, () => {
 
         const selected = renderResult.container.querySelector(".noteLengthButton.du-btn-primary");
 
-        expect(selected?.getAttribute("data-tooltip")).toBe("Half note (Alt/Cmd+2)");
+        expect(selected?.getAttribute("title")).toBe("Half note (Alt/Cmd+2)");
     });
 
     it("does not announce a length when the arrangement is reverted", async () => {
@@ -501,7 +501,7 @@ describe("NoteLengthToolbar", { concurrent: false }, () => {
         const marked = () => {
             const button = renderResult!.container.querySelector(".noteLengthButton.du-btn-primary");
 
-            return button?.getAttribute("data-tooltip");
+            return button?.getAttribute("title");
         };
 
         // Insert mode marks the value the next entry uses.
@@ -542,7 +542,7 @@ describe("NoteLengthToolbar", { concurrent: false }, () => {
         const marked = () => {
             const button = renderResult!.container.querySelector(".noteLengthButton.du-btn-primary");
 
-            return button?.getAttribute("data-tooltip");
+            return button?.getAttribute("title");
         };
 
         expect(marked()).toBe("Half note (Alt/Cmd+2)");
@@ -670,7 +670,7 @@ describe("NoteLengthToolbar", { concurrent: false }, () => {
 
         // The slot has no value of its own, so the toolbar marks the one its subdivision stands for —
         // the value the staff view draws it with.
-        expect(selected?.getAttribute("data-tooltip")).toBe("Eighth note (Alt/Cmd+4)");
+        expect(selected?.getAttribute("title")).toBe("Eighth note (Alt/Cmd+4)");
     });
 
     it("marks the value a rest inside a subdivision is drawn with", () => {
@@ -684,7 +684,7 @@ describe("NoteLengthToolbar", { concurrent: false }, () => {
 
         const selected = renderResult.container.querySelector(".noteLengthButton.du-btn-primary");
 
-        expect(selected?.getAttribute("data-tooltip")).toBe("Eighth note (Alt/Cmd+4)");
+        expect(selected?.getAttribute("title")).toBe("Eighth note (Alt/Cmd+4)");
     });
 
     it("disables the note lengths for a selection inside a subdivision", () => {
@@ -744,7 +744,7 @@ describe("NoteLengthToolbar", { concurrent: false }, () => {
         // The click announces a length, but only the model decides: the fixture keeps its durations,
         // so the mark does not jump to the clicked value.
         expect(marked.map((button) => {
-            return button.getAttribute("data-tooltip");
+            return button.getAttribute("title");
         })).not.toContain("Eighth note (Alt/Cmd+4)");
     });
 
@@ -770,7 +770,7 @@ describe("NoteLengthToolbar", { concurrent: false }, () => {
         expect(buttons.every((button) => {
             return !button.disabled;
         })).toBe(true);
-        expect(marked?.getAttribute("data-tooltip")).toBe("Quarter note (Alt/Cmd+3)");
+        expect(marked?.getAttribute("title")).toBe("Quarter note (Alt/Cmd+3)");
     });
 
     it("disables the note lengths for a group that is a subdivision", () => {
@@ -814,7 +814,7 @@ describe("NoteLengthToolbar", { concurrent: false }, () => {
         expect(buttons.every((button) => {
             return !button.disabled;
         })).toBe(true);
-        expect(marked?.getAttribute("data-tooltip")).toBe("Sixteenth note (Alt/Cmd+5)");
+        expect(marked?.getAttribute("title")).toBe("Sixteenth note (Alt/Cmd+5)");
     });
 
     it("marks the shared length of several selected rests", () => {
@@ -838,7 +838,7 @@ describe("NoteLengthToolbar", { concurrent: false }, () => {
         const marked = renderResult.container.querySelector(".noteLengthButton.du-btn-primary");
 
         // The three quarter rests share their length, so the toolbar marks it.
-        expect(marked?.getAttribute("data-tooltip")).toBe("Quarter note (Alt/Cmd+3)");
+        expect(marked?.getAttribute("title")).toBe("Quarter note (Alt/Cmd+3)");
     });
 
     it("marks no length when the selection mixes lengths", () => {
@@ -876,7 +876,7 @@ describe("NoteLengthToolbar", { concurrent: false }, () => {
 
         // A quarter and a dotted quarter share their base length, so that length is marked while the
         // dot stays unmarked.
-        expect(marked?.getAttribute("data-tooltip")).toBe("Quarter note (Alt/Cmd+3)");
+        expect(marked?.getAttribute("title")).toBe("Quarter note (Alt/Cmd+3)");
         expect(renderResult.container.querySelector(".noteDotButton.du-btn-primary")).toBeNull();
     });
 });

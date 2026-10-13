@@ -343,7 +343,7 @@ test("loops the marked bars without playing an unmarked gap", async ({ page }) =
     await enterZen(page);
     await selectBar(page, 1);
     await selectBar(page, 3);
-    await page.locator('[data-tooltip="Loop playback"]').click();
+    await page.locator('[title="Loop playback"]').click();
     await page.locator("#playbackButton").click();
     await expect(page.locator("#playbackButton")).toHaveAttribute("aria-pressed", "true");
 

@@ -44,7 +44,7 @@ export class PlayStopButton extends UIComponent<IPlayStopButtonProperties> {
                 id={id}
                 className={className}
                 aria-pressed={isPlaying}
-                data-tooltip={isPlaying ? "Stop playback" : "Play the score"}
+                title={isPlaying ? "Stop playback" : "Play the score"}
                 onClick={() => {
                     if (isPlaying) {
                         arrangementPlayer.stop();

@@ -192,7 +192,6 @@ describe("NoteStyleBar", { concurrent: false }, () => {
                 style={{ gap: 16 }}
                 tabIndex={0}
                 title="Note styles"
-                data-tooltip="Available note styles"
             />,
         );
 
@@ -261,8 +260,8 @@ describe("NoteStyleBar", { concurrent: false }, () => {
         );
 
         const buttons = renderResult.container.querySelectorAll(".noteStyleButton");
-        expect(buttons[0].getAttribute("data-tooltip")).toBe("Tamborim Accent (1)");
-        expect(buttons[1].getAttribute("data-tooltip")).toBe("Tamborim Ghost Note (2)");
+        expect(buttons[0].getAttribute("title")).toBe("Tamborim Accent (1)");
+        expect(buttons[1].getAttribute("title")).toBe("Tamborim Ghost Note (2)");
     });
 
     it("requests a note entry when a button is clicked", () => {
@@ -306,7 +305,7 @@ describe("NoteStyleBar", { concurrent: false }, () => {
 
         const initialButtons = renderResult.container.querySelectorAll(".noteStyleButton");
         expect(initialButtons).toHaveLength(1);
-        expect(initialButtons[0].getAttribute("data-tooltip")).toBe("Tamborim Accent (1)");
+        expect(initialButtons[0].getAttribute("title")).toBe("Tamborim Accent (1)");
 
         await act(() => {
             selectionManager.clearSelection();
@@ -315,7 +314,7 @@ describe("NoteStyleBar", { concurrent: false }, () => {
 
         const updatedButtons = renderResult.container.querySelectorAll(".noteStyleButton");
         expect(updatedButtons).toHaveLength(1);
-        expect(updatedButtons[0].getAttribute("data-tooltip")).toBe("Timbau Bass (1)");
+        expect(updatedButtons[0].getAttribute("title")).toBe("Timbau Bass (1)");
     });
 
     it("marks the shared note style across multiple tracks with the same instrument", () => {
@@ -335,7 +334,7 @@ describe("NoteStyleBar", { concurrent: false }, () => {
 
         const markedButtons = renderResult.container.querySelectorAll(".noteStyleButton.du-btn-primary");
         expect(markedButtons).toHaveLength(1);
-        expect(markedButtons[0].getAttribute("data-tooltip")).toBe("Tamborim Accent (1)");
+        expect(markedButtons[0].getAttribute("title")).toBe("Tamborim Accent (1)");
     });
 
     it("marks no note style when notes across tracks differ", () => {
@@ -384,7 +383,7 @@ describe("NoteStyleBar", { concurrent: false }, () => {
 
         const marked = renderResult.container.querySelector(".noteStyleButton.du-btn-primary");
 
-        expect(marked?.getAttribute("data-tooltip")).toBe("Tamborim Accent (1)");
+        expect(marked?.getAttribute("title")).toBe("Tamborim Accent (1)");
     });
 
     it("keeps every button unmarked in insert mode", async () => {
@@ -456,7 +455,7 @@ describe("NoteStyleBar", { concurrent: false }, () => {
 
         const buttons = renderResult.container.querySelectorAll(".noteStyleBar button");
         expect(buttons[0].classList.contains("noteStyleRestButton")).toBe(true);
-        expect(buttons[0].getAttribute("data-tooltip")).toBe("Rest (0)");
+        expect(buttons[0].getAttribute("title")).toBe("Rest (0)");
         expect(buttons[1].classList.contains("noteStyleButton")).toBe(true);
     });
 
@@ -663,7 +662,7 @@ describe("NoteStyleBar", { concurrent: false }, () => {
 
         const buttons = renderResult.container.querySelectorAll(".noteStyleButton");
         expect(buttons).toHaveLength(1);
-        expect(buttons[0].getAttribute("data-tooltip")).toBe("Chocalho (1)");
+        expect(buttons[0].getAttribute("title")).toBe("Chocalho (1)");
     });
 
     it("collapses a muted variant into one button in staff mode", () => {
@@ -684,7 +683,7 @@ describe("NoteStyleBar", { concurrent: false }, () => {
 
         const buttons = renderResult.container.querySelectorAll(".noteStyleButton");
         expect(buttons).toHaveLength(1);
-        expect(buttons[0].getAttribute("data-tooltip")).toBe("Center (1)");
+        expect(buttons[0].getAttribute("title")).toBe("Center (1)");
     });
 
     it("marks the collapsed button when a selected note uses an articulation variant", () => {

@@ -49,9 +49,9 @@ export class ToolsBar extends UIComponent<ICommonUIProperties, IToolsBarState> {
         const divider = <span className="toolsBarDivider" />;
 
         const crescendoTool = this.renderTool(RangeArticulationTool.Crescendo, "Draw a crescendo hairpin",
-            "Crescendo", <Icon src={UIIcon.ChevronLeft} data-tooltip="inherit" />);
+            "Crescendo", <Icon src={UIIcon.ChevronLeft} />);
         const decrescendoTool = this.renderTool(RangeArticulationTool.Decrescendo, "Draw a decrescendo hairpin",
-            "Decrescendo", <Icon src={UIIcon.ChevronRight} data-tooltip="inherit" />);
+            "Decrescendo", <Icon src={UIIcon.ChevronRight} />);
         const forteTool = this.renderTool(RangeArticulationTool.Forte, "Place forte (f)", "Forte",
             <ScoreSymbolView symbol={ScoreSymbol.Forte} staffSpace={staffSpacePx} icon />);
 
@@ -118,7 +118,7 @@ export class ToolsBar extends UIComponent<ICommonUIProperties, IToolsBarState> {
         const status = active ? <span className="toolsBarToolDot" /> : undefined;
 
         return (
-            <Button className={className} data-tooltip={tooltip} onClick={() => {
+            <Button className={className} title={tooltip} onClick={() => {
                 this.startTool(tool);
             }}>
                 {icon}

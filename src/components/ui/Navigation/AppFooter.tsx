@@ -145,7 +145,6 @@ export class AppFooter extends UIComponent<IAppFooterProps, IAppFooterState> {
                         id="zenModeButton"
                         className="appFooterZenButton"
                         title={zenMode ? "Exit Zen mode" : "Enter Zen mode"}
-                        data-tooltip={zenMode ? "Exit Zen mode" : "Enter Zen mode"}
                         aria-pressed={zenMode ?? false}
                         onClick={onToggleZenMode}
                     >

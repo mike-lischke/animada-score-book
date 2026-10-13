@@ -321,24 +321,24 @@ export class NotificationCenter extends UIComponent<ICommonUIProperties, INotifi
                 <Label caption={caption} />
                 <Button
                     imageOnly
-                    data-tooltip="Clear All Notifications"
+                    title="Clear All Notifications"
                     onClick={this.clearHistory}
                 >
-                    <Icon data-tooltip="inherit" className="actionIcon" src={UIIcon.ClearAll} />
+                    <Icon className="actionIcon" src={UIIcon.ClearAll} />
                 </Button>
                 <Button
                     imageOnly
-                    data-tooltip="Toggle Do Not Disturb Mode"
+                    title="Toggle Do Not Disturb Mode"
                     onClick={this.toggleSilentMode}
                 >
-                    <Icon data-tooltip="inherit" className="actionIcon" src={UIIcon.BellSlash} />
+                    <Icon className="actionIcon" src={UIIcon.BellSlash} />
                 </Button>
                 <Button
                     imageOnly
                     onClick={this.toggleHistory}
-                    data-tooltip="Hide Notifications (Escape)"
+                    title="Hide Notifications (Escape)"
                 >
-                    <Icon data-tooltip="inherit" className="actionIcon" src={UIIcon.ChevronDown} />
+                    <Icon className="actionIcon" src={UIIcon.ChevronDown} />
                 </Button>
             </Container>
         );

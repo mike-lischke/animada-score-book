@@ -14,7 +14,7 @@ import { routeApi } from "./e2e-test-helpers.js";
 const meter = { beats: 4, beatUnits: 4, stepResolution: 16, beatGroups: [4, 4, 4, 4] };
 
 const rangeToolButton = (page: Page, tooltip: string) => {
-    return page.locator(`#toolsBarHost button[data-tooltip="${tooltip}"]`);
+    return page.locator(`#toolsBarHost button[title="${tooltip}"]`);
 };
 
 /** A point on the page, in viewport px. */

@@ -25,7 +25,7 @@ export interface ISwapProperties extends ICommonUIProperties {
 
 export class Swap extends UIComponent<ISwapProperties> {
     public override render(): ComponentChild {
-        const { id, offContent, onContent, onChange, isOn, disabled, isMarked } = this.props;
+        const { id, offContent, onContent, onChange, isOn, disabled, isMarked, title } = this.props;
 
         const className = this.generateFinalClassName([
             "btn",
@@ -36,7 +36,7 @@ export class Swap extends UIComponent<ISwapProperties> {
         ]);
 
         return (
-            <label className={className} {...this.dataAttributes}>
+            <label className={className} title={title} {...this.dataAttributes}>
                 <input
                     type="checkbox"
                     id={id}
@@ -46,8 +46,8 @@ export class Swap extends UIComponent<ISwapProperties> {
                         onChange?.(event.currentTarget.checked);
                     }}
                 />
-                <span className="du-swap-off fill-current" data-tooltip="inherit">{offContent}</span>
-                <span className="du-swap-on fill-current" data-tooltip="inherit">{onContent}</span>
+                <span className="du-swap-off fill-current">{offContent}</span>
+                <span className="du-swap-on fill-current">{onContent}</span>
             </label>
         );
     }

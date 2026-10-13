@@ -246,7 +246,7 @@ export class PermissionEditor extends UIComponent<IPermissionEditorProperties, I
                             className="du-btn-sm"
                             caption={resetting ? "Resetting…" : "Reset Children"}
                             disabled={resetting}
-                            data-tooltip="Removes explicit permissions from all sub-folders and scores"
+                            title="Removes explicit permissions from all sub-folders and scores"
                             onClick={() => {
                                 void this.handleResetChildren();
                             }}

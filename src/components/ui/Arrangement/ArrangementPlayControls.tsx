@@ -172,29 +172,29 @@ export class ArrangementPlayControls
                     orientation={Orientation.LeftToRight}
                     crossAlignment={ChildAlignment.Center}
                     gap={4}
-                    data-tooltip={tempoTooltip}
+                    title={tempoTooltip}
                 >
-                    <Label className="tempoUnit" caption="BPM" data-tooltip="inherit" />
+                    <Label className="tempoUnit" caption="BPM" />
                     <Button
                         compact
                         plain
                         className="tempoStepButton"
-                        data-tooltip="Decrease playback tempo"
+                        title="Decrease playback tempo"
                         disabled={currentTempo <= tempoMin}
                         onClick={this.handleTempoDown}
                     >
-                        <Icon src={UIIcon.HorizontalRule} data-tooltip="inherit" />
+                        <Icon src={UIIcon.HorizontalRule} />
                     </Button>
-                    <Label className="tempoValue" caption={tempoCaption} data-tooltip="inherit" />
+                    <Label className="tempoValue" caption={tempoCaption} />
                     <Button
                         compact
                         plain
                         className="tempoStepButton"
-                        data-tooltip="Increase playback tempo"
+                        title="Increase playback tempo"
                         disabled={currentTempo >= tempoMax}
                         onClick={this.handleTempoUp}
                     >
-                        <Icon src={UIIcon.Add} data-tooltip="inherit" />
+                        <Icon src={UIIcon.Add} />
                     </Button>
                 </Container>
                 {this.renderSwitch(UIIcon.Repeat, "Loop playback", loop, this.handleLoopToggle)}
@@ -206,15 +206,14 @@ export class ArrangementPlayControls
                     orientation={Orientation.LeftToRight}
                     crossAlignment={ChildAlignment.Center}
                     gap={4}
-                    data-tooltip="Master volume"
+                    title="Master volume"
                 >
-                    <Icon src={UIIcon.Unmute} data-tooltip="inherit" />
+                    <Icon src={UIIcon.Unmute} />
                     <Slider
                         id="volumeSlider"
                         value={currentVolume}
                         min={0}
                         max={100}
-                        data-tooltip="inherit"
                         className="du-range-xs"
                         style={{ width: "90px" }}
                         onChange={(value) => {
@@ -227,7 +226,6 @@ export class ArrangementPlayControls
                     <Label
                         className="volumeValue"
                         caption={`${Math.round(currentVolume)}%`}
-                        data-tooltip="inherit"
                     />
                 </Container>
             </Container>
@@ -251,13 +249,13 @@ export class ArrangementPlayControls
         ]);
 
         const icon = typeof glyph === "number"
-            ? <Icon src={glyph} alt={tooltip} data-tooltip="inherit" />
-            : <MetronomeIcon alt={tooltip} data-tooltip="inherit" />;
+            ? <Icon src={glyph} alt={tooltip} />
+            : <MetronomeIcon alt={tooltip} />;
 
         const status = <span className="playControlSwitchDot" />;
 
         return (
-            <Button className={className} data-tooltip={tooltip} onClick={onChange}>
+            <Button className={className} title={tooltip} onClick={onChange}>
                 {icon}
                 {status}
             </Button>

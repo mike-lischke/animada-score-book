@@ -179,7 +179,7 @@ export class NoteLengthToolbar extends UIComponent<INoteLengthToolbarProps, INot
                     className="noteLengthButton"
                     isDefault={option.length === markedLength}
                     disabled={disabled}
-                    data-tooltip={`${option.tooltip} (Alt/Cmd+${option.shortcut})`}
+                    title={`${option.tooltip} (Alt/Cmd+${option.shortcut})`}
                     onClick={() => {
                         this.selectLength(option.length);
                     }}
@@ -197,7 +197,7 @@ export class NoteLengthToolbar extends UIComponent<INoteLengthToolbarProps, INot
                 className="noteDotButton"
                 isDefault={markedDotted === true}
                 disabled={this.isDisabled(toggledValue)}
-                data-tooltip="Dotted (Alt/Cmd+.)"
+                title="Dotted (Alt/Cmd+.)"
                 onClick={() => {
                     this.toggleDots();
                 }}

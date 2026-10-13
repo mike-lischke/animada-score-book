@@ -182,7 +182,7 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
                             <Button
                                 imageOnly
                                 className="du-btn-xs"
-                                data-tooltip="Edit"
+                                title="Edit"
                                 onClick={(e) => {
 
                                     const trigger = e.currentTarget as HTMLElement;
@@ -195,7 +195,7 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
                             <Button
                                 imageOnly
                                 className="du-btn-xs"
-                                data-tooltip="Reset Password"
+                                title="Reset Password"
                                 onClick={(e) => {
 
                                     const trigger = e.currentTarget as HTMLElement;
@@ -208,7 +208,7 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
                             <Button
                                 imageOnly
                                 className="du-btn-xs"
-                                data-tooltip="Delete"
+                                title="Delete"
                                 onClick={() => {
                                     void this.handleDeleteUser(u);
                                 }}
@@ -284,7 +284,7 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
                             <Button
                                 imageOnly
                                 className="du-btn-xs"
-                                data-tooltip="Edit Group"
+                                title="Edit Group"
                                 onClick={(e) => {
                                     const trigger = e.currentTarget as HTMLElement;
                                     void this.handleEditGroupClick(group, trigger);
@@ -297,7 +297,7 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
                             <Button
                                 imageOnly
                                 className="du-btn-xs"
-                                data-tooltip="Delete Group"
+                                title="Delete Group"
                                 onClick={() => {
                                     void this.handleDeleteGroup(group);
                                 }}
@@ -354,7 +354,7 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
                                     id="ug-add-user"
                                     className="form-row-add-button"
                                     caption="+"
-                                    data-tooltip="Add User"
+                                    title="Add User"
                                     onClick={this.handleAddClick}
                                 />
                             </Container>
@@ -377,7 +377,7 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
                                         id="ug-add-group"
                                         className="form-row-add-button"
                                         caption="+"
-                                        data-tooltip="Add Group"
+                                        title="Add Group"
                                         onClick={this.handleAddGroupClick}
                                     />
                                 )}
@@ -597,7 +597,7 @@ export class UserGroupEditor extends UIComponent<IUserGroupEditorProperties, IUs
                                                 <Button
                                                     imageOnly
                                                     className="du-btn-xs du-btn-ghost"
-                                                    data-tooltip="Remove"
+                                                    title="Remove"
                                                     onClick={() => {
                                                         this.handleRemoveMember(m.id);
                                                     }}

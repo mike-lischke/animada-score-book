@@ -158,7 +158,6 @@ export class BarActionStrip extends UIComponent<IBarActionStripProps> {
                         key={action.key}
                         className="bar-action-button"
                         data-action={action.key}
-                        data-tooltip={action.label}
                         aria-label={`${action.label}, bar ${barNumber}`}
                         title={`${action.label}, bar ${barNumber}`}
                         disabled={action.kind === BarActionKind.Delete && !canDelete}

@@ -73,9 +73,9 @@ export class UndoRedoControls extends UIComponent<IUndoRedoProps, IUndoRedoState
                     className="headerIconButton"
                     disabled={!canUndo}
                     onClick={undoManager.undo}
-                    data-tooltip="Revert your last change"
+                    title="Revert your last change"
                 >
-                    <Icon src={UIIcon.Discard} width={20} height={20} data-tooltip="inherit" />
+                    <Icon src={UIIcon.Discard} width={20} height={20} />
                 </Button>
                 <Button
                     id="redoButton"
@@ -83,9 +83,9 @@ export class UndoRedoControls extends UIComponent<IUndoRedoProps, IUndoRedoState
                     className="headerIconButton"
                     disabled={!canRedo}
                     onClick={undoManager.redo}
-                    data-tooltip="Redo the last change you reverted"
+                    title="Redo the last change you reverted"
                 >
-                    <Icon src={UIIcon.Redo} width={20} height={20} data-tooltip="inherit" />
+                    <Icon src={UIIcon.Redo} width={20} height={20} />
                 </Button>
             </Container>
         );

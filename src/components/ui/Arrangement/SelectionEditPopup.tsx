@@ -125,7 +125,7 @@ export class SelectionEditPopup extends UIComponent<ISelectionEditPopupProps> {
         if (entries.length > 0 && !isCursorOnly) {
             deleteAction = <Button
                 className="selectionDeleteButton"
-                data-tooltip="Delete selection"
+                title="Delete selection"
                 caption="Delete"
                 onClick={() => {
                     void requisitions.execute("selectionDeleteRequested", undefined);

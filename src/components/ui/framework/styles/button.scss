@@ -34,10 +34,10 @@
     }
 }
 
-/* Disabled buttons swallow pointer events (daisyUI), which also kills the
-   hover-based tooltip. Re-enable pointer events only for tooltip-carrying
-   disabled buttons and signal the non-interactive state via the cursor. */
-.btn:disabled[data-tooltip] {
+/* Disabled buttons swallow pointer events (daisyUI), which also kills the native
+   title tooltip. Re-enable pointer events only for title-carrying disabled
+   buttons and signal the non-interactive state via the cursor. */
+.btn:disabled[title] {
     pointer-events: all;
     cursor: not-allowed;
 }

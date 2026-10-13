@@ -141,7 +141,7 @@ export class NoteStyleBar extends UIComponent<INoteStyleBarProps, INoteStyleBarS
                 className="noteStyleRestButton"
                 isDefault={markedStyle?.isRest === true}
                 disabled={!canEnter}
-                data-tooltip="Rest (0)"
+                title="Rest (0)"
                 onClick={() => {
                     void requisitions.execute("restEntryRequested", undefined);
                 }}
@@ -169,12 +169,12 @@ export class NoteStyleBar extends UIComponent<INoteStyleBarProps, INoteStyleBarS
                     className="noteStyleButton"
                     isDefault={style.id === markedStyleId}
                     disabled={!canEnter}
-                    data-tooltip={`${this.styleDescription(style)} (${index + 1})`}
+                    title={`${this.styleDescription(style)} (${index + 1})`}
                     onClick={() => {
                         void requisitions.execute("noteEntryRequested", style.id);
                     }}
                 >
-                    <NoteStyleSymbolViewer noteStyle={style} data-tooltip="inherit" />
+                    <NoteStyleSymbolViewer noteStyle={style} />
                 </Button>
             );
         });
@@ -219,12 +219,12 @@ export class NoteStyleBar extends UIComponent<INoteStyleBarProps, INoteStyleBarS
                 className="noteStyleButton"
                 isDefault={isMarked}
                 disabled={!canEnter}
-                data-tooltip={`${this.styleDescription(style)} (${index + 1})`}
+                title={`${this.styleDescription(style)} (${index + 1})`}
                 onClick={() => {
                     void requisitions.execute("noteEntryRequested", style.id);
                 }}
             >
-                <NoteStyleIcon noteStyle={style} data-tooltip="inherit" />
+                <NoteStyleIcon noteStyle={style} />
             </Button>
         );
     }
@@ -278,7 +278,7 @@ export class NoteStyleBar extends UIComponent<INoteStyleBarProps, INoteStyleBarS
                 closeOnSelect
                 disabled={!canEnter}
                 selectedItem={selectedItem}
-                data-tooltip={tooltip}
+                title={tooltip}
             />
         );
     }

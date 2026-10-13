@@ -41,7 +41,7 @@ describe("ArrangementPlayControls", { concurrent: false }, () => {
      * @returns The switch button.
      */
     const switchButton = (container: Element, tooltip: string): HTMLButtonElement => {
-        return container.querySelector<HTMLButtonElement>(`.playControlSwitch[data-tooltip="${tooltip}"]`)!;
+        return container.querySelector<HTMLButtonElement>(`.playControlSwitch[title="${tooltip}"]`)!;
     };
 
     /**
@@ -61,7 +61,7 @@ describe("ArrangementPlayControls", { concurrent: false }, () => {
      * @returns The tempo step button.
      */
     const stepButton = (container: Element, tooltip: string): HTMLButtonElement => {
-        return container.querySelector<HTMLButtonElement>(`.tempoStepButton[data-tooltip="${tooltip}"]`)!;
+        return container.querySelector<HTMLButtonElement>(`.tempoStepButton[title="${tooltip}"]`)!;
     };
 
     /**

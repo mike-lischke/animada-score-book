@@ -98,10 +98,9 @@ export class ArrangementActionBar extends UIComponent<IArrangementActionBarProps
                         className={mixerClassName}
                         aria-pressed={mixerExpanded}
                         title={mixerTooltip}
-                        data-tooltip={mixerTooltip}
                         onClick={this.handleMixerToggle}
                     >
-                        <Icon src={UIIcon.Mixer} data-tooltip="inherit" />
+                        <Icon src={UIIcon.Mixer} />
                         <span className="actionControlSwitchLabel">Mixer</span>
                         <span className="actionControlSwitchDot" />
                     </Button>
@@ -109,10 +108,9 @@ export class ArrangementActionBar extends UIComponent<IArrangementActionBarProps
                         className={viewClassName}
                         aria-pressed={staffMode}
                         title={viewTooltip}
-                        data-tooltip={viewTooltip}
                         onClick={this.handleTrackViewModeToggle}
                     >
-                        <Icon src={UIIcon.Music} data-tooltip="inherit" />
+                        <Icon src={UIIcon.Music} />
                         <span className="actionControlSwitchLabel">Staff</span>
                         <span className="actionControlSwitchDot" />
                     </Button>

@@ -29,7 +29,7 @@ const triggerButton = (container: Element): HTMLButtonElement => {
  * @returns The button.
  */
 const buttonWithTooltip = (container: Element, tooltip: string): HTMLButtonElement => {
-    return container.querySelector<HTMLButtonElement>(`button[data-tooltip="${tooltip}"]`)!;
+    return container.querySelector<HTMLButtonElement>(`button[title="${tooltip}"]`)!;
 };
 
 /**
@@ -41,7 +41,7 @@ const buttonWithTooltip = (container: Element, tooltip: string): HTMLButtonEleme
  * @returns The button, or null when it is not rendered.
  */
 const buttonOrNull = (container: Element, tooltip: string): HTMLButtonElement | null => {
-    return container.querySelector<HTMLButtonElement>(`button[data-tooltip="${tooltip}"]`);
+    return container.querySelector<HTMLButtonElement>(`button[title="${tooltip}"]`);
 };
 
 /**

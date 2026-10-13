@@ -64,7 +64,6 @@ export class UpDown extends UIComponent<IUpDownProperties> {
                 onConfirm={this.handleInputConfirm}
                 onCancel={this.handleInputCancel}
                 textAlignment={textAlignment}
-                data-tooltip="inherit"
                 disabled={disabled}
             />
         );
@@ -80,7 +79,6 @@ export class UpDown extends UIComponent<IUpDownProperties> {
                     id="content"
                     key="upDownContent"
                     rowSpan={2}
-                    data-tooltip="inherit"
                 >
                     {content}
                 </GridCell>

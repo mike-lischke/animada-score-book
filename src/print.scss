@@ -28,8 +28,7 @@
     }
 
     body.printing #appRoot,
-    body.printing dialog.modal,
-    body.printing .tooltip {
+    body.printing dialog.modal {
         display: none !important;
     }
 

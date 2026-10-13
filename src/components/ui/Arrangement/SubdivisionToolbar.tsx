@@ -177,7 +177,7 @@ export class SubdivisionToolbar extends UIComponent<ISubdivisionToolbarProps, IS
                     disabled={!canCreate}
                     closeOnSelect
                     items={dropdownItems}
-                    data-tooltip="Add subdivision"
+                    title="Add subdivision"
                 />
             </GooeyGroup>
         );
@@ -194,7 +194,7 @@ export class SubdivisionToolbar extends UIComponent<ISubdivisionToolbarProps, IS
                         isDefault={simileActive}
                         disabled={!canToggleSimile}
                         className="simileButton"
-                        data-tooltip="One-bar repeat (simile)"
+                        title="One-bar repeat (simile)"
                         onClick={this.handleToggleSimile}
                     >
                         <ScoreSymbolView symbol={ScoreSymbol.MeasureRepeat} staffSpace={staffSpacePx} icon />
@@ -215,7 +215,7 @@ export class SubdivisionToolbar extends UIComponent<ISubdivisionToolbarProps, IS
                         <Button
                             isDefault={repeatStartActive}
                             disabled={!canMarkRepeatStart}
-                            data-tooltip="Repeat start"
+                            title="Repeat start"
                             onClick={this.handleToggleRepeatStart}
                         >
                             <ScoreSymbolView symbol={ScoreSymbol.RepeatStart} staffSpace={staffSpacePx} icon />
@@ -223,7 +223,7 @@ export class SubdivisionToolbar extends UIComponent<ISubdivisionToolbarProps, IS
                         <Button
                             isDefault={repeatEndActive}
                             disabled={!canMarkRepeatEnd}
-                            data-tooltip="Repeat end"
+                            title="Repeat end"
                             onClick={this.handleToggleRepeatEnd}
                         >
                             <ScoreSymbolView symbol={ScoreSymbol.RepeatEnd} staffSpace={staffSpacePx} icon />

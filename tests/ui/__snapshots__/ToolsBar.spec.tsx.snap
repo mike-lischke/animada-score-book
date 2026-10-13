@@ -21,12 +21,11 @@ exports[`ToolsBar > matches the baseline snapshot with all props set 1`] = `
     />
     <button
       class="btn du-btn toolsBarTool custom-range-tools"
-      data-tooltip="Draw a crescendo hairpin"
+      title="Draw a crescendo hairpin"
     >
       <svg
         class="icon"
         data-icon="ChevronLeft"
-        data-tooltip="inherit"
         fill="currentColor"
         height="1em"
         viewBox="0 0 24 24"
@@ -45,12 +44,11 @@ exports[`ToolsBar > matches the baseline snapshot with all props set 1`] = `
     </button>
     <button
       class="btn du-btn toolsBarTool custom-range-tools"
-      data-tooltip="Draw a decrescendo hairpin"
+      title="Draw a decrescendo hairpin"
     >
       <svg
         class="icon"
         data-icon="ChevronRight"
-        data-tooltip="inherit"
         fill="currentColor"
         height="1em"
         viewBox="0 0 24 24"
@@ -69,7 +67,7 @@ exports[`ToolsBar > matches the baseline snapshot with all props set 1`] = `
     </button>
     <button
       class="btn du-btn toolsBarTool custom-range-tools"
-      data-tooltip="Place forte (f)"
+      title="Place forte (f)"
     >
       <svg
         aria-hidden="true"
@@ -118,12 +116,11 @@ exports[`ToolsBar > matches the baseline snapshot with minimal props 1`] = `
     />
     <button
       class="btn du-btn toolsBarTool"
-      data-tooltip="Draw a crescendo hairpin"
+      title="Draw a crescendo hairpin"
     >
       <svg
         class="icon"
         data-icon="ChevronLeft"
-        data-tooltip="inherit"
         fill="currentColor"
         height="1em"
         viewBox="0 0 24 24"
@@ -142,12 +139,11 @@ exports[`ToolsBar > matches the baseline snapshot with minimal props 1`] = `
     </button>
     <button
       class="btn du-btn toolsBarTool"
-      data-tooltip="Draw a decrescendo hairpin"
+      title="Draw a decrescendo hairpin"
     >
       <svg
         class="icon"
         data-icon="ChevronRight"
-        data-tooltip="inherit"
         fill="currentColor"
         height="1em"
         viewBox="0 0 24 24"
@@ -166,7 +162,7 @@ exports[`ToolsBar > matches the baseline snapshot with minimal props 1`] = `
     </button>
     <button
       class="btn du-btn toolsBarTool"
-      data-tooltip="Place forte (f)"
+      title="Place forte (f)"
     >
       <svg
         aria-hidden="true"

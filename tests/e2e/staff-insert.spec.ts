@@ -205,12 +205,12 @@ test.describe("staff entry mode switch", () => {
         await runs.nth(0).click();
 
         // Insert mode marks the value the next entry uses, not what the cursor addresses.
-        await expect(marked).toHaveAttribute("data-tooltip", /Quarter note/);
+        await expect(marked).toHaveAttribute("title", /Quarter note/);
 
         await page.locator("label.entryModeButton").click({ force: true });
         await expect(page.locator("#entryModeButton")).toBeChecked();
 
         // The bar now shows what the selection carries, which is the addressed sixteenth.
-        await expect(marked).toHaveAttribute("data-tooltip", /Sixteenth note/);
+        await expect(marked).toHaveAttribute("title", /Sixteenth note/);
     });
 });

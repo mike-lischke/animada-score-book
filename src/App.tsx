@@ -36,7 +36,6 @@ import { Dialog, DialogResponseClosure } from "./components/ui/framework/Dialog.
 import { DrawerSidebar } from "./components/ui/framework/DrawerSidebar.js";
 import { Icon } from "./components/ui/framework/Icon.js";
 import { Label } from "./components/ui/framework/Label.js";
-import { TooltipProvider } from "./components/ui/framework/Tooltip.js";
 import { UIIcon } from "./components/ui/framework/UIIcon.js";
 import { PrintDialog } from "./components/ui/Print/PrintDialog.js";
 import { PrintView, type IPrintOptions } from "./components/ui/Print/PrintView.js";
@@ -325,21 +324,21 @@ export class App extends UIComponent<{}, IAppState> {
             saveButton = <Button
                 id="saveButton"
                 className="headerIconButton"
-                data-tooltip="Save Score"
+                title="Save Score"
                 disabled={!this.undoManager?.canUndo}
                 onClick={this.handleSaveClick}
             >
-                <Icon src={UIIcon.TrayArrowDown} data-tooltip="inherit" />
+                <Icon src={UIIcon.TrayArrowDown} />
             </Button>;
 
             newScoreButton = <Button
                 id="newScoreButton"
                 className="headerIconButton"
-                data-tooltip="New Score"
+                title="New Score"
                 disabled={editMode}
                 onClick={this.handleNewScoreClick}
             >
-                <Icon src={UIIcon.NewScore} data-tooltip="inherit" />
+                <Icon src={UIIcon.NewScore} />
             </Button>;
 
             if (this.arrangementPlayer) {
@@ -350,7 +349,7 @@ export class App extends UIComponent<{}, IAppState> {
                 editModeButton = <Button
                     id="editModeButton"
                     className={editModeButtonClass}
-                    data-tooltip={editMode ? "Exit Edit Mode" : "Enter Edit Mode"}
+                    title={editMode ? "Exit Edit Mode" : "Enter Edit Mode"}
                     onClick={this.handleEditModeToggle}
                 >
                     <span className="headerModeDot" />
@@ -360,25 +359,25 @@ export class App extends UIComponent<{}, IAppState> {
                 printButton = <Button
                     id="printButton"
                     className="headerActionButton"
-                    data-tooltip="Print / Export to PDF"
+                    title="Print / Export to PDF"
                     data-tutorial="print"
                     onClick={this.handlePrintClick}
                 >
-                    <Icon src={UIIcon.Printer} data-tooltip="inherit" />
+                    <Icon src={UIIcon.Printer} />
                     <span className="headerActionLabel">Print</span>
                 </Button>;
 
                 exportButton = <Button
                     id="exportButton"
                     className="headerActionButton is-emphasis"
-                    data-tooltip="Export as MP3"
+                    title="Export as MP3"
                     data-tutorial="export"
                     disabled={this.exporting}
                     onClick={() => {
                         void this.handleExportClick();
                     }}
                 >
-                    <Icon src={UIIcon.Export} data-tooltip="inherit" />
+                    <Icon src={UIIcon.Export} />
                     <span className="headerActionLabel">{this.exporting ? "Exporting…" : "Export"}</span>
                 </Button>;
             }
@@ -428,20 +427,20 @@ export class App extends UIComponent<{}, IAppState> {
                 <img id="titleLogo" src="/logo.svg" />
                 <Button
                     className="du-btn-ghost displayOptionsButton"
-                    data-tooltip="Display Options"
+                    title="Display Options"
                     data-tutorial="display-options"
                     onClick={this.handleDisplayOptionsClick}
                 >
-                    <Icon src={UIIcon.Gear} data-tooltip="inherit" />
+                    <Icon src={UIIcon.Gear} />
                 </Button>
                 <Button
                     id="scoreLibraryButton"
                     className="du-btn-ghost"
-                    data-tooltip="Score Library"
+                    title="Score Library"
                     data-tutorial="score-library"
                     onClick={this.handleScoreLibraryClick}
                 >
-                    <Icon src={UIIcon.Library} data-tooltip="inherit" />
+                    <Icon src={UIIcon.Library} />
                 </Button>
                 {userButton}
             </Container>
@@ -556,7 +555,6 @@ export class App extends UIComponent<{}, IAppState> {
                             />
                             {renderNotificationCenter()}
                         </Container>
-                        <TooltipProvider />
                         <ValueDialog ref={this.valueDialogRef} />
                         <SettingsDialog ref={this.settingsDialogRef} fontLoader={this.smuflFontLoader} />
                         <TutorialWizard
@@ -700,12 +698,11 @@ export class App extends UIComponent<{}, IAppState> {
             imageOnly
             compact
             className="du-btn-ghost"
-            data-tooltip="Sign In"
+            title="Sign In"
             onClick={this.handleSignInClick}
         >
             <Icon
                 src={UIIcon.SignIn}
-                data-tooltip="inherit"
             />
         </Button>;
     }

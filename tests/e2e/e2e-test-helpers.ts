@@ -87,7 +87,7 @@ export const selectTrackPiece = async (page: Page, barNumber: number): Promise<v
  * @returns The button.
  */
 export const toolbarButton = (page: Page, tooltip: string): Locator => {
-    return page.locator(`.subdivisionToolbar button[data-tooltip="${tooltip}"]`);
+    return page.locator(`.subdivisionToolbar button[title="${tooltip}"]`);
 };
 
 export const beijaFlorTitle = "Beija Flor 2004  -  Bossa 1 (H-Break)";

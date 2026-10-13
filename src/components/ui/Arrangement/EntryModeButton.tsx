@@ -40,9 +40,9 @@ export class EntryModeButton extends UIComponent<IEntryModeButtonProps> {
                     className="entryModeButton"
                     isOn={isOverwrite}
                     isMarked={isOverwrite}
-                    data-tooltip={tooltip}
-                    offContent={<Icon src={UIIcon.ArrowExpandRight} width={20} height={20} data-tooltip="inherit" />}
-                    onContent={<Icon src={UIIcon.SwapHorizontal} width={20} height={20} data-tooltip="inherit" />}
+                    title={tooltip}
+                    offContent={<Icon src={UIIcon.ArrowExpandRight} width={20} height={20} />}
+                    onContent={<Icon src={UIIcon.SwapHorizontal} width={20} height={20} />}
                     onChange={(isOn) => {
                         void requisitions.execute("editEntryModeChanged",
                             isOn ? EditEntryMode.Overwrite : EditEntryMode.Insert);

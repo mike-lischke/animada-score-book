@@ -103,7 +103,7 @@ export class ArticulationToolbar extends UIComponent<IArticulationToolbarProps, 
                     className="articulationButton"
                     isDefault={option.articulation === activeArticulation}
                     disabled={!canEnter || !isAvailable}
-                    data-tooltip={option.tooltip}
+                    title={option.tooltip}
                     onClick={() => {
                         this.selectArticulation(option.articulation);
                     }}

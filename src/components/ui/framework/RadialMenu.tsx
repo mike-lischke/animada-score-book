@@ -474,7 +474,7 @@ export class RadialMenu extends UIComponent<IRadialMenuProps, IRadialMenuState> 
                         >
                             <Button
                                 round
-                                data-tooltip={item.tooltip}
+                                title={item.tooltip}
                                 className="radial-btn pointer-events-auto"
                                 disabled={item.disabled}
                                 onClick={() => {

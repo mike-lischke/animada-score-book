@@ -163,7 +163,7 @@ export class Tabview extends UIComponent<ITabviewProperties, ITabviewState> {
 
             return (
                 <Button
-                    data-tooltip={page.tooltip}
+                    title={page.tooltip}
                     id={page.id}
                     key={page.id}
                     tabIndex={-1}
@@ -172,8 +172,8 @@ export class Tabview extends UIComponent<ITabviewProperties, ITabviewState> {
                     draggable={canReorderTabs}
                     onClick={this.selectTab}
                 >
-                    {page.icon && <Icon src={page.icon} data-tooltip="inherit" />}
-                    {page.caption && <Label data-tooltip="inherit">{page.caption}</Label>}
+                    {page.icon && <Icon src={page.icon} />}
+                    {page.caption && <Label>{page.caption}</Label>}
                     {page.auxiliary && <span id="auxiliary">{page.auxiliary}</span>}
                 </Button>
             );

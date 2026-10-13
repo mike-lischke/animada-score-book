@@ -77,9 +77,6 @@ export interface ICommonUIProperties<TRole = AriaRole> {
     /** For OS style tooltips. */
     title?: string;
 
-    /** Tooltip text to show in a custom tooltip. */
-    "data-tooltip"?: string;
-
     /** Accessible label, equivalent to the alt attribute on images. */
     alt?: string;
 

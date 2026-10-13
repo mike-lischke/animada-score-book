@@ -64,7 +64,7 @@ test("lays the playback bar out as the mockup describes it", async ({ page }) =>
                 return "volume";
             }
 
-            return `switch:${element.getAttribute("data-tooltip")}`;
+            return `switch:${element.getAttribute("title")}`;
         };
 
         const switches = Array.from(document.querySelectorAll(".playControlSwitch")).map((element) => {

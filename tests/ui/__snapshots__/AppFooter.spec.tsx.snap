@@ -78,7 +78,6 @@ exports[`AppFooter > renders with all props set 1`] = `
       <button
         aria-pressed="true"
         class="btn du-btn appFooterZenButton"
-        data-tooltip="Exit Zen mode"
         id="zenModeButton"
         title="Exit Zen mode"
       >
@@ -211,7 +210,6 @@ exports[`AppFooter > renders with the minimum props 1`] = `
       <button
         aria-pressed="false"
         class="btn du-btn appFooterZenButton"
-        data-tooltip="Enter Zen mode"
         id="zenModeButton"
         title="Enter Zen mode"
       >

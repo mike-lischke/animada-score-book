@@ -46,7 +46,7 @@ export class Dropdown extends UIComponent<IDropdownProperties, IDropdownState> {
     }
 
     public render(): ComponentChild {
-        const { id, caption, disabled, icon, items, selectedItem, style, compact } = this.props;
+        const { id, caption, disabled, icon, items, selectedItem, style, compact, title } = this.props;
         const { activeIndex } = this.state;
 
         const children = items.map((item, index) => {
@@ -92,6 +92,7 @@ export class Dropdown extends UIComponent<IDropdownProperties, IDropdownState> {
                     style={{ ...style, anchorName: this.anchorName }}
                     imageOnly={!caption && icon !== undefined}
                     disabled={disabled}
+                    title={title}
                     onClick={(e) => {
                         e.stopPropagation();
                     }}

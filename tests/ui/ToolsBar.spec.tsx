@@ -47,7 +47,7 @@ describe("ToolsBar", { concurrent: false }, () => {
      * @returns The button of that tool.
      */
     const toolButton = (tooltip: string): HTMLButtonElement => {
-        return renderResult!.container.querySelector<HTMLButtonElement>(`button[data-tooltip="${tooltip}"]`)!;
+        return renderResult!.container.querySelector<HTMLButtonElement>(`button[title="${tooltip}"]`)!;
     };
 
     beforeEach(() => {

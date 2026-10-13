@@ -340,12 +340,12 @@ export class StaffMeasureViewer extends UIComponent<IStaffMeasureViewerProps, IS
             resizeHandle = (
                 <div
                     className="staff-measure-resize-handle"
-                    data-tooltip="Resize measure"
+                    title="Resize measure"
                     onPointerDown={this.handleResizePointerDown}
                     onDblClick={this.handleResizeDoubleClick}
                 >
                     <span className="staff-measure-resize-thumb" aria-hidden="true">
-                        <Icon src={UIIcon.Menu} data-tooltip="inherit" />
+                        <Icon src={UIIcon.Menu} />
                     </span>
                 </div>
             );
