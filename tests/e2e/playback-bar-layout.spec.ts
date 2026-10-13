@@ -131,3 +131,29 @@ test("leaves no score row hidden behind the playback bar", async ({ page }) => {
     expect(hiddenRows.rowCount).toBeGreaterThan(0);
     expect(hiddenRows.hidden).toBe(0);
 });
+
+test("keeps the play button and every following control fixed when playback toggles", async ({ page }) => {
+    await openSeededStaffScore(page, seededTracks, seededMeasures);
+
+    const readLayout = async () => {
+        return page.locator("#arrangementPlayControls").evaluate((element) => {
+            return [...element.children].map((control) => {
+                const rect = control.getBoundingClientRect();
+
+                return { x: rect.x, width: rect.width, height: rect.height };
+            });
+        });
+    };
+
+    const before = await readLayout();
+
+    await page.locator("#playbackButton").click();
+    await expect(page.locator("#playbackButton")).toHaveAttribute("aria-pressed", "true");
+    await expect(page.locator(".playStopLabel")).toHaveText("Stop");
+    expect(await readLayout()).toEqual(before);
+
+    await page.locator("#playbackButton").click();
+    await expect(page.locator("#playbackButton")).toHaveAttribute("aria-pressed", "false");
+    await expect(page.locator(".playStopLabel")).toHaveText("Play");
+    expect(await readLayout()).toEqual(before);
+});

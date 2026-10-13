@@ -761,6 +761,117 @@ h6 {
 }
 
 /* Footer: status and navigation strip. It is the last section of the app frame. */
+#appRoot.zen-mode {
+    .zenArrangementIdentityHost {
+        position: absolute;
+        top: 4px;
+        left: 16px;
+        height: 28px;
+        max-width: calc(100% - 32px);
+        overflow: hidden;
+        background: var(--color-base-100);
+        pointer-events: auto;
+        z-index: 6;
+
+        .arrangementIdentityRow {
+            width: 100%;
+        }
+
+        .arrangementIdentityStats {
+            display: inline;
+            font-weight: 400;
+        }
+    }
+
+    #trackViewerContainer.view-grid {
+        --zen-grid-headroom: 36px;
+        --score-row-top: calc(20pt + 24px + var(--zen-grid-headroom));
+
+        .grid-measure-viewer {
+            padding-top: var(--zen-grid-headroom);
+        }
+    }
+
+    #trackViewerHost {
+        min-width: 0;
+        touch-action: none;
+        cursor: grab;
+    }
+
+    .grid-measure-viewer,
+    .staff-measure-viewer {
+        > .zenMeasurePlayButton {
+            position: absolute;
+            top: 4px;
+            right: 8px;
+            height: 28px;
+            min-height: 28px;
+            gap: 6px;
+            padding: 0 10px;
+            border: 1px solid var(--border-subtle);
+            border-radius: 9999px;
+            background: var(--color-base-100);
+            color: var(--color-base-content);
+            font-size: 11px;
+            white-space: nowrap;
+            z-index: 5;
+
+            &[aria-pressed="true"] {
+                border-color: var(--color-primary);
+                background: color-mix(in srgb, var(--color-primary) 10%, var(--color-base-100));
+
+                .zenMeasurePlayDot {
+                    background: var(--color-primary);
+                }
+            }
+
+            .zenMeasurePlayDot {
+                width: 8px;
+                height: 8px;
+                flex: 0 0 8px;
+                border-radius: 50%;
+                background: color-mix(in srgb, var(--color-base-content) 30%, transparent);
+            }
+        }
+    }
+
+    #playbackControlsHost {
+        box-sizing: border-box;
+        max-width: calc(100% - 24px);
+    }
+
+    .range-articulation,
+    .range-articulation-handle {
+        pointer-events: none;
+    }
+
+    @media (max-width: 600px) {
+        #playbackControlsHost {
+            max-width: calc(100% - 8px);
+        }
+
+        #appFooter {
+            gap: 8px;
+            padding: 0 8px;
+
+            .appFooterRange {
+                flex: 0 1 auto;
+                min-width: 0;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+
+            .appFooterNavigator {
+                min-width: 16px;
+            }
+
+            .appFooterActions {
+                gap: 4px;
+            }
+        }
+    }
+}
+
 #appFooter {
     --footer-chip-surface: color-mix(in srgb, var(--color-base-content) 8%, transparent);
 
@@ -836,6 +947,22 @@ h6 {
             width: 1px;
             height: 15px;
             background: var(--border-subtle);
+        }
+
+        .appFooterZenButton {
+            width: 25px;
+            min-width: 25px;
+            padding: 0;
+
+            .icon {
+                width: 16px;
+                height: 16px;
+            }
+
+            &[aria-pressed="true"] {
+                background: var(--color-primary);
+                color: var(--color-primary-content);
+            }
         }
 
         .appFooterNotificationButton {

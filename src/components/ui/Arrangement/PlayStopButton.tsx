@@ -17,16 +17,12 @@ export interface IPlayStopButtonProperties extends ICommonUIProperties {
 }
 
 export class PlayStopButton extends UIComponent<IPlayStopButtonProperties> {
-    private currentPlayRange?: { startBar: number; endBar: number; };
-
     public override componentDidMount(): void {
         requisitions.register("playerStateChanged", this.handlePlayerStateChanged);
-        requisitions.register("playRangeChanged", this.playRangeChanged);
     }
 
     public override componentWillUnmount(): void {
         requisitions.unregister("playerStateChanged", this.handlePlayerStateChanged);
-        requisitions.unregister("playRangeChanged", this.playRangeChanged);
     }
 
     public override render(): ComponentChild {
@@ -56,12 +52,7 @@ export class PlayStopButton extends UIComponent<IPlayStopButtonProperties> {
                         return;
                     }
 
-                    if (this.currentPlayRange) {
-                        void arrangementPlayer.playBars(this.currentPlayRange.startBar,
-                            this.currentPlayRange.endBar - this.currentPlayRange.startBar + 1);
-                    } else {
-                        void arrangementPlayer.play();
-                    }
+                    void arrangementPlayer.play();
                 }}
             >
                 {icon}
@@ -76,9 +67,4 @@ export class PlayStopButton extends UIComponent<IPlayStopButtonProperties> {
         return Promise.resolve(true);
     };
 
-    private playRangeChanged = (range: { from: number; to: number; } | undefined): Promise<boolean> => {
-        this.currentPlayRange = range ? { startBar: range.from, endBar: range.to } : undefined;
-
-        return Promise.resolve(true);
-    };
 }

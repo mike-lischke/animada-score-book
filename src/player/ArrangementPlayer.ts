@@ -3,7 +3,7 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import { requisitions } from "../supplement/Requisitions.js";
+import { requisitions, type IPlayRange } from "../supplement/Requisitions.js";
 import type { ISbDmNoteEvent, ISbDmTrack, ITiming, RealTime, ScoreBookDataModel } from "../core/ScoreBookDataModel.js";
 import { getSharedAudioContext } from "../core/audio-context.js";
 import { waitFor } from "../core/utils.js";
@@ -69,7 +69,8 @@ export class ArrangementPlayer {
     /** The part of the song we want to play (in score time). If not set, the entire song is played. */
     private currentInterval?: IInterval;
 
-    private selectedPlayRange?: { from: number; to: number; };
+    private selectedPlayRange?: IPlayRange;
+    private activeSelectedBars?: ReadonlySet<number>;
 
     private scheduledAudioEvents: Array<{ audioEvent: IAudioEvent, audioBufferPlayer: AudioBufferPlayer; }> = [];
     private scheduledCallbackEvents: Array<{
@@ -227,7 +228,8 @@ export class ArrangementPlayer {
             return;
         }
 
-        if (interval === undefined && this.selectedPlayRange !== undefined) {
+        if (interval === undefined && this.selectedPlayRange !== undefined
+            && this.selectedPlayRange.bars === undefined) {
             const { from, to } = this.selectedPlayRange;
 
             return this.playBars(from, to - from + 1);
@@ -236,9 +238,14 @@ export class ArrangementPlayer {
         await this.ensureContextIsRunning();
 
         // If already playing something, stop it first to clear schedules.
-        if (this.nextIterationId) {
+        if (this.#state !== PlayerPlayState.Stopped) {
             this.stop();
         }
+
+        this.activeSelectedBars = interval === undefined && this.selectedPlayRange?.bars !== undefined
+            ? new Set(this.selectedPlayRange.bars) : undefined;
+        this.refreshPerformance();
+        this.updateCallbackEvents();
 
         // Clear any interval restriction and start from 0.
         this.currentInterval = interval;
@@ -289,6 +296,10 @@ export class ArrangementPlayer {
             this.clearScheduledEvents();
             this.#state = PlayerPlayState.Stopped;
 
+            this.activeSelectedBars = undefined;
+            this.refreshPerformance();
+            this.updateCallbackEvents();
+
             this.onStop();
         }
     }
@@ -313,6 +324,7 @@ export class ArrangementPlayer {
     }
 
     public renderToBlob = async (): Promise<Blob> => {
+        this.stop();
         this.currentInterval = undefined;
         const songDuration = this.timeCoordinator.metrics.realTimeLength;
         const countInDuration = this.dataModel.arrangement!.countIn
@@ -467,7 +479,7 @@ export class ArrangementPlayer {
         return Promise.resolve(true);
     };
 
-    private handlePlayRangeChanged = (range?: { from: number; to: number; }): Promise<boolean> => {
+    private handlePlayRangeChanged = (range?: IPlayRange): Promise<boolean> => {
         this.selectedPlayRange = range;
 
         return Promise.resolve(true);
@@ -484,7 +496,16 @@ export class ArrangementPlayer {
 
         this.#playOrder = PlaybackOrder.performedBars(arrangement.repeatBars ?? new Map(),
             arrangement.timeParams.length);
+        const selectedBars = this.activeSelectedBars;
+        if (selectedBars !== undefined) {
+            this.#playOrder = this.#playOrder.filter((bar) => {
+                return selectedBars.has(bar);
+            });
+        }
+
         this.timeCoordinator.setPerformedBars(this.#playOrder.length);
+        this.timeCoordinator.recomputeMetrics();
+        void requisitions.execute("playbackOrderChanged", { arrangementId: arrangement.id, bars: this.#playOrder });
     };
 
     /**
@@ -504,7 +525,7 @@ export class ArrangementPlayer {
 
         for (const track of this.dataModel.arrangement!.tracks) {
             if (!this.trackPlayers.get(track)) {
-                const trackPlayer = new TrackPlayer(track, this.timeCoordinator);
+                const trackPlayer = new TrackPlayer(track, this.timeCoordinator, this.#playOrder);
                 this.trackPlayers.set(track, trackPlayer);
                 somethingChanged = true;
             }
@@ -540,15 +561,28 @@ export class ArrangementPlayer {
             this.endOffset = this.timeCoordinator.metrics.realTimeLength;
         }
 
-        this.callbackEvents = this.dataModel.arrangement!.timeParams.timings.map((timing) => {
-            return {
-                kind: "callback",
-                realTime: this.timeCoordinator.convertToRealTime(timing),
-                callback: () => {
-                    this.timing = timing;
-                },
-                identifier: timing
-            };
+        const timingsByBar = new Map<number, ITiming[]>();
+        for (const timing of this.dataModel.arrangement!.timeParams.timings) {
+            const timings = timingsByBar.get(timing.bar);
+            if (timings) {
+                timings.push(timing);
+            } else {
+                timingsByBar.set(timing.bar, [timing]);
+            }
+        }
+
+        const { secondsPerBar, secondsPerStep } = this.timeCoordinator.metrics;
+        this.callbackEvents = [];
+        this.#playOrder.forEach((bar, index) => {
+            for (const timing of timingsByBar.get(bar) ?? []) {
+                this.callbackEvents.push({
+                    kind: "callback",
+                    realTime: (index * secondsPerBar) + ((timing.step - 1) * secondsPerStep),
+                    callback: () => {
+                        this.timing = timing;
+                    },
+                });
+            }
         });
     };
 

@@ -38,6 +38,44 @@ describe("AppFooter", { concurrent: false }, () => {
         vi.restoreAllMocks();
     });
 
+    it("renders with the minimum props", () => {
+        expect(renderFooter()).toMatchSnapshot();
+    });
+
+    it("renders with all props set", () => {
+        const container = renderFooter({
+            className: "zen-footer",
+            barCount: 8,
+            zoom: 150,
+            version: "2.0.0",
+            zenMode: true,
+            onToggleZenMode: vi.fn(),
+            notifications: { newCount: 2, totalCount: 4, silent: true, showHistory: true },
+        });
+
+        expect(container).toMatchSnapshot();
+    });
+
+    it("places the Zen toggle immediately after the zoom controls", () => {
+        const container = renderFooter();
+        const zoom = container.querySelector(".appFooterZoom");
+        const button = container.querySelector("#zenModeButton");
+
+        expect(zoom?.nextElementSibling).toBe(button);
+        expect(button?.getAttribute("aria-pressed")).toBe("false");
+        expect(button?.getAttribute("title")).toBe("Enter Zen mode");
+        expect(button?.querySelector("svg")?.getAttribute("data-icon")).toBe("ScreenFull");
+    });
+
+    it("renders the active Zen toggle with the exit icon", () => {
+        const container = renderFooter({ zenMode: true, onToggleZenMode: vi.fn() });
+        const button = container.querySelector("#zenModeButton");
+
+        expect(button?.getAttribute("aria-pressed")).toBe("true");
+        expect(button?.getAttribute("title")).toBe("Exit Zen mode");
+        expect(button?.querySelector("svg")?.getAttribute("data-icon")).toBe("ScreenNormal");
+    });
+
     it("shows the visible range the viewer reports", async () => {
         const container = renderFooter();
 

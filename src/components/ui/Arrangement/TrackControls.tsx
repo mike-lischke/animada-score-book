@@ -22,6 +22,7 @@ export interface ITrackControlsProperties extends ICommonUIProperties {
     tracks: ISbDmTrack[];
     selectionManager: SelectionManager;
     mixerExpanded: boolean;
+    labelsOnly?: boolean;
     trackViewMode: "grid" | "staff";
     innerRef?: preact.RefObject<HTMLDivElement | null>;
 
@@ -95,12 +96,13 @@ export class TrackControls extends UIComponent<ITrackControlsProperties, ITrackC
     }
 
     public render() {
-        const { tracks, rowGeometries, innerRef, mixerExpanded } = this.props;
+        const { tracks, rowGeometries, innerRef, mixerExpanded, labelsOnly } = this.props;
         const { selectedTrackIds } = this.state;
 
         const listClassName = this.generateFinalClassName([
             "trackControlsList",
-            this.classFromProperty(mixerExpanded, "expanded"),
+            this.classFromProperty(mixerExpanded && !labelsOnly, "expanded"),
+            this.classFromProperty(labelsOnly, "trackLabelsList"),
         ]);
 
         const controls = tracks.map((track) => {
@@ -114,6 +116,15 @@ export class TrackControls extends UIComponent<ITrackControlsProperties, ITrackC
                     "--track-row-height": StaffRowGeometry.formatPx(geometry.heightPx),
                     "--staff-centre": StaffRowGeometry.formatPx(geometry.centrePx),
                 };
+
+            if (labelsOnly) {
+                return (
+                    <Container key={track.id} className="trackLabelRow" orientation={Orientation.LeftToRight}
+                        crossAlignment={ChildAlignment.Center} style={rowStyle}>
+                        <span className="trackInstrumentLabel" title={instrumentName}>{instrumentName}</span>
+                    </Container>
+                );
+            }
 
             return (
                 <Container

@@ -9,13 +9,6 @@ import { Damping } from "../../src/core/ScoreBookDataModel.js";
 import type { IAudioData, Mutable } from "../../src/core/types/general.js";
 import type { Event as PlaybackEvent, ICallbackEvent, IInterval } from "../../src/player/types.js";
 
-type CallbackHelper = {
-    kind: "callback";
-    callback: () => void;
-} & { realTime: number; } & {
-    identifier: unknown;
-};
-
 class TestScoreBookDataModel extends ScoreBookDataModel {
     private readonly _arrangement: ISbDmArrangement;
 
@@ -332,9 +325,8 @@ describe("ArrangementPlayer", { concurrent: false }, () => {
             expect(events[i - 1].realTime).toBeLessThanOrEqual(events[i].realTime);
         }
 
-        // Find an ArrangementPlayer timing callback (has an identifier) and fire it.
-        const cb = events.find((e): e is CallbackHelper => {
-            return ("callback" in e) && ("identifier" in e);
+        const cb = events.find((event): event is ICallbackEvent => {
+            return event.kind === "callback";
         });
         expect(cb).toBeDefined();
         expect(player.currentTiming).toBeUndefined();
@@ -350,8 +342,8 @@ describe("ArrangementPlayer", { concurrent: false }, () => {
         // Prime currentTiming by firing a timing callback.
         // @ts-expect-error Accessing internal for test purposes
         const events = player.getEvents({ start: 0, end: 0.5 });
-        const timingCb = events.find((e): e is ICallbackEvent & { identifier: unknown; } => {
-            return ("callback" in e) && ("identifier" in e);
+        const timingCb = events.find((event): event is ICallbackEvent => {
+            return event.kind === "callback";
         });
         timingCb?.callback();
         expect(player.currentTiming).toBeTruthy();

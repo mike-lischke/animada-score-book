@@ -16,6 +16,7 @@ import { clampValue } from "../../../core/utils.js";
 import { PlayerPlayState, type ArrangementPlayer } from "../../../player/ArrangementPlayer.js";
 import { requisitions, type IMeasureVisibilityRequest } from "../../../supplement/Requisitions.js";
 import type { SelectionManager } from "../../../ui/SelectionManager.js";
+import { SelectionGranularity } from "../../../ui/SelectionSerializer.js";
 import { GridMeasureEditor } from "../../../ui/GridMeasureEditor.js";
 import { StaffMeasureEditor } from "../../../ui/StaffMeasureEditor.js";
 import type { IMeasureEditorInput } from "../../../ui/MeasureEditor.js";
@@ -26,6 +27,7 @@ import { GridMeasureViewer } from "../Bar/Grid/GridMeasureViewer.js";
 import { StaffMeasureViewer } from "../Bar/Staff/StaffMeasureViewer.js";
 import { StaffPrefixViewer } from "../Bar/Staff/StaffPrefixViewer.js";
 import { Container } from "../framework/Container.js";
+import { Button } from "../framework/Button.js";
 import { DialogResponseClosure } from "../framework/Dialog.js";
 import { RadialMenu } from "../framework/RadialMenu.js";
 import { ChildAlignment, Orientation } from "../framework/ui-types.js";
@@ -72,6 +74,8 @@ export interface IArrangementViewerProps extends ICommonUIProperties {
     dataModel: ScoreBookDataModel;
     selectionManager: SelectionManager;
     inEditMode: boolean;
+    zenMode?: boolean;
+    zenIdentity?: ComponentChild;
 
     /** How note entry makes room. The app reports overwrite while the grid view is active. */
     entryMode: EditEntryMode;
@@ -86,6 +90,7 @@ interface IArrangementViewerState {
     viewerZoom: number;
     trackViewMode: "grid" | "staff";
     mixerExpanded: boolean;
+    selectedZenBars: ReadonlySet<number>;
 
     /** Measures rendered in staff mode. The grid view renders every measure of the arrangement. */
     staffWindow: IMeasureRange;
@@ -158,6 +163,7 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
             autoFollowIsOn: true,
             trackViewMode: settings.viewSettings?.arrangementViewSettings?.displayMode ?? "grid",
             mixerExpanded: false,
+            selectedZenBars: new Set(),
             staffWindow: { first: 1, last: 0 },
         };
 
@@ -166,7 +172,7 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
     }
 
     public override componentDidMount(): void {
-        const { arrangementPlayer, dataModel, selectionManager, inEditMode } = this.props;
+        const { arrangementPlayer, dataModel, selectionManager, inEditMode, zenMode } = this.props;
         const { viewerZoom } = this.state;
 
         selectionManager.setEventContainer(this.arrangementViewerRef.current!, this.scoreElementRegistry);
@@ -195,7 +201,7 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         this.trackViewerInputController = new TrackViewerInputController(contentHost);
         this.trackViewerInputController.attach();
         this.rangeArticulationView = new RangeArticulationView(contentHost, dataModel, selectionManager,
-            this.scoreElementRegistry, this.state.trackViewMode === "staff");
+            this.scoreElementRegistry, this.state.trackViewMode === "staff", zenMode);
         this.activateViewEditor();
         this.applyEditState();
 
@@ -208,6 +214,7 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         requisitions.register("trackChanged", this.handleTrackChanged);
         requisitions.register("measureVisibilityRequested", this.handleMeasureVisibilityRequested);
         requisitions.register("scoreViewportMoveRequested", this.handleScoreViewportMoveRequested);
+        requisitions.register("selectionChanged", this.handleZenSelectionChanged);
 
         setTimeout(this.handleResize, 0);
         this.resizeObserver.observe(this.viewerRef.current!);
@@ -326,10 +333,11 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         requisitions.unregister("trackChanged", this.handleTrackChanged);
         requisitions.unregister("measureVisibilityRequested", this.handleMeasureVisibilityRequested);
         requisitions.unregister("scoreViewportMoveRequested", this.handleScoreViewportMoveRequested);
+        requisitions.unregister("selectionChanged", this.handleZenSelectionChanged);
     }
 
     public override render(): JSX.Element {
-        const { arrangementPlayer, dataModel, selectionManager, inEditMode } = this.props;
+        const { arrangementPlayer, dataModel, selectionManager, inEditMode, zenMode, zenIdentity } = this.props;
         const { trackViewMode, viewerZoom } = this.state;
 
         const arrangement = dataModel.arrangement!;
@@ -354,6 +362,7 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
                             <GridMeasureViewer
                                 key={i + 1}
                                 measureNumber={i + 1}
+                                playOnlyButton={this.renderZenPlayButton(i + 1)}
                                 scoreMetrics={metrics}
                                 {...barViewerProps}
                                 scoreElementRegistry={this.scoreElementRegistry}
@@ -381,6 +390,7 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
                     <StaffMeasureViewer
                         key={bar}
                         barNumber={bar}
+                        playOnlyButton={this.renderZenPlayButton(bar)}
                         {...barViewerProps}
                         measureWidth={measureWidth}
                         rowGeometries={rowGeometries}
@@ -455,6 +465,30 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
             onBarAction: this.handleBarAction,
         };
 
+        let actionBar: ComponentChild;
+        if (!zenMode) {
+            actionBar = <ArrangementActionBar
+                ref={this.actionBarRef}
+                editMode={inEditMode}
+                mixerExpanded={this.state.mixerExpanded}
+                trackViewMode={trackViewMode}
+                trackControlsRef={this.trackControlsRef}
+                onToggleMixer={this.toggleMixer}
+                onTrackViewModeChange={this.setTrackViewMode}
+                barActionStrip={barActionStrip}
+            />;
+        }
+
+        let identity: ComponentChild;
+        if (zenMode) {
+            identity = (
+                <Container className="zenArrangementIdentityHost"
+                    orientation={Orientation.LeftToRight} crossAlignment={ChildAlignment.Center}>
+                    {zenIdentity}
+                </Container>
+            );
+        }
+
         return (
             <>
                 <Container
@@ -463,16 +497,7 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
                     orientation={Orientation.TopDown}
                     crossAlignment={ChildAlignment.Stretch}
                 >
-                    <ArrangementActionBar
-                        ref={this.actionBarRef}
-                        editMode={inEditMode}
-                        mixerExpanded={this.state.mixerExpanded}
-                        trackViewMode={trackViewMode}
-                        trackControlsRef={this.trackControlsRef}
-                        onToggleMixer={this.toggleMixer}
-                        onTrackViewModeChange={this.setTrackViewMode}
-                        barActionStrip={barActionStrip}
-                    />
+                    {actionBar}
                     <Container
                         id="trackViewerContainer"
                         className={viewerContainerClassName}
@@ -481,9 +506,11 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
                         crossAlignment={ChildAlignment.Stretch}
                         style={{ zoom: `${viewerZoom}%` }}
                     >
+                        {identity}
                         <TrackControls innerRef={this.trackControlsRef} tracks={arrangement.tracks}
                             selectionManager={selectionManager} rowGeometries={rowGeometries}
-                            mixerExpanded={this.state.mixerExpanded} trackViewMode={trackViewMode} />
+                            mixerExpanded={this.state.mixerExpanded} trackViewMode={trackViewMode}
+                            labelsOnly={zenMode} />
                         <SelectionEditPopup
                             dataModel={dataModel}
                             selectionManager={selectionManager}
@@ -517,9 +544,46 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         );
     }
 
-    /**
-     * Reports the app's edit state to the editors, which gate their input on it.
-     */
+    private renderZenPlayButton(bar: number): ComponentChild {
+        const { zenMode } = this.props;
+        const { selectedZenBars } = this.state;
+        if (!zenMode) {
+            return undefined;
+        }
+
+        const selected = selectedZenBars.has(bar);
+
+        return (
+            <Button className="zenMeasurePlayButton" aria-pressed={selected} data-bar={bar}
+                title={`Play only this: measure ${bar}`} onClick={() => {
+                    void requisitions.execute("zenMeasureToggled", bar);
+                }}>
+                <span className="zenMeasurePlayDot" />
+                <span>Play only this</span>
+            </Button>
+        );
+    }
+
+    private handleZenSelectionChanged = (): Promise<boolean> => {
+        const { selectionManager } = this.props;
+        const { selectedZenBars: previousBars } = this.state;
+        const selectedZenBars = new Set<number>();
+        for (const entry of selectionManager.currentSelection.values()) {
+            if (entry.target.granularity === SelectionGranularity.Measure) {
+                selectedZenBars.add(entry.target.measure.number);
+            }
+        }
+
+        if (previousBars.size !== selectedZenBars.size || [...selectedZenBars].some((bar) => {
+            return !previousBars.has(bar);
+        })) {
+            this.setState({ selectedZenBars });
+        }
+
+        return Promise.resolve(true);
+    };
+
+    /** Reports the app's edit state to the editors, which gate their input on it. */
     private applyEditState(): void {
         const { inEditMode, entryMode } = this.props;
 

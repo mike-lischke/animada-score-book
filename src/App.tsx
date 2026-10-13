@@ -98,6 +98,7 @@ enum AppPhase {
 interface IAppState {
     phase: AppPhase;
     editMode: boolean;
+    zenMode: boolean;
     sidebarOpen: boolean;
 
     /** The active arrangement view mode (grid or staff notation). */
@@ -181,6 +182,7 @@ export class App extends UIComponent<{}, IAppState> {
         this.state = {
             phase: AppPhase.Checking,
             editMode: false,
+            zenMode: false,
             sidebarOpen: false,
             trackViewMode: AppStorage.loadUISettings()?.viewSettings?.arrangementViewSettings?.displayMode ?? "grid",
             preferredEntryMode: AppStorage.loadUISettings()?.entryMode ?? EditEntryMode.Insert,
@@ -220,10 +222,11 @@ export class App extends UIComponent<{}, IAppState> {
     }
 
     public override shouldComponentUpdate(nextProps: {}, nextState: IAppState): boolean {
-        const { editMode, sidebarOpen, phase, trackViewMode, printing, backendUnreachable,
+        const { editMode, zenMode, sidebarOpen, phase, trackViewMode, printing, backendUnreachable,
             startupError, preferredEntryMode, notificationState, zoom, scoreSaved } = this.state;
 
         return editMode !== nextState.editMode
+            || zenMode !== nextState.zenMode
             || sidebarOpen !== nextState.sidebarOpen || phase !== nextState.phase
             || trackViewMode !== nextState.trackViewMode
             || preferredEntryMode !== nextState.preferredEntryMode
@@ -257,8 +260,9 @@ export class App extends UIComponent<{}, IAppState> {
     }
 
     public render() {
-        const { phase, editMode, sidebarOpen, trackViewMode, notificationState, zoom,
+        const { phase, editMode: requestedEditMode, zenMode, sidebarOpen, trackViewMode, notificationState, zoom,
             printing, printOptions, backendUnreachable, startupError, preferredEntryMode } = this.state;
+        const editMode = requestedEditMode && !zenMode;
         const entryMode = this.effectiveEntryMode(trackViewMode, preferredEntryMode);
         const isRunning = phase === AppPhase.Running;
         const showAnimationDiagnostics = import.meta.env.DEV
@@ -393,6 +397,7 @@ export class App extends UIComponent<{}, IAppState> {
                 editMode={editMode}
                 stats={this.arrangementStats()}
                 saveState={this.arrangementSaveState()}
+                compact={zenMode}
             />;
         }
 
@@ -457,7 +462,8 @@ export class App extends UIComponent<{}, IAppState> {
                 {exportButton}
             </Container>
         );
-        const appHeader = this.renderAppHeader(headerNavigation, arrangementIdentity, headerActions);
+        const appHeader = zenMode
+            ? undefined : this.renderAppHeader(headerNavigation, arrangementIdentity, headerActions);
         let toolsBar: ComponentChild;
         if (editMode && trackViewMode === "staff") {
             toolsBar = <ToolsBar />;
@@ -469,6 +475,7 @@ export class App extends UIComponent<{}, IAppState> {
                     <ErrorBoundary>
                         <Container
                             id="appRoot"
+                            className={zenMode ? "zen-mode" : undefined}
                             orientation={Orientation.TopDown}
                             crossAlignment={ChildAlignment.Stretch}
                         >
@@ -529,6 +536,8 @@ export class App extends UIComponent<{}, IAppState> {
                                             dataModel={this.dataModel}
                                             selectionManager={this.selectionManager}
                                             inEditMode={editMode}
+                                            zenMode={zenMode}
+                                            zenIdentity={zenMode ? arrangementIdentity : undefined}
                                             entryMode={entryMode}
                                         />}
                                     </div>
@@ -537,9 +546,11 @@ export class App extends UIComponent<{}, IAppState> {
                             <AppFooter
                                 barCount={this.arrangementPlayer?.scoreMetrics.bars ?? 0}
                                 zoom={zoom}
+                                zenMode={zenMode}
                                 version={appVersion}
                                 notifications={notificationState}
                                 onZoomChange={this.handleZoomChange}
+                                onToggleZenMode={this.handleToggleZenMode}
                                 onToggleNotifications={this.handleToggleNotifications}
                                 onShowReleaseNotes={this.handleShowReleaseNotes}
                             />
@@ -1734,7 +1745,8 @@ export class App extends UIComponent<{}, IAppState> {
     };
 
     private handleKeyDown(event: KeyboardEvent): void {
-        const { editMode } = this.state;
+        const { editMode: requestedEditMode, zenMode } = this.state;
+        const editMode = requestedEditMode && !zenMode;
 
         // Ctrl/Cmd+S saves the score in edit mode.
         if ((event.ctrlKey || event.metaKey) && !event.shiftKey && !event.altKey && event.key === "s") {
@@ -1785,7 +1797,9 @@ export class App extends UIComponent<{}, IAppState> {
 
         switch (event.key) {
             case "Escape": {
-                this.selectionManager.clearSelection();
+                if (!zenMode) {
+                    this.selectionManager.clearSelection();
+                }
 
                 break;
             }
@@ -1801,7 +1815,7 @@ export class App extends UIComponent<{}, IAppState> {
             // Mac: command+z / command+shift+z
             // We allow overlap for maximum cross-browser consistency, except where it actually causes confusion
             case "z": {
-                if (event.ctrlKey || event.metaKey) {
+                if (!zenMode && (event.ctrlKey || event.metaKey)) {
                     if (event.shiftKey) {
                         this.undoManager?.redo();
                     } else {
@@ -1816,7 +1830,7 @@ export class App extends UIComponent<{}, IAppState> {
             case "y": {
                 // We do not allow command+y to redo on Mac
                 // On Chrome, Firefox, and Safari, it triggers browser things, and so is very confusing to also redo
-                if (event.ctrlKey) {
+                if (!zenMode && event.ctrlKey) {
                     this.undoManager?.redo();
                 }
 
@@ -1958,6 +1972,14 @@ export class App extends UIComponent<{}, IAppState> {
         } else {
             void requisitions.execute("editModeChanged", true);
         }
+    };
+
+    private handleToggleZenMode = (): void => {
+        const { zenMode } = this.state;
+        const enabled = !zenMode;
+        this.setState({ zenMode: enabled, sidebarOpen: false });
+        escapeStack.remove(this.onSidebarEscape);
+        void requisitions.execute("zenModeChanged", enabled);
     };
 
     private confirmExitEditMode = async (): Promise<boolean> => {

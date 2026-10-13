@@ -105,6 +105,7 @@ interface IDragTarget {
 export class RangeArticulationView {
     private tool = RangeArticulationTool.None;
     private staffMode: boolean;
+    private zenMode: boolean;
     private decorationLayer?: HTMLElement;
     private dragImage?: HTMLElement;
     private refreshFrame?: number;
@@ -135,10 +136,12 @@ export class RangeArticulationView {
 
     public constructor(private readonly contentHost: HTMLElement, private readonly dataModel: ScoreBookDataModel,
         private readonly selectionManager: SelectionManager, private readonly registry: ScoreElementRegistry,
-        staffMode: boolean) {
+        staffMode: boolean, zenMode = false) {
         this.staffMode = staffMode;
+        this.zenMode = zenMode;
 
         requisitions.register("rangeArticulationToolChanged", this.handleToolChanged);
+        requisitions.register("zenModeChanged", this.handleZenModeChanged);
         requisitions.register("selectionChanged", this.handleSelectionChanged);
         requisitions.register("trackChanged", this.handleRefreshRequest);
         requisitions.register("arrangementChanged", this.handleRefreshRequest);
@@ -157,6 +160,7 @@ export class RangeArticulationView {
         this.eventHandlersOff();
 
         requisitions.unregister("rangeArticulationToolChanged", this.handleToolChanged);
+        requisitions.unregister("zenModeChanged", this.handleZenModeChanged);
         requisitions.unregister("selectionChanged", this.handleSelectionChanged);
         requisitions.unregister("trackChanged", this.handleRefreshRequest);
         requisitions.unregister("arrangementChanged", this.handleRefreshRequest);
@@ -196,13 +200,26 @@ export class RangeArticulationView {
     }
 
     private handleToolChanged = (tool: RangeArticulationTool): Promise<boolean> => {
-        const effective = this.staffMode ? tool : RangeArticulationTool.None;
+        const effective = this.staffMode && !this.zenMode ? tool : RangeArticulationTool.None;
         if (this.tool !== effective) {
             this.tool = effective;
             this.removeDragImage();
             this.holdPointer(effective !== RangeArticulationTool.None);
             this.scheduleRefresh();
         }
+
+        return Promise.resolve(true);
+    };
+
+    private handleZenModeChanged = (enabled: boolean): Promise<boolean> => {
+        this.zenMode = enabled;
+        if (enabled) {
+            this.endDrag(true);
+            this.selectedId = undefined;
+            this.leaveTool();
+        }
+
+        this.scheduleRefresh();
 
         return Promise.resolve(true);
     };
@@ -309,7 +326,7 @@ export class RangeArticulationView {
      * @param event The pointer event of the press.
      */
     private handleMarkingPointerDown = (event: PointerEvent): void => {
-        if (this.tool !== RangeArticulationTool.None || !this.staffMode || event.button !== 0) {
+        if (this.zenMode || this.tool !== RangeArticulationTool.None || !this.staffMode || event.button !== 0) {
             return;
         }
 
@@ -703,6 +720,10 @@ export class RangeArticulationView {
     };
 
     private handleKeyDown = (event: KeyboardEvent): void => {
+        if (this.zenMode) {
+            return;
+        }
+
         if (event.key === "Escape") {
             if (this.tool !== RangeArticulationTool.None) {
                 event.stopPropagation();

@@ -8,7 +8,7 @@ import {
 } from "../core/ScoreBookDataModel.js";
 import type { IFraction } from "../core/types/general.js";
 import { RangeArticulations } from "../core/RangeArticulations.js";
-import { requisitions } from "../supplement/Requisitions.js";
+import { requisitions, type IPlaybackOrderChange } from "../supplement/Requisitions.js";
 import { PlaybackOrder } from "./PlaybackOrder.js";
 import type { TimeCoordinator } from "./TimeCoordinator.js";
 import { Event, IInterval } from "./types.js";
@@ -36,6 +36,7 @@ export class TrackPlayer {
     private readonly timeCoordinator: TimeCoordinator;
 
     private disposed = false;
+    private playOrder?: readonly number[];
 
     /**
      * The events playback reads, one entry per sounding event of the performance: a measure contributes its own
@@ -50,10 +51,12 @@ export class TrackPlayer {
      *
      * @param track The track view to observe and play.
      * @param timeCoordinator Converts score timings to real-time and provides loop/length context.
+     * @param playOrder The current performance order remembered by the arrangement player.
      */
-    public constructor(track: ISbDmTrack, timeCoordinator: TimeCoordinator) {
+    public constructor(track: ISbDmTrack, timeCoordinator: TimeCoordinator, playOrder?: readonly number[]) {
         this.track = track;
         this.timeCoordinator = timeCoordinator;
+        this.playOrder = playOrder;
 
         // Build runtime measure events immediately for UI/rendering, even if audio buffers are not loaded yet.
         this.rebuildEventCache();
@@ -67,6 +70,7 @@ export class TrackPlayer {
         requisitions.register("trackChanged", this.handleTrackChanged);
         requisitions.register("timeParamsChanged", this.handleTimeParamsChanged);
         requisitions.register("arrangementChanged", this.handleArrangementDestroy);
+        requisitions.register("playbackOrderChanged", this.handlePlaybackOrderChanged);
     }
 
     /**
@@ -116,7 +120,19 @@ export class TrackPlayer {
         requisitions.unregister("trackChanged", this.handleTrackChanged);
         requisitions.unregister("timeParamsChanged", this.handleTimeParamsChanged);
         requisitions.unregister("arrangementChanged", this.handleArrangementDestroy);
+        requisitions.unregister("playbackOrderChanged", this.handlePlaybackOrderChanged);
     }
+
+    private handlePlaybackOrderChanged = (order: IPlaybackOrderChange): Promise<boolean> => {
+        if (order.arrangementId !== this.track.arrangement.id) {
+            return Promise.resolve(false);
+        }
+
+        this.playOrder = order.bars;
+        this.rebuildPlaybackEvents(this.track.measures);
+
+        return Promise.resolve(true);
+    };
 
     /** Rebuilds the resolved runtime note events from the persisted measure events. */
     private rebuildEventCache = (): void => {
@@ -140,7 +156,7 @@ export class TrackPlayer {
     private rebuildPlaybackEvents(measures: readonly ISbDmTrackPiece[]): void {
         const sources = PlaybackOrder.sourcesOf(measures);
         const arrangement = this.track.arrangement;
-        const order = PlaybackOrder.performedBars(arrangement.repeatBars ?? new Map(),
+        const order = this.playOrder ?? PlaybackOrder.performedBars(arrangement.repeatBars ?? new Map(),
             arrangement.timeParams.length);
         const { secondsPerBar } = this.timeCoordinator.metrics;
         const events: IPerformedEvent[] = [];

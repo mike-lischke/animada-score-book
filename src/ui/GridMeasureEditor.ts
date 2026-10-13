@@ -462,6 +462,11 @@ export class GridMeasureEditor extends MeasureEditor {
                 tooltip: `${tooltip} (${index + 1})`,
                 icon: h(NoteStyleSymbolViewer, { noteStyle: style, "data-tooltip": "inherit" }),
                 onClick: () => {
+                    if (!this.editMode) {
+                        return;
+                    }
+
+                    this.cursor = cursor;
                     this.applyNoteActionStyle(style.id);
                 },
             };

@@ -35,6 +35,8 @@ export interface IAppFooterProps extends ICommonUIProperties {
 
     /** Track viewer zoom in percent. */
     zoom: number;
+    zenMode?: boolean;
+    onToggleZenMode?: () => void;
 
     /** App version, shown on the release-notes button. */
     version: string;
@@ -69,7 +71,7 @@ export class AppFooter extends UIComponent<IAppFooterProps, IAppFooterState> {
     }
 
     public override render(): ComponentChild {
-        const { className, barCount, zoom, version, notifications } = this.props;
+        const { className, barCount, zoom, version, notifications, zenMode, onToggleZenMode } = this.props;
         const { viewport } = this.state;
 
         const rangeCaption = viewport.startBar === viewport.endBar
@@ -139,6 +141,16 @@ export class AppFooter extends UIComponent<IAppFooterProps, IAppFooterState> {
                             <Icon src={UIIcon.Add} />
                         </Button>
                     </Container>
+                    <Button
+                        id="zenModeButton"
+                        className="appFooterZenButton"
+                        title={zenMode ? "Exit Zen mode" : "Enter Zen mode"}
+                        data-tooltip={zenMode ? "Exit Zen mode" : "Enter Zen mode"}
+                        aria-pressed={zenMode ?? false}
+                        onClick={onToggleZenMode}
+                    >
+                        <Icon src={zenMode ? UIIcon.ScreenNormal : UIIcon.ScreenFull} />
+                    </Button>
                     <span className="appFooterDivider" />
                     <Button
                         className="appFooterVersionButton"

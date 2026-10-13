@@ -6,7 +6,9 @@
 import { cleanup, render, type RenderResult } from "@testing-library/preact";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { ArrangementIdentity, ArrangementSaveState } from "../../src/components/ui/Header/ArrangementIdentity.js";
+import {
+    ArrangementIdentity, ArrangementSaveState, type IArrangementIdentityProps,
+} from "../../src/components/ui/Header/ArrangementIdentity.js";
 import { ScoreBookDataModel } from "../../src/core/ScoreBookDataModel.js";
 import { createInstrument } from "../unit-test-helpers.js";
 
@@ -18,13 +20,11 @@ describe("ArrangementIdentity", { concurrent: false }, () => {
     /**
      * Renders the identity of a fresh arrangement.
      *
-     * @param editMode Whether the title is editable.
-     * @param saveState The save state the chip shows.
+     * @param overrides The identity props that differ from the default header state.
      *
      * @returns The rendered container.
      */
-    const renderIdentity = (editMode = false,
-        saveState = ArrangementSaveState.Unchanged): Element => {
+    const renderIdentity = (overrides: Partial<IArrangementIdentityProps> = {}): Element => {
         const dataModel = new ScoreBookDataModel();
         const arrangement = dataModel.startNewArrangement([createInstrument("0", 0, 0)], { title: "Samba Test" });
 
@@ -32,9 +32,10 @@ describe("ArrangementIdentity", { concurrent: false }, () => {
             <ArrangementIdentity
                 arrangement={arrangement}
                 dataModel={dataModel}
-                editMode={editMode}
+                editMode={false}
                 stats={statsCaption}
-                saveState={saveState}
+                saveState={ArrangementSaveState.Unchanged}
+                {...overrides}
             />,
         );
 
@@ -47,6 +48,41 @@ describe("ArrangementIdentity", { concurrent: false }, () => {
         renderResult = null;
     });
 
+    it("renders with the minimum props", () => {
+        expect(renderIdentity()).toMatchSnapshot();
+    });
+
+    it("renders with all props set", () => {
+        const container = renderIdentity({
+            className: "zen-identity",
+            editMode: true,
+            stats: "6/8 • 4 bars • 12 s",
+            saveState: ArrangementSaveState.Unsaved,
+            compact: true,
+        });
+
+        expect(container).toMatchSnapshot();
+    });
+
+    it("puts the compact stats inside the read-only name label", () => {
+        const container = renderIdentity({ compact: true, editMode: true });
+        const title = container.querySelector("#arrangementIdentityTitle");
+
+        expect(title?.tagName).not.toBe("INPUT");
+        expect(title?.textContent).toBe(`Samba Test • ${statsCaption}`);
+        expect(title?.querySelector(".arrangementIdentityStats")?.textContent).toBe(` • ${statsCaption}`);
+        expect(container.querySelector("#scoreStats")).toBeNull();
+        expect(container.querySelector(".arrangementIdentitySection")?.textContent).toBe("Score Library");
+    });
+
+    it.each([ArrangementSaveState.Unchanged, ArrangementSaveState.Saved, ArrangementSaveState.Unsaved])(
+        "omits the save badge in compact mode for state %s", (saveState) => {
+            const container = renderIdentity({ compact: true, saveState });
+
+            expect(container.querySelector(".arrangementSaveChip")).toBeNull();
+        },
+    );
+
     it("shows the arrangement name and its stats below", () => {
         const container = renderIdentity();
 
@@ -55,7 +91,7 @@ describe("ArrangementIdentity", { concurrent: false }, () => {
     });
 
     it("lets the title be edited in edit mode", () => {
-        const container = renderIdentity(true);
+        const container = renderIdentity({ editMode: true });
 
         expect(container.querySelector<HTMLInputElement>("#arrangementIdentityTitle")?.value).toBe("Samba Test");
     });
@@ -65,7 +101,7 @@ describe("ArrangementIdentity", { concurrent: false }, () => {
             renderResult?.unmount();
             renderResult = null;
 
-            return renderIdentity(false, state).querySelector<HTMLElement>(".arrangementSaveChip")!;
+            return renderIdentity({ saveState: state }).querySelector<HTMLElement>(".arrangementSaveChip")!;
         };
 
         expect(chipOf(ArrangementSaveState.Unchanged).textContent).toBe("Unchanged");
@@ -78,7 +114,7 @@ describe("ArrangementIdentity", { concurrent: false }, () => {
             renderResult?.unmount();
             renderResult = null;
 
-            return renderIdentity(false, state).querySelector<HTMLElement>(".arrangementSaveChip")!;
+            return renderIdentity({ saveState: state }).querySelector<HTMLElement>(".arrangementSaveChip")!;
         };
 
         expect(chipOf(ArrangementSaveState.Unchanged).classList.contains("uiBadge-neutral")).toBe(true);

@@ -74,6 +74,9 @@ export class SelectionManager {
 
     /** Edit mode as last published on `editModeChanged`, used to initialise new selection views. */
     private editMode = false;
+    private zenMode = false;
+    private selectionBeforeZen?: ISelectionEntry[];
+    private anchorBeforeZen?: ISelectionPoint;
 
     /**
      * Entry mode as last published on `editEntryModeChanged`, used to initialise new selection views. The
@@ -90,6 +93,8 @@ export class SelectionManager {
         requisitions.register("scoreBookLoaded", this.handleScoreBookLoaded);
         requisitions.register("arrangementReverted", this.handleArrangementReverted);
         requisitions.register("editModeChanged", this.handleEditModeChanged);
+        requisitions.register("zenModeChanged", this.handleZenModeChanged);
+        requisitions.register("zenMeasureToggled", this.handleZenMeasureToggled);
         requisitions.register("editEntryModeChanged", this.handleEntryModeChanged);
     }
 
@@ -111,6 +116,8 @@ export class SelectionManager {
         requisitions.unregister("scoreBookLoaded", this.handleScoreBookLoaded);
         requisitions.unregister("arrangementReverted", this.handleArrangementReverted);
         requisitions.unregister("editModeChanged", this.handleEditModeChanged);
+        requisitions.unregister("zenModeChanged", this.handleZenModeChanged);
+        requisitions.unregister("zenMeasureToggled", this.handleZenMeasureToggled);
         requisitions.unregister("editEntryModeChanged", this.handleEntryModeChanged);
 
         if (this.saveDebounceId !== undefined) {
@@ -142,7 +149,8 @@ export class SelectionManager {
             this.view.dispose();
         }
 
-        this.view = new SelectionView(this, container, scoreElementRegistry, this.editMode, this.entryMode);
+        this.view = new SelectionView(this, container, scoreElementRegistry, this.editMode, this.entryMode,
+            this.zenMode);
     }
 
     /**
@@ -923,6 +931,7 @@ export class SelectionManager {
             void requisitions.execute("playRangeChanged", {
                 from: sorted[0],
                 to: sorted[sorted.length - 1],
+                bars: sorted,
             });
         } else {
             void requisitions.execute("playRangeChanged", undefined);
@@ -939,6 +948,10 @@ export class SelectionManager {
      * @returns A resolved promise to satisfy the requisition handler signature.
      */
     private handlePlayerStateChanged = (state: PlayerPlayState): Promise<boolean> => {
+        if (this.zenMode) {
+            return Promise.resolve(true);
+        }
+
         if (state === PlayerPlayState.Playing || state === PlayerPlayState.Counting) {
             this.switchToMeasureSelection();
         } else {
@@ -1051,6 +1064,11 @@ export class SelectionManager {
     private schedulePersist(): void {
         if (this.saveDebounceId) {
             clearTimeout(this.saveDebounceId);
+            this.saveDebounceId = undefined;
+        }
+
+        if (this.zenMode) {
+            return;
         }
 
         this.saveDebounceId = setTimeout(() => {
@@ -1172,6 +1190,47 @@ export class SelectionManager {
      */
     private handleEditModeChanged = (enabled: boolean): Promise<boolean> => {
         this.editMode = enabled;
+
+        return Promise.resolve(true);
+    };
+
+    private handleZenModeChanged = (enabled: boolean): Promise<boolean> => {
+        if (this.zenMode === enabled) {
+            return Promise.resolve(true);
+        }
+
+        this.zenMode = enabled;
+        if (enabled) {
+            this.selectionBeforeZen = [...(this.originalSelection ?? this.currentSelection).values()];
+            this.anchorBeforeZen = this.selectionAnchor;
+            this.originalSelection = undefined;
+            this.selectionAnchor = undefined;
+            this.replaceSelection([]);
+        } else {
+            this.replaceSelection(this.selectionBeforeZen ?? []);
+            this.selectionAnchor = this.anchorBeforeZen;
+            this.selectionBeforeZen = undefined;
+            this.anchorBeforeZen = undefined;
+        }
+
+        this.publishPlayRange();
+
+        return Promise.resolve(true);
+    };
+
+    private handleZenMeasureToggled = (bar: number): Promise<boolean> => {
+        if (!this.zenMode) {
+            return Promise.resolve(false);
+        }
+
+        const measure = this.measureOfBar(bar);
+        if (measure !== undefined) {
+            this.toggleSelection([{
+                granularity: SelectionGranularity.Measure,
+                target: { granularity: SelectionGranularity.Measure, measure },
+            }]);
+            this.publishPlayRange();
+        }
 
         return Promise.resolve(true);
     };

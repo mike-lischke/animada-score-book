@@ -94,7 +94,8 @@ export class SelectionView {
     private autoScrollTimer?: ReturnType<typeof setInterval>;
     private autoScrollDX = 0;
     private autoScrollDY = 0;
-    private editMode: boolean;
+    private requestedEditMode: boolean;
+    private zenMode: boolean;
     private entryMode: EditEntryMode;
     private selectionRefreshFrame?: number;
 
@@ -115,15 +116,18 @@ export class SelectionView {
      * @param editMode The edit mode as remembered by the manager. The view cannot subscribe early
      *                 enough to receive the requisition that announced the current state.
      * @param entryMode The entry mode as remembered by the manager, for the same reason.
+     * @param zenMode Whether editing is suspended by Zen mode.
      */
     public constructor(private manager: SelectionManager, private eventContainer: HTMLElement,
         private readonly scoreElementRegistry?: ScoreElementRegistry, editMode = false,
-        entryMode = EditEntryMode.Overwrite) {
-        this.editMode = editMode;
+        entryMode = EditEntryMode.Overwrite, zenMode = false) {
+        this.requestedEditMode = editMode;
+        this.zenMode = zenMode;
         this.entryMode = entryMode;
 
         requisitions.register("selectionChanged", this.handleSelectionChanged);
         requisitions.register("editModeChanged", this.handleEditModeChanged);
+        requisitions.register("zenModeChanged", this.handleZenModeChanged);
         requisitions.register("editEntryModeChanged", this.handleEntryModeChanged);
         requisitions.register("trackChanged", this.scheduleOverlayRefresh);
         requisitions.register("arrangementChanged", this.scheduleOverlayRefresh);
@@ -133,12 +137,17 @@ export class SelectionView {
         document.addEventListener("keyup", this.handleKeyUp);
     }
 
+    private get editMode(): boolean {
+        return this.requestedEditMode && !this.zenMode;
+    }
+
     public dispose(): void {
         this.cancelDrag();
         this.eventContainer.removeEventListener("pointerdown", this.handlePointerDown);
         document.removeEventListener("keydown", this.handleKeyDown);
         requisitions.unregister("selectionChanged", this.handleSelectionChanged);
         requisitions.unregister("editModeChanged", this.handleEditModeChanged);
+        requisitions.unregister("zenModeChanged", this.handleZenModeChanged);
         requisitions.unregister("editEntryModeChanged", this.handleEntryModeChanged);
         requisitions.unregister("trackChanged", this.scheduleOverlayRefresh);
         requisitions.unregister("arrangementChanged", this.scheduleOverlayRefresh);
@@ -162,7 +171,7 @@ export class SelectionView {
     }
 
     private handlePointerDown = (event: PointerEvent): void => {
-        if (event.defaultPrevented || this.isFormElement(event.target)) {
+        if ((this.zenMode && event.button !== 0) || event.defaultPrevented || this.isFormElement(event.target)) {
             return;
         }
 
@@ -186,6 +195,14 @@ export class SelectionView {
         this.startY = event.clientY;
         this.lastPointerX = event.clientX;
         this.lastPointerY = event.clientY;
+
+        if (this.zenMode) {
+            this.startScrollLeft = this.horizontalScrollHost?.scrollLeft ?? 0;
+            this.startVerticalScrollTop = this.verticalScrollHost?.scrollTop ?? 0;
+            event.preventDefault();
+
+            return;
+        }
 
         const half = 2;
         const clickRect = new DOMRect(event.clientX - half, event.clientY - half,
@@ -221,6 +238,20 @@ export class SelectionView {
     };
 
     private handlePointerMove = (event: PointerEvent): void => {
+        if (this.zenMode && this.dragPending) {
+            if (this.horizontalScrollHost) {
+                this.horizontalScrollHost.scrollLeft = this.startScrollLeft + this.startX - event.clientX;
+            }
+
+            if (this.verticalScrollHost) {
+                this.verticalScrollHost.scrollTop = this.startVerticalScrollTop + this.startY - event.clientY;
+            }
+
+            event.preventDefault();
+
+            return;
+        }
+
         if ((!this.dragPending && !this.isDragging) || !this.rectElement) {
             return;
         }
@@ -243,6 +274,12 @@ export class SelectionView {
     };
 
     private handlePointerUp = (event: PointerEvent): void => {
+        if (this.zenMode) {
+            this.cancelDrag();
+
+            return;
+        }
+
         if (!this.isDragging && this.dragPending) {
             // The user pressed and released without significant movement — treat as a click.
             // The selection mode is already live on the manager via handleKeyDown/handleKeyUp.
@@ -320,6 +357,10 @@ export class SelectionView {
     }
 
     private handleKeyDown = (event: KeyboardEvent): void => {
+        if (this.zenMode) {
+            return;
+        }
+
         if (this.handleArrowKey(event)) {
             return;
         }
@@ -866,8 +907,22 @@ export class SelectionView {
     };
 
     private handleEditModeChanged = (enabled: boolean): Promise<boolean> => {
-        this.editMode = enabled;
-        if (!enabled) {
+        this.requestedEditMode = enabled;
+        this.refreshEditState();
+
+        return Promise.resolve(true);
+    };
+
+    private handleZenModeChanged = (enabled: boolean): Promise<boolean> => {
+        this.zenMode = enabled;
+        this.cancelDrag();
+        this.refreshEditState();
+
+        return Promise.resolve(true);
+    };
+
+    private refreshEditState(): void {
+        if (!this.editMode) {
             const overlayContainer = this.eventContainer.querySelector<HTMLElement>(
                 "#trackViewerDecorationOverlay",
             );
@@ -879,9 +934,7 @@ export class SelectionView {
         }
 
         this.updateTrackViewerOverlays();
-
-        return Promise.resolve(true);
-    };
+    }
 
     private handleEntryModeChanged = (mode: EditEntryMode): Promise<boolean> => {
         this.entryMode = mode;
@@ -921,7 +974,7 @@ export class SelectionView {
             });
         }
 
-        if (this.manager.currentSelection.size === 0) {
+        if (this.zenMode || this.manager.currentSelection.size === 0) {
             return;
         }
 

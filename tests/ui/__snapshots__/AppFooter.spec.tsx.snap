@@ -1,0 +1,263 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`AppFooter > renders with all props set 1`] = `
+<div>
+  <div
+    class="container appFooter zen-footer zen-footer"
+    id="appFooter"
+    style="flex-direction: row; align-items: center;"
+  >
+    <span
+      class="label appFooterRange"
+    >
+      Measure 1 of 8
+    </span>
+    <div
+      class="scoreNavigator appFooterNavigator appFooterNavigator"
+    >
+      <div
+        class="scoreNavigatorTrack"
+      >
+        <div
+          class="scoreNavigatorWindow"
+          style="left: 0%; width: 100%;"
+        />
+      </div>
+    </div>
+    <div
+      class="container appFooterActions"
+      style="flex-direction: row; align-items: center;"
+    >
+      <div
+        class="container appFooterZoom"
+        style="flex-direction: row; align-items: center;"
+      >
+        <button
+          class="btn du-btn appFooterZoomButton"
+          title="Zoom out"
+        >
+          <svg
+            class="icon"
+            data-icon="HorizontalRule"
+            fill="currentColor"
+            height="1em"
+            viewBox="0 0 24 24"
+            width="1em"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M19,13H5V11H19V13Z"
+            />
+          </svg>
+        </button>
+        <span
+          class="label appFooterZoomValue"
+        >
+          150%
+        </span>
+        <button
+          class="btn du-btn du-btn-disabled appFooterZoomButton"
+          disabled=""
+          title="Zoom in"
+        >
+          <svg
+            class="icon"
+            data-icon="Add"
+            fill="currentColor"
+            height="1em"
+            viewBox="0 0 24 24"
+            width="1em"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M19,13H13V19H11V13H5V11H11V5H13V11H19V13Z"
+            />
+          </svg>
+        </button>
+      </div>
+      <button
+        aria-pressed="true"
+        class="btn du-btn appFooterZenButton"
+        data-tooltip="Exit Zen mode"
+        id="zenModeButton"
+        title="Exit Zen mode"
+      >
+        <svg
+          class="icon"
+          data-icon="ScreenNormal"
+          fill="currentColor"
+          height="1em"
+          viewBox="0 0 24 24"
+          width="1em"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <path
+            d="M14,14H19V16H16V19H14V14M5,14H10V19H8V16H5V14M8,5H10V10H5V8H8V5M19,8V10H14V5H16V8H19Z"
+          />
+        </svg>
+      </button>
+      <span
+        class="appFooterDivider"
+      />
+      <button
+        class="btn du-btn appFooterVersionButton"
+        title="Release Notes"
+      >
+        v2.0.0
+      </button>
+      <button
+        class="btn du-btn appFooterNotificationButton"
+        id="showNotificationHistory"
+        title="Hide notifications"
+      >
+        <svg
+          class="icon"
+          data-icon="BellSlash"
+          fill="currentColor"
+          height="1em"
+          viewBox="0 0 24 24"
+          width="1em"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <path
+            d="M22.11,21.46L2.39,1.73L1.11,3L5.83,7.72C5.29,8.73 5,9.86 5,11V17L3,19V20H18.11L20.84,22.73L22.11,21.46M7,18V11C7,10.39 7.11,9.79 7.34,9.23L16.11,18H7M10,21H14A2,2 0 0,1 12,23A2,2 0 0,1 10,21M8.29,5.09C8.82,4.75 9.4,4.5 10,4.29C10,4.19 10,4.1 10,4A2,2 0 0,1 12,2A2,2 0 0,1 14,4C14,4.1 14,4.19 14,4.29C16.97,5.17 19,7.9 19,11V15.8L17,13.8V11A5,5 0 0,0 12,6C11.22,6 10.45,6.2 9.76,6.56L8.29,5.09Z"
+          />
+        </svg>
+        <span
+          class="appFooterNotificationBadge"
+        >
+          2
+        </span>
+      </button>
+    </div>
+  </div>
+</div>
+`;
+
+exports[`AppFooter > renders with the minimum props 1`] = `
+<div>
+  <div
+    class="container appFooter"
+    id="appFooter"
+    style="flex-direction: row; align-items: center;"
+  >
+    <span
+      class="label appFooterRange"
+    >
+      Measure 1 of 16
+    </span>
+    <div
+      class="scoreNavigator appFooterNavigator appFooterNavigator"
+    >
+      <div
+        class="scoreNavigatorTrack"
+      >
+        <div
+          class="scoreNavigatorWindow"
+          style="left: 0%; width: 100%;"
+        />
+      </div>
+    </div>
+    <div
+      class="container appFooterActions"
+      style="flex-direction: row; align-items: center;"
+    >
+      <div
+        class="container appFooterZoom"
+        style="flex-direction: row; align-items: center;"
+      >
+        <button
+          class="btn du-btn appFooterZoomButton"
+          title="Zoom out"
+        >
+          <svg
+            class="icon"
+            data-icon="HorizontalRule"
+            fill="currentColor"
+            height="1em"
+            viewBox="0 0 24 24"
+            width="1em"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M19,13H5V11H19V13Z"
+            />
+          </svg>
+        </button>
+        <span
+          class="label appFooterZoomValue"
+        >
+          100%
+        </span>
+        <button
+          class="btn du-btn appFooterZoomButton"
+          title="Zoom in"
+        >
+          <svg
+            class="icon"
+            data-icon="Add"
+            fill="currentColor"
+            height="1em"
+            viewBox="0 0 24 24"
+            width="1em"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M19,13H13V19H11V13H5V11H11V5H13V11H19V13Z"
+            />
+          </svg>
+        </button>
+      </div>
+      <button
+        aria-pressed="false"
+        class="btn du-btn appFooterZenButton"
+        data-tooltip="Enter Zen mode"
+        id="zenModeButton"
+        title="Enter Zen mode"
+      >
+        <svg
+          class="icon"
+          data-icon="ScreenFull"
+          fill="currentColor"
+          height="1em"
+          viewBox="0 0 24 24"
+          width="1em"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <path
+            d="M5,5H10V7H7V10H5V5M14,5H19V10H17V7H14V5M17,14H19V19H14V17H17V14M10,17V19H5V14H7V17H10Z"
+          />
+        </svg>
+      </button>
+      <span
+        class="appFooterDivider"
+      />
+      <button
+        class="btn du-btn appFooterVersionButton"
+        title="Release Notes"
+      >
+        v1.5.0
+      </button>
+      <button
+        class="btn du-btn appFooterNotificationButton"
+        id="showNotificationHistory"
+        title="No notifications"
+      >
+        <svg
+          class="icon"
+          data-icon="Bell"
+          fill="currentColor"
+          height="1em"
+          viewBox="0 0 24 24"
+          width="1em"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <path
+            d="M10 21H14C14 22.1 13.1 23 12 23S10 22.1 10 21M21 19V20H3V19L5 17V11C5 7.9 7 5.2 10 4.3V4C10 2.9 10.9 2 12 2S14 2.9 14 4V4.3C17 5.2 19 7.9 19 11V17L21 19M17 11C17 8.2 14.8 6 12 6S7 8.2 7 11V18H17V11Z"
+          />
+        </svg>
+      </button>
+    </div>
+  </div>
+</div>
+`;

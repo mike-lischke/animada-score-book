@@ -35,12 +35,60 @@ export interface IArrangementIdentityProps extends ICommonUIProperties {
 
     /** How the current score stands towards the backend. */
     saveState: ArrangementSaveState;
+    compact?: boolean;
 }
 
 /** The header's arrangement identity: its name with the save state, and its performance stats below. */
 export class ArrangementIdentity extends UIComponent<IArrangementIdentityProps> {
     public override render(): ComponentChild {
-        const { className, arrangement, dataModel, editMode, stats, saveState } = this.props;
+        const { className, stats, compact } = this.props;
+        const title = this.renderTitle();
+        const badge = compact ? undefined : this.renderSaveBadge();
+        const statsLabel = compact
+            ? undefined : <Label id="scoreStats" className="arrangementIdentityStats" caption={stats} />;
+
+        return (
+            <Container
+                className={this.generateFinalClassName(["arrangementIdentity", className])}
+                orientation={Orientation.TopDown}
+                mainAlignment={ChildAlignment.Center}
+                crossAlignment={ChildAlignment.Start}
+                {...this.dataAttributes}
+            >
+                <Container
+                    className="arrangementIdentityRow"
+                    orientation={Orientation.LeftToRight}
+                    crossAlignment={ChildAlignment.Center}
+                >
+                    <Label className="arrangementIdentitySection" caption="Score Library" />
+                    <Label className="arrangementIdentityChevron" caption={"\u203a"} />
+                    {title}
+                    {badge}
+                </Container>
+                {statsLabel}
+            </Container>
+        );
+    }
+
+    private renderTitle(): ComponentChild {
+        const { arrangement, dataModel, editMode, stats, compact } = this.props;
+        if (compact) {
+            return (
+                <Label id="arrangementIdentityTitle">
+                    {arrangement.title}
+                    <span className="arrangementIdentityStats">{` \u2022 ${stats}`}</span>
+                </Label>
+            );
+        }
+
+        return (
+            <ArrangementTitle id="arrangementIdentityTitle" arrangement={arrangement}
+                dataModel={dataModel} editMode={editMode} />
+        );
+    }
+
+    private renderSaveBadge(): ComponentChild {
+        const { saveState } = this.props;
 
         let saveCaption: string;
         let badgeVariant: BadgeVariant;
@@ -67,31 +115,6 @@ export class ArrangementIdentity extends UIComponent<IArrangementIdentityProps> 
             }
         }
 
-        return (
-            <Container
-                className={this.generateFinalClassName(["arrangementIdentity", className])}
-                orientation={Orientation.TopDown}
-                mainAlignment={ChildAlignment.Center}
-                crossAlignment={ChildAlignment.Start}
-                {...this.dataAttributes}
-            >
-                <Container
-                    className="arrangementIdentityRow"
-                    orientation={Orientation.LeftToRight}
-                    crossAlignment={ChildAlignment.Center}
-                >
-                    <Label className="arrangementIdentitySection" caption="Score Library" />
-                    <Label className="arrangementIdentityChevron" caption={"\u203a"} />
-                    <ArrangementTitle
-                        id="arrangementIdentityTitle"
-                        arrangement={arrangement}
-                        dataModel={dataModel}
-                        editMode={editMode}
-                    />
-                    <Badge className="arrangementSaveChip" variant={badgeVariant} caption={saveCaption} />
-                </Container>
-                <Label id="scoreStats" className="arrangementIdentityStats" caption={stats} />
-            </Container>
-        );
+        return <Badge className="arrangementSaveChip" variant={badgeVariant} caption={saveCaption} />;
     }
 }

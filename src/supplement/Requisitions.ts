@@ -69,6 +69,17 @@ export interface INotificationState {
     showHistory: boolean;
 }
 
+export interface IPlayRange {
+    from: number;
+    to: number;
+    bars?: readonly number[];
+}
+
+export interface IPlaybackOrderChange {
+    arrangementId: number;
+    bars: readonly number[];
+}
+
 /** A generic type to extract the (single) callback parameter type from the callback map. */
 export type IRequisitionCallbackValues<K extends keyof IRequestTypeMap> = Parameters<IRequestTypeMap[K]>[0];
 
@@ -80,7 +91,8 @@ export interface IRequestTypeMap {
     /** Refresh staff decorations after a new measure window arrives or rendered rows move. */
     "staffWindowChanged": SimpleCallback;
 
-    "playRangeChanged": (range?: { from: number; to: number; }) => Promise<boolean>;
+    "playRangeChanged": (range?: IPlayRange) => Promise<boolean>;
+    "playbackOrderChanged": (order: IPlaybackOrderChange) => Promise<boolean>;
     "animationStateChanged": (state: PlayerPlayState) => Promise<boolean>;
     "playerStateChanged": (state: PlayerPlayState) => Promise<boolean>;
 
@@ -125,6 +137,10 @@ export interface IRequestTypeMap {
     "notesClicked": (noteIds: number[]) => Promise<boolean>;
 
     "editModeChanged": (enabled: boolean) => Promise<boolean>;
+
+    "zenModeChanged": (enabled: boolean) => Promise<boolean>;
+
+    "zenMeasureToggled": (bar: number) => Promise<boolean>;
 
     /** The effective entry mode, published by its button and applied by the app; insert is staff-only. */
     "editEntryModeChanged": (mode: EditEntryMode) => Promise<boolean>;
