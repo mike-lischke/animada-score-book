@@ -169,7 +169,7 @@ test("opens the barline as a resize handle in edit mode only", async ({ page }) 
     await expect(page.locator(".staff-measure-resize-handle").first()).toHaveCSS("cursor", "col-resize");
 
     // The grid view has no resizing, so it has no handles either.
-    await page.locator("input.trackViewModeToggle").first().click({ force: true });
+    await page.locator("button.trackViewModeToggle").first().click({ force: true });
     await expect(page.locator(".grid-measure-viewer").first()).toBeVisible();
     await expect(page.locator(".staff-measure-resize-handle")).toHaveCount(0);
 });
@@ -304,7 +304,7 @@ test("places the play head for the view that is shown", async ({ page }) => {
         return playBeamTransform(page);
     }).toBe(`translate3d(${prefixWidthPx}px, 0px, 0px)`);
 
-    await page.locator("input.trackViewModeToggle").first().click({ force: true });
+    await page.locator("button.trackViewModeToggle").first().click({ force: true });
     await expect(page.locator(".grid-measure-viewer").first()).toBeVisible();
     await expect.poll(() => {
         return playBeamTransform(page);

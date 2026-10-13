@@ -329,7 +329,7 @@ export class App extends UIComponent<{}, IAppState> {
                 disabled={!this.undoManager?.canUndo}
                 onClick={this.handleSaveClick}
             >
-                <Icon src={UIIcon.Save} data-tooltip="inherit" />
+                <Icon src={UIIcon.TrayArrowDown} data-tooltip="inherit" />
             </Button>;
 
             newScoreButton = <Button
@@ -339,7 +339,7 @@ export class App extends UIComponent<{}, IAppState> {
                 disabled={editMode}
                 onClick={this.handleNewScoreClick}
             >
-                <Icon src={UIIcon.NewFile} data-tooltip="inherit" />
+                <Icon src={UIIcon.NewScore} data-tooltip="inherit" />
             </Button>;
 
             if (this.arrangementPlayer) {

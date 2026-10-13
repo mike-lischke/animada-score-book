@@ -126,7 +126,14 @@ test("clicking just below a track piece's top edge selects the track piece", asy
     expect(box!.y + box!.height).toBeLessThanOrEqual(second!.y + 2);
 });
 
-test("clicking above a staff selects the measure, not the track piece", async ({ page }) => {
+const selectWholeMeasure = async (page: Page): Promise<void> => {
+    const measure = (await page.locator(".staff-measure-viewer").first().boundingBox())!;
+    const row = (await page.locator(".staff-measure-track-row").first().boundingBox())!;
+
+    await page.mouse.click(measure.x + 4, row.y + 4);
+};
+
+test("clicking the measure gutter selects the measure, not the track piece", async ({ page }) => {
     await openStaffScore(page, twoTrackSnapshot, "e2e-staff-track-above");
 
     const rows = page.locator(".staff-measure-track-row");
@@ -135,8 +142,7 @@ test("clicking above a staff selects the measure, not the track piece", async ({
     expect(first).not.toBeNull();
     expect(second).not.toBeNull();
 
-    // In the measure's head room, just above the first row's top edge.
-    await page.mouse.click(first!.x + (first!.width / 2), first!.y - 5);
+    await selectWholeMeasure(page);
 
     // The measure rect goes from the first piece's top edge to the last piece's bottom edge, the bottom
     // margin of the last row included.
@@ -156,8 +162,7 @@ test("the playhead spans exactly the height of the measure rect", async ({ page 
     const first = await rows.nth(0).boundingBox();
     expect(first).not.toBeNull();
 
-    // Select the whole measure through its head room.
-    await page.mouse.click(first!.x + (first!.width / 2), first!.y - 5);
+    await selectWholeMeasure(page);
 
     const overlay = await page.locator(".selection-overlay").boundingBox();
     // The beam is hidden while no playback runs, so its rect is read straight from the DOM.
@@ -234,8 +239,7 @@ test("the measure overlay starts where the track-piece overlay starts", async ({
     await expect(overlay).toHaveCount(1);
     const pieceBox = (await overlay.boundingBox())!;
 
-    // A click in the measure's head room selects the whole measure.
-    await page.mouse.click(rowBox.x + (rowBox.width / 2), rowBox.y - 5);
+    await selectWholeMeasure(page);
     await expect(overlay).toHaveCount(1);
     const measureBox = (await overlay.boundingBox())!;
 

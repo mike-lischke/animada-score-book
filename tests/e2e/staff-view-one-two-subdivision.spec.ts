@@ -69,10 +69,10 @@ test.describe("Staff view two-step note", () => {
         await expect(page.locator("#trackViewerHost")).toBeVisible();
 
         // Switch to staff (track) view.
-        const trackViewToggle = page.locator("input.trackViewModeToggle").first();
+        const trackViewToggle = page.locator("button.trackViewModeToggle").first();
         await expect(trackViewToggle).toBeVisible();
-        if (!await trackViewToggle.isChecked()) {
-            await trackViewToggle.check({ force: true });
+        if (await trackViewToggle.getAttribute("aria-pressed") !== "true") {
+            await trackViewToggle.click({ force: true });
         }
 
         await expect(page.locator(".staff-measure-track-row").first()).toBeVisible();

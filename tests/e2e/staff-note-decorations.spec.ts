@@ -104,10 +104,10 @@ const openStaffArrangement = async (page: Page, seed: ISessionSeed): Promise<voi
 
     await page.goto("/");
 
-    const trackViewToggle = page.locator("input.trackViewModeToggle").first();
+    const trackViewToggle = page.locator("button.trackViewModeToggle").first();
     await expect(trackViewToggle).toBeVisible();
-    if (!await trackViewToggle.isChecked()) {
-        await trackViewToggle.check({ force: true });
+    if (await trackViewToggle.getAttribute("aria-pressed") !== "true") {
+        await trackViewToggle.click({ force: true });
     }
 
     await expect(page.locator(".staff-measure-track-row").first()).toBeVisible();
@@ -170,10 +170,10 @@ test.describe("Note head types", () => {
 
         await page.goto("/");
 
-        const trackViewToggle = page.locator("input.trackViewModeToggle").first();
+        const trackViewToggle = page.locator("button.trackViewModeToggle").first();
         await expect(trackViewToggle).toBeVisible();
-        if (!await trackViewToggle.isChecked()) {
-            await trackViewToggle.check({ force: true });
+        if (await trackViewToggle.getAttribute("aria-pressed") !== "true") {
+            await trackViewToggle.click({ force: true });
         }
 
         await expect(page.locator(".staff-measure-track-row").first()).toBeVisible();
@@ -203,10 +203,10 @@ test.describe("Note head types", () => {
 
         await page.goto("/");
 
-        const trackViewToggle = page.locator("input.trackViewModeToggle").first();
+        const trackViewToggle = page.locator("button.trackViewModeToggle").first();
         await expect(trackViewToggle).toBeVisible();
-        if (!await trackViewToggle.isChecked()) {
-            await trackViewToggle.check({ force: true });
+        if (await trackViewToggle.getAttribute("aria-pressed") !== "true") {
+            await trackViewToggle.click({ force: true });
         }
 
         await expect(page.locator(".staff-measure-track-row").first()).toBeVisible();
@@ -236,10 +236,10 @@ test.describe("Note head types", () => {
 
         await page.goto("/");
 
-        const trackViewToggle = page.locator("input.trackViewModeToggle").first();
+        const trackViewToggle = page.locator("button.trackViewModeToggle").first();
         await expect(trackViewToggle).toBeVisible();
-        if (!await trackViewToggle.isChecked()) {
-            await trackViewToggle.check({ force: true });
+        if (await trackViewToggle.getAttribute("aria-pressed") !== "true") {
+            await trackViewToggle.click({ force: true });
         }
 
         await expect(page.locator(".staff-measure-track-row").first()).toBeVisible();
@@ -268,10 +268,10 @@ test.describe("Note head types", () => {
 
         await page.goto("/");
 
-        const trackViewToggle = page.locator("input.trackViewModeToggle").first();
+        const trackViewToggle = page.locator("button.trackViewModeToggle").first();
         await expect(trackViewToggle).toBeVisible();
-        if (!await trackViewToggle.isChecked()) {
-            await trackViewToggle.check({ force: true });
+        if (await trackViewToggle.getAttribute("aria-pressed") !== "true") {
+            await trackViewToggle.click({ force: true });
         }
 
         await expect(page.locator(".staff-measure-track-row").first()).toBeVisible();
@@ -301,10 +301,10 @@ test.describe("Note decorations", () => {
 
         await page.goto("/");
 
-        const trackViewToggle = page.locator("input.trackViewModeToggle").first();
+        const trackViewToggle = page.locator("button.trackViewModeToggle").first();
         await expect(trackViewToggle).toBeVisible();
-        if (!await trackViewToggle.isChecked()) {
-            await trackViewToggle.check({ force: true });
+        if (await trackViewToggle.getAttribute("aria-pressed") !== "true") {
+            await trackViewToggle.click({ force: true });
         }
 
         await expect(page.locator(".staff-measure-track-row").first()).toBeVisible();
@@ -334,10 +334,10 @@ test.describe("Note decorations", () => {
 
         await page.goto("/");
 
-        const trackViewToggle = page.locator("input.trackViewModeToggle").first();
+        const trackViewToggle = page.locator("button.trackViewModeToggle").first();
         await expect(trackViewToggle).toBeVisible();
-        if (!await trackViewToggle.isChecked()) {
-            await trackViewToggle.check({ force: true });
+        if (await trackViewToggle.getAttribute("aria-pressed") !== "true") {
+            await trackViewToggle.click({ force: true });
         }
 
         await expect(page.locator(".staff-measure-track-row").first()).toBeVisible();
@@ -366,10 +366,10 @@ test.describe("Note decorations", () => {
 
         await page.goto("/");
 
-        const trackViewToggle = page.locator("input.trackViewModeToggle").first();
+        const trackViewToggle = page.locator("button.trackViewModeToggle").first();
         await expect(trackViewToggle).toBeVisible();
-        if (!await trackViewToggle.isChecked()) {
-            await trackViewToggle.check({ force: true });
+        if (await trackViewToggle.getAttribute("aria-pressed") !== "true") {
+            await trackViewToggle.click({ force: true });
         }
 
         await expect(page.locator(".staff-measure-track-row").first()).toBeVisible();
@@ -459,10 +459,10 @@ test.describe("Note decorations", () => {
 
         await page.goto("/");
 
-        const trackViewToggle = page.locator("input.trackViewModeToggle").first();
+        const trackViewToggle = page.locator("button.trackViewModeToggle").first();
         await expect(trackViewToggle).toBeVisible();
-        if (!await trackViewToggle.isChecked()) {
-            await trackViewToggle.check({ force: true });
+        if (await trackViewToggle.getAttribute("aria-pressed") !== "true") {
+            await trackViewToggle.click({ force: true });
         }
 
         await expect(page.locator(".staff-measure-track-row").first()).toBeVisible();
@@ -490,10 +490,10 @@ test.describe("Note decorations", () => {
 
         await page.goto("/");
 
-        const trackViewToggle = page.locator("input.trackViewModeToggle").first();
+        const trackViewToggle = page.locator("button.trackViewModeToggle").first();
         await expect(trackViewToggle).toBeVisible();
-        if (!await trackViewToggle.isChecked()) {
-            await trackViewToggle.check({ force: true });
+        if (await trackViewToggle.getAttribute("aria-pressed") !== "true") {
+            await trackViewToggle.click({ force: true });
         }
 
         await expect(page.locator(".staff-measure-track-row").first()).toBeVisible();
@@ -527,10 +527,10 @@ test.describe("Note decorations", () => {
 
         await page.goto("/");
 
-        const trackViewToggle = page.locator("input.trackViewModeToggle").first();
+        const trackViewToggle = page.locator("button.trackViewModeToggle").first();
         await expect(trackViewToggle).toBeVisible();
-        if (!await trackViewToggle.isChecked()) {
-            await trackViewToggle.check({ force: true });
+        if (await trackViewToggle.getAttribute("aria-pressed") !== "true") {
+            await trackViewToggle.click({ force: true });
         }
 
         await expect(page.locator(".staff-measure-track-row").first()).toBeVisible();
@@ -562,10 +562,10 @@ test.describe("Note decorations", () => {
 
         await page.goto("/");
 
-        const trackViewToggle = page.locator("input.trackViewModeToggle").first();
+        const trackViewToggle = page.locator("button.trackViewModeToggle").first();
         await expect(trackViewToggle).toBeVisible();
-        if (!await trackViewToggle.isChecked()) {
-            await trackViewToggle.check({ force: true });
+        if (await trackViewToggle.getAttribute("aria-pressed") !== "true") {
+            await trackViewToggle.click({ force: true });
         }
 
         await expect(page.locator(".staff-measure-track-row").first()).toBeVisible();
@@ -610,10 +610,10 @@ test.describe("Note decorations", () => {
 
         await page.goto("/");
 
-        const trackViewToggle = page.locator("input.trackViewModeToggle").first();
+        const trackViewToggle = page.locator("button.trackViewModeToggle").first();
         await expect(trackViewToggle).toBeVisible();
-        if (!await trackViewToggle.isChecked()) {
-            await trackViewToggle.check({ force: true });
+        if (await trackViewToggle.getAttribute("aria-pressed") !== "true") {
+            await trackViewToggle.click({ force: true });
         }
 
         await expect(page.locator(".staff-note-head").first()).toBeVisible();

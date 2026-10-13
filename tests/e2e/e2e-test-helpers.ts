@@ -273,14 +273,14 @@ export const expectImportedPolyrhythmSong = async (page: Page): Promise<void> =>
 };
 
 export const ensureGridMode = async (page: Page): Promise<void> => {
-    const trackViewToggle = page.locator("input.trackViewModeToggle").first();
+    const trackViewToggle = page.locator("button.trackViewModeToggle").first();
     await expect(trackViewToggle).toBeVisible();
 
-    if (await trackViewToggle.isChecked()) {
-        await trackViewToggle.uncheck({ force: true });
+    if (await trackViewToggle.getAttribute("aria-pressed") === "true") {
+        await trackViewToggle.click({ force: true });
     }
 
-    await expect(trackViewToggle).not.toBeChecked();
+    await expect(trackViewToggle).toHaveAttribute("aria-pressed", "false");
     await expect(page.locator(".grid-measure-row").first()).toBeVisible();
 };
 

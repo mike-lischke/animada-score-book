@@ -26,6 +26,8 @@ import {
     type ISelectionHitTester,
 } from "../../../../ui/SelectionSerializer.js";
 import { UIComponent, type ICommonUIProperties } from "../../framework/UIComponent.js";
+import { Icon } from "../../framework/Icon.js";
+import { UIIcon } from "../../framework/UIIcon.js";
 import { StaffMeasureTrackRow } from "./StaffMeasureTrackRow.js";
 
 /** Tolerance in px around note heads, stems and group markers when a hit region is tested. */
@@ -338,9 +340,14 @@ export class StaffMeasureViewer extends UIComponent<IStaffMeasureViewerProps, IS
             resizeHandle = (
                 <div
                     className="staff-measure-resize-handle"
+                    data-tooltip="Resize measure"
                     onPointerDown={this.handleResizePointerDown}
                     onDblClick={this.handleResizeDoubleClick}
-                />
+                >
+                    <span className="staff-measure-resize-thumb" aria-hidden="true">
+                        <Icon src={UIIcon.Menu} data-tooltip="inherit" />
+                    </span>
+                </div>
             );
         }
 

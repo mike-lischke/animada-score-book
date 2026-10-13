@@ -11,7 +11,6 @@ import { Button } from "../framework/Button.js";
 import { Container } from "../framework/Container.js";
 import { Icon } from "../framework/Icon.js";
 import { UIIcon } from "../framework/UIIcon.js";
-import { CheckState, Toggle } from "../framework/Toggle.js";
 import { ChildAlignment, Orientation } from "../framework/ui-types.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
 
@@ -71,6 +70,15 @@ export class ArrangementActionBar extends UIComponent<IArrangementActionBarProps
             "arrangement-action-controls",
             this.classFromProperty(mixerExpanded, "expanded"),
         ]);
+        const mixerClassName = this.generateFinalClassName([
+            "actionControlSwitch", "trackControlsToggle", this.classFromProperty(mixerExpanded, "is-active"),
+        ]);
+        const staffMode = trackViewMode === "staff";
+        const viewClassName = this.generateFinalClassName([
+            "actionControlSwitch", "trackViewModeToggle", this.classFromProperty(staffMode, "is-active"),
+        ]);
+        const mixerTooltip = mixerExpanded ? "Collapse mixer" : "Expand mixer";
+        const viewTooltip = staffMode ? "Show grid view" : "Show staff view";
 
         return (
             <Container
@@ -82,40 +90,32 @@ export class ArrangementActionBar extends UIComponent<IArrangementActionBarProps
                 <Container
                     className={controlsClassName}
                     innerRef={this.controlsRef}
-                    orientation={Orientation.LeftToRight}
-                    crossAlignment={ChildAlignment.Center}
+                    orientation={Orientation.TopDown}
+                    mainAlignment={ChildAlignment.Center}
+                    crossAlignment={ChildAlignment.Start}
                 >
                     <Button
-                        className="trackControlsToggle"
-                        data-tooltip={mixerExpanded ? "Collapse mixer" : "Expand mixer"}
+                        className={mixerClassName}
+                        aria-pressed={mixerExpanded}
+                        title={mixerTooltip}
+                        data-tooltip={mixerTooltip}
                         onClick={this.handleMixerToggle}
                     >
-                        <Icon src={UIIcon.Settings} data-tooltip="inherit" />
+                        <Icon src={UIIcon.Mixer} data-tooltip="inherit" />
+                        <span className="actionControlSwitchLabel">Mixer</span>
+                        <span className="actionControlSwitchDot" />
                     </Button>
-                    <Container
-                        className="trackViewModeToggleGroup"
-                        orientation={Orientation.LeftToRight}
-                        crossAlignment={ChildAlignment.Center}
+                    <Button
+                        className={viewClassName}
+                        aria-pressed={staffMode}
+                        title={viewTooltip}
+                        data-tooltip={viewTooltip}
+                        onClick={this.handleTrackViewModeToggle}
                     >
-                        <Toggle
-                            className="trackViewModeToggle du-toggle-xs"
-                            vertical
-                            checkState={trackViewMode === "staff" ? CheckState.Checked : CheckState.Unchecked}
-                            onChange={this.handleTrackViewModeToggle}
-                        />
-                        <Container
-                            className="trackViewModeIcons"
-                            orientation={Orientation.TopDown}
-                            crossAlignment={ChildAlignment.Center}
-                            mainAlignment={ChildAlignment.SpaceBetween}
-                        >
-                            <div className="trackViewModeGridIcon" aria-label="Show grid view" />
-                            <div className="trackViewModeStaffIcon" aria-label="Show staff view">
-                                <span className="trackViewModeStaffIconHead" />
-                                <span className="trackViewModeStaffIconStem" />
-                            </div>
-                        </Container>
-                    </Container>
+                        <Icon src={UIIcon.Music} data-tooltip="inherit" />
+                        <span className="actionControlSwitchLabel">Staff</span>
+                        <span className="actionControlSwitchDot" />
+                    </Button>
                 </Container>
                 <div className="bar-action-strip-viewport" ref={this.actionViewportRef}>
                     {actions}
@@ -124,11 +124,10 @@ export class ArrangementActionBar extends UIComponent<IArrangementActionBarProps
         );
     }
 
-    private handleTrackViewModeToggle = (event: InputEvent, checkState: CheckState): void => {
-        const { onTrackViewModeChange } = this.props;
-        const mode = checkState === CheckState.Checked ? "staff" : "grid";
-        event.preventDefault();
-        onTrackViewModeChange(mode);
+    private handleTrackViewModeToggle = (event: MouseEvent | KeyboardEvent): void => {
+        const { trackViewMode, onTrackViewModeChange } = this.props;
+        event.stopPropagation();
+        onTrackViewModeChange(trackViewMode === "staff" ? "grid" : "staff");
     };
 
     private handleMixerToggle = (event: MouseEvent | KeyboardEvent): void => {

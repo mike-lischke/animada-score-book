@@ -127,10 +127,10 @@ test.describe("BananaDrum polyrhythm import", () => {
         expect(gridSubdivisionCounts["8"]).toBe(1);
 
         // Staff mode: binary subdivisions produce no tuplet bracket/number labels.
-        const trackViewToggle = page.locator("input.trackViewModeToggle").first();
+        const trackViewToggle = page.locator("button.trackViewModeToggle").first();
         await expect(trackViewToggle).toBeVisible();
-        if (!(await trackViewToggle.isChecked())) {
-            await trackViewToggle.check({ force: true });
+        if (await trackViewToggle.getAttribute("aria-pressed") !== "true") {
+            await trackViewToggle.click({ force: true });
         }
 
         await expect(page.locator(".staff-measure-viewer").first()).toBeVisible();

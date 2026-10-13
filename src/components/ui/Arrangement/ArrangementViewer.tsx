@@ -558,8 +558,8 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
                 title={`Play only this: measure ${bar}`} onClick={() => {
                     void requisitions.execute("zenMeasureToggled", bar);
                 }}>
-                <span className="zenMeasurePlayDot" />
                 <span>Play only this</span>
+                <span className="zenMeasurePlayDot" />
             </Button>
         );
     }
@@ -1209,6 +1209,16 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         const host = this.viewerRef.current;
         if (!host) {
             return;
+        }
+
+        const trackControls = this.trackControlsRef.current;
+        const scrollHost = this.arrangementViewerRef.current?.parentElement;
+        if (trackControls && scrollHost) {
+            const dividerX = trackControls.getBoundingClientRect().right - scrollHost.getBoundingClientRect().left - 1;
+            const position = `${dividerX}px`;
+            if (scrollHost.style.getPropertyValue("--track-controls-divider-x") !== position) {
+                scrollHost.style.setProperty("--track-controls-divider-x", position);
+            }
         }
 
         const style = window.getComputedStyle(host);

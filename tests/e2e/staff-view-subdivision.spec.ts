@@ -19,10 +19,10 @@ test.describe("Staff view subdivision rendering", () => {
 
         await expect(page.locator("#trackViewerHost")).toBeVisible();
 
-        const trackViewToggle = page.locator("input.trackViewModeToggle").first();
+        const trackViewToggle = page.locator("button.trackViewModeToggle").first();
         await expect(trackViewToggle).toBeVisible();
-        if (!await trackViewToggle.isChecked()) {
-            await trackViewToggle.check({ force: true });
+        if (await trackViewToggle.getAttribute("aria-pressed") !== "true") {
+            await trackViewToggle.click({ force: true });
         }
 
         await expect(page.locator(".staff-measure-track-row").first()).toBeVisible();
@@ -114,10 +114,10 @@ test.describe("Staff view subdivision rendering", () => {
 
         await expect(page.locator("#trackViewerHost")).toBeVisible();
 
-        const trackViewToggle = page.locator("input.trackViewModeToggle").first();
+        const trackViewToggle = page.locator("button.trackViewModeToggle").first();
         await expect(trackViewToggle).toBeVisible();
-        if (!await trackViewToggle.isChecked()) {
-            await trackViewToggle.check({ force: true });
+        if (await trackViewToggle.getAttribute("aria-pressed") !== "true") {
+            await trackViewToggle.click({ force: true });
         }
 
         await expect(page.locator(".staff-measure-track-row").first()).toBeVisible();
@@ -201,10 +201,10 @@ test.describe("Staff view subdivision rendering", () => {
         await page.goto("/");
         await expect(page.locator("#trackViewerHost")).toBeVisible();
 
-        const trackViewToggle = page.locator("input.trackViewModeToggle").first();
+        const trackViewToggle = page.locator("button.trackViewModeToggle").first();
         await expect(trackViewToggle).toBeVisible();
-        if (!await trackViewToggle.isChecked()) {
-            await trackViewToggle.check({ force: true });
+        if (await trackViewToggle.getAttribute("aria-pressed") !== "true") {
+            await trackViewToggle.click({ force: true });
         }
 
         await expect(page.locator(".staff-measure-track-row").first()).toBeVisible();
@@ -291,10 +291,10 @@ test.describe("Staff view subdivision rendering", () => {
         await page.goto("/");
         await expect(page.locator("#trackViewerHost")).toBeVisible();
 
-        const trackViewToggle = page.locator("input.trackViewModeToggle").first();
+        const trackViewToggle = page.locator("button.trackViewModeToggle").first();
         await expect(trackViewToggle).toBeVisible();
-        if (!await trackViewToggle.isChecked()) {
-            await trackViewToggle.check({ force: true });
+        if (await trackViewToggle.getAttribute("aria-pressed") !== "true") {
+            await trackViewToggle.click({ force: true });
         }
 
         await expect(page.locator(".staff-note-viewer-tuplet-bracket").first()).toBeVisible();

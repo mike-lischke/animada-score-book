@@ -16,10 +16,10 @@ test("keyboard navigation scrolls the staff viewer to keep the cursor visible", 
     await expect(page.locator("#trackViewerHost")).toBeVisible();
 
     // Switch to staff mode.
-    const trackViewToggle = page.locator("input.trackViewModeToggle").first();
+    const trackViewToggle = page.locator("button.trackViewModeToggle").first();
     await expect(trackViewToggle).toBeVisible();
-    if (!await trackViewToggle.isChecked()) {
-        await trackViewToggle.check({ force: true });
+    if (await trackViewToggle.getAttribute("aria-pressed") !== "true") {
+        await trackViewToggle.click({ force: true });
     }
 
     await expect(page.locator(".staff-measure-track-row").first()).toBeVisible();
