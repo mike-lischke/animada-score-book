@@ -3,7 +3,9 @@ import { expect, test, type Locator, type Page } from "@playwright/test";
 import { stringifyPackedArrangement } from "../../src/core/serialisation/snapshot-packing.js";
 import { arrangementSnapshotVersion } from "../../src/core/serialisation/snapshots.js";
 import { EditEntryMode, type IArrangementSnapshot } from "../../src/core/types/general.js";
-import type { ISerialisedSelectionEntry } from "../../src/ui/SelectionSerializer.js";
+import type {
+    ISerialisedSelectionEntry, ISerialisedSelectionState,
+} from "../../src/ui/SelectionSerializer.js";
 import { ensureStaffBarRendered, findStaffMeasure, readStoredCurrentScore, routeApi } from "./e2e-test-helpers.js";
 
 enum ViewerMode {
@@ -224,7 +226,7 @@ for (const mode of [ViewerMode.Grid, ViewerMode.Staff]) {
             await expect(page.locator('.zenMeasurePlayButton[aria-pressed="true"]')).toHaveCount(0);
         });
 
-        test("plays only marked bars and skips the gap between them", async ({ page }) => {
+        test("plays the filled range between marked bars", async ({ page }) => {
             await openScore(page, mode);
             await enterZen(page);
             await selectBar(page, 1);
@@ -232,7 +234,7 @@ for (const mode of [ViewerMode.Grid, ViewerMode.Staff]) {
             await page.locator("#playbackButton").click();
             await expect(page.locator("#playbackButton")).toHaveAttribute("aria-pressed", "true");
 
-            expect(await playbackBars(page)).toEqual([1, 3]);
+            expect(await playbackBars(page)).toEqual([1, 2, 3]);
             await expect(page.locator("#playbackButton")).toHaveAttribute("aria-pressed", "false");
             await expect(page.locator(".selection-overlay")).toHaveCount(0);
         });
@@ -259,7 +261,7 @@ for (const mode of [ViewerMode.Grid, ViewerMode.Staff]) {
             expect(await playbackBars(page)).toEqual([2, 2]);
         });
 
-        test("also skips unselected bars outside Zen mode", async ({ page }) => {
+        test("extends the selection outside Zen mode without gaps", async ({ page }) => {
             await openScore(page, mode);
 
             for (const bar of [1, 3]) {
@@ -278,16 +280,25 @@ for (const mode of [ViewerMode.Grid, ViewerMode.Staff]) {
 
             await expect.poll(async () => {
                 const stored = await storedSelection(page);
-                const entries = JSON.parse(stored ?? "[]") as ISerialisedSelectionEntry[];
+                const selection = JSON.parse(stored ?? "null") as
+                    | ISerialisedSelectionEntry[]
+                    | ISerialisedSelectionState
+                    | null;
+                let entries: ISerialisedSelectionEntry[] = [];
+                if (Array.isArray(selection)) {
+                    entries = selection;
+                } else if (selection !== null && Array.isArray(selection.entries)) {
+                    entries = selection.entries;
+                }
 
                 return entries.map((entry) => {
                     return entry.bar;
                 });
-            }).toEqual([1, 3]);
+            }).toEqual([1, 2, 3]);
             await page.locator("#playbackButton").click();
             await expect(page.locator("#playbackButton")).toHaveAttribute("aria-pressed", "true");
 
-            expect(await playbackBars(page)).toEqual([1, 3]);
+            expect(await playbackBars(page)).toEqual([1, 2, 3]);
         });
 
         test("keeps the title above passing buttons and aligns the instrument labels", async ({ page }) => {
@@ -338,7 +349,7 @@ for (const mode of [ViewerMode.Grid, ViewerMode.Staff]) {
     });
 }
 
-test("loops the marked bars without playing an unmarked gap", async ({ page }) => {
+test("loops the filled range without leaving a gap", async ({ page }) => {
     await openScore(page, ViewerMode.Staff);
     await enterZen(page);
     await selectBar(page, 1);
@@ -347,7 +358,7 @@ test("loops the marked bars without playing an unmarked gap", async ({ page }) =
     await page.locator("#playbackButton").click();
     await expect(page.locator("#playbackButton")).toHaveAttribute("aria-pressed", "true");
 
-    expect(await playbackBars(page, 4)).toEqual([1, 3, 1, 3]);
+    expect(await playbackBars(page, 4)).toEqual([1, 2, 3, 1]);
     await page.locator("#playbackButton").click();
     await expect(page.locator("#playbackButton")).toHaveAttribute("aria-pressed", "false");
 });

@@ -194,13 +194,22 @@ describe("SelectionManager (class)", { concurrent: false }, () => {
         const stored = AppStorage.loadUISettings()?.viewSettings?.selectionState ?? "";
 
         expect(stored).not.toBe("");
-        expect(JSON.parse(stored)).toEqual([{
-            granularity: SelectionGranularity.Note,
-            bar: 1,
-            trackId: 7,
-            start: { numerator: 0, denominator: 1 },
-            end: { numerator: 1, denominator: 1 },
-        }]);
+        expect(JSON.parse(stored)).toEqual({
+            version: 1,
+            anchor: {
+                granularity: SelectionGranularity.Note,
+                bar: 1,
+                trackId: 7,
+                position: { numerator: 0, denominator: 1 },
+            },
+            entries: [{
+                granularity: SelectionGranularity.Note,
+                bar: 1,
+                trackId: 7,
+                start: { numerator: 0, denominator: 1 },
+                end: { numerator: 1, denominator: 1 },
+            }],
+        });
     });
 
     it("can construct via new", () => {
@@ -433,7 +442,7 @@ describe("SelectionManager note groups", { concurrent: false }, () => {
         } as unknown as ISbDmTrackPiece;
     };
 
-    it("replaces a narrower group when the group covering it is picked", () => {
+    it("extends a group selection to include every covered event", () => {
         const measure = makeGroupMeasure();
         const beamGroup: ISelectionEntry = {
             granularity: SelectionGranularity.NoteGroup,
@@ -463,12 +472,12 @@ describe("SelectionManager note groups", { concurrent: false }, () => {
         manager.selectNotes([tupletGroup]);
         requisitions.unregister("selectionChanged", spy);
 
-        // Both groups cover the same events in part, so the one picked last is the one that counts.
+        // Extending to a covering group keeps the full contiguous event span.
         expect([...manager.currentSelection.values()]).toEqual([tupletGroup]);
         expect(removed).toEqual([beamGroup]);
     });
 
-    it("replaces the covering group when a narrower group is picked", () => {
+    it("does not shrink a group selection when extending to a narrower group", () => {
         const measure = makeGroupMeasure();
         const beamGroup: ISelectionEntry = {
             granularity: SelectionGranularity.NoteGroup,
@@ -489,7 +498,7 @@ describe("SelectionManager note groups", { concurrent: false }, () => {
         manager.selectionMode = SelectionMode.Add;
         manager.selectNotes([beamGroup]);
 
-        expect([...manager.currentSelection.values()]).toEqual([beamGroup]);
+        expect([...manager.currentSelection.values()]).toEqual([tupletGroup]);
     });
 });
 

@@ -119,7 +119,6 @@ export class GridMeasureViewer extends UIComponent<IGridMeasureViewerProperties,
 
             const measure = track.measures[measureNumber - 1];
 
-            let rowHasNotes = false;
             for (const noteElement of noteElements) {
                 const location = scoreElementRegistry?.getLocation(noteElement);
                 if (location?.step === undefined) {
@@ -145,41 +144,24 @@ export class GridMeasureViewer extends UIComponent<IGridMeasureViewerProperties,
                             rect: noteRect,
                         });
                     }
-
-                    rowHasNotes = true;
                 }
             }
 
-            if (!rowHasNotes) {
-                const entry: ISelectionHitEntry = {
-                    granularity: SelectionGranularity.TrackPiece,
-                    target: { granularity: SelectionGranularity.TrackPiece, track, measure },
-                    rect: rowRect,
-                };
-
-                trackPieceEntries.push(entry);
-            }
-        }
-
-        // Notes dominate: when any note is hit, only return notes (no mixed granularities).
-        if (noteEntries.length > 0) {
-            return noteEntries;
-        }
-
-        if (trackPieceEntries.length > 0) {
-            return trackPieceEntries;
+            trackPieceEntries.push({
+                granularity: SelectionGranularity.TrackPiece,
+                target: { granularity: SelectionGranularity.TrackPiece, track, measure },
+                rect: rowRect,
+            });
         }
 
         const measure = SelectionSerializer.measureOfBar(this.props.dataModel.arrangement!, measureNumber);
-        if (measure === undefined) {
-            return [];
-        }
-
-        return [{
+        const measureEntries: ISelectionHitEntry[] = measure === undefined ? [] : [{
             granularity: SelectionGranularity.Measure,
             target: { granularity: SelectionGranularity.Measure, measure },
             rect: elRect,
         }];
+
+        return [...noteEntries, ...trackPieceEntries, ...measureEntries];
     }
 
     public override render(): ComponentChild {

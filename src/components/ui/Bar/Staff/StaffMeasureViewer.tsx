@@ -194,8 +194,6 @@ export class StaffMeasureViewer extends UIComponent<IStaffMeasureViewerProps, IS
                 ScoreElementKind.StaffRun, barNumber, trackId,
             ) ?? [];
 
-            let rowHasSoundingNotes = false;
-
             for (const runEl of noteRunElements) {
                 const runLocation = scoreElementRegistry?.getLocation(runEl);
                 if (runLocation?.step === undefined) {
@@ -257,9 +255,6 @@ export class StaffMeasureViewer extends UIComponent<IStaffMeasureViewerProps, IS
                         });
                     }
 
-                    if (runLocation.noteId !== undefined) {
-                        rowHasSoundingNotes = true;
-                    }
                 }
             }
 
@@ -267,7 +262,7 @@ export class StaffMeasureViewer extends UIComponent<IStaffMeasureViewerProps, IS
             const hitsTrackPiece = StaffMeasureViewer.rectsIntersect(rect, rowRect.left, rowRect.top, rowRect.right,
                 pieceBottom, 0);
 
-            if (!rowHasSoundingNotes && hitsTrackPiece) {
+            if (hitsTrackPiece) {
                 if (track !== undefined && measure !== undefined) {
                     trackPieceEntries.push({
                         granularity: SelectionGranularity.TrackPiece,
@@ -290,11 +285,8 @@ export class StaffMeasureViewer extends UIComponent<IStaffMeasureViewerProps, IS
             const measure = arrangement.tracks.find((track) => {
                 return track.id === trackId;
             })?.measures[barNumber - 1];
-            const hasNoteHits = noteEntries.some((entry) => {
-                return SelectionSerializer.trackOf(entry).id === trackId;
-            });
 
-            if (measure === undefined || hasNoteHits) {
+            if (measure === undefined) {
                 continue;
             }
 
@@ -303,29 +295,14 @@ export class StaffMeasureViewer extends UIComponent<IStaffMeasureViewerProps, IS
             }
         }
 
-        if (noteEntries.length > 0) {
-            return noteEntries;
-        }
-
-        if (trackPieceEntries.length > 0) {
-            return trackPieceEntries;
-        }
-
-        // Only a marker reaches outside the measure's box; a rectangle there addresses no measure.
-        if (!insideMeasure) {
-            return [];
-        }
-
-        const measure = SelectionSerializer.measureOfBar(arrangement, barNumber);
-        if (measure === undefined) {
-            return [];
-        }
-
-        return [{
+        const measure = insideMeasure ? SelectionSerializer.measureOfBar(arrangement, barNumber) : undefined;
+        const measureEntries: ISelectionHitEntry[] = measure === undefined ? [] : [{
             granularity: SelectionGranularity.Measure,
             target: { granularity: SelectionGranularity.Measure, measure },
             rect: elRect,
         }];
+
+        return [...noteEntries, ...trackPieceEntries, ...measureEntries];
     }
 
     public override render(): ComponentChild {

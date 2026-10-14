@@ -500,9 +500,8 @@ test.describe("Staff view selection", () => {
         await page.mouse.move(band.right, band.bottom, { steps: 10 });
         await page.mouse.up();
 
-        // The rectangle covers markers of both groups and no notes, so each group becomes a selection of
-        // its own: one overlay per group, and no note-level highlight.
-        await expect(page.locator(".selection-overlay")).toHaveCount(2);
+        // The rectangle covers both groups and the events between them as one filled range.
+        await expect(page.locator(".selection-overlay")).toHaveCount(1);
         await expect(page.locator(".staff-note-viewer-run.note-selected")).toHaveCount(0);
     });
 
@@ -517,15 +516,15 @@ test.describe("Staff view selection", () => {
         const firstRun = runs.nth(0);
         const secondRun = runs.nth(1);
 
-        const firstBox = await firstRun.boundingBox();
-        const secondBox = await secondRun.boundingBox();
+        const firstBox = await firstRun.locator(".staff-note-head-symbol").boundingBox();
+        const secondBox = await secondRun.locator(".staff-note-head-symbol").boundingBox();
         if (!firstBox || !secondBox) {
             test.fail(true, "Could not get bounding boxes");
 
             return;
         }
 
-        // Drag from top-left of first run to bottom-right of second run.
+        // Start on a notehead so the gesture locks to note granularity.
         await page.mouse.move(firstBox.x, firstBox.y);
         await page.mouse.down();
         await page.mouse.move(secondBox.x + secondBox.width, secondBox.y + secondBox.height, { steps: 10 });

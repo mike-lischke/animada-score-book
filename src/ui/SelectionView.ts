@@ -210,9 +210,7 @@ export class SelectionView {
         this.manager.previewNote(clickRect);
 
         if (!this.showsCursorOnly) {
-            const selectionMode = event.shiftKey || event.altKey || event.metaKey
-                ? this.selectionModeFromEvent(event)
-                : undefined;
+            const selectionMode = this.selectionModeFromEvent(event);
             this.selectionGestureActive = true;
             void requisitions.execute("selectionGestureChanged", true);
             this.manager.beginSelection(selectionMode, clickRect);
@@ -349,8 +347,6 @@ export class SelectionView {
     private selectionModeFromEvent(event: KeyboardEvent | MouseEvent): SelectionMode {
         if (event.shiftKey) {
             return SelectionMode.Add;
-        } else if (event.altKey || event.metaKey) {
-            return SelectionMode.Invert;
         } else {
             return SelectionMode.New;
         }
@@ -1071,10 +1067,14 @@ export class SelectionView {
             }
         }
 
-        // Detect view mode from the first element.
-        const firstElements = singleNotes.length > 0
-            ? this.findNoteElements(singleNotes[0])
-            : this.findNoteElements(noteGroups[0]);
+        let firstElements: HTMLElement[] = [];
+        for (const entry of [...singleNotes, ...noteGroups]) {
+            firstElements = this.findNoteElements(entry);
+            if (firstElements.length > 0) {
+                break;
+            }
+        }
+
         const isStaffMode = firstElements.length > 0
             && firstElements[0].classList.contains(staffNoteRunClass);
 

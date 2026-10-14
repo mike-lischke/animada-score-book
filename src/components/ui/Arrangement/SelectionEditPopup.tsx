@@ -46,6 +46,7 @@ export class SelectionEditPopup extends UIComponent<ISelectionEditPopupProps> {
     public override componentDidMount(): void {
         requisitions.register("selectionChanged", this.handleSelectionChanged);
         requisitions.register("selectionGestureChanged", this.handleSelectionGestureChanged);
+        requisitions.register("staffWindowChanged", this.handleStaffWindowChanged);
         this.updatePopup();
     }
 
@@ -61,6 +62,7 @@ export class SelectionEditPopup extends UIComponent<ISelectionEditPopupProps> {
     public override componentWillUnmount(): void {
         requisitions.unregister("selectionChanged", this.handleSelectionChanged);
         requisitions.unregister("selectionGestureChanged", this.handleSelectionGestureChanged);
+        requisitions.unregister("staffWindowChanged", this.handleStaffWindowChanged);
         this.popupRef.current?.close(true);
     }
 
@@ -232,6 +234,12 @@ export class SelectionEditPopup extends UIComponent<ISelectionEditPopupProps> {
         return Promise.resolve(true);
     };
 
+    private handleStaffWindowChanged = (): Promise<boolean> => {
+        this.updatePopup();
+
+        return Promise.resolve(true);
+    };
+
     private updatePopup(): void {
         const { editMode, selectionManager } = this.props;
         if (!editMode || selectionManager.currentSelection.size === 0 || this.selectionGestureInProgress) {
@@ -266,7 +274,6 @@ export class SelectionEditPopup extends UIComponent<ISelectionEditPopupProps> {
         let left = Infinity;
         let top = Infinity;
         let right = -Infinity;
-        let bottom = -Infinity;
 
         for (let index = entries.length - 1; index >= 0; index--) {
             const elements = scoreElementRegistry.findTargetElements(entries[index].target);
@@ -280,7 +287,6 @@ export class SelectionEditPopup extends UIComponent<ISelectionEditPopupProps> {
                 left = Math.min(left, rect.left);
                 top = Math.min(top, rect.top);
                 right = Math.max(right, rect.right);
-                bottom = Math.max(bottom, rect.bottom);
             }
         }
 
@@ -288,6 +294,6 @@ export class SelectionEditPopup extends UIComponent<ISelectionEditPopupProps> {
             return undefined;
         }
 
-        return { anchor, bounds: new DOMRect(left, top, right - left, bottom - top) };
+        return { anchor, bounds: new DOMRect(left, top, right - left, 0) };
     }
 }
