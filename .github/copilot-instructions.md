@@ -51,7 +51,7 @@ The score renders in **grid mode** (matrix-style, each bar a column) or **staff 
 
 All UI components extend `UIComponent<P, S>` (not raw `Component`). Key patterns:
 - `Container` for all flex layouts — never raw `<div>` with `display: flex`.
-- `generateFinalClassName(["base-class", this.props.className])` merges classes.
+- `generateFinalClassName(["base-class", this.props.className])` merges classes, to combine a common base class with any application-supplied class names.
 - `data-*` props are auto-forwarded to DOM via `ICommonUIProperties`.
 - Styles are per-component SCSS files under `src/components/ui/framework/styles/`, imported centrally via `styles/index.scss`.
 

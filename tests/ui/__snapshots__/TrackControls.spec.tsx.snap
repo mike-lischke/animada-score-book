@@ -124,7 +124,7 @@ exports[`TrackControls > renders with the minimum props 1`] = `
           <div
             aria-label="Instrument short"
             class="icon trackInstrumentIcon"
-            style="mask-image: url(""); -webkit-mask-image: url(""); --icon-src: url(""); width: 40px; height: 40px;"
+            style="mask-image: url(""); -webkit-mask-image: url(""); --icon-src: url(""); width: 34px; height: 34px;"
           />
         </div>
       </div>
@@ -197,7 +197,7 @@ exports[`TrackControls > renders with the minimum props 1`] = `
           <div
             aria-label="Instrument long instrument name"
             class="icon trackInstrumentIcon"
-            style="mask-image: url(""); -webkit-mask-image: url(""); --icon-src: url(""); width: 40px; height: 40px;"
+            style="mask-image: url(""); -webkit-mask-image: url(""); --icon-src: url(""); width: 34px; height: 34px;"
           />
         </div>
       </div>

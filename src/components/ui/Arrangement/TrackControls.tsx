@@ -168,8 +168,8 @@ export class TrackControls extends UIComponent<ITrackControlsProperties, ITrackC
                             className="trackInstrumentIcon"
                             src={iconPath}
                             alt={instrumentName}
-                            width={40}
-                            height={40}
+                            width={34}
+                            height={34}
                         />
                     </Container>
                 </Container>

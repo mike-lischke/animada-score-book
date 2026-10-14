@@ -720,16 +720,25 @@ h6 {
 
 #viewerScrollHost {
     box-sizing: border-box;
-    padding-bottom: 64px;
 
     overscroll-behavior: none;
 }
 
-#appRoot:not(.zen-mode) #viewerScrollHost {
-    background-image: linear-gradient(var(--border-subtle), var(--border-subtle));
-    background-position: var(--track-controls-divider-x, -1px) 0;
-    background-size: 1px 100%;
-    background-repeat: no-repeat;
+/* The room the floating playback bar needs below the score. The spacer also carries the side panels' vertical
+   edges, so they reach down to the footer however tall the score content is. */
+.viewerBottomSpacer {
+    flex: 1 1 auto;
+    min-height: 79px;
+}
+
+#appRoot:not(.zen-mode) .viewerBottomSpacer {
+    margin-left: var(--track-controls-divider-left, 0);
+    border-left: 1px solid var(--border-subtle);
+}
+
+#appRoot:not(.zen-mode) .score-editing .viewerBottomSpacer {
+    margin-right: var(--track-actions-divider-right, 0);
+    border-right: 1px solid var(--border-subtle);
 }
 
 @media (max-width: 600px) {

@@ -102,6 +102,7 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
     private playBeamRef = createRef<HTMLDivElement | null>();
     private trackViewerContainerRef = createRef<HTMLDivElement | null>();
     private trackControlsRef = createRef<HTMLDivElement | null>();
+    private editSidebarRef = createRef<HTMLDivElement | null>();
     private viewerContentHostRef = createRef<HTMLDivElement | null>();
     private insertBarsDialogRef = createRef<InsertBarsDialog | null>();
     private actionBarRef = createRef<ArrangementActionBar | null>();
@@ -454,7 +455,12 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         );
 
         const editSidebar = inEditMode ? (
-            <TrackEditSidebar tracks={arrangement.tracks} dataModel={dataModel} rowGeometries={rowGeometries} />
+            <TrackEditSidebar
+                tracks={arrangement.tracks}
+                dataModel={dataModel}
+                rowGeometries={rowGeometries}
+                innerRef={this.editSidebarRef}
+            />
         ) : undefined;
 
         const barActionStrip: Omit<IBarActionStripProps, "actionViewportRef"> = {
@@ -537,6 +543,7 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
                         </Container>
                         {editSidebar}
                     </Container>
+                    <div className="viewerBottomSpacer" />
                     <InsertBarsDialog ref={this.insertBarsDialogRef} />
                 </Container>
                 <RadialMenu ref={this.gridRadialMenuRef} />
@@ -1207,6 +1214,20 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         return start > scrollLeft + 0.5 ? start : Number.MAX_SAFE_INTEGER;
     }
 
+    /**
+     * Reports where a side panel's edge sits, for the spacer below the score to continue the line.
+     *
+     * @param target The element that carries the variable the spacer reads.
+     * @param property The variable to write.
+     * @param inset The panel edge's distance from the container's left or right edge, in px.
+     */
+    private reportPanelEdge(target: HTMLElement, property: string, inset: number): void {
+        const position = `${inset}px`;
+        if (target.style.getPropertyValue(property) !== position) {
+            target.style.setProperty(property, position);
+        }
+    }
+
     private handleTrackViewerScroll = () => {
         const host = this.viewerRef.current;
         if (!host) {
@@ -1214,13 +1235,20 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         }
 
         const trackControls = this.trackControlsRef.current;
-        const scrollHost = this.arrangementViewerRef.current?.parentElement;
-        if (trackControls && scrollHost) {
-            const dividerX = trackControls.getBoundingClientRect().right - scrollHost.getBoundingClientRect().left - 1;
-            const position = `${dividerX}px`;
-            if (scrollHost.style.getPropertyValue("--track-controls-divider-x") !== position) {
-                scrollHost.style.setProperty("--track-controls-divider-x", position);
-            }
+        const editSidebar = this.editSidebarRef.current;
+        const container = this.trackViewerContainerRef.current;
+        const viewer = this.arrangementViewerRef.current;
+        if (trackControls && container && viewer) {
+            // The spacer below the score continues the side panels' edges down to the footer, so it states their
+            // positions as its margins. Each value names the x the panel's own border sits at.
+            const containerBounds = container.getBoundingClientRect();
+            this.reportPanelEdge(viewer, "--track-controls-divider-left",
+                trackControls.getBoundingClientRect().right - containerBounds.left - 1);
+
+            const sidebarInset = editSidebar === null
+                ? 0
+                : containerBounds.right - editSidebar.getBoundingClientRect().left - 1;
+            this.reportPanelEdge(viewer, "--track-actions-divider-right", sidebarInset);
         }
 
         const style = window.getComputedStyle(host);
