@@ -583,7 +583,7 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         return Promise.resolve(true);
     };
 
-    /** Reports the app's edit state to the editors, which gate their input on it. */
+    /** Reports the app's edit state to the editors and the marking view, which gate their input on it. */
     private applyEditState(): void {
         const { inEditMode, entryMode } = this.props;
 
@@ -593,6 +593,8 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
                 editor.entryMode = entryMode;
             }
         }
+
+        this.rangeArticulationView?.setEditMode(inEditMode);
     }
 
     /**

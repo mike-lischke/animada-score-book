@@ -2125,6 +2125,12 @@
     }
 }
 
+/* Only while edit mode is on does a marking take a press; otherwise a press on it reaches the score behind it. */
+#trackViewerContainer:not(.edit-mode) .range-articulation {
+    cursor: default;
+    pointer-events: none;
+}
+
 /* The handle a selected marking shows: one per end of a hairpin, one for the position of an f. */
 .range-articulation-handle {
     position: absolute;

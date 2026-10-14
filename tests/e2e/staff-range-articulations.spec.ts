@@ -8,7 +8,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { stringifyPackedArrangement } from "../../src/core/serialisation/snapshot-packing.js";
 import { arrangementSnapshotVersion } from "../../src/core/serialisation/snapshots.js";
 import type { IArrangementSnapshot, IMeasureEvent } from "../../src/core/types/general.js";
-import { EditEntryMode } from "../../src/core/types/general.js";
+import { EditEntryMode, RangeArticulationKind } from "../../src/core/types/general.js";
 import { routeApi } from "./e2e-test-helpers.js";
 
 const meter = { beats: 4, beatUnits: 4, stepResolution: 16, beatGroups: [4, 4, 4, 4] };
@@ -71,6 +71,25 @@ const snapshotOf = (events: IMeasureEvent[], bars = 3): IArrangementSnapshot => 
             }),
         }],
     };
+};
+
+/**
+ * @returns A score whose first measure already carries a crescendo, so a test can start outside edit mode without
+ *          having to place and then commit the marking.
+ */
+const snapshotWithHairpin = (): IArrangementSnapshot => {
+    const snapshot = snapshotOf(quarterEvents);
+    snapshot.extensions = {
+        rangeArticulations: [{
+            id: 1,
+            trackId: 100,
+            kind: RangeArticulationKind.Crescendo,
+            from: { bar: 1, start: { numerator: 0, denominator: 1 } },
+            to: { bar: 1, start: { numerator: 3, denominator: 4 } },
+        }],
+    };
+
+    return snapshot;
 };
 
 /**
@@ -168,6 +187,24 @@ const markingBox = (page: Page): Promise<IPageBox | undefined> => {
         }
 
         return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+    });
+};
+
+/**
+ * @param page The page under test.
+ *
+ * @returns The marking's left edge relative to the first note head of the score, so a scroll or a pan of the viewer
+ *          cannot look like a move. Undefined when the marking or the note is not rendered.
+ */
+const markingOffsetToNote = (page: Page): Promise<number | undefined> => {
+    return page.evaluate(() => {
+        const marking = document.querySelector<HTMLElement>(".range-articulation:not(.range-articulation-preview)");
+        const note = document.querySelector<HTMLElement>(".staff-measure-viewer .staff-note-head-symbol");
+        if (marking === null || note === null) {
+            return undefined;
+        }
+
+        return marking.getBoundingClientRect().left - note.getBoundingClientRect().left;
     });
 };
 
@@ -345,6 +382,48 @@ test("moves a hairpin as a whole when its body is dragged", async ({ page }) => 
     // have stretched it by the two notes between its old place and the drop.
     expect(after.x).toBeGreaterThan(before.x + 20);
     expect(Math.abs(after.width - before.width)).toBeLessThan(100);
+});
+
+test("does not select or move a marking while edit mode is off", async ({ page }) => {
+    // The score already carries a hairpin and the app starts outside edit mode, so the marking is drawn but inert.
+    await seedScore(page, snapshotWithHairpin());
+    await expect(page.locator("#toolsBarHost")).toHaveCount(0);
+    await expect(page.locator(".range-articulation")).toHaveCount(1);
+
+    // The marking takes no press of its own, so the score behind it gets it instead.
+    const pointerEvents = await page.locator(".range-articulation").evaluate((marking) => {
+        return getComputedStyle(marking).pointerEvents;
+    });
+    expect(pointerEvents).toBe("none");
+
+    const before = await markingBox(page);
+    const grabX = await markingOffsetToNote(page);
+    const first = await bandPointOfNote(page, 1, 0);
+    const second = await bandPointOfNote(page, 1, 1);
+    const target = await bandPointOfNote(page, 1, 3);
+    if (before === undefined || grabX === undefined) {
+        throw new Error("The seeded hairpin has no box.");
+    }
+
+    // A press that lands on the marking reaches the score, so no handle opens and nothing is selected for a drag.
+    await page.mouse.click(first.x, before.y + (before.height / 2));
+    await expect(page.locator(".range-articulation-handle")).toHaveCount(0);
+
+    // Dragging its body leaves it where it stands.
+    await page.mouse.move((first.x + second.x) / 2, before.y + (before.height / 2));
+    await page.mouse.down();
+    await page.mouse.move(target.x, target.y, { steps: 8 });
+    await page.mouse.up();
+    await expect(page.locator(".range-articulation-preview")).toHaveCount(0);
+
+    const after = await markingBox(page);
+    const movedX = await markingOffsetToNote(page);
+    if (after === undefined || movedX === undefined) {
+        throw new Error("The hairpin disappeared while edit mode was off.");
+    }
+
+    expect(Math.abs(movedX - grabX)).toBeLessThan(2);
+    expect(Math.abs(after.width - before.width)).toBeLessThan(2);
 });
 
 test("leaves a hairpin untouched when the drag is cancelled", async ({ page }) => {

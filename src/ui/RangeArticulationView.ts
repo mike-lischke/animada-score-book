@@ -106,6 +106,7 @@ export class RangeArticulationView {
     private tool = RangeArticulationTool.None;
     private staffMode: boolean;
     private zenMode: boolean;
+    private editMode = false;
     private decorationLayer?: HTMLElement;
     private dragImage?: HTMLElement;
     private refreshFrame?: number;
@@ -190,6 +191,26 @@ export class RangeArticulationView {
         this.scheduleRefresh();
     }
 
+    /**
+     * Applies the edit mode of the arrangement viewer. Only while it is on may a marking be selected and moved.
+     *
+     * @param editMode True while edit mode is on.
+     */
+    public setEditMode(editMode: boolean): void {
+        if (this.editMode === editMode) {
+            return;
+        }
+
+        this.editMode = editMode;
+        if (!editMode) {
+            this.endDrag(true);
+            this.selectedId = undefined;
+            this.leaveTool();
+        }
+
+        this.scheduleRefresh();
+    }
+
     private eventHandlersOff(): void {
         this.contentHost.removeEventListener("pointerdown", this.handlePointerDown, true);
         this.contentHost.removeEventListener("pointermove", this.handlePointerMove);
@@ -200,7 +221,7 @@ export class RangeArticulationView {
     }
 
     private handleToolChanged = (tool: RangeArticulationTool): Promise<boolean> => {
-        const effective = this.staffMode && !this.zenMode ? tool : RangeArticulationTool.None;
+        const effective = this.staffMode && !this.zenMode && this.editMode ? tool : RangeArticulationTool.None;
         if (this.tool !== effective) {
             this.tool = effective;
             this.removeDragImage();
@@ -326,7 +347,8 @@ export class RangeArticulationView {
      * @param event The pointer event of the press.
      */
     private handleMarkingPointerDown = (event: PointerEvent): void => {
-        if (this.zenMode || this.tool !== RangeArticulationTool.None || !this.staffMode || event.button !== 0) {
+        if (this.zenMode || !this.editMode || this.tool !== RangeArticulationTool.None || !this.staffMode
+            || event.button !== 0) {
             return;
         }
 
@@ -742,7 +764,7 @@ export class RangeArticulationView {
             return;
         }
 
-        if (this.tool !== RangeArticulationTool.None || this.dragId !== undefined) {
+        if (this.tool !== RangeArticulationTool.None || this.dragId !== undefined || !this.editMode) {
             return;
         }
 
