@@ -128,7 +128,7 @@ test("shows per-measure actions in the persistent toolbar only in edit mode", as
 
     const groups = page.locator(".bar-action-group");
     await expect(groups).toHaveCount(barCount);
-    await expect(page.locator(".bar-action-button")).toHaveCount(barCount * 5);
+    await expect(page.locator(".bar-action-button")).toHaveCount(barCount * 7);
 
     // The tools bar overlaps the band's right end, so the second bar's actions have to be scrolled out first.
     const duplicate = groups.nth(1).locator('[data-action="duplicate"]');
@@ -144,7 +144,7 @@ test("keeps fixed per-measure actions aligned at reduced score zoom", async ({ p
 
     const groups = page.locator(".bar-action-group");
     const buttons = groups.first().locator(".bar-action-button");
-    await expect(buttons).toHaveCount(5);
+    await expect(buttons).toHaveCount(7);
 
     const buttonBox = await buttons.first().boundingBox();
     const groupBox = await groups.first().boundingBox();
@@ -320,7 +320,6 @@ test("widens the overlay of a selected measure while the barline is dragged", as
 
     // In the measure's head room, above the first staff: the click selects the whole measure.
     await page.mouse.click(rowBox.x + (rowBox.width / 2), rowBox.y - 5);
-    await expect(page.locator("#selectionEditPopup .subdivisionToolbarHost")).toBeVisible();
 
     const overlay = page.locator(".selection-overlay");
     await expect(overlay).toHaveCount(1);

@@ -510,10 +510,20 @@ h6 {
     }
 
     .toolsBarHeading {
+        position: relative;
         font-size: 10px;
         font-weight: 600;
         text-transform: uppercase;
         color: color-mix(in srgb, var(--color-base-content) 40%, transparent);
+        cursor: grab;
+        user-select: none;
+    }
+
+    /* The title is the bar's handle, so the band the bar is dragged by reaches around it. */
+    .toolsBarHeading::before {
+        content: "";
+        position: absolute;
+        inset: -12px -5px;
     }
 
     .toolsBarDivider {

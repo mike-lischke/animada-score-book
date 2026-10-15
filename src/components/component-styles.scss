@@ -416,13 +416,9 @@
 
 /* A symbol that fills the icon box in both sides reads larger than the marks next to it, so it states the side
  * the ink is scaled to itself: what is left over is the margin the hand-drawn icons have. The dynamic `f` is
- * taller than it is wide, the simile a touch wider than it is high, so each side is what lands on whole pixels. */
+ * taller than it is wide, so its side is what lands on whole pixels. */
 .forteButton .score-symbol-icon {
     --icon-ink-spaces: 1.6;
-}
-
-.simileButton .score-symbol-icon {
-    --icon-ink-spaces: 1.61;
 }
 
 .subdivisionToolbar .btn {
@@ -1286,6 +1282,29 @@
             min-width: 0;
             min-height: 0;
         }
+
+        /* The repeat marks are notation symbols, whose box the catalogue states 24px wide: drawn 4px smaller they
+           sit level with the icons of the other buttons. */
+        .score-symbol-icon {
+            width: 20px;
+            height: 20px;
+        }
+
+        /* A repeat mark reads as pressed while the bar carries it, the way the note length buttons do. */
+        &.du-btn-primary {
+            border-color: var(--color-primary);
+            background-color: color-mix(in srgb, var(--color-primary) 25%, var(--color-base-100));
+            color: var(--color-base-content);
+        }
+    }
+
+    /* The insert actions stand apart from the per-bar actions: 12px on top of the group's 4px gap makes 16px. */
+    .bar-action-group .bar-action-button[data-action="insert-left"] {
+        margin-right: 12px;
+    }
+
+    .bar-action-group .bar-action-button[data-action="insert-right"] {
+        margin-left: 12px;
     }
 
 }

@@ -5,9 +5,14 @@
 
 import { type ComponentChild, createRef } from "preact";
 
+import { staffSpacePx } from "../../../core/MeasureLayout.js";
+import { ScoreSymbol } from "../../../core/ScoreSymbols.js";
+import type { IRepeatBar } from "../../../core/types/general.js";
+import { requisitions } from "../../../supplement/Requisitions.js";
 import { Button } from "../framework/Button.js";
 import { Container } from "../framework/Container.js";
 import { Icon } from "../framework/Icon.js";
+import { ScoreSymbolView } from "../framework/ScoreSymbolView.js";
 import { UIIcon } from "../framework/UIIcon.js";
 import { ChildAlignment, Orientation } from "../framework/ui-types.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
@@ -17,6 +22,12 @@ interface IBarActionDefinition {
     kind: BarActionKind;
     label: string;
     icon: ComponentChild;
+
+    /** Whether the action is unavailable for the bar it is drawn above. */
+    disabled?: (barNumber: number) => boolean;
+
+    /** Whether the bar is in the state the action switches. */
+    active?: (barNumber: number) => boolean;
 }
 
 /** The bar-level actions offered by the strip. */
@@ -26,11 +37,16 @@ export enum BarActionKind {
     Delete,
     Duplicate,
     InsertRight,
+    RepeatStart,
+    RepeatEnd,
 }
 
 export interface IBarActionStripProps extends ICommonUIProperties {
     barCount: number;
     canDelete: boolean;
+
+    /** The repeat marks the bars carry, keyed by 1-based bar number. */
+    repeatBars?: Map<number, IRepeatBar>;
 
     /** The horizontally scrolling host that contains the bar columns. */
     scrollHostRef: preact.RefObject<HTMLDivElement | null>;
@@ -58,6 +74,7 @@ export class BarActionStrip extends UIComponent<IBarActionStripProps> {
     private resizeObserver?: ResizeObserver;
 
     public override componentDidMount(): void {
+        requisitions.register("arrangementMutated", this.handleArrangementMutated);
         this.layout();
 
         const host = this.props.scrollHostRef.current;
@@ -74,6 +91,8 @@ export class BarActionStrip extends UIComponent<IBarActionStripProps> {
     }
 
     public override componentWillUnmount(): void {
+        requisitions.unregister("arrangementMutated", this.handleArrangementMutated);
+
         this.resizeObserver?.disconnect();
         this.resizeObserver = undefined;
     }
@@ -106,7 +125,86 @@ export class BarActionStrip extends UIComponent<IBarActionStripProps> {
     }
 
     public override render(): ComponentChild {
-        const { barCount, canDelete, onBarAction } = this.props;
+        const groups = this.renderGroups();
+
+        return (
+            <Container
+                className="bar-action-strip"
+                innerRef={this.stripRef}
+                style={{ height: "var(--bar-action-strip-height)" }}
+            >
+                {groups}
+            </Container>
+        );
+    }
+
+    /**
+     * A repeat mark is a switch the buttons draw as pressed, so they follow the marks the score holds.
+     *
+     * @returns True to signal that the event was handled.
+     */
+    private handleArrangementMutated = (): Promise<boolean> => {
+        this.forceUpdate();
+
+        return Promise.resolve(true);
+    };
+
+    /**
+     * Builds one group of buttons per bar, each centred on its measure column.
+     *
+     * @returns The groups to draw.
+     */
+    private renderGroups(): ComponentChild[] {
+        const { barCount } = this.props;
+        const actions = this.buildActions();
+
+        const groups: ComponentChild[] = [];
+        for (let barNumber = 1; barNumber <= barCount; barNumber++) {
+            groups.push(
+                <Container key={barNumber} className="bar-action-group" orientation={Orientation.LeftToRight}
+                    crossAlignment={ChildAlignment.Center}>
+                    {this.renderButtons(barNumber, actions)}
+                </Container>,
+            );
+        }
+
+        return groups;
+    }
+
+    /**
+     * @param barNumber The 1-based bar the buttons act on.
+     * @param actions The actions every bar offers.
+     *
+     * @returns The buttons of one bar.
+     */
+    private renderButtons(barNumber: number, actions: IBarActionDefinition[]): ComponentChild[] {
+        const { onBarAction } = this.props;
+
+        return actions.map((action) => {
+            return (
+                <Button
+                    key={action.key}
+                    className="bar-action-button"
+                    data-action={action.key}
+                    aria-label={`${action.label}, bar ${barNumber}`}
+                    title={`${action.label}, bar ${barNumber}`}
+                    disabled={action.disabled?.(barNumber) === true}
+                    isDefault={action.active?.(barNumber) === true}
+                    onClick={() => {
+                        onBarAction(barNumber, action.kind);
+                    }}
+                >
+                    {action.icon}
+                </Button>
+            );
+        });
+    }
+
+    /**
+     * @returns The actions every bar offers, in the order they appear.
+     */
+    private buildActions(): IBarActionDefinition[] {
+        const { barCount, canDelete, repeatBars } = this.props;
 
         const insertLeftIcon = (
             <Container className="bar-action-insert-icon" orientation={Orientation.LeftToRight}
@@ -122,7 +220,8 @@ export class BarActionStrip extends UIComponent<IBarActionStripProps> {
                 <Icon src={UIIcon.ArrowRight} width={16} height={16} />
             </Container>
         );
-        const actionDefinitions: IBarActionDefinition[] = [{
+
+        return [{
             key: "insert-left",
             kind: BarActionKind.InsertLeft,
             label: "Insert bars to the left",
@@ -137,55 +236,45 @@ export class BarActionStrip extends UIComponent<IBarActionStripProps> {
             kind: BarActionKind.Delete,
             label: "Delete bar",
             icon: <Icon src={UIIcon.Trash} />,
+            disabled: () => {
+                return !canDelete;
+            },
         }, {
             key: "duplicate",
             kind: BarActionKind.Duplicate,
             label: "Duplicate bar",
             icon: <Icon src={UIIcon.Copy} />,
         }, {
+            key: "repeat-start",
+            kind: BarActionKind.RepeatStart,
+            label: "Repeat start",
+            icon: <ScoreSymbolView symbol={ScoreSymbol.RepeatStart} staffSpace={staffSpacePx} icon />,
+            disabled: (barNumber) => {
+                // A section that opens needs a bar after it that closes it.
+                return barNumber >= barCount;
+            },
+            active: (barNumber) => {
+                return repeatBars?.get(barNumber)?.start === true;
+            },
+        }, {
+            key: "repeat-end",
+            kind: BarActionKind.RepeatEnd,
+            label: "Repeat end",
+            icon: <ScoreSymbolView symbol={ScoreSymbol.RepeatEnd} staffSpace={staffSpacePx} icon />,
+            disabled: (barNumber) => {
+                // A section that closes needs a bar before it that opens it.
+                return barNumber <= 1;
+            },
+            active: (barNumber) => {
+                return repeatBars?.get(barNumber)?.end === true;
+            },
+        }, {
+            // The insert actions frame the rest of the bar actions: the one that inserts on the left opens the
+            // row, the one that inserts on the right closes it.
             key: "insert-right",
             kind: BarActionKind.InsertRight,
             label: "Insert bars to the right",
             icon: insertRightIcon,
         }];
-
-        const groups: ComponentChild[] = [];
-        for (let barNumber = 1; barNumber <= barCount; barNumber++) {
-            const buttons: ComponentChild[] = [];
-            for (const action of actionDefinitions) {
-                buttons.push(
-                    <Button
-                        key={action.key}
-                        className="bar-action-button"
-                        data-action={action.key}
-                        aria-label={`${action.label}, bar ${barNumber}`}
-                        title={`${action.label}, bar ${barNumber}`}
-                        disabled={action.kind === BarActionKind.Delete && !canDelete}
-                        onClick={() => {
-                            onBarAction(barNumber, action.kind);
-                        }}
-                    >
-                        {action.icon}
-                    </Button>,
-                );
-            }
-
-            groups.push(
-                <Container key={barNumber} className="bar-action-group" orientation={Orientation.LeftToRight}
-                    crossAlignment={ChildAlignment.Center}>
-                    {buttons}
-                </Container>,
-            );
-        }
-
-        return (
-            <Container
-                className="bar-action-strip"
-                innerRef={this.stripRef}
-                style={{ height: "var(--bar-action-strip-height)" }}
-            >
-                {groups}
-            </Container>
-        );
     }
 }

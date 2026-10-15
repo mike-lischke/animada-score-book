@@ -8,7 +8,7 @@ import { expect, test, type Locator, type Page } from "@playwright/test";
 import { stringifyPackedArrangement } from "../../src/core/serialisation/snapshot-packing.js";
 import { arrangementSnapshotVersion } from "../../src/core/serialisation/snapshots.js";
 import type { IArrangementSnapshot, IRepeatBar, ITrackPieceSnapshot } from "../../src/core/types/general.js";
-import { routeApi, toolbarButton } from "./e2e-test-helpers.js";
+import { routeApi, scrollClearOfToolsBar } from "./e2e-test-helpers.js";
 
 const meter = { beats: 4, beatUnits: 4, stepResolution: 16, beatGroups: [4, 4, 4, 4] };
 
@@ -272,15 +272,39 @@ test("keeps the whole-measure rest of a bar centred under a repeat barline", asy
     expect(await restCentre(page, 1)).toBeCloseTo(0.5, 2);
 });
 
-test("hides repeat marks for a note selection", async ({ page }) => {
+test("sets and clears a bar's repeat mark from the bar actions", async ({ page }) => {
     await seedScore(page, snapshotWith(3, {}));
 
     await page.locator("#editModeButton").click({ force: true });
 
-    // A note is not a bar, so neither mark can be set on the selection.
+    // The marks are bar actions now: the bar opens the score with a repeat barline once its button is on.
+    const start = page.locator('.bar-action-button[data-action="repeat-start"]').first();
+    await scrollClearOfToolsBar(page, start);
+    await start.click({ force: true });
+
+    await expect(start).toHaveClass(/du-btn-primary/);
+    await expect(openingBarline(page, 1).locator(".barline-view-dots")).toHaveCount(1);
+
+    // Pressing the button again takes the mark off, and the barline the mark stated goes with it.
+    await scrollClearOfToolsBar(page, start);
+    await start.click({ force: true });
+
+    await expect(start).not.toHaveClass(/du-btn-primary/);
+    await expect(openingBarline(page, 1).locator(".barline-view-dots")).toHaveCount(0);
+});
+
+test("offers the repeat marks above every bar, not in a selection popup", async ({ page }) => {
+    await seedScore(page, snapshotWith(3, {}));
+
+    await page.locator("#editModeButton").click({ force: true });
+
+    // Every bar carries both marks as its own actions.
+    await expect(page.locator('.bar-action-group [data-action="repeat-start"]')).toHaveCount(3);
+    await expect(page.locator('.bar-action-group [data-action="repeat-end"]')).toHaveCount(3);
+
+    // A selected note brings none of them along: its popup holds the note tools alone.
     await staffBar(page, 2).locator(".staff-note-head-symbol").first().click();
     await expect(page.locator("#selectionEditPopup .subdivisionToolbarHost")).toBeVisible();
-
-    await expect(toolbarButton(page, "Repeat start")).toHaveCount(0);
-    await expect(toolbarButton(page, "Repeat end")).toHaveCount(0);
+    await expect(page.locator('#selectionEditPopup [title="Repeat start"]')).toHaveCount(0);
+    await expect(page.locator('#selectionEditPopup [title="Repeat end"]')).toHaveCount(0);
 });

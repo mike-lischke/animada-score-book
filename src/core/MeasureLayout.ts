@@ -51,11 +51,12 @@ export const minMeasureRepeatWidth = 3 * staffSpacePx;
 export const staffMeasureInsets = 24;
 
 /**
- * Width of the bar action strip — five 34 px buttons with 4 px gaps — in px at 100% zoom. Mirrors
- * `.bar-action-button` and `.bar-action-group` in component-styles: the strip is centred on the measure, so the
- * measure has to be at least this wide for the strip to fit.
+ * Width of the bar action strip — seven 34 px buttons, with 4 px between the per-bar actions and 16 px to the
+ * insert actions that frame them — in px at 100% zoom. Mirrors `.bar-action-button` and `.bar-action-group` in
+ * component-styles: the strip is centred on the measure, so the measure has to be at least this wide for the
+ * strip to fit.
  */
-export const barActionStripWidth = (5 * 34) + (4 * 4);
+export const barActionStripWidth = (7 * 34) + (4 * 4) + (2 * 16);
 
 /** A half-open range of 1-based measure numbers. */
 export interface IMeasureRange {

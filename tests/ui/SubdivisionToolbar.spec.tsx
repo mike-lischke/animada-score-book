@@ -4,17 +4,15 @@
  */
 
 import { cleanup, render, type RenderResult } from "@testing-library/preact";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { SubdivisionToolbar } from "../../src/components/ui/Arrangement/SubdivisionToolbar.js";
-import { AppStorage } from "../../src/core/AppStorage.js";
 import type { ISbDmArrangement, ISbDmTrack, ISbDmTrackPiece } from "../../src/core/ScoreBookDataModel.js";
 import { ScoreBookDataModel } from "../../src/core/ScoreBookDataModel.js";
 import type { IFraction } from "../../src/core/types/general.js";
-import { RepeatMark } from "../../src/core/types/general.js";
 import { requisitions } from "../../src/supplement/Requisitions.js";
 import { SelectionManager } from "../../src/ui/SelectionManager.js";
-import { createInstrument, measureEntry, noteEntry, runEntry, trackPieceEntry } from "../unit-test-helpers.js";
+import { createInstrument, noteEntry, runEntry } from "../unit-test-helpers.js";
 
 const triggerButton = (container: Element): HTMLButtonElement => {
     return container.querySelector<HTMLButtonElement>("button")!;
@@ -42,39 +40,6 @@ const buttonWithTooltip = (container: Element, tooltip: string): HTMLButtonEleme
  */
 const buttonOrNull = (container: Element, tooltip: string): HTMLButtonElement | null => {
     return container.querySelector<HTMLButtonElement>(`button[title="${tooltip}"]`);
-};
-
-/**
- * The one-bar repeat toggle, which follows the tuplet dropdown in the same group.
- *
- * @param container The rendered toolbar.
- *
- * @returns The toggle button.
- */
-const repeatButton = (container: Element): HTMLButtonElement => {
-    return buttonWithTooltip(container, "One-bar repeat (simile)");
-};
-
-/**
- * The button that marks the barline a repeated section opens at.
- *
- * @param container The rendered toolbar.
- *
- * @returns The toggle button.
- */
-const startButton = (container: Element): HTMLButtonElement => {
-    return buttonWithTooltip(container, "Repeat start");
-};
-
-/**
- * The button that marks the barline a repeated section closes at.
- *
- * @param container The rendered toolbar.
- *
- * @returns The toggle button.
- */
-const endButton = (container: Element): HTMLButtonElement => {
-    return buttonWithTooltip(container, "Repeat end");
 };
 
 /**
@@ -115,17 +80,10 @@ const cell = (step: number): IFraction => {
 describe("SubdivisionToolbar", { concurrent: false }, () => {
     let renderResult: RenderResult | null;
     let selectionManager: SelectionManager;
-    let dataModel: ScoreBookDataModel;
 
     beforeEach(() => {
         renderResult = null;
         selectionManager = new SelectionManager();
-        dataModel = new ScoreBookDataModel();
-
-        // The repeat and dynamics controls belong to the staff view, so the spec runs in it by default.
-        vi.spyOn(AppStorage, "loadUISettings").mockReturnValue({
-            viewSettings: { arrangementViewSettings: { displayMode: "staff" } },
-        });
     });
 
     afterEach(() => {
@@ -133,7 +91,6 @@ describe("SubdivisionToolbar", { concurrent: false }, () => {
         cleanup();
         renderResult = null;
         selectionManager.dispose();
-        vi.restoreAllMocks();
     });
 
     it("enables the dropdown for a note inside one tuplet but not inside a nested one", () => {
@@ -148,7 +105,7 @@ describe("SubdivisionToolbar", { concurrent: false }, () => {
         selectionManager.replaceSelection([noteEntry(measure, { numerator: 1, denominator: 12 })]);
 
         renderResult = render(
-            <SubdivisionToolbar selectionManager={selectionManager} dataModel={dataModel} />,
+            <SubdivisionToolbar selectionManager={selectionManager} />,
         );
 
         expect(triggerButton(renderResult.container).disabled).toBe(false);
@@ -157,7 +114,7 @@ describe("SubdivisionToolbar", { concurrent: false }, () => {
             { numerator: 1, denominator: 6 }, 3, 2);
         selectionManager.replaceSelection([noteEntry(measure, { numerator: 1, denominator: 18 })]);
         renderResult.rerender(
-            <SubdivisionToolbar selectionManager={selectionManager} dataModel={dataModel} />,
+            <SubdivisionToolbar selectionManager={selectionManager} />,
         );
 
         // A note in the second level has no room for another bracket.
@@ -180,7 +137,7 @@ describe("SubdivisionToolbar", { concurrent: false }, () => {
         ]);
 
         renderResult = render(
-            <SubdivisionToolbar selectionManager={selectionManager} dataModel={dataModel} />,
+            <SubdivisionToolbar selectionManager={selectionManager} />,
         );
 
         expect(triggerButton(renderResult.container).disabled).toBe(true);
@@ -188,7 +145,7 @@ describe("SubdivisionToolbar", { concurrent: false }, () => {
 
     it("renders a disabled creation dropdown when nothing is selected", () => {
         renderResult = render(
-            <SubdivisionToolbar selectionManager={selectionManager} dataModel={dataModel} />,
+            <SubdivisionToolbar selectionManager={selectionManager} />,
         );
 
         expect(triggerButton(renderResult.container).disabled).toBe(true);
@@ -199,7 +156,7 @@ describe("SubdivisionToolbar", { concurrent: false }, () => {
         selectionManager.replaceSelection([noteEntry(measure, cell(0))]);
 
         renderResult = render(
-            <SubdivisionToolbar selectionManager={selectionManager} dataModel={dataModel} />,
+            <SubdivisionToolbar selectionManager={selectionManager} />,
         );
 
         expect(triggerButton(renderResult.container).disabled).toBe(false);
@@ -222,7 +179,7 @@ describe("SubdivisionToolbar", { concurrent: false }, () => {
         selectionManager.replaceSelection([noteEntry(measure, slotStart)]);
 
         renderResult = render(
-            <SubdivisionToolbar selectionManager={selectionManager} dataModel={dataModel} />,
+            <SubdivisionToolbar selectionManager={selectionManager} />,
         );
 
         const dropdownItems = [...renderResult.container.querySelectorAll<HTMLAnchorElement>("a")];
@@ -242,7 +199,7 @@ describe("SubdivisionToolbar", { concurrent: false }, () => {
         selectionManager.replaceSelection(entries);
 
         renderResult = render(
-            <SubdivisionToolbar selectionManager={selectionManager} dataModel={dataModel} />,
+            <SubdivisionToolbar selectionManager={selectionManager} />,
         );
 
         expect(triggerButton(renderResult.container).disabled).toBe(false);
@@ -258,7 +215,7 @@ describe("SubdivisionToolbar", { concurrent: false }, () => {
         selectionManager.replaceSelection(entries);
 
         renderResult = render(
-            <SubdivisionToolbar selectionManager={selectionManager} dataModel={dataModel} />,
+            <SubdivisionToolbar selectionManager={selectionManager} />,
         );
 
         expect(triggerButton(renderResult.container).disabled).toBe(true);
@@ -273,7 +230,7 @@ describe("SubdivisionToolbar", { concurrent: false }, () => {
         selectionManager.replaceSelection(entries);
 
         renderResult = render(
-            <SubdivisionToolbar selectionManager={selectionManager} dataModel={dataModel} />,
+            <SubdivisionToolbar selectionManager={selectionManager} />,
         );
 
         const dropdownItems = [...renderResult.container.querySelectorAll<HTMLAnchorElement>("a")];
@@ -294,7 +251,7 @@ describe("SubdivisionToolbar", { concurrent: false }, () => {
         selectionManager.replaceSelection([runEntry(measure, measure.events[0])]);
 
         renderResult = render(
-            <SubdivisionToolbar selectionManager={selectionManager} dataModel={dataModel} />,
+            <SubdivisionToolbar selectionManager={selectionManager} />,
         );
 
         const dropdownItems = [...renderResult.container.querySelectorAll<HTMLAnchorElement>("a")];
@@ -309,167 +266,18 @@ describe("SubdivisionToolbar", { concurrent: false }, () => {
         expect(nontuplet?.getAttribute("aria-disabled")).toBe("true");
     });
 
-    it("disables the one-bar repeat unless the whole selection is track pieces", () => {
-        const measure = makeMeasure(7, [cell(0)], undefined, 2);
-        selectionManager.replaceSelection([noteEntry(measure, cell(0))]);
+    it("carries the tuplet dropdown alone, whatever view the score is shown in", async () => {
+        // The repeat marks are set from the bar action strip, so the toolbar holds tuplets in both views.
+        renderResult = render(<SubdivisionToolbar selectionManager={selectionManager} />);
 
-        renderResult = render(
-            <SubdivisionToolbar selectionManager={selectionManager} dataModel={dataModel} />,
-        );
+        for (const mode of ["staff", "grid"] as const) {
+            void requisitions.execute("trackViewModeToggled", mode);
+            await Promise.resolve();
 
-        expect(repeatButton(renderResult.container).disabled).toBe(true);
-    });
-
-    it("enables the one-bar repeat for a track piece beyond the first measure", () => {
-        const measure = makeMeasure(7, [cell(0)], undefined, 2);
-        selectionManager.replaceSelection([trackPieceEntry(measure.track, measure)]);
-
-        renderResult = render(
-            <SubdivisionToolbar selectionManager={selectionManager} dataModel={dataModel} />,
-        );
-
-        const button = repeatButton(renderResult.container);
-        expect(button.disabled).toBe(false);
-        expect(button.classList.contains("du-btn-primary")).toBe(false);
-    });
-
-    it("disables the one-bar repeat on the first measure", () => {
-        const measure = makeMeasure(7, [cell(0)]);
-        selectionManager.replaceSelection([trackPieceEntry(measure.track, measure)]);
-
-        renderResult = render(
-            <SubdivisionToolbar selectionManager={selectionManager} dataModel={dataModel} />,
-        );
-
-        expect(repeatButton(renderResult.container).disabled).toBe(true);
-    });
-
-    it("marks the one-bar repeat when every selected track piece carries it", () => {
-        const measure = makeMeasure(7, [cell(0)], undefined, 2);
-        measure.simile = true;
-        selectionManager.replaceSelection([trackPieceEntry(measure.track, measure)]);
-
-        renderResult = render(
-            <SubdivisionToolbar selectionManager={selectionManager} dataModel={dataModel} />,
-        );
-
-        expect(repeatButton(renderResult.container).classList.contains("du-btn-primary")).toBe(true);
-    });
-
-    it("disables the repeat marks unless the whole selection is whole bars", () => {
-        const measure = makeMeasure(7, [cell(0)]);
-        selectionManager.replaceSelection([noteEntry(measure, cell(0))]);
-
-        renderResult = render(
-            <SubdivisionToolbar selectionManager={selectionManager} dataModel={dataModel} />,
-        );
-
-        expect(startButton(renderResult.container).disabled).toBe(true);
-        expect(endButton(renderResult.container).disabled).toBe(true);
-    });
-
-    it("enables the repeat marks for whole bars and toggles the mark on them", () => {
-        const model = new ScoreBookDataModel();
-        model.startNewArrangement([createInstrument("0", 0, 0)]);
-        model.insertBars(1, 2, false, false);
-        const measure = model.arrangement!.tracks[0].measures[1];
-        selectionManager.replaceSelection([measureEntry(measure)]);
-
-        renderResult = render(
-            <SubdivisionToolbar selectionManager={selectionManager} dataModel={model} />,
-        );
-
-        const start = startButton(renderResult.container);
-        expect(start.disabled).toBe(false);
-        expect(endButton(renderResult.container).disabled).toBe(false);
-        expect(start.classList.contains("du-btn-primary")).toBe(false);
-
-        start.click();
-        expect(model.arrangement!.repeatBars?.get(2)).toEqual({ start: true });
-
-        // The button follows the model, so pressing it again takes the mark off with one undo step.
-        renderResult.rerender(<SubdivisionToolbar selectionManager={selectionManager} dataModel={model} />);
-        const marked = startButton(renderResult.container);
-        expect(marked.classList.contains("du-btn-primary")).toBe(true);
-
-        marked.click();
-        expect(model.arrangement!.repeatBars?.size).toBe(0);
-    });
-
-    it("disables the repeat mark that nothing can pair with on the first and the last bar", () => {
-        const model = new ScoreBookDataModel();
-        model.startNewArrangement([createInstrument("0", 0, 0)]);
-        model.insertBars(1, 2, false, false);
-        const measures = model.arrangement!.tracks[0].measures;
-
-        // The first bar can open a repeated section but not close one: no bar precedes it to open the repeat.
-        selectionManager.replaceSelection([measureEntry(measures[0])]);
-        renderResult = render(
-            <SubdivisionToolbar selectionManager={selectionManager} dataModel={model} />,
-        );
-
-        expect(startButton(renderResult.container).disabled).toBe(false);
-        expect(endButton(renderResult.container).disabled).toBe(true);
-
-        // The last bar is the other way round: no bar follows it that could close a repeat it opens.
-        selectionManager.replaceSelection([measureEntry(measures[2])]);
-        renderResult.rerender(<SubdivisionToolbar selectionManager={selectionManager} dataModel={model} />);
-
-        expect(startButton(renderResult.container).disabled).toBe(true);
-        expect(endButton(renderResult.container).disabled).toBe(false);
-
-        // A bar with bars on both sides can do both.
-        selectionManager.replaceSelection([measureEntry(measures[1])]);
-        renderResult.rerender(<SubdivisionToolbar selectionManager={selectionManager} dataModel={model} />);
-
-        expect(startButton(renderResult.container).disabled).toBe(false);
-        expect(endButton(renderResult.container).disabled).toBe(false);
-    });
-
-    it("does not light the repeat mark a bar cannot be given", () => {
-        const model = new ScoreBookDataModel();
-        model.startNewArrangement([createInstrument("0", 0, 0)]);
-        model.insertBars(1, 2, false, false);
-        const measures = model.arrangement!.tracks[0].measures;
-
-        // A score may carry the mark of a section opening on its last bar, where no repeat can follow it.
-        model.setRepeatBars([measures[2].number], RepeatMark.Start, true);
-        selectionManager.replaceSelection([measureEntry(measures[2])]);
-
-        renderResult = render(
-            <SubdivisionToolbar selectionManager={selectionManager} dataModel={model} />,
-        );
-
-        const start = startButton(renderResult.container);
-        expect(start.disabled).toBe(true);
-        expect(start.classList.contains("du-btn-primary")).toBe(false);
-    });
-
-    it("keeps tuplets in grid and exposes repeat marks only in staff", async () => {
-        const model = new ScoreBookDataModel();
-        model.startNewArrangement([createInstrument("0", 0, 0)]);
-
-        renderResult = render(<SubdivisionToolbar selectionManager={selectionManager} dataModel={model} />);
-        void requisitions.execute("trackViewModeToggled", "grid");
-        await Promise.resolve();
-
-        expect(buttonWithTooltip(renderResult.container, "Add subdivision")).toBeTruthy();
-        expect(buttonOrNull(renderResult.container, "One-bar repeat (simile)")).toBeNull();
-
-        void requisitions.execute("trackViewModeToggled", "staff");
-        await Promise.resolve();
-
-        expect(buttonWithTooltip(renderResult.container, "One-bar repeat (simile)")).toBeTruthy();
-        expect(buttonWithTooltip(renderResult.container, "Repeat start")).toBeTruthy();
-        expect(buttonWithTooltip(renderResult.container, "Repeat end")).toBeTruthy();
-        expect(renderResult.container.querySelectorAll(".subdivisionToolbar")).toHaveLength(3);
-
-        void requisitions.execute("trackViewModeToggled", "grid");
-        await Promise.resolve();
-
-        expect(buttonWithTooltip(renderResult.container, "Add subdivision")).toBeTruthy();
-        expect(buttonOrNull(renderResult.container, "One-bar repeat (simile)")).toBeNull();
-        expect(buttonOrNull(renderResult.container, "Repeat start")).toBeNull();
-        expect(buttonOrNull(renderResult.container, "Repeat end")).toBeNull();
+            expect(buttonWithTooltip(renderResult.container, "Add subdivision")).toBeTruthy();
+            expect(buttonOrNull(renderResult.container, "Repeat start")).toBeNull();
+            expect(buttonOrNull(renderResult.container, "Repeat end")).toBeNull();
+            expect(renderResult.container.querySelectorAll(".subdivisionToolbar")).toHaveLength(1);
+        }
     });
 });

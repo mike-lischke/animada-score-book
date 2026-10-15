@@ -6,7 +6,7 @@
 import { uuid } from "../string-helpers.js";
 import type { Articulation } from "./articulation.js";
 import type { INoteValue } from "./rest-notation.js";
-import type { EditEntryMode } from "./types/general.js";
+import type { EditEntryMode, IPoint } from "./types/general.js";
 
 export interface IArrangementViewSettings {
     /** The scroll position of the arrangement in its viewer. */
@@ -96,6 +96,12 @@ export interface IUISettings {
 
     /** Whether edit mode was active when the app was last closed. */
     editMode?: boolean;
+
+    /**
+     * Where the staff placing tools bar sits, in px inside the overlay it floats in, as the user last dragged
+     * it. Missing means the bar's default place at the overlay's top right.
+     */
+    toolsBarPosition?: IPoint;
 
     /**
      * The entry mode to start the staff view with. It is remembered across view mode switches and sessions;

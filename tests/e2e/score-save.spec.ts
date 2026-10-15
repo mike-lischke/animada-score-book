@@ -107,7 +107,7 @@ const editSomething = async (page: Page): Promise<void> => {
     await page.locator("#editModeButton").click({ force: true });
 
     await expect(page.locator(".bar-action-group")).toHaveCount(1);
-    await expect(page.locator(".bar-action-button")).toHaveCount(5);
+    await expect(page.locator(".bar-action-button")).toHaveCount(7);
 
     // The tools bar overlaps the band's right end, so the bar's actions have to be scrolled out first.
     const duplicate = page.locator('.bar-action-button[data-action="duplicate"]');

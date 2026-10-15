@@ -91,7 +91,7 @@ export class SelectionEditPopup extends UIComponent<ISelectionEditPopupProps> {
         });
 
         let content: ComponentChild;
-        if (editMode && entries.length > 0) {
+        if (editMode && SelectionEditPopup.carriesTools(entries)) {
             content = isTrackPieceSelection ? this.renderTrackPieceTools() : this.renderGenericTools(entries);
         }
 
@@ -115,6 +115,20 @@ export class SelectionEditPopup extends UIComponent<ISelectionEditPopupProps> {
                 {content}
             </Popup>
         );
+    }
+
+    /**
+     * Whether the popup hosts tools for the entries. The bar action strip shows the bar actions above every bar,
+     * so a selection of whole bars carries no tools here.
+     *
+     * @param entries The selection entries.
+     *
+     * @returns True when the popup shows tools for the selection.
+     */
+    private static carriesTools(entries: ISelectionEntry[]): boolean {
+        return entries.some((entry) => {
+            return entry.granularity !== SelectionGranularity.Measure;
+        });
     }
 
     /**
@@ -208,9 +222,6 @@ export class SelectionEditPopup extends UIComponent<ISelectionEditPopupProps> {
             return entry.granularity === SelectionGranularity.Note
                 || entry.granularity === SelectionGranularity.NoteGroup;
         });
-        const allMeasures = entries.every((entry) => {
-            return entry.granularity === SelectionGranularity.Measure;
-        });
 
         let noteTools: ComponentChild;
         let noteLengthTools: ComponentChild;
@@ -263,21 +274,12 @@ export class SelectionEditPopup extends UIComponent<ISelectionEditPopupProps> {
             />;
         }
 
-        const showTuplets = allNoteTargets;
-        const showRepeatBars = trackViewMode === "staff" && allMeasures;
-
         let structureTools: ComponentChild;
-        if (showTuplets || showRepeatBars) {
+        if (allNoteTargets) {
             structureTools = (
                 <>
                     <Separator />
-                    <SubdivisionToolbar
-                        selectionManager={selectionManager}
-                        dataModel={dataModel}
-                        showTuplets={showTuplets}
-                        showSimile={false}
-                        showRepeatBars={showRepeatBars}
-                    />
+                    <SubdivisionToolbar selectionManager={selectionManager} />
                 </>
             );
         }
@@ -350,7 +352,10 @@ export class SelectionEditPopup extends UIComponent<ISelectionEditPopupProps> {
 
     private updatePopup(): void {
         const { editMode, selectionManager } = this.props;
-        if (!editMode || selectionManager.currentSelection.size === 0) {
+        const entries = [...selectionManager.currentSelection.values()];
+
+        // A bar selection carries no tools here, so the popup stays closed for one.
+        if (!editMode || !SelectionEditPopup.carriesTools(entries)) {
             this.popupRef.current?.close(true);
 
             return;

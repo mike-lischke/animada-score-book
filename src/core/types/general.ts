@@ -12,6 +12,12 @@ export interface IRect {
     height: number;
 }
 
+/** A point in px. What its coordinates mean — a place inside a container, the offset between two — its use states. */
+export interface IPoint {
+    x: number;
+    y: number;
+}
+
 export interface IAudioData extends Omit<ISoundStyleMeta, "file"> {
     /** The audio buffer associated with this note style. Null while the instrument is loading. */
     audioBuffer: AudioBuffer | null;

@@ -203,7 +203,7 @@ test("a track-piece overlay reaches past the barline closing the staff", async (
     expect(overlayBox!.x + overlayBox!.width).toBeGreaterThanOrEqual(rowBox!.x + rowBox!.width + 5);
 });
 
-test("the clear button of a measure selection stays inside the overlay container", async ({ page }) => {
+test("a measure selection opens no selection popup", async ({ page }) => {
     await openStaffScore(page, twoTrackSnapshot, "e2e-staff-measure-clear");
 
     await page.locator("#editModeButton").click({ force: true });
@@ -212,19 +212,13 @@ test("the clear button of a measure selection stays inside the overlay container
     const first = await rows.nth(0).boundingBox();
     expect(first).not.toBeNull();
 
-    // In the measure's head room, above the first staff: a measure selection in both the old and the new bounds.
+    // In the measure's head room, above the first staff: the click selects the whole measure.
     await page.mouse.click(first!.x + (first!.width / 2), first!.y - 20);
 
-    const popup = page.locator("#selectionEditPopup");
-    const button = popup.locator(".selectionDeleteButton");
-    await expect(popup).toBeVisible();
-    await expect(button).toBeVisible();
-
-    const buttonBox = await button.boundingBox();
-    const containerBox = await popup.boundingBox();
-    expect(buttonBox).not.toBeNull();
-    expect(containerBox).not.toBeNull();
-    expect(buttonBox!.y).toBeGreaterThanOrEqual(containerBox!.y);
+    // The bar actions live in the bar action strip, which shows them above every bar, so the whole bar carries
+    // no tool of its own.
+    await expect(page.locator(".selection-overlay")).toHaveCount(1);
+    await expect(page.locator("#selectionEditPopup")).toHaveCount(0);
 });
 
 test("the measure overlay starts where the track-piece overlay starts", async ({ page }) => {

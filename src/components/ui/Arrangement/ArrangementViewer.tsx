@@ -11,7 +11,7 @@ import {
 } from "../../../core/MeasureLayout.js";
 import { StaffRowGeometry, type IStaffRowGeometry } from "../../../core/StaffRowGeometry.js";
 import type { RealTime, ScoreBookDataModel } from "../../../core/ScoreBookDataModel.js";
-import type { EditEntryMode } from "../../../core/types/general.js";
+import { RepeatMark, type EditEntryMode } from "../../../core/types/general.js";
 import { clampValue } from "../../../core/utils.js";
 import { PlayerPlayState, type ArrangementPlayer } from "../../../player/ArrangementPlayer.js";
 import { requisitions, type IMeasureVisibilityRequest } from "../../../supplement/Requisitions.js";
@@ -466,6 +466,7 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         const barActionStrip: Omit<IBarActionStripProps, "actionViewportRef"> = {
             barCount,
             canDelete: barCount > 1,
+            repeatBars: arrangement.repeatBars,
             scrollHostRef: this.viewerRef,
             barCenters: this.measureCenters,
             onBarAction: this.handleBarAction,
@@ -645,8 +646,31 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
                 void this.handleInsertBars(barNumber, false);
                 break;
             }
+
+            case BarActionKind.RepeatStart: {
+                this.handleToggleRepeat(barNumber, RepeatMark.Start);
+                break;
+            }
+
+            case BarActionKind.RepeatEnd: {
+                this.handleToggleRepeat(barNumber, RepeatMark.End);
+                break;
+            }
         }
     };
+
+    /**
+     * Sets or clears a repeat mark on one bar, taking it off when the bar already carries it.
+     *
+     * @param barNumber The 1-based bar to mark.
+     * @param mark The mark to toggle.
+     */
+    private handleToggleRepeat(barNumber: number, mark: RepeatMark): void {
+        const { dataModel } = this.props;
+        const repeats = dataModel.arrangement?.repeatBars;
+
+        dataModel.setRepeatBars([barNumber], mark, repeats?.get(barNumber)?.[mark] !== true);
+    }
 
     private handleInsertBars = async (barNumber: number, before: boolean): Promise<void> => {
         const { dataModel } = this.props;
