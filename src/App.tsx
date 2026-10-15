@@ -465,7 +465,7 @@ export class App extends UIComponent<{}, IAppState> {
             ? undefined : this.renderAppHeader(headerNavigation, arrangementIdentity, headerActions);
         let toolsBar: ComponentChild;
         if (editMode && trackViewMode === "staff") {
-            toolsBar = <ToolsBar />;
+            toolsBar = <ToolsBar entryMode={entryMode} />;
         }
 
         return (

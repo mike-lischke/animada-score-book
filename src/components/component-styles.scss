@@ -359,32 +359,47 @@
     }
 }
 
-/* The entry mode button stands on its own, directly left of the tuplet button. */
-.entryModeGooey {
-    margin-left: 4px;
-}
-
+/* The insert/overwrite switch is built like the playback bar's switches: a pill that names the mode and
+   carries a status dot, which lights up while overwrite, the mode that replaces content, is in effect. It is
+   portaled into the document body, so it only uses theme tokens the root publishes. */
 .entryModeButton {
-    height: 40px;
-    width: 40px;
-    min-width: 40px;
-    padding: 0;
-    border-radius: 50%;
+    height: 28px;
+    min-height: 28px;
+    padding: 0 12px 0 10px;
+    gap: 6px;
+    border: 1px solid color-mix(in srgb, var(--color-base-content) 14%, transparent);
+    border-radius: 9999px;
     background-color: var(--color-base-100);
+    color: var(--color-base-content);
     flex-shrink: 0;
     box-shadow: none;
-    border: 1px solid color-mix(in srgb, var(--color-base-content) 30%, transparent);
 
-    &:not(:has(input:disabled)):hover {
-        border-color: var(--color-primary);
-        background: color-mix(in srgb, var(--color-primary) 10%, var(--color-base-100));
+    .entryModeDot {
+        flex: 0 0 auto;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background-color: color-mix(in srgb, var(--color-base-content) 30%, transparent);
     }
 
-    /* The mark shows that overwrite, the mode that replaces content, is in effect. */
-    &.du-btn-primary {
-        border-color: var(--color-primary);
-        background-color: color-mix(in srgb, var(--color-primary) 25%, var(--color-base-100));
-        color: var(--color-base-content);
+    .entryModeLabel {
+        font-size: 12px;
+        font-weight: 600;
+        white-space: nowrap;
+    }
+
+    &:hover {
+        border-color: color-mix(in srgb, var(--color-base-content) 30%, transparent);
+        background-color: color-mix(in srgb, var(--color-base-content) 4%, var(--color-base-100));
+    }
+
+    &.is-active {
+        border-color: var(--color-playback-accent);
+        background-color: color-mix(in srgb, var(--color-playback-accent) 10%, var(--color-base-100));
+
+        .entryModeDot {
+            background-color: var(--color-playback-accent);
+        }
     }
 }
 
@@ -567,9 +582,9 @@
 }
 
 #trackViewerContainer {
-    /* Height of the block above a side panel, which its first row is offset by: 1px border + 7px padding +
-       30px header + 16px gap. Keep in step with `.trackControlsList` / `.trackEditSidebar`. */
-    --track-panel-head: 54px;
+    /* Height of the block above a side panel, which its first row is offset by: the list's 7px padding, the 30px
+       header block and the 16px gap after it. Keep in step with `.trackControlsList` / `.trackEditSidebar`. */
+    --track-panel-head: 53px;
 
     /* Additional toolbar room inside the score columns. The fixed action bar lives above this container. */
     --score-strip-band: 0px;
@@ -580,7 +595,7 @@
     --score-row-top: 24px;
 
     .trackControlsPanel {
-        margin-top: calc(var(--score-strip-band) + var(--score-row-top) - var(--track-panel-head));
+        margin-top: calc(var(--score-strip-band) + var(--score-row-top) - var(--track-panel-head) + var(--panel-head-room, 0px));
     }
 
     .staff-measure-viewer,
@@ -588,14 +603,22 @@
         padding-top: var(--score-row-top, 24px);
     }
 
-    &:not(.edit-mode) {
-        /* No action strip precedes the score, so the staff columns leave the panel's header block its room, which
-           keeps the score's first row level with the panels' first row. */
-        --score-row-top: var(--track-panel-head);
-    }
-
+    /* A grid column carries its beat strip instead of head room of its own: the strip is given the distance below
+       the action bar the staff's first row has, so a column's content sits as far down as the staff's does. */
     &.view-grid {
+        --grid-head-room: 16px;
+
         --score-row-top: calc(20pt + 24px);
+
+        .grid-measure-viewer {
+            padding-top: var(--grid-head-room);
+        }
+
+        /* That head room is not part of the head room `--score-row-top` states for the panels to mirror, so the edit
+           mode adds it to their offset. The non-edit mode does the same in its own branch. */
+        &.edit-mode {
+            --panel-head-room: var(--grid-head-room);
+        }
     }
 
     #trackViewerHost {
@@ -831,20 +854,19 @@
 
 #appRoot:not(.zen-mode) {
     #trackViewerContainer:not(.edit-mode) {
+        /* Only the panels lack their header block here, and the list keeps no inset of its own, so nothing precedes
+           a panel's first row; the score keeps the head room it has with the action strip, so its content does not
+           move when the edit mode is left. */
         --track-panel-head: 0px;
-        --score-row-top: 0px;
-
-        &.view-grid {
-            --score-row-top: calc(20pt + 16px);
-
-            .grid-measure-beam {
-                margin-top: 0;
-            }
-        }
 
         .trackControlsList {
             gap: 0;
-            padding-top: 15px;
+            padding-top: 0;
+        }
+
+        /* A grid column carries its beat strip in head room the staff's rows do not have; the panels mirror it. */
+        &.view-grid {
+            --panel-head-room: var(--grid-head-room);
         }
 
         .trackControlsHeaderSpacer {
@@ -870,7 +892,7 @@
        back to the shared panel offset. */
     .trackEditSidebarPanel {
         min-width: 0;
-        margin-top: calc(var(--score-strip-band) + var(--score-row-top) - var(--track-panel-head) + 46px);
+        margin-top: calc(var(--score-strip-band) + var(--score-row-top) - var(--track-panel-head) + 46px + var(--panel-head-room, 0px));
 
         .trackEditEmpty {
             padding: 24px 2px;
@@ -926,26 +948,32 @@
     }
 }
 
-/* The track toolbar floats beside a track's action button and slides in from the right. It is portaled into
-   the document body (like every popup), so it only uses theme tokens the root publishes. The `.popup` prefix
-   lifts these rules above the framework's own popup defaults. */
-.popup.track-toolbar {
-    min-width: 0;
-    max-width: none;
-    padding: 10px;
-    gap: 8px;
+/* The card that the popups carrying the actions of selected score elements share: a header naming what they act
+   on and a tray of action buttons. It is portaled into the document body (like every popup), so it only uses
+   theme tokens the root publishes. The `.popup` prefix lifts these rules above the framework's own popup
+   defaults. */
+.popup.selection-toolbar {
+    width: max-content;
+    min-width: 200px;
+    max-width: 300px;
+    padding: 12px;
+    gap: 10px;
     border: 1px solid color-mix(in srgb, var(--color-base-content) 14%, transparent);
     border-radius: 12px;
     background: var(--color-base-100);
     box-shadow: 0 10px 28px var(--shadow-color);
-    animation: track-toolbar-slide-in 0.16s ease-out;
 
-    .trackToolbarHeader {
-        gap: 8px;
+    /* The card slides in when it appears, so the popup it replaces reads as the older one. It hangs above the
+       elements it acts on, so it rises into place. */
+    animation: selection-toolbar-slide-up 0.16s ease-out;
+
+    .selectionToolbarHeader {
+        gap: 6px;
         min-width: 0;
     }
 
-    .trackToolbarDot {
+    /* The dot carries the color of the instrument the addressed elements belong to. */
+    .selectionToolbarDot {
         flex: 0 0 auto;
         width: 8px;
         height: 8px;
@@ -953,8 +981,8 @@
         background-color: color-mix(in srgb, var(--color-base-content) 30%, transparent);
     }
 
-    .trackToolbarTitle {
-        flex: 1 1 auto;
+    .selectionToolbarInstrument {
+        flex: 0 1 auto;
         min-width: 0;
         font-size: 13px;
         font-weight: 600;
@@ -963,7 +991,19 @@
         text-overflow: ellipsis;
     }
 
-    .trackToolbarClose {
+    .selectionToolbarSeparator {
+        flex: 0 0 auto;
+        color: color-mix(in srgb, var(--color-base-content) 40%, transparent);
+    }
+
+    .selectionToolbarPosition {
+        flex: 0 0 auto;
+        font-size: 13px;
+        color: color-mix(in srgb, var(--color-base-content) 60%, transparent);
+        white-space: nowrap;
+    }
+
+    .selectionToolbarClose {
         flex: 0 0 auto;
         width: 24px;
         min-width: 24px;
@@ -989,7 +1029,7 @@
         }
     }
 
-    .trackToolbarSection {
+    .selectionToolbarSection {
         font-size: 10px;
         font-weight: 600;
         text-transform: uppercase;
@@ -998,22 +1038,23 @@
         user-select: none;
     }
 
-    /* The action row is a tray: a light surface with a soft inset, holding the white action buttons. */
-    .trackToolbarActions {
+    /* The action row is a tray: a surface tinted the primary color's way, holding the square action buttons. */
+    .selectionToolbarActions {
+        width: 100%;
         gap: 6px;
         min-width: 0;
-        padding: 5px;
-        border: 1px solid color-mix(in srgb, var(--color-base-content) 12%, transparent);
+        padding: 4px;
         border-radius: 10px;
-        background-color: color-mix(in srgb, var(--color-base-content) 5%, var(--color-base-100));
+        background-color: color-mix(in srgb, var(--color-primary) 8%, var(--color-base-100));
         box-shadow: inset 0 1px 3px color-mix(in srgb, var(--color-base-content) 8%, transparent);
     }
 
-    .trackToolbarAction {
-        flex: 0 0 40px;
-        width: 40px;
-        height: 40px;
-        min-height: 0;
+    .selectionToolbarAction {
+        flex: 0 0 36px;
+        width: 36px;
+        min-width: 36px;
+        height: 36px;
+        min-height: 36px;
         padding: 0;
         border: 1px solid color-mix(in srgb, var(--color-base-content) 12%, transparent);
         border-radius: 8px;
@@ -1021,30 +1062,57 @@
         color: var(--color-base-content);
         box-shadow: 0 1px 2px var(--shadow-color);
 
-        &:hover {
+        &:not(:disabled):hover {
             border-color: color-mix(in srgb, var(--color-primary) 55%, transparent);
-            background-color: color-mix(in srgb, var(--color-primary) 8%, var(--color-base-100));
+            background-color: color-mix(in srgb, var(--color-primary) 10%, var(--color-base-100));
         }
 
-        .icon {
-            width: 18px;
-            min-width: 18px;
-            height: 18px;
-            min-height: 18px;
+        /* An action that is a switch reads as pressed while it holds its state. */
+        &.du-btn-primary {
+            border-color: color-mix(in srgb, var(--color-primary) 60%, transparent);
+            background-color: color-mix(in srgb, var(--color-primary) 18%, var(--color-base-100));
+            color: var(--color-base-content);
         }
-    }
 
-    .trackToolbarAction.is-destructive {
-        color: var(--color-error);
+        /* A glyph icon and a drawn icon share one visual size inside the button. */
+        .icon,
+        .score-symbol-icon {
+            width: 20px;
+            min-width: 20px;
+            height: 20px;
+            min-height: 20px;
+        }
 
-        &:hover {
-            border-color: color-mix(in srgb, var(--color-error) 55%, transparent);
-            background-color: color-mix(in srgb, var(--color-error) 8%, var(--color-base-100));
+        /* The simile glyph's ink fills more of its box than a drawn icon does, so its ink is stated 4px smaller
+           than the tray's icon size. Ink is scaled in staff spaces, which are 10px here. */
+        .score-symbol-icon {
+            --icon-ink-spaces: 1.21;
+        }
+
+        &.is-destructive {
+            color: var(--color-error);
+
+            &:not(:disabled):hover {
+                border-color: color-mix(in srgb, var(--color-error) 55%, transparent);
+                background-color: color-mix(in srgb, var(--color-error) 8%, var(--color-base-100));
+            }
         }
     }
 }
 
-@keyframes track-toolbar-slide-in {
+@keyframes selection-toolbar-slide-up {
+    from {
+        opacity: 0;
+        transform: translateY(12px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes selection-toolbar-slide-right {
     from {
         opacity: 0;
         transform: translateX(12px);
@@ -1054,6 +1122,11 @@
         opacity: 1;
         transform: translateX(0);
     }
+}
+
+/* The track toolbar floats beside the action trigger it belongs to, so it slides in from that side instead. */
+.popup.track-toolbar {
+    animation: selection-toolbar-slide-right 0.16s ease-out;
 }
 
 .bar-action-strip {
@@ -1108,6 +1181,7 @@
         border-bottom: 1px solid var(--border-subtle);
         background: color-mix(in srgb, var(--color-base-content) 3%, var(--color-base-100));
         pointer-events: none;
+        z-index: 3;
     }
 
     .arrangement-action-controls {

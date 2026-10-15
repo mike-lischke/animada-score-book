@@ -523,8 +523,14 @@ h6 {
         background: var(--border-subtle);
     }
 
+    /* The entry switch is the bar's first control, so it takes the height of the tools beside it. */
+    .toolsBar .entryModeButton {
+        height: calc(var(--control-size) - 4px);
+        min-height: calc(var(--control-size) - 4px);
+    }
+
     .toolsBarTool {
-        height: var(--control-size);
+        height: calc(var(--control-size) - 4px);
         gap: 6px;
         padding: 0 12px;
         font-size: 13px;
@@ -611,10 +617,6 @@ h6 {
 #selectionEditActions {
     min-width: 0;
     gap: 8px;
-}
-
-.selectionEditHeader {
-    min-width: 0;
 }
 
 #selectionEditActions .selectionNoteTools {
@@ -799,12 +801,21 @@ h6 {
         }
     }
 
-    #trackViewerContainer.view-grid {
-        --zen-grid-headroom: 36px;
-        --score-row-top: calc(20pt + 24px + var(--zen-grid-headroom));
+    #trackViewerContainer {
+        /* Room for the measure play button, which sits in the head room of a column and must stay clear of the
+           score's first row. Both views state it, so the rows start below the button. */
+        --zen-headroom: 36px;
 
-        .grid-measure-viewer {
-            padding-top: var(--zen-grid-headroom);
+        &.view-grid {
+            --score-row-top: calc(20pt + 24px + var(--zen-headroom));
+
+            .grid-measure-viewer {
+                padding-top: var(--zen-headroom);
+            }
+        }
+
+        &.view-staff {
+            --score-row-top: var(--zen-headroom);
         }
     }
 

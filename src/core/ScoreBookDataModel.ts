@@ -1443,13 +1443,13 @@ export class ScoreBookDataModel {
 
     /**
      * Clears note content across the given measure ranges in one edit, turning the affected notes
-     * into rests. Clearing a whole measure also removes its subdivisions. Fires one
-     * arrangementMutated event (a single undo step) and one trackChanged event per affected track,
-     * so viewers recompute their note structure.
+     * into rests. Clearing a whole measure also removes its subdivisions and its one-bar repeat mark,
+     * because a cleared measure holds nothing. Fires one arrangementMutated event (a single undo step)
+     * and one trackChanged event per affected track, so viewers recompute their note structure.
      *
      * @param ranges The ranges to clear. Ranges referencing a missing track or measure are ignored.
      *
-     * @returns True when at least one range or subdivision changed.
+     * @returns True when at least one range, subdivision or mark changed.
      */
     public clearRanges(ranges: ITrackPieceRange[]): boolean {
         const arrangement = this.arrangement;
@@ -1470,10 +1470,14 @@ export class ScoreBookDataModel {
                 continue;
             }
 
-            const rangeChanged = range.start === undefined && range.end === undefined
+            // A range without bounds covers the whole piece, so clearing it also takes the mark off.
+            const wholePiece = range.start === undefined && range.end === undefined;
+            const contentChanged = wholePiece
                 ? this.clearMeasureContent(measure)
                 : this.replaceSpan(measure, range.start ?? barStart, range.end ?? barLine, undefined);
-            if (rangeChanged) {
+            const markCleared = wholePiece && this.clearSimile(measure);
+
+            if (contentChanged || markCleared) {
                 changed = true;
                 affectedTracks.add(range.trackId);
             }
@@ -3454,6 +3458,23 @@ export class ScoreBookDataModel {
         }
 
         void requisitions.execute("authChanged", undefined);
+    }
+
+    /**
+     * Takes the one-bar repeat mark off a measure, which leaves an empty piece behind.
+     *
+     * @param measure The measure to unmark.
+     *
+     * @returns True when the measure carried the mark.
+     */
+    private clearSimile(measure: ISbDmTrackPiece): boolean {
+        if (measure.simile !== true) {
+            return false;
+        }
+
+        measure.simile = undefined;
+
+        return true;
     }
 
     /**

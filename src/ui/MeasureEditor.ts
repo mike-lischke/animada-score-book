@@ -711,8 +711,9 @@ export abstract class MeasureEditor {
     }
 
     /**
-     * Clears the content the selection describes and drops the selection, because the cleared
-     * elements no longer hold it.
+     * Clears the content the selection describes. A cleared piece still exists, so a selection that addresses
+     * one stays and its tools remain usable. Notes go with the content they hold, so a selection that addresses
+     * them is dropped.
      *
      * @returns True when content was deleted.
      */
@@ -722,7 +723,11 @@ export abstract class MeasureEditor {
             return false;
         }
 
-        this.selectionManager.clearSelection();
+        if (entries.some((entry) => {
+            return addressesNoteCells(entry.target);
+        })) {
+            this.selectionManager.clearSelection();
+        }
 
         return true;
     }

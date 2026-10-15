@@ -7,6 +7,7 @@ import type { ComponentChild } from "preact";
 
 import { staffSpacePx } from "../../../core/MeasureLayout.js";
 import { ScoreSymbol } from "../../../core/ScoreSymbols.js";
+import type { EditEntryMode } from "../../../core/types/general.js";
 import { requisitions, RangeArticulationTool } from "../../../supplement/Requisitions.js";
 import { Button } from "../framework/Button.js";
 import { Container } from "../framework/Container.js";
@@ -16,14 +17,23 @@ import { ScoreSymbolView } from "../framework/ScoreSymbolView.js";
 import { UIIcon } from "../framework/UIIcon.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
 import { ChildAlignment, Orientation } from "../framework/ui-types.js";
+import { EntryModeButton } from "./EntryModeButton.js";
 
 interface IToolsBarState {
     activeTool: RangeArticulationTool;
 }
 
+export interface IToolsBarProps extends ICommonUIProperties {
+    /**
+     * The entry mode in effect. Omitted means the app states no mode, so the bar offers no entry switch — the
+     * only place insert and overwrite can be told apart.
+     */
+    entryMode?: EditEntryMode;
+}
+
 /** The floating bar of the staff view's placing tools, headed like the mockup's tool bar. */
-export class ToolsBar extends UIComponent<ICommonUIProperties, IToolsBarState> {
-    public constructor(props: ICommonUIProperties) {
+export class ToolsBar extends UIComponent<IToolsBarProps, IToolsBarState> {
+    public constructor(props: IToolsBarProps) {
         super(props);
 
         this.state = { activeTool: RangeArticulationTool.None };
@@ -42,11 +52,23 @@ export class ToolsBar extends UIComponent<ICommonUIProperties, IToolsBarState> {
     }
 
     public override render(): ComponentChild {
-        const { className } = this.props;
+        const { className, entryMode } = this.props;
         const { activeTool } = this.state;
 
         const heading = <Label className="toolsBarHeading" caption="Tools" />;
         const divider = <span className="toolsBarDivider" />;
+
+        // The entry switch heads the bar: insert mode draws no selection, so without a switch out here the
+        // mode could not be left again in the staff view.
+        let entrySwitch: ComponentChild;
+        if (entryMode !== undefined) {
+            entrySwitch = (
+                <>
+                    <EntryModeButton entryMode={entryMode} />
+                    <span className="toolsBarDivider" />
+                </>
+            );
+        }
 
         const crescendoTool = this.renderTool(RangeArticulationTool.Crescendo, "Draw a crescendo hairpin",
             "Crescendo", <Icon src={UIIcon.ChevronLeft} />);
@@ -86,6 +108,7 @@ export class ToolsBar extends UIComponent<ICommonUIProperties, IToolsBarState> {
                 >
                     {heading}
                     {divider}
+                    {entrySwitch}
                     {crescendoTool}
                     {decrescendoTool}
                     {forteTool}

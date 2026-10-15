@@ -129,6 +129,7 @@ export class SelectionView {
         requisitions.register("editModeChanged", this.handleEditModeChanged);
         requisitions.register("zenModeChanged", this.handleZenModeChanged);
         requisitions.register("editEntryModeChanged", this.handleEntryModeChanged);
+        requisitions.register("trackViewModeToggled", this.handleViewModeToggled);
         requisitions.register("trackChanged", this.scheduleOverlayRefresh);
         requisitions.register("arrangementChanged", this.scheduleOverlayRefresh);
         requisitions.register("staffWindowChanged", this.handleStaffWindowChanged);
@@ -149,6 +150,7 @@ export class SelectionView {
         requisitions.unregister("editModeChanged", this.handleEditModeChanged);
         requisitions.unregister("zenModeChanged", this.handleZenModeChanged);
         requisitions.unregister("editEntryModeChanged", this.handleEntryModeChanged);
+        requisitions.unregister("trackViewModeToggled", this.handleViewModeToggled);
         requisitions.unregister("trackChanged", this.scheduleOverlayRefresh);
         requisitions.unregister("arrangementChanged", this.scheduleOverlayRefresh);
         requisitions.unregister("staffWindowChanged", this.handleStaffWindowChanged);
@@ -524,12 +526,29 @@ export class SelectionView {
         return this.eventContainer.querySelector(".staff-measure-viewer") !== null;
     }
 
+    /** @returns True while the entry mode in effect is insert. The grid view always overwrites. */
+    private get insertDrawsCursor(): boolean {
+        return this.editMode && this.entryMode === EditEntryMode.Insert;
+    }
+
     /**
      * @returns True while the staff view runs in insert mode. The cursor is then the only decoration and
      *          nothing can be selected; in the grid view overwrite is always in effect.
      */
     private get showsCursorOnly(): boolean {
-        return this.editMode && this.entryMode === EditEntryMode.Insert && this.isStaffView();
+        return this.insertDrawsCursor && this.isStaffView();
+    }
+
+    /**
+     * Insert draws a cursor instead of a selection, so a selection made outside it has to go as soon as that
+     * state takes over: the edit mode following it into the staff view, or the staff view taking over with it.
+     *
+     * @param takingOverInStaffView Whether the staff view is the one taking over.
+     */
+    private dropSelectionForInsertMode(takingOverInStaffView: boolean): void {
+        if (takingOverInStaffView && this.insertDrawsCursor && this.manager.currentSelection.size > 0) {
+            this.manager.clearSelection();
+        }
     }
 
     private findStaffArrowTarget(noteElement: HTMLElement, key: string): HTMLElement | undefined {
@@ -904,6 +923,7 @@ export class SelectionView {
 
     private handleEditModeChanged = (enabled: boolean): Promise<boolean> => {
         this.requestedEditMode = enabled;
+        this.dropSelectionForInsertMode(this.isStaffView());
         this.refreshEditState();
 
         return Promise.resolve(true);
@@ -913,6 +933,19 @@ export class SelectionView {
         this.zenMode = enabled;
         this.cancelDrag();
         this.refreshEditState();
+
+        return Promise.resolve(true);
+    };
+
+    /**
+     * The viewer renders the new view after this, so the mode it announces decides, not the DOM.
+     *
+     * @param mode The view mode the score switches to.
+     *
+     * @returns A promise that resolves when the takeover was applied.
+     */
+    private handleViewModeToggled = (mode: "grid" | "staff"): Promise<boolean> => {
+        this.dropSelectionForInsertMode(mode === "staff");
 
         return Promise.resolve(true);
     };

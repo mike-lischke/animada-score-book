@@ -7,10 +7,7 @@ import type { ComponentChild } from "preact";
 
 import { EditEntryMode } from "../../../core/types/general.js";
 import { requisitions } from "../../../supplement/Requisitions.js";
-import { GooeyGroup } from "../framework/GooeyGroup.js";
-import { Icon } from "../framework/Icon.js";
-import { Swap } from "../framework/Swap.js";
-import { UIIcon } from "../framework/UIIcon.js";
+import { Button } from "../framework/Button.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
 
 export interface IEntryModeButtonProps extends ICommonUIProperties {
@@ -20,9 +17,8 @@ export interface IEntryModeButtonProps extends ICommonUIProperties {
 
 /**
  * Switches how note entry makes room: insert pushes the content behind the entry position, overwrite
- * replaces it. The button is a swap, so it animates between its two icons the way the play button
- * does. Overwrite is the mode that changes the content, so it carries the mark the note length
- * buttons use for their active value.
+ * replaces it. The button is built like the playback bar's switches: a pill naming the mode, whose status
+ * dot lights up while overwrite, the mode that replaces content, is in effect.
  */
 export class EntryModeButton extends UIComponent<IEntryModeButtonProps> {
     public render(): ComponentChild {
@@ -32,23 +28,23 @@ export class EntryModeButton extends UIComponent<IEntryModeButtonProps> {
         const tooltip = isOverwrite
             ? "Overwrite mode: new notes replace the content at the cursor"
             : "Insert mode: new notes push the content behind the cursor";
+        const className = this.generateFinalClassName([
+            "entryModeButton",
+            this.classFromProperty(isOverwrite, "is-active"),
+        ]);
 
         return (
-            <GooeyGroup className="entryModeGooey" background="var(--color-base-200)">
-                <Swap
-                    id="entryModeButton"
-                    className="entryModeButton"
-                    isOn={isOverwrite}
-                    isMarked={isOverwrite}
-                    title={tooltip}
-                    offContent={<Icon src={UIIcon.ArrowExpandRight} width={20} height={20} />}
-                    onContent={<Icon src={UIIcon.SwapHorizontal} width={20} height={20} />}
-                    onChange={(isOn) => {
-                        void requisitions.execute("editEntryModeChanged",
-                            isOn ? EditEntryMode.Overwrite : EditEntryMode.Insert);
-                    }}
-                />
-            </GooeyGroup>
+            <Button className={className} title={tooltip} onClick={this.handleClick}>
+                <span className="entryModeDot" aria-hidden="true" />
+                <span className="entryModeLabel">{isOverwrite ? "Overwrite" : "Insert"}</span>
+            </Button>
         );
     }
+
+    private handleClick = (): void => {
+        const { entryMode } = this.props;
+        const next = entryMode === EditEntryMode.Overwrite ? EditEntryMode.Insert : EditEntryMode.Overwrite;
+
+        void requisitions.execute("editEntryModeChanged", next);
+    };
 }

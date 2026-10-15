@@ -13,7 +13,10 @@ import { ComponentPlacement, UIComponent } from "./UIComponent.js";
 import { computeContentPosition } from "./html-helpers.js";
 import { Orientation } from "./ui-types.js";
 
-/** Supplies live placement bounds while a popup remains anchored to a DOM element. */
+/**
+ * Supplies live placement bounds while a popup remains anchored to a DOM element. Returning undefined means the
+ * anchor is currently out of view: the popup hides until the provider reports bounds again.
+ */
 export type PopupBoundsProvider = () => DOMRect | undefined;
 
 interface IPopupProperties extends IPortalProperties {
@@ -41,7 +44,7 @@ interface IPopupProperties extends IPortalProperties {
     /** Distance between the popup and its target, in px. */
     offset?: number;
 
-    /** Supplies live placement bounds while the popup remains anchored to a DOM element. */
+    /** Supplies live placement bounds; undefined while the anchor is out of view, which hides the popup. */
     boundsProvider?: PopupBoundsProvider;
 
     /** Flex orientation of the popup content. */
@@ -79,6 +82,12 @@ export class Popup extends UIComponent<IPopupProperties, IPopupState> {
     private returnFocusElement?: HTMLElement;
     private positionFrame?: number;
     private outsideClickTimer?: ReturnType<typeof setTimeout>;
+
+    /** Whether the anchor left the view, which hides the popup while it stays open. */
+    private anchorOffscreen = false;
+
+    /** Whether the next placement is applied without a transition, because the popup is placed from scratch. */
+    private instantPlacement = true;
 
     public constructor(props: IPopupProperties) {
         super(props);
@@ -139,10 +148,9 @@ export class Popup extends UIComponent<IPopupProperties, IPopupState> {
      * @param options Additional options for the portal.
      */
     public open(target: HTMLElement, options?: IPortalOptions): void {
-        const { boundsProvider, restoreFocusOnClose = true } = this.props;
-        const currentTarget = boundsProvider?.() ?? target.getBoundingClientRect();
+        const { restoreFocusOnClose = true } = this.props;
 
-        this.openPopup(currentTarget, target, options, restoreFocusOnClose);
+        this.openPopup(this.resolveBounds(target), target, options, restoreFocusOnClose);
     }
 
     /**
@@ -170,15 +178,21 @@ export class Popup extends UIComponent<IPopupProperties, IPopupState> {
     }
 
     public updatePosition(target: HTMLElement): void {
-        const { boundsProvider } = this.props;
         this.anchorElement = target;
-        const currentTarget = boundsProvider?.() ?? target.getBoundingClientRect();
-        this.setState({ currentTarget }, this.schedulePositionUpdate);
+
+        // A provider is asked again for every placement, so only the mode without one needs the bounds in state.
+        if (this.props.boundsProvider === undefined) {
+            this.setState({ currentTarget: this.resolveBounds(target) }, this.schedulePositionUpdate);
+        } else {
+            this.schedulePositionUpdate();
+        }
     }
 
-    private openPopup(currentTarget: DOMRect, anchorElement: HTMLElement | undefined,
+    private openPopup(currentTarget: DOMRect | undefined, anchorElement: HTMLElement | undefined,
         options: IPortalOptions | undefined, restoreFocusOnClose: boolean): void {
         this.anchorElement = anchorElement;
+        this.anchorOffscreen = false;
+        this.instantPlacement = true;
         this.returnFocusElement = restoreFocusOnClose
             ? anchorElement ?? (document.activeElement instanceof HTMLElement ? document.activeElement : undefined)
             : undefined;
@@ -244,16 +258,32 @@ export class Popup extends UIComponent<IPopupProperties, IPopupState> {
         const { onOpen } = popupProperties;
         const { currentTarget } = this.state;
 
-        if (currentTarget) {
-            onOpen?.(popupProperties);
+        onOpen?.(popupProperties);
 
-            if (this.containerRef.current) {
-                this.positionPopup(currentTarget);
-                this.startPositionTracking();
-                this.focusPopup();
-            }
+        if (!this.containerRef.current) {
+            return;
         }
+
+        // Bounds are missing while the anchor is out of view: the popup opens hidden and is placed as soon as they
+        // are reported again, which is what makes it come back when its anchor is scrolled into view.
+        this.setAnchorOffscreen(currentTarget === undefined);
+        this.startPositionTracking();
+
+        if (currentTarget) {
+            this.positionPopup(currentTarget);
+        }
+
+        this.focusPopup();
     };
+
+    private resolveBounds(fallback?: HTMLElement): DOMRect | undefined {
+        const { boundsProvider } = this.props;
+        if (boundsProvider !== undefined) {
+            return boundsProvider();
+        }
+
+        return (this.anchorElement ?? fallback)?.getBoundingClientRect();
+    }
 
     private positionPopup(target: DOMRect): void {
         const {
@@ -268,6 +298,7 @@ export class Popup extends UIComponent<IPopupProperties, IPopupState> {
             return;
         }
 
+        popup.classList.remove("offscreen");
         const viewport = window.visualViewport;
         const viewportWidth = viewport?.width ?? window.innerWidth;
         const viewportHeight = viewport?.height ?? window.innerHeight;
@@ -277,6 +308,7 @@ export class Popup extends UIComponent<IPopupProperties, IPopupState> {
         popup.classList.add(placement);
 
         if (!pinned && this.shouldAttachToEdge(target, popup)) {
+            popup.classList.remove("positioned");
             popup.classList.add("edgeAttached");
             popup.style.removeProperty("left");
             popup.style.removeProperty("top");
@@ -285,6 +317,22 @@ export class Popup extends UIComponent<IPopupProperties, IPopupState> {
         }
 
         const { left, top } = computeContentPosition(placement, popup, target, offset, !pinned);
+
+        // The placement the popup opens with, and the one that follows the anchor having left the view, is applied
+        // without a transition: the popup must not travel in from where it was placed before. The class that
+        // animates the later placements follows a frame later, hence not in the same style recalculation.
+        if (this.instantPlacement) {
+            this.instantPlacement = false;
+            popup.classList.remove("positioned");
+            popup.style.left = `${left}px`;
+            popup.style.top = `${top}px`;
+            requestAnimationFrame(() => {
+                this.containerRef.current?.classList.add("positioned");
+            });
+
+            return;
+        }
+
         popup.style.left = `${left}px`;
         popup.style.top = `${top}px`;
     }
@@ -300,6 +348,20 @@ export class Popup extends UIComponent<IPopupProperties, IPopupState> {
         const spaceBelow = Math.max(0, viewportHeight - target.bottom - 8);
 
         return popup.scrollHeight > Math.max(spaceAbove, spaceBelow);
+    }
+
+    private setAnchorOffscreen(offscreen: boolean): void {
+        if (this.anchorOffscreen === offscreen) {
+            return;
+        }
+
+        this.anchorOffscreen = offscreen;
+        if (offscreen) {
+            // The placement that follows is applied without a transition, so the popup does not travel back in.
+            this.instantPlacement = true;
+        }
+
+        this.containerRef.current?.classList.toggle("offscreen", offscreen);
     }
 
     private startPositionTracking(): void {
@@ -390,7 +452,6 @@ export class Popup extends UIComponent<IPopupProperties, IPopupState> {
     }
 
     private isAnchorInteraction(event: Event, eventPath: EventTarget[]): boolean {
-        const { boundsProvider } = this.props;
         const anchor = this.anchorElement;
         if (!anchor) {
             return false;
@@ -404,7 +465,9 @@ export class Popup extends UIComponent<IPopupProperties, IPopupState> {
             return false;
         }
 
-        const bounds = boundsProvider?.() ?? anchor.getBoundingClientRect();
+        // The placement bounds say where the popup hangs and may be as narrow as a single point, so what counts as
+        // a press on the anchor is the area of the element the popup hangs on.
+        const bounds = anchor.getBoundingClientRect();
 
         return event.clientX >= bounds.left && event.clientX <= bounds.right
             && event.clientY >= bounds.top && event.clientY <= bounds.bottom;
@@ -433,11 +496,17 @@ export class Popup extends UIComponent<IPopupProperties, IPopupState> {
                 return;
             }
 
-            const target = boundsProvider?.() ?? this.anchorElement?.getBoundingClientRect()
-                ?? this.state.currentTarget;
-            if (target) {
-                this.positionPopup(target);
+            const target = boundsProvider !== undefined
+                ? boundsProvider()
+                : this.anchorElement?.getBoundingClientRect() ?? this.state.currentTarget;
+            if (target === undefined) {
+                this.setAnchorOffscreen(true);
+
+                return;
             }
+
+            this.setAnchorOffscreen(false);
+            this.positionPopup(target);
         });
     };
 

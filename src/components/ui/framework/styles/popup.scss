@@ -43,6 +43,18 @@
     display: flex;
 }
 
+/* A popup whose anchor left the view keeps its box — placement measures it — but shows nothing. */
+.popup.offscreen {
+    visibility: hidden;
+    pointer-events: none;
+}
+
+/* Following a live anchor is animated. The class is added a frame after the first placement, which itself must not
+   animate, or the popup would slide in from wherever the stylesheet places it. */
+.popup.positioned {
+    transition: left 140ms ease-out, top 140ms ease-out;
+}
+
 .popup > .header {
     font-size: 1em;
     line-height: 1.2;

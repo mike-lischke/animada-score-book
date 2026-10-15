@@ -14,7 +14,8 @@ import { UIIcon } from "../framework/UIIcon.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
 import { ChildAlignment, Orientation } from "../framework/ui-types.js";
 import { SelectionDialog } from "../composites/SelectionDialog.js";
-import { TrackToolbar, type ITrackToolbarItem } from "./TrackToolbar.js";
+import { TrackToolbar } from "./TrackToolbar.js";
+import type { ISelectionToolbarAction } from "./SelectionToolbar.js";
 
 export interface ITrackEditSidebarProps extends ICommonUIProperties {
     tracks: ISbDmTrack[];
@@ -106,31 +107,31 @@ export class TrackEditSidebar extends UIComponent<ITrackEditSidebarProps> {
     private handleOpenToolbar = (track: ISbDmTrack, event: MouseEvent): void => {
         const anchor = event.currentTarget as HTMLElement;
 
-        const items: ITrackToolbarItem[] = [{
+        const items: ISelectionToolbarAction[] = [{
             id: "add",
             tooltip: "Add a new track. Its position in the arrangement depends on the instrument you choose.",
-            icon: <Icon src={UIIcon.Add} width={18} height={18} />,
+            icon: <Icon src={UIIcon.Add} />,
             onClick: () => {
                 void this.handleAdd(track);
             },
         }, {
             id: "duplicate",
             tooltip: "Duplicate this track, including all notes and settings.",
-            icon: <Icon src={UIIcon.Copy} width={18} height={18} />,
+            icon: <Icon src={UIIcon.Copy} />,
             onClick: () => {
                 this.handleDuplicate(track);
             },
         }, {
             id: "clear",
             tooltip: "Clear all notes and settings from this track.",
-            icon: <Icon src={UIIcon.ClearAll} width={18} height={18} />,
+            icon: <Icon src={UIIcon.ClearAll} />,
             onClick: () => {
                 this.handleClear(track);
             },
         }, {
             id: "delete",
             tooltip: "Delete this track and all notes in it.",
-            icon: <Icon src={UIIcon.Trash} width={18} height={18} />,
+            icon: <Icon src={UIIcon.Trash} />,
             destructive: true,
             onClick: () => {
                 this.handleDelete(track);

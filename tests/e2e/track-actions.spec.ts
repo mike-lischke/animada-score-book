@@ -38,8 +38,13 @@ test("opens the track toolbar left of the trigger and names the instrument", asy
 
     const popup = page.locator(".track-toolbar");
     await expect(popup).toBeVisible();
-    await expect(popup.locator(".trackToolbarTitle")).toHaveText(instrumentName!.trim());
-    await expect(popup.locator(".trackToolbarAction")).toHaveCount(4);
+    await expect(popup.locator(".selectionToolbarInstrument")).toHaveText(instrumentName!.trim());
+    await expect(popup.locator(".selectionToolbarAction")).toHaveCount(4);
+
+    // The card carries one tray of actions, so it draws neither a caption nor a close button: the toolbar
+    // closes on Escape, on a click outside it and after an action.
+    await expect(popup.locator(".selectionToolbarSection")).toHaveCount(0);
+    await expect(popup.locator(".selectionToolbarClose")).toHaveCount(0);
 
     const triggerBox = await trigger.boundingBox();
     expect(triggerBox).not.toBeNull();
@@ -86,7 +91,7 @@ test("duplicates a track through the toolbar and closes it", async ({ page }) =>
     await expect(popup).toBeVisible();
 
     // The action row is add, duplicate, clear, delete — the second button duplicates.
-    await popup.locator(".trackToolbarAction").nth(1).click({ force: true });
+    await popup.locator(".selectionToolbarAction").nth(1).click({ force: true });
 
     await expect(rows).toHaveCount(seededTracks + 1);
     await expect(page.locator(".trackControls")).toHaveCount(seededTracks + 1);

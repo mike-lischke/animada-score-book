@@ -80,6 +80,28 @@ const staffBar = (page: Page, barNumber: number): Locator => {
     return page.locator(".staff-measure-viewer").nth(barNumber - 1);
 };
 
+/**
+ * @param page The page under test.
+ *
+ * @returns The tray of the track-piece popup's card.
+ */
+const pieceTray = (page: Page): Locator => {
+    return page.locator("#selectionEditPopup .selectionToolbarActions");
+};
+
+/**
+ * Resolves an action of the track-piece popup by the tooltip that names it, the way `toolbarButton` does it for
+ * the subdivision toolbar.
+ *
+ * @param page The page under test.
+ * @param tooltip The tooltip the button carries.
+ *
+ * @returns The action button.
+ */
+const pieceAction = (page: Page, tooltip: string): Locator => {
+    return page.locator(`#selectionEditPopup .selectionToolbarAction[title="${tooltip}"]`);
+};
+
 test.beforeEach(async ({ page }) => {
     await routeApi(page);
 });
@@ -109,9 +131,12 @@ test("does not offer the mark for a note selection", async ({ page }) => {
     await page.locator("#editModeButton").click({ force: true });
 
     await staffBar(page, 1).locator(".staff-note-head-symbol").first().click();
+
+    // A note selection carries the note tools, so the track-piece card and its mark are absent.
     await expect(page.locator("#selectionEditPopup .subdivisionToolbarHost")).toBeVisible();
 
     await expect(toolbarButton(page, "One-bar repeat (simile)")).toHaveCount(0);
+    await expect(pieceAction(page, "One-bar repeat (simile)")).toHaveCount(0);
 });
 
 test("sets the mark on a track piece and clears it again", async ({ page }) => {
@@ -120,21 +145,29 @@ test("sets the mark on a track piece and clears it again", async ({ page }) => {
     await page.locator("#editModeButton").click({ force: true });
 
     await selectTrackPiece(page, 2);
-    await expect(page.locator("#selectionEditPopup .subdivisionToolbarHost")).toBeVisible();
 
-    const repeat = toolbarButton(page, "One-bar repeat (simile)");
+    // The card names the addressed piece and holds its two actions in one tray, which stays uncaptioned.
+    const instrumentName = await page.locator(".trackInstrumentName").first().textContent();
+    await expect(pieceTray(page)).toBeVisible();
+    await expect(page.locator("#selectionEditPopup .selectionToolbarInstrument"))
+        .toHaveText(instrumentName!.trim());
+    await expect(page.locator("#selectionEditPopup .selectionToolbarPosition")).toHaveText("Measure 2");
+    await expect(pieceTray(page).locator(".selectionToolbarAction")).toHaveCount(2);
+    await expect(page.locator("#selectionEditPopup .selectionToolbarSection")).toHaveCount(0);
+
+    const repeat = pieceAction(page, "One-bar repeat (simile)");
     await expect(repeat).toBeEnabled();
     await repeat.click({ force: true });
 
     const mark = staffBar(page, 2).locator(".staff-note-viewer-simile");
     await expect(mark).toBeVisible();
 
-    // The score mutation replaces the popup's rendered anchor, so selecting the track piece again opens its context.
+    // The score mutation replaces the popup's rendered anchor, so selecting the track piece again opens its card.
     await selectTrackPiece(page, 2);
-    await expect(page.locator("#selectionEditPopup .subdivisionToolbarHost")).toBeVisible();
+    await expect(pieceTray(page)).toBeVisible();
 
     // The toggle clears the mark again, which leaves the piece empty rather than restoring its content.
-    await toolbarButton(page, "One-bar repeat (simile)").click({ force: true });
+    await pieceAction(page, "One-bar repeat (simile)").click({ force: true });
     await expect(mark).toHaveCount(0);
 });
 
@@ -144,7 +177,7 @@ test("keeps the mark off a track piece of the first measure", async ({ page }) =
     await page.locator("#editModeButton").click({ force: true });
 
     await selectTrackPiece(page, 1);
-    await expect(page.locator("#selectionEditPopup .subdivisionToolbarHost")).toBeVisible();
+    await expect(pieceTray(page)).toBeVisible();
 
-    await expect(toolbarButton(page, "One-bar repeat (simile)")).toBeDisabled();
+    await expect(pieceAction(page, "Simile is not applicable in the first bar")).toBeDisabled();
 });

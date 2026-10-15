@@ -87,7 +87,7 @@ describe("TrackToolbar", { concurrent: false }, () => {
         expect(document.body.querySelectorAll(".portal")).toHaveLength(0);
     });
 
-    it("shows the title, colour dot, close button, section and one action per item", async () => {
+    it("shows the title, colour dot and one action per item", async () => {
         renderResult = render(<TrackToolbar ref={toolbarRef} />);
 
         await openToolbar({
@@ -103,14 +103,13 @@ describe("TrackToolbar", { concurrent: false }, () => {
         });
 
         const popup = popupElement()!;
-        const actions = [...popup.querySelectorAll<HTMLButtonElement>(".trackToolbarAction")];
+        const actions = [...popup.querySelectorAll<HTMLButtonElement>(".selectionToolbarAction")];
 
         expect(popup.classList.contains("popup")).toBe(true);
         expect(popup.classList.contains("visible")).toBe(true);
-        expect(popup.querySelector(".trackToolbarTitle")?.textContent).toBe("Caixa");
-        expect(popup.querySelector<HTMLElement>(".trackToolbarDot")?.style.backgroundColor).toBe("rgb(18, 52, 86)");
-        expect(popup.querySelector(".trackToolbarClose")?.getAttribute("title")).toBe("Close");
-        expect(popup.querySelector(".trackToolbarSection")?.textContent).toBe("Actions");
+        expect(popup.querySelector(".selectionToolbarInstrument")?.textContent).toBe("Caixa");
+        expect(popup.querySelector<HTMLElement>(".selectionToolbarDot")?.style.backgroundColor).toBe("rgb(18, 52, 86)");
+        expect(popup.querySelector(".selectionToolbarSection")).toBeNull();
         expect(actions).toHaveLength(2);
         expect(actions.map((action) => {
             return action.getAttribute("title");
@@ -131,27 +130,10 @@ describe("TrackToolbar", { concurrent: false }, () => {
         });
 
         await act(() => {
-            popupElement()!.querySelector<HTMLButtonElement>(".trackToolbarAction")!.click();
+            popupElement()!.querySelector<HTMLButtonElement>(".selectionToolbarAction")!.click();
         });
 
         expect(onClick).toHaveBeenCalledTimes(1);
-        await waitFor(() => {
-            expect(popupElement()).toBeNull();
-        });
-    });
-
-    it("closes when the close button is clicked", async () => {
-        renderResult = render(<TrackToolbar ref={toolbarRef} />);
-
-        await openToolbar({
-            title: "Tamborim",
-            items: [{ id: "add", icon: <span className="testToolbarIcon" /> }],
-        });
-
-        await act(() => {
-            popupElement()!.querySelector<HTMLButtonElement>(".trackToolbarClose")!.click();
-        });
-
         await waitFor(() => {
             expect(popupElement()).toBeNull();
         });

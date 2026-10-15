@@ -2,53 +2,30 @@
 
 exports[`TrackToolbar > matches the baseline snapshot with all props set 1`] = `
 <div
-  class="container popup visible noArrow track-toolbar custom-track-toolbar left"
+  class="container popup visible noArrow selection-toolbar track-toolbar custom-track-toolbar left"
   id="customTrackToolbar"
   style="flex-direction: column; --popup-viewport-width: 1024px; --popup-viewport-height: 768px; left: 0px; top: 0px;"
 >
   <div
-    class="container trackToolbarHeader"
+    class="container selectionToolbarHeader"
     style="flex-direction: row; align-items: center;"
   >
     <span
-      class="trackToolbarDot"
+      class="selectionToolbarDot"
       style="background-color: rgb(255, 136, 0);"
     />
     <span
-      class="trackToolbarTitle"
+      class="selectionToolbarInstrument"
     >
       Repinique
     </span>
-    <button
-      class="btn du-btn trackToolbarClose"
-      title="Close"
-    >
-      <svg
-        class="icon"
-        data-icon="Close"
-        fill="currentColor"
-        height="16px"
-        viewBox="0 0 24 24"
-        width="16px"
-        xmlns="http://www.w3.org/2000/svg"
-      >
-        <path
-          d="M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z"
-        />
-      </svg>
-    </button>
   </div>
   <div
-    class="trackToolbarSection"
-  >
-    Actions
-  </div>
-  <div
-    class="container trackToolbarActions"
-    style="flex-direction: row;"
+    class="container selectionToolbarActions"
+    style="flex-direction: row; align-items: center;"
   >
     <button
-      class="btn du-btn trackToolbarAction"
+      class="btn du-btn selectionToolbarAction"
       title="Add"
     >
       <span
@@ -56,7 +33,7 @@ exports[`TrackToolbar > matches the baseline snapshot with all props set 1`] = `
       />
     </button>
     <button
-      class="btn du-btn trackToolbarAction"
+      class="btn du-btn selectionToolbarAction"
       title="Duplicate"
     >
       <span
@@ -64,7 +41,7 @@ exports[`TrackToolbar > matches the baseline snapshot with all props set 1`] = `
       />
     </button>
     <button
-      class="btn du-btn du-btn-disabled trackToolbarAction"
+      class="btn du-btn du-btn-disabled selectionToolbarAction"
       disabled=""
       title="Clear"
     >
@@ -73,7 +50,7 @@ exports[`TrackToolbar > matches the baseline snapshot with all props set 1`] = `
       />
     </button>
     <button
-      class="btn du-btn trackToolbarAction is-destructive"
+      class="btn du-btn selectionToolbarAction is-destructive"
       title="Delete"
     >
       <span
@@ -86,51 +63,28 @@ exports[`TrackToolbar > matches the baseline snapshot with all props set 1`] = `
 
 exports[`TrackToolbar > matches the baseline snapshot with minimal props 1`] = `
 <div
-  class="container popup visible noArrow track-toolbar left"
+  class="container popup visible noArrow selection-toolbar track-toolbar left"
   style="flex-direction: column; --popup-viewport-width: 1024px; --popup-viewport-height: 768px; left: 0px; top: 0px;"
 >
   <div
-    class="container trackToolbarHeader"
+    class="container selectionToolbarHeader"
     style="flex-direction: row; align-items: center;"
   >
     <span
-      class="trackToolbarDot"
+      class="selectionToolbarDot"
     />
     <span
-      class="trackToolbarTitle"
+      class="selectionToolbarInstrument"
     >
       Surdo
     </span>
-    <button
-      class="btn du-btn trackToolbarClose"
-      title="Close"
-    >
-      <svg
-        class="icon"
-        data-icon="Close"
-        fill="currentColor"
-        height="16px"
-        viewBox="0 0 24 24"
-        width="16px"
-        xmlns="http://www.w3.org/2000/svg"
-      >
-        <path
-          d="M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z"
-        />
-      </svg>
-    </button>
   </div>
   <div
-    class="trackToolbarSection"
-  >
-    Actions
-  </div>
-  <div
-    class="container trackToolbarActions"
-    style="flex-direction: row;"
+    class="container selectionToolbarActions"
+    style="flex-direction: row; align-items: center;"
   >
     <button
-      class="btn du-btn trackToolbarAction"
+      class="btn du-btn selectionToolbarAction"
     >
       <span
         class="testToolbarIcon"

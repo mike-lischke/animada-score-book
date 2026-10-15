@@ -665,6 +665,26 @@ export class SelectionManager {
     }
 
     /**
+     * Checks whether one granularity addresses a coarser level than another. A note and a note group share their
+     * level: both address the events of one track.
+     *
+     * @param candidate The granularity to test.
+     * @param selected The granularity it is compared against.
+     *
+     * @returns True when the candidate addresses the coarser level.
+     */
+    private static isCoarserGranularity(candidate: SelectionGranularity,
+        selected: SelectionGranularity): boolean {
+        const level = (granularity: SelectionGranularity): number => {
+            return granularity === SelectionGranularity.Note
+                ? SelectionManager.granularityRank[SelectionGranularity.NoteGroup]
+                : SelectionManager.granularityRank[granularity];
+        };
+
+        return level(candidate) < level(selected);
+    }
+
+    /**
      * Applies a set of selection entries according to the current mode, computes the delta
      * (added/removed), and publishes the change.
      *
@@ -755,6 +775,17 @@ export class SelectionManager {
         let bottomTrackIndex = -1;
 
         for (const entry of entries) {
+            // A measure entry stands in for the whole bar, so it covers every track of it — the single measure it
+            // holds just happens to be the first track's. It therefore states the bounds only for a bar selection,
+            // and an entry coarser than the one being materialized states none at all: both address more than the
+            // range holds, which would drag its start towards the whole track, bar or score.
+            const statesBounds = entry.granularity === SelectionGranularity.Measure
+                ? granularity === SelectionGranularity.Measure
+                : !SelectionManager.isCoarserGranularity(entry.granularity, granularity);
+            if (!statesBounds) {
+                continue;
+            }
+
             const trackId = SelectionSerializer.trackOf(entry).id;
             const entryTrackIndex = trackIndexes.get(trackId);
             if (entryTrackIndex !== undefined) {
@@ -1585,7 +1616,8 @@ export class SelectionManager {
     };
 
     /**
-     * Remembers the entry mode for newly created selection views.
+     * Remembers the entry mode for newly created selection views. Insert draws no selection, so switching to it
+     * drops the selection in place — the tools at it belong to overwrite.
      *
      * @param mode The entry mode announced by the app.
      *
@@ -1593,6 +1625,10 @@ export class SelectionManager {
      */
     private handleEntryModeChanged = (mode: EditEntryMode): Promise<boolean> => {
         this.entryMode = mode;
+
+        if (mode === EditEntryMode.Insert) {
+            this.clearSelection();
+        }
 
         return Promise.resolve(true);
     };

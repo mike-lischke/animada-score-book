@@ -18,12 +18,12 @@ describe("EntryModeButton", { concurrent: false }, () => {
      *
      * @param entryMode The mode the app reports.
      *
-     * @returns The button's label element.
+     * @returns The rendered button.
      */
-    const renderButton = (entryMode: EditEntryMode): HTMLLabelElement => {
+    const renderButton = (entryMode: EditEntryMode): HTMLButtonElement => {
         renderResult = render(<EntryModeButton entryMode={entryMode} />);
 
-        return renderResult.container.querySelector<HTMLLabelElement>(".entryModeButton")!;
+        return renderResult.container.querySelector<HTMLButtonElement>(".entryModeButton")!;
     };
 
     const unmountButton = (): void => {
@@ -37,31 +37,34 @@ describe("EntryModeButton", { concurrent: false }, () => {
         vi.restoreAllMocks();
     });
 
-    it("shows the icon of each mode", () => {
-        const insert = renderButton(EditEntryMode.Insert);
-        const offIcon = insert.querySelector(".du-swap-off svg");
-        const onIcon = insert.querySelector(".du-swap-on svg");
-
-        expect(offIcon?.getAttribute("data-icon")).toBe("ArrowExpandRight");
-        expect(onIcon?.getAttribute("data-icon")).toBe("SwapHorizontal");
-        expect(offIcon?.getAttribute("width")).toBe("20px");
-        expect(onIcon?.getAttribute("height")).toBe("20px");
-    });
-
-    it("marks the button while overwrite is in effect", () => {
-        expect(renderButton(EditEntryMode.Insert).classList.contains("du-btn-primary")).toBe(false);
+    it("names the mode it holds", () => {
+        expect(renderButton(EditEntryMode.Insert).querySelector(".entryModeLabel")?.textContent).toBe("Insert");
 
         unmountButton();
 
-        expect(renderButton(EditEntryMode.Overwrite).classList.contains("du-btn-primary")).toBe(true);
+        expect(renderButton(EditEntryMode.Overwrite).querySelector(".entryModeLabel")?.textContent).toBe("Overwrite");
+    });
+
+    it("marks the button while overwrite is in effect", () => {
+        expect(renderButton(EditEntryMode.Insert).classList.contains("is-active")).toBe(false);
+
+        unmountButton();
+
+        expect(renderButton(EditEntryMode.Overwrite).classList.contains("is-active")).toBe(true);
     });
 
     it("posts the mode the user switched to", () => {
         const executeSpy = vi.spyOn(requisitions, "execute").mockResolvedValue(true);
         const button = renderButton(EditEntryMode.Insert);
 
-        fireEvent.click(button.querySelector("input")!);
+        fireEvent.click(button);
 
         expect(executeSpy).toHaveBeenCalledWith("editEntryModeChanged", EditEntryMode.Overwrite);
+
+        unmountButton();
+
+        fireEvent.click(renderButton(EditEntryMode.Overwrite));
+
+        expect(executeSpy).toHaveBeenCalledWith("editEntryModeChanged", EditEntryMode.Insert);
     });
 });
