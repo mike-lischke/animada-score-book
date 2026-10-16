@@ -171,7 +171,7 @@ describe("NoteStyleBar", { concurrent: false }, () => {
             <NoteStyleBar dataModel={dataModel} selectionManager={selectionManager} />,
         );
 
-        const html = renderResult.container.innerHTML.replace(/gooey-\d+/g, "gooey-ID");
+        const html = renderResult.container.innerHTML;
         expect(html).toMatchSnapshot();
     });
 
@@ -195,7 +195,7 @@ describe("NoteStyleBar", { concurrent: false }, () => {
             />,
         );
 
-        const html = renderResult.container.innerHTML.replace(/gooey-\d+/g, "gooey-ID");
+        const html = renderResult.container.innerHTML;
         expect(html).toMatchSnapshot();
     });
 
