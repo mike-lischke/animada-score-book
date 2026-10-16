@@ -154,7 +154,7 @@ export class GridMeasureViewer extends UIComponent<IGridMeasureViewerProperties,
             });
         }
 
-        const measure = SelectionSerializer.measureOfBar(this.props.dataModel.arrangement!, measureNumber);
+        const measure = SelectionSerializer.measureOfBar(dataModel.arrangement!, measureNumber);
         const measureEntries: ISelectionHitEntry[] = measure === undefined ? [] : [{
             granularity: SelectionGranularity.Measure,
             target: { granularity: SelectionGranularity.Measure, measure },

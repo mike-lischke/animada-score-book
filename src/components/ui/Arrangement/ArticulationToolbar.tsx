@@ -16,10 +16,7 @@ import type { SelectionManager } from "../../../ui/SelectionManager.js";
 import { SelectionSerializer, type ISelectionEntry } from "../../../ui/SelectionSerializer.js";
 import { selectionEventsOf } from "../../../ui/selection-ranges.js";
 import { Button } from "../framework/Button.js";
-import { Container } from "../framework/Container.js";
-import { GooeyGroup } from "../framework/GooeyGroup.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
-import { ChildAlignment, Orientation } from "../framework/ui-types.js";
 
 export interface IArticulationToolbarProps extends ICommonUIProperties {
     dataModel: ScoreBookDataModel;
@@ -94,13 +91,13 @@ export class ArticulationToolbar extends UIComponent<IArticulationToolbarProps, 
     public override render(): ComponentChild {
         const { canEnter, activeArticulation, available } = this.state;
 
-        const buttons = articulationOptions.map((option) => {
+        return articulationOptions.map((option) => {
             const isAvailable = available.has(option.articulation);
 
             return (
                 <Button
                     key={option.articulation}
-                    className="articulationButton"
+                    className="selectionToolbarAction articulationButton"
                     isDefault={option.articulation === activeArticulation}
                     disabled={!canEnter || !isAvailable}
                     title={option.tooltip}
@@ -112,21 +109,6 @@ export class ArticulationToolbar extends UIComponent<IArticulationToolbarProps, 
                 </Button>
             );
         });
-
-        return (
-            <Container
-                className="articulationToolbarHost"
-                orientation={Orientation.LeftToRight}
-                crossAlignment={ChildAlignment.Center}
-            >
-                <GooeyGroup
-                    className="articulationToolbar"
-                    background="var(--color-base-200)"
-                >
-                    {buttons}
-                </GooeyGroup>
-            </Container>
-        );
     }
 
     private handleSelectionChanged = (): Promise<boolean> => {
@@ -270,7 +252,8 @@ export class ArticulationToolbar extends UIComponent<IArticulationToolbarProps, 
      * @returns The common note style id, or undefined when no single style is shared.
      */
     private resolveMarkedStyleId(entries: ISelectionEntry[]): string | undefined {
-        const arrangement = this.props.dataModel.arrangement;
+        const { dataModel } = this.props;
+        const arrangement = dataModel.arrangement;
         if (!arrangement) {
             return undefined;
         }

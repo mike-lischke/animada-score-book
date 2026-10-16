@@ -368,6 +368,8 @@ export class GridMeasureRow extends UIComponent<IGridMeasureRowProperties, IGrid
      * @returns The zero-based grid step.
      */
     private stepOf(start: IFraction): number {
-        return Math.floor(start.numerator * this.props.measure.meter.stepResolution / start.denominator);
+        const { measure } = this.props;
+
+        return Math.floor(start.numerator * measure.meter.stepResolution / start.denominator);
     }
 }

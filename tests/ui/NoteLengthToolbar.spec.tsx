@@ -270,7 +270,7 @@ describe("NoteLengthToolbar", { concurrent: false }, () => {
             <NoteLengthToolbar dataModel={dataModel} selectionManager={selectionManager} />,
         );
 
-        const buttons = [...renderResult.container.querySelectorAll(".noteLengthToolbar button")];
+        const buttons = [...renderResult.container.querySelectorAll("button")];
 
         expect(buttons).toHaveLength(7);
         expect(buttons[6].classList.contains("noteDotButton")).toBe(true);

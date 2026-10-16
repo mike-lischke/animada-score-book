@@ -11,7 +11,7 @@ import {
 } from "../../../core/MeasureLayout.js";
 import { StaffRowGeometry, type IStaffRowGeometry } from "../../../core/StaffRowGeometry.js";
 import type { RealTime, ScoreBookDataModel } from "../../../core/ScoreBookDataModel.js";
-import { RepeatMark, type EditEntryMode } from "../../../core/types/general.js";
+import { RepeatMark, TrackViewMode, type EditEntryMode } from "../../../core/types/general.js";
 import { clampValue } from "../../../core/utils.js";
 import { PlayerPlayState, type ArrangementPlayer } from "../../../player/ArrangementPlayer.js";
 import { requisitions, type IMeasureVisibilityRequest } from "../../../supplement/Requisitions.js";
@@ -88,7 +88,7 @@ interface IArrangementViewerState {
     trackPlayerCount: number;
     autoFollowIsOn: boolean;
     viewerZoom: number;
-    trackViewMode: "grid" | "staff";
+    trackViewMode: TrackViewMode;
     mixerExpanded: boolean;
     selectedZenBars: ReadonlySet<number>;
 
@@ -162,7 +162,7 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
             noteWidth: 0,
             trackPlayerCount: props.arrangementPlayer.trackPlayers.size,
             autoFollowIsOn: true,
-            trackViewMode: settings.viewSettings?.arrangementViewSettings?.displayMode ?? "grid",
+            trackViewMode: settings.viewSettings?.arrangementViewSettings?.displayMode ?? TrackViewMode.Grid,
             mixerExpanded: false,
             selectedZenBars: new Set(),
             staffWindow: { first: 1, last: 0 },
@@ -174,7 +174,7 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
 
     public override componentDidMount(): void {
         const { arrangementPlayer, dataModel, selectionManager, inEditMode, zenMode } = this.props;
-        const { viewerZoom } = this.state;
+        const { viewerZoom, trackViewMode } = this.state;
 
         selectionManager.setEventContainer(this.arrangementViewerRef.current!, this.scoreElementRegistry);
 
@@ -202,7 +202,7 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         this.trackViewerInputController = new TrackViewerInputController(contentHost);
         this.trackViewerInputController.attach();
         this.rangeArticulationView = new RangeArticulationView(contentHost, dataModel, selectionManager,
-            this.scoreElementRegistry, this.state.trackViewMode === "staff", zenMode);
+            this.scoreElementRegistry, trackViewMode === TrackViewMode.Staff, zenMode);
         this.activateViewEditor();
         this.applyEditState();
 
@@ -251,7 +251,7 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         if (viewModeChanged) {
             // View mode switched — the input follows the new view, and its newly mounted components
             // need the current selection state.
-            this.rangeArticulationView?.setStaffMode(trackViewMode === "staff");
+            this.rangeArticulationView?.setStaffMode(trackViewMode === TrackViewMode.Staff);
             this.activateViewEditor();
             selectionManager.republishSelection();
         }
@@ -338,8 +338,9 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
     }
 
     public override render(): JSX.Element {
-        const { arrangementPlayer, dataModel, selectionManager, inEditMode, zenMode, zenIdentity } = this.props;
-        const { trackViewMode, viewerZoom } = this.state;
+        const { arrangementPlayer, dataModel, selectionManager, inEditMode, zenMode, zenIdentity,
+            entryMode } = this.props;
+        const { trackViewMode, viewerZoom, mixerExpanded } = this.state;
 
         const arrangement = dataModel.arrangement!;
         const metrics = arrangementPlayer.scoreMetrics;
@@ -423,11 +424,11 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
             );
         };
 
-        const rowGeometries = trackViewMode === "staff" ? this.resolveStaffRowGeometries() : undefined;
+        const rowGeometries = trackViewMode === TrackViewMode.Staff ? this.resolveStaffRowGeometries() : undefined;
 
         // The view decides the score's head room, which the side panels mirror to line their rows up with it.
         const viewerContainerClassName = this.generateFinalClassName([
-            trackViewMode === "staff" ? "view-staff" : "view-grid",
+            trackViewMode === TrackViewMode.Staff ? "view-staff" : "view-grid",
             this.classFromProperty(inEditMode, "edit-mode"),
         ]);
 
@@ -477,7 +478,7 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
             actionBar = <ArrangementActionBar
                 ref={this.actionBarRef}
                 editMode={inEditMode}
-                mixerExpanded={this.state.mixerExpanded}
+                mixerExpanded={mixerExpanded}
                 trackViewMode={trackViewMode}
                 trackControlsRef={this.trackControlsRef}
                 onToggleMixer={this.toggleMixer}
@@ -516,15 +517,16 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
                         {identity}
                         <TrackControls innerRef={this.trackControlsRef} tracks={arrangement.tracks}
                             selectionManager={selectionManager} rowGeometries={rowGeometries}
-                            mixerExpanded={this.state.mixerExpanded} trackViewMode={trackViewMode}
+                            mixerExpanded={mixerExpanded} trackViewMode={trackViewMode}
                             labelsOnly={zenMode} />
                         <SelectionEditPopup
                             dataModel={dataModel}
                             selectionManager={selectionManager}
                             scoreElementRegistry={this.scoreElementRegistry}
                             editMode={inEditMode}
-                            entryMode={this.props.entryMode}
+                            entryMode={entryMode}
                             trackViewMode={trackViewMode}
+                            scoreHost={this.viewerRef}
                         />
                         <Container
                             id="trackViewerHost"
@@ -611,7 +613,7 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
      */
     private activateViewEditor(): void {
         const { trackViewMode } = this.state;
-        const editor = trackViewMode === "staff" ? this.staffEditor : this.gridEditor;
+        const editor = trackViewMode === TrackViewMode.Staff ? this.staffEditor : this.gridEditor;
 
         if (editor !== undefined) {
             this.trackViewerInputController!.activeEditor = editor;
@@ -702,12 +704,14 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
      */
     private handleMeasureVisibilityRequested = (request: IMeasureVisibilityRequest): Promise<boolean> => {
         const { bar, position } = request;
+        const { arrangementPlayer } = this.props;
+        const { trackViewMode } = this.state;
         const host = this.viewerRef.current;
-        if (this.state.trackViewMode !== "staff" || !host) {
+        if (trackViewMode !== TrackViewMode.Staff || !host) {
             return Promise.resolve(false);
         }
 
-        this.updateStaffGeometry(this.props.arrangementPlayer.scoreMetrics.bars);
+        this.updateStaffGeometry(arrangementPlayer.scoreMetrics.bars);
         if (bar < 1 || bar > this.staffColumns.length) {
             return Promise.resolve(false);
         }
@@ -759,7 +763,8 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         this.staffRowGeometries.clear();
 
         const { arrangementPlayer, dataModel } = this.props;
-        if (this.state.trackViewMode === "staff" && dataModel.arrangement !== undefined) {
+        const { trackViewMode } = this.state;
+        if (trackViewMode === TrackViewMode.Staff && dataModel.arrangement !== undefined) {
             this.updateStaffGeometry(arrangementPlayer.scoreMetrics.bars);
             this.staffGeometryDirty = true;
         }
@@ -838,7 +843,7 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         const firstHalfWidth = Math.ceil(metrics.beatsPerBar / 2) * beatWidthPixels;
         const secondHalfWidth = Math.floor(metrics.beatsPerBar / 2) * beatWidthPixels;
 
-        const rightPartialBarStart = trackViewMode === "staff"
+        const rightPartialBarStart = trackViewMode === TrackViewMode.Staff
             ? this.getRightPartialMeasureStart(viewer.scrollLeft, clientWidth)
             : this.getRightPartialBarStart(viewer.scrollLeft, clientWidth, column.width);
         const reachedRightPartialBar = position >= rightPartialBarStart;
@@ -914,13 +919,14 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
      * and as high as a measure selection overlay. The grid view keeps the beam across the whole content.
      */
     private updatePlayBeamExtent(): void {
+        const { trackViewMode } = this.state;
         const beam = this.playBeamRef.current;
         const host = this.viewerContentHostRef.current;
         if (beam === null || host === null) {
             return;
         }
 
-        if (this.state.trackViewMode !== "staff") {
+        if (trackViewMode !== TrackViewMode.Staff) {
             beam.style.top = "";
             beam.style.height = "";
 
@@ -965,9 +971,12 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
      *          width of the rendered content. The grid view uses the same width for every measure.
      */
     private playheadColumn(totalProgress: number): IPlayheadColumn {
+        const { arrangementPlayer } = this.props;
+        const { trackViewMode } = this.state;
+
         // The columns follow the bars as written, the order says which of them a played bar is.
-        const bars = this.props.arrangementPlayer.scoreMetrics.bars;
-        const order = this.props.arrangementPlayer.playOrder;
+        const bars = arrangementPlayer.scoreMetrics.bars;
+        const order = arrangementPlayer.playOrder;
         if (bars <= 0 || order.length === 0) {
             return { start: 0, width: 0, progress: 0, contentWidth: 0 };
         }
@@ -976,7 +985,7 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         const progress = totalProgress - index;
         const column = order[index] - 1;
 
-        if (this.state.trackViewMode === "staff") {
+        if (trackViewMode === TrackViewMode.Staff) {
             return {
                 start: this.staffOffsets[column],
                 width: this.staffColumns[column],
@@ -1034,7 +1043,7 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
 
         const viewSettings = settings.viewSettings?.arrangementViewSettings;
         const newZoom = viewSettings?.zoomLevel ?? 100;
-        const newTrackViewMode = viewSettings?.displayMode ?? "grid";
+        const newTrackViewMode = viewSettings?.displayMode ?? TrackViewMode.Grid;
         const musicFontChanged = settings.musicFont !== this.musicFont;
 
         if (musicFontChanged) {
@@ -1064,7 +1073,7 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         return Promise.resolve(true);
     };
 
-    private handleTrackViewModeToggled = (newTrackViewMode: "grid" | "staff") => {
+    private handleTrackViewModeToggled = (newTrackViewMode: TrackViewMode) => {
         const { trackViewMode: currentMode } = this.state;
 
         if (currentMode === newTrackViewMode) {
@@ -1076,7 +1085,7 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         return Promise.resolve(true);
     };
 
-    private setTrackViewMode = (mode: "grid" | "staff"): void => {
+    private setTrackViewMode = (mode: TrackViewMode): void => {
         const settings = AppStorage.loadUISettings() ?? {};
         settings.viewSettings ??= {};
         settings.viewSettings.arrangementViewSettings ??= {};
@@ -1153,10 +1162,11 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
             return;
         }
 
-        const { dataModel } = this.props;
+        const { dataModel, inEditMode } = this.props;
+        const { viewerZoom } = this.state;
         const sourceWidths = MeasureLayout.columns(barCount, dataModel.arrangement?.measureWidths);
-        const minimumWidth = this.props.inEditMode
-            ? barActionStripWidth / (this.state.viewerZoom / 100)
+        const minimumWidth = inEditMode
+            ? barActionStripWidth / (viewerZoom / 100)
             : 0;
         this.staffDisplayWidths.clear();
         this.staffColumns = sourceWidths.map((width, index) => {
@@ -1178,18 +1188,19 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
      * nothing there.
      */
     private updateStaffWindow(): void {
-        const { trackViewMode } = this.state;
+        const { arrangementPlayer } = this.props;
+        const { trackViewMode, staffWindow } = this.state;
         const host = this.viewerRef.current;
-        if (trackViewMode !== "staff" || !host) {
+        if (trackViewMode !== TrackViewMode.Staff || !host) {
             return;
         }
 
-        const barCount = this.props.arrangementPlayer.scoreMetrics.bars;
+        const barCount = arrangementPlayer.scoreMetrics.bars;
         this.updateStaffGeometry(barCount);
 
         const visible = MeasureLayout.rangeFor(this.staffOffsets, host.scrollLeft,
             host.scrollLeft + host.clientWidth, staffWindowOverscan);
-        const current = this.state.staffWindow;
+        const current = staffWindow;
         if (visible.first !== current.first || visible.last !== current.last) {
             this.setState({ staffWindow: visible });
         }
@@ -1200,9 +1211,10 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
      *          columns from the measure layout, the grid view reads them from its rendered measures.
      */
     private measureCenters = (): Map<number, number> => {
+        const { trackViewMode } = this.state;
         const centers = new Map<number, number>();
 
-        if (this.state.trackViewMode === "staff") {
+        if (trackViewMode === TrackViewMode.Staff) {
             for (let bar = 1; bar <= this.staffColumns.length; bar++) {
                 centers.set(bar, this.staffOffsets[bar - 1] + (this.staffColumns[bar - 1] / 2));
             }
@@ -1295,7 +1307,8 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
     };
 
     private getVisibleBarRange(scrollHost: HTMLElement, leftPadding: number): IVisibleBarRange | null {
-        if (this.state.trackViewMode === "staff") {
+        const { trackViewMode } = this.state;
+        if (trackViewMode === TrackViewMode.Staff) {
             // Only a window of measures is rendered, so the visible range comes from the measure offsets
             // instead of from the registered elements.
             const range = MeasureLayout.rangeFor(this.staffOffsets, scrollHost.scrollLeft,

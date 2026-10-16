@@ -3,34 +3,30 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import type { ComponentChild } from "preact";
+import type { ComponentChild, RefObject } from "preact";
 import { createRef } from "preact";
 
 import type { ScoreBookDataModel } from "../../../core/ScoreBookDataModel.js";
-import { EditEntryMode } from "../../../core/types/general.js";
+import { EditEntryMode, TrackViewMode } from "../../../core/types/general.js";
 import { requisitions } from "../../../supplement/Requisitions.js";
 import type { SelectionManager } from "../../../ui/SelectionManager.js";
 import { ScoreElementKind, type ScoreElementRegistry } from "../../../ui/ScoreElementRegistry.js";
 import {
     SelectionGranularity, type ISelectionEntry, type ISelectionTarget,
 } from "../../../ui/SelectionSerializer.js";
-import { ArticulationToolbar } from "./ArticulationToolbar.js";
-import { NoteLengthToolbar } from "./NoteLengthToolbar.js";
-import { NoteStyleBar } from "./NoteStyleBar.js";
-import { SubdivisionToolbar } from "./SubdivisionToolbar.js";
+import { NoteToolbar } from "./NoteToolbar.js";
 import { TrackPieceToolbar } from "./TrackPieceToolbar.js";
 import { SelectionToolbar } from "./SelectionToolbar.js";
-import { Button } from "../framework/Button.js";
-import { Container } from "../framework/Container.js";
 import { Popup } from "../framework/Popup.js";
-import { Separator } from "../Separator.js";
-import { ChildAlignment, Orientation } from "../framework/ui-types.js";
 import { ComponentPlacement, UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
 
 interface ISelectionPlacement {
     anchor: HTMLElement;
 
-    /** The point above the selection the popup is centered on; absent while the selection is out of view. */
+    /**
+     * The span of the addressed elements the popup hangs under and is centered on; absent while the selection
+     * is out of view.
+     */
     bounds?: DOMRect;
 }
 
@@ -40,11 +36,17 @@ export interface ISelectionEditPopupProps extends ICommonUIProperties {
     scoreElementRegistry: ScoreElementRegistry;
     editMode: boolean;
     entryMode: EditEntryMode;
-    trackViewMode: "grid" | "staff";
+    trackViewMode: TrackViewMode;
+
+    /**
+     * The element the score is drawn in, which holds the rows and the selected elements. A press on it addresses
+     * score elements, so the selection it produces decides what happens to the popup.
+     */
+    scoreHost: RefObject<HTMLElement | null>;
 }
 
 /**
- * Hosts note and selection-structure tools at the currently selected score elements. The popup hangs above the
+ * Hosts note and selection-structure tools at the currently selected score elements. The popup hangs under the
  * visible part of the selection and hides while the selection is scrolled out of view.
  */
 export class SelectionEditPopup extends UIComponent<ISelectionEditPopupProps> {
@@ -82,34 +84,24 @@ export class SelectionEditPopup extends UIComponent<ISelectionEditPopupProps> {
     }
 
     public render(): ComponentChild {
-        const { selectionManager, editMode, trackViewMode } = this.props;
+        const { selectionManager, editMode, trackViewMode, scoreHost } = this.props;
         const entries = [...selectionManager.currentSelection.values()];
-
-        // A track-piece selection in the staff view gets its own layout, everything else the shared tools.
-        const isTrackPieceSelection = trackViewMode === "staff" && entries.length > 0 && entries.every((entry) => {
-            return entry.granularity === SelectionGranularity.TrackPiece;
-        });
+        const isTrackPieceSelection = SelectionEditPopup.isTrackPieceSelection(entries, trackViewMode);
 
         let content: ComponentChild;
-        if (editMode && SelectionEditPopup.carriesTools(entries)) {
-            content = isTrackPieceSelection ? this.renderTrackPieceTools() : this.renderGenericTools(entries);
-        }
-
-        let className: string;
-        if (isTrackPieceSelection) {
-            className = `selection-edit-popup ${SelectionToolbar.surfaceClassName}`;
-        } else {
-            className = "selection-edit-popup";
+        if (editMode && SelectionEditPopup.carriesTools(entries, trackViewMode)) {
+            content = isTrackPieceSelection ? this.renderTrackPieceTools() : this.renderNoteTools();
         }
 
         return (
             <Popup
                 id="selectionEditPopup"
                 ref={this.popupRef}
-                className={className}
-                placement={ComponentPlacement.TopCenter}
+                className={`selection-edit-popup ${SelectionToolbar.surfaceClassName}`}
+                placement={ComponentPlacement.BottomCenter}
                 offset={8}
                 boundsProvider={this.selectionBounds}
+                anchorArea={scoreHost.current ?? undefined}
                 showArrow={false}
             >
                 {content}
@@ -122,12 +114,25 @@ export class SelectionEditPopup extends UIComponent<ISelectionEditPopupProps> {
      * so a selection of whole bars carries no tools here.
      *
      * @param entries The selection entries.
+     * @param trackViewMode The view mode the score is shown in.
      *
      * @returns True when the popup shows tools for the selection.
      */
-    private static carriesTools(entries: ISelectionEntry[]): boolean {
-        return entries.some((entry) => {
-            return entry.granularity !== SelectionGranularity.Measure;
+    private static carriesTools(entries: ISelectionEntry[], trackViewMode: TrackViewMode): boolean {
+        return NoteToolbar.carriesTools(entries) || SelectionEditPopup.isTrackPieceSelection(entries, trackViewMode);
+    }
+
+    /**
+     * Whether the entries address the track pieces a staff view selects as one piece.
+     *
+     * @param entries The selection entries.
+     * @param trackViewMode The view mode the score is shown in.
+     *
+     * @returns True when the popup shows the tools of a track piece.
+     */
+    private static isTrackPieceSelection(entries: ISelectionEntry[], trackViewMode: TrackViewMode): boolean {
+        return trackViewMode === TrackViewMode.Staff && entries.length > 0 && entries.every((entry) => {
+            return entry.granularity === SelectionGranularity.TrackPiece;
         });
     }
 
@@ -206,97 +211,21 @@ export class SelectionEditPopup extends UIComponent<ISelectionEditPopupProps> {
     }
 
     /**
-     * Renders the note and structure tools every other selection kind shares.
+     * Renders the tools a note selection offers: the styles, values, articulations and tuplets of the addressed
+     * notes, as the card the selection popups share draws them.
      *
-     * @param entries The selection entries, never empty.
-     *
-     * @returns The shared tools.
+     * @returns The note tools.
      */
-    private renderGenericTools(entries: ISelectionEntry[]): ComponentChild {
+    private renderNoteTools(): ComponentChild {
         const { dataModel, selectionManager, entryMode, trackViewMode } = this.props;
-        const hasNoteTargets = entries.some((entry) => {
-            return entry.granularity === SelectionGranularity.Note
-                || entry.granularity === SelectionGranularity.NoteGroup;
-        });
-        const allNoteTargets = entries.every((entry) => {
-            return entry.granularity === SelectionGranularity.Note
-                || entry.granularity === SelectionGranularity.NoteGroup;
-        });
-
-        let noteTools: ComponentChild;
-        let noteLengthTools: ComponentChild;
-        let deleteAction: ComponentChild;
-        if (hasNoteTargets) {
-            noteTools = (
-                <Container
-                    className="selectionNoteTools"
-                    orientation={Orientation.LeftToRight}
-                    crossAlignment={ChildAlignment.Center}
-                >
-                    <NoteStyleBar
-                        dataModel={dataModel}
-                        selectionManager={selectionManager}
-                        trackViewMode={trackViewMode}
-                        entryMode={entryMode}
-                    />
-                    <ArticulationToolbar
-                        dataModel={dataModel}
-                        selectionManager={selectionManager}
-                        entryMode={entryMode}
-                    />
-                </Container>
-            );
-
-            if (trackViewMode === "staff") {
-                noteLengthTools = (
-                    <NoteLengthToolbar
-                        dataModel={dataModel}
-                        selectionManager={selectionManager}
-                        entryMode={entryMode}
-                    />
-                );
-            }
-
-        }
-
-        const isCursorOnly = trackViewMode === "staff" && entryMode === EditEntryMode.Insert
-            && entries.every((entry) => {
-                return entry.granularity === SelectionGranularity.Note;
-            });
-        if (entries.length > 0 && !isCursorOnly) {
-            deleteAction = <Button
-                className="selectionDeleteButton"
-                title="Delete selection"
-                caption="Delete"
-                onClick={() => {
-                    void requisitions.execute("selectionDeleteRequested", undefined);
-                }}
-            />;
-        }
-
-        let structureTools: ComponentChild;
-        if (allNoteTargets) {
-            structureTools = (
-                <>
-                    <Separator />
-                    <SubdivisionToolbar selectionManager={selectionManager} />
-                </>
-            );
-        }
 
         return (
-            <Container
-                id="selectionEditActions"
-                className="selectionEditActions"
-                orientation={Orientation.TopDown}
-                crossAlignment={ChildAlignment.Stretch}
-                gap={8}
-            >
-                {noteTools}
-                {noteLengthTools}
-                {structureTools}
-                {deleteAction}
-            </Container>
+            <NoteToolbar
+                dataModel={dataModel}
+                selectionManager={selectionManager}
+                trackViewMode={trackViewMode}
+                entryMode={entryMode}
+            />
         );
     }
 
@@ -305,9 +234,11 @@ export class SelectionEditPopup extends UIComponent<ISelectionEditPopupProps> {
     };
 
     private handleSelectionChanged = (): Promise<boolean> => {
+        const { selectionManager } = this.props;
+
         // A gesture clears the selection before it selects what the pointer hit, so an empty selection reported
         // while one runs is a transient state — closing the popup on it would only make the popup blink.
-        if (this.selectionGestureInProgress && this.props.selectionManager.currentSelection.size === 0) {
+        if (this.selectionGestureInProgress && selectionManager.currentSelection.size === 0) {
             return Promise.resolve(true);
         }
 
@@ -351,11 +282,11 @@ export class SelectionEditPopup extends UIComponent<ISelectionEditPopupProps> {
     };
 
     private updatePopup(): void {
-        const { editMode, selectionManager } = this.props;
+        const { editMode, selectionManager, trackViewMode } = this.props;
         const entries = [...selectionManager.currentSelection.values()];
 
         // A bar selection carries no tools here, so the popup stays closed for one.
-        if (!editMode || !SelectionEditPopup.carriesTools(entries)) {
+        if (!editMode || !SelectionEditPopup.carriesTools(entries, trackViewMode)) {
             this.popupRef.current?.close(true);
 
             return;
@@ -383,7 +314,7 @@ export class SelectionEditPopup extends UIComponent<ISelectionEditPopupProps> {
     }
 
     /**
-     * Resolves where the popup is placed for the current selection: the row it hangs on, and the point it is
+     * Resolves where the popup is placed for the current selection: the row it hangs on, and the span it is
      * centered on, which is absent while nothing of the selection is in view.
      *
      * @returns The placement, or undefined when the selection has no rendered row to hang on.
@@ -395,6 +326,7 @@ export class SelectionEditPopup extends UIComponent<ISelectionEditPopupProps> {
         let left = Infinity;
         let top = Infinity;
         let right = -Infinity;
+        let bottom = -Infinity;
 
         for (let index = entries.length - 1; index >= 0; index--) {
             const { target } = entries[index];
@@ -413,6 +345,7 @@ export class SelectionEditPopup extends UIComponent<ISelectionEditPopupProps> {
                 left = Math.min(left, rect.left);
                 top = Math.min(top, rect.top);
                 right = Math.max(right, rect.right);
+                bottom = Math.max(bottom, rect.bottom);
             }
         }
 
@@ -420,15 +353,15 @@ export class SelectionEditPopup extends UIComponent<ISelectionEditPopupProps> {
             return undefined;
         }
 
-        // The anchor sits on the top edge of the selection. That edge leaves the view when the content is
-        // scrolled away, which hides the popup until the anchor is shown again.
+        // The popup hangs under the lower edge of the span. That edge leaves the view when the content is
+        // scrolled away, which hides the popup until the selection is shown again.
         const view = SelectionEditPopup.visibleAreaOf(anchor);
         const center = left > right ? undefined : SelectionEditPopup.anchorCenter(left, right, view);
-        if (center === undefined || top < view.top || top > view.bottom) {
+        if (center === undefined || bottom < view.top || bottom > view.bottom) {
             return { anchor };
         }
 
-        return { anchor, bounds: new DOMRect(center, top, 0, 0) };
+        return { anchor, bounds: new DOMRect(center, top, 0, bottom - top) };
     }
 
     /**

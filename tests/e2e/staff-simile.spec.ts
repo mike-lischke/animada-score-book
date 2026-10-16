@@ -133,7 +133,7 @@ test("does not offer the mark for a note selection", async ({ page }) => {
     await staffBar(page, 1).locator(".staff-note-head-symbol").first().click();
 
     // A note selection carries the note tools, so the track-piece card and its mark are absent.
-    await expect(page.locator("#selectionEditPopup .subdivisionToolbarHost")).toBeVisible();
+    await expect(page.locator("#selectionEditPopup .subdivisionToolbar")).toBeVisible();
 
     await expect(toolbarButton(page, "One-bar repeat (simile)")).toHaveCount(0);
     await expect(pieceAction(page, "One-bar repeat (simile)")).toHaveCount(0);

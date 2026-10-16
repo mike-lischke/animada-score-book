@@ -19,9 +19,12 @@ Persistent toolbars are app-shell surfaces, not score children: score zoom and s
 Secondary playback controls may collapse, but must remain easy to reach on every platform.
 The range-articulation toolbar is a tool selector, not an indicator that drawing mode is already active. The selected
 action starts the viewer's pointer-owning placing mode; Escape leaves that mode, while choosing the other action
-switches tools. A contextual popover is temporary: outside click, Escape, or loss of its target closes it; focus returns
-to its invoking control, and the score remains interactive outside the popover. On narrow screens, an anchored popover
-may become edge-attached.
+switches tools. A contextual popover is temporary: Escape, loss of its target, or a press outside the surface it belongs
+to closes it. A press inside that surface — the score, for the selection popover — is an interaction with the popover
+instead, so the selection it produces decides whether the popover follows, shows other tools, or closes. Pointer and
+keyboard therefore behave alike: the popover travels between selections rather than blinking. Focus returns to its
+invoking control, and the score remains interactive outside the popover. On narrow screens, an anchored popover may
+become edge-attached.
 
 ## Selection Action Grouping
 
@@ -43,9 +46,11 @@ Persistent shell controls stay outside the portal stack and coexist without outs
 opening another replaces it. Modal `Dialog` portals keep their backdrop and stack behavior, with only the topmost portal
 handling Escape.
 
-Contextual `Popup` surfaces are nonmodal: a pointer press or keyboard-activated click outside closes the popup without
-blocking the target action. Escape and programmatic close restore focus to the trigger; outside-click close leaves focus
-with the clicked target.
+Contextual `Popup` surfaces are nonmodal: a pointer press or keyboard-activated click outside dismisses the popup
+without blocking the target action, while a press inside the surface the popover belongs to counts as an interaction
+with its anchor — `Popup.anchorArea` states that surface and defaults to the anchor element itself, so the selection
+popover states the score and follows the selection instead of closing and reopening. Escape and programmatic close
+restore focus to the trigger; outside-click close leaves focus with the clicked target.
 Interactive popups may focus their first control on open. Prefer live elements as anchors so placement follows
 scrolling, resizing, orientation, and visual-viewport changes; removing an anchor closes the popup. If neither side has
 room on mobile, attach the popup to the bottom edge and scroll its contents.

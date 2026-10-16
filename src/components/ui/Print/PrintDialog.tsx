@@ -15,6 +15,7 @@ import { Icon } from "../framework/Icon.js";
 import { ChildAlignment, Orientation } from "../framework/ui-types.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
 import type { BarsPerLine, IPrintOptions } from "./PrintView.js";
+import { TrackViewMode } from "../../../core/types/general.js";
 
 /** Compact descriptor for tracks — passed in by the caller when opening the dialog. */
 export interface IPrintTrackInfo {
@@ -48,7 +49,7 @@ export class PrintDialog extends UIComponent<IPrintDialogProps, IPrintDialogStat
             options: {
                 barsPerLine: "auto",
                 showLegend: true,
-                viewMode: "grid",
+                viewMode: TrackViewMode.Grid,
                 selectedTrackIds: undefined,
             },
             availableTracks: [],

@@ -16,11 +16,8 @@ import {
     addressesNoteCells, SelectionGranularity, SelectionSerializer, type INoteCellTarget, type ISelectionEntry,
 } from "../../../ui/SelectionSerializer.js";
 import { TupletIcon } from "../Note/TupletIcon.js";
-import { Container } from "../framework/Container.js";
 import { Dropdown, type IDropdownItem } from "../framework/Dropdown.js";
-import { GooeyGroup } from "../framework/GooeyGroup.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
-import { ChildAlignment, Orientation } from "../framework/ui-types.js";
 
 export interface ISubdivisionToolbarProps extends ICommonUIProperties {
     selectionManager: SelectionManager;
@@ -85,37 +82,17 @@ export class SubdivisionToolbar extends UIComponent<ISubdivisionToolbarProps, IS
     }
 
     public override render(): ComponentChild {
-        return (
-            <Container
-                className="subdivisionToolbarHost"
-                orientation={Orientation.LeftToRight}
-                crossAlignment={ChildAlignment.Center}
-            >
-                {this.renderTupletGroup()}
-            </Container>
-        );
-    }
-
-    /**
-     * @returns The group's content.
-     */
-    private renderTupletGroup(): ComponentChild {
         const { canCreate } = this.state;
         const dropdownItems = this.buildDropdownItems();
 
         return (
-            <GooeyGroup
-                className="subdivisionToolbar"
-                background="var(--color-base-200)"
-            >
-                <Dropdown
-                    icon={<TupletIcon />}
-                    disabled={!canCreate}
-                    closeOnSelect
-                    items={dropdownItems}
-                    title="Add subdivision"
-                />
-            </GooeyGroup>
+            <Dropdown
+                icon={<TupletIcon />}
+                disabled={!canCreate}
+                closeOnSelect
+                items={dropdownItems}
+                title="Add subdivision"
+            />
         );
     }
 
@@ -133,7 +110,8 @@ export class SubdivisionToolbar extends UIComponent<ISubdivisionToolbarProps, IS
 
     private buildDropdownItems(): IDropdownItem[] {
         const { maxSlots } = this.state;
-        const entries = [...this.props.selectionManager.currentSelection.values()];
+        const { selectionManager } = this.props;
+        const entries = [...selectionManager.currentSelection.values()];
         const selectedSubdivisionSlot = entries.length === 1
             && SelectionSerializer.addressesSubdivisionSlot(entries[0].target);
 

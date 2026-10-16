@@ -15,12 +15,6 @@ import { UIIcon } from "../framework/UIIcon.js";
 import { type ICommonUIProperties } from "../framework/UIComponent.js";
 import { SelectionToolbar, type ISelectionToolbarSection, type ISelectionToolbarTitle } from "./SelectionToolbar.js";
 
-/** The header title of a track-piece selection, split into the instrument and the measures it covers. */
-interface ITrackPieceToolbarTitle {
-    instrument: string;
-    position: string;
-}
-
 export interface ITrackPieceToolbarProps extends ICommonUIProperties {
     dataModel: ScoreBookDataModel;
     selectionManager: SelectionManager;
@@ -60,9 +54,14 @@ export class TrackPieceToolbar extends SelectionToolbar<ITrackPieceToolbarProps,
 
     protected override get toolbarTitle(): ISelectionToolbarTitle {
         const pieces = this.selectedPieces();
-        const { instrument, position } = TrackPieceToolbar.titleOf(pieces);
+        const tracks = pieces.map((piece) => {
+            return piece.track;
+        });
+        const bars = pieces.map((piece) => {
+            return piece.measure.number;
+        });
 
-        return { instrument, position, color: pieces[0]?.track.instrument.color };
+        return SelectionToolbar.titleOf(tracks, bars);
     }
 
     protected override get toolbarSections(): ISelectionToolbarSection[] {
@@ -72,6 +71,7 @@ export class TrackPieceToolbar extends SelectionToolbar<ITrackPieceToolbarProps,
             : "Simile is not applicable in the first bar";
 
         return [{
+            className: "trackPieceToolbar",
             actions: [{
                 id: "simile",
                 tooltip: simileTooltip,
@@ -89,59 +89,13 @@ export class TrackPieceToolbar extends SelectionToolbar<ITrackPieceToolbarProps,
     }
 
     /**
-     * Builds the header title of the given pieces: the instruments that play them and the measures they cover.
-     *
-     * @param pieces The addressed track pieces.
-     *
-     * @returns The two title parts.
-     */
-    private static titleOf(pieces: ITrackPieceTarget[]): ITrackPieceToolbarTitle {
-        const instruments = [...new Set(pieces.map((piece) => {
-            return piece.track.instrument.displayName;
-        }))];
-        const bars = [...new Set(pieces.map((piece) => {
-            return piece.measure.number;
-        }))];
-
-        bars.sort((left, right) => {
-            return left - right;
-        });
-
-        return { instrument: instruments.join(", "), position: TrackPieceToolbar.positionOf(bars) };
-    }
-
-    /**
-     * Names the bars a selection covers: one bar, a contiguous run of them, or their count.
-     *
-     * @param bars The covered bar numbers, ascending.
-     *
-     * @returns The name of the covered bars.
-     */
-    private static positionOf(bars: number[]): string {
-        if (bars.length === 0) {
-            return "";
-        }
-
-        if (bars.length === 1) {
-            return `Measure ${bars[0]}`;
-        }
-
-        const first = bars[0];
-        const last = bars[bars.length - 1];
-        if (last - first === bars.length - 1) {
-            return `Measures ${first} – ${last}`;
-        }
-
-        return `${bars.length} measures`;
-    }
-
-    /**
      * Resolves the track pieces the selection addresses.
      *
      * @returns The addressed pieces.
      */
     private selectedPieces(): ITrackPieceTarget[] {
-        const entries = [...this.props.selectionManager.currentSelection.values()];
+        const { selectionManager } = this.props;
+        const entries = [...selectionManager.currentSelection.values()];
         const pieces: ITrackPieceTarget[] = [];
         for (const entry of entries) {
             const { target } = entry;

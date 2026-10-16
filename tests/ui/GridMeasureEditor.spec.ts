@@ -675,6 +675,23 @@ describe("GridMeasureEditor input", { concurrent: false }, () => {
         expect(noteAtStep(measure, 3)).toBe("1");
     });
 
+    it("keeps the cleared cell selected, so the cursor stands where the note stood", () => {
+        const measure = model.arrangement!.tracks[0].measures[0];
+        setCellNote(model, trackId, 1, 2, "1");
+        input.selectionManager.replaceSelection([noteEntry(measure, { numerator: 2, denominator: 16 })]);
+
+        expect(editor.deleteForward()).toBe(true);
+
+        // The cell holds a rest now and stays selected: the view derives its cursor from a selection of one
+        // element, so the cursor keeps standing on the cell the delete emptied.
+        expect(noteAtStep(measure, 2)).toBeUndefined();
+        const entries = [...input.selectionManager.currentSelection.values()];
+        expect(entries).toHaveLength(1);
+
+        // The coordinates come back reduced, so step 2 of 16 cells reads as an eighth.
+        expect(SelectionSerializer.coordinatesOf(entries[0]).start).toEqual({ numerator: 1, denominator: 8 });
+    });
+
     it("opens the note action menu for the addressed cell and writes the picked style", () => {
         const measure = model.arrangement!.tracks[0].measures[0];
         setCellNote(model, trackId, 1, 2, "1");

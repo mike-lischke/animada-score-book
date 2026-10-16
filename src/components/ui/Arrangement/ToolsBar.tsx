@@ -62,10 +62,11 @@ export class ToolsBar extends UIComponent<IToolsBarProps, IToolsBarState> {
     }
 
     public override componentWillUnmount(): void {
+        const { activeTool } = this.state;
         requisitions.unregister("rangeArticulationToolChanged", this.handleToolChanged);
         this.endDrag();
 
-        if (this.state.activeTool !== RangeArticulationTool.None) {
+        if (activeTool !== RangeArticulationTool.None) {
             void requisitions.execute("rangeArticulationToolChanged", RangeArticulationTool.None);
         }
     }

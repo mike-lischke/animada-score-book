@@ -13,14 +13,15 @@ import { Icon } from "../framework/Icon.js";
 import { UIIcon } from "../framework/UIIcon.js";
 import { ChildAlignment, Orientation } from "../framework/ui-types.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
+import { TrackViewMode } from "../../../core/types/general.js";
 
 interface IArrangementActionBarProps extends ICommonUIProperties {
     editMode: boolean;
     mixerExpanded: boolean;
-    trackViewMode: "grid" | "staff";
+    trackViewMode: TrackViewMode;
     trackControlsRef: preact.RefObject<HTMLDivElement | null>;
     onToggleMixer: () => void;
-    onTrackViewModeChange: (mode: "grid" | "staff") => void;
+    onTrackViewModeChange: (mode: TrackViewMode) => void;
     barActionStrip: Omit<IBarActionStripProps, "actionViewportRef">;
 }
 
@@ -73,7 +74,7 @@ export class ArrangementActionBar extends UIComponent<IArrangementActionBarProps
         const mixerClassName = this.generateFinalClassName([
             "actionControlSwitch", "trackControlsToggle", this.classFromProperty(mixerExpanded, "is-active"),
         ]);
-        const staffMode = trackViewMode === "staff";
+        const staffMode = trackViewMode === TrackViewMode.Staff;
         const viewClassName = this.generateFinalClassName([
             "actionControlSwitch", "trackViewModeToggle", this.classFromProperty(staffMode, "is-active"),
         ]);
@@ -125,7 +126,7 @@ export class ArrangementActionBar extends UIComponent<IArrangementActionBarProps
     private handleTrackViewModeToggle = (event: MouseEvent | KeyboardEvent): void => {
         const { trackViewMode, onTrackViewModeChange } = this.props;
         event.stopPropagation();
-        onTrackViewModeChange(trackViewMode === "staff" ? "grid" : "staff");
+        onTrackViewModeChange(trackViewMode === TrackViewMode.Staff ? TrackViewMode.Grid : TrackViewMode.Staff);
     };
 
     private handleMixerToggle = (event: MouseEvent | KeyboardEvent): void => {

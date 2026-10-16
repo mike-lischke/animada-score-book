@@ -62,7 +62,8 @@ export class NoteStyleIcon extends UIComponent<INoteStyleIconProps> {
      * @returns The CSS class for a stick technique that requires a custom icon layout.
      */
     private stickTechniqueLayoutClass(): string | undefined {
-        const characteristics = this.props.noteStyle?.characteristics;
+        const { noteStyle } = this.props;
+        const characteristics = noteStyle?.characteristics;
 
         if (characteristics?.excitationMode !== ExcitationMode.Struck
             || !("stickTechnique" in characteristics)) {

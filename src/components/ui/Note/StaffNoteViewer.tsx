@@ -94,17 +94,11 @@ interface IDrawnAnchors {
     /** Drawn position of the first anchor, as a fraction of the whole bar. */
     firstAnchor?: IFraction;
 
-    /** Whether the first anchor belongs to a notehead, which reaches left of its anchor. */
-    firstIsNote: boolean;
-
     /** How far the first node's ink reaches left of its anchor, as a CSS length. */
     firstReach?: string;
 
     /** Drawn position of the last anchor, as a fraction of the whole bar. */
     lastAnchor?: IFraction;
-
-    /** Whether the last anchor belongs to a notehead, which ends on its anchor. */
-    lastIsNote: boolean;
 
     /** How far the last node's ink reaches right of its anchor, as a CSS length. */
     lastReach?: string;
@@ -137,14 +131,15 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
             scoreElementRegistry, repeatBars, articulations, rowGeometry,
             measureWidth = MeasureLayout.defaultWidth() } = this.props;
 
-        // A barline sits between two bars, so the marks on both sides of it decide which one it is. A repeat that
-        // only opens is the opening barline of the bar it opens, so the bar before it draws none at all.
+        // A repeat mark stands on the bar it belongs to: one that closes a section ends its bar, one that opens a
+        // section starts its bar, so two marks meeting at one boundary stay two barlines. A bar that carries no
+        // mark of its own draws no barline where the bar after it opens a section.
         const closesRepeat = repeatBars?.get(barNumber)?.end === true;
-        const opensRepeat = repeatBars?.get(barNumber + 1)?.start === true;
-        const boundaryBarline = ScoreSymbols.barlineAt({ closesRepeat, opensRepeat, endsScore: isLastBar });
-        const closingBarline = boundaryBarline === ScoreSymbol.RepeatStart ? undefined : boundaryBarline;
-        const opensWithRepeat = repeatBars?.get(barNumber)?.start === true
-            && repeatBars.get(barNumber - 1)?.end !== true;
+        const opensWithRepeat = repeatBars?.get(barNumber)?.start === true;
+        const nextOpensRepeat = repeatBars?.get(barNumber + 1)?.start === true;
+        const closingBarline = nextOpensRepeat && !closesRepeat
+            ? undefined
+            : ScoreSymbols.barlineAt({ closesRepeat, endsScore: isLastBar });
         const openingBarline = opensWithRepeat ? ScoreSymbol.RepeatStart : undefined;
         const className = this.generateFinalClassName([
             "staff-note-viewer",
@@ -206,47 +201,37 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
         // height of its own, so its barline stays at two staff spaces — the band `barlineShort` covers.
         const barlineHeight = Math.max((maxNoteLine - 1) * staffSpacePx, staffSpacePx * 2);
 
-        // Every track piece closes with a real barline; the repeat marks at its boundary decide which one, and a
-        // bar that opens a repeated section draws that barline itself.
+        // Every track piece closes with a real barline; the repeat marks at its boundary decide which one.
         const closingInkWidth = closingBarline === undefined ? "0px" : ScoreSymbols.inkBox(closingBarline).width;
 
         // A repeat barline reaches into the bar with its dots, so the notes keep clear of that ink and of the gap
         // the stylesheet states, which is what the dots would otherwise stand right against.
         let clearance = "0px";
-        if (closingBarline === ScoreSymbol.RepeatEnd || closingBarline === ScoreSymbol.RepeatBoth) {
+        if (closingBarline === ScoreSymbol.RepeatEnd) {
             clearance = `calc(${closingInkWidth} + var(--staff-repeat-dot-gap))`;
         } else if (isLastBar) {
             clearance = finalBarlineWidth;
         }
 
-        // The barline a bar opens with stands inside the bar it opens; so does the half of the barline a repeat
-        // draws centred on the boundary when it ends the bar before this one and opens this one at once.
-        const opensAfterRepeatEnd = repeatBars?.get(barNumber)?.start === true
-            && repeatBars.get(barNumber - 1)?.end === true;
-        const openingReach = openingBarline !== undefined
-            ? ScoreSymbols.inkBox(openingBarline).width
-            : (opensAfterRepeatEnd ? StaffNoteViewer.centredReach(ScoreSymbol.RepeatBoth) : undefined);
+        // The barline a bar opens with stands inside the bar it opens, so the notes start right of its ink.
+        const openingReach = openingBarline === undefined
+            ? undefined
+            : ScoreSymbols.inkBox(openingBarline).width;
 
         // A repeat that closes the bar reaches into it the same way, so the bar keeps that room free of notes too.
-        const closingReach = closingBarline === undefined
-            ? undefined
-            : StaffNoteViewer.repeatReach(closingBarline);
-
-        // A rest stands centred in its slot, and so does the mark of a simile: both keep the room a barline takes
-        // by themselves, so a bar reserves room only where a notehead stands next to the barline.
-        const anchors = StaffNoteViewer.drawnAnchors(nodes, {
-            numerator: 1,
-            denominator: 2 * scoreMetrics.stepsPerBar,
-        });
-        const closingRoom = closingReach === undefined || !anchors.lastIsNote
-            ? "0px"
-            : `calc(${closingReach} + var(--staff-repeat-dot-gap))`;
-        const firstHeadWidth = anchors.firstIsNote
-            ? StaffNoteViewer.firstNoteHeadWidth(nodes)
+        const closingReach = closingBarline === ScoreSymbol.RepeatEnd
+            ? ScoreSymbols.inkBox(closingBarline).width
             : undefined;
 
-        const openingRoom = this.openingBarlineRoom(openingReach, closingRoom, anchors, firstHeadWidth,
-            scoreMetrics.stepsPerBar);
+        // Both rooms are the barline's own ink plus the gap the stylesheet states for the dots it reaches into the
+        // bar with: the room a repeat takes is stated by the barline alone, so it takes the same room away in every
+        // bar and in every track of a measure, and no track's content moves.
+        const closingRoom = closingReach === undefined
+            ? "0px"
+            : `calc(${closingReach} + var(--staff-repeat-dot-gap))`;
+        const openingRoom = openingReach === undefined
+            ? "0px"
+            : `calc(${openingReach} + var(--staff-repeat-dot-gap))`;
 
         const closingBarlineElement = closingBarline === undefined
             ? null
@@ -344,35 +329,6 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
     }
 
     /**
-     * @param symbol The barline the bar closes with.
-     *
-     * @returns How far that barline reaches into the bar, in CSS length syntax: a repeat that closes the bar draws
-     * its ink on the bar's edge, a repeat that ends and opens at once draws it centred on that edge.
-     */
-    private static repeatReach(symbol: ScoreSymbol): string | undefined {
-        if (symbol === ScoreSymbol.RepeatEnd) {
-            return ScoreSymbols.inkBox(symbol).width;
-        }
-
-        if (symbol === ScoreSymbol.RepeatBoth) {
-            return StaffNoteViewer.centredReach(symbol);
-        }
-
-        return undefined;
-    }
-
-    /**
-     * @param symbol The barline a caller draws centred on a bar's edge.
-     *
-     * @returns How far that barline reaches into the bar beyond the edge, in CSS length syntax.
-     */
-    private static centredReach(symbol: ScoreSymbol): string {
-        const ink = ScoreSymbols.inkBox(symbol).width;
-
-        return `calc(${ink} - round(nearest, ${ink} / 2, 1px))`;
-    }
-
-    /**
      * Finds the drawn positions of the first and last anchor of a list of nodes, as fractions of the bar the nodes
      * belong to. A notehead is drawn half a grid step behind its onset, a rest sits centred in its slot. Rests count
      * as children: a group that starts or ends with one still has to be covered over its full extent.
@@ -380,8 +336,8 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
      * @param nodes The nodes to inspect.
      * @param halfStep Half a grid step, the offset a notehead is drawn at behind its onset.
      *
-     * @returns The first and last anchor and whether they belong to a notehead, or undefined anchors when the
-     * nodes hold no child.
+     * @returns The first and last anchor with the ink they reach beyond it, or undefined anchors when the nodes
+     * hold no child.
      */
     private static drawnAnchors(nodes: IStaffTreeNode[], halfStep: IFraction): IDrawnAnchors {
         let firstNode: IStaffNoteNode | undefined;
@@ -416,10 +372,8 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
 
         return {
             firstAnchor,
-            firstIsNote: firstNode?.noteStyle !== undefined,
             firstReach: StaffNoteViewer.firstReachOf(firstNode),
             lastAnchor,
-            lastIsNote: lastNode?.noteStyle !== undefined,
             lastReach: StaffNoteViewer.lastReachOf(lastNode),
         };
     }
@@ -457,31 +411,6 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
     }
 
     /**
-     * @param nodes The nodes to search.
-     *
-     * @returns The width of the ink of the first notehead, in CSS length syntax, or undefined when the nodes hold
-     * no note.
-     */
-    private static firstNoteHeadWidth(nodes: IStaffTreeNode[]): string | undefined {
-        for (const node of nodes) {
-            if (node.kind === StaffNodeKind.Subdivision) {
-                const nested = StaffNoteViewer.firstNoteHeadWidth(node.children);
-                if (nested !== undefined) {
-                    return nested;
-                }
-
-                continue;
-            }
-
-            if (node.noteStyle !== undefined) {
-                return ScoreSymbols.inkBox(ScoreSymbols.notehead(node.displayType, node.glyph.length)).width;
-            }
-        }
-
-        return undefined;
-    }
-
-    /**
      * @param fraction The fraction to read.
      *
      * @returns The fraction as a number.
@@ -507,46 +436,6 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
      */
     private static parameterOf(bar: number, fraction: IFraction): number {
         return (bar - 1) + (fraction.numerator / fraction.denominator);
-    }
-
-    /**
-     * The room the notes of a bar keep before the barline it opens with. A barline a bar opens with reaches into
-     * the bar with its dots, so the notes start right of that ink. How far right is the room the bar's last note
-     * leaves before the barline it closes with, on top of the room the bar keeps free for that barline, which is
-     * what makes both sides of a repeated section look alike. The barline's own ink and the gap the stylesheet
-     * states are the smallest room, and a notehead reaches left of its anchor, so the room the first head already
-     * takes is added back.
-     *
-     * @param reach How far the barline reaches into the bar, or undefined when no barline reaches into it.
-     * @param closingRoom The room the bar keeps free before the barline it closes with.
-     * @param anchors The drawn anchors of the bar's first and last ink.
-     * @param firstHeadWidth The width of the first notehead's ink, or undefined when the bar opens without a note.
-     * @param stepsPerBar The number of base-grid steps in a bar.
-     *
-     * @returns The room, in CSS length syntax.
-     */
-    private openingBarlineRoom(reach: string | undefined, closingRoom: string, anchors: IDrawnAnchors,
-        firstHeadWidth: string | undefined, stepsPerBar: number): string {
-        if (reach === undefined || firstHeadWidth === undefined || anchors.firstAnchor === undefined
-            || !anchors.firstIsNote) {
-            return "0px";
-        }
-
-        const ink = `calc(${reach} + var(--staff-repeat-dot-gap))`;
-
-        // The room the last anchor leaves before the barline the bar closes with, or the barline's own ink when the
-        // bar holds no child at all. A rest leaves room the same way a note does — it sits centred in its slot —
-        // so only the barline's own ink is what a bar without a last anchor falls back on.
-        const { lastAnchor } = anchors;
-        const room = lastAnchor === undefined
-            ? ink
-            : `max(${ink}, calc(${100 - StaffNoteViewer.percentOf(lastAnchor)}% + ${closingRoom}))`;
-
-        // A notehead is drawn half a grid step behind the anchor of its slot, so what the first head already takes
-        // of the room is subtracted. Never more than half the bar is reserved, so the notes keep a place to stand.
-        const headOverhang = `calc(${100 / (2 * stepsPerBar)}% - ${firstHeadWidth})`;
-
-        return `max(0px, min(50%, calc(${room} - ${headOverhang})))`;
     }
 
     /**

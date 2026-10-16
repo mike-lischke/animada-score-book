@@ -6,6 +6,7 @@ import { TrackControls, type ITrackControlsProperties } from "../../src/componen
 import { ScoreBookDataModel } from "../../src/core/ScoreBookDataModel.js";
 import { SelectionManager } from "../../src/ui/SelectionManager.js";
 import { createInstrument } from "../unit-test-helpers.js";
+import { TrackViewMode } from "../../src/core/types/general.js";
 
 describe("TrackControls", { concurrent: false }, () => {
     let renderResult: RenderResult | undefined;
@@ -19,7 +20,7 @@ describe("TrackControls", { concurrent: false }, () => {
         selectionManager = new SelectionManager(dataModel);
 
         renderResult = render(<TrackControls tracks={arrangement.tracks} selectionManager={selectionManager}
-            mixerExpanded={false} trackViewMode="grid" {...overrides} />);
+            mixerExpanded={false} trackViewMode={TrackViewMode.Grid} {...overrides} />);
 
         return renderResult.container;
     };
@@ -40,7 +41,7 @@ describe("TrackControls", { concurrent: false }, () => {
         const container = renderControls({
             className: "zen-track-labels",
             mixerExpanded: true,
-            trackViewMode: "staff",
+            trackViewMode: TrackViewMode.Staff,
             labelsOnly: true,
             innerRef: createRef<HTMLDivElement>(),
             rowGeometries: new Map(),

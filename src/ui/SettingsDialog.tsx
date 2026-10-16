@@ -299,16 +299,17 @@ export class SettingsDialog extends UIComponent<ISettingsDialogProperties, ISett
     }
 
     public open(): void {
+        const { fontLoader } = this.props;
         const currentSettings = AppStorage.loadUISettings() ?? {};
         const previousSettings = JSON.parse(JSON.stringify(currentSettings)) as IUISettings;
         currentSettings.theme ??= "Light+";
-        this.setState({ currentSettings, previousSettings, fontChoices: this.props.fontLoader.choices }, () => {
+        this.setState({ currentSettings, previousSettings, fontChoices: fontLoader.choices }, () => {
             this.dialogRef.current?.open();
         });
 
         // A sample draws in its own font, so the list is refreshed once every font has arrived.
-        void this.props.fontLoader.preload().then(() => {
-            this.setState({ fontChoices: this.props.fontLoader.choices });
+        void fontLoader.preload().then(() => {
+            this.setState({ fontChoices: fontLoader.choices });
         });
     }
 
@@ -342,12 +343,13 @@ export class SettingsDialog extends UIComponent<ISettingsDialogProperties, ISett
     }
 
     private renderMusicFontRow(): ComponentChild {
+        const { fontChoices } = this.state;
         const currentFont = this.currentFont();
         if (currentFont === undefined) {
             return undefined;
         }
 
-        const fontItems: IDropdownItem[] = this.state.fontChoices.map((choice) => {
+        const fontItems: IDropdownItem[] = fontChoices.map((choice) => {
             return {
                 label: choice.name,
                 detail: this.renderFontSample(choice),
@@ -479,8 +481,9 @@ export class SettingsDialog extends UIComponent<ISettingsDialogProperties, ISett
      * @returns The font the score is drawn with, which is the one the row shows and explains.
      */
     private currentFont(): ISmuflFontChoice | undefined {
+        const { fontLoader } = this.props;
         const { currentSettings, fontChoices } = this.state;
-        const id = currentSettings.musicFont ?? this.props.fontLoader.activeId;
+        const id = currentSettings.musicFont ?? fontLoader.activeId;
 
         const picked = fontChoices.find((choice) => {
             return choice.id === id;
@@ -526,8 +529,9 @@ export class SettingsDialog extends UIComponent<ISettingsDialogProperties, ISett
             return;
         }
 
+        const { fontLoader } = this.props;
         const { currentSettings } = this.state;
-        currentSettings.musicFont = this.props.fontLoader.activeId;
+        currentSettings.musicFont = fontLoader.activeId;
         this.setState({ currentSettings }, () => {
             this.temporarySettingsChange();
         });

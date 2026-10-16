@@ -5,7 +5,7 @@
 
 import type { IUISettings } from "../core/AppStorage.js";
 import type { INoteValue } from "../core/rest-notation.js";
-import type { IFraction, EditEntryMode } from "../core/types/general.js";
+import type { IFraction, EditEntryMode, TrackViewMode } from "../core/types/general.js";
 import type { Articulation } from "../core/articulation.js";
 import type { ISbDmScore, ISbDmScoreFolder, ISbDmTrack, ScoreBookChangeReason } from "../core/ScoreBookDataModel.js";
 import type { PlayerPlayState } from "../player/ArrangementPlayer.js";
@@ -86,7 +86,7 @@ export type IRequisitionCallbackValues<K extends keyof IRequestTypeMap> = Parame
 /** A map of request types to their corresponding callback signatures. A callback must only have a single parameter. */
 export interface IRequestTypeMap {
     "settingsChanged": (settings: IUISettings) => Promise<boolean>;
-    "trackViewModeToggled": (mode: "grid" | "staff") => Promise<boolean>;
+    "trackViewModeToggled": (mode: TrackViewMode) => Promise<boolean>;
 
     /** Refresh staff decorations after a new measure window arrives or rendered rows move. */
     "staffWindowChanged": SimpleCallback;

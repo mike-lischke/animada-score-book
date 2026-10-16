@@ -52,7 +52,7 @@ import { ArrangementMigrator } from "./core/serialisation/migration/ArrangementM
 import { stringifyPackedArrangement, tryParsePackedArrangement } from "./core/serialisation/snapshot-packing.js";
 import { SmuflFontLoader } from "./core/smufl/SmuflFontLoader.js";
 import { mixerStepIndex, tutorialSteps } from "./core/TutorialSteps.js";
-import { EditEntryMode, type IArrangementSnapshot } from "./core/types/general.js";
+import { EditEntryMode, TrackViewMode, type IArrangementSnapshot } from "./core/types/general.js";
 import { SelectionGranularity } from "./ui/SelectionSerializer.js";
 import { UndoManager } from "./core/UndoManager.js";
 import { convertErrorToString } from "./core/utils.js";
@@ -101,7 +101,7 @@ interface IAppState {
     sidebarOpen: boolean;
 
     /** The active arrangement view mode (grid or staff notation). */
-    trackViewMode: "grid" | "staff";
+    trackViewMode: TrackViewMode;
 
     /**
      * The entry mode the staff view was last set to. The grid view always works with overwrite, so the
@@ -183,7 +183,8 @@ export class App extends UIComponent<{}, IAppState> {
             editMode: false,
             zenMode: false,
             sidebarOpen: false,
-            trackViewMode: AppStorage.loadUISettings()?.viewSettings?.arrangementViewSettings?.displayMode ?? "grid",
+            trackViewMode: AppStorage.loadUISettings()?.viewSettings?.arrangementViewSettings?.displayMode
+                ?? TrackViewMode.Grid,
             preferredEntryMode: AppStorage.loadUISettings()?.entryMode ?? EditEntryMode.Insert,
             printing: false,
             notificationState: { newCount: 0, totalCount: 0, silent: false, showHistory: false },
@@ -464,7 +465,7 @@ export class App extends UIComponent<{}, IAppState> {
         const appHeader = zenMode
             ? undefined : this.renderAppHeader(headerNavigation, arrangementIdentity, headerActions);
         let toolsBar: ComponentChild;
-        if (editMode && trackViewMode === "staff") {
+        if (editMode && trackViewMode === TrackViewMode.Staff) {
             toolsBar = <ToolsBar entryMode={entryMode} />;
         }
 
@@ -1261,7 +1262,7 @@ export class App extends UIComponent<{}, IAppState> {
         }
 
         const settings = AppStorage.loadUISettings() ?? {};
-        const viewMode = settings.viewSettings?.arrangementViewSettings?.displayMode ?? "grid";
+        const viewMode = settings.viewSettings?.arrangementViewSettings?.displayMode ?? TrackViewMode.Grid;
 
         const availableTracks = this.dataModel.arrangement.tracks.map((track) => {
             return { id: track.id, name: track.name || track.instrument.displayName };
@@ -1358,14 +1359,15 @@ export class App extends UIComponent<{}, IAppState> {
         this.applyThemePreference(settings.theme);
 
         const zoom = settings.viewSettings?.arrangementViewSettings?.zoomLevel ?? 100;
-        if (zoom !== this.state.zoom) {
+        const { zoom: currentZoom } = this.state;
+        if (zoom !== currentZoom) {
             this.setState({ zoom });
         }
 
         return Promise.resolve(true);
     };
 
-    private handleTrackViewModeToggled = (mode: "grid" | "staff"): Promise<boolean> => {
+    private handleTrackViewModeToggled = (mode: TrackViewMode): Promise<boolean> => {
         this.setState({ trackViewMode: mode });
 
         return Promise.resolve(true);
@@ -1387,8 +1389,8 @@ export class App extends UIComponent<{}, IAppState> {
      *
      * @returns The entry mode in effect.
      */
-    private effectiveEntryMode(viewMode: "grid" | "staff", preferred: EditEntryMode): EditEntryMode {
-        return viewMode === "staff" ? preferred : EditEntryMode.Overwrite;
+    private effectiveEntryMode(viewMode: TrackViewMode, preferred: EditEntryMode): EditEntryMode {
+        return viewMode === TrackViewMode.Staff ? preferred : EditEntryMode.Overwrite;
     }
 
     private handleSystemThemeChange = (): void => {
@@ -1846,13 +1848,14 @@ export class App extends UIComponent<{}, IAppState> {
 
     private async pasteSelection(): Promise<void> {
         const entries = [...this.selectionManager.currentSelection.values()];
+        const { trackViewMode } = this.state;
 
         // The grid shortens content that does not fit its cells, while the staff keeps the copied
         // notes as they are and lets the following notes give way. The display mode is read from the
         // same setting the viewers render with, because the state value only follows the toggle.
         const displayMode = AppStorage.loadUISettings()?.viewSettings?.arrangementViewSettings?.displayMode
-            ?? this.state.trackViewMode;
-        const overflowMode = displayMode === "staff"
+            ?? trackViewMode;
+        const overflowMode = displayMode === TrackViewMode.Staff
             ? PasteOverflowMode.Shift
             : PasteOverflowMode.Truncate;
 
@@ -2375,11 +2378,12 @@ export class App extends UIComponent<{}, IAppState> {
      * @returns How the current score stands towards the backend: unsaved changes win over a prior save.
      */
     private arrangementSaveState(): ArrangementSaveState {
+        const { scoreSaved } = this.state;
         if (this.undoManager?.canUndo) {
             return ArrangementSaveState.Unsaved;
         }
 
-        return this.state.scoreSaved ? ArrangementSaveState.Saved : ArrangementSaveState.Unchanged;
+        return scoreSaved ? ArrangementSaveState.Saved : ArrangementSaveState.Unchanged;
     }
 
 }

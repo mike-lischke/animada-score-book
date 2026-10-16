@@ -5,9 +5,10 @@
 
 import type { ComponentChild } from "preact";
 
+import type { ISbDmTrack } from "../../../core/ScoreBookDataModel.js";
 import { Button } from "../framework/Button.js";
 import { Container } from "../framework/Container.js";
-import { ChildAlignment, Orientation } from "../framework/ui-types.js";
+import { ChildAlignment, ChildWrap, Orientation } from "../framework/ui-types.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
 
 /** What a selection toolbar acts on, as its header names it. */
@@ -37,16 +38,31 @@ export interface ISelectionToolbarAction {
     onClick?: () => void;
 }
 
-/** A group of actions a selection toolbar draws as one tray. */
+/** A section a selection toolbar draws as one row of controls, captioned above it. */
 export interface ISelectionToolbarSection {
     /**
-     * The caption above the section, which tells the trays of a toolbar that holds several of them apart. A
+     * The caption above the section, which tells the rows of a toolbar that holds several of them apart. A
      * toolbar that holds one section draws no caption.
      */
     label?: string;
 
+    /** A short label the section shows at the end of its caption, e.g. the group its controls belong to. */
+    badge?: string;
+
+    /** Extra class of the section's row, which tells the rows carrying controls of their own apart. */
+    className?: string;
+
     /** The actions of the section, in the order they appear. */
-    actions: ISelectionToolbarAction[];
+    actions?: ISelectionToolbarAction[];
+
+    /** Controls the section brings itself, which the row draws in place of actions. */
+    content?: ComponentChild;
+
+    /**
+     * Whether the row sits on the card's tray, the surface the note styles read as the palette of the addressed
+     * instrument. A section that lists actions always sits on one.
+     */
+    tray?: boolean;
 }
 
 /**
@@ -62,7 +78,48 @@ export abstract class SelectionToolbar<P extends ICommonUIProperties, S> extends
         const header = this.renderHeader();
         const sections = this.renderSections();
 
-        return this.renderSurface(<>{header}{sections}</>);
+        const card = (
+            <>
+                {header}
+                <Container
+                    className="selectionToolbarSections"
+                    orientation={Orientation.LeftToRight}
+                    mainAlignment={ChildAlignment.SpaceBetween}
+                    crossAlignment={ChildAlignment.Start}
+                    wrap={ChildWrap.Wrap}
+                    gap={10}
+                >
+                    {sections}
+                </Container>
+            </>
+        );
+
+        return this.renderSurface(card);
+    }
+
+    /**
+     * Names the elements a toolbar acts on from the tracks that hold them and the bars they cover.
+     *
+     * @param tracks The tracks the addressed elements belong to.
+     * @param bars The covered bar numbers, 0 for a track selection, which spans the whole score.
+     *
+     * @returns The title the card's header shows.
+     */
+    protected static titleOf(tracks: ISbDmTrack[], bars: number[]): ISelectionToolbarTitle {
+        const instruments = [...new Set(tracks.map((track) => {
+            return track.instrument.displayName;
+        }))];
+
+        // A track selection covers every bar, so naming the bars of the others would misstate it.
+        const namesBar = !bars.some((bar) => {
+            return bar === 0;
+        });
+
+        return {
+            instrument: instruments.join(", "),
+            position: namesBar && bars.length > 0 ? SelectionToolbar.positionOf(bars) : undefined,
+            color: tracks[0]?.instrument.color,
+        };
     }
 
     /**
@@ -90,6 +147,52 @@ export abstract class SelectionToolbar<P extends ICommonUIProperties, S> extends
      */
     protected renderSurface(card: ComponentChild): ComponentChild {
         return card;
+    }
+
+    /**
+     * Names the bars a selection covers: one bar, a contiguous run of them, or their count.
+     *
+     * @param bars The covered bar numbers.
+     *
+     * @returns The name of the covered bars.
+     */
+    private static positionOf(bars: number[]): string {
+        const measures = [...new Set(bars)].sort((left, right) => {
+            return left - right;
+        });
+
+        if (measures.length === 1) {
+            return `Measure ${measures[0]}`;
+        }
+
+        const first = measures[0];
+        const last = measures[measures.length - 1];
+        if (last - first === measures.length - 1) {
+            return `Measures ${first} – ${last}`;
+        }
+
+        return `${measures.length} measures`;
+    }
+
+    /**
+     * @param section The section to draw.
+     *
+     * @returns The classes of the section's box.
+     */
+    private static boxClassesOf(section: ISelectionToolbarSection): string {
+        // A section on the tray reads as the palette of the addressed elements, so it takes a row of its own.
+        return SelectionToolbar.sitsOnTray(section)
+            ? "selectionToolbarGroup is-tray"
+            : "selectionToolbarGroup";
+    }
+
+    /**
+     * @param section The section to draw.
+     *
+     * @returns True when the section's row sits on the card's tray.
+     */
+    private static sitsOnTray(section: ISelectionToolbarSection): boolean {
+        return section.actions !== undefined || section.tray === true;
     }
 
     private renderHeader(): ComponentChild {
@@ -123,22 +226,119 @@ export abstract class SelectionToolbar<P extends ICommonUIProperties, S> extends
     private renderSections(): ComponentChild[] {
         const sections = this.toolbarSections;
 
-        // Only a toolbar that holds several sections captions them, so its trays can be told apart.
+        // Only a toolbar that holds several sections captions them, so its rows can be told apart.
         const captions = sections.length > 1;
         const parts: ComponentChild[] = [];
         for (const section of sections) {
-            const { label, actions } = section;
-            if (captions && label !== undefined) {
-                parts.push(<div className="selectionToolbarSection">{label}</div>);
-            }
-
-            parts.push(this.renderTray(actions));
+            parts.push(this.renderSection(section, captions));
         }
 
         return parts;
     }
 
-    private renderTray(actions: ISelectionToolbarAction[]): ComponentChild {
+    /**
+     * Draws one section: the caption naming it and the row of its controls.
+     *
+     * @param section The section to draw.
+     * @param captioned Whether the card captions its sections.
+     *
+     * @returns The section's box.
+     */
+    private renderSection(section: ISelectionToolbarSection, captioned: boolean): ComponentChild {
+        let caption: ComponentChild;
+        if (captioned) {
+            caption = this.renderCaption(section);
+        }
+
+        return (
+            <Container
+                className={SelectionToolbar.boxClassesOf(section)}
+                orientation={Orientation.TopDown}
+                crossAlignment={ChildAlignment.Stretch}
+                gap={6}
+            >
+                {caption}
+                {this.renderRow(section)}
+            </Container>
+        );
+    }
+
+    /**
+     * Draws the row that captions a section: the caption naming it and the short label it states.
+     *
+     * @param section The section to caption.
+     *
+     * @returns The caption row, or undefined when the section states neither.
+     */
+    private renderCaption(section: ISelectionToolbarSection): ComponentChild {
+        const { label, badge } = section;
+        if (label === undefined && badge === undefined) {
+            return undefined;
+        }
+
+        let caption: ComponentChild;
+        if (label !== undefined) {
+            caption = <div className="selectionToolbarSection">{label}</div>;
+        }
+
+        let badgeLabel: ComponentChild;
+        if (badge !== undefined) {
+            badgeLabel = <span className="selectionToolbarBadge">{badge}</span>;
+        }
+
+        return (
+            <Container
+                className="selectionToolbarCaption"
+                orientation={Orientation.LeftToRight}
+                mainAlignment={ChildAlignment.SpaceBetween}
+                crossAlignment={ChildAlignment.Center}
+            >
+                {caption}
+                {badgeLabel}
+            </Container>
+        );
+    }
+
+    /**
+     * Draws the row of one section: the controls it brings itself, or the actions it lists.
+     *
+     * @param section The section to draw.
+     *
+     * @returns The section's row.
+     */
+    private renderRow(section: ISelectionToolbarSection): ComponentChild {
+        const { actions, className, content } = section;
+
+        let body: ComponentChild;
+        if (content !== undefined) {
+            body = content;
+        } else {
+            body = this.renderActions(actions ?? []);
+        }
+
+        const rowClasses = ["selectionToolbarActions"];
+        if (className !== undefined) {
+            rowClasses.push(className);
+        }
+
+        if (SelectionToolbar.sitsOnTray(section)) {
+            rowClasses.push("selectionToolbarTray");
+        }
+
+        return (
+            <Container
+                className={rowClasses.join(" ")}
+                orientation={Orientation.LeftToRight}
+                crossAlignment={ChildAlignment.Center}
+                wrap={ChildWrap.Wrap}
+                gap={6}
+            >
+                {body}
+            </Container>
+        );
+    }
+
+    private renderActions(actions: ISelectionToolbarAction[]): ComponentChild[] {
         const buttons = actions.map((action) => {
             let className = "selectionToolbarAction";
             if (action.destructive === true) {
@@ -159,14 +359,6 @@ export abstract class SelectionToolbar<P extends ICommonUIProperties, S> extends
             );
         });
 
-        return (
-            <Container
-                className="selectionToolbarActions"
-                orientation={Orientation.LeftToRight}
-                crossAlignment={ChildAlignment.Center}
-            >
-                {buttons}
-            </Container>
-        );
+        return buttons;
     }
 }

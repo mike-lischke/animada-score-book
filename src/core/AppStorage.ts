@@ -6,7 +6,7 @@
 import { uuid } from "../string-helpers.js";
 import type { Articulation } from "./articulation.js";
 import type { INoteValue } from "./rest-notation.js";
-import type { EditEntryMode, IPoint } from "./types/general.js";
+import type { EditEntryMode, IPoint, TrackViewMode } from "./types/general.js";
 
 export interface IArrangementViewSettings {
     /** The scroll position of the arrangement in its viewer. */
@@ -16,7 +16,7 @@ export interface IArrangementViewSettings {
     zoomLevel?: number;
 
     /** The current note display mode of the arrangement viewer. */
-    displayMode?: "grid" | "staff";
+    displayMode?: TrackViewMode;
 
     /** Whether to animate transitions when toggling between grid and staff mode. */
     animateModeTransitions?: boolean;

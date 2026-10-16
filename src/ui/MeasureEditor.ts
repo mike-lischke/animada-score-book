@@ -712,8 +712,9 @@ export abstract class MeasureEditor {
 
     /**
      * Clears the content the selection describes. A cleared piece still exists, so a selection that addresses
-     * one stays and its tools remain usable. Notes go with the content they hold, so a selection that addresses
-     * them is dropped.
+     * one stays and its tools remain usable. A single note cell stays as well: the rest that takes its place
+     * holds the same span, so the cursor stands where the deleted note stood. A selection naming several notes
+     * is dropped instead, because the notes it holds are gone.
      *
      * @returns True when content was deleted.
      */
@@ -723,7 +724,10 @@ export abstract class MeasureEditor {
             return false;
         }
 
-        if (entries.some((entry) => {
+        const only = entries.length === 1 ? entries[0] : undefined;
+        if (only !== undefined && addressesNoteCells(only.target)) {
+            this.selectionManager.replaceSelection(this.refreshSelection(entries));
+        } else if (entries.some((entry) => {
             return addressesNoteCells(entry.target);
         })) {
             this.selectionManager.clearSelection();

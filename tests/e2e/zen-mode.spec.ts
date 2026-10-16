@@ -2,18 +2,13 @@ import { expect, test, type Locator, type Page } from "@playwright/test";
 
 import { stringifyPackedArrangement } from "../../src/core/serialisation/snapshot-packing.js";
 import { arrangementSnapshotVersion } from "../../src/core/serialisation/snapshots.js";
-import { EditEntryMode, type IArrangementSnapshot } from "../../src/core/types/general.js";
+import { EditEntryMode, TrackViewMode, type IArrangementSnapshot } from "../../src/core/types/general.js";
 import type {
     ISerialisedSelectionEntry, ISerialisedSelectionState,
 } from "../../src/ui/SelectionSerializer.js";
 import { ensureStaffBarRendered, findStaffMeasure, readStoredCurrentScore, routeApi } from "./e2e-test-helpers.js";
 
-enum ViewerMode {
-    Grid = "grid",
-    Staff = "staff",
-}
-
-const openScore = async (page: Page, mode: ViewerMode, repeatSecondBar = false): Promise<void> => {
+const openScore = async (page: Page, mode: TrackViewMode, repeatSecondBar = false): Promise<void> => {
     const snapshot: IArrangementSnapshot = {
         version: arrangementSnapshotVersion,
         title: "E2E Zen Score",
@@ -78,8 +73,8 @@ const selectBar = async (page: Page, bar: number): Promise<void> => {
     await expect(button).toHaveAttribute("aria-pressed", "true");
 };
 
-const firstNote = (page: Page, mode: ViewerMode): Locator => {
-    return page.locator(mode === ViewerMode.Grid ? ".note-viewer" : ".staff-note-head").first();
+const firstNote = (page: Page, mode: TrackViewMode): Locator => {
+    return page.locator(mode === TrackViewMode.Grid ? ".note-viewer" : ".staff-note-head").first();
 };
 
 const storedSelection = async (page: Page): Promise<string | undefined> => {
@@ -150,7 +145,7 @@ test.beforeEach(async ({ page }) => {
     await routeApi(page);
 });
 
-for (const mode of [ViewerMode.Grid, ViewerMode.Staff]) {
+for (const mode of [TrackViewMode.Grid, TrackViewMode.Staff]) {
     test.describe(`Zen mode in ${mode}`, () => {
         test("hides editing controls and restores the original selection", async ({ page }) => {
             await openScore(page, mode);
@@ -265,7 +260,7 @@ for (const mode of [ViewerMode.Grid, ViewerMode.Staff]) {
             await openScore(page, mode);
 
             for (const bar of [1, 3]) {
-                const measure = mode === ViewerMode.Staff
+                const measure = mode === TrackViewMode.Staff
                     ? await findStaffMeasure(page, bar) : page.locator(".grid-measure-viewer").nth(bar - 1);
                 const row = measure.locator(".grid-measure-row, .staff-measure-track-row").first();
                 await row.scrollIntoViewIfNeeded();
@@ -350,7 +345,7 @@ for (const mode of [ViewerMode.Grid, ViewerMode.Staff]) {
 }
 
 test("loops the filled range without leaving a gap", async ({ page }) => {
-    await openScore(page, ViewerMode.Staff);
+    await openScore(page, TrackViewMode.Staff);
     await enterZen(page);
     await selectBar(page, 1);
     await selectBar(page, 3);

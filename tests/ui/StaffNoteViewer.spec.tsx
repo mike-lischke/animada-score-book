@@ -973,7 +973,8 @@ describe("StaffNoteViewer barlines", { concurrent: false }, () => {
     });
 
     it("draws a repeat that only opens as the barline of the bar it opens", () => {
-        // The bar before it keeps none: a barline sits between two bars and a repeat is drawn once.
+        // The bar before it keeps none: a bar that carries no mark of its own draws no barline where the bar
+        // after it opens a section.
         expect(renderBarline(1, { 2: { start: true } }).querySelector(".staff-note-viewer-barline")).toBeNull();
 
         const viewer = renderBarline(2, { 2: { start: true } });
@@ -984,44 +985,50 @@ describe("StaffNoteViewer barlines", { concurrent: false }, () => {
         expect(partsOf(leading)).toEqual(["thick", "thin", "dots"]);
         expect(viewer.style.getPropertyValue("--staff-note-clearance")).toBe("0px");
 
-        // The barline reaches into the bar, so the notes keep the room the last note of the bar (a sixteenth in
-        // this fixture, which leaves 96.875 % of the bar) leaves before the barline at the other end, less the
-        // half grid step the first notehead reaches left of its anchor.
-        const room = viewer.style.getPropertyValue("--staff-opening-barline-room");
-        expect(room).toContain("max(calc(var(--barline-repeat-width) + var(--staff-repeat-dot-gap)),");
-        expect(room).toContain("96.875%");
-        expect(room).toContain("- calc(3.125% - var(--glyph-ink-width-noteheadblack))");
+        // The barline stands inside the bar it opens, so the bar keeps its own ink plus the gap its dots keep free
+        // of notes.
+        expect(viewer.style.getPropertyValue("--staff-opening-barline-room"))
+            .toBe("calc(var(--barline-repeat-width) + var(--staff-repeat-dot-gap))");
         expect(viewer.style.getPropertyValue("--staff-closing-barline-room")).toBe("0px");
     });
 
-    it("keeps the notes of the next bar clear of the half of a barline that straddles the boundary", () => {
-        const viewer = renderBarline(2, { 1: { end: true }, 2: { start: true } });
+    it("keeps the room a repeat takes the same whatever the bar holds", () => {
+        const withNotes = renderBarline(1, { 1: { start: true, end: true } });
+        const openingRoom = withNotes.style.getPropertyValue("--staff-opening-barline-room");
+        const closingRoom = withNotes.style.getPropertyValue("--staff-closing-barline-room");
 
-        // The barline stands centred on the boundary, so its inner half reaches into this bar.
-        expect(viewer.style.getPropertyValue("--staff-opening-barline-room"))
-            .toContain("var(--barline-repeat-both-width)");
-    });
+        expect(openingRoom).toBe("calc(var(--barline-repeat-width) + var(--staff-repeat-dot-gap))");
+        expect(closingRoom).toBe("calc(var(--barline-repeat-width) + var(--staff-repeat-dot-gap))");
 
-    it("leaves the room a repeat barline takes to the rest a bar holds", () => {
-        // A rest stands centred in its slot and keeps that room by itself, so a bar of rests is not shifted.
-        const viewer = renderBarline(1, { 1: { start: true, end: true } }, false,
+        // A bar holding nothing but a whole rest keeps the same room: the barline states the room, so no track's
+        // content moves when a repeat is set.
+        const withRest = renderBarline(1, { 1: { start: true, end: true } }, false,
             [event(fraction(0, 1), fraction(1, 1))]);
 
-        expect(viewer.style.getPropertyValue("--staff-opening-barline-room")).toBe("0px");
-        expect(viewer.style.getPropertyValue("--staff-closing-barline-room")).toBe("0px");
+        expect(withRest.style.getPropertyValue("--staff-opening-barline-room")).toBe(openingRoom);
+        expect(withRest.style.getPropertyValue("--staff-closing-barline-room")).toBe(closingRoom);
     });
 
-    it("draws one barline for a repeat that closes where the next one opens", () => {
-        const viewer = renderBarline(1, { 1: { end: true }, 2: { start: true } });
-        const barline = viewer.querySelector(".staff-note-viewer-barline")!;
+    it("draws the repeat that closes a bar and the one that opens the next as two barlines", () => {
+        const marks = { 1: { end: true }, 2: { start: true } };
 
-        // The ink straddles the boundary, so the dots of both repeats hang on the strokes in the middle.
-        expect(partsOf(barline)).toEqual(["dots", "thin", "thick", "thin", "dots"]);
-        expect(barline.classList.contains("staff-note-viewer-barline-centred")).toBe(true);
+        // The bar the section closes at ends with its own repeat, which reaches into it from the right.
+        const closing = renderBarline(1, marks);
+        const endBarline = closing.querySelector(".staff-note-viewer-barline-end")!;
 
-        // Its inner half reaches into the bar, so the bar keeps the room of that ink free of notes.
-        expect(viewer.style.getPropertyValue("--staff-closing-barline-room"))
-            .toContain("var(--barline-repeat-both-width)");
+        expect(partsOf(endBarline)).toEqual(["dots", "thin", "thick"]);
+        expect(closing.querySelector(".staff-note-viewer-barline-start")).toBeNull();
+        expect(closing.style.getPropertyValue("--staff-closing-barline-room"))
+            .toBe("calc(var(--barline-repeat-width) + var(--staff-repeat-dot-gap))");
+
+        // The bar the next section opens at starts with its own repeat, which reaches into it from the left.
+        const opening = renderBarline(2, marks);
+        const startBarline = opening.querySelector(".staff-note-viewer-barline-start")!;
+
+        expect(partsOf(startBarline)).toEqual(["thick", "thin", "dots"]);
+        expect(opening.querySelector(".staff-note-viewer-barline-centred")).toBeNull();
+        expect(opening.style.getPropertyValue("--staff-opening-barline-room"))
+            .toBe("calc(var(--barline-repeat-width) + var(--staff-repeat-dot-gap))");
     });
 });
 

@@ -5,7 +5,7 @@
 
 import { compareFractions } from "../core/serialisation/numeric-functions.js";
 import { staffSpacePx } from "../core/MeasureLayout.js";
-import { EditEntryMode } from "../core/types/general.js";
+import { EditEntryMode, TrackViewMode } from "../core/types/general.js";
 import type { IFraction, IMeasureEvent, IRect } from "../core/types/general.js";
 import { requisitions } from "../supplement/Requisitions.js";
 import type { SelectionManager } from "./SelectionManager.js";
@@ -944,8 +944,8 @@ export class SelectionView {
      *
      * @returns A promise that resolves when the takeover was applied.
      */
-    private handleViewModeToggled = (mode: "grid" | "staff"): Promise<boolean> => {
-        this.dropSelectionForInsertMode(mode === "staff");
+    private handleViewModeToggled = (mode: TrackViewMode): Promise<boolean> => {
+        this.dropSelectionForInsertMode(mode === TrackViewMode.Staff);
 
         return Promise.resolve(true);
     };

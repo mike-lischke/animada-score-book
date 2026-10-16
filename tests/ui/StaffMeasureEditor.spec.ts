@@ -17,6 +17,7 @@ import { EditEntryMode } from "../../src/core/types/general.js";
 import type { IMeasureEditorInput, IMeasurePosition } from "../../src/ui/MeasureEditor.js";
 import { ScoreElementKind } from "../../src/ui/ScoreElementRegistry.js";
 import { StaffMeasureEditor } from "../../src/ui/StaffMeasureEditor.js";
+import { SelectionSerializer } from "../../src/ui/SelectionSerializer.js";
 import {
     createEditorInput, createInstrument, createStaffEditor, hydrateMeasureEvents, noteValue, runEntry,
 } from "../unit-test-helpers.js";
@@ -511,6 +512,27 @@ describe("StaffMeasureEditor input", { concurrent: false }, () => {
         // A style change never alters a note's length.
         expect(durationAt(measure, { numerator: 0, denominator: 1 })).toEqual({ numerator: 1, denominator: 4 });
         expect(styleAt(measure, { numerator: 0, denominator: 1 })).toBe("2");
+    });
+
+    it("keeps the cleared cell selected, so the cursor stands where the note stood", () => {
+        setEvents(model, [
+            {
+                start: { numerator: 0, denominator: 1 }, duration: { numerator: 1, denominator: 4 },
+                noteStyleId: "1",
+            },
+            { start: { numerator: 1, denominator: 4 }, duration: { numerator: 3, denominator: 4 } },
+        ]);
+        editor.entryMode = EditEntryMode.Overwrite;
+        input.selectionManager.replaceSelection([runEntry(measure, measure.events[0])]);
+
+        expect(editor.deleteForward()).toBe(true);
+
+        // The note is a rest now, and the cell it stood in stays selected: the view derives its cursor from a
+        // selection of one element, so the cursor keeps standing on the cell the delete emptied.
+        expect(styleAt(measure, { numerator: 0, denominator: 1 })).toBeUndefined();
+        const entries = [...input.selectionManager.currentSelection.values()];
+        expect(entries).toHaveLength(1);
+        expect(SelectionSerializer.coordinatesOf(entries[0]).start).toEqual({ numerator: 0, denominator: 1 });
     });
 
     it("removes the element before the cursor and pulls the rest left", () => {

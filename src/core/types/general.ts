@@ -253,3 +253,12 @@ export enum EditEntryMode {
     Insert,
     Overwrite,
 }
+
+/**
+ * How the score is laid out: as a matrix of note cells, one column per bar, or as notation on staff lines. The
+ * values are strings, because the stored settings and the viewer container's view classes carry them as such.
+ */
+export enum TrackViewMode {
+    Grid = "grid",
+    Staff = "staff",
+}

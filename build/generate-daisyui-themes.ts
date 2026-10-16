@@ -76,6 +76,11 @@ const mapVsThemeToDaisyTheme = (theme: VSTheme): string => {
     // deep green on the light pill of a dark theme.
     const playbackAccent = type === "dark" ? "#2a6140" : "#89cc9e";
 
+    // The accent of the tuplet tool, which the mockup draws as a filled violet button among the plain ones. No
+    // daisyUI role states a violet, so this is another fixed pair: each tone carries the surface color of a light
+    // resp. dark theme as the glyph, so the mark reads as punched out of the button.
+    const tupletAccent = type === "dark" ? "#a58ae6" : "#6f4bd0";
+
     return `@plugin "daisyui/theme" {
     /* Meta data */
     name: "${theme.name}";
@@ -122,6 +127,7 @@ const mapVsThemeToDaisyTheme = (theme: VSTheme): string => {
     --color-identity: ${identity};
     --color-identity-content: ${identityContent};
     --color-playback-accent: ${playbackAccent};
+    --color-tuplet-accent: ${tupletAccent};
 
     ${sharedValues}
 }`;

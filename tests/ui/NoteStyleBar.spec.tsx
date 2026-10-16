@@ -13,7 +13,7 @@ import {
     type ScoreBookDataModel,
 } from "../../src/core/ScoreBookDataModel.js";
 import type { IAudioData } from "../../src/core/types/general.js";
-import { EditEntryMode } from "../../src/core/types/general.js";
+import { EditEntryMode, TrackViewMode } from "../../src/core/types/general.js";
 import { requisitions } from "../../src/supplement/Requisitions.js";
 import { SelectionManager } from "../../src/ui/SelectionManager.js";
 import type { ISelectionEntry } from "../../src/ui/SelectionSerializer.js";
@@ -233,14 +233,16 @@ describe("NoteStyleBar", { concurrent: false }, () => {
         selectionManager.selectTracks([7]);
 
         renderResult = render(
-            <NoteStyleBar dataModel={dataModel} selectionManager={selectionManager} trackViewMode="grid" />,
+            <NoteStyleBar dataModel={dataModel} selectionManager={selectionManager}
+                trackViewMode={TrackViewMode.Grid} />,
         );
 
         expect(renderResult.container.querySelectorAll(".noteStyleButton .note-style-symbol")).toHaveLength(1);
         expect(renderResult.container.querySelectorAll(".noteStyleButton .note-style-icon")).toHaveLength(0);
 
         renderResult.rerender(
-            <NoteStyleBar dataModel={dataModel} selectionManager={selectionManager} trackViewMode="staff" />,
+            <NoteStyleBar dataModel={dataModel} selectionManager={selectionManager}
+                trackViewMode={TrackViewMode.Staff} />,
         );
 
         expect(renderResult.container.querySelectorAll(".noteStyleButton .note-style-symbol")).toHaveLength(0);
@@ -369,7 +371,7 @@ describe("NoteStyleBar", { concurrent: false }, () => {
             <NoteStyleBar dataModel={dataModel} selectionManager={selectionManager} entryMode={EditEntryMode.Insert} />,
         );
 
-        expect(renderResult.container.querySelectorAll(".noteStyleBar button.du-btn-primary")).toHaveLength(0);
+        expect(renderResult.container.querySelectorAll("button.du-btn-primary")).toHaveLength(0);
 
         await act(() => {
             renderResult!.rerender(
@@ -401,7 +403,7 @@ describe("NoteStyleBar", { concurrent: false }, () => {
         );
 
         // An entry names the style it writes, so insert mode holds no style the bar could show.
-        expect(renderResult.container.querySelectorAll(".noteStyleBar button.du-btn-primary")).toHaveLength(0);
+        expect(renderResult.container.querySelectorAll("button.du-btn-primary")).toHaveLength(0);
 
         // A selection that moves does not mark either, the selection is only the insertion point.
         await act(() => {
@@ -409,7 +411,7 @@ describe("NoteStyleBar", { concurrent: false }, () => {
                 track.measures[0].events[1].start)]);
         });
 
-        expect(renderResult.container.querySelectorAll(".noteStyleBar button.du-btn-primary")).toHaveLength(0);
+        expect(renderResult.container.querySelectorAll("button.du-btn-primary")).toHaveLength(0);
     });
 
     it("drops the overwrite mark when the view switches to insert mode", async () => {
@@ -441,7 +443,7 @@ describe("NoteStyleBar", { concurrent: false }, () => {
             );
         });
 
-        expect(renderResult.container.querySelectorAll(".noteStyleBar button.du-btn-primary")).toHaveLength(0);
+        expect(renderResult.container.querySelectorAll("button.du-btn-primary")).toHaveLength(0);
     });
 
     it("leads the bar with the rest button", () => {
@@ -453,7 +455,7 @@ describe("NoteStyleBar", { concurrent: false }, () => {
             <NoteStyleBar dataModel={dataModel} selectionManager={selectionManager} />,
         );
 
-        const buttons = renderResult.container.querySelectorAll(".noteStyleBar button");
+        const buttons = renderResult.container.querySelectorAll("button");
         expect(buttons[0].classList.contains("noteStyleRestButton")).toBe(true);
         expect(buttons[0].getAttribute("title")).toBe("Rest (0)");
         expect(buttons[1].classList.contains("noteStyleButton")).toBe(true);
@@ -577,7 +579,7 @@ describe("NoteStyleBar", { concurrent: false }, () => {
         expect(renderResult.container.querySelectorAll(".noteStyleButton.du-btn-primary")).toHaveLength(0);
     });
 
-    it("groups styles with the same note head into a dropdown in staff mode", () => {
+    it("draws styles that share a note head as buttons on their note lines", () => {
         const track = makeTrack(7, {
             "1": makeNoteStyleWithHead("1", "Low", "Low Agogo Bell", NoteDisplayType.Oval, 2),
             "2": makeNoteStyleWithHead("2", "High", "High Agogo Bell", NoteDisplayType.Oval, 1),
@@ -586,26 +588,21 @@ describe("NoteStyleBar", { concurrent: false }, () => {
         selectionManager.selectTracks([7]);
 
         renderResult = render(
-            <NoteStyleBar dataModel={dataModel} selectionManager={selectionManager} trackViewMode="staff" />,
+            <NoteStyleBar dataModel={dataModel} selectionManager={selectionManager}
+                trackViewMode={TrackViewMode.Staff} />,
         );
 
-        expect(renderResult.container.querySelectorAll(".noteStyleDropdown")).toHaveLength(1);
-        expect(renderResult.container.querySelectorAll(".noteStyleButton")).toHaveLength(0);
+        expect(renderResult.container.querySelectorAll(".noteStyleButton")).toHaveLength(2);
 
-        // The dropdown button shows only the shared note head, without staff lines.
-        const button = renderResult.container.querySelector(".noteStyleDropdown .du-btn-ghost")!;
-        expect(button.querySelectorAll(".note-style-icon")).toHaveLength(1);
-        expect(button.querySelectorAll(".note-style-line-icon")).toHaveLength(0);
-
-        // Each menu entry places its note head on the style's note line.
-        const itemIcons = renderResult.container.querySelectorAll(".dropdown-popup .note-style-line-icon");
-        expect(itemIcons).toHaveLength(2);
-        expect(itemIcons[0].querySelectorAll(".note-style-line-icon-line")).toHaveLength(2);
+        // A head on its own names the style; a voice of several shows the line it sits on instead.
+        const icons = renderResult.container.querySelectorAll(".noteStyleButton .note-style-line-icon");
+        expect(icons).toHaveLength(2);
+        expect(icons[0].querySelectorAll(".note-style-line-icon-line")).toHaveLength(2);
 
         // Line spacing is 7px, centered in the 24px icon: lines at 8.5 and 15.5.
-        expect(itemIcons[0].querySelector<HTMLElement>(".note-style-line-icon-head")!.style.top).toBe("15.5px");
-        expect(itemIcons[1].querySelector<HTMLElement>(".note-style-line-icon-head")!.style.top).toBe("8.5px");
-        expect(itemIcons[0].querySelectorAll(".note-style-line-icon-head .score-symbol-view")).toHaveLength(1);
+        expect(icons[0].querySelector<HTMLElement>(".note-style-line-icon-head")!.style.top).toBe("15.5px");
+        expect(icons[1].querySelector<HTMLElement>(".note-style-line-icon-head")!.style.top).toBe("8.5px");
+        expect(icons[0].querySelectorAll(".note-style-line-icon-head .score-symbol-view")).toHaveLength(1);
     });
 
     it("keeps distinct note heads as separate buttons in staff mode", () => {
@@ -617,14 +614,15 @@ describe("NoteStyleBar", { concurrent: false }, () => {
         selectionManager.selectTracks([7]);
 
         renderResult = render(
-            <NoteStyleBar dataModel={dataModel} selectionManager={selectionManager} trackViewMode="staff" />,
+            <NoteStyleBar dataModel={dataModel} selectionManager={selectionManager}
+                trackViewMode={TrackViewMode.Staff} />,
         );
 
-        expect(renderResult.container.querySelectorAll(".noteStyleDropdown")).toHaveLength(0);
         expect(renderResult.container.querySelectorAll(".noteStyleButton")).toHaveLength(2);
+        expect(renderResult.container.querySelectorAll(".note-style-line-icon")).toHaveLength(0);
     });
 
-    it("renders one dropdown entry per grouped style", () => {
+    it("names each voice of a shared note head after its own style", () => {
         const track = makeTrack(7, {
             "1": makeNoteStyleWithHead("1", "Low", "Low Agogo Bell", NoteDisplayType.Oval, 2),
             "2": makeNoteStyleWithHead("2", "High", "High Agogo Bell", NoteDisplayType.Oval, 1),
@@ -633,15 +631,15 @@ describe("NoteStyleBar", { concurrent: false }, () => {
         selectionManager.selectTracks([7]);
 
         renderResult = render(
-            <NoteStyleBar dataModel={dataModel} selectionManager={selectionManager} trackViewMode="staff" />,
+            <NoteStyleBar dataModel={dataModel} selectionManager={selectionManager}
+                trackViewMode={TrackViewMode.Staff} />,
         );
 
-        const items = [
-            ...renderResult.container.querySelectorAll(".noteStyleDropdown .dropdown-popup li"),
-        ];
-        expect(items).toHaveLength(2);
-        expect(items[0].textContent).toContain("Low Agogo Bell (1)");
-        expect(items[1].textContent).toContain("High Agogo Bell (2)");
+        const buttons = [...renderResult.container.querySelectorAll<HTMLButtonElement>(".noteStyleButton")];
+
+        expect(buttons).toHaveLength(2);
+        expect(buttons[0].title).toBe("Low Agogo Bell (1)");
+        expect(buttons[1].title).toBe("High Agogo Bell (2)");
     });
 
     it("collapses a ghost variant into one button in staff mode", () => {
@@ -655,10 +653,9 @@ describe("NoteStyleBar", { concurrent: false }, () => {
         selectionManager.selectTracks([7]);
 
         renderResult = render(
-            <NoteStyleBar dataModel={dataModel} selectionManager={selectionManager} trackViewMode="staff" />,
+            <NoteStyleBar dataModel={dataModel} selectionManager={selectionManager}
+                trackViewMode={TrackViewMode.Staff} />,
         );
-
-        expect(renderResult.container.querySelectorAll(".noteStyleDropdown")).toHaveLength(0);
 
         const buttons = renderResult.container.querySelectorAll(".noteStyleButton");
         expect(buttons).toHaveLength(1);
@@ -676,10 +673,9 @@ describe("NoteStyleBar", { concurrent: false }, () => {
         selectionManager.selectTracks([7]);
 
         renderResult = render(
-            <NoteStyleBar dataModel={dataModel} selectionManager={selectionManager} trackViewMode="staff" />,
+            <NoteStyleBar dataModel={dataModel} selectionManager={selectionManager}
+                trackViewMode={TrackViewMode.Staff} />,
         );
-
-        expect(renderResult.container.querySelectorAll(".noteStyleDropdown")).toHaveLength(0);
 
         const buttons = renderResult.container.querySelectorAll(".noteStyleButton");
         expect(buttons).toHaveLength(1);
@@ -698,13 +694,14 @@ describe("NoteStyleBar", { concurrent: false }, () => {
         selectionManager.replaceSelection([noteEntryOf(track)]);
 
         renderResult = render(
-            <NoteStyleBar dataModel={dataModel} selectionManager={selectionManager} trackViewMode="staff" />,
+            <NoteStyleBar dataModel={dataModel} selectionManager={selectionManager}
+                trackViewMode={TrackViewMode.Staff} />,
         );
 
         expect(renderResult.container.querySelectorAll(".noteStyleButton.du-btn-primary")).toHaveLength(1);
     });
 
-    it("groups non-ghost styles with the same head into a dropdown", () => {
+    it("keeps non-ghost styles that share a head apart in staff mode", () => {
         const center = {
             ...makeNoteStyleWithHead("1", "Center", "Center", NoteDisplayType.Oval),
             sampleProfile: { builtInDamping: Damping.Open, builtInAccent: true, ghost: false },
@@ -715,16 +712,15 @@ describe("NoteStyleBar", { concurrent: false }, () => {
         selectionManager.selectTracks([7]);
 
         renderResult = render(
-            <NoteStyleBar dataModel={dataModel} selectionManager={selectionManager} trackViewMode="staff" />,
+            <NoteStyleBar dataModel={dataModel} selectionManager={selectionManager}
+                trackViewMode={TrackViewMode.Staff} />,
         );
 
-        expect(renderResult.container.querySelectorAll(".noteStyleButton")).toHaveLength(0);
-        expect(renderResult.container.querySelectorAll(".noteStyleDropdown")).toHaveLength(1);
+        const buttons = [...renderResult.container.querySelectorAll<HTMLButtonElement>(".noteStyleButton")];
 
-        const items = renderResult.container.querySelectorAll(".noteStyleDropdown .dropdown-popup li");
-        expect(items).toHaveLength(2);
-        expect(items[0].textContent).toContain("Center (1)");
-        expect(items[1].textContent).toContain("Outer Area (2)");
+        expect(buttons.map((button) => {
+            return button.title;
+        })).toEqual(["Center (1)", "Outer Area (2)"]);
     });
 
     it("renders press roll without a head and rimshot as one scalable composition", () => {
@@ -749,7 +745,8 @@ describe("NoteStyleBar", { concurrent: false }, () => {
         selectionManager.selectTracks([7]);
 
         renderResult = render(
-            <NoteStyleBar dataModel={dataModel} selectionManager={selectionManager} trackViewMode="staff" />,
+            <NoteStyleBar dataModel={dataModel} selectionManager={selectionManager}
+                trackViewMode={TrackViewMode.Staff} />,
         );
 
         const pressRollIcon = renderResult.container.querySelector(".note-style-icon.press-roll")!;
@@ -786,7 +783,8 @@ describe("NoteStyleBar", { concurrent: false }, () => {
         selectionManager.selectTracks([7]);
 
         renderResult = render(
-            <NoteStyleBar dataModel={dataModel} selectionManager={selectionManager} trackViewMode="staff" />,
+            <NoteStyleBar dataModel={dataModel} selectionManager={selectionManager}
+                trackViewMode={TrackViewMode.Staff} />,
         );
 
         techniques.forEach(({ className }) => {

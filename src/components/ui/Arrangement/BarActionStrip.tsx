@@ -74,10 +74,11 @@ export class BarActionStrip extends UIComponent<IBarActionStripProps> {
     private resizeObserver?: ResizeObserver;
 
     public override componentDidMount(): void {
+        const { scrollHostRef } = this.props;
         requisitions.register("arrangementMutated", this.handleArrangementMutated);
         this.layout();
 
-        const host = this.props.scrollHostRef.current;
+        const host = scrollHostRef.current;
         if (host) {
             this.resizeObserver = new ResizeObserver(() => {
                 this.layout();
@@ -261,10 +262,6 @@ export class BarActionStrip extends UIComponent<IBarActionStripProps> {
             kind: BarActionKind.RepeatEnd,
             label: "Repeat end",
             icon: <ScoreSymbolView symbol={ScoreSymbol.RepeatEnd} staffSpace={staffSpacePx} icon />,
-            disabled: (barNumber) => {
-                // A section that closes needs a bar before it that opens it.
-                return barNumber <= 1;
-            },
             active: (barNumber) => {
                 return repeatBars?.get(barNumber)?.end === true;
             },

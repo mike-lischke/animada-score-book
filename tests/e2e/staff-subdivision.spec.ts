@@ -55,7 +55,7 @@ test.beforeEach(async ({ page }) => {
 
 test("creates a subdivision from the notes selected in the staff view", async ({ page }) => {
     await page.locator(".staff-measure-track-row .staff-note-head-symbol").first().click();
-    await expect(page.locator("#selectionEditPopup .subdivisionToolbarHost")).toBeVisible();
+    await expect(page.locator("#selectionEditPopup .subdivisionToolbar")).toBeVisible();
     const runsBefore = await page.locator(".staff-note-viewer-run").count();
 
     await page.locator(".subdivisionToolbar button").first().click();
@@ -73,7 +73,7 @@ test("creates a subdivision from the notes selected in the staff view", async ({
 
 test("applies a length to a note beside a subdivision", async ({ page }) => {
     await page.locator(".staff-measure-track-row .staff-note-head-symbol").first().click();
-    await expect(page.locator("#selectionEditPopup .subdivisionToolbarHost")).toBeVisible();
+    await expect(page.locator("#selectionEditPopup .subdivisionToolbar")).toBeVisible();
     await page.locator(".subdivisionToolbar button").first().click();
     const quadruplet = page.locator(".subdivisionToolbar .du-dropdown li", { hasText: "Quadruplet" }).locator("a");
     await quadruplet.click({ force: true });
@@ -95,7 +95,7 @@ test("nests a subdivision inside a slot of the subdivision around it", async ({ 
     const runsBefore = await page.locator(".staff-note-viewer-run").count();
 
     await page.locator(".staff-measure-track-row .staff-note-head-symbol").first().click();
-    await expect(page.locator("#selectionEditPopup .subdivisionToolbarHost")).toBeVisible();
+    await expect(page.locator("#selectionEditPopup .subdivisionToolbar")).toBeVisible();
     await page.locator(".subdivisionToolbar button").first().click();
     await page.locator(".subdivisionToolbar .du-dropdown li", { hasText: "Triplet" }).locator("a")
         .click({ force: true });

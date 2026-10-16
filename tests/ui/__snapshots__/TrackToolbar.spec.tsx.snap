@@ -21,42 +21,52 @@ exports[`TrackToolbar > matches the baseline snapshot with all props set 1`] = `
     </span>
   </div>
   <div
-    class="container selectionToolbarActions"
-    style="flex-direction: row; align-items: center;"
+    class="container selectionToolbarSections"
+    style="flex-direction: row; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 10px;"
   >
-    <button
-      class="btn du-btn selectionToolbarAction"
-      title="Add"
+    <div
+      class="container selectionToolbarGroup is-tray"
+      style="flex-direction: column; align-items: stretch; gap: 6px;"
     >
-      <span
-        class="testToolbarIcon"
-      />
-    </button>
-    <button
-      class="btn du-btn selectionToolbarAction"
-      title="Duplicate"
-    >
-      <span
-        class="testToolbarIcon"
-      />
-    </button>
-    <button
-      class="btn du-btn du-btn-disabled selectionToolbarAction"
-      disabled=""
-      title="Clear"
-    >
-      <span
-        class="testToolbarIcon"
-      />
-    </button>
-    <button
-      class="btn du-btn selectionToolbarAction is-destructive"
-      title="Delete"
-    >
-      <span
-        class="testToolbarIcon"
-      />
-    </button>
+      <div
+        class="container selectionToolbarActions selectionToolbarTray"
+        style="flex-direction: row; align-items: center; flex-wrap: wrap; gap: 6px;"
+      >
+        <button
+          class="btn du-btn selectionToolbarAction"
+          title="Add"
+        >
+          <span
+            class="testToolbarIcon"
+          />
+        </button>
+        <button
+          class="btn du-btn selectionToolbarAction"
+          title="Duplicate"
+        >
+          <span
+            class="testToolbarIcon"
+          />
+        </button>
+        <button
+          class="btn du-btn du-btn-disabled selectionToolbarAction"
+          disabled=""
+          title="Clear"
+        >
+          <span
+            class="testToolbarIcon"
+          />
+        </button>
+        <button
+          class="btn du-btn selectionToolbarAction is-destructive"
+          title="Delete"
+        >
+          <span
+            class="testToolbarIcon"
+          />
+        </button>
+      </div>
+    </div>
   </div>
 </div>
 `;
@@ -80,16 +90,26 @@ exports[`TrackToolbar > matches the baseline snapshot with minimal props 1`] = `
     </span>
   </div>
   <div
-    class="container selectionToolbarActions"
-    style="flex-direction: row; align-items: center;"
+    class="container selectionToolbarSections"
+    style="flex-direction: row; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 10px;"
   >
-    <button
-      class="btn du-btn selectionToolbarAction"
+    <div
+      class="container selectionToolbarGroup is-tray"
+      style="flex-direction: column; align-items: stretch; gap: 6px;"
     >
-      <span
-        class="testToolbarIcon"
-      />
-    </button>
+      <div
+        class="container selectionToolbarActions selectionToolbarTray"
+        style="flex-direction: row; align-items: center; flex-wrap: wrap; gap: 6px;"
+      >
+        <button
+          class="btn du-btn selectionToolbarAction"
+        >
+          <span
+            class="testToolbarIcon"
+          />
+        </button>
+      </div>
+    </div>
   </div>
 </div>
 `;

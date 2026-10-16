@@ -10,6 +10,7 @@ import { SubdivisionToolbar } from "../../src/components/ui/Arrangement/Subdivis
 import type { ISbDmArrangement, ISbDmTrack, ISbDmTrackPiece } from "../../src/core/ScoreBookDataModel.js";
 import { ScoreBookDataModel } from "../../src/core/ScoreBookDataModel.js";
 import type { IFraction } from "../../src/core/types/general.js";
+import { TrackViewMode } from "../../src/core/types/general.js";
 import { requisitions } from "../../src/supplement/Requisitions.js";
 import { SelectionManager } from "../../src/ui/SelectionManager.js";
 import { createInstrument, noteEntry, runEntry } from "../unit-test-helpers.js";
@@ -270,14 +271,14 @@ describe("SubdivisionToolbar", { concurrent: false }, () => {
         // The repeat marks are set from the bar action strip, so the toolbar holds tuplets in both views.
         renderResult = render(<SubdivisionToolbar selectionManager={selectionManager} />);
 
-        for (const mode of ["staff", "grid"] as const) {
+        for (const mode of [TrackViewMode.Staff, TrackViewMode.Grid]) {
             void requisitions.execute("trackViewModeToggled", mode);
             await Promise.resolve();
 
             expect(buttonWithTooltip(renderResult.container, "Add subdivision")).toBeTruthy();
             expect(buttonOrNull(renderResult.container, "Repeat start")).toBeNull();
             expect(buttonOrNull(renderResult.container, "Repeat end")).toBeNull();
-            expect(renderResult.container.querySelectorAll(".subdivisionToolbar")).toHaveLength(1);
+            expect(renderResult.container.querySelectorAll(".dropdownHost")).toHaveLength(1);
         }
     });
 });

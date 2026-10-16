@@ -101,12 +101,13 @@ describe("BarActionStrip", { concurrent: false }, () => {
         expect(buttonOf(manyBars.container, 2, "delete").disabled).toBe(false);
     });
 
-    it("disables the repeat marks that no counterpart can pair with", () => {
+    it("disables the repeat starts that no counterpart can pair with", () => {
         const { container } = renderStrip();
 
-        // A section that opens needs a bar after it that closes it, one that closes needs a bar before it.
+        // A section that opens needs a bar after it that closes it. A closing repeat stands alone: it repeats
+        // from the bar the section opened at, or from the first bar where no bar opens one.
         expect(buttonOf(container, 1, "repeat-start").disabled).toBe(false);
-        expect(buttonOf(container, 1, "repeat-end").disabled).toBe(true);
+        expect(buttonOf(container, 1, "repeat-end").disabled).toBe(false);
         expect(buttonOf(container, 3, "repeat-start").disabled).toBe(true);
         expect(buttonOf(container, 3, "repeat-end").disabled).toBe(false);
 

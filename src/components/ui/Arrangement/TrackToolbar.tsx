@@ -52,7 +52,8 @@ export class TrackToolbar extends SelectionToolbar<ICommonUIProperties, ITrackTo
      * @returns The actions of the track the toolbar was opened for, in one tray.
      */
     protected override get toolbarSections(): ISelectionToolbarSection[] {
-        const items = this.state.options?.items ?? [];
+        const { options } = this.state;
+        const items = options?.items ?? [];
 
         const actions = items.map((item) => {
             return {

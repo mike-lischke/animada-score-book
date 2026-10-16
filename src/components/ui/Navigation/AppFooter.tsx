@@ -71,7 +71,8 @@ export class AppFooter extends UIComponent<IAppFooterProps, IAppFooterState> {
     }
 
     public override render(): ComponentChild {
-        const { className, barCount, zoom, version, notifications, zenMode, onToggleZenMode } = this.props;
+        const { className, barCount, zoom, version, notifications, zenMode, onToggleZenMode,
+            onShowReleaseNotes, onToggleNotifications } = this.props;
         const { viewport } = this.state;
 
         const rangeCaption = viewport.startBar === viewport.endBar
@@ -155,13 +156,13 @@ export class AppFooter extends UIComponent<IAppFooterProps, IAppFooterState> {
                         className="appFooterVersionButton"
                         caption={`v${version}`}
                         title="Release Notes"
-                        onClick={this.props.onShowReleaseNotes}
+                        onClick={onShowReleaseNotes}
                     />
                     <Button
                         id="showNotificationHistory"
                         className="appFooterNotificationButton"
                         title={notificationCaption}
-                        onClick={this.props.onToggleNotifications}
+                        onClick={onToggleNotifications}
                     >
                         {notificationIcon}
                         {newCountBadge}
@@ -172,15 +173,19 @@ export class AppFooter extends UIComponent<IAppFooterProps, IAppFooterState> {
     }
 
     private handleZoomOut = (): void => {
-        this.props.onZoomChange(clampValue(this.props.zoom - zoomStep, zoomMin, zoomMax));
+        const { onZoomChange, zoom } = this.props;
+
+        onZoomChange(clampValue(zoom - zoomStep, zoomMin, zoomMax));
     };
 
     private handleZoomIn = (): void => {
-        this.props.onZoomChange(clampValue(this.props.zoom + zoomStep, zoomMin, zoomMax));
+        const { onZoomChange, zoom } = this.props;
+
+        onZoomChange(clampValue(zoom + zoomStep, zoomMin, zoomMax));
     };
 
     private handleViewportChanged = (viewport: IScoreViewport): Promise<boolean> => {
-        const current = this.state.viewport;
+        const { viewport: current } = this.state;
         if (current.position === viewport.position && current.width === viewport.width
             && current.startBar === viewport.startBar && current.endBar === viewport.endBar) {
             return Promise.resolve(true);

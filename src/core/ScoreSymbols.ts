@@ -243,9 +243,6 @@ export interface IBarlineMarks {
     /** Whether the repeated section before the barline closes there (`:|`). */
     closesRepeat: boolean;
 
-    /** Whether the repeated section after the barline opens there (`|:`). */
-    opensRepeat: boolean;
-
     /** Whether the side is the end of the score, which a plain barline cannot state. */
     endsScore: boolean;
 }
@@ -593,26 +590,17 @@ export class ScoreSymbols {
 
     /**
      * Names the barline the score draws on one side of a bar out of the marks it carries. A repeat mark wins
-     * over the final barline of the score, and a repeat that closes and opens at the same barline over the two
-     * single ones.
+     * over the final barline of the score.
      *
      * @param marks The marks at one side of a bar.
      *
      * @returns The symbol the barline is drawn with.
      */
     public static barlineAt(marks: IBarlineMarks): ScoreSymbol {
-        const { closesRepeat, opensRepeat, endsScore } = marks;
-
-        if (closesRepeat && opensRepeat) {
-            return ScoreSymbol.RepeatBoth;
-        }
+        const { closesRepeat, endsScore } = marks;
 
         if (closesRepeat) {
             return ScoreSymbol.RepeatEnd;
-        }
-
-        if (opensRepeat) {
-            return ScoreSymbol.RepeatStart;
         }
 
         return endsScore ? ScoreSymbol.BarlineFinal : ScoreSymbol.BarlineSingle;

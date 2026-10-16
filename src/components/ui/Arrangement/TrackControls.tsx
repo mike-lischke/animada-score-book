@@ -5,7 +5,7 @@
 
 import type { ISbDmTrack } from "../../../core/ScoreBookDataModel.js";
 import { StaffRowGeometry, type IStaffRowGeometry } from "../../../core/StaffRowGeometry.js";
-import type { Mutable } from "../../../core/types/general.js";
+import { TrackViewMode, type Mutable } from "../../../core/types/general.js";
 import { requisitions } from "../../../supplement/Requisitions.js";
 import type { SelectionManager } from "../../../ui/SelectionManager.js";
 import {
@@ -23,7 +23,7 @@ export interface ITrackControlsProperties extends ICommonUIProperties {
     selectionManager: SelectionManager;
     mixerExpanded: boolean;
     labelsOnly?: boolean;
-    trackViewMode: "grid" | "staff";
+    trackViewMode: TrackViewMode;
     innerRef?: preact.RefObject<HTMLDivElement | null>;
 
     /**

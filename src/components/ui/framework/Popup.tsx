@@ -47,6 +47,13 @@ interface IPopupProperties extends IPortalProperties {
     /** Supplies live placement bounds; undefined while the anchor is out of view, which hides the popup. */
     boundsProvider?: PopupBoundsProvider;
 
+    /**
+     * The area a pointer press counts as an interaction with the anchor, e.g. the view that holds the anchor's
+     * elements. Defaults to the anchor element: a popup that belongs to a whole view — the score a selection
+     * sits in — states that view, so a press beside the anchor is not dismissed as if it were outside.
+     */
+    anchorArea?: HTMLElement;
+
     /** Flex orientation of the popup content. */
     orientation?: Orientation;
 
@@ -178,10 +185,11 @@ export class Popup extends UIComponent<IPopupProperties, IPopupState> {
     }
 
     public updatePosition(target: HTMLElement): void {
+        const { boundsProvider } = this.props;
         this.anchorElement = target;
 
         // A provider is asked again for every placement, so only the mode without one needs the bounds in state.
-        if (this.props.boundsProvider === undefined) {
+        if (boundsProvider === undefined) {
             this.setState({ currentTarget: this.resolveBounds(target) }, this.schedulePositionUpdate);
         } else {
             this.schedulePositionUpdate();
@@ -452,7 +460,8 @@ export class Popup extends UIComponent<IPopupProperties, IPopupState> {
     }
 
     private isAnchorInteraction(event: Event, eventPath: EventTarget[]): boolean {
-        const anchor = this.anchorElement;
+        const { anchorArea } = this.props;
+        const anchor = anchorArea ?? this.anchorElement;
         if (!anchor) {
             return false;
         }
@@ -484,6 +493,7 @@ export class Popup extends UIComponent<IPopupProperties, IPopupState> {
 
         this.positionFrame = requestAnimationFrame(() => {
             const { boundsProvider } = this.props;
+            const { currentTarget } = this.state;
             this.positionFrame = undefined;
 
             if (!this.portalRef.current?.isOpen) {
@@ -498,7 +508,7 @@ export class Popup extends UIComponent<IPopupProperties, IPopupState> {
 
             const target = boundsProvider !== undefined
                 ? boundsProvider()
-                : this.anchorElement?.getBoundingClientRect() ?? this.state.currentTarget;
+                : this.anchorElement?.getBoundingClientRect() ?? currentTarget;
             if (target === undefined) {
                 this.setAnchorOffscreen(true);
 

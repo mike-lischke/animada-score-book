@@ -188,7 +188,9 @@ export class TrackEditSidebar extends UIComponent<ITrackEditSidebarProps> {
     };
 
     private handleDelete = (track: ISbDmTrack): void => {
-        this.props.dataModel.removeTrack(track);
+        const { dataModel } = this.props;
+
+        dataModel.removeTrack(track);
     };
 
     private handleDuplicate = (track: ISbDmTrack): void => {

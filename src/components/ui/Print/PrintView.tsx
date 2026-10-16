@@ -9,6 +9,7 @@ import type { Arrangement } from "../../../core/Arrangement.js";
 import { MeasureLayout } from "../../../core/MeasureLayout.js";
 import type { ISbDmTrack, ScoreBookDataModel } from "../../../core/ScoreBookDataModel.js";
 import { StaffRowGeometry, type IStaffRowGeometry } from "../../../core/StaffRowGeometry.js";
+import { TrackViewMode } from "../../../core/types/general.js";
 import type { ArrangementPlayer } from "../../../player/ArrangementPlayer.js";
 import type { SelectionManager } from "../../../ui/SelectionManager.js";
 import { GridMeasureViewer } from "../Bar/Grid/GridMeasureViewer.js";
@@ -44,7 +45,7 @@ export interface IPrintOptions {
     /** IDs of tracks to include. If undefined, all tracks are included. */
     selectedTrackIds?: Set<number>;
     showLegend: boolean;
-    viewMode: "grid" | "staff";
+    viewMode: TrackViewMode;
 }
 
 export interface IPrintViewProps extends ICommonUIProperties {
@@ -65,7 +66,7 @@ export interface IPrintViewProps extends ICommonUIProperties {
  */
 export class PrintView extends UIComponent<IPrintViewProps> {
     public render(): ComponentChild {
-        const { arrangement, options } = this.props;
+        const { arrangement, options, arrangementPlayer } = this.props;
         const className = this.generateFinalClassName(["print-root", `view-${options.viewMode}`]);
         const tempo = arrangement.timeParams.tempo;
 
@@ -74,10 +75,10 @@ export class PrintView extends UIComponent<IPrintViewProps> {
 
         // The printed staff lays its measures out half as wide, so the row geometry is measured for those widths
         // too, which keeps the rows of a printed page from colliding. The grid view keeps its cell heights.
-        const rowGeometries = options.viewMode === "staff"
+        const rowGeometries = options.viewMode === TrackViewMode.Staff
             ? new Map(tracks.map((track): [number, IStaffRowGeometry] => {
                 return [track.id, StaffRowGeometry.ofTrack(track, arrangement,
-                    this.props.arrangementPlayer.scoreMetrics, printWidthScale)];
+                    arrangementPlayer.scoreMetrics, printWidthScale)];
             }))
             : undefined;
 
@@ -107,8 +108,9 @@ export class PrintView extends UIComponent<IPrintViewProps> {
                                     crossAlignment={ChildAlignment.Stretch}
                                     className="print-bar-row"
                                 >
-                                    {options.viewMode === "grid" && this.renderInstrumentColumn(tracks, rowGeometries)}
-                                    {options.viewMode === "staff" && (
+                                    {options.viewMode === TrackViewMode.Grid
+                                        && this.renderInstrumentColumn(tracks, rowGeometries)}
+                                    {options.viewMode === TrackViewMode.Staff && (
                                         <>
                                             {this.renderInstrumentColumn(tracks, rowGeometries)}
                                             <StaffPrefixViewer
@@ -120,7 +122,7 @@ export class PrintView extends UIComponent<IPrintViewProps> {
                                         </>
                                     )}
                                     {block.map((barNumber) => {
-                                        return options.viewMode === "staff"
+                                        return options.viewMode === TrackViewMode.Staff
                                             ? this.renderStaffMeasure(barNumber, tracks, rowGeometries)
                                             : this.renderGridBar(barNumber, tracks);
                                     })}
@@ -194,7 +196,7 @@ export class PrintView extends UIComponent<IPrintViewProps> {
         const { arrangementPlayer, options } = this.props;
         const totalBars = arrangementPlayer.scoreMetrics.bars;
 
-        if (options.barsPerLine !== "auto" || options.viewMode !== "staff") {
+        if (options.barsPerLine !== "auto" || options.viewMode !== TrackViewMode.Staff) {
             // Only the staff view has measures of differing widths, so only it can pack by width.
             const perLine = options.barsPerLine === "auto" ? defaultMeasuresPerRow : options.barsPerLine;
             const fixedBlocks: number[][] = [];
@@ -256,7 +258,7 @@ export class PrintView extends UIComponent<IPrintViewProps> {
      */
     private rowWidth(block: number[]): number {
         const { options } = this.props;
-        if (options.viewMode !== "staff") {
+        if (options.viewMode !== TrackViewMode.Staff) {
             return block.length;
         }
 
