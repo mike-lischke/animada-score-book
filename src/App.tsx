@@ -376,6 +376,7 @@ export class App extends UIComponent<{}, IAppState> {
                     id="editModeButton"
                     className={editModeButtonClass}
                     title={editMode ? "Exit Edit Mode" : "Enter Edit Mode"}
+                    data-tutorial="edit-mode"
                     onClick={this.handleEditModeToggle}
                 >
                     <span className="headerModeDot" />
@@ -598,6 +599,7 @@ export class App extends UIComponent<{}, IAppState> {
                                 zenMode={zenMode}
                                 version={appVersion}
                                 notifications={notificationState}
+                                data-tutorial="footer"
                                 onZoomChange={this.handleZoomChange}
                                 onToggleZenMode={this.handleToggleZenMode}
                                 onToggleNotifications={this.handleToggleNotifications}
@@ -1197,6 +1199,13 @@ export class App extends UIComponent<{}, IAppState> {
 
     private handleTutorialClose = (completed: boolean): void => {
         this.tutorialWizardRef.current?.close(completed);
+
+        // Closing on the mixer step must restore the panel state the tutorial expanded.
+        if (this.currentTutorialStep === mixerStepIndex) {
+            this.toggleMixerIf(this.isMixerExpanded());
+        }
+
+        this.currentTutorialStep = 0;
         this.loadScorebook(undefined);
     };
 

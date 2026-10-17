@@ -43,7 +43,8 @@ export class TutorialWizard extends Component<ITutorialWizardProps, ITutorialWiz
 
     public override componentDidMount(): void {
         this.syncObserver();
-        window.addEventListener("scroll", this.readTargetRect, { passive: true });
+        window.addEventListener("scroll", this.handleScroll, { passive: true });
+        window.addEventListener("resize", this.handleResize);
     }
 
     public override componentDidUpdate(_prevProps: ITutorialWizardProps, prevState: ITutorialWizardState): void {
@@ -56,7 +57,8 @@ export class TutorialWizard extends Component<ITutorialWizardProps, ITutorialWiz
 
     public override componentWillUnmount(): void {
         this.resizeObserver?.disconnect();
-        window.removeEventListener("scroll", this.readTargetRect);
+        window.removeEventListener("scroll", this.handleScroll);
+        window.removeEventListener("resize", this.handleResize);
     }
 
     public render(): ComponentChild {
@@ -123,15 +125,50 @@ export class TutorialWizard extends Component<ITutorialWizardProps, ITutorialWiz
             return;
         }
 
-        const element = document.querySelector(step.targetSelector);
-        if (element === this.observedElement) {
-            this.readTargetRect();
+        this.observeTarget(this.resolveTarget(step));
+        this.readTargetRect();
+    }
 
+    /**
+     * Resolves the element a step points at, preferring the first rendered candidate.
+     *
+     * @param step The step whose target to resolve.
+     *
+     * @returns The resolved element, or undefined when no candidate is rendered.
+     */
+    private resolveTarget(step: ITutorialStep): Element | undefined {
+        const { targetSelector, targetFallbacks } = step;
+        if (!targetSelector) {
+            return undefined;
+        }
+
+        for (const selector of [targetSelector, ...(targetFallbacks ?? [])]) {
+            const element = document.querySelector(selector);
+            if (!element) {
+                continue;
+            }
+
+            const rect = element.getBoundingClientRect();
+            if (rect.width > 0 && rect.height > 0) {
+                return element;
+            }
+        }
+
+        return undefined;
+    }
+
+    /**
+     * Moves the resize observer to the given element.
+     *
+     * @param element The element to observe, or undefined to observe nothing.
+     */
+    private observeTarget(element: Element | undefined): void {
+        if (element === this.observedElement) {
             return;
         }
 
         this.resizeObserver?.disconnect();
-        this.observedElement = element ?? undefined;
+        this.observedElement = element;
 
         if (element) {
             this.resizeObserver ??= new ResizeObserver(() => {
@@ -140,9 +177,27 @@ export class TutorialWizard extends Component<ITutorialWizardProps, ITutorialWiz
 
             this.resizeObserver.observe(element);
         }
+    }
+
+    /**
+     * Re-resolves the target after the viewport changed, so a re-rendered anchor does not go stale.
+     */
+    private handleResize = (): void => {
+        this.syncObserver();
+    };
+
+    /**
+     * Keeps the marker aligned while scrolling and recovers a target that was replaced mid-step.
+     */
+    private handleScroll = (): void => {
+        if (this.observedElement?.isConnected === false) {
+            this.syncObserver();
+
+            return;
+        }
 
         this.readTargetRect();
-    }
+    };
 
     private readTargetRect = (): void => {
         if (!this.observedElement) {
