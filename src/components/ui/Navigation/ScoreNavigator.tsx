@@ -26,6 +26,13 @@ export class ScoreNavigator extends UIComponent<IScoreNavigatorProps> {
     private activePointerId?: number;
     private dragOffset = 0;
 
+    /**
+     * The rail's area as read when the drag started. The score's visible range moves the caption beside the
+     * navigator, so the rail is laid out again while the drag runs — reading it again would report a position
+     * the pointer never stated.
+     */
+    private dragArea?: DOMRect;
+
     public override componentWillUnmount(): void {
         document.removeEventListener("pointermove", this.handlePointerMove);
         document.removeEventListener("pointerup", this.handlePointerUp);
@@ -78,6 +85,7 @@ export class ScoreNavigator extends UIComponent<IScoreNavigatorProps> {
         }
 
         this.activePointerId = event.pointerId;
+        this.dragArea = rect;
         rail.setPointerCapture(event.pointerId);
         document.addEventListener("pointermove", this.handlePointerMove);
         document.addEventListener("pointerup", this.handlePointerUp);
@@ -91,17 +99,12 @@ export class ScoreNavigator extends UIComponent<IScoreNavigatorProps> {
             return;
         }
 
-        const rail = this.railRef.current;
-        if (!rail) {
+        const area = this.dragArea;
+        if (area === undefined || area.width <= 0) {
             return;
         }
 
-        const rect = rail.getBoundingClientRect();
-        if (rect.width <= 0) {
-            return;
-        }
-
-        this.moveTo(((event.clientX - rect.left) / rect.width) - this.dragOffset);
+        this.moveTo(((event.clientX - area.left) / area.width) - this.dragOffset);
 
         event.preventDefault();
     };
@@ -112,6 +115,7 @@ export class ScoreNavigator extends UIComponent<IScoreNavigatorProps> {
         }
 
         this.activePointerId = undefined;
+        this.dragArea = undefined;
         document.removeEventListener("pointermove", this.handlePointerMove);
         document.removeEventListener("pointerup", this.handlePointerUp);
         document.removeEventListener("pointercancel", this.handlePointerUp);

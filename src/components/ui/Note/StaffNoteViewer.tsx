@@ -864,6 +864,12 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                 "--rest-line-offset": `${isWholeOrHalf ? restLineOffset : 0}px`,
             } as CSSProperties;
 
+            // A dotted rest draws its dot beside the glyph, so the symbol is shifted by half of the dot's room to
+            // stay centred in its slot, which is the room the layout keeps free for it.
+            const restSymbolClass = restGlyph.dotted
+                ? "staff-note-viewer-rest-symbol staff-note-viewer-rest-symbol-dotted"
+                : "staff-note-viewer-rest-symbol";
+
             return (
                 <div key={`${keyPrefix}rest-${index}`} className="staff-note-viewer-run" style={slotStyle}
                     ref={scoreElementRegistry?.createRef({
@@ -874,7 +880,7 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                         start: node.start,
                         measure,
                     }, measure.events[node.eventIndex])}>
-                    <span className="staff-note-viewer-rest-symbol" style={restStyle}>
+                    <span className={restSymbolClass} style={restStyle}>
                         <ScoreSymbolView symbol={restSymbol} staffSpace={staffSpacePx} />
                         {restGlyph.dotted
                             ? <ScoreSymbolView

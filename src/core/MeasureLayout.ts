@@ -5,6 +5,7 @@
 
 import type { ISbDmArrangement } from "./ScoreBookDataModel.js";
 import { subtractFractions } from "./serialisation/numeric-functions.js";
+import type { IFraction } from "./types/general.js";
 import { clampValue } from "./utils.js";
 
 /**
@@ -43,6 +44,24 @@ export const minEventWidth = 25;
 
 /** Distance two adjacent event anchors keep at least, in px at 100% zoom, so noteheads do not collide. */
 export const minEventGap = 12;
+
+/** Air a rest keeps on either side of its symbol, in px at 100% zoom. */
+export const minRestAir = 4;
+
+/**
+ * Width of the widest rest glyph of the standard values, in px at 100% zoom. Mirrors the SMuFL rest boxes:
+ * the thirty-second rest is the widest of them.
+ */
+export const restGlyphWidth = 15;
+
+/**
+ * Room the augmentation dot of a dotted rest takes beside its glyph, in px at 100% zoom: the gap the dot keeps
+ * from the glyph plus the dot's own ink.
+ */
+export const restDotWidth = 8;
+
+/** Width a rest keeps at least, in px at 100% zoom: the widest rest glyph and the air on both of its sides. */
+export const minRestWidth = restGlyphWidth + (2 * minRestAir);
 
 /** Width the one-bar repeat (simile) mark keeps at least, in px at 100% zoom: the glyph plus its air. */
 export const minMeasureRepeatWidth = 3 * staffSpacePx;
@@ -218,12 +237,13 @@ export class MeasureLayout {
     /**
      * Resolves the smallest column width a measure of an arrangement still draws in.
      *
-     * The staff lays its events out proportionally, so both quantities that have to hold scale with the
-     * column: an event's slot is its duration fraction of the column, and the distance between two anchors is
-     * the fraction between their starts. Two requirements follow — every event's slot holds its symbol
-     * ({@link minEventWidth}), and two neighbouring symbols keep their air (`minEventWidth + minEventGap`).
-     * Because the events tile the measure, the neighbouring rule dominates every event but the last one, whose
-     * symbol is bounded by its own slot. The widest track decides.
+     * The staff lays its events out proportionally, so a requirement stated as a length scales with the column:
+     * an event's slot is its duration fraction of the column and the distance between two anchors is the fraction
+     * between their starts. A note needs the room its symbol takes ({@link minEventWidth}), and where a note stands
+     * at one of two neighbouring anchors, their air ({@link minEventGap}). A rest needs the width of its symbol,
+     * the widest rest glyph and the room of a dot ({@link restDotWidth}), with its own air on both sides
+     * ({@link minRestAir}): rests are the elastic slack of a measure (ADR-0003), so a measure holding rests alone
+     * keeps the room its controls need.
      *
      * The measure also carries the bar action strip, which is centred on it and therefore has to fit inside it
      * ({@link barActionStripWidth}).
@@ -234,8 +254,9 @@ export class MeasureLayout {
      * @returns The smallest column width in px at 100% zoom, the column insets included.
      */
     public static minimumWidthOfMeasure(arrangement: Readonly<ISbDmArrangement>, bar: number): number {
-        let shortestDuration = Number.POSITIVE_INFINITY;
-        let tightestGap = Number.POSITIVE_INFINITY;
+        let noteSlotWidth = 0;
+        let noteGapWidth = 0;
+        let restSlotWidth = 0;
         let hasSimile = false;
 
         for (const track of arrangement.tracks) {
@@ -244,27 +265,63 @@ export class MeasureLayout {
                 hasSimile = true;
             }
 
-            const events = measure.events;
+            for (let index = 0; index < measure.events.length; index++) {
+                const event = measure.events[index];
+                const previous = index === 0 ? undefined : measure.events[index - 1];
+                const isNote = event.noteStyleId !== undefined;
+                const isPreviousNote = previous !== undefined && previous.noteStyleId !== undefined;
 
-            for (let index = 0; index < events.length; index++) {
-                const duration = events[index].duration;
-                if (duration.denominator > 0 && duration.numerator > 0) {
-                    shortestDuration = Math.min(shortestDuration, duration.numerator / duration.denominator);
+                if (isNote) {
+                    noteSlotWidth = Math.max(noteSlotWidth, MeasureLayout.columnWidthFor(minEventWidth, event.duration));
+                } else {
+                    restSlotWidth = Math.max(restSlotWidth, MeasureLayout.columnWidthFor(
+                        MeasureLayout.restSymbolWidth(event.duration), event.duration));
                 }
 
-                const gap = index > 0 ? subtractFractions(events[index].start, events[index - 1].start) : undefined;
-                if (gap !== undefined && gap.denominator > 0 && gap.numerator > 0) {
-                    tightestGap = Math.min(tightestGap, gap.numerator / gap.denominator);
+                if (previous !== undefined && (isNote || isPreviousNote)) {
+                    const gap = subtractFractions(event.start, previous.start);
+                    noteGapWidth = Math.max(noteGapWidth,
+                        MeasureLayout.columnWidthFor(minEventWidth + minEventGap, gap));
                 }
             }
         }
 
         const contentWidth = Math.max(
             hasSimile ? minMeasureRepeatWidth : 0,
-            Number.isFinite(shortestDuration) ? minEventWidth / shortestDuration : 0,
-            Number.isFinite(tightestGap) ? (minEventWidth + minEventGap) / tightestGap : 0,
+            noteSlotWidth,
+            noteGapWidth,
+            restSlotWidth,
         );
 
         return Math.max(Math.ceil(contentWidth) + staffMeasureInsets, barActionStripWidth);
+    }
+
+    /**
+     * States how wide a column has to be for a span of it to hold a length.
+     *
+     * @param length The room an event's symbol or the air between two anchors needs, in px at 100% zoom.
+     * @param span The part of the column the length has to fit into, as a bar fraction.
+     *
+     * @returns The column width in px at 100% zoom, or 0 when the span holds nothing.
+     */
+    private static columnWidthFor(length: number, span: IFraction): number {
+        const ratio = span.numerator > 0 && span.denominator > 0 ? span.numerator / span.denominator : 0;
+
+        return ratio > 0 ? length / ratio : 0;
+    }
+
+    /**
+     * Resolves the room a rest's symbol takes, its air included.
+     *
+     * @param duration The rest's duration as a bar fraction.
+     *
+     * @returns The width the rest needs, in px at 100% zoom.
+     */
+    private static restSymbolWidth(duration: IFraction): number {
+        const isDotted = duration.numerator === 3
+            && duration.denominator > 0
+            && (duration.denominator & (duration.denominator - 1)) === 0;
+
+        return minRestWidth + (isDotted ? restDotWidth : 0);
     }
 }

@@ -10,8 +10,10 @@ import {
     MeasureLayout, barActionStripWidth, staffPrefixWidth, type IMeasureRange,
 } from "../../../core/MeasureLayout.js";
 import { StaffRowGeometry, type IStaffRowGeometry } from "../../../core/StaffRowGeometry.js";
-import type { RealTime, ScoreBookDataModel } from "../../../core/ScoreBookDataModel.js";
-import { RepeatMark, TrackViewMode, type EditEntryMode } from "../../../core/types/general.js";
+import {
+    ScoreBookChangeReason, type ISbDmArrangement, type RealTime, type ScoreBookDataModel,
+} from "../../../core/ScoreBookDataModel.js";
+import { RepeatMark, TrackViewMode, type EditEntryMode, type IPoint } from "../../../core/types/general.js";
 import { clampValue } from "../../../core/utils.js";
 import { PlayerPlayState, type ArrangementPlayer } from "../../../player/ArrangementPlayer.js";
 import { requisitions, type IMeasureVisibilityRequest } from "../../../supplement/Requisitions.js";
@@ -130,6 +132,15 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
     private staffDisplayWidths = new Map<number, number>();
     private staffGeometryDirty = true;
 
+    /** The arrangement the cached row geometry was measured for. Another one drops the cache. */
+    private staffGeometryArrangement?: ISbDmArrangement;
+
+    /**
+     * Scroll position a loaded score is to be shown at, applied once its own measures are laid out: a scroll
+     * offset set before them is read against the extent of the score that is gone and clamped.
+     */
+    private pendingViewportTarget?: IPoint;
+
     /**
      * Row geometry of the staff tracks, keyed by track id, so the height of a row is measured once and stays
      * the same while the score scrolls. Entries are dropped when a track's content changes.
@@ -212,6 +223,7 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         requisitions.register("animationStateChanged", this.handleAnimationStateChanged);
         requisitions.register("arrangementChanged", this.handleArrangementChanged);
         requisitions.register("arrangementReverted", this.handleArrangementReverted);
+        requisitions.register("scoreBookLoaded", this.handleScoreBookLoaded);
         requisitions.register("trackChanged", this.handleTrackChanged);
         requisitions.register("measureVisibilityRequested", this.handleMeasureVisibilityRequested);
         requisitions.register("scoreViewportMoveRequested", this.handleScoreViewportMoveRequested);
@@ -219,6 +231,7 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
 
         setTimeout(this.handleResize, 0);
         this.resizeObserver.observe(this.viewerRef.current!);
+        window.addEventListener("pagehide", this.handlePageHide);
 
         // The animation always runs while playing: it moves the play beam. Scrolling to keep the beam
         // in view is what auto-follow adds, and what a manual scroll of the viewer turns off.
@@ -229,6 +242,15 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         this.trackViewerContainerRef.current!.style.setProperty(
             "--bar-action-min-width", inEditMode ? `${barActionStripWidth / (viewerZoom / 100)}px` : "0px",
         );
+
+        // A reload hands the viewer the score the session cached, so the position that score was left at is staged
+        // here. A score the user opens or creates states its own position, which the load handler covers.
+        const stored = AppStorage.loadUISettings()?.currentScoreScroll;
+        const arrangement = dataModel.arrangement;
+        if (arrangement !== undefined && stored?.scoreId === arrangement.id) {
+            this.pendingViewportTarget = { x: stored.x, y: stored.y };
+        }
+
         this.updateStaffWindow();
         this.actionBarRef.current?.layout();
         this.handleTrackViewerScroll();
@@ -280,6 +302,10 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
             "--bar-action-min-width", inEditMode ? `${barActionStripWidth / (viewerZoom / 100)}px` : "0px",
         );
         this.actionBarRef.current?.layout();
+
+        // A loaded score states the position it is to be shown at, which needs the measures of that score to be in
+        // the document: the scroll right after them is the one that counts.
+        this.applyStagedViewport();
         this.updateStaffWindow();
         this.handleTrackViewerScroll();
         this.updatePlayBeamExtent();
@@ -315,6 +341,7 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
 
         this.resizeObserver.disconnect();
         arrangementPlayer.animationEngine.disconnect(this.autoFollow);
+        window.removeEventListener("pagehide", this.handlePageHide);
         this.trackViewerInputController?.dispose();
         this.trackViewerInputController = undefined;
         this.rangeArticulationView?.dispose();
@@ -331,6 +358,7 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         requisitions.unregister("animationStateChanged", this.handleAnimationStateChanged);
         requisitions.unregister("arrangementChanged", this.handleArrangementChanged);
         requisitions.unregister("arrangementReverted", this.handleArrangementReverted);
+        requisitions.unregister("scoreBookLoaded", this.handleScoreBookLoaded);
         requisitions.unregister("trackChanged", this.handleTrackChanged);
         requisitions.unregister("measureVisibilityRequested", this.handleMeasureVisibilityRequested);
         requisitions.unregister("scoreViewportMoveRequested", this.handleScoreViewportMoveRequested);
@@ -762,14 +790,104 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         this.staffGeometryDirty = true;
         this.staffRowGeometries.clear();
 
-        const { arrangementPlayer, dataModel } = this.props;
+        const { dataModel } = this.props;
         const { trackViewMode } = this.state;
-        if (trackViewMode === TrackViewMode.Staff && dataModel.arrangement !== undefined) {
-            this.updateStaffGeometry(arrangementPlayer.scoreMetrics.bars);
+        const arrangement = dataModel.arrangement;
+        if (trackViewMode === TrackViewMode.Staff && arrangement !== undefined) {
+            // The measure count comes from the arrangement itself: the player beside it is still the previous
+            // score's while a load is being handled, and its count would lay out the measures that are gone.
+            this.updateStaffGeometry(arrangement.timeParams.length);
             this.staffGeometryDirty = true;
         }
 
         this.forceUpdate();
+    }
+
+    /**
+     * A loaded or newly created score is shown at the position it states, and its rows and columns are rebuilt,
+     * because the arrangement brings tracks of its own. Renames, deletions and library refreshes leave the
+     * arrangement alone.
+     *
+     * @param reason What triggered the event.
+     *
+     * @returns A promise that resolves once the score's viewport is staged.
+     */
+    private handleScoreBookLoaded = (reason: ScoreBookChangeReason): Promise<boolean> => {
+        if (reason === ScoreBookChangeReason.ScoreLoaded) {
+            this.stageScoreViewport();
+            this.refreshStaffGeometryBeforeRender();
+        }
+
+        return Promise.resolve(true);
+    };
+
+    /**
+     * States where the score now in place is to be shown: the position it was left at when it is the score this
+     * session cached, and its first measure for a score the user opens or creates.
+     */
+    private stageScoreViewport(): void {
+        const { dataModel } = this.props;
+        const arrangement = dataModel.arrangement;
+        const stored = AppStorage.loadUISettings()?.currentScoreScroll;
+
+        this.pendingViewportTarget = arrangement !== undefined && stored?.scoreId === arrangement.id
+            ? { x: stored.x, y: stored.y }
+            : { x: 0, y: 0 };
+    }
+
+    /** Applies the staged position, which waits for the measures of the score it belongs to. */
+    private applyStagedViewport(): void {
+        const target = this.pendingViewportTarget;
+        if (target === undefined) {
+            return;
+        }
+
+        this.pendingViewportTarget = undefined;
+        this.applyViewportTarget(target);
+    }
+
+    /**
+     * @param target The scroll position to show.
+     */
+    private applyViewportTarget(target: IPoint): void {
+        const viewer = this.viewerRef.current;
+        if (viewer !== null) {
+            viewer.scrollLeft = target.x;
+
+            // The auto-follow tells its own scrolling from the user's by this offset, so the position just set is
+            // the one it has to know.
+            this.autoScrollLeft = viewer.scrollLeft;
+        }
+
+        const verticalHost = this.verticalScrollHost();
+        if (verticalHost !== undefined) {
+            verticalHost.scrollTop = target.y;
+        }
+    }
+
+    /**
+     * Remembers where the score was left, so a reload of the cached score shows it at the same place again.
+     */
+    private handlePageHide = (): void => {
+        const viewer = this.viewerRef.current;
+        const { dataModel } = this.props;
+        const arrangement = dataModel.arrangement;
+        if (viewer === null || arrangement === undefined) {
+            return;
+        }
+
+        AppStorage.saveSetting("currentScoreScroll", {
+            scoreId: arrangement.id,
+            x: viewer.scrollLeft,
+            y: this.verticalScrollHost()?.scrollTop ?? 0,
+        });
+    };
+
+    /**
+     * @returns The host the score scrolls in vertically, which is the element the viewer sits in.
+     */
+    private verticalScrollHost(): HTMLElement | undefined {
+        return this.arrangementViewerRef.current?.parentElement ?? undefined;
     }
 
     /**
@@ -1138,6 +1256,15 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         const arrangement = dataModel.arrangement;
         if (arrangement === undefined) {
             return this.staffRowGeometries;
+        }
+
+        // A cached row belongs to the arrangement it was measured for. A loaded score brings another one, whose
+        // tracks carry ids of their own, so rows of the score that is gone are dropped before a panel can lay
+        // itself out against them.
+        if (this.staffGeometryArrangement !== arrangement) {
+            this.staffGeometryArrangement = arrangement;
+            this.staffGeometryDirty = true;
+            this.staffRowGeometries.clear();
         }
 
         const metrics = arrangementPlayer.scoreMetrics;

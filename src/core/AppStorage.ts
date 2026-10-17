@@ -55,6 +55,18 @@ export interface IScoreCreationSettings {
     instruments?: number[];
 }
 
+/** Where a score was last scrolled to, so a session picks up where it was left. */
+export interface IScoreScrollPosition {
+    /** The score the position belongs to. */
+    scoreId: number;
+
+    /** Horizontal scroll position in px, as the score's scroll host reports it. */
+    x: number;
+
+    /** Vertical scroll position in px, as the score's scroll host reports it. */
+    y: number;
+}
+
 export interface IUISettings {
     /** Theme selection for the user interface. */
     theme?: string;
@@ -69,6 +81,12 @@ export interface IUISettings {
      * The score the user has currently opened - stored as snapshot.
      */
     currentScore?: string;
+
+    /**
+     * Where the score cached in {@link IUISettings.currentScore} was left scrolled to. It names the score it
+     * belongs to, so a position can never put another score somewhere in the middle.
+     */
+    currentScoreScroll?: IScoreScrollPosition;
 
     /** The last-used values for the new score dialog. */
     scoreCreationSettings?: IScoreCreationSettings;
@@ -147,6 +165,7 @@ export class AppStorage {
     /** Top-level UI settings that should be isolated per session/tab. */
     static #sessionScopedKeys = new Set<keyof IUISettings>([
         "currentScore",
+        "currentScoreScroll",
         "viewSettings",
     ]);
 

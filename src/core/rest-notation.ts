@@ -250,6 +250,79 @@ export const standardNoteValueFractions: readonly IFraction[] = standardNoteValu
     return reduceFraction(numerator, denominator);
 });
 
+/** Grid rests are split in: every standard note value is a whole number of these steps. */
+const restSplitSteps = 64;
+
+/** The standard note values as steps of the split grid, in descending order. */
+const standardValueSteps: readonly number[] = standardNoteValueFractions.map((fraction) => {
+    return (fraction.numerator * restSplitSteps) / fraction.denominator;
+});
+
+/**
+ * Counts the split-grid steps a span holds.
+ *
+ * @param span The span as a bar fraction.
+ *
+ * @returns The number of steps, or undefined when the span is finer than one step.
+ */
+const restSpanSteps = (span: IFraction): number | undefined => {
+    const steps = (span.numerator * restSplitSteps) / span.denominator;
+
+    return Number.isInteger(steps) ? steps : undefined;
+};
+
+/**
+ * Splits a span into standard note values: as few of them as possible, and among those the largest ones.
+ * The room a measure needs follows its smallest rest, so a span covered by a single value stays one, and a
+ * span that needs several rests gets rests no smaller than it has to.
+ *
+ * @param steps The span in split-grid steps.
+ *
+ * @returns The step counts of the values, largest first, or undefined when no split covers the span.
+ */
+const standardValueSplit = (steps: number): number[] | undefined => {
+    const partCount = new Array<number>(steps + 1).fill(Number.POSITIVE_INFINITY);
+    const smallestPart = new Array<number>(steps + 1).fill(0);
+    const firstPart = new Array<number>(steps + 1).fill(0);
+
+    partCount[0] = 0;
+    smallestPart[0] = Number.POSITIVE_INFINITY;
+
+    for (let total = 1; total <= steps; total++) {
+        for (const value of standardValueSteps) {
+            const rest = total - value;
+            if (rest < 0 || !Number.isFinite(partCount[rest])) {
+                continue;
+            }
+
+            const count = partCount[rest] + 1;
+            const smallest = Math.min(value, smallestPart[rest]);
+            if (count > partCount[total] || (count === partCount[total] && smallest <= smallestPart[total])) {
+                continue;
+            }
+
+            partCount[total] = count;
+            smallestPart[total] = smallest;
+            firstPart[total] = value;
+        }
+    }
+
+    if (!Number.isFinite(partCount[steps])) {
+        return undefined;
+    }
+
+    const parts: number[] = [];
+    for (let remaining = steps; remaining > 0; remaining -= firstPart[remaining]) {
+        parts.push(firstPart[remaining]);
+    }
+
+    parts.sort((left, right) => {
+        return right - left;
+    });
+
+    return parts;
+};
+
 /**
  * Decomposes a rest span into the standard note values, largest first. Only the span decides the
  * split: the staff view places rests freely, so a dotted value may stand wherever its length fits
@@ -260,6 +333,15 @@ export const standardNoteValueFractions: readonly IFraction[] = standardNoteValu
  * @returns The durations of the decomposed rest, in display order.
  */
 export const decomposeRestSpan = (span: IFraction): IFraction[] => {
+    const steps = restSpanSteps(span);
+    const split = steps === undefined ? undefined : standardValueSplit(steps);
+    if (split !== undefined) {
+        return split.map((part) => {
+            return reduceFraction(part, restSplitSteps);
+        });
+    }
+
+    // A span no standard value can express (e.g. a subdivision slot) keeps its length.
     const parts: IFraction[] = [];
     let remaining = { ...span };
 
@@ -271,7 +353,6 @@ export const decomposeRestSpan = (span: IFraction): IFraction[] => {
     }
 
     if (remaining.numerator > 0) {
-        // A span no standard value can express (e.g. a subdivision slot) keeps its length.
         parts.push(remaining);
     }
 

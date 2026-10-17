@@ -377,7 +377,9 @@ export class StaffMeasureViewer extends UIComponent<IStaffMeasureViewerProps, IS
                 style={style}
                 ref={setViewerRef}
             >
-                <div className="staff-measure-number">{barNumber}</div>
+                <div className="staff-measure-number">
+                    <span className="staff-measure-number-digits">{barNumber}</span>
+                </div>
                 {playOnlyButton}
                 {trackRows}
                 {resizeHandle}

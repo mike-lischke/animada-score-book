@@ -4452,7 +4452,18 @@ export class ScoreBookDataModel {
             return compareFractions(left.start, right.start);
         });
 
-        return this.setMeasureEvents(measure, events);
+        // Every rest the model writes holds a single standard note value (ADR-0006), because the staff draws one
+        // glyph per rest: a rest of an odd length is decomposed, largest value first. The rests that were there keep
+        // their own values, and the addressed one keeps the length the request named, so a dotted rest stays whole
+        // and only the tail the span cuts off is split.
+        const protectedStarts = this.subdivisionSlotStarts(measure);
+        for (const event of measure.events) {
+            protectedStarts.add(this.fractionKey(event.start));
+        }
+
+        protectedStarts.add(this.fractionKey(start));
+
+        return this.setMeasureEvents(measure, this.normalizeRests(events, protectedStarts));
     }
 
     /**

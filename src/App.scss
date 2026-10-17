@@ -909,6 +909,11 @@ h6 {
 
     .appFooterRange {
         flex: 0 0 auto;
+
+        /* The caption swings between one measure and a range, which is 25 px wider. Reserving the longer form
+           keeps the navigator beside it in place while the visible range changes. Sized for bar counts up to
+           three digits. */
+        min-width: 12.5em;
         white-space: nowrap;
         color: color-mix(in srgb, var(--color-base-content) 70%, transparent);
     }

@@ -426,6 +426,10 @@
     column carries its beat strip inside it — 20pt plus its margins and the first row's top margin. */
     --score-row-top: 24px;
 
+    /* Room the closing measure's resize thumb takes beyond the measure: the handle sits on the barline, its thumb
+       is centred on it, so half the thumb (7 px) less the 1 px the handle's centre lies inside the column. */
+    --staff-handle-overhang: 6px;
+
     .trackControlsPanel {
         margin-top: calc(var(--score-strip-band) + var(--score-row-top) - var(--track-panel-head) + var(--panel-head-room, 0px));
     }
@@ -471,6 +475,11 @@
 
         #trackViewerContentHost {
             padding-top: 0;
+
+            /* The score's right edge is where the last rendered measure ends, so the room the resize thumb of
+               that measure reaches into has to be part of the content rather than of a measure — otherwise the
+               scrollable width moves with the rendered window and a scroll position means two things. */
+            padding-right: var(--staff-handle-overhang);
             min-width: 100%;
 
             #trackViewerDecorations,
@@ -1359,19 +1368,28 @@
     padding-top: 24px;
 }
 
+/* The bar number is the column's watermark, so it takes the column's own area and the query units below state
+   its size from the height the column has. A score of a single instrument is a short column, which the number
+   follows instead of overflowing it. */
 .staff-measure-number {
     position: absolute;
-    top: 50%;
-    left: 50%;
+    inset: 0;
     z-index: 0;
-    transform: translate(-50%, -50%);
+    display: grid;
+    place-items: center;
     pointer-events: none;
-    flex-shrink: 0;
-    font-size: 192px;
-    font-weight: 700;
-    line-height: 1;
-    color: var(--color-base-content);
-    opacity: 0.1;
+    container-type: size;
+
+    /* A digit fills 0.7 of its font size, so 120cqh covers the column while leaving it a little air above and
+       below. The cap keeps the number at its former size once a column is tall enough to hold that. The digits
+       state no line height: a line box taller than the column would be aligned to the column's top, not centred. */
+    .staff-measure-number-digits {
+        font-size: min(192px, 120cqh);
+        font-weight: 700;
+        line-height: 0;
+        color: var(--color-base-content);
+        opacity: 0.1;
+    }
 }
 
 .staff-prefix-row {
@@ -2061,6 +2079,12 @@
     position: relative;
     display: block;
     transform: translateY(var(--rest-line-offset, 0px));
+
+    /* A dotted rest's dot hangs beside its glyph, so the symbol moves left by half of the dot's room and stays
+       centred in the slot the measure layout keeps free for it. */
+    &.staff-note-viewer-rest-symbol-dotted {
+        transform: translateY(var(--rest-line-offset, 0px)) translateX(calc(var(--staff-space) * -0.4));
+    }
 
     .staff-note-viewer-rest-dot {
         position: absolute;
