@@ -282,11 +282,9 @@ const restSpanSteps = (span: IFraction): number | undefined => {
  */
 const standardValueSplit = (steps: number): number[] | undefined => {
     const partCount = new Array<number>(steps + 1).fill(Number.POSITIVE_INFINITY);
-    const smallestPart = new Array<number>(steps + 1).fill(0);
     const firstPart = new Array<number>(steps + 1).fill(0);
 
     partCount[0] = 0;
-    smallestPart[0] = Number.POSITIVE_INFINITY;
 
     for (let total = 1; total <= steps; total++) {
         for (const value of standardValueSteps) {
@@ -296,13 +294,11 @@ const standardValueSplit = (steps: number): number[] | undefined => {
             }
 
             const count = partCount[rest] + 1;
-            const smallest = Math.min(value, smallestPart[rest]);
-            if (count > partCount[total] || (count === partCount[total] && smallest <= smallestPart[total])) {
+            if (count > partCount[total] || (count === partCount[total] && value <= firstPart[total])) {
                 continue;
             }
 
             partCount[total] = count;
-            smallestPart[total] = smallest;
             firstPart[total] = value;
         }
     }

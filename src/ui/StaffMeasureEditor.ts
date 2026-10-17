@@ -442,24 +442,7 @@ export class StaffMeasureEditor extends MeasureEditor {
             return false;
         }
 
-        // The cursor moves behind the last edited event, the way an entry leaves it, so a further value applies to
-        // the event that follows without selecting it by hand. That event is taken from the model, so a rest the
-        // edit just split into parts is addressed by what it holds now rather than by what the view keeps showing.
-        const addressed = entries.flatMap((entry) => {
-            return this.addressedEventsOf(entry);
-        });
-        const last = addressed.at(-1);
-        const event = last === undefined ? undefined : this.eventAt(last);
-
-        if (event === undefined || last === undefined) {
-            this.selectionManager.clearSelection();
-
-            return true;
-        }
-
-        // The selection is replaced rather than cleared and set again: the tools of a selection close and reopen
-        // within one update otherwise, and the reopen is lost while the close is still being applied.
-        this.advanceStaffCursor({ ...last, duration: { ...event.duration } });
+        this.selectionManager.replaceSelection(this.refreshSelection(entries));
 
         return true;
     }

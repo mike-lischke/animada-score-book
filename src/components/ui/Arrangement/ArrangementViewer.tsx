@@ -1113,7 +1113,8 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         }
 
         const contentWidth = this.viewerContentHostRef.current!.scrollWidth;
-        const width = contentWidth / bars;
+        const firstMeasure = this.viewerContentHostRef.current!.querySelector<HTMLElement>(".grid-measure-viewer");
+        const width = firstMeasure?.offsetWidth ?? (contentWidth / bars);
 
         return { start: column * width, width, progress, contentWidth };
     };

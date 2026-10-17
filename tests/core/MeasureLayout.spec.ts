@@ -26,6 +26,7 @@ const equalTiles = (count: number): IMeasureEvent[] => {
         return {
             start: { numerator: index, denominator: count },
             duration: { numerator: 1, denominator: count },
+            noteStyleId: "test-note",
         };
     });
 };
@@ -167,15 +168,26 @@ describe("MeasureLayout.minimumWidthOfMeasure", () => {
     });
 
     it("keeps a measure wide enough for the bar action strip", () => {
-        // A single whole rest needs 43 px, which the strip's own width overrides.
-        expect(MeasureLayout.minimumWidthOfMeasure(arrangementOf(equalTiles(1)), 1))
+        // A single whole rest needs 47 px, which the strip's own width overrides.
+        const wholeRest = [{
+            start: { numerator: 0, denominator: 1 },
+            duration: { numerator: 1, denominator: 1 },
+        }];
+
+        expect(MeasureLayout.minimumWidthOfMeasure(arrangementOf(wholeRest), 1))
             .toBe(barActionStripWidth);
     });
 
     it("lets the tightest slot of the measure decide", () => {
         const events: IMeasureEvent[] = [
-            { start: { numerator: 0, denominator: 1 }, duration: { numerator: 1, denominator: 32 } },
-            { start: { numerator: 1, denominator: 32 }, duration: { numerator: 1, denominator: 32 } },
+            {
+                start: { numerator: 0, denominator: 1 }, duration: { numerator: 1, denominator: 32 },
+                noteStyleId: "test-note",
+            },
+            {
+                start: { numerator: 1, denominator: 32 }, duration: { numerator: 1, denominator: 32 },
+                noteStyleId: "test-note",
+            },
             { start: { numerator: 1, denominator: 16 }, duration: { numerator: 15, denominator: 16 } },
         ];
 

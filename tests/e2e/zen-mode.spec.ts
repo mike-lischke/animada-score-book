@@ -250,6 +250,7 @@ for (const mode of [TrackViewMode.Grid, TrackViewMode.Staff]) {
             await openScore(page, mode, true);
             await enterZen(page);
             await selectBar(page, 2);
+            await expect(page.locator('.zenMeasurePlayButton[aria-pressed="true"]')).toHaveCount(1);
             await page.locator("#playbackButton").click();
             await expect(page.locator("#playbackButton")).toHaveAttribute("aria-pressed", "true");
 

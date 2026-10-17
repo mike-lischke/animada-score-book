@@ -269,10 +269,11 @@ export class MeasureLayout {
                 const event = measure.events[index];
                 const previous = index === 0 ? undefined : measure.events[index - 1];
                 const isNote = event.noteStyleId !== undefined;
-                const isPreviousNote = previous !== undefined && previous.noteStyleId !== undefined;
+                const isPreviousNote = previous?.noteStyleId !== undefined;
 
                 if (isNote) {
-                    noteSlotWidth = Math.max(noteSlotWidth, MeasureLayout.columnWidthFor(minEventWidth, event.duration));
+                    noteSlotWidth = Math.max(noteSlotWidth, MeasureLayout.columnWidthFor(minEventWidth,
+                        event.duration));
                 } else {
                     restSlotWidth = Math.max(restSlotWidth, MeasureLayout.columnWidthFor(
                         MeasureLayout.restSymbolWidth(event.duration), event.duration));
