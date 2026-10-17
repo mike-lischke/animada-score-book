@@ -93,7 +93,8 @@ export class ArrangementPlayer {
         this.refreshPerformance();
 
         this.updateTrackPlayers();
-        requisitions.register("arrangementChanged", this.handleArrangementChanged);
+        requisitions.register("arrangementMutated", this.handleArrangementMutated);
+        requisitions.register("arrangementReverted", this.handleArrangementMutated);
 
         this.updateCallbackEvents();
         requisitions.register("timeParamsChanged", this.handleTimeParamsChanged);
@@ -181,7 +182,8 @@ export class ArrangementPlayer {
         this.animationEngine.dispose();
 
         // Unsubscribe from arrangement changes and the event engine.
-        requisitions.unregister("arrangementChanged", this.handleArrangementChanged);
+        requisitions.unregister("arrangementMutated", this.handleArrangementMutated);
+        requisitions.unregister("arrangementReverted", this.handleArrangementMutated);
         requisitions.unregister("timeParamsChanged", this.handleTimeParamsChanged);
         requisitions.unregister("trackChanged", this.handleTrackChanged);
         requisitions.unregister("playRangeChanged", this.handlePlayRangeChanged);
@@ -451,16 +453,11 @@ export class ArrangementPlayer {
     };
 
     /**
-     * Handles arrangement structure changes (tracks added/removed).
+     * Keeps the performance and the track players in step with a finished edit or a restored snapshot.
      *
-     * @param arrangementId The id of the arrangement that changed.
-     * @returns True if this player handles the given arrangement.
+     * @returns Always true (the change is always handled).
      */
-    private handleArrangementChanged = (arrangementId: number): Promise<boolean> => {
-        if (arrangementId !== this.dataModel.arrangement?.id) {
-            return Promise.resolve(false);
-        }
-
+    private handleArrangementMutated = (): Promise<boolean> => {
         this.refreshPerformance();
         this.updateTrackPlayers();
 

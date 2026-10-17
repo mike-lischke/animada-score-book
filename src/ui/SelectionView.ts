@@ -131,7 +131,9 @@ export class SelectionView {
         requisitions.register("editEntryModeChanged", this.handleEntryModeChanged);
         requisitions.register("trackViewModeToggled", this.handleViewModeToggled);
         requisitions.register("trackChanged", this.scheduleOverlayRefresh);
-        requisitions.register("arrangementChanged", this.scheduleOverlayRefresh);
+        requisitions.register("arrangementMutated", this.scheduleOverlayRefresh);
+        requisitions.register("arrangementReverted", this.scheduleOverlayRefresh);
+        requisitions.register("measureLayoutChanged", this.scheduleOverlayRefresh);
         requisitions.register("staffWindowChanged", this.handleStaffWindowChanged);
         eventContainer.addEventListener("pointerdown", this.handlePointerDown);
         document.addEventListener("keydown", this.handleKeyDown);
@@ -152,7 +154,9 @@ export class SelectionView {
         requisitions.unregister("editEntryModeChanged", this.handleEntryModeChanged);
         requisitions.unregister("trackViewModeToggled", this.handleViewModeToggled);
         requisitions.unregister("trackChanged", this.scheduleOverlayRefresh);
-        requisitions.unregister("arrangementChanged", this.scheduleOverlayRefresh);
+        requisitions.unregister("arrangementMutated", this.scheduleOverlayRefresh);
+        requisitions.unregister("arrangementReverted", this.scheduleOverlayRefresh);
+        requisitions.unregister("measureLayoutChanged", this.scheduleOverlayRefresh);
         requisitions.unregister("staffWindowChanged", this.handleStaffWindowChanged);
 
         if (this.selectionRefreshFrame !== undefined) {
@@ -903,8 +907,8 @@ export class SelectionView {
     };
 
     /**
-     * Redraws the decoration after rendered notes moved: a track change, or an arrangement mutation, which a
-     * measure resize fires on every frame. The redraw waits a frame, so it reads the laid-out geometry.
+     * Redraws the decoration after rendered notes moved: a track change, a finished edit, a restored snapshot,
+     * or a measure layout change. The redraw waits a frame, so it reads the laid-out geometry.
      *
      * @returns A promise that resolves when the redraw was scheduled.
      */

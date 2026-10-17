@@ -43,7 +43,8 @@ import { AppStorage, type IUISettings } from "./core/AppStorage.js";
 import { Arrangement, type IArrangementCreationOptions } from "./core/Arrangement.js";
 import { getSharedAudioContext } from "./core/audio-context.js";
 import {
-    SbDmEntityType, ScoreBookDataModel, type ISbDmInstrument, type ISbDmScore, type ISbDmScoreFolder
+    SbDmEntityType, ScoreBookChangeReason, ScoreBookDataModel, type ISbDmInstrument, type ISbDmScore,
+    type ISbDmScoreFolder
 } from "./core/ScoreBookDataModel.js";
 import {
     PasteOverflowMode, PasteResultKind, ScoreClipboard, SubdivisionPasteMode, type IPasteResult,
@@ -178,9 +179,6 @@ export class App extends UIComponent<{}, IAppState> {
     private compactQueries = [this.compactHeaderQuery, this.compactLayoutQuery];
     private signInFromRunning = false;
 
-    /** The arrangement the save state refers to, so a newly loaded score starts as unchanged. */
-    private currentArrangementId?: number;
-
     /** True while an MP3 export is running, to keep the export button disabled. */
     private exporting = false;
 
@@ -224,7 +222,7 @@ export class App extends UIComponent<{}, IAppState> {
 
         requisitions.register("settingsChanged", this.handleSettingsChanged);
         requisitions.register("notificationStateChanged", this.handleNotificationStateChanged);
-        requisitions.register("arrangementChanged", this.handleArrangementChanged);
+        requisitions.register("scoreBookLoaded", this.handleScoreBookLoaded);
         requisitions.register("backendDisconnected", this.handleBackendDisconnected);
         requisitions.register("authChanged", this.handleAuthChanged);
         requisitions.register("notesClicked", this.handleNoteClicked);
@@ -272,7 +270,7 @@ export class App extends UIComponent<{}, IAppState> {
 
         requisitions.unregister("settingsChanged", this.handleSettingsChanged);
         requisitions.unregister("notificationStateChanged", this.handleNotificationStateChanged);
-        requisitions.unregister("arrangementChanged", this.handleArrangementChanged);
+        requisitions.unregister("scoreBookLoaded", this.handleScoreBookLoaded);
         requisitions.unregister("backendDisconnected", this.handleBackendDisconnected);
         requisitions.unregister("authChanged", this.handleAuthChanged);
         requisitions.unregister("notesClicked", this.handleNoteClicked);
@@ -2392,9 +2390,9 @@ export class App extends UIComponent<{}, IAppState> {
         return Promise.resolve(true);
     };
 
-    private handleArrangementChanged = (arrangementId: number): Promise<boolean> => {
-        if (arrangementId !== this.currentArrangementId) {
-            this.currentArrangementId = arrangementId;
+    private handleScoreBookLoaded = (reason: ScoreBookChangeReason): Promise<boolean> => {
+        // A newly loaded arrangement starts unsaved; library refreshes and renames leave the edit state alone.
+        if (reason === ScoreBookChangeReason.ScoreLoaded) {
             this.setState({ scoreSaved: false });
         }
 

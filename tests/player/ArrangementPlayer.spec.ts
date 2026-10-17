@@ -306,7 +306,7 @@ describe("ArrangementPlayer", { concurrent: false }, () => {
             clear: vi.fn(),
         };
         arrangement.tracks.push(newTrack);
-        void requisitions.execute("arrangementChanged", arrangement.id);
+        void requisitions.execute("arrangementMutated", undefined);
 
         expect(player.trackPlayers.size).toBe(2);
     });

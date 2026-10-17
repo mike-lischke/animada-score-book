@@ -124,6 +124,7 @@ export class UndoManager {
             this.dataModel.instruments);
         this.updateDirtyState();
         this.dataModel.persistCurrentScore();
+        void requisitions.execute("arrangementReverted", undefined);
     };
 
     /**

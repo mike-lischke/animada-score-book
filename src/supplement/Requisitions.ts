@@ -98,7 +98,9 @@ export interface IRequestTypeMap {
 
     "instrumentLoaded": (instrumentId: number) => Promise<boolean>;
     "trackChanged": (trackId: number) => Promise<boolean>;
-    "arrangementChanged": (arrangementId: number) => Promise<boolean>;
+
+    /** Refresh view-only decorations after a measure width changed; the edit itself is not finished yet. */
+    "measureLayoutChanged": SimpleCallback;
     "timeParamsChanged": SimpleCallback;
     "scoreBookLoaded": (reason: ScoreBookChangeReason) => Promise<boolean>;
     "scoreEntryUpdated": (entry: ISbDmScoreFolder | ISbDmScore) => Promise<boolean>;
@@ -165,7 +167,7 @@ export interface IRequestTypeMap {
     /** Fired by the articulation toolbar to change the articulation of subsequently entered notes. */
     "articulationChanged": (articulation: Articulation) => Promise<boolean>;
 
-    /** Posted after arrangement mutations so UndoManager can record undo/redo snapshots. */
+    /** Posted once per finished arrangement edit: undo recording, autosave, toolbars, and viewers refresh on it. */
     "arrangementMutated": SimpleCallback;
 
     /** Posted after undo/redo to revalidate the selection and restore its state from the restored arrangement. */

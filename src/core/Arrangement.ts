@@ -189,8 +189,6 @@ export class Arrangement implements ISbDmArrangement {
             this.tracks.splice(index, 0, track);
         }
 
-        void requisitions.execute("arrangementChanged", this.id);
-
         return track;
     };
 
@@ -205,7 +203,6 @@ export class Arrangement implements ISbDmArrangement {
         if (index !== -1) {
             this.tracks.splice(index, 1);
             this.rangeArticulations.removeTrack(trackToRemove.id);
-            void requisitions.execute("arrangementChanged", this.id);
 
             return true;
         } else {
@@ -253,7 +250,6 @@ export class Arrangement implements ISbDmArrangement {
 
         this.tracks.splice(index + 1, 0, copy);
         this.rangeArticulations.duplicateTrack(trackToDuplicate.id, copy.id);
-        void requisitions.execute("arrangementChanged", this.id);
 
         return copy;
     };
@@ -311,8 +307,6 @@ export class Arrangement implements ISbDmArrangement {
                 this.repeatBars.set(atIndex + i, { ...sourceRepeats });
             }
         }
-
-        void requisitions.execute("arrangementChanged", this.id);
     }
 
     /**
@@ -338,7 +332,6 @@ export class Arrangement implements ISbDmArrangement {
         this.shiftMeasureWidths(barNumber + 1, -1);
         this.repeatBars.delete(barNumber);
         this.shiftRepeatBars(barNumber + 1, -1);
-        void requisitions.execute("arrangementChanged", this.id);
     }
 
     /**
@@ -354,8 +347,6 @@ export class Arrangement implements ISbDmArrangement {
             (track as Track).clearMeasure(barNumber - 1);
             void requisitions.execute("trackChanged", track.id);
         }
-
-        void requisitions.execute("arrangementChanged", this.id);
     }
 
     /**
@@ -387,8 +378,6 @@ export class Arrangement implements ISbDmArrangement {
         if (repeats !== undefined) {
             this.repeatBars.set(barNumber + 1, { ...repeats });
         }
-
-        void requisitions.execute("arrangementChanged", this.id);
     }
 
     /**
@@ -407,7 +396,6 @@ export class Arrangement implements ISbDmArrangement {
      */
     public set title(newTitle: string) {
         this.titleString = newTitle;
-        void requisitions.execute("arrangementChanged", this.id);
     }
 
     public applyArrangementSnapshot(arrangementSnapshot: IArrangementSnapshot, instruments: ISbDmInstrument[]): void {
@@ -454,7 +442,6 @@ export class Arrangement implements ISbDmArrangement {
         // they are applied after both the time params and the track list.
         applyArrangementExtensions(this, arrangementSnapshot);
         this.clampMeasureWidths();
-        void requisitions.execute("arrangementChanged", this.id);
     };
 
     /**

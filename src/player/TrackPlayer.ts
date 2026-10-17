@@ -69,7 +69,8 @@ export class TrackPlayer {
         // Subscriptions to keep internal caches in sync.
         requisitions.register("trackChanged", this.handleTrackChanged);
         requisitions.register("timeParamsChanged", this.handleTimeParamsChanged);
-        requisitions.register("arrangementChanged", this.handleArrangementDestroy);
+        requisitions.register("arrangementMutated", this.handleArrangementMutated);
+        requisitions.register("arrangementReverted", this.handleArrangementMutated);
         requisitions.register("playbackOrderChanged", this.handlePlaybackOrderChanged);
     }
 
@@ -119,7 +120,8 @@ export class TrackPlayer {
         requisitions.unregister("instrumentLoaded", this.handleInstrumentLoaded);
         requisitions.unregister("trackChanged", this.handleTrackChanged);
         requisitions.unregister("timeParamsChanged", this.handleTimeParamsChanged);
-        requisitions.unregister("arrangementChanged", this.handleArrangementDestroy);
+        requisitions.unregister("arrangementMutated", this.handleArrangementMutated);
+        requisitions.unregister("arrangementReverted", this.handleArrangementMutated);
         requisitions.unregister("playbackOrderChanged", this.handlePlaybackOrderChanged);
     }
 
@@ -282,14 +284,9 @@ export class TrackPlayer {
     /**
      * Disposes this player if its track was removed from the arrangement.
      *
-     * @param arrangementId The id of the arrangement that changed.
-     * @returns True if this player handles the given arrangement.
+     * @returns Always true (the change is always handled).
      */
-    private handleArrangementDestroy = (arrangementId: number): Promise<boolean> => {
-        if (arrangementId !== this.track.arrangement.id) {
-            return Promise.resolve(false);
-        }
-
+    private handleArrangementMutated = (): Promise<boolean> => {
         if (!this.track.arrangement.tracks.includes(this.track)) {
             this.dispose();
         }

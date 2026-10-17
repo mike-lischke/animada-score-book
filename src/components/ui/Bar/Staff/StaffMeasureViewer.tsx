@@ -118,7 +118,8 @@ export class StaffMeasureViewer extends UIComponent<IStaffMeasureViewerProps, IS
         const { selectionManager } = this.props;
         selectionManager.registerHitTester(this);
 
-        requisitions.register("arrangementChanged", this.handleArrangementChanged);
+        requisitions.register("arrangementMutated", this.handleArrangementMutated);
+        requisitions.register("arrangementReverted", this.handleArrangementMutated);
     }
 
     public override componentDidUpdate(previousProps: Readonly<IStaffMeasureViewerProps>): void {
@@ -134,7 +135,8 @@ export class StaffMeasureViewer extends UIComponent<IStaffMeasureViewerProps, IS
         const { selectionManager } = this.props;
         selectionManager.unregisterHitTester(this);
 
-        requisitions.unregister("arrangementChanged", this.handleArrangementChanged);
+        requisitions.unregister("arrangementMutated", this.handleArrangementMutated);
+        requisitions.unregister("arrangementReverted", this.handleArrangementMutated);
     }
 
     /**
@@ -823,12 +825,8 @@ export class StaffMeasureViewer extends UIComponent<IStaffMeasureViewerProps, IS
         };
     }
 
-    private handleArrangementChanged = (arrangementId: number): Promise<boolean> => {
+    private handleArrangementMutated = (): Promise<boolean> => {
         const { arrangement, tracks } = this.props;
-
-        if (arrangementId !== arrangement.id) {
-            return Promise.resolve(false);
-        }
 
         this.setState({ tracks: tracks ?? [...arrangement.tracks] });
 

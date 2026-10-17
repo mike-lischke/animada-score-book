@@ -145,7 +145,9 @@ export class RangeArticulationView {
         requisitions.register("zenModeChanged", this.handleZenModeChanged);
         requisitions.register("selectionChanged", this.handleSelectionChanged);
         requisitions.register("trackChanged", this.handleRefreshRequest);
-        requisitions.register("arrangementChanged", this.handleRefreshRequest);
+        requisitions.register("arrangementMutated", this.handleRefreshRequest);
+        requisitions.register("arrangementReverted", this.handleRefreshRequest);
+        requisitions.register("measureLayoutChanged", this.handleRefreshRequest);
         requisitions.register("staffWindowChanged", this.handleRefreshRequest);
 
         contentHost.addEventListener("pointerdown", this.handlePointerDown, true);
@@ -164,7 +166,9 @@ export class RangeArticulationView {
         requisitions.unregister("zenModeChanged", this.handleZenModeChanged);
         requisitions.unregister("selectionChanged", this.handleSelectionChanged);
         requisitions.unregister("trackChanged", this.handleRefreshRequest);
-        requisitions.unregister("arrangementChanged", this.handleRefreshRequest);
+        requisitions.unregister("arrangementMutated", this.handleRefreshRequest);
+        requisitions.unregister("arrangementReverted", this.handleRefreshRequest);
+        requisitions.unregister("measureLayoutChanged", this.handleRefreshRequest);
         requisitions.unregister("staffWindowChanged", this.handleRefreshRequest);
 
         if (this.refreshFrame !== undefined) {

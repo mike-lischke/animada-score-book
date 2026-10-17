@@ -221,7 +221,8 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         requisitions.register("trackViewModeToggled", this.handleTrackViewModeToggled);
         requisitions.register("timeParamsChanged", this.handleTimeParamsChange);
         requisitions.register("animationStateChanged", this.handleAnimationStateChanged);
-        requisitions.register("arrangementChanged", this.handleArrangementChanged);
+        requisitions.register("arrangementMutated", this.handleArrangementMutated);
+        requisitions.register("measureLayoutChanged", this.handleArrangementMutated);
         requisitions.register("arrangementReverted", this.handleArrangementReverted);
         requisitions.register("scoreBookLoaded", this.handleScoreBookLoaded);
         requisitions.register("trackChanged", this.handleTrackChanged);
@@ -356,7 +357,8 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         requisitions.unregister("trackViewModeToggled", this.handleTrackViewModeToggled);
         requisitions.unregister("timeParamsChanged", this.handleTimeParamsChange);
         requisitions.unregister("animationStateChanged", this.handleAnimationStateChanged);
-        requisitions.unregister("arrangementChanged", this.handleArrangementChanged);
+        requisitions.unregister("arrangementMutated", this.handleArrangementMutated);
+        requisitions.unregister("measureLayoutChanged", this.handleArrangementMutated);
         requisitions.unregister("arrangementReverted", this.handleArrangementReverted);
         requisitions.unregister("scoreBookLoaded", this.handleScoreBookLoaded);
         requisitions.unregister("trackChanged", this.handleTrackChanged);
@@ -768,13 +770,7 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         return Promise.resolve(true);
     };
 
-    private handleArrangementChanged = (arrangementId: number): Promise<boolean> => {
-        const { dataModel } = this.props;
-
-        if (arrangementId !== dataModel.arrangement?.id) {
-            return Promise.resolve(false);
-        }
-
+    private handleArrangementMutated = (): Promise<boolean> => {
         this.refreshStaffGeometryBeforeRender();
 
         return Promise.resolve(true);

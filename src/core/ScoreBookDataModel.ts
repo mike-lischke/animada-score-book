@@ -1044,7 +1044,7 @@ export class ScoreBookDataModel {
             widths.set(bar, next);
         }
 
-        void requisitions.execute("arrangementChanged", arrangement.id);
+        void requisitions.execute("measureLayoutChanged", undefined);
 
         return true;
     }
@@ -4264,7 +4264,6 @@ export class ScoreBookDataModel {
             return;
         }
 
-        let widened = false;
         for (let bar = 1; bar <= arrangement.timeParams.length; bar++) {
             const floor = MeasureLayout.minimumWidthOfMeasure(arrangement, bar);
             if (MeasureLayout.widthOf(bar, widths) >= floor) {
@@ -4277,13 +4276,6 @@ export class ScoreBookDataModel {
             } else {
                 widths.set(bar, floor);
             }
-
-            widened = true;
-        }
-
-        if (widened) {
-            // The staff geometry follows the widths, so the viewer has to lay its columns out again.
-            void requisitions.execute("arrangementChanged", arrangement.id);
         }
     }
 

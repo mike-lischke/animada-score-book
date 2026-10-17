@@ -1580,7 +1580,7 @@ describe("ScoreBookDataModel measure widths", { concurrent: false }, () => {
     let model: ScoreBookDataModel;
     let widths: Map<number, number>;
     let mutatedCalls: number;
-    let changedCalls: number;
+    let layoutCalls: number;
 
     const mutatedSpy = (): Promise<boolean> => {
         mutatedCalls++;
@@ -1588,8 +1588,8 @@ describe("ScoreBookDataModel measure widths", { concurrent: false }, () => {
         return Promise.resolve(true);
     };
 
-    const changedSpy = (): Promise<boolean> => {
-        changedCalls++;
+    const layoutSpy = (): Promise<boolean> => {
+        layoutCalls++;
 
         return Promise.resolve(true);
     };
@@ -1598,22 +1598,22 @@ describe("ScoreBookDataModel measure widths", { concurrent: false }, () => {
         vi.restoreAllMocks();
         model = new ScoreBookDataModel();
         mutatedCalls = 0;
-        changedCalls = 0;
+        layoutCalls = 0;
         model.startNewArrangement([createInstrument("0", 0, 0)]);
         widths = model.arrangement!.measureWidths!;
         requisitions.register("arrangementMutated", mutatedSpy);
-        requisitions.register("arrangementChanged", changedSpy);
+        requisitions.register("measureLayoutChanged", layoutSpy);
     });
 
     afterEach(() => {
         requisitions.unregister("arrangementMutated", mutatedSpy);
-        requisitions.unregister("arrangementChanged", changedSpy);
+        requisitions.unregister("measureLayoutChanged", layoutSpy);
     });
 
     it("stores a width and refreshes the layout without recording an undo step", () => {
         expect(model.setMeasureWidth(1, 2000)).toBe(true);
         expect(widths.get(1)).toBe(2000);
-        expect(changedCalls).toBe(1);
+        expect(layoutCalls).toBe(1);
         expect(mutatedCalls).toBe(0);
     });
 
