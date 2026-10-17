@@ -55,11 +55,11 @@ test.beforeEach(async ({ page }) => {
 
 test("creates a subdivision from the notes selected in the staff view", async ({ page }) => {
     await page.locator(".staff-measure-track-row .staff-note-head-symbol").first().click();
-    await expect(page.locator("#selectionEditPopup .subdivisionToolbar")).toBeVisible();
+    await expect(page.locator("#selectionEditPopup .subdivision-toolbar")).toBeVisible();
     const runsBefore = await page.locator(".staff-note-viewer-run").count();
 
-    await page.locator(".subdivisionToolbar button").first().click();
-    const quadruplet = page.locator(".subdivisionToolbar .du-dropdown li", { hasText: "Quadruplet" }).locator("a");
+    await page.locator(".subdivision-toolbar button").first().click();
+    const quadruplet = page.locator(".subdivision-toolbar .du-dropdown li", { hasText: "Quadruplet" }).locator("a");
 
     // A quarter note is four grid steps long, so a 4:1 split must be offered for it.
     await expect(quadruplet).toBeVisible();
@@ -73,9 +73,9 @@ test("creates a subdivision from the notes selected in the staff view", async ({
 
 test("applies a length to a note beside a subdivision", async ({ page }) => {
     await page.locator(".staff-measure-track-row .staff-note-head-symbol").first().click();
-    await expect(page.locator("#selectionEditPopup .subdivisionToolbar")).toBeVisible();
-    await page.locator(".subdivisionToolbar button").first().click();
-    const quadruplet = page.locator(".subdivisionToolbar .du-dropdown li", { hasText: "Quadruplet" }).locator("a");
+    await expect(page.locator("#selectionEditPopup .subdivision-toolbar")).toBeVisible();
+    await page.locator(".subdivision-toolbar button").first().click();
+    const quadruplet = page.locator(".subdivision-toolbar .du-dropdown li", { hasText: "Quadruplet" }).locator("a");
     await quadruplet.click({ force: true });
 
     // The quarter note behind the subdivision is an event of its own, so it takes a new length even
@@ -84,26 +84,26 @@ test("applies a length to a note beside a subdivision", async ({ page }) => {
     const noteSymbols = page.locator(".staff-measure-track-row .staff-note-head-symbol");
     await expect(noteSymbols).toHaveCount(2);
     await noteSymbols.nth(1).click();
-    await expect(page.locator(".noteLengthToolbar .noteLengthButton").first()).toBeEnabled();
+    await expect(page.locator(".note-length-toolbar .note-length-button").first()).toBeEnabled();
 
-    await page.locator(".noteLengthToolbar .noteDotButton").click();
+    await page.locator(".note-length-toolbar .note-dot-button").click();
 
-    await expect(page.locator(".noteLengthToolbar .noteDotButton.du-btn-primary")).toBeVisible();
+    await expect(page.locator(".note-length-toolbar .note-dot-button.du-btn-primary")).toBeVisible();
 });
 
 test("nests a subdivision inside a slot of the subdivision around it", async ({ page }) => {
     const runsBefore = await page.locator(".staff-note-viewer-run").count();
 
     await page.locator(".staff-measure-track-row .staff-note-head-symbol").first().click();
-    await expect(page.locator("#selectionEditPopup .subdivisionToolbar")).toBeVisible();
-    await page.locator(".subdivisionToolbar button").first().click();
-    await page.locator(".subdivisionToolbar .du-dropdown li", { hasText: "Triplet" }).locator("a")
+    await expect(page.locator("#selectionEditPopup .subdivision-toolbar")).toBeVisible();
+    await page.locator(".subdivision-toolbar button").first().click();
+    await page.locator(".subdivision-toolbar .du-dropdown li", { hasText: "Triplet" }).locator("a")
         .click({ force: true });
 
     // The triplet's second slot is a rest, so the run stands in for the slot's note head.
     await page.locator(".staff-note-viewer-run").nth(1).click();
-    await page.locator(".subdivisionToolbar button").first().click();
-    await page.locator(".subdivisionToolbar .du-dropdown li", { hasText: "Triplet" }).locator("a")
+    await page.locator(".subdivision-toolbar button").first().click();
+    await page.locator(".subdivision-toolbar .du-dropdown li", { hasText: "Triplet" }).locator("a")
         .click({ force: true });
 
     // The nested triplet and the two slots beside it are four runs more than the measure held before.

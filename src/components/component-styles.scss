@@ -33,7 +33,7 @@
 }
 
 /* The play control is the bar's primary action: an inverted pill that names itself, like the mockup. */
-#arrangementPlayControls .playStopButton {
+#arrangementPlayControls .play-stop-button {
     gap: 6px;
     flex: 0 0 88px;
     width: 88px;
@@ -78,7 +78,7 @@
     border: 1px solid color-mix(in srgb, var(--color-base-content) 30%, transparent);
 }
 
-.playStopLabel {
+.play-stop-label {
     white-space: nowrap;
 }
 
@@ -309,7 +309,7 @@
 /* The insert/overwrite switch is built like the playback bar's switches: a pill that names the mode and
    carries a status dot, which lights up while overwrite, the mode that replaces content, is in effect. It is
    portaled into the document body, so it only uses theme tokens the root publishes. */
-.entryModeButton {
+.entry-mode-button {
     height: 28px;
     min-height: 28px;
     padding: 0 12px 0 10px;
@@ -329,7 +329,7 @@
         background-color: color-mix(in srgb, var(--color-base-content) 30%, transparent);
     }
 
-    .entryModeLabel {
+    .entry-mode-label {
         font-size: 12px;
         font-weight: 600;
         white-space: nowrap;
@@ -359,8 +359,8 @@
 
 /* The value icons are drawn in the button's own ink: the outline states the value and the segment filled from
    its apex the share of a whole it stands for. */
-.noteLengthButton,
-.noteDotButton {
+.note-length-button,
+.note-dot-button {
     .noteLengthIcon {
         color: var(--color-base-content);
         display: block;
@@ -415,7 +415,7 @@
 
 #trackViewerContainer {
     /* Height of the block above a side panel, which its first row is offset by: the list's 7px padding, the 30px
-       header block and the 16px gap after it. Keep in step with `.trackControlsList` / `.trackEditSidebar`. */
+       header block and the 16px gap after it. Keep in step with `.track-controls-list` / `.track-edit-sidebar`. */
     --track-panel-head: 53px;
 
     /* Additional toolbar room inside the score columns. The fixed action bar lives above this container. */
@@ -545,7 +545,7 @@
         }
     }
 
-    .trackControlsList {
+    .track-controls-list {
         overflow: hidden;
         gap: 16px;
 
@@ -569,7 +569,7 @@
             }
         }
 
-        &:not(.trackLabelsList) {
+        &:not(.track-labels-list) {
             padding-right: 9px;
             border-right: 1px solid var(--border-subtle);
 
@@ -588,7 +588,7 @@
     .trackControlsPanel {
         min-width: 0;
 
-        .trackControls {
+        .track-controls {
             align-self: flex-end;
             width: calc(var(--track-controls-expanded-width) - 20px);
             height: var(--track-row-height, var(--note-height));
@@ -617,7 +617,7 @@
             z-index: 2;
         }
 
-        .trackControls .trackInstrumentShell {
+        .track-controls .trackInstrumentShell {
             position: relative;
             width: 60px;
             height: 60px;
@@ -625,20 +625,20 @@
             border: 4px solid white;
         }
 
-        .trackControls .trackInstrumentIcon {
+        .track-controls .trackInstrumentIcon {
             width: 34px;
             mask-size: contain;
             background-color: var(--color-base-content);
             flex: 0 0 auto;
         }
 
-        .trackControls .trackSliderArea {
+        .track-controls .trackSliderArea {
             flex: 1 1 auto;
             min-width: 0;
             margin-right: 10px;
         }
 
-        .trackControls .trackInstrumentName {
+        .track-controls .track-instrument-name {
             font-size: 0.9rem;
             white-space: nowrap;
             overflow: hidden;
@@ -647,12 +647,12 @@
             margin-bottom: 2px;
         }
 
-        .trackControls .trackVolumeSlider {
+        .track-controls .track-volume-slider {
             width: calc(100% - 16px);
             margin: 0 8px;
         }
 
-        .trackControls .trackVolumeLegend {
+        .track-controls .trackVolumeLegend {
             display: grid;
             grid-template-columns: 1fr 1fr;
             width: calc(100% - 16px);
@@ -662,11 +662,11 @@
             user-select: none;
         }
 
-        .trackControls .trackVolumeLegendLeft {
+        .track-controls .trackVolumeLegendLeft {
             text-align: left;
         }
 
-        .trackControls .trackVolumeLegendRight {
+        .track-controls .trackVolumeLegendRight {
             text-align: right;
         }
     }
@@ -676,13 +676,13 @@
         min-width: 0;
     }
 
-    .trackControlsList.trackLabelsList {
+    .track-controls-list.track-labels-list {
         flex: 0 0 auto;
         width: max-content;
         padding: 7px 16px;
         transition: none;
 
-        .trackLabelRow {
+        .track-label-row {
             height: var(--track-row-height, var(--note-height));
             flex-shrink: 0;
             margin-bottom: 20px;
@@ -692,7 +692,7 @@
             }
         }
 
-        .trackInstrumentLabel {
+        .track-instrument-label {
             width: 100%;
             margin-top: calc(var(--staff-centre, 0px) * 2);
             font-size: 12px;
@@ -710,7 +710,7 @@
            move when the edit mode is left. */
         --track-panel-head: 0px;
 
-        .trackControlsList {
+        .track-controls-list {
             gap: 0;
             padding-top: 0;
         }
@@ -726,7 +726,7 @@
     }
 }
 
-.trackEditSidebar {
+.track-edit-sidebar {
     box-sizing: border-box;
     flex: 0 0 auto;
     width: 48px;
@@ -757,7 +757,7 @@
     }
 }
 
-.trackEditRow {
+.track-edit-row {
     align-self: stretch;
     height: var(--track-row-height, var(--note-height));
     margin-bottom: 20px;
@@ -768,14 +768,14 @@
         margin-bottom: 0;
     }
 
-    .trackEditTrigger {
+    .track-edit-trigger {
         /* The button sits on the staff line of the track it belongs to, which the row geometry states as the
            line's offset from the row's middle. A centred item moves by half its top margin. */
         margin-top: calc(var(--staff-centre, 0px) * 2);
     }
 }
 
-.trackEditTrigger {
+.track-edit-trigger {
     display: flex;
     align-items: center;
     justify-content: center;
@@ -818,7 +818,7 @@
        elements it acts on, so it rises into place. */
     animation: selection-toolbar-slide-up 0.16s ease-out;
 
-    .selectionToolbarHeader {
+    .selection-toolbar-header {
         gap: 6px;
         min-width: 0;
 
@@ -828,7 +828,7 @@
     }
 
     /* The dot carries the color of the instrument the addressed elements belong to. */
-    .selectionToolbarDot {
+    .selection-toolbar-dot {
         flex: 0 0 auto;
         width: 8px;
         height: 8px;
@@ -836,7 +836,7 @@
         background-color: color-mix(in srgb, var(--color-base-content) 30%, transparent);
     }
 
-    .selectionToolbarInstrument {
+    .selection-toolbar-instrument {
         flex: 0 1 auto;
         min-width: 0;
         font-size: 13px;
@@ -846,19 +846,19 @@
         text-overflow: ellipsis;
     }
 
-    .selectionToolbarSeparator {
+    .selection-toolbar-separator {
         flex: 0 0 auto;
         color: color-mix(in srgb, var(--color-base-content) 40%, transparent);
     }
 
-    .selectionToolbarPosition {
+    .selection-toolbar-position {
         flex: 0 0 auto;
         font-size: 13px;
         color: color-mix(in srgb, var(--color-base-content) 60%, transparent);
         white-space: nowrap;
     }
 
-    .selectionToolbarClose {
+    .selection-toolbar-close {
         flex: 0 0 auto;
         width: 24px;
         min-width: 24px;
@@ -884,7 +884,7 @@
         }
     }
 
-    .selectionToolbarSection {
+    .selection-toolbar-section {
         font-size: 10px;
         font-weight: 600;
         text-transform: uppercase;
@@ -894,14 +894,14 @@
     }
 
     /* The caption names the section, the label beside it says what its controls belong to. */
-    .selectionToolbarCaption {
+    .selection-toolbar-caption {
         width: 100%;
         gap: 6px;
         min-width: 0;
     }
 
     /* The label of a section is drawn in the theme's accent color, so it stands out from the caption it sits beside. */
-    .selectionToolbarBadge {
+    .selection-toolbar-badge {
         flex: 0 0 auto;
         padding: 0 8px;
         border-radius: 9999px;
@@ -916,11 +916,11 @@
     /* The rows of the card share its width: a section on the tray takes a row of its own, the strips of plain
        buttons flow beside each other, and the room left over spreads evenly between them, which lines the first
        strip up on the left and the last one on the right. */
-    .selectionToolbarSections {
+    .selection-toolbar-sections {
         align-content: flex-start;
     }
 
-    .selectionToolbarGroup {
+    .selection-toolbar-group {
         flex: 0 0 auto;
         min-width: 0;
 
@@ -931,12 +931,12 @@
 
     /* The row a section's controls sit in. Its inset matches the tray's padding, so the buttons of a plain row
        line up with the ones the note styles sit on. */
-    .selectionToolbarActions {
+    .selection-toolbar-actions {
         min-width: 0;
         padding: 0 4px;
 
         /* Only the note styles sit on a tray, which reads their buttons as the palette of the addressed track. */
-        &.selectionToolbarTray {
+        &.selection-toolbar-tray {
             width: 100%;
             padding: 4px;
             border-radius: 10px;
@@ -946,13 +946,13 @@
 
         /* The simile glyph's ink fills more of its box than a drawn icon does, so its ink is stated 4px smaller
            than the tray's icon size. Ink is scaled in staff spaces, which are 10px here. */
-        &.trackPieceToolbar .score-symbol-icon {
+        &.track-piece-toolbar .score-symbol-icon {
             --icon-ink-spaces: 1.21;
         }
 
         /* The tuplet tool reads as a mode of its own, which the mockup draws in violet: a violet mark and border
            on a surface merely tinted with the same color. */
-        &.subdivisionToolbar .dropdownHost > .du-btn-ghost {
+        &.subdivision-toolbar .dropdown-host > .du-btn-ghost {
             border-color: var(--color-tuplet-accent);
             background-color: color-mix(in srgb, var(--color-tuplet-accent) 12%, var(--color-base-100));
             color: var(--color-tuplet-accent);
@@ -971,8 +971,8 @@
 
     /* A tray holds square buttons beside the buttons the note tools bring: a dropdown trigger that stands in
        the row for one is drawn the same way, and so is every button of a note tool. */
-    .selectionToolbarAction,
-    .dropdownHost > .du-btn-ghost {
+    .selection-toolbar-action,
+    .dropdown-host > .du-btn-ghost {
         flex: 0 0 36px;
         width: 36px;
         min-width: 36px;

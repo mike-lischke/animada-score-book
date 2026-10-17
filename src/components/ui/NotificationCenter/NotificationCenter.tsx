@@ -159,7 +159,7 @@ export class NotificationCenter extends UIComponent<ICommonUIProperties, INotifi
         const { showHistory } = this.state;
 
         const className = this.generateFinalClassName([
-            "notificationCenter",
+            "notification-center",
             this.classFromProperty(showHistory, "history"),
         ]);
 
@@ -277,7 +277,7 @@ export class NotificationCenter extends UIComponent<ICommonUIProperties, INotifi
                         <Icon src={NotificationCenter.typeToIconMap.get(details.type)} />
                         <Label caption={details.text} wrap />
                         <Button
-                            className="closeButton"
+                            className="close-button"
                             imageOnly
                             onClick={this.closeToast.bind(this, toast, undefined)}
                         >
@@ -378,7 +378,7 @@ export class NotificationCenter extends UIComponent<ICommonUIProperties, INotifi
                         <Icon src={NotificationCenter.typeToIconMap.get(details.type)} />
                         <Label caption={details.text} wrap />
                         <Button
-                            className="closeButton"
+                            className="close-button"
                             imageOnly
                             onClick={this.closeToast.bind(this, toast, undefined)}
                         >

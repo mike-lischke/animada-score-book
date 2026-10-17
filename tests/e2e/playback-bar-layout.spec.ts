@@ -23,9 +23,9 @@ test("keeps the playback bar at the left edge and the toasts at the right", asyn
     const gaps = await page.evaluate(() => {
         const frame = document.querySelector("#appRoot")!.getBoundingClientRect();
         const bar = document.querySelector("#playbackControlsHost")!.getBoundingClientRect();
-        const footer = document.querySelector(".appFooter")!.getBoundingClientRect();
-        const toasts = document.querySelector(".notificationCenter")!.getBoundingClientRect();
-        const playButton = document.querySelector(".playStopButton")!.getBoundingClientRect();
+        const footer = document.querySelector(".app-footer")!.getBoundingClientRect();
+        const toasts = document.querySelector(".notification-center")!.getBoundingClientRect();
+        const playButton = document.querySelector(".play-stop-button")!.getBoundingClientRect();
 
         return {
             barToFrame: Math.round(bar.left - frame.left),
@@ -52,7 +52,7 @@ test("lays the playback bar out as the mockup describes it", async ({ page }) =>
     const layout = await page.evaluate(() => {
         const controls = document.querySelector("#arrangementPlayControls")!;
         const describe = (element: Element): string => {
-            if (element.classList.contains("playStopButton")) {
+            if (element.classList.contains("play-stop-button")) {
                 return "play";
             }
 
@@ -67,10 +67,10 @@ test("lays the playback bar out as the mockup describes it", async ({ page }) =>
             return `switch:${element.getAttribute("title")}`;
         };
 
-        const switches = Array.from(document.querySelectorAll(".playControlSwitch")).map((element) => {
+        const switches = Array.from(document.querySelectorAll(".play-control-switch")).map((element) => {
             const children = Array.from(element.children);
             const icon = element.querySelector("svg.icon")!;
-            const dot = element.querySelector(".playControlSwitchDot")!;
+            const dot = element.querySelector(".play-control-switch-dot")!;
             const button = element.getBoundingClientRect();
             const dotBox = dot.getBoundingClientRect();
 
@@ -85,7 +85,7 @@ test("lays the playback bar out as the mockup describes it", async ({ page }) =>
         return {
             order: Array.from(controls.children).map(describe),
             switches,
-            stepSizes: Array.from(document.querySelectorAll(".tempoStepButton")).map((element) => {
+            stepSizes: Array.from(document.querySelectorAll(".tempo-step-button")).map((element) => {
                 return Math.round(element.getBoundingClientRect().width);
             }),
         };
@@ -149,11 +149,11 @@ test("keeps the play button and every following control fixed when playback togg
 
     await page.locator("#playbackButton").click();
     await expect(page.locator("#playbackButton")).toHaveAttribute("aria-pressed", "true");
-    await expect(page.locator(".playStopLabel")).toHaveText("Stop");
+    await expect(page.locator(".play-stop-label")).toHaveText("Stop");
     expect(await readLayout()).toEqual(before);
 
     await page.locator("#playbackButton").click();
     await expect(page.locator("#playbackButton")).toHaveAttribute("aria-pressed", "false");
-    await expect(page.locator(".playStopLabel")).toHaveText("Play");
+    await expect(page.locator(".play-stop-label")).toHaveText("Play");
     expect(await readLayout()).toEqual(before);
 });

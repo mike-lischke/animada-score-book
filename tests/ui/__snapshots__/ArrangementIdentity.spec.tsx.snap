@@ -63,7 +63,7 @@ exports[`ArrangementIdentity > renders with the minimum props 1`] = `
         Samba Test
       </span>
       <span
-        class="uiBadge uiBadge-neutral arrangementSaveChip arrangementSaveChip"
+        class="uiBadge uiBadge-neutral arrangement-save-chip arrangement-save-chip"
       >
         Unchanged
       </span>

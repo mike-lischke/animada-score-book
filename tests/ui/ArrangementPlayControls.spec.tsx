@@ -41,7 +41,7 @@ describe("ArrangementPlayControls", { concurrent: false }, () => {
      * @returns The switch button.
      */
     const switchButton = (container: Element, tooltip: string): HTMLButtonElement => {
-        return container.querySelector<HTMLButtonElement>(`.playControlSwitch[title="${tooltip}"]`)!;
+        return container.querySelector<HTMLButtonElement>(`.play-control-switch[title="${tooltip}"]`)!;
     };
 
     /**
@@ -61,7 +61,7 @@ describe("ArrangementPlayControls", { concurrent: false }, () => {
      * @returns The tempo step button.
      */
     const stepButton = (container: Element, tooltip: string): HTMLButtonElement => {
-        return container.querySelector<HTMLButtonElement>(`.tempoStepButton[title="${tooltip}"]`)!;
+        return container.querySelector<HTMLButtonElement>(`.tempo-step-button[title="${tooltip}"]`)!;
     };
 
     /**
@@ -194,7 +194,7 @@ describe("ArrangementPlayControls", { concurrent: false }, () => {
         expect(container.querySelector("#playbackButton")).toBeTruthy();
         expect(container.querySelector(".tempoStepper")).toBeTruthy();
         expect(container.querySelector(".playbackOverflowMenu")).toBeTruthy();
-        expect(container.querySelector(".playControlSwitch")).toBeNull();
+        expect(container.querySelector(".play-control-switch")).toBeNull();
         expect(container.querySelector("#volumeSlider")).toBeNull();
 
         expect(overflowLinks(container).map((link) => {

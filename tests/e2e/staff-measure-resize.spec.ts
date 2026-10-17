@@ -169,7 +169,7 @@ test("opens the barline as a resize handle in edit mode only", async ({ page }) 
     await expect(page.locator(".staff-measure-resize-handle").first()).toHaveCSS("cursor", "col-resize");
 
     // The grid view has no resizing, so it has no handles either.
-    await page.locator("button.trackViewModeToggle").first().click({ force: true });
+    await page.locator("button.track-view-mode-toggle").first().click({ force: true });
     await expect(page.locator(".grid-measure-viewer").first()).toBeVisible();
     await expect(page.locator(".staff-measure-resize-handle")).toHaveCount(0);
 });
@@ -286,8 +286,8 @@ test("widens a shrunk measure when an entry packs it tighter", async ({ page }) 
 
     // A quadruplet splits a quarter note into sixteenths, which need more room between their anchors.
     await page.locator(".staff-measure-track-row .staff-note-head-symbol").nth(1).click();
-    await page.locator(".subdivisionToolbar button").first().click();
-    await page.locator(".subdivisionToolbar .du-dropdown li", { hasText: "Quadruplet" }).locator("a")
+    await page.locator(".subdivision-toolbar button").first().click();
+    await page.locator(".subdivision-toolbar .du-dropdown li", { hasText: "Quadruplet" }).locator("a")
         .click({ force: true });
 
     await expect.poll(async () => {
@@ -304,7 +304,7 @@ test("places the play head for the view that is shown", async ({ page }) => {
         return playBeamTransform(page);
     }).toBe(`translate3d(${prefixWidthPx}px, 0px, 0px)`);
 
-    await page.locator("button.trackViewModeToggle").first().click({ force: true });
+    await page.locator("button.track-view-mode-toggle").first().click({ force: true });
     await expect(page.locator(".grid-measure-viewer").first()).toBeVisible();
     await expect.poll(() => {
         return playBeamTransform(page);

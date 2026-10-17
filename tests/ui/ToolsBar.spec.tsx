@@ -89,7 +89,7 @@ const installLayoutMocks = (): void => {
         get(): number {
             const element = this as HTMLElement;
             const compact = element.querySelector(".toolsBarOverflowMenu") !== null;
-            if (element.classList.contains("toolsBar") || element.id === "toolsBarHost") {
+            if (element.classList.contains("tools-bar") || element.id === "toolsBarHost") {
                 return compact ? compactWidth : expandedWidth;
             }
 
@@ -102,7 +102,7 @@ const installLayoutMocks = (): void => {
         get(): number {
             const element = this as HTMLElement;
 
-            return element.classList.contains("toolsBar") || element.id === "toolsBarHost" ? 42 : 0;
+            return element.classList.contains("tools-bar") || element.id === "toolsBarHost" ? 42 : 0;
         },
     });
 };
@@ -146,7 +146,7 @@ describe("ToolsBar", { concurrent: false }, () => {
      * @returns The bar the user sees, not the hidden measuring twin.
      */
     const visibleBar = (): Element => {
-        return renderResult!.container.querySelector("#toolsBarHost > .toolsBar")!;
+        return renderResult!.container.querySelector("#toolsBarHost > .tools-bar")!;
     };
 
     beforeAll(() => {
@@ -243,7 +243,7 @@ describe("ToolsBar", { concurrent: false }, () => {
 
             // The active tool carries the status dot the mockup shows, the others stay plain.
             expect(toolButton(entry.tooltip).querySelector(".toolsBarToolDot")).toBeTruthy();
-            expect(renderResult.container.querySelector(".toolsModeStatus")?.textContent).toContain(entry.status);
+            expect(renderResult.container.querySelector(".tools-mode-status")?.textContent).toContain(entry.status);
 
             for (const other of tools) {
                 if (other.tool !== entry.tool) {
@@ -257,16 +257,16 @@ describe("ToolsBar", { concurrent: false }, () => {
     it("reports an active tool with the dot of the status", async () => {
         renderResult = render(<ToolsBar />);
 
-        expect(renderResult.container.querySelector(".toolsModeStatus")).toBeNull();
+        expect(renderResult.container.querySelector(".tools-mode-status")).toBeNull();
 
         fireEvent.click(toolButton(tools[0].tooltip));
 
         await waitFor(() => {
-            expect(renderResult?.container.querySelector(".toolsModeStatus")).toBeTruthy();
+            expect(renderResult?.container.querySelector(".tools-mode-status")).toBeTruthy();
         });
 
         // Like the editing switch, the status states the mode it reports with a dot.
-        expect(renderResult.container.querySelector(".toolsModeStatusDot")).toBeTruthy();
+        expect(renderResult.container.querySelector(".tools-mode-status-dot")).toBeTruthy();
     });
 
     it("ends an active placing mode when the toolbar unmounts", async () => {
@@ -346,7 +346,7 @@ describe("ToolsBar", { concurrent: false }, () => {
             fireEvent.click(links[1]);
 
             await waitFor(() => {
-                expect(renderResult?.container.querySelector(".toolsModeStatus")?.textContent)
+                expect(renderResult?.container.querySelector(".tools-mode-status")?.textContent)
                     .toContain(tools[1].status);
             });
 

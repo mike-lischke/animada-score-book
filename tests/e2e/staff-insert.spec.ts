@@ -200,8 +200,8 @@ test.describe("staff entry mode switch", () => {
 
     test("marks the values of the selection the mode switches to", async ({ page }) => {
         const runs = page.locator(".staff-measure-track-row").first().locator(".staff-note-viewer-run");
-        const marked = page.locator(".noteLengthToolbar .noteLengthButton.du-btn-primary");
-        const modeLabel = page.locator(".entryModeButton .entryModeLabel");
+        const marked = page.locator(".note-length-toolbar .note-length-button.du-btn-primary");
+        const modeLabel = page.locator(".entry-mode-button .entry-mode-label");
 
         // The score opens in insert mode, which marks the value the next entry uses.
         await expect(modeLabel).toHaveText("Insert");
@@ -211,7 +211,7 @@ test.describe("staff entry mode switch", () => {
         // The cursor addresses a sixteenth, yet the bar keeps marking the value the next entry uses.
         await expect(marked).toHaveAttribute("title", /Quarter note/);
 
-        await page.locator(".entryModeButton").click();
+        await page.locator(".entry-mode-button").click();
         await expect(modeLabel).toHaveText("Overwrite");
 
         // The bar now shows what the selection carries, which is the addressed sixteenth.

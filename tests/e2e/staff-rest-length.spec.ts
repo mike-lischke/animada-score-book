@@ -116,7 +116,7 @@ test.beforeEach(async ({ page }) => {
 
     // Select the quarter rest between the two beamed groups.
     await page.locator(".staff-measure-track-row .staff-note-viewer-run").nth(4).click();
-    await expect(page.locator("#selectionEditPopup .noteLengthToolbar")).toBeVisible();
+    await expect(page.locator("#selectionEditPopup .note-length-toolbar")).toBeVisible();
     await expect(page.locator(".staff-note-viewer-run.note-selected .staff-note-viewer-rest-symbol"))
         .toHaveCount(1);
 });
@@ -136,7 +136,7 @@ test("changes a rest's length with the length hotkey", async ({ page }) => {
 test("changes a rest's length with the length toolbar", async ({ page }) => {
     const noteBehind = await leftOf(page, 5);
 
-    await page.locator(".noteLengthButton").nth(1).click({ force: true });
+    await page.locator(".note-length-button").nth(1).click({ force: true });
     await expect.poll(() => {
         return growOf(page, 4);
     }).toBe("0.5");
@@ -148,7 +148,7 @@ test("changes a rest's length with the length toolbar", async ({ page }) => {
 test("grows a rest by the augmentation dot", async ({ page }) => {
     expect(await restSpanOf(page)).toBe("0.250");
 
-    await page.locator(".noteDotButton").click({ force: true });
+    await page.locator(".note-dot-button").click({ force: true });
 
     // The dot makes the rest a dotted quarter, which stands as one glyph wherever it is: the notes
     // behind the rest give way.

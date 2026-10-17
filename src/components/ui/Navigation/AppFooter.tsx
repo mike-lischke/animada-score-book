@@ -149,7 +149,7 @@ export class AppFooter extends UIComponent<IAppFooterProps, IAppFooterState> {
         return (
             <Container
                 id="appFooter"
-                className={this.generateFinalClassName(["appFooter", className])}
+                className={this.generateFinalClassName(["app-footer", className])}
                 orientation={Orientation.LeftToRight}
                 crossAlignment={ChildAlignment.Center}
                 {...this.dataAttributes}

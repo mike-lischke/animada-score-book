@@ -59,7 +59,7 @@ const openScore = async (page: Page, mode: TrackViewMode, repeatSecondBar = fals
 const enterZen = async (page: Page): Promise<void> => {
     await page.locator("#zenModeButton").click();
     await expect(page.locator("#zenModeButton")).toHaveAttribute("aria-pressed", "true");
-    await expect(page.locator(".zenMeasurePlayButton")).not.toHaveCount(0);
+    await expect(page.locator(".zen-measure-play-button")).not.toHaveCount(0);
 };
 
 const selectBar = async (page: Page, bar: number): Promise<void> => {
@@ -67,7 +67,7 @@ const selectBar = async (page: Page, bar: number): Promise<void> => {
         await ensureStaffBarRendered(page, bar);
     }
 
-    const button = page.locator(`.zenMeasurePlayButton[data-bar="${bar}"]`);
+    const button = page.locator(`.zen-measure-play-button[data-bar="${bar}"]`);
     await button.scrollIntoViewIfNeeded();
     await button.click();
     await expect(button).toHaveAttribute("aria-pressed", "true");
@@ -108,7 +108,7 @@ const playbackBars = async (page: Page, visits = 0): Promise<number[]> => {
                             continue;
                         }
 
-                        const bar = Number(measure.querySelector(".zenMeasurePlayButton")?.getAttribute("data-bar")
+                        const bar = Number(measure.querySelector(".zen-measure-play-button")?.getAttribute("data-bar")
                             ?? measure.querySelector(".grid-measure-number, .staff-measure-number")?.textContent);
                         const progress = (beam.left - rect.left) / rect.width;
                         if (seen.at(-1) !== bar || progress < previousProgress - 0.25) {
@@ -160,10 +160,10 @@ for (const mode of [TrackViewMode.Grid, TrackViewMode.Staff]) {
             await enterZen(page);
             await expect(page.locator("#headerContent")).toHaveCount(0);
             await expect(page.locator("#arrangementActionBar")).toHaveCount(0);
-            await expect(page.locator(".trackEditSidebar")).toHaveCount(0);
+            await expect(page.locator(".track-edit-sidebar")).toHaveCount(0);
             await expect(page.locator("#toolsBarHost")).toHaveCount(0);
-            await expect(page.locator(".trackVolumeSlider")).toHaveCount(0);
-            await expect(page.locator(".trackInstrumentLabel")).toHaveCount(10);
+            await expect(page.locator(".track-volume-slider")).toHaveCount(0);
+            await expect(page.locator(".track-instrument-label")).toHaveCount(10);
             await expect(page.locator(".selection-overlay")).toHaveCount(0);
             await expect(page.locator(".selection-cursor")).toBeHidden();
 
@@ -180,13 +180,14 @@ for (const mode of [TrackViewMode.Grid, TrackViewMode.Staff]) {
 
             await selectBar(page, 2);
             await page.keyboard.press("Escape");
-            await expect(page.locator('.zenMeasurePlayButton[data-bar="2"]')).toHaveAttribute("aria-pressed", "true");
+            await expect(page.locator('.zen-measure-play-button[data-bar="2"]'))
+                .toHaveAttribute("aria-pressed", "true");
 
             await page.locator("#zenModeButton").click();
             await expect(page.locator("#appContent")).toHaveClass(/score-editing/);
             await expect(page.locator("#headerContent")).toBeVisible();
             await expect(page.locator("#arrangementActionBar")).toBeVisible();
-            await expect(page.locator(".trackEditSidebar")).toBeVisible();
+            await expect(page.locator(".track-edit-sidebar")).toBeVisible();
             await expect(page.locator(".selection-cursor")).toBeVisible();
             await expect.poll(async () => {
                 return storedSelection(page);
@@ -218,7 +219,7 @@ for (const mode of [TrackViewMode.Grid, TrackViewMode.Staff]) {
                 });
             }).toBeGreaterThan(50);
             await expect(page.locator(".selection-overlay")).toHaveCount(0);
-            await expect(page.locator('.zenMeasurePlayButton[aria-pressed="true"]')).toHaveCount(0);
+            await expect(page.locator('.zen-measure-play-button[aria-pressed="true"]')).toHaveCount(0);
         });
 
         test("plays the filled range between marked bars", async ({ page }) => {
@@ -238,8 +239,8 @@ for (const mode of [TrackViewMode.Grid, TrackViewMode.Staff]) {
             await openScore(page, mode);
             await enterZen(page);
             await selectBar(page, 2);
-            await page.locator('.zenMeasurePlayButton[data-bar="2"]').click();
-            await expect(page.locator('.zenMeasurePlayButton[aria-pressed="true"]')).toHaveCount(0);
+            await page.locator('.zen-measure-play-button[data-bar="2"]').click();
+            await expect(page.locator('.zen-measure-play-button[aria-pressed="true"]')).toHaveCount(0);
             await page.locator("#playbackButton").click();
             await expect(page.locator("#playbackButton")).toHaveAttribute("aria-pressed", "true");
 
@@ -250,7 +251,7 @@ for (const mode of [TrackViewMode.Grid, TrackViewMode.Staff]) {
             await openScore(page, mode, true);
             await enterZen(page);
             await selectBar(page, 2);
-            await expect(page.locator('.zenMeasurePlayButton[aria-pressed="true"]')).toHaveCount(1);
+            await expect(page.locator('.zen-measure-play-button[aria-pressed="true"]')).toHaveCount(1);
             await page.locator("#playbackButton").click();
             await expect(page.locator("#playbackButton")).toHaveAttribute("aria-pressed", "true");
 
@@ -300,17 +301,17 @@ for (const mode of [TrackViewMode.Grid, TrackViewMode.Staff]) {
         test("keeps the title above passing buttons and aligns the instrument labels", async ({ page }) => {
             await openScore(page, mode);
             await enterZen(page);
-            const identity = page.locator(".zenArrangementIdentityHost");
+            const identity = page.locator(".zen-arrangement-identity-host");
             await expect(identity).toContainText("E2E Zen Score");
-            await expect(identity.locator(".arrangementSaveChip")).toHaveCount(0);
+            await expect(identity.locator(".arrangement-save-chip")).toHaveCount(0);
             await expect(identity).toHaveCSS("box-shadow", "none");
             const before = (await identity.boundingBox())!;
             const room = await page.evaluate(() => {
-                const button = document.querySelector(".zenMeasurePlayButton")!.getBoundingClientRect();
+                const button = document.querySelector(".zen-measure-play-button")!.getBoundingClientRect();
                 const row = document.querySelector(".grid-measure-row, .staff-measure-track-row")!
                     .getBoundingClientRect();
-                const label = document.querySelector(".trackLabelRow")!.getBoundingClientRect();
-                const list = getComputedStyle(document.querySelector(".trackLabelsList")!);
+                const label = document.querySelector(".track-label-row")!.getBoundingClientRect();
+                const list = getComputedStyle(document.querySelector(".track-labels-list")!);
                 const beam = document.querySelector(".grid-measure-beam")?.getBoundingClientRect();
 
                 return {
@@ -325,16 +326,16 @@ for (const mode of [TrackViewMode.Grid, TrackViewMode.Staff]) {
 
             await page.evaluate(() => {
                 const host = document.querySelector<HTMLElement>("#trackViewerHost")!;
-                const title = document.querySelector(".zenArrangementIdentityHost")!.getBoundingClientRect();
-                const button = document.querySelector(".zenMeasurePlayButton")!.getBoundingClientRect();
+                const title = document.querySelector(".zen-arrangement-identity-host")!.getBoundingClientRect();
+                const button = document.querySelector(".zen-measure-play-button")!.getBoundingClientRect();
                 host.scrollLeft += button.left - title.left - 50;
             });
             await expect.poll(async () => {
                 return page.evaluate(() => {
-                    const button = document.querySelector(".zenMeasurePlayButton")!.getBoundingClientRect();
+                    const button = document.querySelector(".zen-measure-play-button")!.getBoundingClientRect();
 
                     return !!document.elementFromPoint(button.left + 20, button.top + 14)
-                        ?.closest(".zenArrangementIdentityHost");
+                        ?.closest(".zen-arrangement-identity-host");
                 });
             }).toBe(true);
 

@@ -87,7 +87,7 @@ export const selectTrackPiece = async (page: Page, barNumber: number): Promise<v
  * @returns The button.
  */
 export const toolbarButton = (page: Page, tooltip: string): Locator => {
-    return page.locator(`.subdivisionToolbar button[title="${tooltip}"]`);
+    return page.locator(`.subdivision-toolbar button[title="${tooltip}"]`);
 };
 
 export const beijaFlorTitle = "Beija Flor 2004  -  Bossa 1 (H-Break)";
@@ -273,7 +273,7 @@ export const expectImportedPolyrhythmSong = async (page: Page): Promise<void> =>
 };
 
 export const ensureGridMode = async (page: Page): Promise<void> => {
-    const trackViewToggle = page.locator("button.trackViewModeToggle").first();
+    const trackViewToggle = page.locator("button.track-view-mode-toggle").first();
     await expect(trackViewToggle).toBeVisible();
 
     if (await trackViewToggle.getAttribute("aria-pressed") === "true") {
@@ -368,7 +368,7 @@ export const expectGridBarDomSnapshot = async (
 
 export const expectPlaybackToMove = async (page: Page): Promise<void> => {
     const playbackToggle = page.locator("#playbackButton");
-    const playButton = page.locator("#arrangementPlayControls .playStopButton");
+    const playButton = page.locator("#arrangementPlayControls .play-stop-button");
     const playBeam = page.locator("#playBeam");
 
     await expect(playButton).toBeVisible();

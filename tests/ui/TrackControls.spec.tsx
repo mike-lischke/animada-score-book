@@ -52,7 +52,7 @@ describe("TrackControls", { concurrent: false }, () => {
 
     it("renders instrument names without mixer controls in labels-only mode", () => {
         const container = renderControls({ labelsOnly: true, mixerExpanded: true });
-        const labels = [...container.querySelectorAll(".trackInstrumentLabel")];
+        const labels = [...container.querySelectorAll(".track-instrument-label")];
 
         expect(labels.map((label) => {
             return label.textContent;
@@ -64,9 +64,9 @@ describe("TrackControls", { concurrent: false }, () => {
         })).toEqual([
             "Instrument short", "Instrument long instrument name",
         ]);
-        expect(container.querySelectorAll(".trackLabelRow")).toHaveLength(2);
-        expect(container.querySelector(".trackControlsList.expanded")).toBeNull();
-        expect(container.querySelector(".trackVolumeSlider")).toBeNull();
+        expect(container.querySelectorAll(".track-label-row")).toHaveLength(2);
+        expect(container.querySelector(".track-controls-list.expanded")).toBeNull();
+        expect(container.querySelector(".track-volume-slider")).toBeNull();
         expect(container.querySelector(".trackInstrumentIcon")).toBeNull();
     });
 
@@ -79,7 +79,7 @@ describe("TrackControls", { concurrent: false }, () => {
             labelsOnly: true,
             rowGeometries: new Map([[track.id, { heightPx: 120, centrePx: 10, staffLineOffsetPx: 70 }]]),
         });
-        const row = container.querySelector<HTMLElement>(".trackLabelRow")!;
+        const row = container.querySelector<HTMLElement>(".track-label-row")!;
 
         expect(row.style.getPropertyValue("--track-row-height")).toBe("120px");
         expect(row.style.getPropertyValue("--staff-centre")).toBe("10px");

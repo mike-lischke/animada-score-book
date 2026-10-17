@@ -47,7 +47,7 @@ describe("SelectionToolbar", { concurrent: false }, () => {
     };
 
     const captions = (result: RenderResult): Array<string | null> => {
-        return [...result.container.querySelectorAll(".selectionToolbarSection")].map((element) => {
+        return [...result.container.querySelectorAll(".selection-toolbar-section")].map((element) => {
             return element.textContent;
         });
     };
@@ -61,19 +61,19 @@ describe("SelectionToolbar", { concurrent: false }, () => {
 
     it("draws the instrument, its dot and the position of the addressed elements", () => {
         const result = renderCard({ instrument: "Caixa", position: "Measure 2", color: "#123456" }, [{ actions: [] }]);
-        const dot = result.container.querySelector<HTMLElement>(".selectionToolbarDot");
+        const dot = result.container.querySelector<HTMLElement>(".selection-toolbar-dot");
 
         expect(dot?.style.backgroundColor).toBe("rgb(18, 52, 86)");
-        expect(result.container.querySelector(".selectionToolbarInstrument")?.textContent).toBe("Caixa");
-        expect(result.container.querySelector(".selectionToolbarSeparator")?.textContent).toBe("-");
-        expect(result.container.querySelector(".selectionToolbarPosition")?.textContent).toBe("Measure 2");
+        expect(result.container.querySelector(".selection-toolbar-instrument")?.textContent).toBe("Caixa");
+        expect(result.container.querySelector(".selection-toolbar-separator")?.textContent).toBe("-");
+        expect(result.container.querySelector(".selection-toolbar-position")?.textContent).toBe("Measure 2");
     });
 
     it("leaves the position out while the toolbar names one element", () => {
         const result = renderCard({ instrument: "Caixa" }, [{ actions: [] }]);
 
-        expect(result.container.querySelector(".selectionToolbarSeparator")).toBeNull();
-        expect(result.container.querySelector(".selectionToolbarPosition")).toBeNull();
+        expect(result.container.querySelector(".selection-toolbar-separator")).toBeNull();
+        expect(result.container.querySelector(".selection-toolbar-position")).toBeNull();
     });
 
     it("draws one tray without a caption", () => {
@@ -81,8 +81,8 @@ describe("SelectionToolbar", { concurrent: false }, () => {
             [{ label: "Ignored", actions: [action("first"), action("second")] }]);
 
         expect(captions(result)).toEqual([]);
-        expect(result.container.querySelectorAll(".selectionToolbarActions")).toHaveLength(1);
-        expect(result.container.querySelectorAll(".selectionToolbarAction")).toHaveLength(2);
+        expect(result.container.querySelectorAll(".selection-toolbar-actions")).toHaveLength(1);
+        expect(result.container.querySelectorAll(".selection-toolbar-action")).toHaveLength(2);
     });
 
     it("captions both trays while the card holds two sections", () => {
@@ -92,8 +92,8 @@ describe("SelectionToolbar", { concurrent: false }, () => {
         ]);
 
         expect(captions(result)).toEqual(["Piece", "Entry"]);
-        expect(result.container.querySelectorAll(".selectionToolbarActions")).toHaveLength(2);
-        expect(result.container.querySelectorAll(".selectionToolbarAction")).toHaveLength(3);
+        expect(result.container.querySelectorAll(".selection-toolbar-actions")).toHaveLength(2);
+        expect(result.container.querySelectorAll(".selection-toolbar-action")).toHaveLength(3);
     });
 
     it("leaves a section without a label uncaptioned while the card holds several", () => {
@@ -115,7 +115,7 @@ describe("SelectionToolbar", { concurrent: false }, () => {
             ],
         }]);
 
-        const buttons = [...result.container.querySelectorAll<HTMLButtonElement>(".selectionToolbarAction")];
+        const buttons = [...result.container.querySelectorAll<HTMLButtonElement>(".selection-toolbar-action")];
 
         expect(buttons.map((button) => {
             return button.title;
@@ -130,7 +130,7 @@ describe("SelectionToolbar", { concurrent: false }, () => {
         const onClick = vi.fn();
         const result = renderCard({ instrument: "Caixa" }, [{ actions: [action("first", { onClick })] }]);
 
-        fireEvent.click(result.container.querySelector<HTMLButtonElement>(".selectionToolbarAction")!);
+        fireEvent.click(result.container.querySelector<HTMLButtonElement>(".selection-toolbar-action")!);
 
         expect(onClick).toHaveBeenCalledTimes(1);
     });

@@ -27,7 +27,7 @@ describe("NotificationCenter", { concurrent: false }, () => {
     it("renders the notification center DOM", () => {
         const { container } = render(renderNotificationCenter());
 
-        expect(container.querySelector(".notificationCenter")).not.toBeNull();
+        expect(container.querySelector(".notification-center")).not.toBeNull();
     });
 
     it("has no toasts initially", () => {
@@ -85,7 +85,7 @@ describe("NotificationCenter", { concurrent: false }, () => {
         let toasts = container.querySelectorAll(".toast");
         expect(toasts).toHaveLength(1);
 
-        const closeButton = toasts[0].querySelector(".closeButton")!;
+        const closeButton = toasts[0].querySelector(".close-button")!;
         await act(() => {
             fireEvent.click(closeButton);
         });

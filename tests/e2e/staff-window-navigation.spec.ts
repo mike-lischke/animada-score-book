@@ -161,7 +161,7 @@ const staffGeometry = (page: Page): Promise<IStaffGeometry> => {
     return page.evaluate(() => {
         return {
             contentHeight: document.getElementById("trackViewerContentHost")?.offsetHeight ?? -1,
-            controlsHeight: document.querySelector<HTMLElement>(".trackControlsList")?.offsetHeight ?? -1,
+            controlsHeight: document.querySelector<HTMLElement>(".track-controls-list")?.offsetHeight ?? -1,
         };
     });
 };

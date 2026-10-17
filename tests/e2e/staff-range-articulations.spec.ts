@@ -121,7 +121,7 @@ const seedScore = async (page: Page, snapshot: IArrangementSnapshot): Promise<vo
  */
 const openToolbar = async (page: Page): Promise<void> => {
     await page.locator("#editModeButton").click({ force: true });
-    await expect(page.locator("#toolsBarHost .toolsBar")).toBeVisible();
+    await expect(page.locator("#toolsBarHost .tools-bar")).toBeVisible();
 };
 
 /**
@@ -283,7 +283,7 @@ test("cancels the placing mode from its floating status", async ({ page }) => {
     await openToolbar(page);
 
     await rangeToolButton(page, "Place forte (f)").click();
-    const modeStatus = page.locator(".toolsModeStatus");
+    const modeStatus = page.locator(".tools-mode-status");
     await expect(modeStatus).toContainText("Click a note or rest to place forte");
 
     await modeStatus.getByRole("button", { name: "Cancel" }).click();
@@ -298,13 +298,13 @@ test("reports the placing mode with the dot of the editing switch", async ({ pag
     await openToolbar(page);
 
     // The dot of the editing switch marks a mode, so the status of a placing tool carries the same one.
-    const switchDot = await page.locator("#editModeButton .headerModeDot").evaluate((dot) => {
+    const switchDot = await page.locator("#editModeButton .header-mode-dot").evaluate((dot) => {
         return getComputedStyle(dot).backgroundColor;
     });
 
     await rangeToolButton(page, "Draw a crescendo hairpin").click();
 
-    const statusDot = page.locator(".toolsModeStatusDot");
+    const statusDot = page.locator(".tools-mode-status-dot");
     await expect(statusDot).toBeVisible();
     await expect(statusDot).toHaveCSS("background-color", switchDot);
 });

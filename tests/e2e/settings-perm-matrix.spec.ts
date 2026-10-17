@@ -98,7 +98,7 @@ test.describe("Settings — Permission Matrix Toggle", () => {
         await expect(page.locator("#scoreTreeHost")).toBeVisible({ timeout: 5000 });
 
         // The perm indicator should be visible by default (showPermMatrix defaults to true).
-        const permIndicator = page.locator("#scoreTreeHost .permIndicator");
+        const permIndicator = page.locator("#scoreTreeHost .perm-indicator");
         await expect(permIndicator).toBeVisible({ timeout: 5000 });
 
         // Close the drawer via Escape so it doesn't intercept toolbar clicks.

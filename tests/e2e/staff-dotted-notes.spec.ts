@@ -70,12 +70,12 @@ test.beforeEach(async ({ page }) => {
 });
 
 test("dots the selected note and takes the dot away again", async ({ page }) => {
-    const dot = page.locator(".noteDotButton");
+    const dot = page.locator(".note-dot-button");
 
     await page.locator(".staff-measure-track-row .staff-note-head-symbol").first().click();
-    await expect(page.locator("#selectionEditPopup .noteLengthToolbar")).toBeVisible();
+    await expect(page.locator("#selectionEditPopup .note-length-toolbar")).toBeVisible();
     await expect(page.locator(".staff-note-viewer-run.note-selected")).toHaveCount(1);
-    await expect(page.locator(".noteLengthButton.du-btn-primary")).toHaveCount(1);
+    await expect(page.locator(".note-length-button.du-btn-primary")).toHaveCount(1);
     await expect(dot).not.toHaveClass(/du-btn-primary/);
 
     // The dot turns the quarter note into a dotted quarter, which takes three steps from the notes

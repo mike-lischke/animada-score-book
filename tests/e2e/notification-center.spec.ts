@@ -55,7 +55,7 @@ test.describe("NotificationCenter", () => {
         await page.goto(beijaFlorImportPath);
         await expectImportedPolyrhythmSong(page);
 
-        await expect(page.locator(".notificationCenter")).toBeAttached();
+        await expect(page.locator(".notification-center")).toBeAttached();
     });
 
     test("shows a notification when showInfo is called", async ({ page }) => {
@@ -79,7 +79,7 @@ test.describe("NotificationCenter", () => {
         const toast = page.locator(".toast.info");
         await expect(toast).toBeVisible();
 
-        await toast.locator(".closeButton").click();
+        await toast.locator(".close-button").click();
 
         // Wait for the closing animation to finish.
         await expect(toast).not.toBeAttached({ timeout: 5000 });
@@ -133,7 +133,7 @@ test.describe("NotificationCenter", () => {
         await expect(bellButton).toBeVisible();
         await bellButton.click();
 
-        const nc = page.locator(".notificationCenter.history");
+        const nc = page.locator(".notification-center.history");
         await expect(nc).toBeVisible();
         await expect(nc.locator("#historyHeader")).toBeVisible();
         await expect(nc.locator("#historyContainer .toast")).toContainText("History test");
@@ -154,7 +154,7 @@ test.describe("NotificationCenter", () => {
         // Open history while the toast is still visible.
         await page.locator("#showNotificationHistory").click();
 
-        const nc = page.locator(".notificationCenter.history");
+        const nc = page.locator(".notification-center.history");
         await expect(nc).toBeVisible();
         await expect(nc.locator("#historyContainer .toast")).toHaveCount(1);
 
@@ -172,7 +172,7 @@ test.describe("NotificationCenter", () => {
         // Open history and enable silent mode (second button in the header).
         await page.locator("#showNotificationHistory").click();
 
-        const nc = page.locator(".notificationCenter.history");
+        const nc = page.locator(".notification-center.history");
         await expect(nc).toBeVisible();
         await nc.locator("#historyHeader .du-btn").nth(1).click();
 
@@ -198,7 +198,7 @@ test.describe("NotificationCenter", () => {
 
         // Enable silent mode via history header.
         await page.locator("#showNotificationHistory").click();
-        const nc = page.locator(".notificationCenter.history");
+        const nc = page.locator(".notification-center.history");
         await nc.locator("#historyHeader .du-btn").nth(1).click();
         await page.locator("#showNotificationHistory").click();
 

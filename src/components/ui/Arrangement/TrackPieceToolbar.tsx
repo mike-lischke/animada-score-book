@@ -71,7 +71,7 @@ export class TrackPieceToolbar extends SelectionToolbar<ITrackPieceToolbarProps,
             : "Simile is not applicable in the first bar";
 
         return [{
-            className: "trackPieceToolbar",
+            className: "track-piece-toolbar",
             actions: [{
                 id: "simile",
                 tooltip: simileTooltip,

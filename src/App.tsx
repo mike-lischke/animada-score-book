@@ -377,7 +377,7 @@ export class App extends UIComponent<{}, IAppState> {
                     data-tutorial="edit-mode"
                     onClick={this.handleEditModeToggle}
                 >
-                    <span className="headerModeDot" />
+                    <span className="header-mode-dot" />
                     <span className="headerActionLabel">{editMode ? "Editing" : "Edit Mode"}</span>
                 </Button>;
 
@@ -1221,7 +1221,7 @@ export class App extends UIComponent<{}, IAppState> {
     };
 
     private isMixerExpanded(): boolean {
-        return document.querySelector(".trackControlsList")?.classList.contains("expanded") ?? false;
+        return document.querySelector(".track-controls-list")?.classList.contains("expanded") ?? false;
     }
 
     private toggleMixerIf(condition: boolean): void {
@@ -1763,7 +1763,7 @@ export class App extends UIComponent<{}, IAppState> {
                 }
 
                 const row = document.querySelector<HTMLElement>(
-                    `.scoreTreeEntry[data-entry-type="${String(data.type)}"][data-entry-id="${data.id}"]`,
+                    `.score-tree-entry[data-entry-type="${String(data.type)}"][data-entry-id="${data.id}"]`,
                 );
 
                 if (row) {

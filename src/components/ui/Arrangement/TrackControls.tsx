@@ -76,7 +76,7 @@ export class TrackControls extends UIComponent<ITrackControlsProperties, ITrackC
             return [];
         }
 
-        const rows = element.querySelectorAll<HTMLElement>(".trackControls");
+        const rows = element.querySelectorAll<HTMLElement>(".track-controls");
         const entries: ISelectionHitEntry[] = [];
 
         for (let i = 0; i < rows.length; i++) {
@@ -100,9 +100,9 @@ export class TrackControls extends UIComponent<ITrackControlsProperties, ITrackC
         const { selectedTrackIds } = this.state;
 
         const listClassName = this.generateFinalClassName([
-            "trackControlsList",
+            "track-controls-list",
             this.classFromProperty(mixerExpanded && !labelsOnly, "expanded"),
-            this.classFromProperty(labelsOnly, "trackLabelsList"),
+            this.classFromProperty(labelsOnly, "track-labels-list"),
         ]);
 
         const controls = tracks.map((track) => {
@@ -119,9 +119,9 @@ export class TrackControls extends UIComponent<ITrackControlsProperties, ITrackC
 
             if (labelsOnly) {
                 return (
-                    <Container key={track.id} className="trackLabelRow" orientation={Orientation.LeftToRight}
+                    <Container key={track.id} className="track-label-row" orientation={Orientation.LeftToRight}
                         crossAlignment={ChildAlignment.Center} style={rowStyle}>
-                        <span className="trackInstrumentLabel" title={instrumentName}>{instrumentName}</span>
+                        <span className="track-instrument-label" title={instrumentName}>{instrumentName}</span>
                     </Container>
                 );
             }
@@ -129,7 +129,7 @@ export class TrackControls extends UIComponent<ITrackControlsProperties, ITrackC
             return (
                 <Container
                     key={track.id}
-                    className="trackControls"
+                    className="track-controls"
                     orientation={Orientation.LeftToRight}
                     crossAlignment={ChildAlignment.Center}
                     style={rowStyle}
@@ -139,9 +139,9 @@ export class TrackControls extends UIComponent<ITrackControlsProperties, ITrackC
                         orientation={Orientation.TopDown}
                         crossAlignment={ChildAlignment.Start}
                     >
-                        <span className="trackInstrumentName">{instrumentName}</span>
+                        <span className="track-instrument-name">{instrumentName}</span>
                         <SplitSlider
-                            className="trackVolumeSlider"
+                            className="track-volume-slider"
                             value={track.volume}
                             fillValue={track.effectiveVolume}
                             min={0}

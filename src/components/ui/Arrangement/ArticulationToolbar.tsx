@@ -97,7 +97,7 @@ export class ArticulationToolbar extends UIComponent<IArticulationToolbarProps, 
             return (
                 <Button
                     key={option.articulation}
-                    className="selectionToolbarAction articulationButton"
+                    className="selection-toolbar-action articulationButton"
                     isDefault={option.articulation === activeArticulation}
                     disabled={!canEnter || !isAvailable}
                     title={option.tooltip}

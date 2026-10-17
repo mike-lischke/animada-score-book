@@ -133,7 +133,7 @@ export class ToolsBar extends UIComponent<IToolsBarProps, IToolsBarState> {
         if (compact) {
             measureProbe = <div className="toolsBarMeasure" aria-hidden="true">
                 <Container
-                    className="toolsBar"
+                    className="tools-bar"
                     orientation={Orientation.LeftToRight}
                     crossAlignment={ChildAlignment.Center}
                     gap={8}
@@ -151,11 +151,11 @@ export class ToolsBar extends UIComponent<IToolsBarProps, IToolsBarState> {
         if (activeTool !== RangeArticulationTool.None) {
             modeStatus = (
                 <Container
-                    className="toolsModeStatus"
+                    className="tools-mode-status"
                     orientation={Orientation.LeftToRight}
                     crossAlignment={ChildAlignment.Center}
                 >
-                    <span className="toolsModeStatusDot" />
+                    <span className="tools-mode-status-dot" />
                     <Label caption={this.modeCaption(activeTool)} />
                     <Button caption="Cancel" onClick={this.handleCancel} />
                 </Container>
@@ -174,7 +174,7 @@ export class ToolsBar extends UIComponent<IToolsBarProps, IToolsBarState> {
                 {...this.dataAttributes}
             >
                 <Container
-                    className="toolsBar"
+                    className="tools-bar"
                     orientation={Orientation.LeftToRight}
                     crossAlignment={ChildAlignment.Center}
                     gap={8}

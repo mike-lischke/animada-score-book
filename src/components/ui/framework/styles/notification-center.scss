@@ -3,7 +3,7 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-.notificationCenter {
+.notification-center {
     width: 500px;
     max-width: calc(100vw - 16px);
     position: absolute;
@@ -94,7 +94,7 @@
             color: var(--color-error);
         }
 
-        > .container > .closeButton {
+        > .container > .close-button {
             flex: 0;
             border: none;
             background: none;

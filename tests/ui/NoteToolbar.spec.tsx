@@ -66,13 +66,13 @@ describe("NoteToolbar", { concurrent: false }, () => {
     };
 
     const sectionLabels = (result: RenderResult): Array<string | null> => {
-        return [...result.container.querySelectorAll(".selectionToolbarSection")].map((element) => {
+        return [...result.container.querySelectorAll(".selection-toolbar-section")].map((element) => {
             return element.textContent;
         });
     };
 
     const sectionRows = (result: RenderResult): HTMLElement[] => {
-        return [...result.container.querySelectorAll<HTMLElement>(".selectionToolbarActions")];
+        return [...result.container.querySelectorAll<HTMLElement>(".selection-toolbar-actions")];
     };
 
     beforeEach(() => {
@@ -97,9 +97,9 @@ describe("NoteToolbar", { concurrent: false }, () => {
     it("names the instrument and the measure of the addressed note", () => {
         const result = renderToolbar([noteEntry(measure, noteStart)]);
 
-        expect(result.container.querySelector(".selectionToolbarInstrument")?.textContent)
+        expect(result.container.querySelector(".selection-toolbar-instrument")?.textContent)
             .toBe(track.instrument.displayName);
-        expect(result.container.querySelector(".selectionToolbarPosition")?.textContent).toBe("Measure 1");
+        expect(result.container.querySelector(".selection-toolbar-position")?.textContent).toBe("Measure 1");
     });
 
     it("captions the sections of a note selection and keeps the styles on a tray of their own", () => {
@@ -108,26 +108,26 @@ describe("NoteToolbar", { concurrent: false }, () => {
         expect(sectionLabels(result)).toEqual([
             "Note style & technique", "Note value / duration", "Articulation", "Tuplets",
         ]);
-        expect(result.container.querySelector(".selectionToolbarBadge")?.textContent).toBe("Percussion");
+        expect(result.container.querySelector(".selection-toolbar-badge")?.textContent).toBe("Percussion");
 
         // Each row carries the class of its own section, and only the styles sit on the card's tray.
         const rows = sectionRows(result);
         expect(rows).toHaveLength(4);
-        expect(rows[0].classList.contains("noteStyleBar")).toBe(true);
-        expect(rows[1].classList.contains("noteLengthToolbar")).toBe(true);
-        expect(rows[2].classList.contains("articulationToolbar")).toBe(true);
-        expect(rows[3].classList.contains("subdivisionToolbar")).toBe(true);
+        expect(rows[0].classList.contains("note-style-bar")).toBe(true);
+        expect(rows[1].classList.contains("note-length-toolbar")).toBe(true);
+        expect(rows[2].classList.contains("articulation-toolbar")).toBe(true);
+        expect(rows[3].classList.contains("subdivision-toolbar")).toBe(true);
         expect(rows.map((row) => {
-            return row.classList.contains("selectionToolbarTray");
+            return row.classList.contains("selection-toolbar-tray");
         })).toEqual([true, false, false, false]);
-        expect(result.container.querySelectorAll(".selectionToolbarGroup.is-tray")).toHaveLength(1);
+        expect(result.container.querySelectorAll(".selection-toolbar-group.is-tray")).toHaveLength(1);
     });
 
     it("leaves the note values out of the grid view", () => {
         const result = renderToolbar([noteEntry(measure, noteStart)], TrackViewMode.Grid);
 
         expect(sectionLabels(result)).toEqual(["Note style & technique", "Articulation", "Tuplets"]);
-        expect(result.container.querySelector(".noteLengthToolbar")).toBeNull();
+        expect(result.container.querySelector(".note-length-toolbar")).toBeNull();
     });
 
     it("leaves the tuplets out while the selection reaches beyond note cells", () => {
@@ -155,7 +155,7 @@ describe("NoteToolbar", { concurrent: false }, () => {
         expect(sectionLabels(renderResult)).toEqual([
             "Note style & technique", "Note value / duration", "Articulation",
         ]);
-        expect(renderResult.container.querySelector(".subdivisionToolbar")).toBeNull();
+        expect(renderResult.container.querySelector(".subdivision-toolbar")).toBeNull();
     });
 
     it("carries the note tools for notes and note groups alone", () => {

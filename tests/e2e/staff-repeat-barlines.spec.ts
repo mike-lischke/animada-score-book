@@ -350,7 +350,7 @@ test("offers the repeat marks above every bar, not in a selection popup", async 
 
     // A selected note brings none of them along: its popup holds the note tools alone.
     await staffBar(page, 2).locator(".staff-note-head-symbol").first().click();
-    await expect(page.locator("#selectionEditPopup .subdivisionToolbar")).toBeVisible();
+    await expect(page.locator("#selectionEditPopup .subdivision-toolbar")).toBeVisible();
     await expect(page.locator('#selectionEditPopup [title="Repeat start"]')).toHaveCount(0);
     await expect(page.locator('#selectionEditPopup [title="Repeat end"]')).toHaveCount(0);
 });

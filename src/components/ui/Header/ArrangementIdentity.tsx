@@ -115,6 +115,6 @@ export class ArrangementIdentity extends UIComponent<IArrangementIdentityProps> 
             }
         }
 
-        return <Badge className="arrangementSaveChip" variant={badgeVariant} caption={saveCaption} />;
+        return <Badge className="arrangement-save-chip" variant={badgeVariant} caption={saveCaption} />;
     }
 }

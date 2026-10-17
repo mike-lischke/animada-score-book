@@ -86,7 +86,7 @@ const staffBar = (page: Page, barNumber: number): Locator => {
  * @returns The tray of the track-piece popup's card.
  */
 const pieceTray = (page: Page): Locator => {
-    return page.locator("#selectionEditPopup .selectionToolbarActions");
+    return page.locator("#selectionEditPopup .selection-toolbar-actions");
 };
 
 /**
@@ -99,7 +99,7 @@ const pieceTray = (page: Page): Locator => {
  * @returns The action button.
  */
 const pieceAction = (page: Page, tooltip: string): Locator => {
-    return page.locator(`#selectionEditPopup .selectionToolbarAction[title="${tooltip}"]`);
+    return page.locator(`#selectionEditPopup .selection-toolbar-action[title="${tooltip}"]`);
 };
 
 test.beforeEach(async ({ page }) => {
@@ -133,7 +133,7 @@ test("does not offer the mark for a note selection", async ({ page }) => {
     await staffBar(page, 1).locator(".staff-note-head-symbol").first().click();
 
     // A note selection carries the note tools, so the track-piece card and its mark are absent.
-    await expect(page.locator("#selectionEditPopup .subdivisionToolbar")).toBeVisible();
+    await expect(page.locator("#selectionEditPopup .subdivision-toolbar")).toBeVisible();
 
     await expect(toolbarButton(page, "One-bar repeat (simile)")).toHaveCount(0);
     await expect(pieceAction(page, "One-bar repeat (simile)")).toHaveCount(0);
@@ -147,13 +147,13 @@ test("sets the mark on a track piece and clears it again", async ({ page }) => {
     await selectTrackPiece(page, 2);
 
     // The card names the addressed piece and holds its two actions in one tray, which stays uncaptioned.
-    const instrumentName = await page.locator(".trackInstrumentName").first().textContent();
+    const instrumentName = await page.locator(".track-instrument-name").first().textContent();
     await expect(pieceTray(page)).toBeVisible();
-    await expect(page.locator("#selectionEditPopup .selectionToolbarInstrument"))
+    await expect(page.locator("#selectionEditPopup .selection-toolbar-instrument"))
         .toHaveText(instrumentName!.trim());
-    await expect(page.locator("#selectionEditPopup .selectionToolbarPosition")).toHaveText("Measure 2");
-    await expect(pieceTray(page).locator(".selectionToolbarAction")).toHaveCount(2);
-    await expect(page.locator("#selectionEditPopup .selectionToolbarSection")).toHaveCount(0);
+    await expect(page.locator("#selectionEditPopup .selection-toolbar-position")).toHaveText("Measure 2");
+    await expect(pieceTray(page).locator(".selection-toolbar-action")).toHaveCount(2);
+    await expect(page.locator("#selectionEditPopup .selection-toolbar-section")).toHaveCount(0);
 
     const repeat = pieceAction(page, "One-bar repeat (simile)");
     await expect(repeat).toBeEnabled();

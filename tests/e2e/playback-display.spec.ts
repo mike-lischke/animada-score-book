@@ -23,7 +23,7 @@ test("playback button starts and stops playback", async ({ page }) => {
     await page.goto("/");
 
     const playbackToggle = page.locator("#playbackButton");
-    const playButton = page.locator("#arrangementPlayControls .playStopButton");
+    const playButton = page.locator("#arrangementPlayControls .play-stop-button");
     await expect(playButton).toBeVisible();
 
     await playButton.click();

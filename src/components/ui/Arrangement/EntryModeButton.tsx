@@ -29,14 +29,14 @@ export class EntryModeButton extends UIComponent<IEntryModeButtonProps> {
             ? "Overwrite mode: new notes replace the content at the cursor"
             : "Insert mode: new notes push the content behind the cursor";
         const className = this.generateFinalClassName([
-            "entryModeButton",
+            "entry-mode-button",
             this.classFromProperty(isOverwrite, "is-active"),
         ]);
 
         return (
             <Button className={className} title={tooltip} onClick={this.handleClick}>
                 <span className="entryModeDot" aria-hidden="true" />
-                <span className="entryModeLabel">{isOverwrite ? "Overwrite" : "Insert"}</span>
+                <span className="entry-mode-label">{isOverwrite ? "Overwrite" : "Insert"}</span>
             </Button>
         );
     }

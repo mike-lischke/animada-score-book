@@ -61,7 +61,7 @@ export class NoteToolbar extends SelectionToolbar<INoteToolbarProps, Record<stri
         const styleSection: ISelectionToolbarSection = {
             label: "Note style & technique",
             badge: "Percussion",
-            className: "noteStyleBar",
+            className: "note-style-bar",
             tray: true,
             content: (
                 <NoteStyleBar
@@ -76,7 +76,7 @@ export class NoteToolbar extends SelectionToolbar<INoteToolbarProps, Record<stri
         // A length is entered at the staff view, which is the only view that draws note values.
         const lengthSection: ISelectionToolbarSection = {
             label: "Note value / duration",
-            className: "noteLengthToolbar",
+            className: "note-length-toolbar",
             content: (
                 <NoteLengthToolbar
                     dataModel={dataModel}
@@ -88,7 +88,7 @@ export class NoteToolbar extends SelectionToolbar<INoteToolbarProps, Record<stri
 
         const articulationSection: ISelectionToolbarSection = {
             label: "Articulation",
-            className: "articulationToolbar",
+            className: "articulation-toolbar",
             content: (
                 <ArticulationToolbar
                     dataModel={dataModel}
@@ -101,7 +101,7 @@ export class NoteToolbar extends SelectionToolbar<INoteToolbarProps, Record<stri
         // A subdivision is cut out of the note cells of one measure, so a coarser selection cannot take one.
         const tupletSection: ISelectionToolbarSection = {
             label: "Tuplets",
-            className: "subdivisionToolbar",
+            className: "subdivision-toolbar",
             content: <SubdivisionToolbar selectionManager={selectionManager} />,
         };
 

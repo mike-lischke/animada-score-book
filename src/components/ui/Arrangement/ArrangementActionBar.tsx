@@ -76,7 +76,7 @@ export class ArrangementActionBar extends UIComponent<IArrangementActionBarProps
         ]);
         const staffMode = trackViewMode === TrackViewMode.Staff;
         const viewClassName = this.generateFinalClassName([
-            "actionControlSwitch", "trackViewModeToggle", this.classFromProperty(staffMode, "is-active"),
+            "actionControlSwitch", "track-view-mode-toggle", this.classFromProperty(staffMode, "is-active"),
         ]);
         const mixerTooltip = mixerExpanded ? "Collapse mixer" : "Expand mixer";
         const viewTooltip = staffMode ? "Show grid view" : "Show staff view";

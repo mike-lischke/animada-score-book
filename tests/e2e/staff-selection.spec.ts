@@ -154,7 +154,7 @@ test.describe("Staff view selection", () => {
         await expect(page.locator("#trackViewerHost")).toBeVisible();
 
         // Switch to staff mode.
-        const trackViewToggle = page.locator("button.trackViewModeToggle").first();
+        const trackViewToggle = page.locator("button.track-view-mode-toggle").first();
         await expect(trackViewToggle).toBeVisible();
         if (await trackViewToggle.getAttribute("aria-pressed") !== "true") {
             await trackViewToggle.click({ force: true });
@@ -226,7 +226,7 @@ test.describe("Staff view selection", () => {
         await page.goto(bolero3Url);
         await expect(page.locator("#trackViewerHost")).toBeVisible();
 
-        const trackViewToggle = page.locator("button.trackViewModeToggle").first();
+        const trackViewToggle = page.locator("button.track-view-mode-toggle").first();
         if (await trackViewToggle.getAttribute("aria-pressed") !== "true") {
             await trackViewToggle.click({ force: true });
         }

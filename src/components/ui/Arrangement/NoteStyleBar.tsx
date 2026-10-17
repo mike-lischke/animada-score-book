@@ -118,7 +118,7 @@ export class NoteStyleBar extends UIComponent<INoteStyleBarProps, INoteStyleBarS
     private renderRestButton(markedStyle: IMarkedStyle | undefined, canEnter: boolean): ComponentChild {
         return (
             <Button
-                className="selectionToolbarAction noteStyleRestButton"
+                className="selection-toolbar-action noteStyleRestButton"
                 isDefault={markedStyle?.isRest === true}
                 disabled={!canEnter}
                 title="Rest (0)"
@@ -146,7 +146,7 @@ export class NoteStyleBar extends UIComponent<INoteStyleBarProps, INoteStyleBarS
             return (
                 <Button
                     key={style.id}
-                    className="selectionToolbarAction noteStyleButton"
+                    className="selection-toolbar-action noteStyleButton"
                     isDefault={style.id === markedStyleId}
                     disabled={!canEnter}
                     title={`${this.styleDescription(style)} (${index + 1})`}
@@ -217,7 +217,7 @@ export class NoteStyleBar extends UIComponent<INoteStyleBarProps, INoteStyleBarS
         return (
             <Button
                 key={style.id}
-                className="selectionToolbarAction noteStyleButton"
+                className="selection-toolbar-action noteStyleButton"
                 isDefault={isMarked}
                 disabled={!canEnter}
                 title={`${this.styleDescription(style)} (${index + 1})`}

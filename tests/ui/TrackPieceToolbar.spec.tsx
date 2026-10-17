@@ -42,7 +42,7 @@ describe("TrackPieceToolbar", { concurrent: false }, () => {
     };
 
     const actionButton = (result: RenderResult, tooltip: string): HTMLButtonElement => {
-        return result.container.querySelector<HTMLButtonElement>(`.selectionToolbarAction[title="${tooltip}"]`)!;
+        return result.container.querySelector<HTMLButtonElement>(`.selection-toolbar-action[title="${tooltip}"]`)!;
     };
 
     beforeEach(() => {
@@ -64,17 +64,17 @@ describe("TrackPieceToolbar", { concurrent: false }, () => {
     it("names the instrument and the measure of the selected piece", () => {
         const result = renderToolbar([measure(2)]);
 
-        expect(result.container.querySelector(".selectionToolbarInstrument")?.textContent)
+        expect(result.container.querySelector(".selection-toolbar-instrument")?.textContent)
             .toBe(track.instrument.displayName);
-        expect(result.container.querySelector(".selectionToolbarPosition")?.textContent).toBe("Measure 2");
-        expect(result.container.querySelectorAll(".selectionToolbarAction")).toHaveLength(2);
-        expect(result.container.querySelector(".selectionToolbarSection")).toBeNull();
+        expect(result.container.querySelector(".selection-toolbar-position")?.textContent).toBe("Measure 2");
+        expect(result.container.querySelectorAll(".selection-toolbar-action")).toHaveLength(2);
+        expect(result.container.querySelector(".selection-toolbar-section")).toBeNull();
     });
 
     it("names the range of measures the selection covers", () => {
         const result = renderToolbar([measure(2), measure(3)]);
 
-        expect(result.container.querySelector(".selectionToolbarPosition")?.textContent).toBe("Measures 2 – 3");
+        expect(result.container.querySelector(".selection-toolbar-position")?.textContent).toBe("Measures 2 – 3");
     });
 
     it("offers the one-bar repeat from the second measure on", () => {

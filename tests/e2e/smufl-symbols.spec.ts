@@ -66,7 +66,7 @@ const openStaffArrangement = async (page: Page, packed: string): Promise<void> =
 
     await page.goto("/");
 
-    const trackViewToggle = page.locator("button.trackViewModeToggle").first();
+    const trackViewToggle = page.locator("button.track-view-mode-toggle").first();
     await expect(trackViewToggle).toBeVisible();
     if (await trackViewToggle.getAttribute("aria-pressed") !== "true") {
         await trackViewToggle.click({ force: true });

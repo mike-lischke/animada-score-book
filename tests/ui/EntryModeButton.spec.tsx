@@ -23,7 +23,7 @@ describe("EntryModeButton", { concurrent: false }, () => {
     const renderButton = (entryMode: EditEntryMode): HTMLButtonElement => {
         renderResult = render(<EntryModeButton entryMode={entryMode} />);
 
-        return renderResult.container.querySelector<HTMLButtonElement>(".entryModeButton")!;
+        return renderResult.container.querySelector<HTMLButtonElement>(".entry-mode-button")!;
     };
 
     const unmountButton = (): void => {
@@ -38,11 +38,11 @@ describe("EntryModeButton", { concurrent: false }, () => {
     });
 
     it("names the mode it holds", () => {
-        expect(renderButton(EditEntryMode.Insert).querySelector(".entryModeLabel")?.textContent).toBe("Insert");
+        expect(renderButton(EditEntryMode.Insert).querySelector(".entry-mode-label")?.textContent).toBe("Insert");
 
         unmountButton();
 
-        expect(renderButton(EditEntryMode.Overwrite).querySelector(".entryModeLabel")?.textContent).toBe("Overwrite");
+        expect(renderButton(EditEntryMode.Overwrite).querySelector(".entry-mode-label")?.textContent).toBe("Overwrite");
     });
 
     it("marks the button while overwrite is in effect", () => {

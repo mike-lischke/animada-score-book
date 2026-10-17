@@ -81,7 +81,7 @@ export class Dropdown extends UIComponent<IDropdownProperties, IDropdownState> {
         });
 
         const defaultCaption = !caption && (icon === undefined) ? "Select an option" : undefined;
-        const className = this.generateFinalClassName(["dropdownHost"]);
+        const className = this.generateFinalClassName(["dropdown-host"]);
 
         return (
             <div id={id} className={className}>

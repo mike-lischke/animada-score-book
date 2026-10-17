@@ -278,7 +278,7 @@ describe("SubdivisionToolbar", { concurrent: false }, () => {
             expect(buttonWithTooltip(renderResult.container, "Add subdivision")).toBeTruthy();
             expect(buttonOrNull(renderResult.container, "Repeat start")).toBeNull();
             expect(buttonOrNull(renderResult.container, "Repeat end")).toBeNull();
-            expect(renderResult.container.querySelectorAll(".dropdownHost")).toHaveLength(1);
+            expect(renderResult.container.querySelectorAll(".dropdown-host")).toHaveLength(1);
         }
     });
 });

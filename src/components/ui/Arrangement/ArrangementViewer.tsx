@@ -520,7 +520,7 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         let identity: ComponentChild;
         if (zenMode) {
             identity = (
-                <Container className="zenArrangementIdentityHost"
+                <Container className="zen-arrangement-identity-host"
                     orientation={Orientation.LeftToRight} crossAlignment={ChildAlignment.Center}>
                     {zenIdentity}
                 </Container>
@@ -576,7 +576,7 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
                         </Container>
                         {editSidebar}
                     </Container>
-                    <div className="viewerBottomSpacer" />
+                    <div className="viewer-bottom-spacer" />
                     <InsertBarsDialog ref={this.insertBarsDialogRef} />
                 </Container>
                 <RadialMenu ref={this.gridRadialMenuRef} />
@@ -594,7 +594,7 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         const selected = selectedZenBars.has(bar);
 
         return (
-            <Button className="zenMeasurePlayButton" aria-pressed={selected} data-bar={bar}
+            <Button className="zen-measure-play-button" aria-pressed={selected} data-bar={bar}
                 title={`Play only this: measure ${bar}`} onClick={() => {
                     void requisitions.execute("zenMeasureToggled", bar);
                 }}>

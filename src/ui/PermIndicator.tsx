@@ -63,7 +63,7 @@ export const PermIndicator = (props: IPermIndicatorProps): ComponentChild => {
 
     return (
         <span
-            class="permIndicator"
+            class="perm-indicator"
             onClick={handleClick}
             onMouseDown={handleMouseDown}
             title={canManage ? "Group Access" : title}

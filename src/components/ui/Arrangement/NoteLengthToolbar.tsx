@@ -173,7 +173,7 @@ export class NoteLengthToolbar extends UIComponent<INoteLengthToolbarProps, INot
             return (
                 <Button
                     key={option.length}
-                    className="selectionToolbarAction noteLengthButton"
+                    className="selection-toolbar-action note-length-button"
                     isDefault={option.length === markedLength}
                     disabled={disabled}
                     title={`${option.tooltip} (Alt/Cmd+${option.shortcut})`}
@@ -191,7 +191,7 @@ export class NoteLengthToolbar extends UIComponent<INoteLengthToolbarProps, INot
         const toggledValue: INoteValue = { length: activeValue.length, dotted: !activeValue.dotted };
         const dotButton = (
             <Button
-                className="selectionToolbarAction noteDotButton"
+                className="selection-toolbar-action note-dot-button"
                 isDefault={markedDotted === true}
                 disabled={this.isDisabled(toggledValue)}
                 title="Dotted (Alt/Cmd+.)"

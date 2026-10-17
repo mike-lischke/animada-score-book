@@ -82,7 +82,7 @@ export abstract class SelectionToolbar<P extends ICommonUIProperties, S> extends
             <>
                 {header}
                 <Container
-                    className="selectionToolbarSections"
+                    className="selection-toolbar-sections"
                     orientation={Orientation.LeftToRight}
                     mainAlignment={ChildAlignment.SpaceBetween}
                     crossAlignment={ChildAlignment.Start}
@@ -182,8 +182,8 @@ export abstract class SelectionToolbar<P extends ICommonUIProperties, S> extends
     private static boxClassesOf(section: ISelectionToolbarSection): string {
         // A section on the tray reads as the palette of the addressed elements, so it takes a row of its own.
         return SelectionToolbar.sitsOnTray(section)
-            ? "selectionToolbarGroup is-tray"
-            : "selectionToolbarGroup";
+            ? "selection-toolbar-group is-tray"
+            : "selection-toolbar-group";
     }
 
     /**
@@ -197,22 +197,22 @@ export abstract class SelectionToolbar<P extends ICommonUIProperties, S> extends
 
     private renderHeader(): ComponentChild {
         const { instrument, position, color } = this.toolbarTitle;
-        const dot = <span className="selectionToolbarDot" style={{ backgroundColor: color }} />;
-        const name = <span className="selectionToolbarInstrument">{instrument}</span>;
+        const dot = <span className="selection-toolbar-dot" style={{ backgroundColor: color }} />;
+        const name = <span className="selection-toolbar-instrument">{instrument}</span>;
 
         let placement: ComponentChild;
         if (position !== undefined) {
             placement = (
                 <>
-                    <span className="selectionToolbarSeparator">-</span>
-                    <span className="selectionToolbarPosition">{position}</span>
+                    <span className="selection-toolbar-separator">-</span>
+                    <span className="selection-toolbar-position">{position}</span>
                 </>
             );
         }
 
         return (
             <Container
-                className="selectionToolbarHeader"
+                className="selection-toolbar-header"
                 orientation={Orientation.LeftToRight}
                 crossAlignment={ChildAlignment.Center}
             >
@@ -278,17 +278,17 @@ export abstract class SelectionToolbar<P extends ICommonUIProperties, S> extends
 
         let caption: ComponentChild;
         if (label !== undefined) {
-            caption = <div className="selectionToolbarSection">{label}</div>;
+            caption = <div className="selection-toolbar-section">{label}</div>;
         }
 
         let badgeLabel: ComponentChild;
         if (badge !== undefined) {
-            badgeLabel = <span className="selectionToolbarBadge">{badge}</span>;
+            badgeLabel = <span className="selection-toolbar-badge">{badge}</span>;
         }
 
         return (
             <Container
-                className="selectionToolbarCaption"
+                className="selection-toolbar-caption"
                 orientation={Orientation.LeftToRight}
                 mainAlignment={ChildAlignment.SpaceBetween}
                 crossAlignment={ChildAlignment.Center}
@@ -316,13 +316,13 @@ export abstract class SelectionToolbar<P extends ICommonUIProperties, S> extends
             body = this.renderActions(actions ?? []);
         }
 
-        const rowClasses = ["selectionToolbarActions"];
+        const rowClasses = ["selection-toolbar-actions"];
         if (className !== undefined) {
             rowClasses.push(className);
         }
 
         if (SelectionToolbar.sitsOnTray(section)) {
-            rowClasses.push("selectionToolbarTray");
+            rowClasses.push("selection-toolbar-tray");
         }
 
         return (
@@ -340,7 +340,7 @@ export abstract class SelectionToolbar<P extends ICommonUIProperties, S> extends
 
     private renderActions(actions: ISelectionToolbarAction[]): ComponentChild[] {
         const buttons = actions.map((action) => {
-            let className = "selectionToolbarAction";
+            let className = "selection-toolbar-action";
             if (action.destructive === true) {
                 className += " is-destructive";
             }

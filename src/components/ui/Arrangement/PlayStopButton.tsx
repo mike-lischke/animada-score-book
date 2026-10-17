@@ -32,12 +32,12 @@ export class PlayStopButton extends UIComponent<IPlayStopButtonProperties> {
             || arrangementPlayer.state === PlayerPlayState.Counting;
 
         const className = this.generateFinalClassName([
-            "playStopButton",
+            "play-stop-button",
             this.classFromProperty(isPlaying, "is-playing"),
         ]);
 
         const icon = <Icon src={isPlaying ? UIIcon.Stop : UIIcon.Play} />;
-        const label = <span className="playStopLabel">{isPlaying ? "Stop" : "Play"}</span>;
+        const label = <span className="play-stop-label">{isPlaying ? "Stop" : "Play"}</span>;
 
         return (
             <Button

@@ -87,10 +87,10 @@ test("subdivides the whole-measure rest into visible slots", async ({ page }) =>
     await page.locator("#editModeButton").click({ force: true });
 
     await selectWholeRest(page);
-    await expect(page.locator("#selectionEditPopup .noteLengthToolbar")).toBeVisible();
+    await expect(page.locator("#selectionEditPopup .note-length-toolbar")).toBeVisible();
 
-    await page.locator(".subdivisionToolbar button").first().click();
-    await page.locator(".subdivisionToolbar").getByText("Triplet", { exact: true }).click();
+    await page.locator(".subdivision-toolbar button").first().click();
+    await page.locator(".subdivision-toolbar").getByText("Triplet", { exact: true }).click();
 
     // The bar keeps its subdivision instead of collapsing into one whole rest, so the three slots
     // the user just created are there to be filled.
@@ -103,11 +103,11 @@ test("splits the whole-measure rest into two half rests with the length toolbar"
     await page.locator("#editModeButton").click({ force: true });
 
     await selectWholeRest(page);
-    await expect(page.locator("#selectionEditPopup .noteLengthToolbar")).toBeVisible();
+    await expect(page.locator("#selectionEditPopup .note-length-toolbar")).toBeVisible();
 
     // The second length button is the half note: the addressed rest takes that length and the space
     // behind it becomes the second half rest.
-    await page.locator(".noteLengthToolbar .noteLengthButton").nth(1).click({ force: true });
+    await page.locator(".note-length-toolbar .note-length-button").nth(1).click({ force: true });
 
     const bar = page.locator(".staff-measure-viewer").nth(1);
     const rests = bar.locator(".staff-note-viewer-run");

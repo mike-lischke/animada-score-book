@@ -20,7 +20,7 @@ const seededMeasures = 2;
  */
 const enterEditMode = async (page: Page): Promise<void> => {
     await page.locator("#editModeButton").click({ force: true });
-    await expect(page.locator(".trackEditSidebar")).toBeVisible();
+    await expect(page.locator(".track-edit-sidebar")).toBeVisible();
 };
 
 test.beforeEach(async ({ page }) => {
@@ -31,20 +31,20 @@ test("opens the track toolbar left of the trigger and names the instrument", asy
     await openSeededStaffScore(page, seededTracks, seededMeasures);
     await enterEditMode(page);
 
-    const trigger = page.locator(".trackEditTrigger").first();
-    const instrumentName = await page.locator(".trackInstrumentName").first().textContent();
+    const trigger = page.locator(".track-edit-trigger").first();
+    const instrumentName = await page.locator(".track-instrument-name").first().textContent();
 
     await trigger.click({ force: true });
 
     const popup = page.locator(".track-toolbar");
     await expect(popup).toBeVisible();
-    await expect(popup.locator(".selectionToolbarInstrument")).toHaveText(instrumentName!.trim());
-    await expect(popup.locator(".selectionToolbarAction")).toHaveCount(4);
+    await expect(popup.locator(".selection-toolbar-instrument")).toHaveText(instrumentName!.trim());
+    await expect(popup.locator(".selection-toolbar-action")).toHaveCount(4);
 
     // The card carries one tray of actions, so it draws neither a caption nor a close button: the toolbar
     // closes on Escape, on a click outside it and after an action.
-    await expect(popup.locator(".selectionToolbarSection")).toHaveCount(0);
-    await expect(popup.locator(".selectionToolbarClose")).toHaveCount(0);
+    await expect(popup.locator(".selection-toolbar-section")).toHaveCount(0);
+    await expect(popup.locator(".selection-toolbar-close")).toHaveCount(0);
 
     const triggerBox = await trigger.boundingBox();
     expect(triggerBox).not.toBeNull();
@@ -62,7 +62,7 @@ test("closes the track toolbar on Escape and on a click outside", async ({ page 
     await openSeededStaffScore(page, seededTracks, seededMeasures);
     await enterEditMode(page);
 
-    const trigger = page.locator(".trackEditTrigger").first();
+    const trigger = page.locator(".track-edit-trigger").first();
     const popup = page.locator(".track-toolbar");
 
     await trigger.click({ force: true });
@@ -82,18 +82,18 @@ test("duplicates a track through the toolbar and closes it", async ({ page }) =>
     await openSeededStaffScore(page, seededTracks, seededMeasures);
     await enterEditMode(page);
 
-    const rows = page.locator(".trackEditRow");
+    const rows = page.locator(".track-edit-row");
     await expect(rows).toHaveCount(seededTracks);
 
     const popup = page.locator(".track-toolbar");
 
-    await page.locator(".trackEditTrigger").first().click({ force: true });
+    await page.locator(".track-edit-trigger").first().click({ force: true });
     await expect(popup).toBeVisible();
 
     // The action row is add, duplicate, clear, delete — the second button duplicates.
-    await popup.locator(".selectionToolbarAction").nth(1).click({ force: true });
+    await popup.locator(".selection-toolbar-action").nth(1).click({ force: true });
 
     await expect(rows).toHaveCount(seededTracks + 1);
-    await expect(page.locator(".trackControls")).toHaveCount(seededTracks + 1);
+    await expect(page.locator(".track-controls")).toHaveCount(seededTracks + 1);
     await expect(popup).toBeHidden();
 });

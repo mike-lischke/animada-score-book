@@ -194,7 +194,7 @@ export class ArrangementPlayControls
                     <Button
                         compact
                         plain
-                        className="tempoStepButton"
+                        className="tempo-step-button"
                         title="Decrease playback tempo"
                         disabled={currentTempo <= tempoMin}
                         onClick={this.handleTempoDown}
@@ -205,7 +205,7 @@ export class ArrangementPlayControls
                     <Button
                         compact
                         plain
-                        className="tempoStepButton"
+                        className="tempo-step-button"
                         title="Increase playback tempo"
                         disabled={currentTempo >= tempoMax}
                         onClick={this.handleTempoUp}
@@ -340,7 +340,7 @@ export class ArrangementPlayControls
      */
     private renderSwitch(glyph: SwitchGlyph, tooltip: string, checked: boolean, onChange: () => void): ComponentChild {
         const className = this.generateFinalClassName([
-            "playControlSwitch",
+            "play-control-switch",
             this.classFromProperty(checked, "is-active"),
         ]);
 
@@ -348,7 +348,7 @@ export class ArrangementPlayControls
             ? <Icon src={glyph} alt={tooltip} />
             : <MetronomeIcon alt={tooltip} />;
 
-        const status = <span className="playControlSwitchDot" />;
+        const status = <span className="play-control-switch-dot" />;
 
         return (
             <Button className={className} title={tooltip} onClick={onChange}>

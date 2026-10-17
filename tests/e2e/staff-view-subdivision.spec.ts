@@ -19,7 +19,7 @@ test.describe("Staff view subdivision rendering", () => {
 
         await expect(page.locator("#trackViewerHost")).toBeVisible();
 
-        const trackViewToggle = page.locator("button.trackViewModeToggle").first();
+        const trackViewToggle = page.locator("button.track-view-mode-toggle").first();
         await expect(trackViewToggle).toBeVisible();
         if (await trackViewToggle.getAttribute("aria-pressed") !== "true") {
             await trackViewToggle.click({ force: true });
@@ -114,7 +114,7 @@ test.describe("Staff view subdivision rendering", () => {
 
         await expect(page.locator("#trackViewerHost")).toBeVisible();
 
-        const trackViewToggle = page.locator("button.trackViewModeToggle").first();
+        const trackViewToggle = page.locator("button.track-view-mode-toggle").first();
         await expect(trackViewToggle).toBeVisible();
         if (await trackViewToggle.getAttribute("aria-pressed") !== "true") {
             await trackViewToggle.click({ force: true });
@@ -201,7 +201,7 @@ test.describe("Staff view subdivision rendering", () => {
         await page.goto("/");
         await expect(page.locator("#trackViewerHost")).toBeVisible();
 
-        const trackViewToggle = page.locator("button.trackViewModeToggle").first();
+        const trackViewToggle = page.locator("button.track-view-mode-toggle").first();
         await expect(trackViewToggle).toBeVisible();
         if (await trackViewToggle.getAttribute("aria-pressed") !== "true") {
             await trackViewToggle.click({ force: true });
@@ -291,7 +291,7 @@ test.describe("Staff view subdivision rendering", () => {
         await page.goto("/");
         await expect(page.locator("#trackViewerHost")).toBeVisible();
 
-        const trackViewToggle = page.locator("button.trackViewModeToggle").first();
+        const trackViewToggle = page.locator("button.track-view-mode-toggle").first();
         await expect(trackViewToggle).toBeVisible();
         if (await trackViewToggle.getAttribute("aria-pressed") !== "true") {
             await trackViewToggle.click({ force: true });

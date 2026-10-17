@@ -36,7 +36,7 @@ export class MenuItem extends UIComponent<IMenuItemViewProperties> {
         const { label, icon, hasSubMenu, disabled } = item;
         const isSeparator = label === "-";
         const className = this.generateFinalClassName([
-            "menuItem",
+            "menu-item",
             this.classFromProperty(disabled ?? isSeparator, "disabled"),
             this.classFromProperty(hasSubMenu ?? false, "submenu"),
             isSeparator ? "separator" : "",

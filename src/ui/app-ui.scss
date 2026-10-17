@@ -63,7 +63,7 @@
     height: 100%;
     min-height: 0;
 
-    .scoreTreeEntry {
+    .score-tree-entry {
         display: flex;
         flex-direction: row;
         align-items: center;
@@ -97,14 +97,14 @@
             flex: 0 0 auto;
         }
 
-        > .actionBox {
+        > .action-box {
             display: flex;
             justify-content: flex-end;
             overflow: hidden;
             min-width: fit-content;
 
             > .actionButton,
-            > .dropdownHost > .btn {
+            > .dropdown-host > .btn {
                 top: 1px;
                 right: 0;
                 width: 20px;
@@ -121,7 +121,7 @@
             }
         }
 
-        &:hover > .actionBox > .actionButton:hover .icon {
+        &:hover > .action-box > .actionButton:hover .icon {
             color: var(--color-primary);
             border: 1px solid var(--color-primary);
             border-radius: 4px;
@@ -137,7 +137,7 @@
         }
     }
 
-    .tabulator-row:hover .actionBox {
+    .tabulator-row:hover .action-box {
         display: flex;
     }
 
@@ -162,7 +162,7 @@
 
     /* ---- Permission indicator ---- */
 
-    .permIndicator {
+    .perm-indicator {
         display: inline-flex;
         align-items: center;
         gap: 2px;

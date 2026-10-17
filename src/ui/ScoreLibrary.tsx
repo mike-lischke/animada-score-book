@@ -143,7 +143,7 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
         const data = cell.getData() as ISbDmScoreFolder | ISbDmScore;
 
         const host = document.createElement("div");
-        host.className = "scoreTreeEntry";
+        host.className = "score-tree-entry";
         host.dataset.entryType = String(data.type);
         host.dataset.entryId = String(data.id);
 
@@ -216,7 +216,7 @@ export class ScoreLibrary extends UIComponent<IScoreLibraryProperties, IScoreLib
                     } : undefined}
                 />
             )}
-            <Container className="actionBox" orientation={Orientation.LeftToRight}>
+            <Container className="action-box" orientation={Orientation.LeftToRight}>
                 <Menu
                     icon={UIIcon.KebabVertical}
                     items={menuItems}

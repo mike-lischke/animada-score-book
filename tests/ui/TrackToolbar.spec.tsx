@@ -103,13 +103,14 @@ describe("TrackToolbar", { concurrent: false }, () => {
         });
 
         const popup = popupElement()!;
-        const actions = [...popup.querySelectorAll<HTMLButtonElement>(".selectionToolbarAction")];
+        const actions = [...popup.querySelectorAll<HTMLButtonElement>(".selection-toolbar-action")];
 
         expect(popup.classList.contains("popup")).toBe(true);
         expect(popup.classList.contains("visible")).toBe(true);
-        expect(popup.querySelector(".selectionToolbarInstrument")?.textContent).toBe("Caixa");
-        expect(popup.querySelector<HTMLElement>(".selectionToolbarDot")?.style.backgroundColor).toBe("rgb(18, 52, 86)");
-        expect(popup.querySelector(".selectionToolbarSection")).toBeNull();
+        expect(popup.querySelector(".selection-toolbar-instrument")?.textContent).toBe("Caixa");
+        expect(popup.querySelector<HTMLElement>(".selection-toolbar-dot")?.style.backgroundColor)
+            .toBe("rgb(18, 52, 86)");
+        expect(popup.querySelector(".selection-toolbar-section")).toBeNull();
         expect(actions).toHaveLength(2);
         expect(actions.map((action) => {
             return action.getAttribute("title");
@@ -130,7 +131,7 @@ describe("TrackToolbar", { concurrent: false }, () => {
         });
 
         await act(() => {
-            popupElement()!.querySelector<HTMLButtonElement>(".selectionToolbarAction")!.click();
+            popupElement()!.querySelector<HTMLButtonElement>(".selection-toolbar-action")!.click();
         });
 
         expect(onClick).toHaveBeenCalledTimes(1);

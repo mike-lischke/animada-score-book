@@ -69,15 +69,15 @@ const readPanelEdges = async (page: Page, position: ScrollPosition): Promise<IPa
             return element.getBoundingClientRect();
         };
 
-        const spacerElement = document.querySelector<HTMLElement>(".viewerBottomSpacer");
+        const spacerElement = document.querySelector<HTMLElement>(".viewer-bottom-spacer");
         if (!spacerElement) {
-            throw new Error("Missing element: .viewerBottomSpacer");
+            throw new Error("Missing element: .viewer-bottom-spacer");
         }
 
         const spacerStyle = getComputedStyle(spacerElement);
         const spacer = spacerElement.getBoundingClientRect();
-        const mixer = box(".trackControlsList");
-        const sidebar = document.querySelector(".trackEditSidebar")?.getBoundingClientRect() ?? null;
+        const mixer = box(".track-controls-list");
+        const sidebar = document.querySelector(".track-edit-sidebar")?.getBoundingClientRect() ?? null;
         const footer = box("#appFooter");
 
         return {
@@ -116,7 +116,7 @@ for (const viewport of viewports) {
         await page.setViewportSize(viewport);
         await openSeededStaffScore(page, seededTracks, seededMeasures);
         await page.locator("#editModeButton").click({ force: true });
-        await expect(page.locator(".trackEditSidebar")).toBeVisible();
+        await expect(page.locator(".track-edit-sidebar")).toBeVisible();
 
         for (const position of ["top", "bottom"] as ScrollPosition[]) {
             const edges = await readPanelEdges(page, position);
@@ -152,7 +152,7 @@ test("draws the spacer's right divider only while editing", async ({ page }) => 
     expect(outside.borderRightWidth).toBe(0);
 
     await page.locator("#editModeButton").click({ force: true });
-    await expect(page.locator(".trackEditSidebar")).toBeVisible();
+    await expect(page.locator(".track-edit-sidebar")).toBeVisible();
 
     const inside = await readPanelEdges(page, "top");
     expect(inside.borderLeftWidth).toBe(1);

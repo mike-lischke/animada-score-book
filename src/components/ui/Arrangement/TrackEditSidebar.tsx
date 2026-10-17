@@ -43,7 +43,7 @@ export class TrackEditSidebar extends UIComponent<ITrackEditSidebarProps> {
     public render(): ComponentChild {
         const { tracks, rowGeometries, innerRef } = this.props;
 
-        const className = this.generateFinalClassName(["trackEditSidebar"]);
+        const className = this.generateFinalClassName(["track-edit-sidebar"]);
 
         const trackRows = tracks.map((track) => {
             const geometry = rowGeometries?.get(track.id);
@@ -57,14 +57,14 @@ export class TrackEditSidebar extends UIComponent<ITrackEditSidebarProps> {
             return (
                 <Container
                     key={track.id}
-                    className="trackEditRow"
+                    className="track-edit-row"
                     orientation={Orientation.LeftToRight}
                     mainAlignment={ChildAlignment.Center}
                     crossAlignment={ChildAlignment.Center}
                     style={rowStyle}
                 >
                     <button
-                        className="trackEditTrigger"
+                        className="track-edit-trigger"
                         title="Track actions"
                         aria-label="Track actions"
                         onClick={(e) => {

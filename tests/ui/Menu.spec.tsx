@@ -77,7 +77,7 @@ describe("Menu", () => {
 
         renderResult = render(<Menu items={items} caption="Actions" onItemClick={onClick} />);
 
-        const newItem = renderResult.container.querySelector<HTMLElement>(".menuItem:not(.separator):not(.disabled)");
+        const newItem = renderResult.container.querySelector<HTMLElement>(".menu-item:not(.separator):not(.disabled)");
 
         expect(newItem).toBeTruthy();
         newItem!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
@@ -89,7 +89,7 @@ describe("Menu", () => {
 
         renderResult = render(<Menu items={items} caption="Actions" onItemClick={onClick} />);
 
-        const separator = renderResult.container.querySelector<HTMLElement>(".menuItem.separator");
+        const separator = renderResult.container.querySelector<HTMLElement>(".menu-item.separator");
 
         expect(separator).toBeTruthy();
         separator!.dispatchEvent(new MouseEvent("click", { bubbles: true }));

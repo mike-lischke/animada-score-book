@@ -79,7 +79,7 @@ describe("ArrangementIdentity", { concurrent: false }, () => {
         "omits the save badge in compact mode for state %s", (saveState) => {
             const container = renderIdentity({ compact: true, saveState });
 
-            expect(container.querySelector(".arrangementSaveChip")).toBeNull();
+            expect(container.querySelector(".arrangement-save-chip")).toBeNull();
         },
     );
 
@@ -101,7 +101,7 @@ describe("ArrangementIdentity", { concurrent: false }, () => {
             renderResult?.unmount();
             renderResult = null;
 
-            return renderIdentity({ saveState: state }).querySelector<HTMLElement>(".arrangementSaveChip")!;
+            return renderIdentity({ saveState: state }).querySelector<HTMLElement>(".arrangement-save-chip")!;
         };
 
         expect(chipOf(ArrangementSaveState.Unchanged).textContent).toBe("Unchanged");
@@ -114,7 +114,7 @@ describe("ArrangementIdentity", { concurrent: false }, () => {
             renderResult?.unmount();
             renderResult = null;
 
-            return renderIdentity({ saveState: state }).querySelector<HTMLElement>(".arrangementSaveChip")!;
+            return renderIdentity({ saveState: state }).querySelector<HTMLElement>(".arrangement-save-chip")!;
         };
 
         expect(chipOf(ArrangementSaveState.Unchanged).classList.contains("uiBadge-neutral")).toBe(true);

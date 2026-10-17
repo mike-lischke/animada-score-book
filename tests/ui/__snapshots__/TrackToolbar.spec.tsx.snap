@@ -7,33 +7,33 @@ exports[`TrackToolbar > matches the baseline snapshot with all props set 1`] = `
   style="flex-direction: column; --popup-viewport-width: 1024px; --popup-viewport-height: 768px; left: 0px; top: 0px;"
 >
   <div
-    class="container selectionToolbarHeader"
+    class="container selection-toolbar-header"
     style="flex-direction: row; align-items: center;"
   >
     <span
-      class="selectionToolbarDot"
+      class="selection-toolbar-dot"
       style="background-color: rgb(255, 136, 0);"
     />
     <span
-      class="selectionToolbarInstrument"
+      class="selection-toolbar-instrument"
     >
       Repinique
     </span>
   </div>
   <div
-    class="container selectionToolbarSections"
+    class="container selection-toolbar-sections"
     style="flex-direction: row; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 10px;"
   >
     <div
-      class="container selectionToolbarGroup is-tray"
+      class="container selection-toolbar-group is-tray"
       style="flex-direction: column; align-items: stretch; gap: 6px;"
     >
       <div
-        class="container selectionToolbarActions selectionToolbarTray"
+        class="container selection-toolbar-actions selection-toolbar-tray"
         style="flex-direction: row; align-items: center; flex-wrap: wrap; gap: 6px;"
       >
         <button
-          class="btn du-btn selectionToolbarAction"
+          class="btn du-btn selection-toolbar-action"
           title="Add"
         >
           <span
@@ -41,7 +41,7 @@ exports[`TrackToolbar > matches the baseline snapshot with all props set 1`] = `
           />
         </button>
         <button
-          class="btn du-btn selectionToolbarAction"
+          class="btn du-btn selection-toolbar-action"
           title="Duplicate"
         >
           <span
@@ -49,7 +49,7 @@ exports[`TrackToolbar > matches the baseline snapshot with all props set 1`] = `
           />
         </button>
         <button
-          class="btn du-btn du-btn-disabled selectionToolbarAction"
+          class="btn du-btn du-btn-disabled selection-toolbar-action"
           disabled=""
           title="Clear"
         >
@@ -58,7 +58,7 @@ exports[`TrackToolbar > matches the baseline snapshot with all props set 1`] = `
           />
         </button>
         <button
-          class="btn du-btn selectionToolbarAction is-destructive"
+          class="btn du-btn selection-toolbar-action is-destructive"
           title="Delete"
         >
           <span
@@ -77,32 +77,32 @@ exports[`TrackToolbar > matches the baseline snapshot with minimal props 1`] = `
   style="flex-direction: column; --popup-viewport-width: 1024px; --popup-viewport-height: 768px; left: 0px; top: 0px;"
 >
   <div
-    class="container selectionToolbarHeader"
+    class="container selection-toolbar-header"
     style="flex-direction: row; align-items: center;"
   >
     <span
-      class="selectionToolbarDot"
+      class="selection-toolbar-dot"
     />
     <span
-      class="selectionToolbarInstrument"
+      class="selection-toolbar-instrument"
     >
       Surdo
     </span>
   </div>
   <div
-    class="container selectionToolbarSections"
+    class="container selection-toolbar-sections"
     style="flex-direction: row; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 10px;"
   >
     <div
-      class="container selectionToolbarGroup is-tray"
+      class="container selection-toolbar-group is-tray"
       style="flex-direction: column; align-items: stretch; gap: 6px;"
     >
       <div
-        class="container selectionToolbarActions selectionToolbarTray"
+        class="container selection-toolbar-actions selection-toolbar-tray"
         style="flex-direction: row; align-items: center; flex-wrap: wrap; gap: 6px;"
       >
         <button
-          class="btn du-btn selectionToolbarAction"
+          class="btn du-btn selection-toolbar-action"
         >
           <span
             class="testToolbarIcon"

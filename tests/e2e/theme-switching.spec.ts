@@ -116,7 +116,7 @@ const themeRow = (page: Page): Locator => {
  */
 const pickTheme = async (page: Page, theme: string): Promise<void> => {
     const row = themeRow(page);
-    await row.locator(".dropdownHost button").click();
+    await row.locator(".dropdown-host button").click();
 
     // An exact match, because one theme name is the prefix of another ("Monokai" / "Monokai Dimmed").
     await row.locator(".dropdown-popup").getByText(theme, { exact: true }).click();

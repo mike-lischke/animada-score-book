@@ -3,7 +3,7 @@
 exports[`AppFooter > renders the compact footer 1`] = `
 <div>
   <div
-    class="container appFooter"
+    class="container app-footer"
     id="appFooter"
     style="flex-direction: row; align-items: center;"
   >
@@ -49,7 +49,7 @@ exports[`AppFooter > renders the compact footer 1`] = `
         </svg>
       </button>
       <div
-        class="dropdownHost footerOverflowMenu"
+        class="dropdown-host footerOverflowMenu"
       >
         <button
           class="btn du-btn imageOnly du-btn-ghost"
@@ -216,7 +216,7 @@ exports[`AppFooter > renders the compact footer 1`] = `
 exports[`AppFooter > renders with all props set 1`] = `
 <div>
   <div
-    class="container appFooter zen-footer zen-footer"
+    class="container app-footer zen-footer zen-footer"
     id="appFooter"
     style="flex-direction: row; align-items: center;"
   >
@@ -349,7 +349,7 @@ exports[`AppFooter > renders with all props set 1`] = `
 exports[`AppFooter > renders with the minimum props 1`] = `
 <div>
   <div
-    class="container appFooter"
+    class="container app-footer"
     id="appFooter"
     style="flex-direction: row; align-items: center;"
   >
