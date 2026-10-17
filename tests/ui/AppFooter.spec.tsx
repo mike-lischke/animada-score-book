@@ -56,6 +56,10 @@ describe("AppFooter", { concurrent: false }, () => {
         expect(container).toMatchSnapshot();
     });
 
+    it("renders the compact footer", () => {
+        expect(renderFooter({ compact: true })).toMatchSnapshot();
+    });
+
     it("places the Zen toggle immediately after the zoom controls", () => {
         const container = renderFooter();
         const zoom = container.querySelector(".appFooterZoom");
@@ -193,5 +197,67 @@ describe("AppFooter", { concurrent: false }, () => {
         expect(executeSpy).toHaveBeenCalledWith("scoreViewportMoveRequested", 1);
 
         fireEvent.pointerUp(document, { pointerId: 5 });
+    });
+
+    it("folds zoom and version into the overflow menu when compact", () => {
+        const container = renderFooter({ compact: true });
+
+        // Position, navigator, Zen mode and notifications stay in the strip.
+        expect(container.querySelector(".appFooterRange")).toBeTruthy();
+        expect(container.querySelector(".appFooterNavigator")).toBeTruthy();
+        expect(container.querySelector("#zenModeButton")).toBeTruthy();
+        expect(container.querySelector("#showNotificationHistory")).toBeTruthy();
+
+        expect(container.querySelector(".appFooterZoom")).toBeNull();
+        expect(container.querySelector(".appFooterVersionButton")).toBeNull();
+        expect(container.querySelector(".footerOverflowMenu")).toBeTruthy();
+
+        const items = Array.from(container.querySelectorAll(".footerOverflowMenu li"));
+        expect(items.map((item) => {
+            return item.textContent.trim();
+        })).toEqual(["Zoom out", "Zoom in", "Reset zoom100%", "Version 1.5.0", "Release Notes"]);
+    });
+
+    it("reports zoom steps and the reset from the compact menu", () => {
+        const onZoomChange = vi.fn();
+        const container = renderFooter({ compact: true, zoom: 120, onZoomChange });
+        const links = container.querySelectorAll<HTMLAnchorElement>(".footerOverflowMenu li > a");
+
+        fireEvent.click(links[0]);
+        expect(onZoomChange).toHaveBeenCalledWith(110);
+
+        fireEvent.click(links[1]);
+        expect(onZoomChange).toHaveBeenCalledWith(130);
+
+        expect(links[2].parentElement?.textContent.trim()).toBe("Reset zoom120%");
+
+        fireEvent.click(links[2]);
+        expect(onZoomChange).toHaveBeenCalledWith(100);
+    });
+
+    it("disables the compact zoom steps at the outer bounds", () => {
+        const container = renderFooter({ compact: true, zoom: 50 });
+        const links = container.querySelectorAll<HTMLAnchorElement>(".footerOverflowMenu li > a");
+
+        expect(links[0].getAttribute("aria-disabled")).toBe("true");
+        expect(links[1].getAttribute("aria-disabled")).toBeNull();
+
+        renderResult?.unmount();
+
+        const otherContainer = renderFooter({ compact: true, zoom: 150 });
+        const otherLinks = otherContainer.querySelectorAll<HTMLAnchorElement>(".footerOverflowMenu li > a");
+
+        expect(otherLinks[0].getAttribute("aria-disabled")).toBeNull();
+        expect(otherLinks[1].getAttribute("aria-disabled")).toBe("true");
+    });
+
+    it("opens the release notes from the compact menu", () => {
+        const onShowReleaseNotes = vi.fn();
+        const container = renderFooter({ compact: true, onShowReleaseNotes });
+        const links = container.querySelectorAll<HTMLAnchorElement>(".footerOverflowMenu li > a");
+
+        fireEvent.click(links[4]);
+
+        expect(onShowReleaseNotes).toHaveBeenCalledTimes(1);
     });
 });

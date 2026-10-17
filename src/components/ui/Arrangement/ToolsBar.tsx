@@ -13,6 +13,7 @@ import { clampValue } from "../../../core/utils.js";
 import { requisitions, RangeArticulationTool } from "../../../supplement/Requisitions.js";
 import { Button } from "../framework/Button.js";
 import { Container } from "../framework/Container.js";
+import { Dropdown, type IDropdownItem } from "../framework/Dropdown.js";
 import { Icon } from "../framework/Icon.js";
 import { Label } from "../framework/Label.js";
 import { ScoreSymbolView } from "../framework/ScoreSymbolView.js";
@@ -21,11 +22,21 @@ import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.
 import { ChildAlignment, Orientation } from "../framework/ui-types.js";
 import { EntryModeButton } from "./EntryModeButton.js";
 
+/** The distance the bar keeps from the overlay's right and top edges while it sits in its default place. */
+const barMargin = 12;
+const barTop = 6;
+
 interface IToolsBarState {
     activeTool: RangeArticulationTool;
 
     /** Where the bar was dragged to, in px inside the overlay it floats in. Absent means its default place. */
     position?: IPoint;
+
+    /** True while the full bar needs more room than the overlay offers. */
+    compact: boolean;
+
+    /** Where the bar is drawn, clamped to the room the overlay offers. */
+    placement?: IPoint;
 }
 
 export interface IToolsBarProps extends ICommonUIProperties {
@@ -41,6 +52,15 @@ export class ToolsBar extends UIComponent<IToolsBarProps, IToolsBarState> {
     /** The bar's own element, whose place a drag states and whose area bounds the drag. */
     private hostRef = createRef<HTMLDivElement | null>();
 
+    /** The visible bar, whose width states what has to fit. */
+    private barRef = createRef<HTMLDivElement | null>();
+
+    /** The hidden full-width bar, measured while the visible one is compact. */
+    private probeRef = createRef<HTMLDivElement | null>();
+
+    /** Watches the overlay and the bar, so a resize re-fits the bar. */
+    private resizeObserver?: ResizeObserver;
+
     /** The pointer the running drag belongs to, absent while the bar stays put. */
     private dragPointerId?: number;
 
@@ -53,17 +73,21 @@ export class ToolsBar extends UIComponent<IToolsBarProps, IToolsBarState> {
     public constructor(props: IToolsBarProps) {
         super(props);
 
-        this.state = { activeTool: RangeArticulationTool.None };
+        this.state = { activeTool: RangeArticulationTool.None, compact: false };
     }
 
     public override componentDidMount(): void {
         requisitions.register("rangeArticulationToolChanged", this.handleToolChanged);
         this.restorePosition();
+        this.observeLayout();
+        this.updateLayout();
     }
 
     public override componentWillUnmount(): void {
         const { activeTool } = this.state;
         requisitions.unregister("rangeArticulationToolChanged", this.handleToolChanged);
+        this.resizeObserver?.disconnect();
+        this.resizeObserver = undefined;
         this.endDrag();
 
         if (activeTool !== RangeArticulationTool.None) {
@@ -73,7 +97,7 @@ export class ToolsBar extends UIComponent<IToolsBarProps, IToolsBarState> {
 
     public override render(): ComponentChild {
         const { className, entryMode } = this.props;
-        const { activeTool, position } = this.state;
+        const { activeTool, compact, placement } = this.state;
 
         const heading = <Label className="toolsBarHeading" caption="Tools" />;
         const divider = <span className="toolsBarDivider" />;
@@ -90,12 +114,38 @@ export class ToolsBar extends UIComponent<IToolsBarProps, IToolsBarState> {
             );
         }
 
-        const crescendoTool = this.renderTool(RangeArticulationTool.Crescendo, "Draw a crescendo hairpin",
-            "Crescendo", <Icon src={UIIcon.ChevronLeft} />);
-        const decrescendoTool = this.renderTool(RangeArticulationTool.Decrescendo, "Draw a decrescendo hairpin",
-            "Decrescendo", <Icon src={UIIcon.ChevronRight} />);
-        const forteTool = this.renderTool(RangeArticulationTool.Forte, "Place forte (f)", "Forte",
-            <ScoreSymbolView symbol={ScoreSymbol.Forte} staffSpace={staffSpacePx} icon />);
+        const expandedTools = <>
+            {this.renderTool(RangeArticulationTool.Crescendo, "Draw a crescendo hairpin",
+                "Crescendo", <Icon src={UIIcon.ChevronLeft} />)}
+            {this.renderTool(RangeArticulationTool.Decrescendo, "Draw a decrescendo hairpin",
+                "Decrescendo", <Icon src={UIIcon.ChevronRight} />)}
+            {this.renderTool(RangeArticulationTool.Forte, "Place forte (f)", "Forte",
+                <ScoreSymbolView symbol={ScoreSymbol.Forte} staffSpace={staffSpacePx} icon />)}
+        </>;
+
+        let tools: ComponentChild = expandedTools;
+        if (compact) {
+            tools = this.renderOverflowTools();
+        }
+
+        // While the bar is compact, this invisible twin states the width the full bar would need.
+        let measureProbe: ComponentChild;
+        if (compact) {
+            measureProbe = <div className="toolsBarMeasure" aria-hidden="true">
+                <Container
+                    className="toolsBar"
+                    orientation={Orientation.LeftToRight}
+                    crossAlignment={ChildAlignment.Center}
+                    gap={8}
+                    innerRef={this.probeRef}
+                >
+                    {heading}
+                    {divider}
+                    {entrySwitch}
+                    {expandedTools}
+                </Container>
+            </div>;
+        }
 
         let modeStatus: ComponentChild;
         if (activeTool !== RangeArticulationTool.None) {
@@ -119,7 +169,7 @@ export class ToolsBar extends UIComponent<IToolsBarProps, IToolsBarState> {
                 orientation={Orientation.TopDown}
                 crossAlignment={ChildAlignment.End}
                 innerRef={this.hostRef}
-                style={ToolsBar.placementStyle(position)}
+                style={ToolsBar.placementStyle(placement)}
                 onPointerDown={this.handlePointerDown}
                 {...this.dataAttributes}
             >
@@ -128,15 +178,15 @@ export class ToolsBar extends UIComponent<IToolsBarProps, IToolsBarState> {
                     orientation={Orientation.LeftToRight}
                     crossAlignment={ChildAlignment.Center}
                     gap={8}
+                    innerRef={this.barRef}
                 >
                     {heading}
                     {divider}
                     {entrySwitch}
-                    {crescendoTool}
-                    {decrescendoTool}
-                    {forteTool}
+                    {tools}
                 </Container>
                 {modeStatus}
+                {measureProbe}
             </Container>
         );
     }
@@ -166,6 +216,32 @@ export class ToolsBar extends UIComponent<IToolsBarProps, IToolsBarState> {
         return {
             x: clampValue(position.x, 0, Math.max(0, overlay.width - bar.width)),
             y: clampValue(position.y, 0, Math.max(0, overlay.height - bar.height)),
+        };
+    }
+
+    /**
+     * @param position The place inside the overlay.
+     * @param bar The area the bar takes.
+     * @param overlay The area of the overlay the bar floats in.
+     *
+     * @returns The area the place covers, in viewport coordinates.
+     */
+    private static areaAt(position: IPoint, bar: DOMRect, overlay: DOMRect): DOMRect {
+        const left = overlay.left + position.x;
+        const top = overlay.top + position.y;
+
+        return {
+            x: left,
+            y: top,
+            width: bar.width,
+            height: bar.height,
+            top,
+            right: left + bar.width,
+            bottom: top + bar.height,
+            left,
+            toJSON: () => {
+                return {};
+            },
         };
     }
 
@@ -206,6 +282,66 @@ export class ToolsBar extends UIComponent<IToolsBarProps, IToolsBarState> {
                 && place.top < rect.bottom && place.bottom > rect.top;
         });
     }
+
+    /** Watches the surfaces whose size decides the bar's place and mode. */
+    private observeLayout(): void {
+        const host = this.hostRef.current;
+        const overlay = host?.offsetParent;
+        if (typeof ResizeObserver === "undefined" || host === null || !(overlay instanceof HTMLElement)) {
+            return;
+        }
+
+        this.resizeObserver = new ResizeObserver(this.updateLayout);
+        this.resizeObserver.observe(overlay);
+        this.resizeObserver.observe(host);
+    }
+
+    /**
+     * Fits the bar into the overlay: it moves left until it reaches the edge, and folds its tools into a menu
+     * only when even the full width no longer fits.
+     */
+    private updateLayout = (): void => {
+        const host = this.hostRef.current;
+        const overlay = host?.offsetParent;
+        if (host === null || !(overlay instanceof HTMLElement)) {
+            return;
+        }
+
+        const overlayWidth = overlay.clientWidth;
+        const overlayHeight = overlay.clientHeight;
+        if (overlayWidth === 0 || overlayHeight === 0) {
+            return;
+        }
+
+        // While compact, the hidden twin states the width the full bar would need.
+        const bar = this.barRef.current;
+        const probe = this.probeRef.current;
+        const expandedWidth = probe?.offsetWidth ?? bar?.offsetWidth ?? 0;
+        const compact = expandedWidth > overlayWidth;
+
+        if (compact !== this.state.compact) {
+            this.setState({ compact }, this.updateLayout);
+
+            return;
+        }
+
+        const width = host.offsetWidth;
+        const height = host.offsetHeight;
+        if (width === 0 || height === 0) {
+            return;
+        }
+
+        const { position } = this.state;
+        const placement = {
+            x: clampValue(position?.x ?? overlayWidth - width - barMargin, 0, Math.max(0, overlayWidth - width)),
+            y: clampValue(position?.y ?? barTop, 0, Math.max(0, overlayHeight - height)),
+        };
+
+        const current = this.state.placement;
+        if (current?.x !== placement.x || current.y !== placement.y) {
+            this.setState({ placement });
+        }
+    };
 
     /**
      * Starts a drag when the pointer goes down on the band around the bar's title. The controls of the bar keep
@@ -256,13 +392,12 @@ export class ToolsBar extends UIComponent<IToolsBarProps, IToolsBarState> {
             y: event.clientY - this.dragOffset.y - overlayRect.top,
         }, hostRect, overlayRect);
 
-        const place = new DOMRect(overlayRect.left + position.x, overlayRect.top + position.y,
-            hostRect.width, hostRect.height);
+        const place = ToolsBar.areaAt(position, hostRect, overlayRect);
         if (ToolsBar.coversObstacle(place, this.obstacles)) {
             return;
         }
 
-        this.setState({ position });
+        this.setState({ position, placement: position });
         event.preventDefault();
     };
 
@@ -301,14 +436,68 @@ export class ToolsBar extends UIComponent<IToolsBarProps, IToolsBarState> {
 
         const hostRect = host.getBoundingClientRect();
         const overlayRect = overlay.getBoundingClientRect();
-        const position = ToolsBar.clampPlacement(stored, hostRect, overlayRect);
-        const place = new DOMRect(overlayRect.left + position.x, overlayRect.top + position.y,
-            hostRect.width, hostRect.height);
+        const clamped = ToolsBar.clampPlacement(stored, hostRect, overlayRect);
+        const place = ToolsBar.areaAt(clamped, hostRect, overlayRect);
         if (ToolsBar.coversObstacle(place, ToolsBar.obstaclesIn(overlay, host))) {
             return;
         }
 
-        this.setState({ position });
+        // The stored place stays the preference; the layout clamps it again when the overlay is smaller now.
+        this.setState({ position: stored });
+    }
+
+    /**
+     * Renders the bar's tools as menu entries.
+     *
+     * @returns The overflow menu.
+     */
+    private renderOverflowTools(): ComponentChild {
+        const { activeTool } = this.state;
+
+        const items: IDropdownItem[] = [
+            {
+                label: "Crescendo",
+                icon: <Icon src={UIIcon.ChevronLeft} />,
+                detail: activeTool === RangeArticulationTool.Crescendo ? "On" : undefined,
+                onClick: () => {
+                    this.startTool(RangeArticulationTool.Crescendo);
+                },
+            },
+            {
+                label: "Decrescendo",
+                icon: <Icon src={UIIcon.ChevronRight} />,
+                detail: activeTool === RangeArticulationTool.Decrescendo ? "On" : undefined,
+                onClick: () => {
+                    this.startTool(RangeArticulationTool.Decrescendo);
+                },
+            },
+            {
+                label: "Forte",
+                icon: <ScoreSymbolView symbol={ScoreSymbol.Forte} staffSpace={staffSpacePx} icon />,
+                detail: activeTool === RangeArticulationTool.Forte ? "On" : undefined,
+                onClick: () => {
+                    this.startTool(RangeArticulationTool.Forte);
+                },
+            },
+        ];
+
+        let statusDot: ComponentChild;
+        if (activeTool !== RangeArticulationTool.None) {
+            statusDot = <span className="toolsBarOverflowDot" />;
+        }
+
+        const icon = <span className="toolsBarOverflowIcon">
+            <Icon src={UIIcon.Ellipsis} />
+            {statusDot}
+        </span>;
+
+        return <Dropdown
+            className="toolsBarOverflowMenu"
+            icon={icon}
+            title="Placing tools"
+            items={items}
+            closeOnSelect
+        />;
     }
 
     /**

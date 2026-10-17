@@ -108,6 +108,11 @@ Object.defineProperty(globalThis, "AudioContext", {
     enumerable: true,
 });
 
+// jsdom does not implement the Popover API, which the dropdown menus toggle natively.
+HTMLElement.prototype.hidePopover = vi.fn();
+HTMLElement.prototype.showPopover = vi.fn();
+HTMLElement.prototype.togglePopover = vi.fn();
+
 Object.defineProperty(window, "matchMedia", {
     writable: true,
     value: vi.fn().mockImplementation((query: unknown) => {

@@ -9,6 +9,7 @@ import { AppStorage } from "../../../core/AppStorage.js";
 import type { ScoreBookDataModel } from "../../../core/ScoreBookDataModel.js";
 import type { ArrangementPlayer } from "../../../player/ArrangementPlayer.js";
 import { Button } from "../framework/Button.js";
+import { Dropdown, type IDropdownItem } from "../framework/Dropdown.js";
 import { UIIcon } from "../framework/UIIcon.js";
 import { Container } from "../framework/Container.js";
 import { Icon } from "../framework/Icon.js";
@@ -28,6 +29,9 @@ export interface IArrangementPlayControlsProperties extends ICommonUIProperties 
     arrangementPlayer: ArrangementPlayer,
     dataModel: ScoreBookDataModel;
     editMode: boolean;
+
+    /** True when the bar folds its secondary controls into a menu. */
+    compact?: boolean;
 }
 
 interface IArrangementPlayControlsState {
@@ -109,7 +113,7 @@ export class ArrangementPlayControls
 
     public override shouldComponentUpdate(nextProps: Readonly<IArrangementPlayControlsProperties>,
         nextState: Readonly<IArrangementPlayControlsState>): boolean {
-        const { arrangementPlayer, dataModel, editMode } = this.props;
+        const { arrangementPlayer, dataModel, editMode, compact } = this.props;
         const { currentVolume, currentTempo, scoreTempo, loop, useMetronome, countIn } = this.state;
 
         if (arrangementPlayer !== nextProps.arrangementPlayer) {
@@ -120,7 +124,7 @@ export class ArrangementPlayControls
             return true;
         }
 
-        if (editMode !== nextProps.editMode) {
+        if (editMode !== nextProps.editMode || compact !== nextProps.compact) {
             return true;
         }
 
@@ -144,10 +148,9 @@ export class ArrangementPlayControls
     }
 
     public override render(): ComponentChild {
-        const { arrangementPlayer, dataModel, editMode } = this.props;
+        const { arrangementPlayer, editMode, compact = false } = this.props;
         const { currentVolume, currentTempo, scoreTempo, loop, useMetronome, countIn } = this.state;
 
-        const arrangementView = dataModel.arrangement!;
         const tempoDeviates = !editMode && currentTempo !== scoreTempo;
 
         const tempoCaption = tempoDeviates ? `${currentTempo}*` : `${currentTempo}`;
@@ -155,6 +158,19 @@ export class ArrangementPlayControls
             ? `Playback tempo (${currentTempo} bpm) differs from the arrangement tempo (${scoreTempo} bpm).`
             + " Enter Edit Mode to persist the change."
             : "Playback tempo (beats per minute)";
+
+        let playbackOptions: ComponentChild;
+        if (compact) {
+            playbackOptions = this.renderOverflow(loop, useMetronome, countIn, currentVolume);
+        } else {
+            playbackOptions = <>
+                {this.renderSwitch(UIIcon.Repeat, "Loop playback", loop, this.handleLoopToggle)}
+                {this.renderSwitch(MetronomeIcon, "Metronome", useMetronome, this.handleMetronomeToggle)}
+                {this.renderSwitch(UIIcon.AccountVoice, "Play a count-in before playback starts", countIn,
+                    this.handleCountInToggle)}
+                {this.renderVolume(currentVolume)}
+            </>;
+        }
 
         return (
             <Container
@@ -197,40 +213,120 @@ export class ArrangementPlayControls
                         <Icon src={UIIcon.Add} />
                     </Button>
                 </Container>
-                {this.renderSwitch(UIIcon.Repeat, "Loop playback", loop, this.handleLoopToggle)}
-                {this.renderSwitch(MetronomeIcon, "Metronome", useMetronome, this.handleMetronomeToggle)}
-                {this.renderSwitch(UIIcon.AccountVoice, "Play a count-in before playback starts", countIn,
-                    this.handleCountInToggle)}
-                <Container
-                    className="volumeControl"
-                    orientation={Orientation.LeftToRight}
-                    crossAlignment={ChildAlignment.Center}
-                    gap={4}
-                    title="Master volume"
-                >
-                    <Icon src={UIIcon.Unmute} />
-                    <Slider
-                        id="volumeSlider"
-                        value={currentVolume}
-                        min={0}
-                        max={100}
-                        className="du-range-xs"
-                        style={{ width: "90px" }}
-                        onChange={(value) => {
-                            arrangementView.mainVolume = value;
-                            this.setState({ currentVolume: arrangementView.mainVolume }, () => {
-                                AppStorage.saveSetting("masterVolume", arrangementView.mainVolume);
-                            });
-                        }}
-                    />
-                    <Label
-                        className="volumeValue"
-                        caption={`${Math.round(currentVolume)}%`}
-                    />
-                </Container>
+                {playbackOptions}
             </Container>
         );
     }
+
+    /**
+     * Renders the bar's secondary controls as menu entries.
+     *
+     * @param loop Whether looping is on.
+     * @param useMetronome Whether the metronome is on.
+     * @param countIn Whether a count-in plays before playback.
+     * @param volume The master volume in percent.
+     *
+     * @returns The overflow menu.
+     */
+    private renderOverflow(loop: boolean, useMetronome: boolean, countIn: boolean,
+        volume: number): ComponentChild {
+        const items: IDropdownItem[] = [
+            {
+                label: "Loop playback",
+                icon: <Icon src={UIIcon.Repeat} />,
+                detail: loop ? "On" : "Off",
+                onClick: this.handleLoopToggle,
+            },
+            {
+                label: "Metronome",
+                icon: <MetronomeIcon style={{ width: 16, height: 16 }} />,
+                detail: useMetronome ? "On" : "Off",
+                onClick: this.handleMetronomeToggle,
+            },
+            {
+                label: "Count-in",
+                icon: <Icon src={UIIcon.AccountVoice} />,
+                detail: countIn ? "On" : "Off",
+                onClick: this.handleCountInToggle,
+            },
+            {
+                label: "Volume",
+                icon: <Icon src={UIIcon.Unmute} />,
+                detail: this.renderVolume(volume, true),
+                onClick: () => {
+                    // The slider in the detail is this row's control.
+                },
+            },
+        ];
+
+        const active = loop || useMetronome || countIn;
+        let statusDot: ComponentChild;
+        if (active) {
+            statusDot = <span className="playbackOverflowDot" />;
+        }
+
+        const icon = <span className="playbackOverflowIcon">
+            <Icon src={UIIcon.Ellipsis} />
+            {statusDot}
+        </span>;
+
+        return <Dropdown
+            className="playbackOverflowMenu"
+            icon={icon}
+            title="More playback controls"
+            items={items}
+        />;
+    }
+
+    /**
+     * Renders the master volume control.
+     *
+     * @param volume The master volume in percent.
+     * @param inline True for the menu row, which has no pill of its own.
+     *
+     * @returns The volume control.
+     */
+    private renderVolume(volume: number, inline = false): ComponentChild {
+        const slider = <Slider
+            id={inline ? undefined : "volumeSlider"}
+            value={volume}
+            min={0}
+            max={100}
+            className="du-range-xs"
+            style={{ width: "90px" }}
+            onChange={this.handleVolumeChange}
+        />;
+
+        if (inline) {
+            return <span className="playbackVolumeItem" onKeyDown={(e) => {
+                e.stopPropagation();
+            }}>
+                {slider}
+                <Label className="volumeValue" caption={`${Math.round(volume)}%`} />
+            </span>;
+        }
+
+        return <Container
+            className="volumeControl"
+            orientation={Orientation.LeftToRight}
+            crossAlignment={ChildAlignment.Center}
+            gap={4}
+            title="Master volume"
+        >
+            <Icon src={UIIcon.Unmute} />
+            {slider}
+            <Label className="volumeValue" caption={`${Math.round(volume)}%`} />
+        </Container>;
+    }
+
+    private handleVolumeChange = (value: number): void => {
+        const { dataModel } = this.props;
+        const arrangementView = dataModel.arrangement!;
+
+        arrangementView.mainVolume = value;
+        AppStorage.saveSetting("masterVolume", arrangementView.mainVolume);
+        this.setState({ currentVolume: arrangementView.mainVolume });
+    };
 
     /**
      * Renders one of the bar's switches in the shape of the header's edit-mode switch.

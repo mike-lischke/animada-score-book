@@ -198,6 +198,23 @@ export class SelectionEditPopup extends UIComponent<ISelectionEditPopupProps> {
     }
 
     /**
+     * A run spans its whole slot, while the notation it draws sits at one point inside it: a note head at its
+     * onset, a rest centred in the slot. Hiding follows that drawing, so a whole-bar rest does not keep the
+     * popup around until the slot's far edge leaves the view.
+     *
+     * @param element A rendered score element.
+     *
+     * @returns The element drawing the notation inside a run, or undefined for other element kinds.
+     */
+    private static contentElementOf(element: HTMLElement): HTMLElement | undefined {
+        if (!element.classList.contains("staff-note-viewer-run")) {
+            return undefined;
+        }
+
+        return element.querySelector<HTMLElement>(".staff-note-head, .staff-note-viewer-rest-symbol") ?? undefined;
+    }
+
+    /**
      * Renders the tools of a track-piece selection: the title and the piece actions.
      *
      * @returns The track-piece tools.
@@ -327,6 +344,8 @@ export class SelectionEditPopup extends UIComponent<ISelectionEditPopupProps> {
         let top = Infinity;
         let right = -Infinity;
         let bottom = -Infinity;
+        let contentLeft = Infinity;
+        let contentRight = -Infinity;
 
         for (let index = entries.length - 1; index >= 0; index--) {
             const { target } = entries[index];
@@ -346,6 +365,13 @@ export class SelectionEditPopup extends UIComponent<ISelectionEditPopupProps> {
                 top = Math.min(top, rect.top);
                 right = Math.max(right, rect.right);
                 bottom = Math.max(bottom, rect.bottom);
+
+                const content = SelectionEditPopup.contentElementOf(element);
+                if (content !== undefined) {
+                    const contentRect = content.getBoundingClientRect();
+                    contentLeft = Math.min(contentLeft, contentRect.left);
+                    contentRight = Math.max(contentRight, contentRect.right);
+                }
             }
         }
 
@@ -354,10 +380,13 @@ export class SelectionEditPopup extends UIComponent<ISelectionEditPopupProps> {
         }
 
         // The popup hangs under the lower edge of the span. That edge leaves the view when the content is
-        // scrolled away, which hides the popup until the selection is shown again.
+        // scrolled away, which hides the popup until the selection is shown again. Horizontally the drawn
+        // notation decides, because a run spans its whole slot and would otherwise outlast its own drawing.
         const view = SelectionEditPopup.visibleAreaOf(anchor);
         const center = left > right ? undefined : SelectionEditPopup.anchorCenter(left, right, view);
-        if (center === undefined || bottom < view.top || bottom > view.bottom) {
+        const contentShown = contentLeft > contentRight
+            || (contentRight > view.left && contentLeft < view.right);
+        if (center === undefined || !contentShown || bottom < view.top || bottom > view.bottom) {
             return { anchor };
         }
 

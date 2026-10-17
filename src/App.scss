@@ -424,6 +424,35 @@ h6 {
     gap: 8px;
 }
 
+/* The header's overflow menu takes the size of the header's icon controls. */
+.headerOverflowMenu {
+    flex: 0 0 auto;
+
+    > .btn {
+        height: var(--control-size);
+        min-height: var(--control-size);
+        width: var(--control-size);
+        min-width: var(--control-size);
+        padding: 0;
+        border: 1px solid var(--border-subtle);
+        background-color: var(--color-base-100);
+    }
+
+    .dropdown-popup {
+        width: max-content;
+        min-width: 13rem;
+        max-width: calc(100vw - 24px);
+    }
+
+    /* The framework forces dropdown icons to 32 px; these rows keep the control's size. */
+    .icon {
+        width: 16px;
+        min-width: 16px;
+        height: 16px;
+        min-height: 16px;
+    }
+}
+
 #arrangementPlayControls {
     width: max-content;
     flex: 0 0 auto;
@@ -559,6 +588,62 @@ h6 {
 
             /* The glyph is narrower than its icon box, so the box's empty side holds the caption off. */
             margin-right: -4px;
+        }
+    }
+
+    /* The compact bar measures the full one in this hidden twin, so it folds only when the width no longer fits. */
+    .toolsBarMeasure {
+        position: absolute;
+        top: 0;
+        right: 0;
+        visibility: hidden;
+        pointer-events: none;
+
+        .toolsBar {
+            pointer-events: none;
+        }
+    }
+
+    /* The placing tools fold into this menu while the bar is compact. */
+    .toolsBarOverflowMenu {
+        > .btn {
+            width: calc(var(--control-size) - 4px);
+            min-width: calc(var(--control-size) - 4px);
+            height: calc(var(--control-size) - 4px);
+            min-height: calc(var(--control-size) - 4px);
+            padding: 0;
+            border: 1px solid var(--border-subtle);
+            background: var(--color-base-100);
+        }
+
+        .toolsBarOverflowIcon {
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .toolsBarOverflowDot {
+            position: absolute;
+            top: -3px;
+            right: -4px;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: var(--color-primary);
+        }
+
+        .dropdown-popup {
+            width: max-content;
+            min-width: 12rem;
+            max-width: calc(100vw - 24px);
+        }
+
+        .icon {
+            width: 16px;
+            min-width: 16px;
+            height: 16px;
+            min-height: 16px;
         }
     }
 
@@ -715,6 +800,68 @@ h6 {
             background-color: var(--color-playback-accent);
         }
     }
+
+    /* Secondary controls live in this menu while the bar is compact. */
+    .playbackOverflowMenu {
+        flex: 0 0 auto;
+
+        > .btn {
+            position: relative;
+            width: var(--control-size);
+            min-width: var(--control-size);
+            height: var(--control-size);
+            min-height: var(--control-size);
+            padding: 0;
+            border: 1px solid var(--border-subtle);
+            border-radius: 9999px;
+            background-color: var(--color-base-100);
+        }
+
+        .playbackOverflowIcon {
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .playbackOverflowDot {
+            position: absolute;
+            top: -3px;
+            right: -4px;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: var(--color-playback-accent);
+        }
+
+        .dropdown-popup {
+            width: max-content;
+            min-width: 14rem;
+            max-width: calc(100vw - 24px);
+        }
+
+        .icon {
+            width: 16px;
+            min-width: 16px;
+            height: 16px;
+            min-height: 16px;
+        }
+
+        .playbackVolumeItem {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .playbackVolumeItem .du-range {
+            width: 90px;
+        }
+
+        .volumeValue {
+            font-size: 11px;
+            white-space: nowrap;
+        }
+    }
 }
 
 #viewerScrollHost {
@@ -750,9 +897,30 @@ h6 {
         padding: 0 4px;
     }
 
-    .arrangementIdentityStats,
-    .arrangementSaveChip,
-    .displayOptionsButton {
+    /* The framework's badge and label rules load after this file, so the header hides by id specificity. */
+    #headerContent {
+
+        .arrangementIdentityStats,
+        .arrangementIdentitySection,
+        .arrangementIdentityChevron,
+        .arrangementSaveChip,
+        .displayOptionsButton {
+            display: none;
+        }
+    }
+
+    #headerActions {
+        gap: 4px;
+    }
+
+    /* The edit-mode switch drops its label, so the identity keeps room beside it. */
+    #headerContent .headerSwitcherButton {
+        width: var(--control-size);
+        min-width: var(--control-size);
+        padding: 0;
+    }
+
+    #headerContent .headerSwitcherButton .headerActionLabel {
         display: none;
     }
 
@@ -763,7 +931,7 @@ h6 {
     #playbackControlsHost {
         left: 4px;
         bottom: 4px;
-        max-width: calc(100vw - 8px);
+        max-width: calc(100% - 8px);
     }
 }
 
@@ -1022,6 +1190,49 @@ h6 {
             line-height: 14px;
             text-align: center;
         }
+
+        /* Zoom and version fold into this menu while the footer is compact. */
+        .footerOverflowMenu {
+            flex: 0 0 auto;
+
+            > .btn {
+                width: 25px;
+                min-width: 25px;
+                height: 25px;
+                min-height: 25px;
+                padding: 0;
+                background: transparent;
+            }
+
+            .icon {
+                width: 16px;
+                min-width: 16px;
+                height: 16px;
+                min-height: 16px;
+            }
+
+            .dropdown-popup {
+                width: max-content;
+                min-width: 13rem;
+                max-width: calc(100vw - 24px);
+            }
+        }
+    }
+}
+
+/* The compact footer folds zoom and version into its menu; these bounds keep the rest inside the frame. */
+@media (max-width: 600px) {
+    #appFooter {
+        gap: 8px;
+        padding: 0 8px;
+
+        .appFooterNavigator {
+            min-width: 16px;
+        }
+
+        .appFooterActions {
+            gap: 4px;
+        }
     }
 }
 
@@ -1129,4 +1340,20 @@ h6 {
 #signInButton,
 #userMenu .btn {
     flex: 0 0 auto;
+}
+
+/* Touch devices get a wider hit area than the compact shell controls draw. */
+@media (pointer: coarse) {
+
+    #headerContent .btn,
+    #playbackControlsHost .btn,
+    #toolsBarHost .btn {
+        position: relative;
+
+        &::after {
+            content: "";
+            position: absolute;
+            inset: -4px;
+        }
+    }
 }

@@ -125,6 +125,12 @@ interface IAppState {
     /** Track viewer zoom in percent, mirrored from the UI settings. */
     zoom: number;
 
+    /** True when the header folds its secondary actions into a menu. */
+    compactHeader: boolean;
+
+    /** True when the floating bars and the footer fold controls into menus. */
+    compactLayout: boolean;
+
     /** True once the current score was saved during this session. */
     scoreSaved: boolean;
 
@@ -165,6 +171,11 @@ export class App extends UIComponent<{}, IAppState> {
 
     private selectedThemePreference = "Light+";
     private systemThemeQuery = window.matchMedia("(prefers-color-scheme: dark)");
+    private compactHeaderQuery = window.matchMedia("(max-width: 900px)");
+    private compactLayoutQuery = window.matchMedia("(max-width: 600px)");
+
+    /** Both breakpoints can change independently, so one handler listens to each of their emitters. */
+    private compactQueries = [this.compactHeaderQuery, this.compactLayoutQuery];
     private signInFromRunning = false;
 
     /** The arrangement the save state refers to, so a newly loaded score starts as unchanged. */
@@ -189,6 +200,8 @@ export class App extends UIComponent<{}, IAppState> {
             printing: false,
             notificationState: { newCount: 0, totalCount: 0, silent: false, showHistory: false },
             zoom: AppStorage.loadUISettings()?.viewSettings?.arrangementViewSettings?.zoomLevel ?? 100,
+            compactHeader: this.compactHeaderQuery.matches,
+            compactLayout: this.compactLayoutQuery.matches,
             scoreSaved: false,
             backendUnreachable: false,
         };
@@ -202,6 +215,10 @@ export class App extends UIComponent<{}, IAppState> {
         this.selectedThemePreference = AppStorage.loadUISettings()?.theme ?? "Light+";
         this.applyThemePreference(this.selectedThemePreference);
         this.systemThemeQuery.addEventListener("change", this.handleSystemThemeChange);
+        for (const query of this.compactQueries) {
+            query.addEventListener("change", this.handleViewportResize);
+        }
+
         window.addEventListener("afterprint", this.handleAfterPrint);
         escapeStack.attach();
 
@@ -223,7 +240,8 @@ export class App extends UIComponent<{}, IAppState> {
 
     public override shouldComponentUpdate(nextProps: {}, nextState: IAppState): boolean {
         const { editMode, zenMode, sidebarOpen, phase, trackViewMode, printing, backendUnreachable,
-            startupError, preferredEntryMode, notificationState, zoom, scoreSaved } = this.state;
+            startupError, preferredEntryMode, notificationState, zoom, compactHeader, compactLayout,
+            scoreSaved } = this.state;
 
         return editMode !== nextState.editMode
             || zenMode !== nextState.zenMode
@@ -235,6 +253,8 @@ export class App extends UIComponent<{}, IAppState> {
             || startupError !== nextState.startupError
             || notificationState !== nextState.notificationState
             || zoom !== nextState.zoom
+            || compactHeader !== nextState.compactHeader
+            || compactLayout !== nextState.compactLayout
             || scoreSaved !== nextState.scoreSaved;
     }
 
@@ -243,6 +263,10 @@ export class App extends UIComponent<{}, IAppState> {
 
         requisitions.unregister("timeParamsChanged", this.handleTimeParamsChange);
         this.systemThemeQuery.removeEventListener("change", this.handleSystemThemeChange);
+        for (const query of this.compactQueries) {
+            query.removeEventListener("change", this.handleViewportResize);
+        }
+
         window.removeEventListener("afterprint", this.handleAfterPrint);
         escapeStack.detach();
 
@@ -261,7 +285,8 @@ export class App extends UIComponent<{}, IAppState> {
 
     public render() {
         const { phase, editMode: requestedEditMode, zenMode, sidebarOpen, trackViewMode, notificationState, zoom,
-            printing, printOptions, backendUnreachable, startupError, preferredEntryMode } = this.state;
+            printing, printOptions, backendUnreachable, startupError, preferredEntryMode, compactHeader,
+            compactLayout } = this.state;
         const editMode = requestedEditMode && !zenMode;
         const entryMode = this.effectiveEntryMode(trackViewMode, preferredEntryMode);
         const isRunning = phase === AppPhase.Running;
@@ -388,6 +413,11 @@ export class App extends UIComponent<{}, IAppState> {
             headerUndoRedo = <UndoRedoControls undoManager={this.undoManager} />;
         }
 
+        let headerOverflow: ComponentChild;
+        if (isRunning) {
+            headerOverflow = this.renderHeaderOverflow();
+        }
+
         let arrangementIdentity: ComponentChild;
         const currentArrangement = this.dataModel.arrangement;
         if (isRunning && currentArrangement) {
@@ -447,23 +477,40 @@ export class App extends UIComponent<{}, IAppState> {
             </Container>
         );
 
-        const headerActions = (
-            <Container
-                id="headerActions"
-                orientation={Orientation.LeftToRight}
-                crossAlignment={ChildAlignment.Center}
-            >
-                {saveButton}
-                {newScoreButton}
-                {headerUndoRedo}
-                {editModeButton}
-                <div className="headerSeparator" />
-                {printButton}
-                {exportButton}
-            </Container>
-        );
+        let headerActions: ComponentChild;
+        if (compactHeader) {
+            headerActions = (
+                <Container
+                    id="headerActions"
+                    orientation={Orientation.LeftToRight}
+                    crossAlignment={ChildAlignment.Center}
+                >
+                    {saveButton}
+                    {editModeButton}
+                    {headerOverflow}
+                </Container>
+            );
+        } else {
+            headerActions = (
+                <Container
+                    id="headerActions"
+                    orientation={Orientation.LeftToRight}
+                    crossAlignment={ChildAlignment.Center}
+                >
+                    {saveButton}
+                    {newScoreButton}
+                    {headerUndoRedo}
+                    {editModeButton}
+                    <div className="headerSeparator" />
+                    {printButton}
+                    {exportButton}
+                </Container>
+            );
+        }
+
         const appHeader = zenMode
             ? undefined : this.renderAppHeader(headerNavigation, arrangementIdentity, headerActions);
+
         let toolsBar: ComponentChild;
         if (editMode && trackViewMode === TrackViewMode.Staff) {
             toolsBar = <ToolsBar entryMode={entryMode} />;
@@ -519,6 +566,7 @@ export class App extends UIComponent<{}, IAppState> {
                                                 arrangementPlayer={this.arrangementPlayer!}
                                                 dataModel={this.dataModel}
                                                 editMode={editMode}
+                                                compact={compactLayout}
                                                 data-tutorial="playback"
                                             />
                                         </div>
@@ -546,6 +594,7 @@ export class App extends UIComponent<{}, IAppState> {
                             <AppFooter
                                 barCount={this.arrangementPlayer?.scoreMetrics.bars ?? 0}
                                 zoom={zoom}
+                                compact={compactLayout}
                                 zenMode={zenMode}
                                 version={appVersion}
                                 notifications={notificationState}
@@ -669,6 +718,66 @@ export class App extends UIComponent<{}, IAppState> {
                 {actions}
             </Container>
         );
+    }
+
+    /**
+     * Renders the menu that holds the header's secondary actions while the window is too narrow to show them.
+     *
+     * @returns The overflow menu.
+     */
+    private renderHeaderOverflow(): ComponentChild {
+        const { editMode } = this.state;
+
+        const items: IDropdownItem[] = [
+            {
+                label: "Display Options",
+                icon: <Icon src={UIIcon.Gear} />,
+                onClick: this.handleDisplayOptionsClick,
+            },
+            {
+                label: "New Score",
+                icon: <Icon src={UIIcon.NewScore} />,
+                disabled: editMode,
+                onClick: this.handleNewScoreClick,
+            },
+            {
+                label: "Undo",
+                icon: <Icon src={UIIcon.Discard} />,
+                disabled: !this.undoManager?.canUndo,
+                onClick: () => {
+                    this.undoManager?.undo();
+                },
+            },
+            {
+                label: "Redo",
+                icon: <Icon src={UIIcon.Redo} />,
+                disabled: !this.undoManager?.canRedo,
+                onClick: () => {
+                    this.undoManager?.redo();
+                },
+            },
+            {
+                label: "Print",
+                icon: <Icon src={UIIcon.Printer} />,
+                onClick: this.handlePrintClick,
+            },
+            {
+                label: this.exporting ? "Exporting…" : "Export",
+                icon: <Icon src={UIIcon.Export} />,
+                disabled: this.exporting,
+                onClick: () => {
+                    void this.handleExportClick();
+                },
+            },
+        ];
+
+        return <Dropdown
+            className="headerOverflowMenu"
+            icon={<Icon src={UIIcon.Ellipsis} />}
+            title="More actions"
+            items={items}
+            closeOnSelect
+        />;
     }
 
     private renderUserButton(): ComponentChild {
@@ -1396,6 +1505,17 @@ export class App extends UIComponent<{}, IAppState> {
     private handleSystemThemeChange = (): void => {
         if (this.selectedThemePreference === "Auto") {
             this.applyThemePreference("Auto");
+        }
+    };
+
+    /** Re-evaluates both breakpoints when the viewport size changed and updates only the flags that differ. */
+    private handleViewportResize = (): void => {
+        const compactHeader = this.compactHeaderQuery.matches;
+        const compactLayout = this.compactLayoutQuery.matches;
+        const { compactHeader: currentHeader, compactLayout: currentLayout } = this.state;
+
+        if (compactHeader !== currentHeader || compactLayout !== currentLayout) {
+            this.setState({ compactHeader, compactLayout });
         }
     };
 

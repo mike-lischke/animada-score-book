@@ -8,8 +8,9 @@
     display: flex;
     flex-direction: column;
 
-    min-width: 500px;
-    max-width: 90%;
+    /* Narrow screens get the full width less a margin, so no dialog runs off the viewport. */
+    min-width: min(500px, calc(100% - 24px));
+    max-width: calc(100% - 24px);
     max-height: 90%;
     left: 50%;
     top: 50%;
@@ -52,5 +53,13 @@
 
         padding: 8px 16px 12px 16px;
         border-top: 1px solid var(--color-base-200);
+    }
+}
+
+@media (max-width: 600px) {
+    .dialog {
+        .dialog-content {
+            padding: 16px;
+        }
     }
 }

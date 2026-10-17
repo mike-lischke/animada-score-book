@@ -469,6 +469,11 @@
            has to keep passing through to #viewerScrollHost, hence the x axis alone. */
         overscroll-behavior-x: none;
 
+        /* Phones have no room for the desktop minimum; the score scrolls inside the host instead. */
+        @media (max-width: 600px) {
+            min-width: 0;
+        }
+
         &::-webkit-scrollbar {
             display: none;
         }
@@ -572,6 +577,11 @@
                 margin-right: -5px;
                 padding-right: 10px;
             }
+        }
+
+        /* The collapsed rail shows the instrument icons alone, so their row's controls may not peek out. */
+        &:not(.expanded) .trackSliderArea {
+            visibility: hidden;
         }
     }
 

@@ -68,10 +68,11 @@ describe("ArrangementPlayControls", { concurrent: false }, () => {
      * Renders the playback bar for a fresh arrangement.
      *
      * @param editMode Whether the arrangement is edited, in which case the tempo is a score value.
+     * @param compact Whether the bar folds its secondary controls into a menu.
      *
      * @returns The rendered container.
      */
-    const renderControls = (editMode = false): Element => {
+    const renderControls = (editMode = false, compact = false): Element => {
         dataModel = new ScoreBookDataModel();
         dataModel.startNewArrangement([createInstrument("0", 0)]);
 
@@ -80,10 +81,20 @@ describe("ArrangementPlayControls", { concurrent: false }, () => {
                 arrangementPlayer={new ArrangementPlayer(dataModel)}
                 dataModel={dataModel}
                 editMode={editMode}
+                compact={compact}
             />,
         );
 
         return renderResult.container;
+    };
+
+    /**
+     * @param container The rendered container.
+     *
+     * @returns The links of the compact overflow menu.
+     */
+    const overflowLinks = (container: Element): HTMLAnchorElement[] => {
+        return Array.from(container.querySelectorAll<HTMLAnchorElement>(".playbackOverflowMenu li > a"));
     };
 
     beforeEach(() => {
@@ -174,5 +185,51 @@ describe("ArrangementPlayControls", { concurrent: false }, () => {
 
         expect(dataModel.arrangement!.timeParams.tempo).toBe(tempoMax);
         expect(up.disabled).toBe(true);
+    });
+
+    it("folds the secondary controls into the overflow menu when compact", () => {
+        const container = renderControls(false, true);
+
+        // The bar keeps the transport and the tempo, everything else moves into the menu.
+        expect(container.querySelector("#playbackButton")).toBeTruthy();
+        expect(container.querySelector(".tempoStepper")).toBeTruthy();
+        expect(container.querySelector(".playbackOverflowMenu")).toBeTruthy();
+        expect(container.querySelector(".playControlSwitch")).toBeNull();
+        expect(container.querySelector("#volumeSlider")).toBeNull();
+
+        expect(overflowLinks(container).map((link) => {
+            return link.parentElement?.textContent.trim();
+        })).toEqual(["Loop playbackOff", "MetronomeOff", "Count-inOff", "Volume100%"]);
+    });
+
+    it("drives the switches and their status dot from the compact menu", () => {
+        const container = renderControls(false, true);
+
+        expect(container.querySelector(".playbackOverflowDot")).toBeNull();
+
+        fireEvent.click(overflowLinks(container)[0]);
+
+        expect(dataModel.arrangement!.loop).toBe(true);
+        expect(AppStorage.loadUISettings()?.loop).toBe(true);
+        expect(overflowLinks(container)[0].parentElement?.textContent.trim()).toBe("Loop playbackOn");
+
+        // Any active secondary control is reported on the menu's trigger.
+        expect(container.querySelector(".playbackOverflowDot")).toBeTruthy();
+
+        fireEvent.click(overflowLinks(container)[0]);
+
+        expect(dataModel.arrangement!.loop).toBe(false);
+        expect(container.querySelector(".playbackOverflowDot")).toBeNull();
+    });
+
+    it("changes the master volume from the compact menu", () => {
+        const container = renderControls(false, true);
+        const slider = container.querySelector<HTMLInputElement>(".playbackOverflowMenu input[type=range]")!;
+
+        fireEvent.change(slider, { target: { value: "40" } });
+
+        expect(dataModel.arrangement!.mainVolume).toBe(40);
+        expect(AppStorage.loadUISettings()?.masterVolume).toBe(40);
+        expect(overflowLinks(container)[3].parentElement?.textContent.trim()).toBe("Volume40%");
     });
 });
