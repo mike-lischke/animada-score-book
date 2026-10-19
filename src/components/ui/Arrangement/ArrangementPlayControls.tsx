@@ -352,8 +352,8 @@ export class ArrangementPlayControls
 
         return (
             <Button className={className} title={tooltip} onClick={onChange}>
-                {icon}
                 {status}
+                {icon}
             </Button>
         );
     }

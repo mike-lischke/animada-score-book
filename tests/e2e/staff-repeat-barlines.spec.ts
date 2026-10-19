@@ -8,7 +8,7 @@ import { expect, test, type Locator, type Page } from "@playwright/test";
 import { stringifyPackedArrangement } from "../../src/core/serialisation/snapshot-packing.js";
 import { arrangementSnapshotVersion } from "../../src/core/serialisation/snapshots.js";
 import type { IArrangementSnapshot, IRepeatBar, ITrackPieceSnapshot } from "../../src/core/types/general.js";
-import { routeApi, scrollClearOfToolsBar } from "./e2e-test-helpers.js";
+import { routeApi, scrollClearOfToolsBar, showEntryMode } from "./e2e-test-helpers.js";
 
 const meter = { beats: 4, beatUnits: 4, stepResolution: 16, beatGroups: [4, 4, 4, 4] };
 
@@ -343,7 +343,7 @@ test("offers the repeat marks above every bar, not in a selection popup", async 
     await seedScore(page, snapshotWith(3, {}));
 
     await page.locator("#editModeButton").click({ force: true });
-    await page.locator(".entry-mode-button").click();
+    await showEntryMode(page, "overwrite");
 
     // Every bar carries both marks as its own actions.
     await expect(page.locator('.bar-action-group [data-action="repeat-start"]')).toHaveCount(3);

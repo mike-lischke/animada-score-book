@@ -8,7 +8,8 @@ exports[`TrackControls > renders with all props set 1`] = `
     style="flex-direction: column;"
   >
     <div
-      class="trackControlsHeaderSpacer"
+      class="container trackControlsHeader"
+      style="flex-direction: row; justify-content: center; align-items: center;"
     />
     <div
       class="container trackControlsPanel"
@@ -49,8 +50,33 @@ exports[`TrackControls > renders with the minimum props 1`] = `
     style="flex-direction: column;"
   >
     <div
-      class="trackControlsHeaderSpacer"
-    />
+      class="container trackControlsHeader"
+      style="flex-direction: row; justify-content: center; align-items: center;"
+    >
+      <button
+        aria-pressed="false"
+        class="btn du-btn actionControlSwitch"
+        id="trackControlsToggle"
+        title="Expand mixer"
+      >
+        <span
+          class="actionControlSwitchDot"
+        />
+        <svg
+          class="icon"
+          data-icon="Mixer"
+          fill="currentColor"
+          height="1em"
+          viewBox="0 0 24 24"
+          width="1em"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <path
+            d="M7 3H5V9H7V3M19 3H17V13H19V3M3 13H5V21H7V13H9V11H3V13M15 7H13V3H11V7H9V9H15V7M11 21H13V11H11V21M15 15V17H17V21H19V17H21V15H15Z"
+          />
+        </svg>
+      </button>
+    </div>
     <div
       class="container trackControlsPanel"
       style="flex-direction: column; align-items: stretch;"

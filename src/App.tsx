@@ -23,6 +23,7 @@ import { ArrangementIdentity, ArrangementSaveState } from "./components/ui/Heade
 
 import { ArrangementPlayControls } from "./components/ui/Arrangement/ArrangementPlayControls.js";
 import { AnimationDiagnostics } from "./components/ui/Arrangement/AnimationDiagnostics.js";
+import { ArrangementModeBar } from "./components/ui/Arrangement/ArrangementModeBar.js";
 import { ArrangementViewer } from "./components/ui/Arrangement/ArrangementViewer.js";
 import { ToolsBar } from "./components/ui/Arrangement/ToolsBar.js";
 import { UndoRedoControls } from "./components/ui/Arrangement/UndoRedoControls.js";
@@ -451,6 +452,7 @@ export class App extends UIComponent<{}, IAppState> {
         const headerNavigation = (
             <Container
                 id="mainToolbarButtons"
+                className="toolbarButtonGroup"
                 orientation={Orientation.LeftToRight}
                 crossAlignment={ChildAlignment.Center}
             >
@@ -476,6 +478,19 @@ export class App extends UIComponent<{}, IAppState> {
             </Container>
         );
 
+        const documentButtons = (
+            <Container
+                id="headerDocumentButtons"
+                className="toolbarButtonGroup"
+                orientation={Orientation.LeftToRight}
+                crossAlignment={ChildAlignment.Center}
+            >
+                {saveButton}
+                {newScoreButton}
+                {headerUndoRedo}
+            </Container>
+        );
+
         let headerActions: ComponentChild;
         if (compactHeader) {
             headerActions = (
@@ -496,9 +511,7 @@ export class App extends UIComponent<{}, IAppState> {
                     orientation={Orientation.LeftToRight}
                     crossAlignment={ChildAlignment.Center}
                 >
-                    {saveButton}
-                    {newScoreButton}
-                    {headerUndoRedo}
+                    {documentButtons}
                     {editModeButton}
                     <div className="headerSeparator" />
                     {printButton}
@@ -512,7 +525,17 @@ export class App extends UIComponent<{}, IAppState> {
 
         let toolsBar: ComponentChild;
         if (editMode && trackViewMode === TrackViewMode.Staff) {
-            toolsBar = <ToolsBar entryMode={entryMode} />;
+            toolsBar = <ToolsBar />;
+        }
+
+        const modeBarEntryMode = editMode && trackViewMode === TrackViewMode.Staff ? entryMode : undefined;
+        let modeBar: ComponentChild;
+        if (!zenMode) {
+            modeBar = <ArrangementModeBar
+                trackViewMode={trackViewMode}
+                entryMode={modeBarEntryMode}
+                onTrackViewModeChange={this.handleTrackViewModeChange}
+            />;
         }
 
         return (
@@ -558,6 +581,7 @@ export class App extends UIComponent<{}, IAppState> {
                                 >
                                     {appHeader}
                                     <div id="appOverlay">
+                                        {modeBar}
                                         {toolsBar}
                                         {animationDiagnostics}
                                         <div id="playbackControlsHost">
@@ -690,6 +714,16 @@ export class App extends UIComponent<{}, IAppState> {
                 </Container>
             </>
         );
+    }
+
+    /**
+     * @param target The event target to check.
+     *
+     * @returns True when the target accepts typed text, so shortcuts leave the key to it.
+     */
+    private static isEditableTarget(target: EventTarget | null): boolean {
+        return target instanceof HTMLElement
+            && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable);
     }
 
     /**
@@ -1229,7 +1263,7 @@ export class App extends UIComponent<{}, IAppState> {
             return;
         }
 
-        document.querySelector<HTMLElement>(".trackControlsToggle")?.click();
+        document.querySelector<HTMLElement>("#trackControlsToggle")?.click();
     }
 
     private handleTutorialEnabledChange = (enabled: boolean): void => {
@@ -1481,6 +1515,16 @@ export class App extends UIComponent<{}, IAppState> {
         }
 
         return Promise.resolve(true);
+    };
+
+    private handleTrackViewModeChange = (mode: TrackViewMode): void => {
+        const settings = AppStorage.loadUISettings() ?? {};
+        settings.viewSettings ??= {};
+        settings.viewSettings.arrangementViewSettings ??= {};
+        settings.viewSettings.arrangementViewSettings.displayMode = mode;
+        AppStorage.saveUISettings(settings);
+
+        void requisitions.execute("trackViewModeToggled", mode);
     };
 
     private handleTrackViewModeToggled = (mode: TrackViewMode): Promise<boolean> => {
@@ -1897,9 +1941,7 @@ export class App extends UIComponent<{}, IAppState> {
             const key = event.key.toLowerCase();
 
             if (key === "x" || key === "c" || key === "v") {
-                const target = event.target as HTMLElement | null;
-                const editable = target !== null && (target.tagName === "INPUT" || target.tagName === "TEXTAREA"
-                    || target.isContentEditable);
+                const editable = App.isEditableTarget(event.target);
                 const selection = window.getSelection();
                 const hasTextSelection = selection !== null && !selection.isCollapsed;
 
@@ -1916,6 +1958,17 @@ export class App extends UIComponent<{}, IAppState> {
                         void this.pasteSelection();
                     }
                 }
+
+                return;
+            }
+        }
+
+        // G and S switch the score view, the shortcuts the mode bar names in its tooltips.
+        if (!event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey) {
+            const key = event.key.toLowerCase();
+            if ((key === "g" || key === "s") && !App.isEditableTarget(event.target)) {
+                event.preventDefault();
+                this.handleTrackViewModeChange(key === "g" ? TrackViewMode.Grid : TrackViewMode.Staff);
 
                 return;
             }

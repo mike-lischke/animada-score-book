@@ -100,11 +100,11 @@ test("lays the playback bar out as the mockup describes it", async ({ page }) =>
     expect(layout.stepSizes).toEqual([23, 23]);
 
     for (const entry of layout.switches) {
-        // The status dot follows its icon, as in the mockup.
-        expect(entry.order).toEqual([0, 1]);
+        // The status dot leads its icon, as in the toolbars.
+        expect(entry.order).toEqual([1, 0]);
         expect(entry.iconSize).toBe(18);
         expect(entry.dotSize).toBe(8);
-        expect(entry.dotToButtonCentre).toBeGreaterThan(0);
+        expect(entry.dotToButtonCentre).toBeLessThan(0);
     }
 });
 

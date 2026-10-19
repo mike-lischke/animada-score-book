@@ -1,6 +1,6 @@
-import { cleanup, render, type RenderResult } from "@testing-library/preact";
+import { cleanup, fireEvent, render, type RenderResult } from "@testing-library/preact";
 import { createRef } from "preact";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { TrackControls, type ITrackControlsProperties } from "../../src/components/ui/Arrangement/TrackControls.js";
 import { ScoreBookDataModel } from "../../src/core/ScoreBookDataModel.js";
@@ -83,5 +83,25 @@ describe("TrackControls", { concurrent: false }, () => {
 
         expect(row.style.getPropertyValue("--track-row-height")).toBe("120px");
         expect(row.style.getPropertyValue("--staff-centre")).toBe("10px");
+    });
+
+    it("heads the mixer with a dot and an icon alone", () => {
+        const container = renderControls();
+        const toggle = container.querySelector<HTMLElement>("#trackControlsToggle")!;
+
+        expect(toggle.getAttribute("title")).toBe("Expand mixer");
+        expect(toggle.textContent.trim()).toBe("");
+        expect([...toggle.children].map((child) => {
+            return child.classList.contains("actionControlSwitchDot") ? "dot" : "icon";
+        })).toEqual(["dot", "icon"]);
+    });
+
+    it("toggles the mixer through its header switch", () => {
+        const onToggleMixer = vi.fn();
+        const container = renderControls({ onToggleMixer });
+
+        fireEvent.click(container.querySelector("#trackControlsToggle")!);
+
+        expect(onToggleMixer).toHaveBeenCalledOnce();
     });
 });

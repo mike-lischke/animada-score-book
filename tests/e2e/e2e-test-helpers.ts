@@ -272,15 +272,68 @@ export const expectImportedPolyrhythmSong = async (page: Page): Promise<void> =>
     await expect(page.locator(".grid-measure-row .note-viewer").first()).toBeVisible();
 };
 
-export const ensureGridMode = async (page: Page): Promise<void> => {
-    const trackViewToggle = page.locator("button.track-view-mode-toggle").first();
-    await expect(trackViewToggle).toBeVisible();
+/**
+ * @param page The page under test.
+ * @param mode The view the segment selects.
+ *
+ * @returns The mode bar's segment for that view.
+ */
+export const trackViewSegment = (page: Page, mode: "grid" | "staff"): Locator => {
+    const title = mode === "grid" ? "Show the score as a note grid (G)" : "Show the score as staff notation (S)";
 
-    if (await trackViewToggle.getAttribute("aria-pressed") === "true") {
-        await trackViewToggle.click({ force: true });
+    return page.locator(`#arrangementModeBar button[title="${title}"]`);
+};
+
+/**
+ * Switches the score to the given view through the mode bar.
+ *
+ * @param page The page under test.
+ * @param mode The view to show.
+ */
+export const showTrackView = async (page: Page, mode: "grid" | "staff"): Promise<void> => {
+    const segment = trackViewSegment(page, mode);
+    await expect(segment).toBeVisible();
+
+    if (await segment.getAttribute("aria-pressed") !== "true") {
+        await segment.click({ force: true });
     }
 
-    await expect(trackViewToggle).toHaveAttribute("aria-pressed", "false");
+    await expect(segment).toHaveAttribute("aria-pressed", "true");
+};
+
+/**
+ * @param page The page under test.
+ * @param mode The entry mode the segment selects.
+ *
+ * @returns The mode bar's segment for that entry mode.
+ */
+export const entryModeSegment = (page: Page, mode: "insert" | "overwrite"): Locator => {
+    const title = mode === "insert"
+        ? "Enter notes by pushing the content behind the cursor (I)"
+        : "Enter notes by replacing the content at the cursor (O)";
+
+    return page.locator(`#arrangementModeBar button[title="${title}"]`);
+};
+
+/**
+ * Switches the staff view's entry mode through the mode bar.
+ *
+ * @param page The page under test.
+ * @param mode The entry mode to switch to.
+ */
+export const showEntryMode = async (page: Page, mode: "insert" | "overwrite"): Promise<void> => {
+    const segment = entryModeSegment(page, mode);
+    await expect(segment).toBeVisible();
+
+    if (await segment.getAttribute("aria-pressed") !== "true") {
+        await segment.click({ force: true });
+    }
+
+    await expect(segment).toHaveAttribute("aria-pressed", "true");
+};
+
+export const ensureGridMode = async (page: Page): Promise<void> => {
+    await showTrackView(page, "grid");
     await expect(page.locator(".grid-measure-row").first()).toBeVisible();
 };
 

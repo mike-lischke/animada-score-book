@@ -11,7 +11,7 @@ import {
 import { stringifyPackedArrangement } from "../../src/core/serialisation/snapshot-packing.js";
 import { arrangementSnapshotVersion } from "../../src/core/serialisation/snapshots.js";
 import { EditEntryMode } from "../../src/core/types/general.js";
-import { routeApi, scrollClearOfToolsBar } from "./e2e-test-helpers.js";
+import { routeApi, scrollClearOfToolsBar, showTrackView } from "./e2e-test-helpers.js";
 
 const barCount = 2;
 
@@ -169,7 +169,7 @@ test("opens the barline as a resize handle in edit mode only", async ({ page }) 
     await expect(page.locator(".staff-measure-resize-handle").first()).toHaveCSS("cursor", "col-resize");
 
     // The grid view has no resizing, so it has no handles either.
-    await page.locator("button.track-view-mode-toggle").first().click({ force: true });
+    await showTrackView(page, "grid");
     await expect(page.locator(".grid-measure-viewer").first()).toBeVisible();
     await expect(page.locator(".staff-measure-resize-handle")).toHaveCount(0);
 });
@@ -304,7 +304,7 @@ test("places the play head for the view that is shown", async ({ page }) => {
         return playBeamTransform(page);
     }).toBe(`translate3d(${prefixWidthPx}px, 0px, 0px)`);
 
-    await page.locator("button.track-view-mode-toggle").first().click({ force: true });
+    await showTrackView(page, "grid");
     await expect(page.locator(".grid-measure-viewer").first()).toBeVisible();
     await expect.poll(() => {
         return playBeamTransform(page);

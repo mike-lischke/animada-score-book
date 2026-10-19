@@ -61,8 +61,8 @@ export const tutorialSteps: ITutorialStep[] = [
         markerShape: "circle",
         description: "Switch to edit mode to change the arrangement."
             + " Selecting notes opens a contextual toolbar with lengths, dots, and subdivisions."
-            + " Above each bar, the action strip adds per-bar repeat marks and switches"
-            + " between the grid and staff views.",
+            + " Above each bar, the action strip adds per-bar repeat marks. The floating switches at the top left"
+            + " choose the grid or staff view and, while editing, insert or overwrite entry.",
     },
     {
         title: "Print / PDF",

@@ -122,6 +122,12 @@ export interface IUISettings {
     toolsBarPosition?: IPoint;
 
     /**
+     * Where the view and entry switch bar sits, in px inside the overlay it floats in, as the user last dragged
+     * it. Missing means the bar's default place at the overlay's top left.
+     */
+    modeBarPosition?: IPoint;
+
+    /**
      * The entry mode to start the staff view with. It is remembered across view mode switches and sessions;
      * the grid view always enters with overwrite.
      */

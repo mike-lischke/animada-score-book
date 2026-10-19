@@ -508,11 +508,6 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
             actionBar = <ArrangementActionBar
                 ref={this.actionBarRef}
                 editMode={inEditMode}
-                mixerExpanded={mixerExpanded}
-                trackViewMode={trackViewMode}
-                trackControlsRef={this.trackControlsRef}
-                onToggleMixer={this.toggleMixer}
-                onTrackViewModeChange={this.setTrackViewMode}
                 barActionStrip={barActionStrip}
             />;
         }
@@ -548,7 +543,7 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
                         <TrackControls innerRef={this.trackControlsRef} tracks={arrangement.tracks}
                             selectionManager={selectionManager} rowGeometries={rowGeometries}
                             mixerExpanded={mixerExpanded} trackViewMode={trackViewMode}
-                            labelsOnly={zenMode} />
+                            labelsOnly={zenMode} onToggleMixer={this.toggleMixer} />
                         <SelectionEditPopup
                             dataModel={dataModel}
                             selectionManager={selectionManager}
@@ -1203,16 +1198,6 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         this.setState({ trackViewMode: newTrackViewMode });
 
         return Promise.resolve(true);
-    };
-
-    private setTrackViewMode = (mode: TrackViewMode): void => {
-        const settings = AppStorage.loadUISettings() ?? {};
-        settings.viewSettings ??= {};
-        settings.viewSettings.arrangementViewSettings ??= {};
-        settings.viewSettings.arrangementViewSettings.displayMode = mode;
-        AppStorage.saveUISettings(settings);
-
-        void requisitions.execute("trackViewModeToggled", mode);
     };
 
     private toggleMixer = (): void => {

@@ -3,6 +3,8 @@
 * Licensed under the MIT License. See License.txt in the project root for license information.
 */
 
+import type { ComponentChild } from "preact";
+
 import type { ISbDmTrack } from "../../../core/ScoreBookDataModel.js";
 import { StaffRowGeometry, type IStaffRowGeometry } from "../../../core/StaffRowGeometry.js";
 import { TrackViewMode, type Mutable } from "../../../core/types/general.js";
@@ -12,9 +14,11 @@ import {
     SelectionGranularity, SelectionSerializer, type ISelectionDelta, type ISelectionHitEntry,
     type ISelectionHitTester,
 } from "../../../ui/SelectionSerializer.js";
+import { Button } from "../framework/Button.js";
 import { Container } from "../framework/Container.js";
 import { Icon } from "../framework/Icon.js";
 import { SplitSlider } from "../framework/SplitSlider.js";
+import { UIIcon } from "../framework/UIIcon.js";
 import { ChildAlignment, Orientation } from "../framework/ui-types.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
 
@@ -25,6 +29,7 @@ export interface ITrackControlsProperties extends ICommonUIProperties {
     labelsOnly?: boolean;
     trackViewMode: TrackViewMode;
     innerRef?: preact.RefObject<HTMLDivElement | null>;
+    onToggleMixer?: () => void;
 
     /**
      * The shared row geometry of every track, so the controls line up with the staff rows they belong to.
@@ -105,6 +110,27 @@ export class TrackControls extends UIComponent<ITrackControlsProperties, ITrackC
             this.classFromProperty(labelsOnly, "track-labels-list"),
         ]);
 
+        let mixerToggle: ComponentChild;
+        if (!labelsOnly) {
+            const mixerClassName = this.generateFinalClassName([
+                "actionControlSwitch", this.classFromProperty(mixerExpanded, "is-active"),
+            ]);
+            const mixerTooltip = mixerExpanded ? "Collapse mixer" : "Expand mixer";
+
+            mixerToggle = (
+                <Button
+                    id="trackControlsToggle"
+                    className={mixerClassName}
+                    aria-pressed={mixerExpanded}
+                    title={mixerTooltip}
+                    onClick={this.handleMixerToggle}
+                >
+                    <span className="actionControlSwitchDot" />
+                    <Icon src={UIIcon.Mixer} />
+                </Button>
+            );
+        }
+
         const controls = tracks.map((track) => {
             const instrumentName = track.instrument.displayName;
             const iconPath = track.instrument.image.filePath;
@@ -184,7 +210,14 @@ export class TrackControls extends UIComponent<ITrackControlsProperties, ITrackC
                 orientation={Orientation.TopDown}
                 data-tutorial="mixer"
             >
-                <div className="trackControlsHeaderSpacer" />
+                <Container
+                    className="trackControlsHeader"
+                    orientation={Orientation.LeftToRight}
+                    mainAlignment={ChildAlignment.Center}
+                    crossAlignment={ChildAlignment.Center}
+                >
+                    {mixerToggle}
+                </Container>
                 <Container
                     className="trackControlsPanel"
                     orientation={Orientation.TopDown}
@@ -195,6 +228,12 @@ export class TrackControls extends UIComponent<ITrackControlsProperties, ITrackC
             </Container>
         );
     }
+
+    private handleMixerToggle = (event: MouseEvent | KeyboardEvent): void => {
+        const { onToggleMixer } = this.props;
+        event.stopPropagation();
+        onToggleMixer?.();
+    };
 
     private handleTrackVolumeChange = (track: ISbDmTrack, value: number) => {
         (track as Mutable<ISbDmTrack>).volume = Math.min(2, Math.max(0, value));

@@ -306,50 +306,6 @@
     }
 }
 
-/* The insert/overwrite switch is built like the playback bar's switches: a pill that names the mode and
-   carries a status dot, which lights up while overwrite, the mode that replaces content, is in effect. It is
-   portaled into the document body, so it only uses theme tokens the root publishes. */
-.entry-mode-button {
-    height: 28px;
-    min-height: 28px;
-    padding: 0 12px 0 10px;
-    gap: 6px;
-    border: 1px solid color-mix(in srgb, var(--color-base-content) 14%, transparent);
-    border-radius: 9999px;
-    background-color: var(--color-base-100);
-    color: var(--color-base-content);
-    flex-shrink: 0;
-    box-shadow: none;
-
-    .entryModeDot {
-        flex: 0 0 auto;
-        width: 8px;
-        height: 8px;
-        border-radius: 50%;
-        background-color: color-mix(in srgb, var(--color-base-content) 30%, transparent);
-    }
-
-    .entry-mode-label {
-        font-size: 12px;
-        font-weight: 600;
-        white-space: nowrap;
-    }
-
-    &:hover {
-        border-color: color-mix(in srgb, var(--color-base-content) 30%, transparent);
-        background-color: color-mix(in srgb, var(--color-base-content) 4%, var(--color-base-100));
-    }
-
-    &.is-active {
-        border-color: var(--color-playback-accent);
-        background-color: color-mix(in srgb, var(--color-playback-accent) 10%, var(--color-base-100));
-
-        .entryModeDot {
-            background-color: var(--color-playback-accent);
-        }
-    }
-}
-
 /* A symbol that fills the icon box in both sides reads larger than the marks next to it, so it states the side
  * the ink is scaled to itself: what is left over is the margin the hand-drawn icons have. The dynamic `f` is
  * taller than it is wide, so its side is what lands on whole pixels. */
@@ -671,9 +627,13 @@
         }
     }
 
-    .trackControlsHeaderSpacer {
+    /* The panel's first row reaches into the header in staff view, so the switch has to paint and hit-test
+       above it. The header itself stays transparent for pointer events. */
+    .trackControlsHeader {
+        z-index: 1;
         height: 30px;
         min-width: 0;
+        pointer-events: none;
     }
 
     .track-controls-list.track-labels-list {
@@ -705,23 +665,10 @@
 
 #appRoot:not(.zen-mode) {
     #trackViewerContainer:not(.edit-mode) {
-        /* Only the panels lack their header block here, and the list keeps no inset of its own, so nothing precedes
-           a panel's first row; the score keeps the head room it has with the action strip, so its content does not
-           move when the edit mode is left. */
-        --track-panel-head: 0px;
-
-        .track-controls-list {
-            gap: 0;
-            padding-top: 0;
-        }
 
         /* A grid column carries its beat strip in head room the staff's rows do not have; the panels mirror it. */
         &.view-grid {
             --panel-head-room: var(--grid-head-room);
-        }
-
-        .trackControlsHeaderSpacer {
-            display: none;
         }
     }
 }
@@ -1104,74 +1051,56 @@
         z-index: 3;
     }
 
-    .arrangement-action-controls {
-        flex: 0 0 var(--track-controls-collapsed-width);
-        width: var(--track-controls-expanded-width);
+    /* The mixer switch in the track controls header. It carries no caption, so its width follows its content
+       and it takes the spacing of the playback bar's switches. Its height stays within the 30px header block,
+       which keeps the track rows where they line up with the score. */
+    .actionControlSwitch {
+        flex: 0 0 auto;
+        justify-content: center;
+        gap: 6px;
+        width: auto;
         min-width: 0;
-        height: 100%;
-        padding: 1px 6px;
-        gap: 4px;
-        border-right: 1px solid var(--border-subtle);
-        pointer-events: none;
+        height: 26px;
+        min-height: 26px;
+        padding: 0 12px;
+        border: 1px solid var(--border-subtle);
+        border-radius: 9999px;
+        background-color: var(--color-base-100);
+        color: var(--color-base-content);
+        font-weight: 600;
+        white-space: nowrap;
+        pointer-events: auto;
 
-        &.expanded {
-            flex-basis: var(--track-controls-expanded-width);
+        .icon {
+            flex: 0 0 18px;
+            width: 18px;
+            min-width: 18px;
+            height: 18px;
+            min-height: 18px;
+            font-size: 18px;
         }
 
-        .actionControlSwitch {
-            flex: 0 0 24px;
-            width: 80px;
-            min-width: 80px;
-            height: 24px;
-            min-height: 24px;
-            padding: 0 9px;
-            justify-content: space-between;
-            gap: 4px;
-            border: 1px solid var(--border-subtle);
-            border-radius: 9999px;
-            background-color: var(--color-base-100);
-            color: var(--color-base-content);
-            font-size: 11px;
-            font-weight: 600;
-            white-space: nowrap;
-            pointer-events: auto;
+        &.is-active {
+            border-color: var(--color-playback-accent);
+            background-color: color-mix(in srgb, var(--color-playback-accent) 10%, var(--color-base-100));
+            color: var(--color-playback-accent);
 
             .icon {
-                flex: 0 0 14px;
-                width: 14px;
-                min-width: 14px;
-                height: 14px;
-                min-height: 14px;
-                font-size: 14px;
-            }
-
-            .actionControlSwitchLabel {
-                flex: 1 1 auto;
-                text-align: center;
-            }
-
-            &.is-active {
-                border-color: var(--color-playback-accent);
-                background-color: color-mix(in srgb, var(--color-playback-accent) 10%, var(--color-base-100));
                 color: var(--color-playback-accent);
+            }
 
-                .icon {
-                    color: var(--color-playback-accent);
-                }
-
-                .actionControlSwitchDot {
-                    background-color: var(--color-playback-accent);
-                }
+            .actionControlSwitchDot {
+                background-color: var(--color-playback-accent);
             }
         }
+    }
 
-        .actionControlSwitchDot {
-            width: 8px;
-            height: 8px;
-            flex: 0 0 8px;
-            border-radius: 50%;
-            background-color: color-mix(in srgb, var(--color-base-content) 30%, transparent);
-        }
+    .actionControlSwitchDot {
+        width: 8px;
+        height: 8px;
+        flex: 0 0 8px;
+        border-radius: 50%;
+        background-color: #b4b4b4;
     }
 
     .bar-action-strip-viewport {

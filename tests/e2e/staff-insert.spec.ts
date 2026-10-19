@@ -10,7 +10,7 @@ import {
 } from "../../src/core/serialisation/snapshot-packing.js";
 import { arrangementSnapshotVersion } from "../../src/core/serialisation/snapshots.js";
 import type { IArrangementSnapshot, IMeasureEvent, ITrackSnapshot } from "../../src/core/types/general.js";
-import { readStoredCurrentScore, routeApi } from "./e2e-test-helpers.js";
+import { entryModeSegment, readStoredCurrentScore, routeApi, showEntryMode } from "./e2e-test-helpers.js";
 
 /** Four beamed sixteenths, a quarter rest, then eight sixteenths. */
 const mixedBarSnapshot: IArrangementSnapshot = {
@@ -205,18 +205,16 @@ test.describe("staff entry mode switch", () => {
     test("marks the values of the selection the mode switches to", async ({ page }) => {
         const runs = page.locator(".staff-measure-track-row").first().locator(".staff-note-viewer-run");
         const marked = page.locator(".note-length-toolbar .note-length-button.du-btn-primary");
-        const modeLabel = page.locator(".entry-mode-button .entry-mode-label");
 
         // The score opens in insert mode, which marks the value the next entry uses.
-        await expect(modeLabel).toHaveText("Insert");
+        await expect(entryModeSegment(page, "insert")).toHaveAttribute("aria-pressed", "true");
 
         await runs.nth(0).click();
 
         // The cursor addresses a sixteenth, yet the bar keeps marking the value the next entry uses.
         await expect(marked).toHaveAttribute("title", /Quarter note/);
 
-        await page.locator(".entry-mode-button").click();
-        await expect(modeLabel).toHaveText("Overwrite");
+        await showEntryMode(page, "overwrite");
 
         // The bar now shows what the selection carries, which is the addressed sixteenth.
         await expect(marked).toHaveAttribute("title", /Sixteenth note/);
@@ -224,17 +222,18 @@ test.describe("staff entry mode switch", () => {
 
     test("switches the mode with the I and O keys", async ({ page }) => {
         const runs = page.locator(".staff-measure-track-row").first().locator(".staff-note-viewer-run");
-        const modeLabel = page.locator(".entry-mode-button .entry-mode-label");
+        const insertSegment = entryModeSegment(page, "insert");
+        const overwriteSegment = entryModeSegment(page, "overwrite");
 
-        await expect(modeLabel).toHaveText("Insert");
+        await expect(insertSegment).toHaveAttribute("aria-pressed", "true");
 
         // The keys reach the view through an editor that has the cursor, which a click on a run sets.
         await runs.nth(0).click();
 
         await page.keyboard.press("o");
-        await expect(modeLabel).toHaveText("Overwrite");
+        await expect(overwriteSegment).toHaveAttribute("aria-pressed", "true");
 
         await page.keyboard.press("i");
-        await expect(modeLabel).toHaveText("Insert");
+        await expect(insertSegment).toHaveAttribute("aria-pressed", "true");
     });
 });
