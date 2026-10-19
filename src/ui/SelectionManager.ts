@@ -6,7 +6,7 @@
 import { AppStorage } from "../core/AppStorage.js";
 import { EditEntryMode, TrackViewMode } from "../core/types/general.js";
 import {
-    ScoreBookChangeReason, type ISbDmTrackPiece, type ScoreBookDataModel,
+    ScoreBookChangeReason, type ISbDmArrangement, type ISbDmTrackPiece, type ScoreBookDataModel,
 } from "../core/ScoreBookDataModel.js";
 import { modelEventAt } from "../core/MeasureProjection.js";
 import { addFractions, compareFractions, formatFraction } from "../core/serialisation/numeric-functions.js";
@@ -1442,11 +1442,12 @@ export class SelectionManager {
     /**
      * The current selection in the form the history stores it.
      *
-     * @returns The serialised selection, or undefined when nothing is selected.
+     * @returns The serialised selection, or undefined when nothing is selected and the cursor is unset.
      */
     public get serialisedSelection(): string | undefined {
+        const cursor = this.cursorEntry;
         const entries = [...this.currentSelection.values()];
-        if (entries.length === 0) {
+        if (entries.length === 0 && cursor === undefined) {
             return undefined;
         }
 
@@ -1454,6 +1455,7 @@ export class SelectionManager {
             version: 1,
             ...(this.selectionAnchor === undefined ? {} : { anchor: this.selectionAnchor }),
             entries: SelectionSerializer.serialise(entries),
+            ...(cursor === undefined ? {} : { cursor: SelectionSerializer.coordinatesOf(cursor) }),
         };
 
         return JSON.stringify(state);
@@ -1511,6 +1513,7 @@ export class SelectionManager {
 
         let stored: ISerialisedSelectionEntry[];
         let anchor: ISelectionPoint | undefined;
+        let cursor: ISerialisedSelectionEntry | undefined;
         if (Array.isArray(parsed)) {
             stored = parsed as ISerialisedSelectionEntry[];
         } else if (typeof parsed === "object" && parsed !== null) {
@@ -1521,11 +1524,14 @@ export class SelectionManager {
 
             stored = selectionState.entries;
             anchor = this.isSelectionPoint(selectionState.anchor) ? selectionState.anchor : undefined;
+            cursor = selectionState.cursor;
         } else {
             return;
         }
 
         if (stored.length === 0) {
+            this.restoreCursor(arrangement, cursor);
+
             return;
         }
 
@@ -1535,6 +1541,33 @@ export class SelectionManager {
         })) {
             this.selectionAnchor = anchor;
         }
+    }
+
+    /**
+     * Restores the staff cursor a stored selection state carries. The staff view keeps its selection in the
+     * cursor, so a state without one leaves the cursor the re-resolution found in place: an undo/redo is no
+     * reason to take the editing surface away.
+     *
+     * @param arrangement The arrangement the cursor addresses.
+     * @param stored The stored cursor, absent for a state that had none.
+     */
+    private restoreCursor(arrangement: ISbDmArrangement, stored: ISerialisedSelectionEntry | undefined): void {
+        if (stored === undefined) {
+            return;
+        }
+
+        const resolved = SelectionSerializer.deserialise(arrangement, [stored]).at(0);
+        if (resolved === undefined) {
+            // The note is gone with the revert, so the popup that hangs on it has nothing left to show.
+            this.cursorEntry = undefined;
+            void requisitions.execute("selectionEditPopupCloseRequested", undefined);
+
+            return;
+        }
+
+        this.cursorEntry = resolved;
+        void requisitions.execute("selectionCursorChanged", resolved);
+        this.followCursor(resolved);
     }
 
     private isSelectionPoint(value: unknown): value is ISelectionPoint {
@@ -1690,6 +1723,18 @@ export class SelectionManager {
         this.internalClearSelection();
         this.selectionAnchor = undefined;
         void requisitions.execute("selectionCursorChanged", firstEntry);
+        this.followCursor(firstEntry);
+    }
+
+    /**
+     * Brings the measure the cursor moved into into view. The staff view renders only a window of measures, so the
+     * bar a cursor edit moved it to may not even exist as an element.
+     *
+     * @param entry The entry the cursor addresses.
+     */
+    private followCursor(entry: ISelectionEntry): void {
+        const { bar, start } = SelectionSerializer.coordinatesOf(entry);
+        void requisitions.execute("measureVisibilityRequested", { bar, position: start });
     }
 
     private firstCursorOf(entries: Iterable<ISelectionEntry>): ISelectionEntry | undefined {
@@ -1776,6 +1821,8 @@ export class SelectionManager {
             return;
         }
 
+        this.reResolveCursor(arrangement);
+
         const previous = [...this.currentSelection.values()];
         const resolved = SelectionSerializer.deserialise(arrangement, SelectionSerializer.serialise(previous));
 
@@ -1803,5 +1850,20 @@ export class SelectionManager {
             this.publishPlayRange();
             this.schedulePersist();
         }
+    }
+
+    /**
+     * Re-resolves the cursor, which addresses a note of the arrangement the revert replaced. The staff view
+     * keeps its selection in the cursor, so leaving it stale would drop what the edit popup hangs on.
+     *
+     * @param arrangement The restored arrangement the cursor addresses.
+     */
+    private reResolveCursor(arrangement: ISbDmArrangement): void {
+        const previous = this.cursorEntry;
+        if (previous === undefined) {
+            return;
+        }
+
+        this.restoreCursor(arrangement, SelectionSerializer.coordinatesOf(previous));
     }
 }

@@ -159,6 +159,9 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
     /** Real time the play head was last placed at, so it can be placed again while playback is paused. */
     private lastRealTime: RealTime = 0;
 
+    /** The frame the panels' offset is stated in, scheduled by a resize. Zero while none is pending. */
+    private contentShiftFrame = 0;
+
     // The value set for the left-transition in CSS. We want to use the same value in JS to determine how long the
     // auto-follow transition should be.
     private autoFollowTransitionDurationMs: number;
@@ -308,6 +311,7 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         // the document: the scroll right after them is the one that counts.
         this.applyStagedViewport();
         this.updateStaffWindow();
+        this.updateContentCenterShift();
         this.handleTrackViewerScroll();
         this.updatePlayBeamExtent();
 
@@ -351,6 +355,11 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         if (this.scrollAnimationFrameId !== 0) {
             cancelAnimationFrame(this.scrollAnimationFrameId);
             this.scrollAnimationFrameId = 0;
+        }
+
+        if (this.contentShiftFrame !== 0) {
+            cancelAnimationFrame(this.contentShiftFrame);
+            this.contentShiftFrame = 0;
         }
 
         requisitions.unregister("settingsChanged", this.handleSettingsChanged);
@@ -718,7 +727,34 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         this.updateStaffWindow();
         this.handleTrackViewerScroll();
         this.actionBarRef.current?.layout();
+
+        // Stating the panels' offset changes their inside, which the observer sees again: it waits for the frame
+        // the resize ended in, so the notification that moved the panel does not restart the observation.
+        if (this.contentShiftFrame === 0) {
+            this.contentShiftFrame = requestAnimationFrame(() => {
+                this.contentShiftFrame = 0;
+                this.updateContentCenterShift();
+            });
+        }
     };
+
+    /**
+     * States how far the centred score content sits below the container's top, so the side panels move their own
+     * controls by the same amount: the rows they list stay next to the score rows they belong to.
+     */
+    private updateContentCenterShift(): void {
+        const host = this.viewerRef.current;
+        const content = this.viewerContentHostRef.current;
+        const container = this.trackViewerContainerRef.current;
+        if (!host || !content || !container) {
+            return;
+        }
+
+        const shift = `${Math.round(Math.max(0, (host.clientHeight - content.offsetHeight) / 2))}px`;
+        if (container.style.getPropertyValue("--content-center-shift") !== shift) {
+            container.style.setProperty("--content-center-shift", shift);
+        }
+    }
 
     /**
      * Scrolls the given measure into the viewport. The staff view renders only a window of measures, so the measure

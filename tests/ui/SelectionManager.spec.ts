@@ -11,7 +11,8 @@ import {
     type ISbDmTrackPiece, type ScoreBookDataModel,
 } from "../../src/core/ScoreBookDataModel.js";
 import type { IFraction, IMeasureEvent, Mutable } from "../../src/core/types/general.js";
-import { requisitions } from "../../src/supplement/Requisitions.js";
+import { TrackViewMode } from "../../src/core/types/general.js";
+import { requisitions, type IMeasureVisibilityRequest } from "../../src/supplement/Requisitions.js";
 import { SelectionManager } from "../../src/ui/SelectionManager.js";
 import {
     SelectionGranularity, SelectionMode, type ISelectionDelta, type ISelectionEntry, type ISelectionHitEntry
@@ -593,5 +594,186 @@ describe("SelectionManager re-validation after undo/redo", { concurrent: false }
 
         expect(manager.isCellSelected(measure1, { numerator: 0, denominator: 1 })).toBe(false);
         expect(manager.isCellSelected(measure2, { numerator: 0, denominator: 1 })).toBe(true);
+    });
+});
+
+describe("SelectionManager cursor after undo/redo", { concurrent: false }, () => {
+    let arrangement: ISbDmArrangement;
+    let track: Mutable<ISbDmTrack>;
+    let measure1: ISbDmTrackPiece;
+    let measure2: ISbDmTrackPiece;
+    let manager: SelectionManager;
+
+    /**
+     * Builds an arrangement with one track of two measures, each holding a single event, and a manager that works
+     * in the staff view's insert mode — the only mode that keeps its selection in the cursor.
+     *
+     * @returns Nothing, the fixtures are stored in the describe's variables.
+     */
+    const openStaffInsertMode = async (): Promise<void> => {
+        arrangement = makeArrangement([] as ISbDmTrack[]);
+        measure1 = {
+            id: 11,
+            type: SbDmEntityType.TrackPiece,
+            number: 1,
+            meter: { beats: 4, beatUnits: 4, stepResolution: 8, beatGroups: [8] },
+            events: [{ start: { numerator: 0, denominator: 1 }, duration: { numerator: 1, denominator: 4 } }],
+            subdivisions: [],
+            noteEvents: [makeNote(1_001_001)],
+        } as unknown as ISbDmTrackPiece;
+        measure2 = {
+            id: 12,
+            type: SbDmEntityType.TrackPiece,
+            number: 2,
+            meter: { beats: 4, beatUnits: 4, stepResolution: 8, beatGroups: [8] },
+            events: [{ start: { numerator: 0, denominator: 1 }, duration: { numerator: 1, denominator: 4 } }],
+            subdivisions: [],
+            noteEvents: [makeNote(1_002_001)],
+        } as unknown as ISbDmTrackPiece;
+
+        const built = makeTrack([], arrangement);
+        track = built;
+        track.measures = [measure1, measure2];
+        (measure1 as Mutable<ISbDmTrackPiece>).track = built;
+        (measure2 as Mutable<ISbDmTrackPiece>).track = built;
+        arrangement.tracks.push(built);
+
+        manager = new SelectionManager({ arrangement } as unknown as ScoreBookDataModel);
+        await requisitions.execute("editModeChanged", true);
+        await requisitions.execute("trackViewModeToggled", TrackViewMode.Staff);
+    };
+
+    /**
+     * Places the cursor on the first event of a measure, the way a click does in the staff view.
+     *
+     * @param measure The measure whose first event the cursor takes.
+     */
+    const placeCursor = (measure: ISbDmTrackPiece): void => {
+        manager.registerHitTester({
+            hitTest: () => {
+                return [{
+                    granularity: SelectionGranularity.Note,
+                    target: { granularity: SelectionGranularity.Note, measure, event: measure.events[0] },
+                    rect: rectOf(0, 0, 0, 0),
+                }];
+            },
+        });
+
+        manager.endSelection(clickRect(), true);
+    };
+
+    it("stores the cursor with the selection state and restores it onto the reverted objects", async () => {
+        await openStaffInsertMode();
+        placeCursor(measure1);
+
+        expect(manager.currentCursor).toBeDefined();
+        expect(manager.currentSelection.size).toBe(0);
+
+        const state = manager.serialisedSelection!;
+        expect(JSON.parse(state)).toMatchObject({
+            entries: [],
+            cursor: { granularity: SelectionGranularity.Note, bar: 1, start: { numerator: 0, denominator: 1 } },
+        });
+
+        // An undo replaces the model objects: the same score is rebuilt from the snapshot.
+        const reverted1 = {
+            ...measure1,
+            track,
+            events: measure1.events.map((event) => {
+                return { ...event };
+            }),
+        } as unknown as ISbDmTrackPiece;
+        track.measures = [reverted1, measure2];
+
+        await requisitions.execute("arrangementReverted", state);
+
+        const cursor = manager.currentCursor as { target: { measure: ISbDmTrackPiece; }; };
+        expect(cursor).toBeDefined();
+        expect(cursor.target.measure).toBe(reverted1);
+        expect(manager.currentSelection.size).toBe(0);
+
+        manager.dispose();
+    });
+
+    it("leaves the cursor in place when the reverted state records none", async () => {
+        await openStaffInsertMode();
+        placeCursor(measure2);
+
+        await requisitions.execute("arrangementReverted", undefined);
+
+        const cursor = manager.currentCursor as { target: { measure: ISbDmTrackPiece; }; };
+        expect(cursor).toBeDefined();
+        expect(cursor.target.measure).toBe(measure2);
+
+        manager.dispose();
+    });
+
+    it("drops a cursor whose note the revert removed and asks the popup to close", async () => {
+        await openStaffInsertMode();
+        placeCursor(measure1);
+
+        const state = manager.serialisedSelection!;
+        const closeRequests: boolean[] = [];
+        const spy = (): Promise<boolean> => {
+            closeRequests.push(true);
+
+            return Promise.resolve(true);
+        };
+
+        requisitions.register("selectionEditPopupCloseRequested", spy);
+
+        const emptied = { ...measure1, track, events: [], noteEvents: [] } as unknown as ISbDmTrackPiece;
+        track.measures = [emptied, measure2];
+
+        await requisitions.execute("arrangementReverted", state);
+
+        requisitions.unregister("selectionEditPopupCloseRequested", spy);
+
+        expect(manager.currentCursor).toBeUndefined();
+        expect(closeRequests.length).toBeGreaterThan(0);
+
+        manager.dispose();
+    });
+
+    it("brings the measure the cursor moves into into view", async () => {
+        await openStaffInsertMode();
+
+        const requests: IMeasureVisibilityRequest[] = [];
+        const spy = (request: IMeasureVisibilityRequest): Promise<boolean> => {
+            requests.push(request);
+
+            return Promise.resolve(true);
+        };
+
+        requisitions.register("measureVisibilityRequested", spy);
+        placeCursor(measure2);
+        requisitions.unregister("measureVisibilityRequested", spy);
+
+        expect(requests).toEqual([{ bar: 2, position: { numerator: 0, denominator: 1 } }]);
+
+        manager.dispose();
+    });
+
+    it("brings the restored cursor's measure into view after a revert", async () => {
+        await openStaffInsertMode();
+        placeCursor(measure1);
+
+        const state = manager.serialisedSelection!;
+        const requests: IMeasureVisibilityRequest[] = [];
+        const spy = (request: IMeasureVisibilityRequest): Promise<boolean> => {
+            requests.push(request);
+
+            return Promise.resolve(true);
+        };
+
+        requisitions.register("measureVisibilityRequested", spy);
+        await requisitions.execute("arrangementReverted", state);
+        requisitions.unregister("measureVisibilityRequested", spy);
+
+        // The revert states the request twice — once while re-resolving, once for the restored state — which the
+        // viewer answers with the same no-op scroll.
+        expect(requests).toContainEqual({ bar: 1, position: { numerator: 0, denominator: 1 } });
+
+        manager.dispose();
     });
 });

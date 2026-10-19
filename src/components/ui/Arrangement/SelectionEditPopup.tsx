@@ -64,7 +64,7 @@ export class SelectionEditPopup extends UIComponent<ISelectionEditPopupProps> {
         requisitions.register("selectionGestureChanged", this.handleSelectionGestureChanged);
         requisitions.register("staffWindowChanged", this.handleStaffWindowChanged);
         requisitions.register("arrangementMutated", this.handleStaffWindowChanged);
-        requisitions.register("arrangementReverted", this.handleStaffWindowChanged);
+        requisitions.register("arrangementReverted", this.handleArrangementReverted);
         requisitions.register("selectionEditPopupCloseRequested", this.handleCloseRequested);
         document.addEventListener("pointerdown", this.handleDocumentPointerDown, true);
         this.updatePopup();
@@ -85,7 +85,7 @@ export class SelectionEditPopup extends UIComponent<ISelectionEditPopupProps> {
         requisitions.unregister("selectionGestureChanged", this.handleSelectionGestureChanged);
         requisitions.unregister("staffWindowChanged", this.handleStaffWindowChanged);
         requisitions.unregister("arrangementMutated", this.handleStaffWindowChanged);
-        requisitions.unregister("arrangementReverted", this.handleStaffWindowChanged);
+        requisitions.unregister("arrangementReverted", this.handleArrangementReverted);
         requisitions.unregister("selectionEditPopupCloseRequested", this.handleCloseRequested);
         document.removeEventListener("pointerdown", this.handleDocumentPointerDown, true);
 
@@ -350,6 +350,23 @@ export class SelectionEditPopup extends UIComponent<ISelectionEditPopupProps> {
         return Promise.resolve(true);
     };
 
+    /**
+     * A revert restores the selection with the arrangement, so the popup belongs to what comes back — a close it
+     * took on the way, while the restored rows were still being laid out, must not keep it hidden.
+     *
+     * @returns A resolved promise to satisfy the requisition handler signature.
+     */
+    private handleArrangementReverted = (): Promise<boolean> => {
+        this.dismissed = false;
+
+        return this.handleStaffWindowChanged();
+    };
+
+    /**
+     * Re-places the popup once the frame that changed its anchor's layout is over.
+     *
+     * @returns A resolved promise to satisfy the requisition handler signature.
+     */
     private handleStaffWindowChanged = (): Promise<boolean> => {
         // Measures that mounted with the window are laid out by the time the frame that mounted them is over, and
         // the window changes while the view is resized: placing the popup right away would read bounds that are

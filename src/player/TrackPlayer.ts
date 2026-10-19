@@ -165,7 +165,13 @@ export class TrackPlayer {
         const markings = arrangement.rangeArticulations?.forTrack(this.track.id) ?? [];
 
         order.forEach((barNumber, index) => {
-            const measure = measures[barNumber - 1];
+            const measure = measures.at(barNumber - 1);
+            if (measure === undefined) {
+                // The order follows the arrangement's bar count, which a track reaches once its measures are in
+                // place: a bar it has no measure for has nothing to play until the next rebuild.
+                return;
+            }
+
             const barStart = index * secondsPerBar;
             const timeOf = (event: ISbDmNoteEvent): RealTime => {
                 return barStart + ((secondsPerBar * event.start.numerator) / event.start.denominator);

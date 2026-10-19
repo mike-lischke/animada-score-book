@@ -4,13 +4,17 @@
  */
 
 .slider-split {
+    /* Room for the thumb to stand half its width beyond either end of the track. It is the element's padding,
+       so the box covers the whole travel and a press on an overhanging thumb end stays with the slider. */
+    --slider-split-thumb-size: 18px;
+
     display: flex;
     align-items: center;
     height: 1.5rem;
+    padding: 0 calc(var(--slider-split-thumb-size) / 2);
     cursor: pointer;
     user-select: none;
     outline-offset: 3px;
-    margin: 0 8px;
 
     &:focus-visible {
         outline: 2px solid var(--color-primary);
@@ -58,8 +62,8 @@
     .slider-split-thumb {
         position: absolute;
         top: 50%;
-        width: 18px;
-        height: 18px;
+        width: var(--slider-split-thumb-size);
+        height: var(--slider-split-thumb-size);
         border-radius: 50%;
         background-color: var(--color-base-200);
         border: 3px solid var(--color-info-content);

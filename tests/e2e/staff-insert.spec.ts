@@ -195,6 +195,36 @@ test.describe("staff insert mode", () => {
         await expect(page.locator(".selection-rect")).toHaveCount(0);
         await expect(page.locator(".selection-overlay")).toHaveCount(0);
     });
+
+    test("keeps the edit popup open while the entry grows the score and through undo and redo", async ({ page }) => {
+        const failures: string[] = [];
+        page.on("pageerror", (error) => {
+            failures.push(error.message);
+        });
+
+        const runs = page.locator(".staff-measure-track-row").first().locator(".staff-note-viewer-run");
+        await expect(runs).toHaveCount(13);
+
+        // The bar is full, so the quarter entered at the rest pushes its tail into the measure that grows for it.
+        await runs.nth(4).click();
+        await page.keyboard.press("1");
+        await expect(page.locator("#selectionEditPopup")).toBeVisible();
+        await expect.poll(async () => {
+            return (await storedTrack(page)).measures.length;
+        }).toBe(2);
+
+        await page.keyboard.press("Control+z");
+        await expect(page.locator("#selectionEditPopup")).toBeVisible();
+        await expect.poll(async () => {
+            return (await storedTrack(page)).measures.length;
+        }).toBe(1);
+
+        await page.keyboard.press("Control+Shift+z");
+        await expect(page.locator("#selectionEditPopup")).toBeVisible();
+
+        // The entry published a playback order for a bar the track did not hold yet, which a player must survive.
+        expect(failures).toEqual([]);
+    });
 });
 
 test.describe("staff entry mode switch", () => {

@@ -370,6 +370,14 @@
 }
 
 #trackViewerContainer {
+    /* The container takes the vertical room the score leaves, so the side panels reach down and the score content
+       has a defined area to be centred in. */
+    flex: 1 1 auto;
+
+    /* How far the centred score content sits below the container's top. The panels move their own controls by the
+       same amount, which keeps the rows they list beside the score rows they belong to. */
+    --content-center-shift: 0px;
+
     /* Height of the block above a side panel, which its first row is offset by: the list's 7px padding, the 30px
        header block and the 16px gap after it. Keep in step with `.track-controls-list` / `.track-edit-sidebar`. */
     --track-panel-head: 53px;
@@ -387,7 +395,8 @@
     --staff-handle-overhang: 6px;
 
     .trackControlsPanel {
-        margin-top: calc(var(--score-strip-band) + var(--score-row-top) - var(--track-panel-head) + var(--panel-head-room, 0px));
+        /* The rows follow the centred score rows; the header above them stays where it is. */
+        margin-top: calc(var(--score-strip-band) + var(--score-row-top) - var(--track-panel-head) + var(--panel-head-room, 0px) + var(--content-center-shift));
     }
 
     .staff-measure-viewer,
@@ -420,6 +429,10 @@
         min-width: 600px;
         scrollbar-width: none;
         touch-action: pan-x;
+
+        /* The score sits in the middle of the room below the action bar, so a score shorter than the viewer is not
+           glued to the top. Content taller than the host grows it, which leaves nothing to distribute. */
+        justify-content: center;
 
         /* This host scrolls the score sideways, so a swipe past its end must stop here. The vertical wheel
            has to keep passing through to #viewerScrollHost, hence the x axis alone. */
@@ -604,15 +617,15 @@
         }
 
         .track-controls .track-volume-slider {
-            width: calc(100% - 16px);
-            margin: 0 8px;
+            width: 100%;
+            margin: 0;
         }
 
         .track-controls .trackVolumeLegend {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            width: calc(100% - 16px);
-            margin: 3px 8px 0;
+            width: calc(100% - 18px);
+            margin: 3px 9px 0;
             font-size: 0.75rem;
             color: var(--color-base-content);
             user-select: none;
@@ -690,7 +703,7 @@
        back to the shared panel offset. */
     .trackEditSidebarPanel {
         min-width: 0;
-        margin-top: calc(var(--score-strip-band) + var(--score-row-top) - var(--track-panel-head) + 46px + var(--panel-head-room, 0px));
+        margin-top: calc(var(--score-strip-band) + var(--score-row-top) - var(--track-panel-head) + 46px + var(--panel-head-room, 0px) + var(--content-center-shift));
 
         .trackEditEmpty {
             padding: 24px 2px;

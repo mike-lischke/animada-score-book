@@ -197,6 +197,9 @@ export interface ISerialisedSelectionState {
     version: number;
     anchor?: ISelectionPoint;
     entries: ISerialisedSelectionEntry[];
+
+    /** The one note the staff view draws its cursor at, which the selection does not include. */
+    cursor?: ISerialisedSelectionEntry;
 }
 
 /**

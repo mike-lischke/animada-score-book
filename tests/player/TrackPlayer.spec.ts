@@ -279,6 +279,22 @@ describe("TrackPlayer", () => {
         player.dispose();
     });
 
+    it("leaves a bar it has no measure for to the track that holds it", async () => {
+        const track = makeTrack({ instrumentLoaded: true });
+        const player = new TrackPlayer(track, makeTimeCoordinator());
+
+        // An arrangement that grew a bar states an order covering it before every track holds the measure, so the
+        // player has to skip it instead of reading notes from nothing.
+        await expect(requisitions.execute("playbackOrderChanged", {
+            arrangementId: track.arrangement.id, bars: [1, 2],
+        })).resolves.toBe(true);
+
+        const events = player.getEvents({ start: 0, end: 2 });
+        expect(events.length).toBeGreaterThan(0);
+
+        player.dispose();
+    });
+
     it("resolves the dynamic level of a hairpin per note", () => {
         const track = makeTrack({ instrumentLoaded: true, withPolyrhythmNote: true });
         const arrangement = track.arrangement;
