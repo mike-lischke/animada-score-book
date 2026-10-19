@@ -221,4 +221,20 @@ test.describe("staff entry mode switch", () => {
         // The bar now shows what the selection carries, which is the addressed sixteenth.
         await expect(marked).toHaveAttribute("title", /Sixteenth note/);
     });
+
+    test("switches the mode with the I and O keys", async ({ page }) => {
+        const runs = page.locator(".staff-measure-track-row").first().locator(".staff-note-viewer-run");
+        const modeLabel = page.locator(".entry-mode-button .entry-mode-label");
+
+        await expect(modeLabel).toHaveText("Insert");
+
+        // The keys reach the view through an editor that has the cursor, which a click on a run sets.
+        await runs.nth(0).click();
+
+        await page.keyboard.press("o");
+        await expect(modeLabel).toHaveText("Overwrite");
+
+        await page.keyboard.press("i");
+        await expect(modeLabel).toHaveText("Insert");
+    });
 });

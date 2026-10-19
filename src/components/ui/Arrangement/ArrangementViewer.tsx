@@ -651,6 +651,7 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
 
         if (editor !== undefined) {
             this.trackViewerInputController!.activeEditor = editor;
+            this.trackViewerInputController!.hasEntryModeSwitch = trackViewMode === TrackViewMode.Staff;
         }
     }
 

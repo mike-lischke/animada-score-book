@@ -5,6 +5,7 @@
 
 import type { Articulation } from "../core/articulation.js";
 import { NoteLength, type INoteValue } from "../core/rest-notation.js";
+import { EditEntryMode } from "../core/types/general.js";
 import { requisitions, type ISubdivisionCreationRequest } from "../supplement/Requisitions.js";
 import type { MeasureEditor } from "./MeasureEditor.js";
 import type { ISelectionDelta, ISelectionEntry } from "./SelectionSerializer.js";
@@ -36,6 +37,12 @@ export class TrackViewerInputController {
      * whenever the view mode changes, so the controller never branches on the view mode itself.
      */
     public activeEditor?: MeasureEditor;
+
+    /**
+     * Whether the active view offers the insert and overwrite modes. The grid view always enters with
+     * overwrite, so only the staff view offers the switch.
+     */
+    public hasEntryModeSwitch = false;
 
     private static readonly longPressDuration = 500;
     private static readonly longPressMoveTolerance = 10;
@@ -168,6 +175,14 @@ export class TrackViewerInputController {
         }
 
         if (!event.altKey && !event.metaKey && !event.ctrlKey && !event.shiftKey) {
+            const key = event.key.toLowerCase();
+
+            if (key === "i" || key === "o") {
+                this.switchEntryMode(editor, key === "i" ? EditEntryMode.Insert : EditEntryMode.Overwrite, event);
+
+                return;
+            }
+
             if (event.key === "0") {
                 if (editor.enterRest()) {
                     event.preventDefault();
@@ -225,6 +240,24 @@ export class TrackViewerInputController {
 
         return Promise.resolve(true);
     };
+
+    /**
+     * Switches the entry mode from the keyboard, where the active view offers the switch (ADR-0011).
+     *
+     * @param editor The editor that executes the entry.
+     * @param mode The mode the key asks for.
+     * @param event The key event, to prevent the default action when the shortcut applies.
+     */
+    private switchEntryMode(editor: MeasureEditor, mode: EditEntryMode, event: KeyboardEvent): void {
+        if (!this.hasEntryModeSwitch) {
+            return;
+        }
+
+        event.preventDefault();
+        if (editor.entryMode !== mode) {
+            void requisitions.execute("editEntryModeChanged", mode);
+        }
+    }
 
     /**
      * Switches the augmentation dot of the note value used for entry and applies the result to the

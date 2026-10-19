@@ -250,8 +250,7 @@ describe("ScoreClipboard", () => {
         expect(targetRests[0]).toBe(rest);
         const result = clipboard.paste(targetRests.map((event) => {
             return runEntry(targetMeasure, event);
-        }),
-        { overflowMode: PasteOverflowMode.Shift });
+        }), { overflowMode: PasteOverflowMode.Shift });
 
         expect(result.kind).toBe(PasteResultKind.Success);
 
