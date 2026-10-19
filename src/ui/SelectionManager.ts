@@ -4,7 +4,7 @@
 */
 
 import { AppStorage } from "../core/AppStorage.js";
-import { EditEntryMode } from "../core/types/general.js";
+import { EditEntryMode, TrackViewMode } from "../core/types/general.js";
 import {
     ScoreBookChangeReason, type ISbDmTrackPiece, type ScoreBookDataModel,
 } from "../core/ScoreBookDataModel.js";
@@ -97,6 +97,9 @@ export class SelectionManager {
      * persisted value is the start value, because the app only announces a mode the user switched to.
      */
     private entryMode = AppStorage.loadUISettings()?.entryMode ?? EditEntryMode.Insert;
+    private viewMode = AppStorage.loadUISettings()?.viewSettings?.arrangementViewSettings?.displayMode
+        ?? TrackViewMode.Grid;
+    private cursorEntry?: ISelectionEntry;
 
     /** Owned view — handles pointer events, rect drawing, and DOM updates. Created lazily when the container is set. */
     private view?: SelectionView;
@@ -110,6 +113,11 @@ export class SelectionManager {
         requisitions.register("zenModeChanged", this.handleZenModeChanged);
         requisitions.register("zenMeasureToggled", this.handleZenMeasureToggled);
         requisitions.register("editEntryModeChanged", this.handleEntryModeChanged);
+        requisitions.register("trackViewModeToggled", this.handleViewModeChanged);
+    }
+
+    public get currentCursor(): ISelectionEntry | undefined {
+        return this.cursorEntry;
     }
 
     public get selectionMode(): SelectionMode {
@@ -133,6 +141,7 @@ export class SelectionManager {
         requisitions.unregister("zenModeChanged", this.handleZenModeChanged);
         requisitions.unregister("zenMeasureToggled", this.handleZenMeasureToggled);
         requisitions.unregister("editEntryModeChanged", this.handleEntryModeChanged);
+        requisitions.unregister("trackViewModeToggled", this.handleViewModeChanged);
 
         if (this.saveDebounceId !== undefined) {
             clearTimeout(this.saveDebounceId);
@@ -261,6 +270,10 @@ export class SelectionManager {
         }
 
         const rawEntries = this.collectEntries(initialRect);
+        if (rawEntries.length === 0) {
+            void requisitions.execute("selectionEditPopupCloseRequested", undefined);
+        }
+
         let entries: ISelectionEntry[];
         if (this.currentSelectionMode === SelectionMode.Add && this.selectionAnchor !== undefined) {
             const possibleEntries = this.gestureEntriesForGranularity(rawEntries, this.selectionAnchor.granularity);
@@ -296,6 +309,10 @@ export class SelectionManager {
      * can apply selection decoration. Called after view mode switches (grid ↔ staff).
      */
     public republishSelection(): void {
+        if (this.cursorEntry !== undefined) {
+            void requisitions.execute("selectionCursorChanged", this.cursorEntry);
+        }
+
         if (this.currentSelection.size > 0) {
             const allEntries = [...this.currentSelection.values()];
             void requisitions.execute("selectionChanged", { added: allEntries, removed: [] });
@@ -316,6 +333,9 @@ export class SelectionManager {
         }
 
         const rawEntries = this.collectEntries(clickRect);
+        if (rawEntries.length === 0) {
+            void requisitions.execute("selectionEditPopupCloseRequested", undefined);
+        }
 
         // Insert mode draws no selection: a click places the cursor on the addressed note, and a click
         // that addresses a coarser element leaves the cursor where it is.
@@ -505,7 +525,13 @@ export class SelectionManager {
      * Clears all selection state and publishes a change.
      */
     public clearSelection(): void {
-        this.internalClearSelection();
+        const hadCursor = this.cursorEntry !== undefined;
+        this.cursorEntry = undefined;
+        const selectionCleared = this.internalClearSelection();
+        if (hadCursor && !selectionCleared) {
+            void requisitions.execute("selectionChanged", { added: [], removed: [] });
+        }
+
         this.selectionAnchor = undefined;
     }
 
@@ -528,6 +554,14 @@ export class SelectionManager {
      * @param entries The entries that become the new selection.
      */
     public replaceSelection(entries: ISelectionEntry[]): void {
+        if (this.editMode && this.entryMode === EditEntryMode.Insert && this.viewMode === TrackViewMode.Staff
+            && entries.length > 0) {
+            this.moveSelectionToCursor(entries);
+
+            return;
+        }
+
+        this.cursorEntry = undefined;
         const removed = [...this.currentSelection.values()];
         if (entries.length === 0) {
             this.currentSelection.clear();
@@ -664,24 +698,9 @@ export class SelectionManager {
         });
     }
 
-    /**
-     * Checks whether one granularity addresses a coarser level than another. A note and a note group share their
-     * level: both address the events of one track.
-     *
-     * @param candidate The granularity to test.
-     * @param selected The granularity it is compared against.
-     *
-     * @returns True when the candidate addresses the coarser level.
-     */
     private static isCoarserGranularity(candidate: SelectionGranularity,
         selected: SelectionGranularity): boolean {
-        const level = (granularity: SelectionGranularity): number => {
-            return granularity === SelectionGranularity.Note
-                ? SelectionManager.granularityRank[SelectionGranularity.NoteGroup]
-                : SelectionManager.granularityRank[granularity];
-        };
-
-        return level(candidate) < level(selected);
+        return SelectionManager.granularityRank[candidate] < SelectionManager.granularityRank[selected];
     }
 
     /**
@@ -722,6 +741,18 @@ export class SelectionManager {
             this.selectionAnchor = this.anchorOf(incoming[0]);
         }
 
+        if (this.selectionGestureActive && this.viewMode === TrackViewMode.Staff
+            && granularity === SelectionGranularity.Note) {
+            const hits = new Map<string, ISelectionEntry>();
+            for (const entry of [...baseEntries, ...incoming]) {
+                if (entry.granularity === granularity) {
+                    hits.set(this.entryKey(entry), entry);
+                }
+            }
+
+            return this.setCurrentSelection([...hits.values()]);
+        }
+
         const bounds = this.selectionBoundsOf([...baseEntries, ...incoming], granularity);
         const entries = bounds === undefined
             ? this.entriesWithoutArrangement([...baseEntries, ...incoming], granularity)
@@ -741,7 +772,7 @@ export class SelectionManager {
             });
         }
 
-        if (granularity === SelectionGranularity.Note || granularity === SelectionGranularity.NoteGroup) {
+        if (granularity === SelectionGranularity.NoteGroup) {
             return entries.filter((entry) => {
                 return entry.granularity === SelectionGranularity.Note
                     || entry.granularity === SelectionGranularity.NoteGroup;
@@ -1037,6 +1068,10 @@ export class SelectionManager {
     }
 
     private setCurrentSelection(entries: ISelectionEntry[]): boolean {
+        if (entries.length > 0) {
+            this.cursorEntry = undefined;
+        }
+
         const nextSelection = new Map<string, ISelectionEntry>();
         for (const entry of entries) {
             nextSelection.set(this.entryKey(entry), entry);
@@ -1222,7 +1257,11 @@ export class SelectionManager {
     }
 
     private handleSelectionRectChanged = (data: ISelectionRectChange): Promise<boolean> => {
-        const currentEntries = this.collectEntries(data.rect).map((entry) => {
+        const rawEntries = this.collectEntries(data.rect);
+        const granularity = this.selectionAnchor?.granularity;
+        const entries = granularity === undefined
+            ? this.resolveRawEntries(rawEntries) : this.gestureEntriesForGranularity(rawEntries, granularity);
+        const currentEntries = entries.map((entry) => {
             return SelectionManager.withoutHitRect(entry);
         });
 
@@ -1570,6 +1609,7 @@ export class SelectionManager {
      */
     private handleEditModeChanged = (enabled: boolean): Promise<boolean> => {
         this.editMode = enabled;
+        this.clearInsertSelection();
 
         return Promise.resolve(true);
     };
@@ -1615,23 +1655,95 @@ export class SelectionManager {
         return Promise.resolve(true);
     };
 
-    /**
-     * Remembers the entry mode for newly created selection views. Insert draws no selection, so switching to it
-     * drops the selection in place — the tools at it belong to overwrite.
-     *
-     * @param mode The entry mode announced by the app.
-     *
-     * @returns A resolved promise to satisfy the requisition handler signature.
-     */
     private handleEntryModeChanged = (mode: EditEntryMode): Promise<boolean> => {
         this.entryMode = mode;
-
-        if (mode === EditEntryMode.Insert) {
-            this.clearSelection();
+        if (this.editMode && mode === EditEntryMode.Overwrite && this.cursorEntry !== undefined) {
+            this.replaceSelection([this.cursorEntry]);
+        } else {
+            this.clearInsertSelection();
         }
 
         return Promise.resolve(true);
     };
+
+    private handleViewModeChanged = (mode: TrackViewMode): Promise<boolean> => {
+        this.viewMode = mode;
+        this.clearInsertSelection();
+
+        return Promise.resolve(true);
+    };
+
+    private clearInsertSelection(): void {
+        if (this.editMode && this.entryMode === EditEntryMode.Insert && this.viewMode === TrackViewMode.Staff
+            && this.currentSelection.size > 0) {
+            this.moveSelectionToCursor(this.currentSelection.values());
+        }
+    }
+
+    private moveSelectionToCursor(entries: Iterable<ISelectionEntry>): void {
+        const firstEntry = this.firstCursorOf(entries);
+        if (firstEntry === undefined) {
+            return;
+        }
+
+        this.cursorEntry = firstEntry;
+        this.internalClearSelection();
+        this.selectionAnchor = undefined;
+        void requisitions.execute("selectionCursorChanged", firstEntry);
+    }
+
+    private firstCursorOf(entries: Iterable<ISelectionEntry>): ISelectionEntry | undefined {
+        const tracks = this.dataModel?.arrangement?.tracks;
+        const trackIndexes = new Map(tracks?.map((track, index) => {
+            return [track.id, index];
+        }));
+        let firstEntry: ISelectionEntry | undefined;
+        let firstTrackIndex = Infinity;
+        let firstBar = Infinity;
+        let firstStart = measureStart;
+
+        for (const entry of entries) {
+            const { target } = entry;
+            let measure = target.granularity === SelectionGranularity.Track
+                ? target.track.measures.at(0) : target.measure;
+            if (measure === undefined) {
+                continue;
+            }
+
+            if (target.granularity === SelectionGranularity.Measure) {
+                measure = tracks?.[0]?.measures[measure.number - 1] ?? measure;
+            }
+
+            const start = SelectionSerializer.coordinatesOf(entry).start ?? measureStart;
+            const trackIndex = trackIndexes.get(measure.track.id) ?? measure.track.id;
+            if (trackIndex > firstTrackIndex || (trackIndex === firstTrackIndex
+                && (measure.number > firstBar || (measure.number === firstBar
+                    && compareFractions(start, firstStart) >= 0)))) {
+                continue;
+            }
+
+            const event = modelEventAt(measure, start);
+            if (event === undefined) {
+                continue;
+            }
+
+            firstEntry = {
+                granularity: SelectionGranularity.Note,
+                target: {
+                    granularity: SelectionGranularity.Note,
+                    measure,
+                    event,
+                    start,
+                    end: addFractions(event.start, event.duration),
+                },
+            };
+            firstTrackIndex = trackIndex;
+            firstBar = measure.number;
+            firstStart = start;
+        }
+
+        return firstEntry;
+    }
 
     /**
      * Reacts to an undo/redo by re-resolving the selection against the current arrangement and

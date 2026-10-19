@@ -516,8 +516,8 @@ test.describe("Staff view selection", () => {
         const firstRun = runs.nth(0);
         const secondRun = runs.nth(1);
 
-        const firstBox = await firstRun.locator(".staff-note-head-symbol").boundingBox();
-        const secondBox = await secondRun.locator(".staff-note-head-symbol").boundingBox();
+        const firstBox = await firstRun.locator(".staff-note-head").boundingBox();
+        const secondBox = await secondRun.locator(".staff-note-head").boundingBox();
         if (!firstBox || !secondBox) {
             test.fail(true, "Could not get bounding boxes");
 
@@ -525,7 +525,7 @@ test.describe("Staff view selection", () => {
         }
 
         // Start on a notehead so the gesture locks to note granularity.
-        await page.mouse.move(firstBox.x, firstBox.y);
+        await page.mouse.move(firstBox.x + (firstBox.width / 2), firstBox.y + (firstBox.height / 2));
         await page.mouse.down();
         await page.mouse.move(secondBox.x + secondBox.width, secondBox.y + secondBox.height, { steps: 10 });
         await page.mouse.up();

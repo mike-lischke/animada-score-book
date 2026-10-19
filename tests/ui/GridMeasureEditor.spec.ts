@@ -637,9 +637,11 @@ describe("GridMeasureEditor input", { concurrent: false }, () => {
 
     it("follows a selection change to place the cursor", () => {
         const measure = model.arrangement!.tracks[0].measures[0];
+        const entry = noteEntry(measure, { numerator: 1, denominator: 16 });
+        input.selectionManager.replaceSelection([entry]);
 
         editor.cursorFromSelection({
-            added: [noteEntry(measure, { numerator: 1, denominator: 16 })],
+            added: [entry],
             removed: [],
         });
         editor.setNoteLength(noteValue(NoteLength.Quarter));

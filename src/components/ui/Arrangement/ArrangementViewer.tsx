@@ -625,7 +625,7 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
 
     /** Reports the app's edit state to the editors and the marking view, which gate their input on it. */
     private applyEditState(): void {
-        const { inEditMode, entryMode } = this.props;
+        const { inEditMode, entryMode, selectionManager } = this.props;
 
         for (const editor of [this.gridEditor, this.staffEditor]) {
             if (editor !== undefined) {
@@ -635,6 +635,10 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         }
 
         this.rangeArticulationView?.setEditMode(inEditMode);
+
+        if (selectionManager.hasSelection || selectionManager.currentCursor !== undefined) {
+            this.viewerContentHostRef.current?.focus({ preventScroll: true });
+        }
     }
 
     /**

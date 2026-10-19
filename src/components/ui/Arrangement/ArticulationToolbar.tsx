@@ -65,12 +65,14 @@ export class ArticulationToolbar extends UIComponent<IArticulationToolbarProps, 
 
     public override componentDidMount(): void {
         requisitions.register("selectionChanged", this.handleSelectionChanged);
+        requisitions.register("selectionCursorChanged", this.handleSelectionChanged);
         requisitions.register("arrangementReverted", this.handleArrangementReverted);
         this.refreshState();
     }
 
     public override componentWillUnmount(): void {
         requisitions.unregister("selectionChanged", this.handleSelectionChanged);
+        requisitions.unregister("selectionCursorChanged", this.handleSelectionChanged);
         requisitions.unregister("arrangementReverted", this.handleArrangementReverted);
     }
 
@@ -127,7 +129,8 @@ export class ArticulationToolbar extends UIComponent<IArticulationToolbarProps, 
         const { selectionManager, entryMode } = this.props;
         const { activeArticulation: chosenArticulation } = this.state;
 
-        const entries = [...selectionManager.currentSelection.values()];
+        const entries = selectionManager.currentCursor === undefined
+            ? [...selectionManager.currentSelection.values()] : [selectionManager.currentCursor];
         const tracks = this.resolveSelectedTracks(entries);
         const noteStyles = this.resolveNoteStyles(tracks);
         const markedStyleId = this.resolveMarkedStyleId(entries);

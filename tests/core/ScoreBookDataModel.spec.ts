@@ -398,16 +398,19 @@ describe("ScoreBookDataModel track actions", { concurrent: false }, () => {
 
         model.setNoteAt(track.id, 1, stepStart(0), stepDuration, "1");
 
-        expect(measure.events).toHaveLength(3);
+        expect(measure.events).toHaveLength(5);
         expect(measure.events[0].noteStyleId).toBe("1");
         expect(measure.events[0].start).toEqual({ numerator: 0, denominator: 1 });
         expect(measure.events[0].duration).toEqual({ numerator: 1, denominator: 16 });
         expect(measure.events[1].noteStyleId).toBeUndefined();
         expect(measure.events[1].start).toEqual({ numerator: 1, denominator: 16 });
-        expect(measure.events[1].duration).toEqual({ numerator: 3, denominator: 4 });
+        expect(measure.events[1].duration).toEqual({ numerator: 1, denominator: 16 });
         expect(measure.events[2].noteStyleId).toBeUndefined();
-        expect(measure.events[2].start).toEqual({ numerator: 13, denominator: 16 });
-        expect(measure.events[2].duration).toEqual({ numerator: 3, denominator: 16 });
+        expect(measure.events[2].start).toEqual({ numerator: 1, denominator: 8 });
+        expect(measure.events[2].duration).toEqual({ numerator: 1, denominator: 8 });
+        expect(eventList(measure)).toEqual([
+            "0/1+1/16:1", "1/16+1/16:-", "1/8+1/8:-", "1/4+1/4:-", "1/2+1/2:-",
+        ]);
     });
 
     it("setNoteAt preserves a note that spans a pulse boundary", () => {
@@ -442,11 +445,12 @@ describe("ScoreBookDataModel track actions", { concurrent: false }, () => {
         expect(model.setNoteAt(track.id, 1, { numerator: 0, denominator: 1 },
             { numerator: 1, denominator: 4 }, "1")).toBe(true);
 
-        expect(measure.events).toHaveLength(2);
+        expect(measure.events).toHaveLength(3);
         expect(measure.events[0].noteStyleId).toBe("1");
         expect(measure.events[0].duration).toEqual({ numerator: 1, denominator: 4 });
         expect(measure.events[1].noteStyleId).toBeUndefined();
-        expect(measure.events[1].duration).toEqual({ numerator: 3, denominator: 4 });
+        expect(measure.events[1].duration).toEqual({ numerator: 1, denominator: 4 });
+        expect(measure.events[2].duration).toEqual({ numerator: 1, denominator: 2 });
     });
 
     it("setNoteAt replaces a same-length note", () => {
@@ -457,11 +461,11 @@ describe("ScoreBookDataModel track actions", { concurrent: false }, () => {
 
         model.setNoteAt(track.id, 1, { numerator: 0, denominator: 1 },
             { numerator: 1, denominator: 16 }, "1");
-        expect(measure.events).toHaveLength(3);
+        expect(measure.events).toHaveLength(5);
 
         expect(model.setNoteAt(track.id, 1, { numerator: 0, denominator: 1 },
             { numerator: 1, denominator: 16 }, "2")).toBe(true);
-        expect(measure.events).toHaveLength(3);
+        expect(measure.events).toHaveLength(5);
         expect(measure.events[0].noteStyleId).toBe("2");
         expect(measure.events[0].duration).toEqual({ numerator: 1, denominator: 16 });
     });
@@ -501,11 +505,12 @@ describe("ScoreBookDataModel track actions", { concurrent: false }, () => {
         expect(model.setNoteAt(track.id, 1, { numerator: 0, denominator: 1 },
             { numerator: 1, denominator: 4 }, "2")).toBe(true);
 
-        expect(measure.events).toHaveLength(2);
+        expect(measure.events).toHaveLength(3);
         expect(measure.events[0].noteStyleId).toBe("2");
         expect(measure.events[0].duration).toEqual({ numerator: 1, denominator: 4 });
         expect(measure.events[1].noteStyleId).toBeUndefined();
-        expect(measure.events[1].duration).toEqual({ numerator: 3, denominator: 4 });
+        expect(measure.events[1].duration).toEqual({ numerator: 1, denominator: 4 });
+        expect(measure.events[2].duration).toEqual({ numerator: 1, denominator: 2 });
     });
 
     it("setNoteAt rejects when a following note blocks the span", () => {
@@ -552,7 +557,10 @@ describe("ScoreBookDataModel track actions", { concurrent: false }, () => {
         const changed = model.insertEventsWithShift([{
             measure: track.measures[0],
             from: rest,
-            to: rest,
+            to: track.measures[0].events.reduce((last, event) => {
+                return event.noteStyleId === undefined && event.start.numerator / event.start.denominator < 1 / 2
+                    ? event : last;
+            }, rest),
             events: [
                 {
                     start: { numerator: 0, denominator: 1 }, duration: { numerator: 1, denominator: 16 },
@@ -579,8 +587,12 @@ describe("ScoreBookDataModel track actions", { concurrent: false }, () => {
         })).toEqual([
             { numerator: 1, denominator: 16 },
             { numerator: 1, denominator: 16 },
-            { numerator: 3, denominator: 4 },
+            { numerator: 1, denominator: 16 },
             { numerator: 1, denominator: 8 },
+            { numerator: 1, denominator: 4 },
+            { numerator: 1, denominator: 4 },
+            { numerator: 1, denominator: 8 },
+            { numerator: 1, denominator: 16 },
         ]);
 
         const quarter = track.measures[0].events.find((event) => {
@@ -841,7 +853,10 @@ describe("ScoreBookDataModel track actions", { concurrent: false }, () => {
         const changed = model.insertEventsWithShift([{
             measure: track.measures[0],
             from: rest,
-            to: rest,
+            to: track.measures[0].events.reduce((last, event) => {
+                return event.noteStyleId === undefined && event.start.numerator / event.start.denominator < 1 / 2
+                    ? event : last;
+            }, rest),
             events: [
                 {
                     start: { numerator: 0, denominator: 1 }, duration: { numerator: 1, denominator: 16 },
@@ -870,7 +885,8 @@ describe("ScoreBookDataModel track actions", { concurrent: false }, () => {
 
         // The two notes that no longer fit continue in the next measure, followed by rests.
         expect(eventList(track.measures[1])).toEqual([
-            "0/1+1/16:2", "1/16+1/16:2", "1/8+3/4:-", "7/8+1/8:-",
+            "0/1+1/16:2", "1/16+1/16:2", "1/8+1/16:-", "3/16+1/8:-", "5/16+1/4:-", "9/16+1/4:-",
+            "13/16+1/8:-", "15/16+1/16:-",
         ]);
     });
 
@@ -923,7 +939,7 @@ describe("ScoreBookDataModel track actions", { concurrent: false }, () => {
         expect(eventList(track.measures[0])).toEqual([
             "0/1+1/4:1",
             "1/4+1/4:3",
-            "1/2+1/2:-",
+            "1/2+1/4:-", "3/4+1/4:-",
         ]);
     });
 
@@ -941,7 +957,7 @@ describe("ScoreBookDataModel track actions", { concurrent: false }, () => {
         expect(eventList(track.measures[0])).toEqual([
             "0/1+1/4:1",
             "1/4+1/4:2",
-            "1/2+1/2:-",
+            "1/2+1/4:-", "3/4+1/4:-",
         ]);
     });
 
@@ -1003,7 +1019,7 @@ describe("ScoreBookDataModel track actions", { concurrent: false }, () => {
             "0/1+1/4:1",
             "1/4+1/8:-",
             "3/8+1/8:2",
-            "1/2+1/2:-",
+            "1/2+1/8:-", "5/8+1/4:-", "7/8+1/8:-",
         ]);
     });
 
@@ -1177,7 +1193,7 @@ describe("ScoreBookDataModel track actions", { concurrent: false }, () => {
             "1/4+1/12:-",
             "1/3+1/12:-",
             "5/12+1/12:-",
-            "1/2+1/2:-",
+            "1/2+1/8:-", "5/8+1/4:-", "7/8+1/8:-",
         ]);
     });
 
@@ -1279,14 +1295,15 @@ describe("ScoreBookDataModel track actions", { concurrent: false }, () => {
 
         expect(cleared).toBe(true);
         // The cleared steps become a combined rest; the surrounding notes keep their durations.
-        expect(track.measures[0].events).toHaveLength(4);
+        expect(track.measures[0].events).toHaveLength(9);
         expect(track.measures[0].events[0].noteStyleId).toBe("1");
         expect(track.measures[0].events[0].duration).toEqual({ numerator: 1, denominator: 16 });
         expect(track.measures[0].events[1].noteStyleId).toBeUndefined();
-        expect(track.measures[0].events[1].duration).toEqual({ numerator: 1, denominator: 8 });
-        expect(track.measures[0].events[2].noteStyleId).toBe("1");
-        expect(track.measures[0].events[2].duration).toEqual({ numerator: 1, denominator: 16 });
-        expect(track.measures[0].events[3].noteStyleId).toBeUndefined();
+        expect(track.measures[0].events[1].duration).toEqual({ numerator: 1, denominator: 16 });
+        expect(track.measures[0].events[2].noteStyleId).toBeUndefined();
+        expect(track.measures[0].events[3].noteStyleId).toBe("1");
+        expect(track.measures[0].events[3].duration).toEqual({ numerator: 1, denominator: 16 });
+        expect(track.measures[0].events[4].noteStyleId).toBeUndefined();
         expect(mutatedCalls).toBe(1);
     });
 
@@ -1396,7 +1413,7 @@ describe("ScoreBookDataModel track actions", { concurrent: false }, () => {
 
         expect(cleared).toBe(true);
         expect(measure.subdivisions).toEqual([{ startIndex: 2, actual: 3, normal: 2, isTuplet: true }]);
-        expect(measure.events).toHaveLength(6);
+        expect(measure.events).toHaveLength(10);
         expect(measure.events[0].noteStyleId).toBe("1");
         expect(measure.events[0].duration).toEqual({ numerator: 1, denominator: 16 });
         expect(measure.events[1].noteStyleId).toBeUndefined();

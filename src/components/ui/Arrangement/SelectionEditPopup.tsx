@@ -7,6 +7,8 @@ import type { ComponentChild, RefObject } from "preact";
 import { createRef } from "preact";
 
 import type { ScoreBookDataModel } from "../../../core/ScoreBookDataModel.js";
+import { modelEventAt } from "../../../core/MeasureProjection.js";
+import { compareFractions } from "../../../core/serialisation/numeric-functions.js";
 import { EditEntryMode, TrackViewMode } from "../../../core/types/general.js";
 import { requisitions } from "../../../supplement/Requisitions.js";
 import type { SelectionManager } from "../../../ui/SelectionManager.js";
@@ -53,11 +55,18 @@ export class SelectionEditPopup extends UIComponent<ISelectionEditPopupProps> {
     private popupRef = createRef<Popup | null>();
     private selectionGestureInProgress = false;
     private staffWindowFrame = 0;
+    private lastBounds?: DOMRect;
+    private dismissed = false;
 
     public override componentDidMount(): void {
         requisitions.register("selectionChanged", this.handleSelectionChanged);
+        requisitions.register("selectionCursorChanged", this.handleCursorChanged);
         requisitions.register("selectionGestureChanged", this.handleSelectionGestureChanged);
         requisitions.register("staffWindowChanged", this.handleStaffWindowChanged);
+        requisitions.register("arrangementMutated", this.handleStaffWindowChanged);
+        requisitions.register("arrangementReverted", this.handleStaffWindowChanged);
+        requisitions.register("selectionEditPopupCloseRequested", this.handleCloseRequested);
+        document.addEventListener("pointerdown", this.handleDocumentPointerDown, true);
         this.updatePopup();
     }
 
@@ -72,8 +81,13 @@ export class SelectionEditPopup extends UIComponent<ISelectionEditPopupProps> {
 
     public override componentWillUnmount(): void {
         requisitions.unregister("selectionChanged", this.handleSelectionChanged);
+        requisitions.unregister("selectionCursorChanged", this.handleCursorChanged);
         requisitions.unregister("selectionGestureChanged", this.handleSelectionGestureChanged);
         requisitions.unregister("staffWindowChanged", this.handleStaffWindowChanged);
+        requisitions.unregister("arrangementMutated", this.handleStaffWindowChanged);
+        requisitions.unregister("arrangementReverted", this.handleStaffWindowChanged);
+        requisitions.unregister("selectionEditPopupCloseRequested", this.handleCloseRequested);
+        document.removeEventListener("pointerdown", this.handleDocumentPointerDown, true);
 
         if (this.staffWindowFrame !== 0) {
             cancelAnimationFrame(this.staffWindowFrame);
@@ -84,12 +98,12 @@ export class SelectionEditPopup extends UIComponent<ISelectionEditPopupProps> {
     }
 
     public render(): ComponentChild {
-        const { selectionManager, editMode, trackViewMode, scoreHost } = this.props;
-        const entries = [...selectionManager.currentSelection.values()];
+        const { editMode, trackViewMode, scoreHost } = this.props;
+        const entries = this.toolEntries;
         const isTrackPieceSelection = SelectionEditPopup.isTrackPieceSelection(entries, trackViewMode);
 
         let content: ComponentChild;
-        if (editMode && SelectionEditPopup.carriesTools(entries, trackViewMode)) {
+        if (editMode) {
             content = isTrackPieceSelection ? this.renderTrackPieceTools() : this.renderNoteTools();
         }
 
@@ -102,7 +116,11 @@ export class SelectionEditPopup extends UIComponent<ISelectionEditPopupProps> {
                 offset={8}
                 boundsProvider={this.selectionBounds}
                 anchorArea={scoreHost.current ?? undefined}
+                persistent
+                dismissOnEscape
+                onClose={this.handlePopupClosed}
                 showArrow={false}
+                restoreFocusOnClose={false}
             >
                 {content}
             </Popup>
@@ -247,7 +265,16 @@ export class SelectionEditPopup extends UIComponent<ISelectionEditPopupProps> {
     }
 
     private selectionBounds = (): DOMRect | undefined => {
-        return this.selectionPlacement()?.bounds;
+        const bounds = this.selectionPlacement()?.bounds;
+        if (bounds === undefined && !this.selectionGestureInProgress) {
+            void this.handleCloseRequested();
+
+            return undefined;
+        }
+
+        this.lastBounds = bounds ?? this.lastBounds;
+
+        return this.lastBounds;
     };
 
     private handleSelectionChanged = (): Promise<boolean> => {
@@ -270,8 +297,48 @@ export class SelectionEditPopup extends UIComponent<ISelectionEditPopupProps> {
         return Promise.resolve(true);
     };
 
+    private handleCursorChanged = (): Promise<boolean> => {
+        this.dismissed = false;
+
+        return this.handleSelectionChanged();
+    };
+
+    private handleCloseRequested = (): Promise<boolean> => {
+        this.dismissed = true;
+        this.popupRef.current?.close(true);
+
+        return Promise.resolve(true);
+    };
+
+    private handlePopupClosed = (): void => {
+        this.dismissed = true;
+    };
+
+    private handleDocumentPointerDown = (event: PointerEvent): void => {
+        const { scoreHost } = this.props;
+        const path = event.composedPath();
+        if (scoreHost.current !== null && path.includes(scoreHost.current)) {
+            return;
+        }
+
+        const interactiveSelector = "button:not(:disabled), a[href], input:not(:disabled), select:not(:disabled), "
+            + "textarea:not(:disabled), summary, label, [role='button'], [role='menuitem'], [role='switch'], "
+            + "[role='checkbox'], [role='radio'], [role='slider'], [role='tab'], [tabindex]:not([tabindex='-1']), "
+            + "[contenteditable]:not([contenteditable='false']), .selection-edit-popup";
+        if (path.some((target) => {
+            return target instanceof Element && target.matches(interactiveSelector);
+        })) {
+            return;
+        }
+
+        void this.handleCloseRequested();
+    };
+
     private handleSelectionGestureChanged = (active: boolean): Promise<boolean> => {
         this.selectionGestureInProgress = active;
+        if (active) {
+            this.dismissed = false;
+        }
 
         // A gesture that ends on what is already selected publishes no change, yet it may have closed the popup
         // — a click outside does — so the state is settled again when the gesture ends.
@@ -298,20 +365,44 @@ export class SelectionEditPopup extends UIComponent<ISelectionEditPopupProps> {
         return Promise.resolve(true);
     };
 
-    private updatePopup(): void {
-        const { editMode, selectionManager, trackViewMode } = this.props;
-        const entries = [...selectionManager.currentSelection.values()];
+    private get toolEntries(): ISelectionEntry[] {
+        const { selectionManager } = this.props;
 
-        // A bar selection carries no tools here, so the popup stays closed for one.
-        if (!editMode || !SelectionEditPopup.carriesTools(entries, trackViewMode)) {
+        return selectionManager.currentCursor === undefined
+            ? [...selectionManager.currentSelection.values()] : [selectionManager.currentCursor];
+    }
+
+    private updatePopup(): void {
+        const { editMode, trackViewMode } = this.props;
+        const entries = this.toolEntries;
+
+        if (!editMode) {
             this.popupRef.current?.close(true);
+            this.lastBounds = undefined;
+            this.dismissed = false;
 
             return;
         }
 
+        if (this.dismissed) {
+            return;
+        }
+
+        if (entries.length === 1 && !this.cursorExists(entries[0])) {
+            void this.handleCloseRequested();
+
+            return;
+        }
+
+        if (!SelectionEditPopup.carriesTools(entries, trackViewMode)) {
+            return;
+        }
+
         const geometry = this.selectionPlacement();
-        if (geometry === undefined) {
-            this.popupRef.current?.close(true);
+        if (geometry?.bounds === undefined) {
+            if (!this.selectionGestureInProgress) {
+                void this.handleCloseRequested();
+            }
 
             return;
         }
@@ -321,13 +412,38 @@ export class SelectionEditPopup extends UIComponent<ISelectionEditPopupProps> {
             return;
         }
 
-        // Bounds are missing while the selection is out of view. The popup stays open then and is hidden by them,
-        // which is what makes it appear again once the selection is scrolled back in.
         if (popup.isOpen) {
             popup.updatePosition(geometry.anchor);
         } else {
             popup.open(geometry.anchor);
         }
+    }
+
+    private cursorExists(entry: ISelectionEntry): boolean {
+        const { dataModel } = this.props;
+        const { target } = entry;
+        if (target.granularity !== SelectionGranularity.Note) {
+            return true;
+        }
+
+        const { measure, event } = target;
+        const track = dataModel.arrangement?.tracks.find((candidate) => {
+            return candidate === measure.track;
+        });
+        if (!track?.measures.includes(measure)) {
+            return false;
+        }
+
+        const currentEvent = modelEventAt(measure, target.start ?? event.start);
+        if (currentEvent === undefined || compareFractions(currentEvent.start, event.start) !== 0) {
+            return false;
+        }
+
+        if (currentEvent.noteStyleId === undefined && currentEvent !== event) {
+            return event.noteStyleId === undefined && compareFractions(currentEvent.duration, event.duration) === 0;
+        }
+
+        return true;
     }
 
     /**
@@ -337,8 +453,8 @@ export class SelectionEditPopup extends UIComponent<ISelectionEditPopupProps> {
      * @returns The placement, or undefined when the selection has no rendered row to hang on.
      */
     private selectionPlacement(): ISelectionPlacement | undefined {
-        const { selectionManager, scoreElementRegistry } = this.props;
-        const entries = [...selectionManager.currentSelection.values()];
+        const { scoreElementRegistry } = this.props;
+        const entries = this.toolEntries;
         let anchor: HTMLElement | undefined;
         let left = Infinity;
         let top = Infinity;

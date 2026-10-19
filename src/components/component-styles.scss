@@ -2213,10 +2213,6 @@
     pointer-events: none;
 }
 
-#trackViewerContainer:not(.edit-mode) .selection-cursor {
-    display: none;
-}
-
 .selection-overlay {
     position: absolute;
     background-color: color-mix(in srgb, var(--color-primary) 25%, transparent);

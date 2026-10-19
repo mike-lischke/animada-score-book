@@ -343,6 +343,7 @@ test("offers the repeat marks above every bar, not in a selection popup", async 
     await seedScore(page, snapshotWith(3, {}));
 
     await page.locator("#editModeButton").click({ force: true });
+    await page.locator(".entry-mode-button").click();
 
     // Every bar carries both marks as its own actions.
     await expect(page.locator('.bar-action-group [data-action="repeat-start"]')).toHaveCount(3);

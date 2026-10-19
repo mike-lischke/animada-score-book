@@ -7,7 +7,7 @@ import type { Articulation } from "../core/articulation.js";
 import { NoteLength, type INoteValue } from "../core/rest-notation.js";
 import { requisitions, type ISubdivisionCreationRequest } from "../supplement/Requisitions.js";
 import type { MeasureEditor } from "./MeasureEditor.js";
-import type { ISelectionDelta } from "./SelectionSerializer.js";
+import type { ISelectionDelta, ISelectionEntry } from "./SelectionSerializer.js";
 
 const noteLengthShortcuts = [
     NoteLength.Whole,
@@ -54,6 +54,7 @@ export class TrackViewerInputController {
         this.eventContainer.addEventListener("contextmenu", this.handleContextMenu);
         this.eventContainer.addEventListener("keydown", this.handleKeyDown);
         requisitions.register("selectionChanged", this.handleSelectionChanged);
+        requisitions.register("selectionCursorChanged", this.handleCursorChanged);
         requisitions.register("selectionDeleteRequested", this.handleSelectionDeleteRequested);
         requisitions.register("noteEntryRequested", this.handleNoteEntryRequested);
         requisitions.register("restEntryRequested", this.handleRestEntryRequested);
@@ -70,6 +71,7 @@ export class TrackViewerInputController {
         this.eventContainer.removeEventListener("contextmenu", this.handleContextMenu);
         this.eventContainer.removeEventListener("keydown", this.handleKeyDown);
         requisitions.unregister("selectionChanged", this.handleSelectionChanged);
+        requisitions.unregister("selectionCursorChanged", this.handleCursorChanged);
         requisitions.unregister("selectionDeleteRequested", this.handleSelectionDeleteRequested);
         requisitions.unregister("noteEntryRequested", this.handleNoteEntryRequested);
         requisitions.unregister("restEntryRequested", this.handleRestEntryRequested);
@@ -186,6 +188,12 @@ export class TrackViewerInputController {
 
     private handleSelectionChanged = (delta: ISelectionDelta): Promise<boolean> => {
         this.activeEditor?.cursorFromSelection(delta);
+
+        return Promise.resolve(true);
+    };
+
+    private handleCursorChanged = (entry: ISelectionEntry): Promise<boolean> => {
+        this.activeEditor?.cursorFromSelection({ added: [entry], removed: [] });
 
         return Promise.resolve(true);
     };

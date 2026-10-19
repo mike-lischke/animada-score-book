@@ -561,10 +561,12 @@ export class ToolsBar extends UIComponent<IToolsBarProps, IToolsBarState> {
     };
 
     private handleCancel = (): void => {
+        void requisitions.execute("selectionEditPopupCloseRequested", undefined);
         void requisitions.execute("rangeArticulationToolChanged", RangeArticulationTool.None);
     };
 
     private startTool(tool: RangeArticulationTool): void {
+        void requisitions.execute("selectionEditPopupCloseRequested", undefined);
         void requisitions.execute("rangeArticulationToolChanged", tool);
     }
 }

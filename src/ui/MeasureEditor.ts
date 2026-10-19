@@ -323,7 +323,8 @@ export abstract class MeasureEditor {
      * @returns True when the value applies.
      */
     public canApplyNoteLength(value: INoteValue): boolean {
-        return this.selectionManager.hasSelection && this.noteLengthAtCursor(value) !== undefined;
+        return (this.entryMode === EditEntryMode.Insert || this.selectionManager.hasSelection)
+            && this.noteLengthAtCursor(value) !== undefined;
     }
 
     /**
@@ -345,13 +346,18 @@ export abstract class MeasureEditor {
      */
     public cursorFromSelection(delta: ISelectionDelta): void {
         if (delta.added.length === 0 && !this.selectionManager.hasSelection) {
-            this.cursor = undefined;
+            const entry = this.selectionManager.currentCursor;
+            this.cursor = entry === undefined ? undefined : this.cursorOf(entry);
 
             return;
         }
 
-        const added = delta.added[0];
-        if (delta.added.length !== 1 || !this.isCursorEntry(added)) {
+        const fixedCursor = this.selectionManager.currentCursor;
+        const selection = this.selectionManager.currentSelection;
+        const added = fixedCursor ?? (selection.size === 1 ? selection.values().next().value : undefined);
+        if (added?.granularity !== SelectionGranularity.Note || !this.isCursorEntry(added)) {
+            this.cursor = undefined;
+
             return;
         }
 

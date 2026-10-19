@@ -37,6 +37,9 @@ interface IPopupProperties extends IPortalProperties {
 
     /** Close when a pointer press starts outside the popup. Defaults to true. */
     dismissOnOutsideClick?: boolean;
+    dismissOnEscape?: boolean;
+
+    persistent?: boolean;
 
     /** Whether to show the CSS arrow pointer. */
     showArrow?: boolean;
@@ -185,8 +188,15 @@ export class Popup extends UIComponent<IPopupProperties, IPopupState> {
     }
 
     public updatePosition(target: HTMLElement): void {
-        const { boundsProvider } = this.props;
-        this.anchorElement = target;
+        const { boundsProvider, anchorArea } = this.props;
+        if (this.anchorElement !== target) {
+            if (this.anchorElement && this.anchorElement !== anchorArea) {
+                this.resizeObserver?.unobserve(this.anchorElement);
+            }
+
+            this.anchorElement = target;
+            this.resizeObserver?.observe(target);
+        }
 
         // A provider is asked again for every placement, so only the mode without one needs the bounds in state.
         if (boundsProvider === undefined) {
@@ -198,6 +208,7 @@ export class Popup extends UIComponent<IPopupProperties, IPopupState> {
 
     private openPopup(currentTarget: DOMRect | undefined, anchorElement: HTMLElement | undefined,
         options: IPortalOptions | undefined, restoreFocusOnClose: boolean): void {
+        const { persistent = false, dismissOnEscape } = this.props;
         this.anchorElement = anchorElement;
         this.anchorOffscreen = false;
         this.instantPlacement = true;
@@ -211,11 +222,13 @@ export class Popup extends UIComponent<IPopupProperties, IPopupState> {
                 return;
             }
 
-            if (Popup.activePopup && Popup.activePopup !== this) {
-                Popup.activePopup.closeWithReason(true, PortalCloseReason.Replaced);
-            }
+            if (!persistent) {
+                if (Popup.activePopup && Popup.activePopup !== this) {
+                    Popup.activePopup.closeWithReason(true, PortalCloseReason.Replaced);
+                }
 
-            Popup.activePopup = this;
+                Popup.activePopup = this;
+            }
 
             if (portal.isOpen) {
                 this.startPositionTracking();
@@ -225,11 +238,11 @@ export class Popup extends UIComponent<IPopupProperties, IPopupState> {
             }
 
             portal.open({
-                closeOnEscape: true,
                 closeOnPortalClick: false,
                 backgroundOpacity: 0,
                 blockMouseEvents: false,
                 ...options,
+                closeOnEscape: dismissOnEscape ?? (persistent ? false : options?.closeOnEscape ?? true),
             });
         });
     }
@@ -375,7 +388,7 @@ export class Popup extends UIComponent<IPopupProperties, IPopupState> {
     private startPositionTracking(): void {
         this.stopPositionTracking();
 
-        const { pinned = false } = this.props;
+        const { pinned = false, persistent = false, anchorArea } = this.props;
         document.addEventListener("pointerdown", this.handleOutsidePointerDown, true);
         this.outsideClickTimer = setTimeout(() => {
             this.outsideClickTimer = undefined;
@@ -397,8 +410,15 @@ export class Popup extends UIComponent<IPopupProperties, IPopupState> {
         if (this.containerRef.current) {
             this.resizeObserver = new ResizeObserver(this.schedulePositionUpdate);
             this.resizeObserver.observe(this.containerRef.current);
+            if (anchorArea) {
+                this.resizeObserver.observe(anchorArea);
+            }
+
             if (this.anchorElement) {
                 this.resizeObserver.observe(this.anchorElement);
+            }
+
+            if (this.anchorElement && !persistent) {
                 this.anchorObserver = new MutationObserver(() => {
                     if (this.anchorElement && !this.anchorElement.isConnected) {
                         this.close(true);
@@ -446,6 +466,11 @@ export class Popup extends UIComponent<IPopupProperties, IPopupState> {
     };
 
     private dismissFromOutside(event: Event): void {
+        const { persistent = false } = this.props;
+        if (persistent) {
+            return;
+        }
+
         const popup = this.containerRef.current;
         const eventPath = event.composedPath();
         if (!popup || eventPath.includes(popup)
@@ -492,7 +517,7 @@ export class Popup extends UIComponent<IPopupProperties, IPopupState> {
         }
 
         this.positionFrame = requestAnimationFrame(() => {
-            const { boundsProvider } = this.props;
+            const { boundsProvider, persistent = false } = this.props;
             const { currentTarget } = this.state;
             this.positionFrame = undefined;
 
@@ -500,7 +525,7 @@ export class Popup extends UIComponent<IPopupProperties, IPopupState> {
                 return;
             }
 
-            if (this.anchorElement && !this.anchorElement.isConnected) {
+            if (!persistent && this.anchorElement && !this.anchorElement.isConnected) {
                 this.close(true);
 
                 return;

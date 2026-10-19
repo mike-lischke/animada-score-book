@@ -79,7 +79,7 @@ test("keeps the cursor on the slot the delete key emptied", async ({ page }) => 
     await page.keyboard.press("Delete");
 
     // The bar holds one rest more and the slot stays selected, so the cursor is still drawn on it.
-    await expect(row.locator(".staff-note-viewer-rest-symbol")).toHaveCount(2);
+    await expect(row.locator(".staff-note-viewer-rest-symbol")).toHaveCount(4);
     await expect(cursor).toBeVisible();
 
     const cursorBox = await cursor.boundingBox();
@@ -109,7 +109,7 @@ test("backspace removes the event before the cursor and pulls the rest left", as
     expect(before).not.toBeNull();
     expect(after).not.toBeNull();
     expect(after!.x).toBeLessThan(before!.x - 40);
-    await expect(row.locator(".staff-note-viewer-rest-symbol")).toHaveCount(1);
+    await expect(row.locator(".staff-note-viewer-rest-symbol")).toHaveCount(3);
 });
 
 test("backspace does nothing when several elements are selected", async ({ page }) => {

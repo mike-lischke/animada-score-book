@@ -46,6 +46,7 @@ export class PlayStopButton extends UIComponent<IPlayStopButtonProperties> {
                 aria-pressed={isPlaying}
                 title={isPlaying ? "Stop playback" : "Play the score"}
                 onClick={() => {
+                    void requisitions.execute("selectionEditPopupCloseRequested", undefined);
                     if (isPlaying) {
                         arrangementPlayer.stop();
 

@@ -3789,8 +3789,8 @@ export class ScoreBookDataModel {
 
     /**
      * Combines adjacent rest events and decomposes every non-subdivision rest into standard note
-     * values, so the staff view can render each rest with a single glyph. The span alone decides the
-     * split: the staff view places rests freely, so no pulse or grid position is honoured.
+     * values, so the staff view can render each rest with a single glyph. The event before a run
+     * decides the length its split starts from; a run at the bar start starts from the largest value.
      *
      * @param events The events to normalise.
      * @param protectedStarts Start fractions of subdivision slots, which must stay untouched.
@@ -3799,18 +3799,21 @@ export class ScoreBookDataModel {
      */
     private normalizeRests(events: IMeasureEvent[], protectedStarts: Set<string>): IMeasureEvent[] {
         const result: IMeasureEvent[] = [];
+        let previousLength: IFraction | undefined;
 
         for (const event of this.mergeRests(events, protectedStarts)) {
             if (event.noteStyleId !== undefined || protectedStarts.has(this.fractionKey(event.start))) {
                 result.push(event);
+                previousLength = event.duration;
 
                 continue;
             }
 
             let position = { ...event.start };
-            for (const part of decomposeRestSpan(event.duration)) {
+            for (const part of decomposeRestSpan(event.duration, previousLength)) {
                 result.push({ start: position, duration: { ...part } });
                 position = addFractions(position, part);
+                previousLength = part;
             }
         }
 
@@ -4445,9 +4448,9 @@ export class ScoreBookDataModel {
         });
 
         // Every rest the model writes holds a single standard note value (ADR-0006), because the staff draws one
-        // glyph per rest: a rest of an odd length is decomposed, largest value first. The rests that were there keep
-        // their own values, and the addressed one keeps the length the request named, so a dotted rest stays whole
-        // and only the tail the span cuts off is split.
+        // glyph per rest: a rest of an odd length is decomposed, starting from the event before it. The rests that
+        // were there keep their own values, and the addressed one keeps the length the request named, so a dotted
+        // rest stays whole and only the tail the span cuts off is split.
         const protectedStarts = this.subdivisionSlotStarts(measure);
         for (const event of measure.events) {
             protectedStarts.add(this.fractionKey(event.start));
@@ -4784,6 +4787,7 @@ export class ScoreBookDataModel {
             const protectedStarts = new Set<string>();
             const slotStarts = this.subdivisionSlotStarts(measure);
             let cursor = measureStart;
+            let previousLength: IFraction | undefined;
 
             while (itemIndex < items.length && compareFractions(items[itemIndex].start, measureEnd) < 0) {
                 const item = items[itemIndex];
@@ -4791,7 +4795,7 @@ export class ScoreBookDataModel {
 
                 if (compareFractions(item.start, cursor) > 0) {
                     events.push(...this.gapRests(measure, subtractFractions(cursor, measureStart), itemStart,
-                        slotStarts, protectedStarts));
+                        previousLength, slotStarts, protectedStarts));
                 }
 
                 const note = item.event;
@@ -4803,6 +4807,7 @@ export class ScoreBookDataModel {
                         start: itemStart,
                         duration: { ...duration },
                     });
+                    previousLength = duration;
                 }
 
                 const slots = item.slots;
@@ -4813,6 +4818,8 @@ export class ScoreBookDataModel {
                         protectedStarts.add(this.fractionKey(start));
                         events.push(this.cloneEvent({ ...slot, start }));
                     }
+
+                    previousLength = slots.at(-1)?.duration;
                 }
 
                 const subdivisions = item.subdivisions;
@@ -4831,7 +4838,7 @@ export class ScoreBookDataModel {
 
             if (compareFractions(cursor, measureEnd) < 0) {
                 events.push(...this.gapRests(measure, subtractFractions(cursor, measureStart), barLength,
-                    slotStarts, protectedStarts));
+                    previousLength, slotStarts, protectedStarts));
             }
 
             // A protected start never merges with a neighbouring rest, and the subdivision records are
@@ -4846,19 +4853,21 @@ export class ScoreBookDataModel {
     /**
      * Splits a gap of a measure into rest events. The rests the measure already held decide the split as
      * long as they cover the gap exactly — the structure the user shaped — while any other gap is
-     * derived from its length alone.
+     * derived from its length and the event before it.
      *
      * @param measure The measure whose rests supply the structure.
      * @param gapStart Start of the gap within the measure.
      * @param gapEnd End of the gap within the measure.
+     * @param previousLength The length of the event before the gap, if there is one.
      * @param slotStarts The measure's subdivision slot starts, which are no rest structure of their own.
      * @param protectedStarts The set the kept structure is registered in, so the merge keeps it.
      *
      * @returns The rest events filling the gap.
      */
     private gapRests(measure: ISbDmTrackPiece, gapStart: IFraction, gapEnd: IFraction,
-        slotStarts: Set<string>, protectedStarts?: Set<string>): IMeasureEvent[] {
-        const kept = this.keptRestStructure(measure, gapStart, gapEnd, slotStarts);
+        previousLength: IFraction | undefined, slotStarts: Set<string>,
+        protectedStarts?: Set<string>): IMeasureEvent[] {
+        const kept = this.keptRestStructure(measure, gapStart, gapEnd, previousLength, slotStarts);
         if (kept !== undefined) {
             for (const rest of kept) {
                 protectedStarts?.add(this.fractionKey(rest.start));
@@ -4869,7 +4878,7 @@ export class ScoreBookDataModel {
 
         const rests: IMeasureEvent[] = [];
         let position = { ...gapStart };
-        for (const part of decomposeRestSpan(subtractFractions(gapEnd, gapStart))) {
+        for (const part of decomposeRestSpan(subtractFractions(gapEnd, gapStart), previousLength)) {
             rests.push({ start: position, duration: { ...part } });
             position = addFractions(position, part);
         }
@@ -4886,12 +4895,13 @@ export class ScoreBookDataModel {
      * @param measure The measure whose rests supply the structure.
      * @param gapStart Start of the gap within the measure.
      * @param gapEnd End of the gap within the measure.
+     * @param previousLength The length of the event before the gap, if there is one.
      * @param slotStarts The measure's subdivision slot starts, which are no rest structure of their own.
      *
      * @returns The rests covering the gap, or undefined when the gap derives its own rests.
      */
     private keptRestStructure(measure: ISbDmTrackPiece, gapStart: IFraction, gapEnd: IFraction,
-        slotStarts: Set<string>): IMeasureEvent[] | undefined {
+        previousLength: IFraction | undefined, slotStarts: Set<string>): IMeasureEvent[] | undefined {
         const held = measure.events.filter((event) => {
             return event.noteStyleId === undefined
                 && compareFractions(event.start, gapStart) >= 0
@@ -4912,7 +4922,7 @@ export class ScoreBookDataModel {
             return undefined;
         }
 
-        const derived = decomposeRestSpan(subtractFractions(gapEnd, gapStart));
+        const derived = decomposeRestSpan(subtractFractions(gapEnd, gapStart), previousLength);
         const isDerived = derived.length === held.length && derived.every((part, index) => {
             return compareFractions(part, held[index].duration) === 0;
         });

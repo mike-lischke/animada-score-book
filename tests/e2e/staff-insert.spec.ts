@@ -143,7 +143,9 @@ test.describe("staff insert mode", () => {
             "9/16+1/16:1",
             "5/8+1/16:1",
             "11/16+1/16:1",
-            "3/4+1/4:-",
+            "3/4+1/16:-",
+            "13/16+1/8:-",
+            "15/16+1/16:-",
         ]);
     });
 
@@ -155,7 +157,7 @@ test.describe("staff insert mode", () => {
         await runs.nth(4).click();
         await page.keyboard.press("Delete");
 
-        await expect(runs).toHaveCount(13);
+        await expect(runs).toHaveCount(15);
         await expect(runs.nth(4).locator(".staff-note-head-symbol")).toHaveCount(1);
 
         await expect.poll(async () => {
@@ -173,7 +175,9 @@ test.describe("staff insert mode", () => {
             "9/16+1/16:1",
             "5/8+1/16:1",
             "11/16+1/16:1",
-            "3/4+1/4:-",
+            "3/4+1/16:-",
+            "13/16+1/8:-",
+            "15/16+1/16:-",
         ]);
     });
     test("draws no selection rectangle while the pointer drags across the bar", async ({ page }) => {

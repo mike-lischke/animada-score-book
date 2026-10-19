@@ -83,12 +83,13 @@ describe("ArrangementMigrator", () => {
         hydrateMeasureEvents(arrangement);
         const track = arrangement.tracks[0] as Track;
 
-        const stepsPerBar = 16;
-        const isPolyrhythmEvent = (event: { duration: { numerator: number; denominator: number; }; }) => {
-            return (event.duration.numerator * stepsPerBar) % event.duration.denominator !== 0;
-        };
-
-        const polyrhythmEvents = track.measures[0].events.filter(isPolyrhythmEvent);
+        const measure = track.measures[0];
+        expect(measure.subdivisions).toHaveLength(1);
+        const subdivision = measure.subdivisions[0];
+        expect(subdivision.actual).toBe(4);
+        expect(subdivision.normal).toBe(3);
+        const polyrhythmEvents = measure.events.slice(subdivision.startIndex,
+            subdivision.startIndex + subdivision.actual);
         expect(polyrhythmEvents).toHaveLength(4);
     });
 

@@ -43,7 +43,8 @@ export class NoteToolbar extends SelectionToolbar<INoteToolbarProps, Record<stri
 
     protected override get toolbarTitle(): ISelectionToolbarTitle {
         const { selectionManager } = this.props;
-        const entries = [...selectionManager.currentSelection.values()];
+        const entries = selectionManager.currentCursor === undefined
+            ? [...selectionManager.currentSelection.values()] : [selectionManager.currentCursor];
         const tracks = entries.map((entry) => {
             return SelectionSerializer.trackOf(entry);
         });
@@ -116,7 +117,7 @@ export class NoteToolbar extends SelectionToolbar<INoteToolbarProps, Record<stri
         }
 
         sections.push(articulationSection);
-        if (allNoteCells) {
+        if (allNoteCells && entries.length > 0) {
             sections.push(tupletSection);
         }
 

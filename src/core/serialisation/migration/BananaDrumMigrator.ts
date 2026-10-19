@@ -1013,8 +1013,8 @@ export class BananaDrumMigrator {
 
     /**
      * Decomposes every non-subdivision rest into standard note values, so the staff view can render
-     * each rest with a single glyph. Only the span decides the split, so a dotted value may stand
-     * wherever it fits. Subdivision slot events stay untouched.
+     * each rest with a single glyph. The split starts from the event before each rest; the first rest
+     * of a measure starts from a sixteenth. Subdivision slot events stay untouched.
      *
      * @param events The synthesised measure events.
      * @param subdivisionIndices Indices into {@link events} that are subdivision slot events.
@@ -1025,12 +1025,14 @@ export class BananaDrumMigrator {
     private static decomposeFinalRests(events: IMeasureEvent[], subdivisionIndices: Set<number>,
         stepResolution: number): IMeasureEvent[] {
         const result: IMeasureEvent[] = [];
+        let previousLength: IFraction = { numerator: 1, denominator: 16 };
 
         for (let index = 0; index < events.length; index++) {
             const event = events[index];
 
             if (event.noteStyleId !== undefined || subdivisionIndices.has(index)) {
                 result.push(event);
+                previousLength = event.duration;
 
                 continue;
             }
@@ -1040,14 +1042,16 @@ export class BananaDrumMigrator {
 
             if (!Number.isInteger(startStep) || !Number.isInteger(durationSteps) || durationSteps <= 0) {
                 result.push(event);
+                previousLength = event.duration;
 
                 continue;
             }
 
             let position = { ...event.start };
-            for (const part of decomposeRestSpan(event.duration)) {
+            for (const part of decomposeRestSpan(event.duration, previousLength)) {
                 result.push({ start: position, duration: { ...part } });
                 position = addFractions(position, part);
+                previousLength = part;
             }
         }
 

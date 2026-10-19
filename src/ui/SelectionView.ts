@@ -5,7 +5,7 @@
 
 import { compareFractions } from "../core/serialisation/numeric-functions.js";
 import { staffSpacePx } from "../core/MeasureLayout.js";
-import { EditEntryMode, TrackViewMode } from "../core/types/general.js";
+import { EditEntryMode } from "../core/types/general.js";
 import type { IFraction, IMeasureEvent, IRect } from "../core/types/general.js";
 import { requisitions } from "../supplement/Requisitions.js";
 import type { SelectionManager } from "./SelectionManager.js";
@@ -126,10 +126,11 @@ export class SelectionView {
         this.entryMode = entryMode;
 
         requisitions.register("selectionChanged", this.handleSelectionChanged);
+        requisitions.register("selectionCursorChanged", this.handleSelectionChanged);
         requisitions.register("editModeChanged", this.handleEditModeChanged);
         requisitions.register("zenModeChanged", this.handleZenModeChanged);
         requisitions.register("editEntryModeChanged", this.handleEntryModeChanged);
-        requisitions.register("trackViewModeToggled", this.handleViewModeToggled);
+        requisitions.register("trackViewModeToggled", this.scheduleOverlayRefresh);
         requisitions.register("trackChanged", this.scheduleOverlayRefresh);
         requisitions.register("arrangementMutated", this.scheduleOverlayRefresh);
         requisitions.register("arrangementReverted", this.scheduleOverlayRefresh);
@@ -149,10 +150,11 @@ export class SelectionView {
         this.eventContainer.removeEventListener("pointerdown", this.handlePointerDown);
         document.removeEventListener("keydown", this.handleKeyDown);
         requisitions.unregister("selectionChanged", this.handleSelectionChanged);
+        requisitions.unregister("selectionCursorChanged", this.handleSelectionChanged);
         requisitions.unregister("editModeChanged", this.handleEditModeChanged);
         requisitions.unregister("zenModeChanged", this.handleZenModeChanged);
         requisitions.unregister("editEntryModeChanged", this.handleEntryModeChanged);
-        requisitions.unregister("trackViewModeToggled", this.handleViewModeToggled);
+        requisitions.unregister("trackViewModeToggled", this.scheduleOverlayRefresh);
         requisitions.unregister("trackChanged", this.scheduleOverlayRefresh);
         requisitions.unregister("arrangementMutated", this.scheduleOverlayRefresh);
         requisitions.unregister("arrangementReverted", this.scheduleOverlayRefresh);
@@ -390,7 +392,8 @@ export class SelectionView {
             return false;
         }
 
-        const entries = [...this.manager.currentSelection.values()];
+        const entries = this.manager.currentCursor === undefined
+            ? [...this.manager.currentSelection.values()] : [this.manager.currentCursor];
         if (entries.length !== 1 || entries[0].granularity !== SelectionGranularity.Note) {
             return false;
         }
@@ -541,18 +544,6 @@ export class SelectionView {
      */
     private get showsCursorOnly(): boolean {
         return this.insertDrawsCursor && this.isStaffView();
-    }
-
-    /**
-     * Insert draws a cursor instead of a selection, so a selection made outside it has to go as soon as that
-     * state takes over: the edit mode following it into the staff view, or the staff view taking over with it.
-     *
-     * @param takingOverInStaffView Whether the staff view is the one taking over.
-     */
-    private dropSelectionForInsertMode(takingOverInStaffView: boolean): void {
-        if (takingOverInStaffView && this.insertDrawsCursor && this.manager.currentSelection.size > 0) {
-            this.manager.clearSelection();
-        }
     }
 
     private findStaffArrowTarget(noteElement: HTMLElement, key: string): HTMLElement | undefined {
@@ -927,7 +918,6 @@ export class SelectionView {
 
     private handleEditModeChanged = (enabled: boolean): Promise<boolean> => {
         this.requestedEditMode = enabled;
-        this.dropSelectionForInsertMode(this.isStaffView());
         this.refreshEditState();
 
         return Promise.resolve(true);
@@ -941,31 +931,7 @@ export class SelectionView {
         return Promise.resolve(true);
     };
 
-    /**
-     * The viewer renders the new view after this, so the mode it announces decides, not the DOM.
-     *
-     * @param mode The view mode the score switches to.
-     *
-     * @returns A promise that resolves when the takeover was applied.
-     */
-    private handleViewModeToggled = (mode: TrackViewMode): Promise<boolean> => {
-        this.dropSelectionForInsertMode(mode === TrackViewMode.Staff);
-
-        return Promise.resolve(true);
-    };
-
     private refreshEditState(): void {
-        if (!this.editMode) {
-            const overlayContainer = this.eventContainer.querySelector<HTMLElement>(
-                "#trackViewerDecorationOverlay",
-            );
-            const cursor = overlayContainer?.querySelector<HTMLElement>(`.${selectionCursorClass}`);
-            if (cursor) {
-                cursor.style.display = "none";
-            }
-
-        }
-
         this.updateTrackViewerOverlays();
     }
 
@@ -1007,7 +973,7 @@ export class SelectionView {
             });
         }
 
-        if (this.zenMode || this.manager.currentSelection.size === 0) {
+        if (this.zenMode || (this.manager.currentSelection.size === 0 && this.manager.currentCursor === undefined)) {
             return;
         }
 
@@ -1023,6 +989,14 @@ export class SelectionView {
         const cssW = contentHost.offsetWidth;
         const viewportW = contentHost.getBoundingClientRect().width;
         this.zoomFactor = cssW > 0 ? viewportW / cssW : 1;
+
+        const cursorEntry = this.manager.currentCursor;
+        if (cursorEntry !== undefined) {
+            const rect = this.findNoteCursorRect(cursorEntry, this.isStaffView());
+            if (rect !== undefined) {
+                this.positionSelectionCursor(cursor, containerRect, rect, this.isStaffView() ? -4 : 0);
+            }
+        }
 
         // Separate entries by granularity.
         const trackEntries: ISelectionEntry[] = [];
@@ -1116,7 +1090,8 @@ export class SelectionView {
             && firstElements[0].classList.contains(staffNoteRunClass);
 
         // Position the cursor directly before a single selected note in both view modes.
-        if (singleNotes.length === 1) {
+        if (singleNotes.length === 1 && this.manager.currentSelection.size === 1
+            && this.manager.currentCursor === undefined) {
             const rect = this.findNoteCursorRect(singleNotes[0], isStaffMode);
             if (rect) {
                 this.positionSelectionCursor(cursor, containerRect, rect, isStaffMode ? -4 : 0);

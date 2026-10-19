@@ -9,7 +9,7 @@ import type { IFraction, EditEntryMode, TrackViewMode } from "../core/types/gene
 import type { Articulation } from "../core/articulation.js";
 import type { ISbDmScore, ISbDmScoreFolder, ISbDmTrack, ScoreBookChangeReason } from "../core/ScoreBookDataModel.js";
 import type { PlayerPlayState } from "../player/ArrangementPlayer.js";
-import type { ISelectionDelta, ISelectionRectChange } from "../ui/SelectionSerializer.js";
+import type { ISelectionDelta, ISelectionEntry, ISelectionRectChange } from "../ui/SelectionSerializer.js";
 
 export type SimpleCallback = () => Promise<boolean>;
 
@@ -109,11 +109,13 @@ export interface IRequestTypeMap {
     "undoStackChanged": SimpleCallback;
 
     "selectionChanged": (delta: ISelectionDelta) => Promise<boolean>;
+    "selectionCursorChanged": (entry: ISelectionEntry) => Promise<boolean>;
 
     /** Whether a rectangle-selection drag is currently active. */
     "selectionGestureChanged": (active: boolean) => Promise<boolean>;
 
     "selectionDeleteRequested": SimpleCallback;
+    "selectionEditPopupCloseRequested": SimpleCallback;
 
     /** Brings the given measure into the viewport, even when it is not rendered at the moment. */
     "measureVisibilityRequested": (request: IMeasureVisibilityRequest) => Promise<boolean>;

@@ -14,7 +14,7 @@ import {
 import { ScoreSymbols, ScoreSymbol, ScoreSymbolSource } from "../../../core/ScoreSymbols.js";
 import { RangeArticulations } from "../../../core/RangeArticulations.js";
 import { MeasureLayout, staffMeasureInsets, staffSpacePx } from "../../../core/MeasureLayout.js";
-import { noteValueForEvent, NoteLength } from "../../../core/rest-notation.js";
+import { NoteLength } from "../../../core/rest-notation.js";
 import { StaffRowGeometry, type IStaffRowGeometry } from "../../../core/StaffRowGeometry.js";
 import { HeadMark } from "../../../core/StaffInk.js";
 import {
@@ -850,9 +850,7 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                 );
             }
 
-            const restGlyph = noteValueForEvent(node.duration, node.depth, scoreMetrics.stepsPerBar,
-                scoreMetrics.stepsPerPulse)
-                ?? { length: NoteLength.Sixteenth, dotted: false };
+            const restGlyph = node.glyph;
             const isWholeOrHalf = restGlyph.length === NoteLength.Whole || restGlyph.length === NoteLength.Half;
             const restSymbol = ScoreSymbols.rest(restGlyph.length);
             const restBox = ScoreSymbols.inkBox(restSymbol);
@@ -881,12 +879,13 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                         measure,
                     }, measure.events[node.eventIndex])}>
                     <span className={restSymbolClass} style={restStyle}>
-                        <ScoreSymbolView symbol={restSymbol} staffSpace={staffSpacePx} />
+                        <ScoreSymbolView symbol={restSymbol} staffSpace={staffSpacePx} inkBox />
                         {restGlyph.dotted
                             ? <ScoreSymbolView
                                 className="staff-note-viewer-rest-dot"
                                 symbol={ScoreSymbol.AugmentationDot}
                                 staffSpace={staffSpacePx}
+                                inkBox
                             />
                             : null}
                     </span>
@@ -1033,7 +1032,7 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                 }, measure.events[0])}
             >
                 <span className="staff-note-viewer-rest-symbol" style={restStyle}>
-                    <ScoreSymbolView symbol={ScoreSymbol.RestWhole} staffSpace={staffSpacePx} />
+                    <ScoreSymbolView symbol={ScoreSymbol.RestWhole} staffSpace={staffSpacePx} inkBox />
                 </span>
             </div>
         );

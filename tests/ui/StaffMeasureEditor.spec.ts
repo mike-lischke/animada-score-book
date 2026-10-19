@@ -495,6 +495,17 @@ describe("StaffMeasureEditor input", { concurrent: false }, () => {
         expect(styleAt(measure, { numerator: 0, denominator: 1 })).toBe("1");
     });
 
+    it("accepts note lengths at an insert cursor without a selection", () => {
+        const runs = [...renderRuns().querySelectorAll<HTMLElement>(".staff-note-viewer-run")];
+        editor.entryMode = EditEntryMode.Insert;
+        expect(editor.hitTest(runs[0])).toBe(true);
+        expect(input.selectionManager.hasSelection).toBe(false);
+        expect(editor.canApplyNoteLength(noteValue(NoteLength.Half))).toBe(true);
+
+        editor.entryMode = EditEntryMode.Overwrite;
+        expect(editor.canApplyNoteLength(noteValue(NoteLength.Half))).toBe(false);
+    });
+
     it("changes the style of the addressed note in the overwrite mode", () => {
         setEvents(model, [
             {

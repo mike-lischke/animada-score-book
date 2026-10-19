@@ -202,7 +202,7 @@ export class StaffMeasureViewer extends UIComponent<IStaffMeasureViewerProps, IS
                     continue;
                 }
 
-                let noteHit = false;
+                let hitRect: DOMRect | undefined;
                 const isSoundingNote = runLocation.noteId !== undefined;
 
                 // 1. A note is what it draws: its head, and the marks that hang on the head's wrapper — the
@@ -216,19 +216,19 @@ export class StaffMeasureViewer extends UIComponent<IStaffMeasureViewerProps, IS
                     // A stem reaches up to the beam, which addresses the note group and not the note.
                     const isStem = mark.classList.contains("staff-note-head-stem")
                         || mark.classList.contains("staff-note-viewer-custom-stem");
-                    if (isStem) {
+                    if (isStem || mark.classList.contains("staff-note-head-symbol")) {
                         continue;
                     }
 
                     const mr = mark.getBoundingClientRect();
                     if (StaffMeasureViewer.rectsIntersect(rect, mr.left, mr.top, mr.right, mr.bottom, hitTolerance)) {
-                        noteHit = true;
+                        hitRect = mr;
                         break;
                     }
                 }
 
                 // 2. Stems carry a note as well, which is what a click beside the head aims at.
-                if (!noteHit) {
+                if (hitRect === undefined) {
                     const headStem = runEl.querySelector<HTMLElement>(
                         ".staff-note-head-stem, .staff-note-viewer-custom-stem",
                     );
@@ -242,18 +242,20 @@ export class StaffMeasureViewer extends UIComponent<IStaffMeasureViewerProps, IS
                         const reserve = beam === null
                             ? 0
                             : (beam.getBoundingClientRect().bottom - r.top) + (staffSpacePx * 2);
-                        noteHit = StaffMeasureViewer.rectsIntersect(rect, r.left, r.top + reserve, r.right,
-                            r.bottom, hitTolerance);
+                        if (StaffMeasureViewer.rectsIntersect(rect, r.left, r.top + reserve, r.right,
+                            r.bottom, hitTolerance)) {
+                            hitRect = new DOMRect(r.left, r.top + reserve, r.width, Math.max(0, r.height - reserve));
+                        }
                     }
                 }
 
-                if (noteHit) {
+                if (hitRect !== undefined) {
                     const target = scoreElementRegistry?.getTarget(runEl);
                     if (target !== undefined && "duration" in target && measure !== undefined) {
                         // A staff run is the whole event, so it is copied with its full duration.
                         noteEntries.push({
                             ...this.eventEntry(measure, target),
-                            rect: runEl.getBoundingClientRect()
+                            rect: hitRect
                         });
                     }
 

@@ -201,16 +201,9 @@ export class StaffNotation {
             ? measure.noteEvents[item.eventIndex]?.audioData
             : undefined;
 
-        let glyph: INoteValue = fallbackNoteValue;
-        let beamCount = 0;
-
-        if (audioData) {
-            // A slot of a plain subdivision can hold a length the grid cannot address — a 2:1 split
-            // of a step holds thirty-seconds — and must keep the beams of that length.
-            glyph = noteValueForEvent(event.duration, depth, grid.stepsPerBar,
-                pulseLengthAt(event.start, grid)) ?? fallbackNoteValue;
-            beamCount = beamCountOf(glyph.length);
-        }
+        const glyph = noteValueForEvent(event.duration, depth, grid.stepsPerBar,
+            pulseLengthAt(event.start, grid)) ?? fallbackNoteValue;
+        const beamCount = audioData ? beamCountOf(glyph.length) : 0;
 
         let displayType = NoteDisplayType.Oval;
         let noteLine: number | undefined;

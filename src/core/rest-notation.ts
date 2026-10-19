@@ -250,106 +250,108 @@ export const standardNoteValueFractions: readonly IFraction[] = standardNoteValu
     return reduceFraction(numerator, denominator);
 });
 
-/** Grid rests are split in: every standard note value is a whole number of these steps. */
-const restSplitSteps = 64;
+/** The plain note values a rest split is built from, largest first. Dotted values are never generated. */
+const plainNoteValues: readonly IFraction[] = [
+    { numerator: 1, denominator: 1 },
+    { numerator: 1, denominator: 2 },
+    { numerator: 1, denominator: 4 },
+    { numerator: 1, denominator: 8 },
+    { numerator: 1, denominator: 16 },
+    { numerator: 1, denominator: 32 },
+];
 
-/** The standard note values as steps of the split grid, in descending order. */
-const standardValueSteps: readonly number[] = standardNoteValueFractions.map((fraction) => {
-    return (fraction.numerator * restSplitSteps) / fraction.denominator;
-});
-
-/**
- * Counts the split-grid steps a span holds.
- *
- * @param span The span as a bar fraction.
- *
- * @returns The number of steps, or undefined when the span is finer than one step.
- */
-const restSpanSteps = (span: IFraction): number | undefined => {
-    const steps = (span.numerator * restSplitSteps) / span.denominator;
-
-    return Number.isInteger(steps) ? steps : undefined;
-};
+/** The dotted note values and the plain value each stands for, longest first. */
+const dottedNoteValues: ReadonlyArray<readonly [IFraction, IFraction]> = [
+    [{ numerator: 3, denominator: 4 }, { numerator: 1, denominator: 2 }],
+    [{ numerator: 3, denominator: 8 }, { numerator: 1, denominator: 4 }],
+    [{ numerator: 3, denominator: 16 }, { numerator: 1, denominator: 8 }],
+    [{ numerator: 3, denominator: 32 }, { numerator: 1, denominator: 16 }],
+    [{ numerator: 3, denominator: 64 }, { numerator: 1, denominator: 32 }],
+];
 
 /**
- * Splits a span into standard note values: as few of them as possible, and among those the largest ones.
- * The room a measure needs follows its smallest rest, so a span covered by a single value stays one, and a
- * span that needs several rests gets rests no smaller than it has to.
+ * Converts the event before a rest span into the length the split starts from: the plain note value
+ * it stands for. A dotted value loses its dot, and a length no single value expresses (a tuplet
+ * slot) is lifted to the next plain value, which is the one the slot represents.
  *
- * @param steps The span in split-grid steps.
+ * @param length The length of the event before the span.
  *
- * @returns The step counts of the values, largest first, or undefined when no split covers the span.
+ * @returns The plain start length, or undefined for a length shorter than the smallest value.
  */
-const standardValueSplit = (steps: number): number[] | undefined => {
-    const partCount = new Array<number>(steps + 1).fill(Number.POSITIVE_INFINITY);
-    const firstPart = new Array<number>(steps + 1).fill(0);
-
-    partCount[0] = 0;
-
-    for (let total = 1; total <= steps; total++) {
-        for (const value of standardValueSteps) {
-            const rest = total - value;
-            if (rest < 0 || !Number.isFinite(partCount[rest])) {
-                continue;
-            }
-
-            const count = partCount[rest] + 1;
-            if (count > partCount[total] || (count === partCount[total] && value <= firstPart[total])) {
-                continue;
-            }
-
-            partCount[total] = count;
-            firstPart[total] = value;
+const restStartLength = (length: IFraction): IFraction | undefined => {
+    for (const [dotted, base] of dottedNoteValues) {
+        if (compareFractions(length, dotted) === 0) {
+            return { ...base };
         }
     }
 
-    if (!Number.isFinite(partCount[steps])) {
-        return undefined;
+    for (const value of plainNoteValues) {
+        if (compareFractions(length, value) === 0) {
+            return { ...value };
+        }
     }
 
-    const parts: number[] = [];
-    for (let remaining = steps; remaining > 0; remaining -= firstPart[remaining]) {
-        parts.push(firstPart[remaining]);
+    for (let index = plainNoteValues.length - 1; index >= 0; index--) {
+        if (compareFractions(plainNoteValues[index], length) >= 0) {
+            return { ...plainNoteValues[index] };
+        }
     }
 
-    parts.sort((left, right) => {
-        return right - left;
-    });
-
-    return parts;
+    return undefined;
 };
 
 /**
- * Decomposes a rest span into the standard note values, largest first. Only the span decides the
- * split: the staff view places rests freely, so a dotted value may stand wherever its length fits
- * — a dotted quarter rest is never split into a quarter plus an eighth rest.
+ * Doubles a plain length as long as it stays within one bar.
+ *
+ * @param length The length to double.
+ *
+ * @returns The doubled length, or undefined when it exceeds a bar.
+ */
+const doubledLength = (length: IFraction): IFraction | undefined => {
+    const doubled = reduceFraction(length.numerator * 2, length.denominator);
+
+    return compareFractions(doubled, plainNoteValues[0]) <= 0 ? doubled : undefined;
+};
+
+/**
+ * Splits a rest span into standard note values. The split follows the event before the span: the
+ * span takes that length first, then doubles it until the next length no longer fits, and covers
+ * what is left with the largest plain values. Dotted values are never generated, a whole-bar span
+ * stays one whole rest, and a span no plain value can express keeps its remainder.
  *
  * @param span The rest length as a bar fraction.
+ * @param previousLength The length of the event before the span, if there is one.
  *
  * @returns The durations of the decomposed rest, in display order.
  */
-export const decomposeRestSpan = (span: IFraction): IFraction[] => {
-    const steps = restSpanSteps(span);
-    const split = steps === undefined ? undefined : standardValueSplit(steps);
-    if (split !== undefined) {
-        return split.map((part) => {
-            return reduceFraction(part, restSplitSteps);
-        });
+export const decomposeRestSpan = (span: IFraction, previousLength?: IFraction): IFraction[] => {
+    if (compareFractions(span, plainNoteValues[0]) === 0) {
+        return [{ ...plainNoteValues[0] }];
     }
 
-    // A span no standard value can express (e.g. a subdivision slot) keeps its length.
     const parts: IFraction[] = [];
     let remaining = { ...span };
+    let step = previousLength === undefined ? undefined : restStartLength(previousLength);
 
-    for (const value of standardNoteValueFractions) {
-        while (compareFractions(remaining, value) >= 0) {
-            parts.push({ ...value });
-            remaining = subtractFractions(remaining, value);
-        }
+    while (step !== undefined && compareFractions(remaining, step) >= 0) {
+        parts.push({ ...step });
+        remaining = subtractFractions(remaining, step);
+        step = doubledLength(step);
     }
 
-    if (remaining.numerator > 0) {
-        parts.push(remaining);
+    while (remaining.numerator > 0) {
+        const value = plainNoteValues.find((candidate) => {
+            return compareFractions(candidate, remaining) <= 0;
+        });
+
+        // A span finer than the shortest value (a subdivision slot) keeps its length.
+        if (value === undefined) {
+            parts.push({ ...remaining });
+            break;
+        }
+
+        parts.push({ ...value });
+        remaining = subtractFractions(remaining, value);
     }
 
     return parts;

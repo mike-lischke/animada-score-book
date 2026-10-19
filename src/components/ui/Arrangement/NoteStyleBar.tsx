@@ -75,6 +75,7 @@ export class NoteStyleBar extends UIComponent<INoteStyleBarProps, INoteStyleBarS
 
     public override componentDidMount(): void {
         requisitions.register("selectionChanged", this.handleSelectionChanged);
+        requisitions.register("selectionCursorChanged", this.handleSelectionChanged);
         requisitions.register("arrangementReverted", this.handleArrangementReverted);
         this.refreshFromSelection();
     }
@@ -91,6 +92,7 @@ export class NoteStyleBar extends UIComponent<INoteStyleBarProps, INoteStyleBarS
 
     public override componentWillUnmount(): void {
         requisitions.unregister("selectionChanged", this.handleSelectionChanged);
+        requisitions.unregister("selectionCursorChanged", this.handleSelectionChanged);
         requisitions.unregister("arrangementReverted", this.handleArrangementReverted);
     }
 
@@ -329,7 +331,8 @@ export class NoteStyleBar extends UIComponent<INoteStyleBarProps, INoteStyleBarS
     private refreshFromSelection(): void {
         const { selectionManager, entryMode } = this.props;
 
-        const entries = [...selectionManager.currentSelection.values()];
+        const entries = selectionManager.currentCursor === undefined
+            ? [...selectionManager.currentSelection.values()] : [selectionManager.currentCursor];
         const tracks = this.resolveSelectedTracks(entries);
         const noteStyles = this.resolveNoteStyles(tracks);
         const canEnter = this.shareInstrument(tracks);

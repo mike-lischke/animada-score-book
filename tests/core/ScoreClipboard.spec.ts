@@ -243,8 +243,15 @@ describe("ScoreClipboard", () => {
             return event.noteStyleId === undefined
                 && event.start.numerator === 1 && event.start.denominator === 4;
         })!;
-        const result = clipboard.paste([runEntry(targetMeasure, rest)],
-            { overflowMode: PasteOverflowMode.Shift });
+        const targetRests = targetMeasure.events.filter((event) => {
+            return event.noteStyleId === undefined && event.start.numerator / event.start.denominator >= 1 / 4
+                && event.start.numerator / event.start.denominator < 1 / 2;
+        });
+        expect(targetRests[0]).toBe(rest);
+        const result = clipboard.paste(targetRests.map((event) => {
+            return runEntry(targetMeasure, event);
+        }),
+        { overflowMode: PasteOverflowMode.Shift });
 
         expect(result.kind).toBe(PasteResultKind.Success);
 
