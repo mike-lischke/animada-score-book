@@ -1310,6 +1310,35 @@ export class ScoreBookDataModel {
     }
 
     /**
+     * Replaces a span of rests with a single rest of the requested length and moves the content behind
+     * it by the difference. The rests the span covers are one silence, so they merge into the rest the
+     * user asked for instead of each taking the new length. The span has to hold rests only; the notes
+     * of a selection are resized one by one instead.
+     *
+     * @param trackId The track containing the measure.
+     * @param bar The one-based measure number.
+     * @param start The start of the span within the measure.
+     * @param end The end of the span within the measure.
+     * @param duration The length the rest takes.
+     *
+     * @returns True when the track content changed.
+     */
+    public setRestSpan(trackId: number, bar: number, start: IFraction, end: IFraction,
+        duration: IFraction): boolean {
+        const track = this.trackById(trackId);
+        if (track?.measures.at(bar - 1) === undefined || compareFractions(start, end) >= 0) {
+            return false;
+        }
+
+        const changed = this.setSpan(track, bar, start, end, duration);
+        if (changed) {
+            this.announceTrackEdit(track);
+        }
+
+        return changed;
+    }
+
+    /**
      * Replaces runs of measure events with runs of new events, moving everything behind a run by the
      * length difference between the two. A run that only covers part of a subdivision is refused: a
      * subdivision is never cut. Content pushed past the track's last measure is dropped, a
@@ -4328,11 +4357,7 @@ export class ScoreBookDataModel {
     }
 
     /**
-     * Gives the event at the given position a new length and moves the content behind it by the
-     * difference, so a rest takes the time it is given. A missing length removes the event. Content
-     * that no longer fits into its measure continues at the start of the next one and the tail of the
-     * track becomes rests. Where no content gives way — a rest is only the gap between the items — the
-     * request shapes the measure's rests instead, so a rest in a silence keeps the length it is given.
+     * Gives the event at the given position a new length; see {@link setSpan}.
      *
      * @param track The track containing the event.
      * @param bar The one-based measure number.
@@ -4342,25 +4367,52 @@ export class ScoreBookDataModel {
      * @returns True when the track content changed.
      */
     private setEventSpan(track: ISbDmTrack, bar: number, start: IFraction, newDuration?: IFraction): boolean {
-        const measure = track.measures.at(bar - 1);
-        const event = measure?.events.find((candidate) => {
+        const event = track.measures.at(bar - 1)?.events.find((candidate) => {
             return compareFractions(candidate.start, start) === 0;
         });
-        if (measure === undefined || event === undefined) {
+        if (event === undefined) {
             return false;
         }
 
-        // An event never crosses a bar line, so a request that reaches past it ends at the measure end.
+        // A single event that keeps its length changes nothing.
+        if (newDuration !== undefined && compareFractions(newDuration, event.duration) === 0) {
+            return false;
+        }
+
+        return this.setSpan(track, bar, start, addFractions(event.start, event.duration), newDuration);
+    }
+
+    /**
+     * Gives the span [start, end) of a measure the requested length and moves the content behind it by
+     * the difference. The span is notated as one rest, so the rests it covers merge. A missing length
+     * removes the span. Content that no longer fits into the measure continues at the start of the next
+     * one and the tail of the track becomes rests. Where no content gives way — a rest is only the gap
+     * between the items — the request shapes the measure's rests instead, so a rest in a silence keeps
+     * the length it is given.
+     *
+     * @param track The track containing the span.
+     * @param bar The one-based measure number.
+     * @param start The exact start of the span within the measure.
+     * @param end The exact end of the span within the measure.
+     * @param newDuration The length the span should take, or undefined to remove it.
+     *
+     * @returns True when the track content changed.
+     */
+    private setSpan(track: ISbDmTrack, bar: number, start: IFraction, end: IFraction,
+        newDuration?: IFraction): boolean {
+        const measure = track.measures.at(bar - 1);
+        if (measure === undefined) {
+            return false;
+        }
+
+        // A span never crosses a bar line, so a request that reaches past it ends at the measure end.
         const room = subtractFractions(barLength, start);
         const requested = newDuration ?? { numerator: 0, denominator: 1 };
         const duration = compareFractions(requested, room) < 0 ? requested : room;
-        if (compareFractions(duration, event.duration) === 0) {
-            return false;
-        }
 
         const spanStart = this.absolutePositionOf(bar - 1, start);
-        const spanEnd = addFractions(spanStart, event.duration);
-        const delta = subtractFractions(duration, event.duration);
+        const spanEnd = this.absolutePositionOf(bar - 1, end);
+        const delta = subtractFractions(duration, subtractFractions(end, start));
         const items = this.collectAbsoluteItems(track);
         const before = ScoreBookDataModel.timelineSignature(items);
         const remaining: IAbsoluteTrackItem[] = [];
@@ -4373,8 +4425,8 @@ export class ScoreBookDataModel {
                 continue;
             }
 
-            // The changed event itself disappears when it is a note; an item reaching into the span is
-            // shortened at its start. A subdivision is never cut or dropped: such a request is refused.
+            // The items inside the span disappear; an item reaching into it is shortened at its start.
+            // A subdivision is never cut or dropped: such a request is refused.
             if (compareFractions(item.start, spanStart) >= 0) {
                 if (item.slots !== undefined) {
                     return false;

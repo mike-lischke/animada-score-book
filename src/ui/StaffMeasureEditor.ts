@@ -34,6 +34,15 @@ export interface IStaffEventAddress {
     event: IMeasureEvent;
 }
 
+/** A gapless row of rests a selection addresses as one silence. */
+interface IRestRun {
+    measure: ISbDmTrackPiece;
+
+    first: IMeasureEvent;
+
+    last: IMeasureEvent;
+}
+
 /** Where an element is written: the measure it goes into, the position it starts at and its length. */
 interface IInsertionTarget {
     measure: ISbDmTrackPiece;
@@ -428,7 +437,8 @@ export class StaffMeasureEditor extends MeasureEditor {
     /**
      * Applies the adopted note value to the selection: the staff resizes the addressed events and ripples
      * the following ones (ADR-0003). Only the overwrite mode changes existing content; the insert mode
-     * uses the value for the next entry.
+     * uses the value for the next entry. A selection of rests takes the value as one rest, because the
+     * rests it addresses are a single silence.
      *
      * @returns True when the selection changed.
      */
@@ -438,7 +448,11 @@ export class StaffMeasureEditor extends MeasureEditor {
         }
 
         const entries = this.selectionEntries();
-        if (!this.resizeSelection(entries, this.noteValue)) {
+        const restRun = this.restRunOfSelection(entries);
+        const changed = restRun === undefined
+            ? this.resizeSelection(entries, this.noteValue)
+            : this.resizeRestRun(restRun);
+        if (!changed) {
             return false;
         }
 
@@ -501,6 +515,54 @@ export class StaffMeasureEditor extends MeasureEditor {
         const [measure] = measures;
 
         return measures.size === 1 ? measure : undefined;
+    }
+
+    /**
+     * Resolves the row of rests a selection addresses. A selection of several notes is no row, and
+     * neither is one that skips a note, so only a gapless row of rests merges into one rest.
+     *
+     * @param entries The selection entries to inspect.
+     *
+     * @returns The row of rests, or undefined when the selection addresses none.
+     */
+    private restRunOfSelection(entries: ISelectionEntry[]): IRestRun | undefined {
+        const measure = this.measureOfSelection(entries);
+        const events = this.selectedEventsOf(entries);
+        const first = events.at(0);
+        const last = events.at(-1);
+        if (measure === undefined || first === undefined || last === undefined || events.length < 2) {
+            return undefined;
+        }
+
+        const gaplessRests = events.every((event, index) => {
+            const previous = index === 0 ? undefined : events[index - 1];
+
+            return event.noteStyleId === undefined
+                && (previous === undefined
+                    || compareFractions(addFractions(previous.start, previous.duration), event.start) === 0);
+        });
+
+        return gaplessRests ? { measure, first, last } : undefined;
+    }
+
+    /**
+     * Gives a row of rests the adopted length as a single rest. The rests are one silence, so giving each
+     * of them the length would add time instead of joining them.
+     *
+     * @param run The row of rests the selection addresses.
+     *
+     * @returns True when the selection changed.
+     */
+    private resizeRestRun(run: IRestRun): boolean {
+        const duration = this.noteValueDurationFor(this.noteValue, run.measure);
+
+        // The value the run's rests carry is the one the toolbars mark, so choosing it changes nothing.
+        if (duration === undefined || compareFractions(duration, run.first.duration) === 0) {
+            return false;
+        }
+
+        return this.dataModel.setRestSpan(run.measure.track.id, run.measure.number, { ...run.first.start },
+            addFractions(run.last.start, run.last.duration), duration);
     }
 
     /**
