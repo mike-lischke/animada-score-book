@@ -11,7 +11,6 @@ import {
 import { modelEventAt } from "../core/MeasureProjection.js";
 import { addFractions, compareFractions, formatFraction } from "../core/serialisation/numeric-functions.js";
 import type { IFraction, IMeasureEvent } from "../core/types/general.js";
-import { PlayerPlayState } from "../player/ArrangementPlayer.js";
 import { requisitions } from "../supplement/Requisitions.js";
 import {
     SelectionGranularity, SelectionMode, SelectionSerializer, type ISelectionEntry,
@@ -70,9 +69,6 @@ export class SelectionManager {
     private selectionGestureActive = false;
     private selectionGestureBase: ISelectionEntry[] = [];
 
-    /** Saved selection before playback started, for restoration on stop. */
-    private originalSelection?: Map<string, ISelectionEntry>;
-
     /** Debounce timer id for persisting the selection to localStorage. */
     private saveDebounceId?: ReturnType<typeof setTimeout>;
 
@@ -106,12 +102,10 @@ export class SelectionManager {
 
     public constructor(private readonly dataModel?: ScoreBookDataModel) {
         requisitions.register("selectionRectChanged", this.handleSelectionRectChanged);
-        requisitions.register("playerStateChanged", this.handlePlayerStateChanged);
         requisitions.register("scoreBookLoaded", this.handleScoreBookLoaded);
         requisitions.register("arrangementReverted", this.handleArrangementReverted);
         requisitions.register("editModeChanged", this.handleEditModeChanged);
         requisitions.register("zenModeChanged", this.handleZenModeChanged);
-        requisitions.register("zenMeasureToggled", this.handleZenMeasureToggled);
         requisitions.register("editEntryModeChanged", this.handleEntryModeChanged);
         requisitions.register("trackViewModeToggled", this.handleViewModeChanged);
     }
@@ -134,12 +128,10 @@ export class SelectionManager {
 
     public dispose(): void {
         requisitions.unregister("selectionRectChanged", this.handleSelectionRectChanged);
-        requisitions.unregister("playerStateChanged", this.handlePlayerStateChanged);
         requisitions.unregister("scoreBookLoaded", this.handleScoreBookLoaded);
         requisitions.unregister("arrangementReverted", this.handleArrangementReverted);
         requisitions.unregister("editModeChanged", this.handleEditModeChanged);
         requisitions.unregister("zenModeChanged", this.handleZenModeChanged);
-        requisitions.unregister("zenMeasureToggled", this.handleZenMeasureToggled);
         requisitions.unregister("editEntryModeChanged", this.handleEntryModeChanged);
         requisitions.unregister("trackViewModeToggled", this.handleViewModeChanged);
 
@@ -290,9 +282,7 @@ export class SelectionManager {
             return;
         }
 
-        if (this.applySelection(entries)) {
-            this.publishPlayRange();
-        }
+        this.applySelection(entries);
     }
 
     public finishSelection(): void {
@@ -346,7 +336,6 @@ export class SelectionManager {
             }
 
             this.replaceSelection([SelectionManager.withoutHitRect(cursor)]);
-            this.publishPlayRange();
 
             return;
         }
@@ -372,9 +361,7 @@ export class SelectionManager {
             this.selectionAnchor = this.anchorOf(entries[0]);
         }
 
-        if (this.applySelection(entries)) {
-            this.publishPlayRange();
-        }
+        this.applySelection(entries);
     }
 
     /**
@@ -1121,7 +1108,6 @@ export class SelectionManager {
             const removed = [...this.currentSelection.values()];
             this.currentSelection.clear();
             void requisitions.execute("selectionChanged", { added: [], removed });
-            void requisitions.execute("playRangeChanged", undefined);
 
             this.schedulePersist();
 
@@ -1269,154 +1255,10 @@ export class SelectionManager {
             return Promise.resolve(true);
         }
 
-        if (this.applySelection(currentEntries)) {
-            this.publishPlayRange();
-        }
+        this.applySelection(currentEntries);
 
         return Promise.resolve(true);
     };
-
-    private publishPlayRange(): void {
-        const bars = new Set<number>();
-        for (const entry of this.currentSelection.values()) {
-            const { target } = entry;
-            if (target.granularity !== SelectionGranularity.Track) {
-                bars.add(target.measure.number);
-            }
-        }
-
-        if (bars.size > 0) {
-            const sorted = [...bars].sort((a, b) => {
-                return a - b;
-            });
-
-            void requisitions.execute("playRangeChanged", {
-                from: sorted[0],
-                to: sorted[sorted.length - 1],
-                bars: sorted,
-            });
-        } else {
-            void requisitions.execute("playRangeChanged", undefined);
-        }
-    }
-
-    /**
-     * Reacts to playback state changes. When playback starts and the current selection is not at measure
-     * granularity, the selection is temporarily replaced with the containing measures so the play range
-     * is valid. When playback stops, the original fine-grained selection is restored.
-     *
-     * @param state The new playback state.
-     *
-     * @returns A resolved promise to satisfy the requisition handler signature.
-     */
-    private handlePlayerStateChanged = (state: PlayerPlayState): Promise<boolean> => {
-        if (this.zenMode) {
-            return Promise.resolve(true);
-        }
-
-        if (state === PlayerPlayState.Playing || state === PlayerPlayState.Counting) {
-            this.switchToMeasureSelection();
-        } else {
-            this.restoreOriginalSelection();
-        }
-
-        return Promise.resolve(true);
-    };
-
-    /**
-     * If the current selection contains entries that are not at measure granularity,
-     * saves the original selection and replaces it with measure-level entries for the containing bars.
-     * Does nothing if all entries are already at measure granularity.
-     */
-    private switchToMeasureSelection(): void {
-        if (this.currentSelection.size === 0 || this.originalSelection) {
-            return;
-        }
-
-        const hasNonMeasure = [...this.currentSelection.values()].some((entry) => {
-            return entry.granularity !== SelectionGranularity.Measure;
-        });
-        if (!hasNonMeasure) {
-            return;
-        }
-
-        // Save the original selection for later restoration.
-        this.originalSelection = new Map(this.currentSelection);
-
-        // Collect the measures of the selected bars.
-        const measures = new Map<number, ISbDmTrackPiece>();
-        for (const entry of this.currentSelection.values()) {
-            const coordinates = SelectionSerializer.coordinatesOf(entry);
-            if (coordinates.bar < 1) {
-                continue;
-            }
-
-            const measure = this.measureOfBar(coordinates.bar);
-            if (measure !== undefined) {
-                measures.set(coordinates.bar, measure);
-            }
-        }
-
-        const measureEntries: ISelectionEntry[] = [...measures.values()].map((measure) => {
-            return {
-                granularity: SelectionGranularity.Measure,
-                bar: measure.number,
-                trackId: measure.track.id,
-                target: { granularity: SelectionGranularity.Measure, measure },
-            };
-        });
-
-        // Replace the selection with measure-level entries.
-        const removed = [...this.currentSelection.values()];
-        this.currentSelection.clear();
-        for (const entry of measureEntries) {
-            this.currentSelection.set(this.entryKey(entry), entry);
-        }
-
-        void requisitions.execute("selectionChanged", { added: measureEntries, removed });
-        this.publishPlayRange();
-    }
-
-    /**
-     * Returns one of the bar's measures, which represents the bar for a measure-level selection.
-     *
-     * @param bar The one-based measure number.
-     *
-     * @returns A measure of that bar, or undefined when no track has it.
-     */
-    private measureOfBar(bar: number): ISbDmTrackPiece | undefined {
-        for (const track of this.dataModel?.arrangement?.tracks ?? []) {
-            const measure = track.measures.at(bar - 1);
-            if (measure) {
-                return measure;
-            }
-        }
-
-        return undefined;
-    }
-
-    /**
-     * Restores the original selection that was saved before playback started, then clears the saved state.
-     * Does nothing if no original selection was saved.
-     */
-    private restoreOriginalSelection(): void {
-        if (!this.originalSelection) {
-            return;
-        }
-
-        const saved = this.originalSelection;
-        this.originalSelection = undefined;
-
-        const removed = [...this.currentSelection.values()];
-        this.currentSelection.clear();
-        for (const [key, entry] of saved) {
-            this.currentSelection.set(key, entry);
-        }
-
-        const added = [...saved.values()];
-        void requisitions.execute("selectionChanged", { added, removed });
-        this.publishPlayRange();
-    }
 
     /**
      * Schedules a debounced write of the current selection to localStorage.
@@ -1647,6 +1489,13 @@ export class SelectionManager {
         return Promise.resolve(true);
     };
 
+    /**
+     * Entering zen mode puts the selection aside, so what the user marks while watching does not survive it.
+     *
+     * @param enabled Whether zen mode is active.
+     *
+     * @returns A resolved promise to satisfy the requisition handler signature.
+     */
     private handleZenModeChanged = (enabled: boolean): Promise<boolean> => {
         if (this.zenMode === enabled) {
             return Promise.resolve(true);
@@ -1654,9 +1503,8 @@ export class SelectionManager {
 
         this.zenMode = enabled;
         if (enabled) {
-            this.selectionBeforeZen = [...(this.originalSelection ?? this.currentSelection).values()];
+            this.selectionBeforeZen = [...this.currentSelection.values()];
             this.anchorBeforeZen = this.selectionAnchor;
-            this.originalSelection = undefined;
             this.selectionAnchor = undefined;
             this.replaceSelection([]);
         } else {
@@ -1664,25 +1512,6 @@ export class SelectionManager {
             this.selectionAnchor = this.anchorBeforeZen;
             this.selectionBeforeZen = undefined;
             this.anchorBeforeZen = undefined;
-        }
-
-        this.publishPlayRange();
-
-        return Promise.resolve(true);
-    };
-
-    private handleZenMeasureToggled = (bar: number): Promise<boolean> => {
-        if (!this.zenMode) {
-            return Promise.resolve(false);
-        }
-
-        const measure = this.measureOfBar(bar);
-        if (measure !== undefined) {
-            this.toggleSelection([{
-                granularity: SelectionGranularity.Measure,
-                target: { granularity: SelectionGranularity.Measure, measure },
-            }]);
-            this.publishPlayRange();
         }
 
         return Promise.resolve(true);
@@ -1847,7 +1676,6 @@ export class SelectionManager {
 
         if (added.length > 0 || removed.length > 0) {
             void requisitions.execute("selectionChanged", { added, removed });
-            this.publishPlayRange();
             this.schedulePersist();
         }
     }

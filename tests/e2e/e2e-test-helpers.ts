@@ -557,3 +557,66 @@ export const readStoredCurrentScore = async (page: Page): Promise<string> => {
         return currentScore ?? "";
     });
 };
+
+/**
+ * Samples the play head while playback runs and collects the bars it passes, in order.
+ *
+ * @param page The page under test.
+ * @param visits The number of entries to collect before resolving. Zero runs until playback stops.
+ *
+ * @returns The bars the play head visited, in the order it reached them.
+ */
+export const playbackBars = async (page: Page, visits = 0): Promise<number[]> => {
+    return page.evaluate((requiredVisits) => {
+        return new Promise<number[]>((resolve, reject) => {
+            const seen: number[] = [];
+            let previousProgress = 0;
+            const started = performance.now();
+            const sample = (): void => {
+                const playing = document.querySelector("#playbackButton")?.getAttribute("aria-pressed") === "true";
+                if (!playing && seen.length > 0) {
+                    resolve(seen);
+
+                    return;
+                }
+
+                const beam = document.querySelector("#playBeam")?.getBoundingClientRect();
+                if (beam && playing) {
+                    for (const measure of document.querySelectorAll(".grid-measure-viewer, .staff-measure-viewer")) {
+                        const rect = measure.getBoundingClientRect();
+                        if (beam.left < rect.left || beam.left >= rect.right) {
+                            continue;
+                        }
+
+                        const bar = Number(measure.querySelector(".measure-focus-button")?.getAttribute("data-bar")
+                            ?? measure.querySelector(".grid-measure-number, .staff-measure-number")?.textContent);
+                        const progress = (beam.left - rect.left) / rect.width;
+                        if (seen.at(-1) !== bar || progress < previousProgress - 0.25) {
+                            seen.push(bar);
+                        }
+
+                        previousProgress = progress;
+
+                        break;
+                    }
+                }
+
+                if (requiredVisits > 0 && seen.length >= requiredVisits) {
+                    resolve(seen);
+
+                    return;
+                }
+
+                if (performance.now() - started > 10_000) {
+                    reject(new Error(`Playback did not finish: ${seen.join(", ")}`));
+
+                    return;
+                }
+
+                requestAnimationFrame(sample);
+            };
+
+            sample();
+        });
+    }, visits);
+};

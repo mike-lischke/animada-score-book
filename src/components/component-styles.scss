@@ -369,6 +369,44 @@
     flex-shrink: 0;
 }
 
+/* The focus switch of a measure: it hangs in the column's head room and states whether playback runs the bar. */
+.grid-measure-viewer,
+.staff-measure-viewer {
+    > .measure-focus-button {
+        position: absolute;
+        top: 4px;
+        right: 8px;
+        height: 28px;
+        min-height: 28px;
+        gap: 6px;
+        padding: 0 9px;
+        border: 1px solid var(--border-subtle);
+        border-radius: 9999px;
+        background: var(--color-base-100);
+        color: var(--color-base-content);
+        font-size: 11px;
+        white-space: nowrap;
+        z-index: 5;
+
+        &[aria-pressed="true"] {
+            border-color: var(--color-playback-accent);
+            background: color-mix(in srgb, var(--color-playback-accent) 10%, var(--color-base-100));
+
+            .measureFocusDot {
+                background: var(--color-playback-accent);
+            }
+        }
+
+        .measureFocusDot {
+            width: 8px;
+            height: 8px;
+            flex: 0 0 8px;
+            border-radius: 50%;
+            background: color-mix(in srgb, var(--color-base-content) 30%, transparent);
+        }
+    }
+}
+
 #trackViewerContainer {
     /* The container takes the vertical room the score leaves, so the side panels reach down and the score content
        has a defined area to be centred in. */
@@ -385,10 +423,14 @@
     /* Additional toolbar room inside the score columns. The fixed action bar lives above this container. */
     --score-strip-band: 0px;
 
+    /* Room the focus switch of a measure hangs in: it sits in the head room of a column, above the score's first
+       row, in both views. */
+    --measure-focus-headroom: 36px;
+
     /* Distance from the top of the score content to the first row of a column. The side panels state the same
     offset, so their rows line up with the rows they belong to. Staff columns keep their own head room; a grid
     column carries its beat strip inside it — 20pt plus its margins and the first row's top margin. */
-    --score-row-top: 24px;
+    --score-row-top: var(--measure-focus-headroom);
 
     /* Room the closing measure's resize thumb takes beyond the measure: the handle sits on the barline, its thumb
        is centred on it, so half the thumb (7 px) less the 1 px the handle's centre lies inside the column. */
@@ -407,9 +449,9 @@
     /* A grid column carries its beat strip instead of head room of its own: the strip is given the distance below
        the action bar the staff's first row has, so a column's content sits as far down as the staff's does. */
     &.view-grid {
-        --grid-head-room: 16px;
+        --grid-head-room: var(--measure-focus-headroom);
 
-        --score-row-top: calc(20pt + 24px);
+        --score-row-top: calc(20pt + 24px + var(--measure-focus-headroom));
 
         .grid-measure-viewer {
             padding-top: var(--grid-head-room);
@@ -491,23 +533,9 @@
 
                 /* Parked off-screen until playback starts. The beam is moved with a transform, never
                  * with `left`: the layout property made the browser lay out the scroller on every
-                 * animation frame (measured ≈120 layouts/s); the transform leaves layout untouched. */
+                * animation frame (measured ≈120 layouts/s); the transform leaves layout untouched. */
                 left: 0;
                 transform: translate3d(-500px, 0, 0);
-            }
-
-            #playRange {
-                width: 0;
-                background-color: oklch(95% 0.20043 108 / 0.15);
-                border: 1px solid oklch(91% 0.2 107);
-                border-radius: 12px;
-
-                position: absolute;
-                top: 0;
-                bottom: 0;
-                left: -500px;
-
-                transition: left 0.050s linear;
             }
 
             @include score.score-grid-rules($useThemeColors: true, $renderBeam: true, $beatNumberTop: 10px);

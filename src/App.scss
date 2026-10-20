@@ -1039,65 +1039,10 @@ h6 {
         }
     }
 
-    #trackViewerContainer {
-        /* Room for the measure play button, which sits in the head room of a column and must stay clear of the
-           score's first row. Both views state it, so the rows start below the button. */
-        --zen-headroom: 36px;
-
-        &.view-grid {
-            --score-row-top: calc(20pt + 24px + var(--zen-headroom));
-
-            .grid-measure-viewer {
-                padding-top: var(--zen-headroom);
-            }
-        }
-
-        &.view-staff {
-            --score-row-top: var(--zen-headroom);
-        }
-    }
-
     #trackViewerHost {
         min-width: 0;
         touch-action: none;
         cursor: grab;
-    }
-
-    .grid-measure-viewer,
-    .staff-measure-viewer {
-        > .zen-measure-play-button {
-            position: absolute;
-            top: 4px;
-            right: 8px;
-            height: 28px;
-            min-height: 28px;
-            gap: 6px;
-            padding: 0 9px;
-            border: 1px solid var(--border-subtle);
-            border-radius: 9999px;
-            background: var(--color-base-100);
-            color: var(--color-base-content);
-            font-size: 11px;
-            white-space: nowrap;
-            z-index: 5;
-
-            &[aria-pressed="true"] {
-                border-color: var(--color-playback-accent);
-                background: color-mix(in srgb, var(--color-playback-accent) 10%, var(--color-base-100));
-
-                .zenMeasurePlayDot {
-                    background: var(--color-playback-accent);
-                }
-            }
-
-            .zenMeasurePlayDot {
-                width: 8px;
-                height: 8px;
-                flex: 0 0 8px;
-                border-radius: 50%;
-                background: color-mix(in srgb, var(--color-base-content) 30%, transparent);
-            }
-        }
     }
 
     #playbackControlsHost {

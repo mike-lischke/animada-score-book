@@ -69,12 +69,6 @@ export interface INotificationState {
     showHistory: boolean;
 }
 
-export interface IPlayRange {
-    from: number;
-    to: number;
-    bars?: readonly number[];
-}
-
 export interface IPlaybackOrderChange {
     arrangementId: number;
     bars: readonly number[];
@@ -91,7 +85,8 @@ export interface IRequestTypeMap {
     /** Refresh staff decorations after a new measure window arrives or rendered rows move. */
     "staffWindowChanged": SimpleCallback;
 
-    "playRangeChanged": (range?: IPlayRange) => Promise<boolean>;
+    /** The bars the user focused for playback; without a focus the whole score is played. */
+    "playFocusChanged": (bars?: readonly number[]) => Promise<boolean>;
     "playbackOrderChanged": (order: IPlaybackOrderChange) => Promise<boolean>;
     "animationStateChanged": (state: PlayerPlayState) => Promise<boolean>;
     "playerStateChanged": (state: PlayerPlayState) => Promise<boolean>;
@@ -143,8 +138,6 @@ export interface IRequestTypeMap {
     "editModeChanged": (enabled: boolean) => Promise<boolean>;
 
     "zenModeChanged": (enabled: boolean) => Promise<boolean>;
-
-    "zenMeasureToggled": (bar: number) => Promise<boolean>;
 
     /** The effective entry mode, published by its button and applied by the app; insert is staff-only. */
     "editEntryModeChanged": (mode: EditEntryMode) => Promise<boolean>;

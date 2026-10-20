@@ -6,7 +6,9 @@ import { EditEntryMode, TrackViewMode, type IArrangementSnapshot } from "../../s
 import type {
     ISerialisedSelectionEntry, ISerialisedSelectionState,
 } from "../../src/ui/SelectionSerializer.js";
-import { ensureStaffBarRendered, findStaffMeasure, readStoredCurrentScore, routeApi } from "./e2e-test-helpers.js";
+import {
+    ensureStaffBarRendered, findStaffMeasure, playbackBars, readStoredCurrentScore, routeApi,
+} from "./e2e-test-helpers.js";
 
 const openScore = async (page: Page, mode: TrackViewMode, repeatSecondBar = false): Promise<void> => {
     const snapshot: IArrangementSnapshot = {
@@ -59,15 +61,15 @@ const openScore = async (page: Page, mode: TrackViewMode, repeatSecondBar = fals
 const enterZen = async (page: Page): Promise<void> => {
     await page.locator("#zenModeButton").click();
     await expect(page.locator("#zenModeButton")).toHaveAttribute("aria-pressed", "true");
-    await expect(page.locator(".zen-measure-play-button")).not.toHaveCount(0);
+    await expect(page.locator(".measure-focus-button")).not.toHaveCount(0);
 };
 
-const selectBar = async (page: Page, bar: number): Promise<void> => {
+const focusBar = async (page: Page, bar: number): Promise<void> => {
     if (await page.locator("#trackViewerContainer.view-staff").count() > 0) {
         await ensureStaffBarRendered(page, bar);
     }
 
-    const button = page.locator(`.zen-measure-play-button[data-bar="${bar}"]`);
+    const button = page.locator(`.measure-focus-button[data-bar="${bar}"]`);
     await button.scrollIntoViewIfNeeded();
     await button.click();
     await expect(button).toHaveAttribute("aria-pressed", "true");
@@ -84,61 +86,6 @@ const storedSelection = async (page: Page): Promise<string | undefined> => {
 
         return settings.viewSettings?.selectionState;
     });
-};
-
-const playbackBars = async (page: Page, visits = 0): Promise<number[]> => {
-    return page.evaluate((requiredVisits) => {
-        return new Promise<number[]>((resolve, reject) => {
-            const seen: number[] = [];
-            let previousProgress = 0;
-            const started = performance.now();
-            const sample = (): void => {
-                const playing = document.querySelector("#playbackButton")?.getAttribute("aria-pressed") === "true";
-                if (!playing && seen.length > 0) {
-                    resolve(seen);
-
-                    return;
-                }
-
-                const beam = document.querySelector("#playBeam")?.getBoundingClientRect();
-                if (beam && playing) {
-                    for (const measure of document.querySelectorAll(".grid-measure-viewer, .staff-measure-viewer")) {
-                        const rect = measure.getBoundingClientRect();
-                        if (beam.left < rect.left || beam.left >= rect.right) {
-                            continue;
-                        }
-
-                        const bar = Number(measure.querySelector(".zen-measure-play-button")?.getAttribute("data-bar")
-                            ?? measure.querySelector(".grid-measure-number, .staff-measure-number")?.textContent);
-                        const progress = (beam.left - rect.left) / rect.width;
-                        if (seen.at(-1) !== bar || progress < previousProgress - 0.25) {
-                            seen.push(bar);
-                        }
-
-                        previousProgress = progress;
-
-                        break;
-                    }
-                }
-
-                if (requiredVisits > 0 && seen.length >= requiredVisits) {
-                    resolve(seen);
-
-                    return;
-                }
-
-                if (performance.now() - started > 10_000) {
-                    reject(new Error(`Playback did not finish: ${seen.join(", ")}`));
-
-                    return;
-                }
-
-                requestAnimationFrame(sample);
-            };
-
-            sample();
-        });
-    }, visits);
 };
 
 test.beforeEach(async ({ page }) => {
@@ -178,9 +125,9 @@ for (const mode of [TrackViewMode.Grid, TrackViewMode.Staff]) {
             expect(await readStoredCurrentScore(page)).toBe(originalScore);
             expect(await storedSelection(page)).toBe(originalSelection);
 
-            await selectBar(page, 2);
+            await focusBar(page, 2);
             await page.keyboard.press("Escape");
-            await expect(page.locator('.zen-measure-play-button[data-bar="2"]'))
+            await expect(page.locator('.measure-focus-button[data-bar="2"]'))
                 .toHaveAttribute("aria-pressed", "true");
 
             await page.locator("#zenModeButton").click();
@@ -219,14 +166,14 @@ for (const mode of [TrackViewMode.Grid, TrackViewMode.Staff]) {
                 });
             }).toBeGreaterThan(50);
             await expect(page.locator(".selection-overlay")).toHaveCount(0);
-            await expect(page.locator('.zen-measure-play-button[aria-pressed="true"]')).toHaveCount(0);
+            await expect(page.locator('.measure-focus-button[aria-pressed="true"]')).toHaveCount(0);
         });
 
-        test("plays the filled range between marked bars", async ({ page }) => {
+        test("plays the span the focused bars cover", async ({ page }) => {
             await openScore(page, mode);
             await enterZen(page);
-            await selectBar(page, 1);
-            await selectBar(page, 3);
+            await focusBar(page, 1);
+            await focusBar(page, 3);
             await page.locator("#playbackButton").click();
             await expect(page.locator("#playbackButton")).toHaveAttribute("aria-pressed", "true");
 
@@ -235,12 +182,12 @@ for (const mode of [TrackViewMode.Grid, TrackViewMode.Staff]) {
             await expect(page.locator(".selection-overlay")).toHaveCount(0);
         });
 
-        test("plays the full score again when every bar is unmarked", async ({ page }) => {
+        test("plays the full score again when no bar is focused", async ({ page }) => {
             await openScore(page, mode);
             await enterZen(page);
-            await selectBar(page, 2);
-            await page.locator('.zen-measure-play-button[data-bar="2"]').click();
-            await expect(page.locator('.zen-measure-play-button[aria-pressed="true"]')).toHaveCount(0);
+            await focusBar(page, 2);
+            await page.locator('.measure-focus-button[data-bar="2"]').click();
+            await expect(page.locator('.measure-focus-button[aria-pressed="true"]')).toHaveCount(0);
             await page.locator("#playbackButton").click();
             await expect(page.locator("#playbackButton")).toHaveAttribute("aria-pressed", "true");
 
@@ -250,8 +197,8 @@ for (const mode of [TrackViewMode.Grid, TrackViewMode.Staff]) {
         test("keeps repeat barlines in the filtered performance", async ({ page }) => {
             await openScore(page, mode, true);
             await enterZen(page);
-            await selectBar(page, 2);
-            await expect(page.locator('.zen-measure-play-button[aria-pressed="true"]')).toHaveCount(1);
+            await focusBar(page, 2);
+            await expect(page.locator('.measure-focus-button[aria-pressed="true"]')).toHaveCount(1);
             await page.locator("#playbackButton").click();
             await expect(page.locator("#playbackButton")).toHaveAttribute("aria-pressed", "true");
 
@@ -307,7 +254,7 @@ for (const mode of [TrackViewMode.Grid, TrackViewMode.Staff]) {
             await expect(identity).toHaveCSS("box-shadow", "none");
             const before = (await identity.boundingBox())!;
             const room = await page.evaluate(() => {
-                const button = document.querySelector(".zen-measure-play-button")!.getBoundingClientRect();
+                const button = document.querySelector(".measure-focus-button")!.getBoundingClientRect();
                 const row = document.querySelector(".grid-measure-row, .staff-measure-track-row")!
                     .getBoundingClientRect();
                 const label = document.querySelector(".track-label-row")!.getBoundingClientRect();
@@ -327,12 +274,12 @@ for (const mode of [TrackViewMode.Grid, TrackViewMode.Staff]) {
             await page.evaluate(() => {
                 const host = document.querySelector<HTMLElement>("#trackViewerHost")!;
                 const title = document.querySelector(".zen-arrangement-identity-host")!.getBoundingClientRect();
-                const button = document.querySelector(".zen-measure-play-button")!.getBoundingClientRect();
+                const button = document.querySelector(".measure-focus-button")!.getBoundingClientRect();
                 host.scrollLeft += button.left - title.left - 50;
             });
             await expect.poll(async () => {
                 return page.evaluate(() => {
-                    const button = document.querySelector(".zen-measure-play-button")!.getBoundingClientRect();
+                    const button = document.querySelector(".measure-focus-button")!.getBoundingClientRect();
 
                     return !!document.elementFromPoint(button.left + 20, button.top + 14)
                         ?.closest(".zen-arrangement-identity-host");
@@ -346,11 +293,11 @@ for (const mode of [TrackViewMode.Grid, TrackViewMode.Staff]) {
     });
 }
 
-test("loops the filled range without leaving a gap", async ({ page }) => {
+test("loops the span the focused bars cover without leaving a gap", async ({ page }) => {
     await openScore(page, TrackViewMode.Staff);
     await enterZen(page);
-    await selectBar(page, 1);
-    await selectBar(page, 3);
+    await focusBar(page, 1);
+    await focusBar(page, 3);
     await page.locator('[title="Loop playback"]').click();
     await page.locator("#playbackButton").click();
     await expect(page.locator("#playbackButton")).toHaveAttribute("aria-pressed", "true");

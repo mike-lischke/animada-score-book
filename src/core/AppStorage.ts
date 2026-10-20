@@ -21,9 +21,6 @@ export interface IArrangementViewSettings {
     /** Whether to animate transitions when toggling between grid and staff mode. */
     animateModeTransitions?: boolean;
 
-    /** The position of the current play range in the arrangement. */
-    playRangePosition?: number;
-
     /** The position of the play beam in the arrangement. */
     markerPosition?: number;
 }

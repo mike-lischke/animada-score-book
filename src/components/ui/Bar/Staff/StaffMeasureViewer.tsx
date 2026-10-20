@@ -68,7 +68,10 @@ interface INoteGroupHit {
 
 export interface IStaffMeasureViewerProps extends ICommonUIProperties {
     barNumber: number;
-    playOnlyButton?: ComponentChild;
+
+    /** The focus switch the measure draws in its head room. */
+    focusButton?: ComponentChild;
+
     arrangement: ISbDmArrangement;
     arrangementPlayer: ArrangementPlayer;
     inEditMode: boolean;
@@ -312,7 +315,7 @@ export class StaffMeasureViewer extends UIComponent<IStaffMeasureViewerProps, IS
     public override render(): ComponentChild {
         const { barNumber, arrangement, arrangementPlayer, inEditMode,
             dataModel, measureWidth, rowGeometries, scoreElementRegistry, style, showRangeArticulations,
-            playOnlyButton } = this.props;
+            focusButton } = this.props;
         const { tracks } = this.state;
 
         // The barline closing the column is the resize handle, so it exists only where resizing is allowed.
@@ -384,7 +387,7 @@ export class StaffMeasureViewer extends UIComponent<IStaffMeasureViewerProps, IS
                 <div className="staff-measure-number">
                     <span className="staff-measure-number-digits">{barNumber}</span>
                 </div>
-                {playOnlyButton}
+                {focusButton}
                 {trackRows}
                 {resizeHandle}
             </div>

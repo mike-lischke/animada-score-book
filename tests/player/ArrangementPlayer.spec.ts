@@ -270,6 +270,22 @@ import type { TimeCoordinator } from "../../src/player/TimeCoordinator.js";
 import type { TrackPlayer } from "../../src/player/TrackPlayer.js";
 import { requisitions } from "../../src/supplement/Requisitions.js";
 
+/**
+ * @returns A minimal audio context, so a player can start scheduling without Web Audio.
+ */
+const makeAudioContext = (): BaseAudioContext => {
+    return {
+        currentTime: 0,
+        destination: {},
+        createBufferSource: () => {
+            return { start: vi.fn(), connect: vi.fn(), addEventListener: vi.fn() };
+        },
+        createGain: () => {
+            return { gain: { value: 1, setTargetAtTime: vi.fn() }, connect: vi.fn() };
+        },
+    } as unknown as BaseAudioContext;
+};
+
 describe("ArrangementPlayer", { concurrent: false }, () => {
     it("creates track players", () => {
         const arrangement = makeArrangement(2);
@@ -373,7 +389,7 @@ describe("ArrangementPlayer", { concurrent: false }, () => {
         expect(progress).toBeLessThan(1);
     });
 
-    it.each([0, 3])("loops the selected bar at %s without playing the following bar", async (start) => {
+    it.each([0, 3])("loops the focused bar at %s without playing the following bar", async (start) => {
         vi.useFakeTimers();
         vi.setSystemTime(0);
         const arrangement = makeArrangement(1);
@@ -406,11 +422,13 @@ describe("ArrangementPlayer", { concurrent: false }, () => {
             },
         } as unknown as BaseAudioContext;
         const note = arrangement.tracks[0].measures[0].noteEvents[0];
+
+        // A focused bar opens the performance, so its events sound within the first second.
         const events: PlaybackEvent[] = [
-            { kind: "audio", realTime: start, event: note, audioBuffer: {} as AudioBuffer, dynamicsFactor: 1 },
-            { kind: "audio", realTime: start + 0.95, event: note, audioBuffer: {} as AudioBuffer, dynamicsFactor: 1 },
-            { kind: "audio", realTime: start + 1, event: note, audioBuffer: {} as AudioBuffer, dynamicsFactor: 1 },
-            { kind: "callback", realTime: start, callback },
+            { kind: "audio", realTime: 0, event: note, audioBuffer: {} as AudioBuffer, dynamicsFactor: 1 },
+            { kind: "audio", realTime: 0.95, event: note, audioBuffer: {} as AudioBuffer, dynamicsFactor: 1 },
+            { kind: "audio", realTime: 1, event: note, audioBuffer: {} as AudioBuffer, dynamicsFactor: 1 },
+            { kind: "callback", realTime: 0, callback },
         ];
         const getEvents = vi.spyOn(scheduler, "getEvents").mockImplementation((interval) => {
             return events.filter(({ realTime }) => {
@@ -419,19 +437,19 @@ describe("ArrangementPlayer", { concurrent: false }, () => {
         });
 
         try {
-            await requisitions.execute("playRangeChanged", { from: start + 1, to: start + 1 });
+            await requisitions.execute("playFocusChanged", [start + 1]);
             await player.play();
             await vi.advanceTimersByTimeAsync(875);
 
             expect(startTimes).toEqual([10, 10.95, 11]);
             expect(fadeOut).not.toHaveBeenCalled();
             expect(callback).toHaveBeenCalledTimes(1);
-            expect(player.currentTime).toBeCloseTo(start + 0.875);
+            expect(player.currentTime).toBeCloseTo(0.875);
             expect(player.state).toBe(PlayerPlayState.Playing);
 
             await vi.advanceTimersByTimeAsync(125);
 
-            expect(player.currentTime).toBeCloseTo(start);
+            expect(player.currentTime).toBeCloseTo(0);
             expect(callback).toHaveBeenCalledTimes(2);
             expect(fadeOut).not.toHaveBeenCalled();
 
@@ -439,15 +457,15 @@ describe("ArrangementPlayer", { concurrent: false }, () => {
 
             expect(startTimes).toEqual([10, 10.95, 11, 11.95, 12]);
             expect(callback).toHaveBeenCalledTimes(3);
-            expect(player.currentTime).toBeCloseTo(start);
+            expect(player.currentTime).toBeCloseTo(0);
             expect(fadeOut).not.toHaveBeenCalled();
             for (const [interval] of getEvents.mock.calls) {
-                expect(interval.start).toBeGreaterThanOrEqual(start);
-                expect(interval.end).toBeLessThanOrEqual(start + 1);
+                expect(interval.start).toBeGreaterThanOrEqual(0);
+                expect(interval.end).toBeLessThanOrEqual(1);
             }
 
             player.stop();
-            await requisitions.execute("playRangeChanged", undefined);
+            await requisitions.execute("playFocusChanged", undefined);
             getEvents.mockClear();
             await player.play();
 
@@ -463,6 +481,52 @@ describe("ArrangementPlayer", { concurrent: false }, () => {
         } finally {
             player.stop();
             player.dispose();
+            vi.useRealTimers();
+        }
+    });
+
+    it("performs the span the focused bars cover", async () => {
+        vi.useFakeTimers();
+        const arrangement = makeArrangement(1);
+        arrangement.timeParams.length = 5;
+        const player = new ArrangementPlayer(new TestScoreBookDataModel(arrangement));
+        const scheduler = player as unknown as { audioContext: BaseAudioContext; };
+        scheduler.audioContext = makeAudioContext();
+
+        try {
+            // Marking the first and the last bar plays the bars between them.
+            await requisitions.execute("playFocusChanged", [2, 4]);
+            await player.play();
+            expect(player.playOrder).toEqual([2, 3, 4]);
+
+            // Stopping drops the focus, so the next performance runs the whole score again.
+            player.stop();
+            expect(player.playOrder).toEqual([1, 2, 3, 4, 5]);
+        } finally {
+            player.stop();
+            player.dispose();
+            await requisitions.execute("playFocusChanged", undefined);
+            vi.useRealTimers();
+        }
+    });
+
+    it("performs the whole score when the focused bars are gone", async () => {
+        vi.useFakeTimers();
+        const arrangement = makeArrangement(1);
+        arrangement.timeParams.length = 5;
+        const player = new ArrangementPlayer(new TestScoreBookDataModel(arrangement));
+        const scheduler = player as unknown as { audioContext: BaseAudioContext; };
+        scheduler.audioContext = makeAudioContext();
+
+        try {
+            await requisitions.execute("playFocusChanged", [9]);
+            await player.play();
+
+            expect(player.playOrder).toEqual([1, 2, 3, 4, 5]);
+        } finally {
+            player.stop();
+            player.dispose();
+            await requisitions.execute("playFocusChanged", undefined);
             vi.useRealTimers();
         }
     });

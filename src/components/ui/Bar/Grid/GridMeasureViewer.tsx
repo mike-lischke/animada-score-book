@@ -21,7 +21,9 @@ import { GridMeasureRow } from "./GridMeasureRow.js";
 export interface IGridMeasureViewerProperties extends ICommonUIProperties {
     /** One-based index of the measure to display */
     measureNumber: number;
-    playOnlyButton?: ComponentChild;
+
+    /** The focus switch the measure draws in its head room. */
+    focusButton?: ComponentChild;
 
     dataModel: ScoreBookDataModel;
     scoreMetrics: IScoreMetrics;
@@ -166,7 +168,7 @@ export class GridMeasureViewer extends UIComponent<IGridMeasureViewerProperties,
 
     public override render(): ComponentChild {
         const { measureNumber, dataModel, scoreMetrics, scoreElementRegistry, tracks: tracksOverride,
-            playOnlyButton } = this.props;
+            focusButton } = this.props;
         const { beatPositions } = this.state;
 
         if (!dataModel.arrangement) {
@@ -216,7 +218,7 @@ export class GridMeasureViewer extends UIComponent<IGridMeasureViewerProperties,
                 innerRef={setViewerRef}
                 style={viewerStyle}
             >
-                {playOnlyButton}
+                {focusButton}
                 <GridMeasureBeam
                     measureNumber={measureNumber}
                     beatPositions={beatPositions}

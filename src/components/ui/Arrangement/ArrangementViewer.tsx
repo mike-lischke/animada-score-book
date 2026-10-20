@@ -18,7 +18,6 @@ import { clampValue } from "../../../core/utils.js";
 import { PlayerPlayState, type ArrangementPlayer } from "../../../player/ArrangementPlayer.js";
 import { requisitions, type IMeasureVisibilityRequest } from "../../../supplement/Requisitions.js";
 import type { SelectionManager } from "../../../ui/SelectionManager.js";
-import { SelectionGranularity } from "../../../ui/SelectionSerializer.js";
 import { GridMeasureEditor } from "../../../ui/GridMeasureEditor.js";
 import { StaffMeasureEditor } from "../../../ui/StaffMeasureEditor.js";
 import type { IMeasureEditorInput } from "../../../ui/MeasureEditor.js";
@@ -92,7 +91,9 @@ interface IArrangementViewerState {
     viewerZoom: number;
     trackViewMode: TrackViewMode;
     mixerExpanded: boolean;
-    selectedZenBars: ReadonlySet<number>;
+
+    /** The bars the user focused for playback; without one the whole score is played. */
+    focusedBars: ReadonlySet<number>;
 
     /** Measures rendered in staff mode. The grid view renders every measure of the arrangement. */
     staffWindow: IMeasureRange;
@@ -178,7 +179,7 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
             autoFollowIsOn: true,
             trackViewMode: settings.viewSettings?.arrangementViewSettings?.displayMode ?? TrackViewMode.Grid,
             mixerExpanded: false,
-            selectedZenBars: new Set(),
+            focusedBars: new Set(),
             staffWindow: { first: 1, last: 0 },
         };
 
@@ -231,7 +232,6 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         requisitions.register("trackChanged", this.handleTrackChanged);
         requisitions.register("measureVisibilityRequested", this.handleMeasureVisibilityRequested);
         requisitions.register("scoreViewportMoveRequested", this.handleScoreViewportMoveRequested);
-        requisitions.register("selectionChanged", this.handleZenSelectionChanged);
 
         setTimeout(this.handleResize, 0);
         this.resizeObserver.observe(this.viewerRef.current!);
@@ -373,7 +373,6 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         requisitions.unregister("trackChanged", this.handleTrackChanged);
         requisitions.unregister("measureVisibilityRequested", this.handleMeasureVisibilityRequested);
         requisitions.unregister("scoreViewportMoveRequested", this.handleScoreViewportMoveRequested);
-        requisitions.unregister("selectionChanged", this.handleZenSelectionChanged);
     }
 
     public override render(): JSX.Element {
@@ -403,7 +402,7 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
                             <GridMeasureViewer
                                 key={i + 1}
                                 measureNumber={i + 1}
-                                playOnlyButton={this.renderZenPlayButton(i + 1)}
+                                focusButton={this.renderFocusButton(i + 1)}
                                 scoreMetrics={metrics}
                                 {...barViewerProps}
                                 scoreElementRegistry={this.scoreElementRegistry}
@@ -431,7 +430,7 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
                     <StaffMeasureViewer
                         key={bar}
                         barNumber={bar}
-                        playOnlyButton={this.renderZenPlayButton(bar)}
+                        focusButton={this.renderFocusButton(bar)}
                         {...barViewerProps}
                         measureWidth={measureWidth}
                         rowGeometries={rowGeometries}
@@ -588,44 +587,60 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         );
     }
 
-    private renderZenPlayButton(bar: number): ComponentChild {
-        const { zenMode } = this.props;
-        const { selectedZenBars } = this.state;
-        if (!zenMode) {
-            return undefined;
-        }
-
-        const selected = selectedZenBars.has(bar);
+    /**
+     * Renders the focus switch of a measure. Playback performs the span the focused bars cover; without a focus the
+     * whole score is played.
+     *
+     * @param bar The one-based measure number.
+     *
+     * @returns The focus switch of the measure.
+     */
+    private renderFocusButton(bar: number): ComponentChild {
+        const { focusedBars } = this.state;
+        const focused = focusedBars.has(bar);
 
         return (
-            <Button className="zen-measure-play-button" aria-pressed={selected} data-bar={bar}
-                title={`Play only this: measure ${bar}`} onClick={() => {
-                    void requisitions.execute("zenMeasureToggled", bar);
+            <Button className="measure-focus-button" aria-pressed={focused} data-bar={bar} title="Play Focus"
+                onClick={() => {
+                    this.handleFocusToggle(bar);
                 }}>
-                <span>Play only this</span>
-                <span className="zenMeasurePlayDot" />
+                <span className="measureFocusDot" />
+                <span>Play Focus</span>
             </Button>
         );
     }
 
-    private handleZenSelectionChanged = (): Promise<boolean> => {
-        const { selectionManager } = this.props;
-        const { selectedZenBars: previousBars } = this.state;
-        const selectedZenBars = new Set<number>();
-        for (const entry of selectionManager.currentSelection.values()) {
-            if (entry.target.granularity === SelectionGranularity.Measure) {
-                selectedZenBars.add(entry.target.measure.number);
-            }
+    /**
+     * Switches the focus of a measure. Clearing the last focused bar removes the focus, so the whole score plays
+     * again.
+     *
+     * @param bar The one-based measure number whose focus is switched.
+     */
+    private handleFocusToggle(bar: number): void {
+        const { focusedBars } = this.state;
+        const next = new Set(focusedBars);
+        if (next.has(bar)) {
+            next.delete(bar);
+        } else {
+            next.add(bar);
         }
 
-        if (previousBars.size !== selectedZenBars.size || [...selectedZenBars].some((bar) => {
-            return !previousBars.has(bar);
-        })) {
-            this.setState({ selectedZenBars });
-        }
+        this.setState({ focusedBars: next });
+        this.publishFocus(next);
+    }
 
-        return Promise.resolve(true);
-    };
+    /**
+     * States the focus playback works with. An empty focus plays the whole score.
+     *
+     * @param bars The focused bars.
+     */
+    private publishFocus(bars: ReadonlySet<number>): void {
+        const sorted = [...bars].sort((left, right) => {
+            return left - right;
+        });
+
+        void requisitions.execute("playFocusChanged", sorted.length === 0 ? undefined : sorted);
+    }
 
     /** Reports the app's edit state to the editors and the marking view, which gate their input on it. */
     private applyEditState(): void {
@@ -848,10 +863,21 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         if (reason === ScoreBookChangeReason.ScoreLoaded) {
             this.stageScoreViewport();
             this.refreshStaffGeometryBeforeRender();
+            this.clearFocus();
         }
 
         return Promise.resolve(true);
     };
+
+    /** Drops the focus of the score that is gone, so the score now in place plays completely. */
+    private clearFocus(): void {
+        if (this.state.focusedBars.size === 0) {
+            return;
+        }
+
+        this.setState({ focusedBars: new Set() });
+        this.publishFocus(new Set());
+    }
 
     /**
      * States where the score now in place is to be shown: the position it was left at when it is the score this
