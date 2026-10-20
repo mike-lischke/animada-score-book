@@ -13,7 +13,7 @@ import { PlaybackOrder } from "./PlaybackOrder.js";
 import type { TimeCoordinator } from "./TimeCoordinator.js";
 import { Event, IInterval } from "./types.js";
 
-/** A note event and the time it sounds at, which the repeat barlines may move away from its written position. */
+/** A note event and the time it sounds at, which the repeat bar lines may move away from its written position. */
 interface IPerformedEvent {
     event: ISbDmNoteEvent;
     realTime: RealTime;
@@ -37,11 +37,12 @@ export class TrackPlayer {
 
     private disposed = false;
     private playOrder?: readonly number[];
+    private playbackSources: Array<ISbDmTrackPiece | undefined> = [];
 
     /**
      * The events playback reads, one entry per sounding event of the performance: a measure contributes its own
      * resolved events, a simile the events of the measure it repeats, re-timed to its own position. A measure the
-     * repeat barlines play more than once contributes its events once per pass, at the time that pass starts.
+     * repeat bar lines play more than once contributes its events once per pass, at the time that pass starts.
      * Kept apart from the measures' `noteEvents`, which stay the literal content the views draw and edit.
      */
     private readonly playbackEvents: IPerformedEvent[] = [];
@@ -103,6 +104,10 @@ export class TrackPlayer {
         return events;
     };
 
+    public sourceOfBar(bar: number): ISbDmTrackPiece | undefined {
+        return this.playbackSources[bar - 1];
+    }
+
     /** No-op; retained for the IEventSource interface. */
     public onStop = (): void => {
         /* nothing transient to reset */
@@ -150,13 +155,14 @@ export class TrackPlayer {
 
     /**
      * Builds the playback list: the events of every bar, and for a simile the events of the bar it repeats,
-     * re-timed to the simile's position. Bars the repeat barlines play more than once are expanded in play order,
+     * re-timed to the simile's position. Bars the repeat bar lines play more than once are expanded in play order,
      * each pass at the time it starts.
      *
      * @param measures The measures of the track, in measure order.
      */
     private rebuildPlaybackEvents(measures: readonly ISbDmTrackPiece[]): void {
         const sources = PlaybackOrder.sourcesOf(measures);
+        this.playbackSources = sources;
         const arrangement = this.track.arrangement;
         const order = this.playOrder ?? PlaybackOrder.performedBars(arrangement.repeatBars ?? new Map(),
             arrangement.timeParams.length);

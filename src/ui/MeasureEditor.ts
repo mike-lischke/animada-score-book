@@ -10,15 +10,15 @@ import { Articulation, articulationOf, resolveNoteStyleForArticulation } from ".
 import { getSharedAudioContext } from "../core/audio-context.js";
 import { modelEventAt } from "../core/MeasureProjection.js";
 import { defaultEntryValue, noteValueFraction, type INoteValue } from "../core/rest-notation.js";
-import { compareFractions, reduceFraction } from "../core/serialisation/numeric-functions.js";
 import type {
     IEventResizeRequest, INoteStyleAssignment, ISbDmTrack, ISbDmTrackPiece, ScoreBookDataModel,
 } from "../core/ScoreBookDataModel.js";
+import { compareFractions, reduceFraction } from "../core/serialisation/numeric-functions.js";
 import { EditEntryMode, type IAudioData, type IFraction, type IMeasureEvent } from "../core/types/general.js";
 import { AudioBufferPlayer } from "../player/AudioBufferPlayer.js";
-import type { ISubdivisionCreationRequest } from "../supplement/Requisitions.js";
-import { selectionEventsOf, selectionToClearRanges } from "./selection-ranges.js";
+import { requisitions, type ISubdivisionCreationRequest } from "../supplement/Requisitions.js";
 import { ScoreElementKind, type ScoreElementRegistry } from "./ScoreElementRegistry.js";
+import { selectionEventsOf, selectionToClearRanges } from "./selection-ranges.js";
 import type { SelectionManager } from "./SelectionManager.js";
 import {
     addressesNoteCells, SelectionGranularity, SelectionSerializer, type INoteTarget, type ISelectionDelta,
@@ -221,6 +221,10 @@ export abstract class MeasureEditor {
 
         const entries = this.selectionEntries();
 
+        if (this.rejectSimileEntry(entries)) {
+            return false;
+        }
+
         return this.entryMode === EditEntryMode.Overwrite && this.isMultiCellSelection(entries)
             ? this.enterNoteForSelection(entries, noteStyleId)
             : this.writeNoteAtCursor(noteStyleId);
@@ -238,6 +242,10 @@ export abstract class MeasureEditor {
         }
 
         const entries = this.selectionEntries();
+        if (this.rejectSimileEntry(entries)) {
+            return false;
+        }
+
         const replacesSelection = this.entryMode === EditEntryMode.Overwrite && entries.length > 1;
 
         return replacesSelection ? this.deleteSelection() : this.writeRestAtCursor();
@@ -1037,6 +1045,34 @@ export abstract class MeasureEditor {
      * @returns True when the selection changed.
      */
     protected abstract resizeSelectionForLengthChange(): boolean;
+
+    private rejectSimileEntry(entries: ISelectionEntry[]): boolean {
+        const hasSimile = entries.some(({ target }) => {
+            if (target.granularity === SelectionGranularity.Track) {
+                return target.track.measures.some((measure) => {
+                    return measure.simile === true;
+                });
+            }
+
+            if (target.granularity === SelectionGranularity.Measure) {
+                return this.dataModel.arrangement?.tracks.some((track) => {
+                    return track.measures[target.measure.number - 1]?.simile === true;
+                }) ?? false;
+            }
+
+            return this.resolveMeasure(target.measure.track.id, target.measure.number)?.simile === true;
+        });
+        const cursor = this.cursor;
+        const cursorIsSimile = entries.length === 0 && cursor !== undefined
+            && this.resolveMeasure(cursor.trackId, cursor.bar)?.simile === true;
+        if (!hasSimile && !cursorIsSimile) {
+            return false;
+        }
+
+        void requisitions.execute("showWarning", "Delete the simile before entering notes or rests.");
+
+        return true;
+    }
 
     /**
      * Adopts the articulation of the element the cursor addresses, so the overwrite mode writes what

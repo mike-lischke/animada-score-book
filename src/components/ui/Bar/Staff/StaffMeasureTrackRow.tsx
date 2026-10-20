@@ -5,13 +5,10 @@
 
 import { type ComponentChild } from "preact";
 
-import type {
-    ISbDmTrack,
-    ITimeParamsView, ScoreBookDataModel
-} from "../../../../core/ScoreBookDataModel.js";
+import type { ISbDmTrack, ITimeParamsView, ScoreBookDataModel } from "../../../../core/ScoreBookDataModel.js";
 import { StaffRowGeometry, type IStaffRowGeometry } from "../../../../core/StaffRowGeometry.js";
 import type { IRangeArticulation } from "../../../../core/types/general.js";
-import type { ArrangementPlayer } from "../../../../player/ArrangementPlayer.js";
+import { PlayerPlayState, type ArrangementPlayer } from "../../../../player/ArrangementPlayer.js";
 import type { TrackPlayer } from "../../../../player/TrackPlayer.js";
 import { requisitions } from "../../../../supplement/Requisitions.js";
 import type { ScoreElementRegistry } from "../../../../ui/ScoreElementRegistry.js";
@@ -55,22 +52,29 @@ export class StaffMeasureTrackRow extends UIComponent<IStaffMeasureTrackRowProps
 
     public override componentDidMount(): void {
         requisitions.register("trackChanged", this.handleTrackChanged);
+        requisitions.register("playerStateChanged", this.handlePlayerStateChanged);
     }
 
     public override componentWillUnmount(): void {
         requisitions.unregister("trackChanged", this.handleTrackChanged);
+        requisitions.unregister("playerStateChanged", this.handlePlayerStateChanged);
     }
 
     public override render(): ComponentChild {
         const { arrangementPlayer, barNumber, dataModel, measureWidth, rowGeometry, timeParams, track,
-            scoreElementRegistry, articulations } = this.props;
+            scoreElementRegistry, articulations, trackPlayer } = this.props;
 
         const measure = track.measures[barNumber - 1];
+        const playbackSource = measure.simile && arrangementPlayer.state === PlayerPlayState.Playing
+            ? trackPlayer.sourceOfBar(barNumber) : undefined;
         const baseSteps = measure.meter.stepResolution;
 
         const maxNoteLine = StaffRowGeometry.maxNoteLineOf(track);
 
-        const rowClassName = this.generateFinalClassName(["staff-measure-track-row"]);
+        const rowClassName = this.generateFinalClassName([
+            "staff-measure-track-row",
+            playbackSource === undefined ? undefined : "simile-playback-preview",
+        ]);
         const repeatBars = dataModel.arrangement?.repeatBars;
 
         return (
@@ -80,18 +84,24 @@ export class StaffMeasureTrackRow extends UIComponent<IStaffMeasureTrackRowProps
                 timeSignature={timeParams.timeSignature}
                 scoreMetrics={arrangementPlayer.scoreMetrics}
                 baseSteps={baseSteps}
-                measure={measure}
+                measure={playbackSource ?? measure}
                 barNumber={barNumber}
                 trackId={track.id}
                 maxNoteLine={maxNoteLine}
                 measureWidth={measureWidth}
                 rowGeometry={rowGeometry}
                 repeatBars={repeatBars}
-                scoreElementRegistry={scoreElementRegistry}
+                scoreElementRegistry={playbackSource === undefined ? scoreElementRegistry : undefined}
                 articulations={articulations}
             />
         );
     }
+
+    private handlePlayerStateChanged = (): Promise<boolean> => {
+        const { track } = this.props;
+
+        return this.handleTrackChanged(track.id);
+    };
 
     private handleTrackChanged = (trackId: number): Promise<boolean> => {
         const { track } = this.props;

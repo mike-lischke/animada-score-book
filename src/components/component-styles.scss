@@ -1600,7 +1600,19 @@
 }
 
 /* Runs: flex row of proportional-width note / rest segments */
+.simile-playback-preview {
+    .staff-note-viewer-tuplets {
+        opacity: 0.6;
+        pointer-events: none;
+    }
+}
+
 .staff-note-viewer-runs {
+    .simile-playback-preview & {
+        opacity: 0.6;
+        pointer-events: none;
+    }
+
     position: absolute;
     inset: 0;
 

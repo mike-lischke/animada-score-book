@@ -7,8 +7,10 @@ import { expect, test, type Locator, type Page } from "@playwright/test";
 
 import { stringifyPackedArrangement } from "../../src/core/serialisation/snapshot-packing.js";
 import { arrangementSnapshotVersion } from "../../src/core/serialisation/snapshots.js";
-import type { IArrangementSnapshot, IRepeatBar, ITrackPieceSnapshot } from "../../src/core/types/general.js";
-import { routeApi, scrollClearOfToolsBar, showEntryMode } from "./e2e-test-helpers.js";
+import {
+    TrackViewMode, type IArrangementSnapshot, type IRepeatBar, type ITrackPieceSnapshot
+} from "../../src/core/types/general.js";
+import { routeApi, scrollClearOfToolsBar, showEntryMode, showTrackView } from "./e2e-test-helpers.js";
 
 const meter = { beats: 4, beatUnits: 4, stepResolution: 16, beatGroups: [4, 4, 4, 4] };
 
@@ -278,6 +280,35 @@ test("opens the score with a repeat barline when the first bar starts a section"
 
     // Nothing stands before the first bar, so it opens the score with a barline of its own.
     await expect(openingBarline(page, 1).locator(".barline-view-dots")).toHaveCount(1);
+});
+
+test("draws separate grid repeat bar lines with room outside the note cells", async ({ page }) => {
+    await seedScore(page, snapshotWith(3, { 1: { start: true, end: true }, 2: { start: true }, 3: { end: true } }));
+    await showTrackView(page, TrackViewMode.Grid);
+    const first = page.locator(".grid-measure-viewer").first();
+    await expect(first.locator(".grid-repeat-barline-start .barline-view-dots text")).toHaveText(repeatDots);
+    await expect(first.locator(".grid-repeat-barline-end .barline-view-dots text")).toHaveText(repeatDots);
+    await expect(page.locator(".grid-repeat-barline-start")).toHaveCount(2);
+    await expect(page.locator(".grid-repeat-barline-end")).toHaveCount(2);
+    await expect(first).toHaveCSS("border-right-color", "rgba(0, 0, 0, 0)");
+
+    const gaps = await first.evaluate((column) => {
+        const row = column.querySelector(".grid-measure-row")!.getBoundingClientRect();
+        const start = column.querySelector(".grid-repeat-barline-start")!.getBoundingClientRect();
+        const end = column.querySelector(".grid-repeat-barline-end")!.getBoundingClientRect();
+        const bounds = column.getBoundingClientRect();
+
+        return {
+            opening: row.left - start.right,
+            closing: end.left - row.right,
+            startInside: start.left - bounds.left,
+            endInside: bounds.right - end.right,
+        };
+    });
+    expect(gaps.opening).toBeGreaterThan(0);
+    expect(gaps.closing).toBeGreaterThan(0);
+    expect(gaps.startInside).toBeGreaterThanOrEqual(0);
+    expect(gaps.endInside).toBeGreaterThanOrEqual(0);
 });
 
 test("takes the room a repeat needs from the barline alone, whatever the bar holds", async ({ page }) => {

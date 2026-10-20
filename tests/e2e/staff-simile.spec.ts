@@ -7,9 +7,11 @@ import { expect, test, type Locator, type Page } from "@playwright/test";
 
 import { stringifyPackedArrangement } from "../../src/core/serialisation/snapshot-packing.js";
 import { arrangementSnapshotVersion } from "../../src/core/serialisation/snapshots.js";
-import { EditEntryMode } from "../../src/core/types/general.js";
+import { EditEntryMode, TrackViewMode } from "../../src/core/types/general.js";
 import type { IArrangementSnapshot, ITrackPieceSnapshot } from "../../src/core/types/general.js";
-import { routeApi, selectTrackPiece, toolbarButton } from "./e2e-test-helpers.js";
+import {
+    findStaffMeasure, readStoredCurrentScore, routeApi, selectTrackPiece, showEntryMode, showTrackView, toolbarButton,
+} from "./e2e-test-helpers.js";
 
 const meter = { beats: 4, beatUnits: 4, stepResolution: 16, beatGroups: [4, 4, 4, 4] };
 
@@ -41,7 +43,7 @@ const snapshotWith = (measures: ITrackPieceSnapshot[]): IArrangementSnapshot => 
     return {
         version: arrangementSnapshotVersion,
         title: "E2E One-bar repeat",
-        timeParams: { timeSignature: "4/4", tempo: 120, length: 2, pulse: "1/4", stepResolution: 16 },
+        timeParams: { timeSignature: "4/4", tempo: 120, length: measures.length, pulse: "1/4", stepResolution: 16 },
         tracks: [{ id: 200, instrumentId: "0", measures }],
     };
 };
@@ -77,7 +79,9 @@ const seedScore = async (page: Page, score: IArrangementSnapshot): Promise<void>
  * @returns The rendered measure column.
  */
 const staffBar = (page: Page, barNumber: number): Locator => {
-    return page.locator(".staff-measure-viewer").nth(barNumber - 1);
+    return page.locator(".staff-measure-viewer").filter({
+        has: page.locator(".staff-measure-number", { hasText: new RegExp(`^${barNumber}$`) }),
+    });
 };
 
 /**
@@ -180,4 +184,117 @@ test("keeps the mark off a track piece of the first measure", async ({ page }) =
     await expect(pieceTray(page)).toBeVisible();
 
     await expect(pieceAction(page, "Simile is not applicable in the first bar")).toBeDisabled();
+});
+
+for (const view of [TrackViewMode.Grid, TrackViewMode.Staff]) {
+    test(`navigates through consecutive similes and scrolls in ${view} view`, async ({ page }) => {
+        await page.setViewportSize({ width: 1000, height: 800 });
+        await seedScore(page, snapshotWith([
+            notePiece, { ...restPiece, simile: true }, { ...restPiece, number: 3, simile: true },
+            { ...notePiece, number: 4 },
+        ]));
+        await showTrackView(page, view);
+
+        const rowClass = view === TrackViewMode.Grid ? ".grid-measure-row" : ".staff-measure-track-row";
+        const firstBar = view === TrackViewMode.Grid ? page.locator(".grid-measure-viewer").first() : staffBar(page, 1);
+        const lastEvent = view === TrackViewMode.Grid
+            ? firstBar.locator(".note-viewer").last() : firstBar.locator(".staff-note-viewer-rest-symbol");
+        await lastEvent.click();
+        const before = await page.locator("#trackViewerHost").evaluate((host) => {
+            return host.scrollLeft;
+        });
+
+        for (const barNumber of [2, 3]) {
+            await page.keyboard.press("ArrowRight");
+            const bar = view === TrackViewMode.Grid
+                ? page.locator(".grid-measure-viewer").nth(barNumber - 1) : staffBar(page, barNumber);
+            await expect.poll(async () => {
+                const row = await bar.locator(rowClass).boundingBox();
+                const overlay = await page.locator(".selection-overlay").first().boundingBox();
+
+                return row && overlay ? Math.abs(row.x - overlay.x) : Infinity;
+            }).toBeLessThan(5);
+            await expect.poll(async () => {
+                return page.locator("#trackViewerHost").evaluate((host) => {
+                    return host.scrollLeft;
+                });
+            }).toBeGreaterThan(before);
+        }
+
+        await page.keyboard.press("ArrowRight");
+        await expect(page.locator(".selection-cursor")).toBeVisible();
+        await page.keyboard.press("ArrowLeft");
+        await page.keyboard.press("ArrowLeft");
+        const secondBar = view === TrackViewMode.Grid
+            ? page.locator(".grid-measure-viewer").nth(1) : staffBar(page, 2);
+        await expect.poll(async () => {
+            const row = await secondBar.locator(rowClass).boundingBox();
+            const overlay = await page.locator(".selection-overlay").first().boundingBox();
+
+            return row && overlay ? Math.abs(row.x - overlay.x) : Infinity;
+        }).toBeLessThan(5);
+    });
+
+    test(`shows the played simile content only during playback in ${view} view`, async ({ page }) => {
+        await page.setViewportSize({ width: 2800, height: 800 });
+        const score = snapshotWith([notePiece, { ...restPiece, simile: true }, {
+            ...restPiece, number: 3, simile: true,
+        }]);
+        score.timeParams.tempo = 30;
+        await seedScore(page, score);
+        await showTrackView(page, view);
+        const stored = await readStoredCurrentScore(page);
+        const mark = view === TrackViewMode.Grid ? ".grid-simile-overlay" : ".staff-note-viewer-simile";
+        await expect(page.locator(mark)).toHaveCount(2);
+
+        await page.getByTitle("Play the score", { exact: true }).click();
+        const previews = page.locator(".simile-playback-preview");
+        await expect(previews).toHaveCount(2);
+        await expect(page.locator(mark)).toHaveCount(0);
+        if (view === TrackViewMode.Staff) {
+            await expect(previews.first().locator(".staff-note-head")).toHaveCount(1);
+            await expect(previews.first().locator(".staff-note-viewer-rest-symbol")).toHaveCount(1);
+            await expect(previews.first().locator(".staff-note-viewer-runs")).toHaveCSS("opacity", "0.6");
+        } else {
+            await expect(previews.first().locator(".note-viewer")).toHaveCount(16);
+            await expect(previews.first().locator(".note-viewer").first()).toHaveCSS("opacity", "0.6");
+        }
+
+        await page.getByTitle("Stop playback", { exact: true }).click();
+        await expect(previews).toHaveCount(0);
+        await expect(page.locator(mark)).toHaveCount(2);
+        expect(await readStoredCurrentScore(page)).toBe(stored);
+    });
+}
+
+test("places the insert cursor on a clicked simile without selecting a note", async ({ page }) => {
+    await seedScore(page, snapshotWith([notePiece, { ...restPiece, simile: true }]));
+    await page.locator("#editModeButton").click({ force: true });
+    await showEntryMode(page, "insert");
+    const bar = await findStaffMeasure(page, 2);
+    await bar.locator(".staff-note-viewer-simile text").click();
+
+    await expect(page.locator(".selection-cursor")).toBeVisible();
+    await expect(page.locator(".selection-overlay")).toHaveCount(0);
+    const cursor = await page.locator(".selection-cursor").boundingBox();
+    const glyph = await bar.locator(".staff-note-viewer-simile svg").boundingBox();
+    expect(cursor).toBeDefined();
+    expect(glyph).toBeDefined();
+    expect(Math.abs(cursor!.x - glyph!.x)).toBeLessThan(10);
+});
+
+test("rejects note and rest input at a simile insert cursor without changing the score", async ({ page }) => {
+    await seedScore(page, snapshotWith([notePiece, { ...restPiece, simile: true }]));
+    await page.locator("#editModeButton").click({ force: true });
+    await showEntryMode(page, "insert");
+    const bar = await findStaffMeasure(page, 2);
+    await bar.locator(".staff-note-viewer-simile text").click();
+    const stored = await readStoredCurrentScore(page);
+
+    for (const key of ["1", "0"]) {
+        await page.keyboard.press(key);
+        await expect(page.getByText("Delete the simile before entering notes or rests.").first()).toBeVisible();
+        await expect(bar.locator(".staff-note-viewer-simile")).toBeVisible();
+        expect(await readStoredCurrentScore(page)).toBe(stored);
+    }
 });

@@ -4,20 +4,20 @@
 */
 
 import { AppStorage } from "../core/AppStorage.js";
-import { EditEntryMode, TrackViewMode } from "../core/types/general.js";
+import { modelEventAt } from "../core/MeasureProjection.js";
 import {
     ScoreBookChangeReason, type ISbDmArrangement, type ISbDmTrackPiece, type ScoreBookDataModel,
 } from "../core/ScoreBookDataModel.js";
-import { modelEventAt } from "../core/MeasureProjection.js";
 import { addFractions, compareFractions, formatFraction } from "../core/serialisation/numeric-functions.js";
 import type { IFraction, IMeasureEvent } from "../core/types/general.js";
+import { EditEntryMode, TrackViewMode } from "../core/types/general.js";
 import { requisitions } from "../supplement/Requisitions.js";
+import type { ScoreElementRegistry } from "./ScoreElementRegistry.js";
 import {
     SelectionGranularity, SelectionMode, SelectionSerializer, type ISelectionEntry,
     type ISelectionHitEntry, type ISelectionHitTester, type ISelectionPoint, type ISelectionRectChange,
     type ISerialisedSelectionEntry, type ISerialisedSelectionState,
 } from "./SelectionSerializer.js";
-import type { ScoreElementRegistry } from "./ScoreElementRegistry.js";
 import { SelectionView } from "./SelectionView.js";
 
 interface ISelectionCoordinate {
@@ -327,8 +327,7 @@ export class SelectionManager {
             void requisitions.execute("selectionEditPopupCloseRequested", undefined);
         }
 
-        // Insert mode draws no selection: a click places the cursor on the addressed note, and a click
-        // that addresses a coarser element leaves the cursor where it is.
+        // Insert mode places the cursor on a note or simile; other coarser elements leave it where it is.
         if (cursorOnly) {
             const cursor = SelectionManager.cursorEntryOf(rawEntries);
             if (cursor === undefined) {
@@ -672,16 +671,17 @@ export class SelectionManager {
     }
 
     /**
-     * Picks the note the cursor can take from hit-test entries. The cursor addresses one note, so the
-     * coarser granularities a hit test offers (track, measure, track piece) are dropped.
+     * Picks a note or simile from hit-test entries, preferring notes over simile track pieces.
      *
      * @param entries The hit-test entries to pick from.
      *
-     * @returns The addressed note, or undefined when the entries hold none.
+     * @returns The addressed note or simile, or undefined when the entries hold neither.
      */
     private static cursorEntryOf(entries: ISelectionEntry[]): ISelectionEntry | undefined {
         return entries.find((entry) => {
             return entry.granularity === SelectionGranularity.Note;
+        }) ?? entries.find((entry) => {
+            return entry.target.granularity === SelectionGranularity.TrackPiece && entry.target.measure.simile;
         });
     }
 

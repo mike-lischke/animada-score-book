@@ -14,6 +14,7 @@ import {
 import { addFractions, compareFractions } from "../../src/core/serialisation/numeric-functions.js";
 import type { IAudioData, IFraction, IMeasureEvent } from "../../src/core/types/general.js";
 import { EditEntryMode } from "../../src/core/types/general.js";
+import { requisitions } from "../../src/supplement/Requisitions.js";
 import type { IMeasureEditorInput, IMeasurePosition } from "../../src/ui/MeasureEditor.js";
 import { ScoreElementKind } from "../../src/ui/ScoreElementRegistry.js";
 import { StaffMeasureEditor } from "../../src/ui/StaffMeasureEditor.js";
@@ -494,6 +495,44 @@ describe("StaffMeasureEditor input", { concurrent: false }, () => {
         expect(durationAt(measure, { numerator: 0, denominator: 1 })).toEqual({ numerator: 1, denominator: 4 });
         expect(styleAt(measure, { numerator: 0, denominator: 1 })).toBe("1");
     });
+
+    it.each([EditEntryMode.Insert, EditEntryMode.Overwrite])(
+        "rejects notes and rests at a simile cursor in entry mode %s", (mode) => {
+            model.ensureBarAvailable(2);
+            const simile = model.arrangement!.tracks[0].measures[1];
+            simile.simile = true;
+            editor.entryMode = mode;
+            const entry = runEntry(simile, simile.events[0]);
+            if (mode === EditEntryMode.Overwrite) {
+                input.selectionManager.replaceSelection([entry]);
+            }
+
+            const run = document.createElement("div");
+            run.className = "staff-note-viewer-run staff-note-viewer-simile";
+            input.scoreElementRegistry.createRef({
+                kind: ScoreElementKind.StaffRun,
+                bar: 2,
+                trackId,
+                start: { numerator: 0, denominator: 1 },
+                measure: simile,
+            }, simile)(run);
+            expect(editor.hitTest(run)).toBe(true);
+            const before = structuredClone(simile.events);
+            const execute = vi.spyOn(requisitions, "execute");
+
+            expect(editor.enterNote("1")).toBe(false);
+            expect(editor.enterRest()).toBe(false);
+            expect(execute).toHaveBeenCalledWith("showWarning", "Delete the simile before entering notes or rests.");
+            expect(execute.mock.calls.filter(([topic]) => {
+                return topic === "showWarning";
+            })).toHaveLength(2);
+            expect(execute.mock.calls.some(([topic]) => {
+                return topic === "arrangementMutated";
+            })).toBe(false);
+            expect(simile.events).toEqual(before);
+            expect(simile.simile).toBe(true);
+        },
+    );
 
     it("accepts note lengths at an insert cursor without a selection", () => {
         const runs = [...renderRuns().querySelectorAll<HTMLElement>(".staff-note-viewer-run")];

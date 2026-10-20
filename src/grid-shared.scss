@@ -36,7 +36,29 @@
 
     .grid-measure-viewer {
         border-right: 2px solid #{$separatorColor};
-        padding-left: 8px;
+        padding-left: calc(8px + var(--grid-repeat-opening-room, 0px));
+        padding-right: var(--grid-repeat-closing-room, 0px);
+
+        &.grid-measure-repeat-boundary {
+            border-right-color: transparent;
+        }
+    }
+
+    .grid-repeat-barline {
+        --staff-barline-height: var(--note-height);
+
+        position: absolute;
+        top: 0;
+        color: #{$contentColor};
+        pointer-events: none;
+
+        &.grid-repeat-barline-start {
+            right: calc(100% + 8px);
+        }
+
+        &.grid-repeat-barline-end {
+            left: calc(100% + 8px);
+        }
     }
 
     @if $renderBeam {
@@ -98,6 +120,15 @@
 
     .grid-measure-row {
         margin: 8px 8px 8px 8px;
+
+        &.simile-playback-preview {
+
+            > .note-viewer,
+            > .subdivision {
+                opacity: 0.6;
+                pointer-events: none;
+            }
+        }
 
         /* A row with cells gets its height from them; a simile row has only the absolutely positioned mark,
            so it needs this floor to keep its place and not pull the following rows up. */

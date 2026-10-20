@@ -3,15 +3,15 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import { compareFractions } from "../core/serialisation/numeric-functions.js";
 import { staffSpacePx } from "../core/MeasureLayout.js";
-import { EditEntryMode } from "../core/types/general.js";
+import { compareFractions } from "../core/serialisation/numeric-functions.js";
 import type { IFraction, IMeasureEvent, IRect } from "../core/types/general.js";
+import { EditEntryMode } from "../core/types/general.js";
 import { requisitions } from "../supplement/Requisitions.js";
-import type { SelectionManager } from "./SelectionManager.js";
 import {
     ScoreElementKind, type IScoreElementLocation, type ScoreElementRegistry,
 } from "./ScoreElementRegistry.js";
+import type { SelectionManager } from "./SelectionManager.js";
 import {
     addressesNoteCells, SelectionGranularity, SelectionMode, SelectionSerializer,
     type ISelectionEntry, type ISelectionTarget, type ISerialisedSelectionEntry,
@@ -394,11 +394,16 @@ export class SelectionView {
 
         const entries = this.manager.currentCursor === undefined
             ? [...this.manager.currentSelection.values()] : [this.manager.currentCursor];
-        if (entries.length !== 1 || entries[0].granularity !== SelectionGranularity.Note) {
+        if (entries.length !== 1) {
             return false;
         }
 
         const entry = entries[0];
+        if (entry.target.granularity !== SelectionGranularity.Note
+            && !(entry.target.granularity === SelectionGranularity.TrackPiece && entry.target.measure.simile)) {
+            return false;
+        }
+
         const contentHost = this.eventContainer.querySelector<HTMLElement>("#trackViewerContentHost");
         if (!contentHost) {
             return false;
@@ -409,10 +414,10 @@ export class SelectionView {
             return false;
         }
 
-        this.manager.selectSingleNote({
-            granularity: SelectionGranularity.Note,
+        this.manager.replaceSelection([{
+            granularity: move.noteTarget.granularity,
             target: move.noteTarget,
-        });
+        }]);
 
         // Bring the newly selected element into view. The staff view renders only a window of measures and decides
         // the horizontal scroll itself, from the measure the cursor moved into: scrolling the element into view
@@ -442,7 +447,7 @@ export class SelectionView {
             return this.arrowMoveFromModel(entry, key);
         }
 
-        const isStaffMode = noteElement.classList.contains(staffNoteRunClass);
+        const isStaffMode = this.isStaffView();
         const target = isStaffMode
             ? this.findStaffArrowTarget(noteElement, key)
             : this.findArrowTarget(noteElement, key);
@@ -483,7 +488,8 @@ export class SelectionView {
 
         const direction = key === "ArrowLeft" ? -1 : key === "ArrowRight" ? 1 : 0;
         const { target } = entry;
-        if (direction === 0 || target.granularity !== SelectionGranularity.Note) {
+        if (direction === 0 || (target.granularity !== SelectionGranularity.Note
+            && target.granularity !== SelectionGranularity.TrackPiece)) {
             return undefined;
         }
 
@@ -495,9 +501,10 @@ export class SelectionView {
         // same measure — the step the cursor takes over rendered runs as well. The cursor's own event is found by
         // the address itself, which is a position in the measure (ADR-0005), not by object identity alone: an undo
         // may well have replaced the events the selection still addresses.
-        const start = target.start ?? target.event.start;
+        const start = target.granularity === SelectionGranularity.Note
+            ? target.start ?? target.event.start : measureStart;
         const index = measure.events.findIndex((candidate) => {
-            return candidate === target.event || compareFractions(candidate.start, start) === 0;
+            return compareFractions(candidate.start, start) === 0;
         });
         const stepIndex = index + direction;
         if (index !== -1 && stepIndex >= 0 && stepIndex < measure.events.length) {
@@ -514,6 +521,18 @@ export class SelectionView {
 
         if (event === undefined) {
             return undefined;
+        }
+
+        if (targetMeasure.simile) {
+            return {
+                bar: targetMeasure.number,
+                noteTarget: {
+                    granularity: SelectionGranularity.TrackPiece,
+                    measure: targetMeasure,
+                    track: targetMeasure.track,
+                },
+                position: measureStart,
+            };
         }
 
         return {
@@ -555,7 +574,7 @@ export class SelectionView {
         const navigableRuns = (rowElement: HTMLElement): HTMLElement[] => {
             return [...rowElement.querySelectorAll<HTMLElement>(".staff-note-viewer-run")]
                 .filter((run) => {
-                    return run.querySelector(
+                    return run.classList.contains("staff-note-viewer-simile") || run.querySelector(
                         ".staff-note-head, .staff-note-viewer-rest-symbol",
                     ) !== null;
                 });
@@ -644,7 +663,7 @@ export class SelectionView {
         }
 
         const cells = (): HTMLElement[] => {
-            return [...row.querySelectorAll<HTMLElement>(".note-viewer")];
+            return [...row.querySelectorAll<HTMLElement>(".note-viewer, .grid-simile-overlay")];
         };
 
         if (key === "ArrowLeft" || key === "ArrowRight") {
@@ -680,7 +699,9 @@ export class SelectionView {
 
             const adjacentRow = rows[adjacentRowIndex];
 
-            const adjacentCells = [...adjacentRow.querySelectorAll<HTMLElement>(".note-viewer")];
+            const adjacentCells = [...adjacentRow.querySelectorAll<HTMLElement>(
+                ".note-viewer, .grid-simile-overlay",
+            )];
             if (adjacentCells.length === 0) {
                 return undefined;
             }
@@ -712,7 +733,7 @@ export class SelectionView {
 
         const adjacentRow = rows[adjacentRowIndex];
 
-        const adjacentCells = [...adjacentRow.querySelectorAll<HTMLElement>(".note-viewer")];
+        const adjacentCells = [...adjacentRow.querySelectorAll<HTMLElement>(".note-viewer, .grid-simile-overlay")];
 
         if (adjacentCells.length === 0) {
             return undefined;
@@ -1414,6 +1435,10 @@ export class SelectionView {
         const event = this.scoreElementRegistry?.getTarget(element);
         const measure = location.measure;
 
+        if (measure?.simile) {
+            return { granularity: SelectionGranularity.TrackPiece, measure, track: measure.track };
+        }
+
         return event === undefined || !("duration" in event) || measure === undefined
             ? undefined
             : { granularity: SelectionGranularity.Note, measure, event, start: location.start };
@@ -1429,6 +1454,14 @@ export class SelectionView {
      * @returns The matching elements, or an empty array if none found.
      */
     private findNoteElements(entry: ISelectionEntry): HTMLElement[] {
+        const { target } = entry;
+        if (target.granularity === SelectionGranularity.TrackPiece && target.measure.simile) {
+            return this.elementsOf(entry).filter((element) => {
+                return element.classList.contains("staff-note-viewer-simile")
+                    || element.classList.contains("grid-simile-overlay");
+            });
+        }
+
         return this.elementsOf(entry);
     }
 
@@ -1500,7 +1533,9 @@ export class SelectionView {
      * rest's symbol.
      */
     private glyphElement(run: HTMLElement): HTMLElement | null {
-        return run.querySelector<HTMLElement>(".staff-note-head, .staff-note-viewer-rest-symbol");
+        return run.querySelector<HTMLElement>(
+            ".staff-note-head, .staff-note-viewer-rest-symbol, .staff-note-viewer-simile > *",
+        );
     }
 
     /**

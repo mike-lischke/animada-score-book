@@ -6,9 +6,11 @@
 import type { ComponentChild } from "preact";
 
 import type { ISbDmTrack, ScoreBookDataModel } from "../../../../core/ScoreBookDataModel.js";
+import { ScoreSymbol, ScoreSymbols } from "../../../../core/ScoreSymbols.js";
+import type { ArrangementPlayer } from "../../../../player/ArrangementPlayer.js";
 import type { IScoreMetrics } from "../../../../player/TimeCoordinator.js";
-import type { SelectionManager } from "../../../../ui/SelectionManager.js";
 import { ScoreElementKind, type ScoreElementRegistry } from "../../../../ui/ScoreElementRegistry.js";
+import type { SelectionManager } from "../../../../ui/SelectionManager.js";
 import {
     SelectionGranularity, SelectionSerializer, type ISelectionHitEntry, type ISelectionHitTester,
 } from "../../../../ui/SelectionSerializer.js";
@@ -27,6 +29,7 @@ export interface IGridMeasureViewerProperties extends ICommonUIProperties {
 
     dataModel: ScoreBookDataModel;
     scoreMetrics: IScoreMetrics;
+    arrangementPlayer?: ArrangementPlayer;
     selectionManager: SelectionManager;
     scoreElementRegistry?: ScoreElementRegistry;
 
@@ -168,7 +171,7 @@ export class GridMeasureViewer extends UIComponent<IGridMeasureViewerProperties,
 
     public override render(): ComponentChild {
         const { measureNumber, dataModel, scoreMetrics, scoreElementRegistry, tracks: tracksOverride,
-            focusButton } = this.props;
+            focusButton, arrangementPlayer } = this.props;
         const { beatPositions } = this.state;
 
         if (!dataModel.arrangement) {
@@ -189,16 +192,29 @@ export class GridMeasureViewer extends UIComponent<IGridMeasureViewerProperties,
                 measure={measure}
                 track={track}
                 dataModel={dataModel}
+                arrangementPlayer={arrangementPlayer}
                 barNumber={measureNumber}
                 scoreElementRegistry={scoreElementRegistry}
             />);
         }
 
-        const className = this.generateFinalClassName(["grid-measure-viewer"]);
+        const repeatBars = dataModel.arrangement.repeatBars;
+        const opensRepeat = repeatBars?.get(measureNumber)?.start === true;
+        const closesRepeat = repeatBars?.get(measureNumber)?.end === true;
+        const nextOpensRepeat = repeatBars?.get(measureNumber + 1)?.start === true;
+        const openingRoom = opensRepeat ? ScoreSymbols.inkBox(ScoreSymbol.RepeatStart).width : "0px";
+        const closingRoom = closesRepeat ? ScoreSymbols.inkBox(ScoreSymbol.RepeatEnd).width : "0px";
+        const className = this.generateFinalClassName([
+            "grid-measure-viewer",
+            closesRepeat || nextOpensRepeat ? "grid-measure-repeat-boundary" : undefined,
+        ]);
 
         const viewerStyle = {
             flex: 1,
-            minWidth: `max(calc(${baseSteps} * var(--note-height)), var(--bar-action-min-width, 0px))`,
+            minWidth: `max(calc(${baseSteps} * var(--note-height) + ${openingRoom} + ${closingRoom}), `
+                + "var(--bar-action-min-width, 0px))",
+            "--grid-repeat-opening-room": openingRoom,
+            "--grid-repeat-closing-room": closingRoom,
         };
         const registryRef = scoreElementRegistry?.createRef({
             kind: ScoreElementKind.BarContainer,
