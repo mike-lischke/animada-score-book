@@ -235,7 +235,21 @@ export class MeasureLayout {
     }
 
     /**
-     * Resolves the smallest column width a measure of an arrangement still draws in.
+     * Resolves the smallest column width a measure of an arrangement still draws in, the room the editor's bar
+     * action strip needs included.
+     *
+     * @param arrangement The arrangement the measure belongs to.
+     * @param bar The 1-based measure number.
+     *
+     * @returns The smallest column width in px at 100% zoom, the column insets included.
+     */
+    public static minimumWidthOfMeasure(arrangement: Readonly<ISbDmArrangement>, bar: number): number {
+        return Math.max(MeasureLayout.contentMinimumWidthOfMeasure(arrangement, bar), barActionStripWidth);
+    }
+
+    /**
+     * Resolves the smallest column width a measure still draws its notation in, without the room the editor's bar
+     * action strip takes. A view that shows no editor controls — the print layout — may go down to this width.
      *
      * The staff lays its events out proportionally, so a requirement stated as a length scales with the column:
      * an event's slot is its duration fraction of the column and the distance between two anchors is the fraction
@@ -245,15 +259,12 @@ export class MeasureLayout {
      * ({@link minRestAir}): rests are the elastic slack of a measure (ADR-0003), so a measure holding rests alone
      * keeps the room its controls need.
      *
-     * The measure also carries the bar action strip, which is centred on it and therefore has to fit inside it
-     * ({@link barActionStripWidth}).
-     *
      * @param arrangement The arrangement the measure belongs to.
      * @param bar The 1-based measure number.
      *
      * @returns The smallest column width in px at 100% zoom, the column insets included.
      */
-    public static minimumWidthOfMeasure(arrangement: Readonly<ISbDmArrangement>, bar: number): number {
+    public static contentMinimumWidthOfMeasure(arrangement: Readonly<ISbDmArrangement>, bar: number): number {
         let noteSlotWidth = 0;
         let noteGapWidth = 0;
         let restSlotWidth = 0;
@@ -294,7 +305,7 @@ export class MeasureLayout {
             restSlotWidth,
         );
 
-        return Math.max(Math.ceil(contentWidth) + staffMeasureInsets, barActionStripWidth);
+        return Math.ceil(contentWidth) + staffMeasureInsets;
     }
 
     /**
