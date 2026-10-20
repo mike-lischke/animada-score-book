@@ -44,26 +44,22 @@ test("print dialog shows expected option rows", async ({ page }) => {
 
     await expect(card).toBeVisible({ timeout: 5000 });
     await expect(card).toContainText("Bars per line");
-    await expect(card).toContainText("Include legend");
     await expect(card).toContainText("Tracks");
 
     // Removed options must not be present.
+    await expect(card).not.toContainText("Include legend");
     await expect(card).not.toContainText("Orientation");
     await expect(card).not.toContainText("Paper Size");
     await expect(card).not.toContainText("Theme");
 });
 
-test("print dialog defaults: bars per line = Auto, include legend = checked", async ({ page }) => {
+test("print dialog defaults to automatic bars per line", async ({ page }) => {
     await page.goto("/");
 
     const dialog = await openPrintDialog(page);
 
     // Bars per line dropdown caption.
     await expect(dialog.getByText("Auto", { exact: true }).first()).toBeVisible();
-
-    // Include legend defaults to checked.
-    const legendCheckbox = dialog.locator("#print-show-legend");
-    await expect(legendCheckbox).toBeChecked();
 });
 
 test("print dialog lists all arrangement tracks, all selected by default", async ({ page }) => {
@@ -104,21 +100,6 @@ test("toggling a track updates its checkbox state", async ({ page }) => {
 
     await firstTrack.click({ force: true });
     await expect(firstTrack).toBeChecked();
-});
-
-test("toggling include legend updates the checkbox state", async ({ page }) => {
-    await page.goto("/");
-
-    const dialog = await openPrintDialog(page);
-
-    const legendCheckbox = dialog.locator("#print-show-legend");
-    await expect(legendCheckbox).toBeChecked();
-
-    await legendCheckbox.click({ force: true });
-    await expect(legendCheckbox).not.toBeChecked();
-
-    await legendCheckbox.click({ force: true });
-    await expect(legendCheckbox).toBeChecked();
 });
 
 test("cancel closes the dialog without triggering print", async ({ page }) => {
@@ -175,7 +156,7 @@ test("accepting the dialog triggers window.print and adds the printing class", a
     }).toContain("Animada Score Book");
 });
 
-test("PrintView is rendered with a legend section after accepting the dialog", async ({ page }) => {
+test("PrintView is rendered after accepting the dialog", async ({ page }) => {
     await page.goto("/");
 
     // Stub window.print so we can observe the in-flight print DOM without a real print dialog,
@@ -192,42 +173,11 @@ test("PrintView is rendered with a legend section after accepting the dialog", a
     // PrintView is only mounted while state.printing is true.
     const printRoot = page.locator(".print-root");
     await expect(printRoot).toBeAttached();
-
-    // The legend section is rendered (default: showLegend = true).
-    const legend = page.locator(".print-legend");
-    await expect(legend).toBeAttached();
-    await expect(page.locator(".print-legend-title")).toHaveText("Legend");
-    const legendItems = page.locator(".print-legend-item");
-    expect(await legendItems.count()).toBeGreaterThan(0);
+    await expect(printRoot.locator(".print-title")).toHaveCount(1);
+    const instrumentNames = page.locator(".print-root .print-instrument-name");
+    expect(await instrumentNames.count()).toBeGreaterThan(0);
 
     // Cleanup: dispatch afterprint so the app exits the printing state.
-    await page.evaluate(() => {
-        window.dispatchEvent(new Event("afterprint"));
-    });
-});
-
-test("disabling include legend hides the legend section in the print view", async ({ page }) => {
-    await page.goto("/");
-
-    await page.evaluate(() => {
-        window.print = () => {
-            // No-op.
-        };
-    });
-
-    const dialog = await openPrintDialog(page);
-
-    // Uncheck "Include legend".
-    const legendCheckbox = dialog.locator("#print-show-legend");
-    await legendCheckbox.click({ force: true });
-    await expect(legendCheckbox).not.toBeChecked();
-
-    await dialog.locator("#print-button-print").click();
-
-    await expect(page.locator(".print-root")).toBeAttached();
-    await expect(page.locator(".print-legend")).toHaveCount(0);
-
-    // Cleanup.
     await page.evaluate(() => {
         window.dispatchEvent(new Event("afterprint"));
     });

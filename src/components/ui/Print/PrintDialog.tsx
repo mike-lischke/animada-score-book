@@ -48,7 +48,6 @@ export class PrintDialog extends UIComponent<IPrintDialogProps, IPrintDialogStat
         this.state = {
             options: {
                 barsPerLine: "auto",
-                showLegend: true,
                 viewMode: TrackViewMode.Grid,
                 selectedTrackIds: undefined,
             },
@@ -106,22 +105,6 @@ export class PrintDialog extends UIComponent<IPrintDialogProps, IPrintDialogStat
                             items={barsPerLineItems}
                             selectedItem={barsPerLineLabel}
                             closeOnSelect
-                        />
-                    </Container>
-
-                    <Container
-                        className="form-row"
-                        orientation={Orientation.LeftToRight}
-                        mainAlignment={ChildAlignment.SpaceBetween}
-                        crossAlignment={ChildAlignment.Center}
-                    >
-                        <span className="form-row-label">Include legend</span>
-                        <Toggle
-                            id="print-show-legend"
-                            checkState={options.showLegend ? CheckState.Checked : CheckState.Unchecked}
-                            onChange={(_e, checkState) => {
-                                this.updateOption("showLegend", checkState === CheckState.Checked);
-                            }}
                         />
                     </Container>
 

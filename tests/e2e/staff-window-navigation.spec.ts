@@ -166,6 +166,31 @@ const staffGeometry = (page: Page): Promise<IStaffGeometry> => {
     });
 };
 
+/**
+ * Reads the staff geometry once it stopped changing: the panels follow the centred score content, which a first
+ * layout pass still adjusts.
+ *
+ * @param page The page to read the geometry from.
+ *
+ * @returns The settled vertical geometry of the staff view.
+ */
+const settledStaffGeometry = async (page: Page): Promise<IStaffGeometry> => {
+    let previous = await staffGeometry(page);
+
+    for (let attempt = 0; attempt < 20; attempt++) {
+        await page.waitForTimeout(50);
+
+        const current = await staffGeometry(page);
+        if (current.contentHeight === previous.contentHeight && current.controlsHeight === previous.controlsHeight) {
+            return current;
+        }
+
+        previous = current;
+    }
+
+    return previous;
+};
+
 // The score has eight measures with four events each, and the viewer renders only a window of them, so the measure
 // the cursor was left in can be gone from the DOM entirely.
 test("navigation steps through the events of a measure that is not rendered", async ({ page }) => {
@@ -214,12 +239,14 @@ test("the staff content keeps its height while the window leaves the prefix behi
     await openScore(page);
 
     await expect(page.locator(".staff-prefix-viewer")).toHaveCount(1);
-    const before = await staffGeometry(page);
+
+    // The panels follow the centred score content, so a first layout pass still moves them by a pixel.
+    const before = await settledStaffGeometry(page);
 
     await scrollAway(page);
 
     // The window has moved past measure 1, which is no longer rendered as a column of its own.
     await expect(page.locator(".staff-measure-number", { hasText: /^1$/ })).toHaveCount(0);
 
-    expect(await staffGeometry(page)).toEqual(before);
+    expect(await settledStaffGeometry(page)).toEqual(before);
 });

@@ -16,7 +16,6 @@ import { GridMeasureViewer } from "../Bar/Grid/GridMeasureViewer.js";
 import { StaffMeasureViewer } from "../Bar/Staff/StaffMeasureViewer.js";
 import { StaffPrefixViewer } from "../Bar/Staff/StaffPrefixViewer.js";
 import { Container } from "../framework/Container.js";
-import { Icon } from "../framework/Icon.js";
 import { ChildAlignment, Orientation } from "../framework/ui-types.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
 
@@ -44,7 +43,6 @@ export interface IPrintOptions {
 
     /** IDs of tracks to include. If undefined, all tracks are included. */
     selectedTrackIds?: Set<number>;
-    showLegend: boolean;
     viewMode: TrackViewMode;
 }
 
@@ -131,45 +129,7 @@ export class PrintView extends UIComponent<IPrintViewProps> {
                         );
                     })}
                 </div>
-
-                {options.showLegend && this.renderLegend(tracks)}
             </div>
-        );
-    }
-
-    /**
-     * Renders the optional legend at the bottom of the print output: one entry per
-     * selected track showing the instrument icon next to the track / instrument name.
-     *
-     * @param tracks The selected tracks, in the same order as in the score.
-     * @returns The legend element, or `null` if there are no tracks to show.
-     */
-    private renderLegend(tracks: ISbDmTrack[]): ComponentChild {
-        if (tracks.length === 0) {
-            return null;
-        }
-
-        return (
-            <section className="print-legend" aria-label="Legend">
-                <h2 className="print-legend-title">Legend</h2>
-                <ul className="print-legend-list">
-                    {tracks.map((track) => {
-                        const label = track.name || track.instrument.displayName;
-
-                        return (
-                            <li key={`legend-${track.id}`} className="print-legend-item">
-                                <Icon
-                                    className="print-legend-icon"
-                                    src={track.instrument.image.filePath}
-                                    alt={track.instrument.displayName}
-                                    color={track.instrument.color}
-                                />
-                                <span className="print-legend-label">{label}</span>
-                            </li>
-                        );
-                    })}
-                </ul>
-            </section>
         );
     }
 
@@ -294,43 +254,39 @@ export class PrintView extends UIComponent<IPrintViewProps> {
     }
 
     /**
-     * Renders a vertical column with one instrument icon per track row, used as the leftmost
-     * column of every bar row in grid mode. The icons line up with the rows produced by
-     * `GridMeasureViewer`.
+     * Renders instrument names aligned with the track rows of each printed system.
      *
-     * @param tracks The tracks to render icons for, in the same order as the rows.
-     * @param rowGeometries The staff row geometry per track, so the icons line up with the staff rows. Omitted
+     * @param tracks The tracks to name, in the same order as the rows.
+     * @param rowGeometries The staff row geometry per track, so the names line up with the staff rows. Omitted
      *                      in grid mode, where the cells keep the grid cell height.
      *
-     * @returns A column container with the per-track icons.
+     * @returns A column container with the instrument names.
      */
     private renderInstrumentColumn(tracks: ISbDmTrack[],
         rowGeometries?: ReadonlyMap<number, IStaffRowGeometry>): ComponentChild {
-        return (
-            <div className="print-instrument-column" aria-hidden="true">
-                {/* Spacer matching the grid-measure-beam strip above the first row. */}
-                <div className="print-instrument-beam-spacer" />
-                {tracks.map((track) => {
-                    const geometry = rowGeometries?.get(track.id);
-                    const cellStyle = geometry === undefined
-                        ? undefined
-                        : {
-                            "--staff-row-height": StaffRowGeometry.formatPx(geometry.heightPx),
-                            "--staff-centre": StaffRowGeometry.formatPx(geometry.centrePx),
-                        };
+        const names = tracks.map((track) => {
+            const geometry = rowGeometries?.get(track.id);
+            const cellStyle = geometry === undefined
+                ? undefined
+                : {
+                    "--staff-row-height": StaffRowGeometry.formatPx(geometry.heightPx),
+                    "--staff-centre": StaffRowGeometry.formatPx(geometry.centrePx),
+                };
 
-                    return (
-                        <div key={`icon-${track.id}`} className="print-instrument-cell" style={cellStyle}>
-                            <Icon
-                                className="print-instrument-icon"
-                                src={track.instrument.image.filePath}
-                                alt={track.instrument.displayName}
-                                color={track.instrument.color}
-                            />
-                        </div>
-                    );
-                })}
-            </div>
+            return (
+                <Container key={track.id} className="print-instrument-cell" style={cellStyle}
+                    crossAlignment={ChildAlignment.Center} mainAlignment={ChildAlignment.End}>
+                    <span className="print-instrument-name">{track.instrument.displayName}</span>
+                </Container>
+            );
+        });
+
+        return (
+            <Container className="print-instrument-column" orientation={Orientation.TopDown}
+                crossAlignment={ChildAlignment.Stretch}>
+                <div className="print-instrument-beam-spacer" />
+                {names}
+            </Container>
         );
     }
 

@@ -61,12 +61,6 @@
     background: white;
     font-family: system-ui, "Open Sans", "Helvetica Neue", "Segoe UI", Roboto, sans-serif;
 
-    /*
-     * Size of an instrument icon in the printed instrument column, in px. The icon belongs to the printed layout
-     * and not to the grid, whose cell size states nothing about how large a printed track is drawn.
-     */
-    --print-instrument-icon-size: 57px;
-
     .print-header {
         margin-bottom: 8mm;
 
@@ -111,13 +105,6 @@
         min-width: calc(var(--steps-per-bar) * var(--measure-step-width) / 2);
     }
 
-    /* Pin the bar number inside the bar instead of right-anchored against the icon column. */
-    .grid-measure-beam .grid-measure-number {
-        right: auto !important;
-        left: 6px;
-        top: 0;
-    }
-
     /* Compensate the 1px border-left of the first beat tick. */
     .grid-measure-beam .grid-measure-beat.bar-start {
         margin-left: -1px;
@@ -142,53 +129,10 @@
         box-shadow: none !important;
     }
 
-    /*
-     * Print fallback for the per-track instrument icons. Chromium/Safari silently
-     * drop mask-image on paper, so we keep the per-track background-color and
-     * overlay the SVG silhouette via `--icon-src` (set by Icon.tsx) as a
-     * background-image. Only used in staff view — in grid view the cells already
-     * carry the track color, so a plain silhouette without colored backdrop is
-     * enough.
-     */
-    &.view-staff .print-instrument-icon.icon,
-    .print-legend-icon.icon {
-        -webkit-mask-image: none !important;
-        mask-image: none !important;
-        background-image: var(--icon-src) !important;
-        background-size: 70% 70% !important;
-        background-repeat: no-repeat !important;
-        background-position: center !important;
-        border-radius: 6px;
-        filter: none !important;
-    }
-
-    /*
-     * Grid view: drop the inline track-color background and render the icon as a
-     * plain silhouette only.
-     */
-    &.view-grid .print-instrument-icon.icon {
-        -webkit-mask-image: none !important;
-        mask-image: none !important;
-        background-color: transparent !important;
-        background-image: var(--icon-src) !important;
-        background-size: contain !important;
-        background-repeat: no-repeat !important;
-        background-position: center !important;
-        filter: none !important;
-    }
-
-    /*
-     * Instrument icon column rendered before the first measure of each bar row. Each
-     * grid row contributes `--note-height + 21px` to the column height (row + note-viewer
-     * margins/border); each icon cell uses that stride so icons line up with their
-     * track row regardless of subdivisions.
-     */
     .print-instrument-column {
-        flex: 0 0 auto;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        margin-right: 6px;
+        flex: 0 0 140px;
+        width: 140px;
+        margin-right: 12px;
         margin-top: calc(var(--note-height) * -0.35 + 5px);
     }
 
@@ -201,17 +145,15 @@
     .print-instrument-cell {
         flex: 0 0 auto;
         height: calc(var(--note-height) + 20px);
-        display: flex;
-        align-items: center;
-        justify-content: center;
     }
 
-    .print-instrument-icon {
-        width: var(--print-instrument-icon-size);
-        height: var(--print-instrument-icon-size);
-        object-fit: contain;
-
-        /* The icon sits on the printed staff line of its track. A centred item moves by half its top margin. */
+    .print-instrument-name {
+        width: 100%;
+        font-size: 18px;
+        font-weight: 600;
+        line-height: 1.2;
+        text-align: right;
+        overflow-wrap: anywhere;
         margin-top: calc(var(--staff-centre, 0px) * 2);
     }
 
@@ -227,8 +169,8 @@
         }
 
         .print-instrument-cell {
-            /* The row geometry states each track's height; the gap below matches the printed staff rows. */
-            height: calc(var(--staff-row-height, var(--note-height)) + 20px);
+            height: var(--staff-row-height, var(--note-height));
+            margin-bottom: 20px;
         }
     }
 
@@ -236,43 +178,6 @@
        the first track row in the printed output. */
     &.view-grid .print-instrument-column {
         margin-top: -4px;
-    }
-
-    .print-legend {
-        margin-top: 8mm;
-        page-break-inside: avoid;
-        break-inside: avoid;
-
-        .print-legend-title {
-            font-size: 12pt;
-            font-weight: 700;
-            margin: 0 0 3mm 0;
-        }
-
-        .print-legend-list {
-            list-style: none;
-            margin: 0;
-            padding: 0;
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-            gap: 2mm 6mm;
-        }
-
-        .print-legend-item {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .print-legend-icon {
-            width: 48px;
-            height: 48px;
-            object-fit: contain;
-        }
-
-        .print-legend-label {
-            font-size: 11pt;
-        }
     }
 
     /*
@@ -323,13 +228,8 @@
         --beam-thickness: calc(3px / var(--print-zoom, 1));
     }
 
-    /*
-     * Bar-number badge: in print the digits sit slightly too high inside their
-     * bordered box (different font-metric handling than on screen). Nudge them
-     * down with a small padding tweak.
-     */
+    .grid-measure-number,
     .staff-measure-number {
-        padding: 0 4px 0 4px;
-        line-height: 1;
+        display: none;
     }
 }
