@@ -1601,7 +1601,7 @@ export class App extends UIComponent<{}, IAppState> {
                             content: "",
                             placeholder: "Name of the new folder",
                             displayWidth: 6,
-                        } as IValueEditorValueEntry],
+                        }],
                     );
 
                     if (result?.closure !== DialogResponseClosure.Accept) {
@@ -1669,7 +1669,7 @@ export class App extends UIComponent<{}, IAppState> {
                                 content,
                                 placeholder: "https://<host-name>/?t=...",
                                 displayWidth: 6,
-                            } as IValueEditorValueEntry],
+                            }],
                         );
 
                         if (result) {
@@ -1732,6 +1732,7 @@ export class App extends UIComponent<{}, IAppState> {
                             type: ValueEditorEntryType.Value,
                             id: "folderName",
                             content: data.name,
+                            autoFocus: true,
                             displayWidth: 6,
                         }],
                     );

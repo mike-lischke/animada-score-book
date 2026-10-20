@@ -44,6 +44,7 @@ export interface IValueEditorEntry {
 export interface IValueEditorValueEntry extends IValueEditorEntry {
     type: ValueEditorEntryType.Value;
     placeholder?: string;
+    autoFocus?: boolean;
 
     /** Renders the input as a password field. */
     password?: boolean;
@@ -128,7 +129,8 @@ export class ValueDialog extends UIComponent<{}, IValueDialogState> {
     }
 
     public async show(id: string, caption: string, icon: UIIcon,
-        entries: IValueEditorEntry[], options?: IValueDialogShowOptions): Promise<IDialogResponse> {
+        entries: Array<IValueEditorEntry | IValueEditorValueEntry>,
+        options?: IValueDialogShowOptions): Promise<IDialogResponse> {
         const { acceptLabel, declineLabel, errorMessage, hideActions, isDefault } = options ?? {};
 
         this.signal = new Semaphore<IDialogResponse>();
@@ -208,6 +210,7 @@ export class ValueDialog extends UIComponent<{}, IValueDialogState> {
                     cellContent = <Input
                         id={entry.id}
                         value={valueEntry.content as string}
+                        autoFocus={valueEntry.autoFocus}
                         placeholder={valueEntry.placeholder}
                         password={valueEntry.password}
                         onConfirm={onConfirm}

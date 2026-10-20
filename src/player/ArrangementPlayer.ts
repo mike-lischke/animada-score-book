@@ -360,7 +360,7 @@ export class ArrangementPlayer {
         }
 
         const horizon = this.audioContext.currentTime + 0.25;
-        while (this.offset + this.timeCovered < horizon) {
+        while (this.timeCovered < horizon - this.offset) {
             if (this.timeCovered >= this.endOffset) {
                 if (!this.dataModel.arrangement!.loop) {
                     break;
