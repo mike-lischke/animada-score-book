@@ -5,6 +5,7 @@
 
 import "./App.scss";
 import "./print.scss";
+import "./print-preview.scss";
 import "./tailwind.css";
 
 import { createRef, type ComponentChild } from "preact";
@@ -38,7 +39,7 @@ import { DrawerSidebar } from "./components/ui/framework/DrawerSidebar.js";
 import { Icon } from "./components/ui/framework/Icon.js";
 import { Label } from "./components/ui/framework/Label.js";
 import { UIIcon } from "./components/ui/framework/UIIcon.js";
-import { PrintDialog } from "./components/ui/Print/PrintDialog.js";
+import { PrintPreview } from "./components/ui/Print/PrintPreview.js";
 import { PrintView, type IPrintOptions } from "./components/ui/Print/PrintView.js";
 import { AppStorage, type IUISettings } from "./core/AppStorage.js";
 import { Arrangement, type IArrangementCreationOptions } from "./core/Arrangement.js";
@@ -67,6 +68,7 @@ import { BackendDisconnectedDialog } from "./ui/BackendDisconnectedDialog.js";
 import { BackendSetupDialog, BackendSetupMode } from "./ui/BackendSetupDialog.js";
 import { LoginDialog } from "./ui/LoginDialog.js";
 import { PermissionEditor } from "./ui/PermissionEditor.js";
+import { PrintSession } from "./ui/PrintSession.js";
 import { SelectionManager } from "./ui/SelectionManager.js";
 import { SettingsDialog } from "./ui/SettingsDialog.js";
 import { TutorialWizard } from "./ui/TutorialWizard.js";
@@ -121,6 +123,9 @@ interface IAppState {
     printing: boolean;
     printOptions?: IPrintOptions;
 
+    /** When true, the full-window print preview overlay is shown. */
+    printPreviewOpen: boolean;
+
     /** The notification center's summary, for the footer's notification button. */
     notificationState: INotificationState;
 
@@ -152,7 +157,6 @@ export class App extends UIComponent<{}, IAppState> {
     private adminSetupDialogRef = createRef<AdminSetupDialog | null>();
     private userGroupEditorRef = createRef<UserGroupEditor | null>();
     private permissionEditorRef = createRef<PermissionEditor | null>();
-    private printDialogRef = createRef<PrintDialog | null>();
     private exportDialogRef = createRef<Dialog | null>();
     private tutorialWizardRef = createRef<TutorialWizard | null>();
     private valueDialogRef = createRef<ValueDialog | null>();
@@ -166,6 +170,9 @@ export class App extends UIComponent<{}, IAppState> {
     private dataModel = new ScoreBookDataModel();
     private scoreClipboard = new ScoreClipboard(this.dataModel);
     private smuflFontLoader = new SmuflFontLoader();
+
+    /** Print settings of the application session, retained while the preview is closed. */
+    private printSession = new PrintSession();
 
     private selectionManager: SelectionManager;
     private arrangementPlayer?: ArrangementPlayer;
@@ -197,6 +204,7 @@ export class App extends UIComponent<{}, IAppState> {
                 ?? TrackViewMode.Grid,
             preferredEntryMode: AppStorage.loadUISettings()?.entryMode ?? EditEntryMode.Insert,
             printing: false,
+            printPreviewOpen: false,
             notificationState: { newCount: 0, totalCount: 0, silent: false, showHistory: false },
             zoom: AppStorage.loadUISettings()?.viewSettings?.arrangementViewSettings?.zoomLevel ?? 100,
             compactHeader: this.compactHeaderQuery.matches,
@@ -240,7 +248,7 @@ export class App extends UIComponent<{}, IAppState> {
     public override shouldComponentUpdate(nextProps: {}, nextState: IAppState): boolean {
         const { editMode, zenMode, sidebarOpen, phase, trackViewMode, printing, backendUnreachable,
             startupError, preferredEntryMode, notificationState, zoom, compactHeader, compactLayout,
-            scoreSaved } = this.state;
+            scoreSaved, printPreviewOpen } = this.state;
 
         return editMode !== nextState.editMode
             || zenMode !== nextState.zenMode
@@ -248,6 +256,7 @@ export class App extends UIComponent<{}, IAppState> {
             || trackViewMode !== nextState.trackViewMode
             || preferredEntryMode !== nextState.preferredEntryMode
             || printing !== nextState.printing
+            || printPreviewOpen !== nextState.printPreviewOpen
             || backendUnreachable !== nextState.backendUnreachable
             || startupError !== nextState.startupError
             || notificationState !== nextState.notificationState
@@ -284,8 +293,8 @@ export class App extends UIComponent<{}, IAppState> {
 
     public render() {
         const { phase, editMode: requestedEditMode, zenMode, sidebarOpen, trackViewMode, notificationState, zoom,
-            printing, printOptions, backendUnreachable, startupError, preferredEntryMode, compactHeader,
-            compactLayout } = this.state;
+            printing, printOptions, printPreviewOpen, backendUnreachable, startupError, preferredEntryMode,
+            compactHeader, compactLayout } = this.state;
         const editMode = requestedEditMode && !zenMode;
         const entryMode = this.effectiveEntryMode(trackViewMode, preferredEntryMode);
         const isRunning = phase === AppPhase.Running;
@@ -652,7 +661,6 @@ export class App extends UIComponent<{}, IAppState> {
                         <BackendSetupDialog
                             ref={this.backendSetupDialogRef}
                         />
-                        <PrintDialog ref={this.printDialogRef} onAccept={this.handlePrintAccept} />
                         <UserGroupEditor
                             ref={this.userGroupEditorRef}
                             dataModel={this.dataModel}
@@ -666,6 +674,19 @@ export class App extends UIComponent<{}, IAppState> {
                                 void requisitions.execute("permChanged", entry);
                             }}
                         />
+                        {
+                            printPreviewOpen && this.dataModel.arrangement && this.arrangementPlayer && (
+                                <PrintPreview
+                                    dataModel={this.dataModel}
+                                    arrangementPlayer={this.arrangementPlayer}
+                                    selectionManager={this.selectionManager}
+                                    session={this.printSession}
+                                    viewMode={trackViewMode}
+                                    onClose={this.handlePrintPreviewClose}
+                                    onPrint={this.handlePrintPreviewPrint}
+                                />
+                            )
+                        }
                         {
                             printing && this.dataModel.arrangement && printOptions
                             && this.arrangementPlayer && this.undoManager && (
@@ -1281,7 +1302,7 @@ export class App extends UIComponent<{}, IAppState> {
     };
 
     private handlePrintClick = () => {
-        this.openPrintDialog();
+        this.openPrintPreview();
     };
 
     private handleSaveClick = (): void => {
@@ -1406,23 +1427,34 @@ export class App extends UIComponent<{}, IAppState> {
         return items;
     }
 
-    private openPrintDialog(): void {
-        if (!this.dataModel.arrangement) {
+    private openPrintPreview(): void {
+        if (!this.dataModel.arrangement || !this.arrangementPlayer) {
             return;
         }
 
-        const settings = AppStorage.loadUISettings() ?? {};
-        const viewMode = settings.viewSettings?.arrangementViewSettings?.displayMode ?? TrackViewMode.Grid;
-
-        const availableTracks = this.dataModel.arrangement.tracks.map((track) => {
-            return { id: track.id, name: track.name || track.instrument.displayName };
-        });
-
-        this.printDialogRef.current?.open({ viewMode, }, availableTracks);
+        this.setState({ printPreviewOpen: true });
     }
 
-    private handlePrintAccept = (options: IPrintOptions): void => {
-        this.startPrint(options);
+    private handlePrintPreviewClose = (): void => {
+        this.setState({ printPreviewOpen: false });
+    };
+
+    /**
+     * Prints through the native dialog. The preview stays mounted, so closing or cancelling the dialog returns to
+     * the unchanged preview.
+     */
+    private handlePrintPreviewPrint = (): void => {
+        const arrangement = this.dataModel.arrangement;
+        if (!arrangement) {
+            return;
+        }
+
+        const selectedTrackIds = this.printSession.selectedTrackIds(arrangement);
+        this.startPrint({
+            barsPerLine: "auto",
+            selectedTrackIds: selectedTrackIds === undefined ? undefined : new Set(selectedTrackIds),
+            viewMode: this.state.trackViewMode,
+        });
     };
 
     private startPrint(options: IPrintOptions): void {
@@ -1929,10 +1961,10 @@ export class App extends UIComponent<{}, IAppState> {
             return;
         }
 
-        // Ctrl/Cmd+P opens the print preview dialog instead of the native print dialog.
+        // Ctrl/Cmd+P opens the print preview instead of the native print dialog.
         if ((event.ctrlKey || event.metaKey) && !event.shiftKey && !event.altKey && event.key === "p") {
             event.preventDefault();
-            this.openPrintDialog();
+            this.openPrintPreview();
 
             return;
         }

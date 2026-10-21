@@ -38,6 +38,12 @@ export interface IGridMeasureViewerProperties extends ICommonUIProperties {
      * Used by the print feature to limit output to the user's selection.
      */
     tracks?: ISbDmTrack[];
+
+    /**
+     * The column's layout width in px at 100% zoom. The print layout states it, so a printed column keeps the
+     * measure's width instead of sharing the width of the viewer.
+     */
+    measureWidth?: number;
 }
 
 interface IGridMeasureViewerState {
@@ -171,7 +177,7 @@ export class GridMeasureViewer extends UIComponent<IGridMeasureViewerProperties,
 
     public override render(): ComponentChild {
         const { measureNumber, dataModel, scoreMetrics, scoreElementRegistry, tracks: tracksOverride,
-            focusButton, arrangementPlayer } = this.props;
+            focusButton, arrangementPlayer, measureWidth } = this.props;
         const { beatPositions } = this.state;
 
         if (!dataModel.arrangement) {
@@ -209,13 +215,20 @@ export class GridMeasureViewer extends UIComponent<IGridMeasureViewerProperties,
             closesRepeat || nextOpensRepeat ? "grid-measure-repeat-boundary" : undefined,
         ]);
 
-        const viewerStyle = {
-            flex: 1,
-            minWidth: `max(calc(${baseSteps} * var(--note-height) + ${openingRoom} + ${closingRoom}), `
-                + "var(--bar-action-min-width, 0px))",
-            "--grid-repeat-opening-room": openingRoom,
-            "--grid-repeat-closing-room": closingRoom,
-        };
+        const viewerStyle = measureWidth === undefined
+            ? {
+                flex: 1,
+                minWidth: `max(calc(${baseSteps} * var(--note-height) + ${openingRoom} + ${closingRoom}), `
+                    + "var(--bar-action-min-width, 0px))",
+                "--grid-repeat-opening-room": openingRoom,
+                "--grid-repeat-closing-room": closingRoom,
+            }
+            : {
+                flex: `0 0 ${measureWidth}px`,
+                minWidth: 0,
+                "--grid-repeat-opening-room": openingRoom,
+                "--grid-repeat-closing-room": closingRoom,
+            };
         const registryRef = scoreElementRegistry?.createRef({
             kind: ScoreElementKind.BarContainer,
             bar: measureNumber,

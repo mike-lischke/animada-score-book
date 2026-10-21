@@ -32,6 +32,11 @@
         display: none !important;
     }
 
+    /* Overlays (the print preview) are screen-only: the print document is the .print-root. */
+    body.printing .portal {
+        display: none !important;
+    }
+
     body.printing .print-root {
         display: block !important;
         color: black;

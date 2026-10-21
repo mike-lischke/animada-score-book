@@ -184,9 +184,9 @@ test.describe("SMuFL music font", () => {
         });
 
         await page.locator("#printButton").click();
-        const dialog = page.locator("#printDialog");
-        await expect(dialog).toBeVisible();
-        await dialog.locator("#print-button-print").click();
+        const preview = page.locator(".print-preview");
+        await expect(preview).toBeVisible();
+        await preview.locator(".print-preview-emphasis").click();
 
         await expect(page.locator(".print-root")).toBeAttached();
 

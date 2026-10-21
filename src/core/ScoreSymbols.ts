@@ -88,6 +88,10 @@ export enum ScoreSymbol {
 
     /** The one-bar repeat (simile): the measure plays what the measure before it plays. */
     MeasureRepeat,
+
+    /** The ends of the bracket that groups the staves of a system. The line between them is drawn geometry. */
+    BracketTop,
+    BracketBottom,
 }
 
 /** What draws a symbol. */
@@ -515,6 +519,18 @@ export class ScoreSymbols {
             source: ScoreSymbolSource.MusicFontGlyph,
             glyph: SmuflGlyph.Repeat1Bar,
             anchor: GlyphAnchor.Centre,
+        },
+
+        [ScoreSymbol.BracketTop]: {
+            source: ScoreSymbolSource.MusicFontGlyph,
+            glyph: SmuflGlyph.BracketTop,
+            anchor: GlyphAnchor.LeftEdge,
+        },
+
+        [ScoreSymbol.BracketBottom]: {
+            source: ScoreSymbolSource.MusicFontGlyph,
+            glyph: SmuflGlyph.BracketBottom,
+            anchor: GlyphAnchor.LeftEdge,
         },
 
         [ScoreSymbol.BarlineSingle]: {

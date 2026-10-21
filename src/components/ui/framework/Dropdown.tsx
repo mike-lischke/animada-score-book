@@ -26,6 +26,9 @@ export interface IDropdownProperties extends ICommonUIProperties {
     items: IDropdownItem[];
     compact?: boolean;
 
+    /** Rendered above the items, e.g. an action that applies to all of them. */
+    menuHeader?: ComponentChild;
+
     /** If true, the dropdown closes automatically after an item is selected. Defaults to false. */
     closeOnSelect?: boolean;
 }
@@ -46,7 +49,7 @@ export class Dropdown extends UIComponent<IDropdownProperties, IDropdownState> {
     }
 
     public render(): ComponentChild {
-        const { id, caption, disabled, icon, items, selectedItem, style, compact, title } = this.props;
+        const { id, caption, disabled, icon, items, selectedItem, style, compact, title, menuHeader } = this.props;
         const { activeIndex } = this.state;
 
         const children = items.map((item, index) => {
@@ -83,6 +86,11 @@ export class Dropdown extends UIComponent<IDropdownProperties, IDropdownState> {
         const defaultCaption = !caption && (icon === undefined) ? "Select an option" : undefined;
         const className = this.generateFinalClassName(["dropdown-host"]);
 
+        let header: ComponentChild;
+        if (menuHeader !== undefined) {
+            header = <li className="dropdown-menu-header">{menuHeader}</li>;
+        }
+
         return (
             <div id={id} className={className}>
                 <Button
@@ -111,6 +119,7 @@ export class Dropdown extends UIComponent<IDropdownProperties, IDropdownState> {
                     onKeyDown={this.handleKeyDown}
                     onToggle={this.handlePopoverToggle}
                 >
+                    {header}
                     {children}
                 </ul>
             </div>

@@ -11,8 +11,8 @@ import { PageOrientation, PrintLayout } from "../../src/core/PrintLayout.js";
 import type { ISbDmArrangement, ISbDmTrack } from "../../src/core/ScoreBookDataModel.js";
 import { TrackViewMode } from "../../src/core/types/general.js";
 import {
-    PrintSession, defaultPrintMargins, defaultPrintScale, maxPreviewZoom, maxPrintScale, minPreviewZoom,
-    minPrintScale,
+    PrintSession, defaultPrintMargins, defaultPrintScale, maxPreviewZoom, maxPrintMargin, maxPrintScale,
+    minPreviewZoom, minPrintMargin, minPrintScale,
 } from "../../src/ui/PrintSession.js";
 
 /** A 4/4 grid, which is all the notation rules the width floor needs. */
@@ -106,12 +106,13 @@ describe("PrintSession", () => {
         expect(session.previewZoom).toBe(maxPreviewZoom);
     });
 
-    it("raises negative margins to zero", () => {
+    it("clamps the margins to the supported range", () => {
         const session = new PrintSession();
 
-        session.setMargins({ top: -5, right: 2, bottom: 3, left: 4 });
+        session.setMargins({ top: -20, right: 60, bottom: 3, left: 4 });
 
-        expect(session.pageSetup.margins).toEqual({ top: 0, right: 2, bottom: 3, left: 4 });
+        expect(session.pageSetup.margins)
+            .toEqual({ top: minPrintMargin, right: maxPrintMargin, bottom: 3, left: 4 });
     });
 
     it("starts with every track selected and refuses to deselect the last one", () => {

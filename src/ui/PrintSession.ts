@@ -14,7 +14,13 @@ import { clampValue } from "../core/utils.js";
 export const minPrintScale = 0.1;
 
 /** Greatest factor the print scale may take. */
-export const maxPrintScale = 4;
+export const maxPrintScale = 2;
+
+/** Narrowest page margin a session accepts, in millimeters. */
+export const minPrintMargin = -5;
+
+/** Widest page margin a session accepts, in millimeters. */
+export const maxPrintMargin = 50;
 
 /** Least magnification the preview may take. */
 export const minPreviewZoom = 0.1;
@@ -77,16 +83,16 @@ export class PrintSession {
     }
 
     /**
-     * @param margins The margins of the printed paper, in millimeters. Negative values are raised to zero.
+     * @param margins The margins of the printed paper, in millimeters, clamped to the supported range.
      */
     public setMargins(margins: IPageMargins): void {
         this.setup = {
             ...this.setup,
             margins: {
-                top: Math.max(0, margins.top),
-                right: Math.max(0, margins.right),
-                bottom: Math.max(0, margins.bottom),
-                left: Math.max(0, margins.left),
+                top: clampValue(margins.top, minPrintMargin, maxPrintMargin),
+                right: clampValue(margins.right, minPrintMargin, maxPrintMargin),
+                bottom: clampValue(margins.bottom, minPrintMargin, maxPrintMargin),
+                left: clampValue(margins.left, minPrintMargin, maxPrintMargin),
             },
         };
     }

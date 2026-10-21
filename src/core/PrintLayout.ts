@@ -6,7 +6,7 @@
 import { MeasureLayout, noteHeightPx, staffPrefixWidth } from "./MeasureLayout.js";
 import type { INotationGrid } from "./MeasureProjection.js";
 import type { ISbDmArrangement, ISbDmTrack } from "./ScoreBookDataModel.js";
-import { StaffRowGeometry } from "./StaffRowGeometry.js";
+import { StaffRowGeometry, type IStaffRowGeometry } from "./StaffRowGeometry.js";
 import { TrackViewMode } from "./types/general.js";
 
 /** A4 paper dimensions in millimeters, the only format of the first version. */
@@ -14,7 +14,7 @@ const a4WidthMm = 210;
 const a4HeightMm = 297;
 
 /** CSS px per millimeter: CSS defines a px as 1/96 inch, which states the physical page in px. */
-const pxPerMillimeter = 96 / 25.4;
+export const pxPerMillimeter = 96 / 25.4;
 
 /** Height of the running header band above the content of every page, in printed px. */
 const runningHeaderHeight = 28;
@@ -182,6 +182,12 @@ export interface IPrintLayout {
     readonly geometry: IPrintPageGeometry;
     readonly pages: readonly IPrintPage[];
     readonly overflows: readonly IPrintOverflow[];
+
+    /**
+     * The staff geometry the layout measured for every printed track, keyed by track id. Empty in grid mode, where
+     * the rows keep the grid cell height.
+     */
+    readonly rowGeometries: ReadonlyMap<number, IStaffRowGeometry>;
 }
 
 /** Everything the printed layout is derived from. */
@@ -277,12 +283,16 @@ export class PrintLayout {
             widthMap.set(index + 1, width);
         });
 
+        const rowGeometries = new Map<number, IStaffRowGeometry>();
         const rowHeightsPx = tracks.map((track) => {
             if (viewMode === TrackViewMode.Grid) {
                 return printGridRowHeight;
             }
 
-            return StaffRowGeometry.ofTrack(track, arrangement, grid, 1, widthMap).heightPx;
+            const geometry = StaffRowGeometry.ofTrack(track, arrangement, grid, 1, widthMap);
+            rowGeometries.set(track.id, geometry);
+
+            return geometry.heightPx;
         });
 
         const leadingWidthPx = PrintLayout.leadingWidth(viewMode);
@@ -324,6 +334,7 @@ export class PrintLayout {
             geometry,
             pages,
             overflows: PrintLayout.overflowsOf(pages),
+            rowGeometries,
         };
     }
 

@@ -202,4 +202,22 @@ describe("ScoreSymbols", () => {
             height: "var(--barline-height)",
         });
     });
+
+    it("draws the two ends of a bracket, not the complete bracket glyph", () => {
+        // U+E002 is the complete bracket of a fixed height; a bracket that spans a system is built from the two
+        // ends below it, which hang on the left edge of the box they are placed in.
+        expect(SmuflGlyphs.definition(SmuflGlyph.BracketTop).codepoint).toBe(0xE003);
+        expect(SmuflGlyphs.definition(SmuflGlyph.BracketBottom).codepoint).toBe(0xE004);
+
+        expect(ScoreSymbols.definition(ScoreSymbol.BracketTop)).toMatchObject({
+            source: ScoreSymbolSource.MusicFontGlyph,
+            glyph: SmuflGlyph.BracketTop,
+            anchor: GlyphAnchor.LeftEdge,
+        });
+        expect(ScoreSymbols.definition(ScoreSymbol.BracketBottom)).toMatchObject({
+            source: ScoreSymbolSource.MusicFontGlyph,
+            glyph: SmuflGlyph.BracketBottom,
+            anchor: GlyphAnchor.LeftEdge,
+        });
+    });
 });
