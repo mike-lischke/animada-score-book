@@ -51,9 +51,12 @@ interface IPrintArrangementState {
  *
  * It splits into settings that hold for every printed score of the application session (paper, margins, print
  * scale, preview zoom) and state that belongs to one arrangement (the track selection and the temporary measure
- * widths). Arrangement state is keyed by the arrangement's runtime id, so reopening a score inside the session
- * brings its own state back and a different score never inherits it. Nothing here writes to the arrangement: the
- * print widths are not saved, do not mark the score dirty and never enter the undo history.
+ * widths). The arrangement state outlives the preview itself: closing and reopening it keeps the widths and the
+ * track selection, and only loading another score drops them. The application therefore clears every arrangement
+ * state when a score is loaded.
+ *
+ * Nothing here writes to the arrangement: the print widths are not saved, do not mark the score dirty and never
+ * enter the undo history.
  */
 export class PrintSession {
     private readonly arrangementStates = new Map<number, IPrintArrangementState>();
@@ -232,6 +235,14 @@ export class PrintSession {
      */
     public forgetArrangement(arrangementId: number): void {
         this.arrangementStates.delete(arrangementId);
+    }
+
+    /**
+     * Drops everything the session keeps for every arrangement, so a loaded score never inherits the print widths
+     * or the track selection of the score shown before it.
+     */
+    public forgetAllArrangements(): void {
+        this.arrangementStates.clear();
     }
 
     /**

@@ -228,6 +228,23 @@ describe("PrintSession", () => {
         expect(session.widthOverrides(arrangement).size).toBe(0);
     });
 
+    it("forgets the state of every arrangement when a score is loaded", () => {
+        const session = new PrintSession();
+        const first = arrangementOf(1, [1, 2]);
+        const second = arrangementOf(2, [1, 2]);
+
+        session.setTrackSelected(first, 1, false);
+        session.setWidthOverride(first, 1, 900);
+        session.setWidthOverride(second, 2, 950);
+
+        session.forgetAllArrangements();
+
+        // A loaded score brings its own arrangements, so the widths and track choices of the earlier score are gone.
+        expect(session.selectedTrackIds(first)).toBeUndefined();
+        expect(session.widthOverrides(first).size).toBe(0);
+        expect(session.widthOverrides(second).size).toBe(0);
+    });
+
     it("changes neither the page setup nor the layout when the preview zoom changes", () => {
         const session = new PrintSession();
         const arrangement = arrangementOf(1, [1], 3);

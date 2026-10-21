@@ -6,7 +6,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
 import {
-    MeasureLayout, barActionStripWidth, minEventGap, minEventWidth, staffMeasureInsets, staffPrefixWidth,
+    MeasureLayout, barActionStripWidth, minEventWidth, staffMeasureInsets, staffPrefixWidth,
 } from "../../src/core/MeasureLayout.js";
 import { stringifyPackedArrangement } from "../../src/core/serialisation/snapshot-packing.js";
 import { arrangementSnapshotVersion } from "../../src/core/serialisation/snapshots.js";
@@ -205,6 +205,58 @@ test("dragging the barline widens its measure, and one undo step restores it", a
     }).toBe(measureWidthPx);
 });
 
+test("keeps the first note in place while a measure is resized", async ({ page }) => {
+    await openScore(page);
+    await page.locator("#editModeButton").click({ force: true });
+    await page.evaluate((scroll) => {
+        document.querySelector<HTMLElement>("#trackViewerHost")!.scrollLeft = scroll;
+    }, barlineScrollPx);
+
+    /**
+     * @returns The distance of the first notehead's anchor to the left barline of the measure, that of the last
+     *          notehead's anchor to its right barline, and the distance between the first two noteheads.
+     */
+    const notePositions = (): Promise<{ first: number; last: number; step: number; }> => {
+        return page.evaluate(() => {
+            const measure = document.querySelector<HTMLElement>(".staff-measure-viewer")!;
+            const box = measure.getBoundingClientRect();
+            const heads = [...measure.querySelectorAll<HTMLElement>(".staff-note-head")]
+                .map((head) => {
+                    return head.getBoundingClientRect();
+                });
+
+            // A notehead is drawn with its right edge on its anchor.
+            return {
+                first: heads[0].right - box.left,
+                last: box.right - heads[heads.length - 1].right,
+                step: heads[1].left - heads[0].left,
+            };
+        });
+    };
+
+    const before = await notePositions();
+
+    const handle = page.locator(".staff-measure-resize-handle").first();
+    const box = (await handle.boundingBox())!;
+    const y = box.y + 100;
+    await page.mouse.move(box.x + (box.width / 2), y);
+    await page.mouse.down();
+    await page.mouse.move(box.x + (box.width / 2) + dragPx, y, { steps: 8 });
+    await page.mouse.up();
+
+    await expect.poll(async () => {
+        return (await page.locator(".staff-measure-viewer").first().boundingBox())!.width;
+    }).toBe(measureWidthPx + dragPx);
+
+    const after = await notePositions();
+
+    // The measure is resized around its notation: the first note keeps its room to the opening barline, and the
+    // notes after it take the difference. The room before the closing barline closes up instead of being held.
+    expect(after.first).toBeCloseTo(before.first, 1);
+    expect(after.step).toBeGreaterThan(before.step);
+    expect(after.last).toBeGreaterThan(before.last);
+});
+
 test("resets the measure width with a double click on its barline", async ({ page }) => {
     await openScore(page);
     await page.locator("#editModeButton").click({ force: true });
@@ -266,13 +318,46 @@ test("resets the measure width with a double click on its barline", async ({ pag
     }).toBe(measureWidthPx);
 });
 
-test("widens a shrunk measure when an entry packs it tighter", async ({ page }) => {
-    await openScore(page, EditEntryMode.Overwrite);
+test("shrinks a measure down to the room its symbols take", async ({ page }) => {
+    // Sixteen sixteenths hold 16 × 25 px of symbols; the empty tails of longer events are not part of the floor.
+    const sixteenths = Array.from({ length: 16 }, (_, step) => {
+        return {
+            start: { numerator: step, denominator: 16 },
+            duration: { numerator: 1, denominator: 16 },
+            noteStyleId: "1",
+        };
+    });
+    const packed = stringifyPackedArrangement({
+        version: arrangementSnapshotVersion,
+        title: "E2E Measure Floor",
+        timeParams: { timeSignature: "4/4", tempo: 120, length: 1, pulse: "1/4", stepResolution: 16 },
+        tracks: [{
+            id: 221,
+            instrumentId: "0",
+            measures: [{
+                number: 1,
+                meter: { beats: 4, beatUnits: 4, stepResolution: 16, beatGroups: [4, 4, 4, 4] },
+                events: sixteenths,
+                subdivisions: [],
+            }],
+        }],
+    });
+
+    await page.addInitScript((content: string) => {
+        const sessionId = "e2e-measure-floor";
+        window.history.replaceState({ ...(window.history.state ?? {}), sessionId }, "");
+        window.sessionStorage.setItem("asb-session-id", sessionId);
+        window.localStorage.setItem(`asb-ui-settings-session-${sessionId}`, JSON.stringify({
+            currentScore: content,
+            viewSettings: { arrangementViewSettings: { displayMode: "staff", zoomLevel: 100 } },
+        }));
+    }, packed);
+
+    await page.goto("/");
+    await expect(page.locator("#trackViewerHost")).toBeVisible();
     await page.locator("#editModeButton").click({ force: true });
 
     const measure = page.locator(".staff-measure-viewer").first();
-
-    // Shrink the measure to the floor its content and controls set.
     await page.evaluate((scroll) => {
         document.querySelector<HTMLElement>("#trackViewerHost")!.scrollLeft = scroll;
     }, barlineScrollPx);
@@ -280,19 +365,10 @@ test("widens a shrunk measure when an entry packs it tighter", async ({ page }) 
     const handle = page.locator(".staff-measure-resize-handle").first();
     const box = (await handle.boundingBox())!;
     await page.mouse.dblclick(box.x + (box.width / 2), box.y + 100);
-    await expect.poll(async () => {
-        return (await measure.boundingBox())!.width;
-    }).toBe(barActionStripWidth);
-
-    // A quadruplet splits a quarter note into sixteenths, which need more room between their anchors.
-    await page.locator(".staff-measure-track-row .staff-note-head-symbol").nth(1).click();
-    await page.locator(".subdivision-toolbar button").first().click();
-    await page.locator(".subdivision-toolbar .du-dropdown li", { hasText: "Quadruplet" }).locator("a")
-        .click({ force: true });
 
     await expect.poll(async () => {
         return (await measure.boundingBox())!.width;
-    }).toBe((16 * (minEventWidth + minEventGap)) + staffMeasureInsets);
+    }).toBe((16 * minEventWidth) + staffMeasureInsets);
 });
 
 test("places the play head for the view that is shown", async ({ page }) => {

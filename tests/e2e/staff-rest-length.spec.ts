@@ -49,14 +49,18 @@ const snapshot = {
  * @param page The page holding the staff view.
  * @param index The index of the run within its row.
  *
- * @returns The run's flex-grow value.
+ * @returns The run's share of its row, which is its duration in the bar.
  */
 const growOf = (page: Page, index: number): Promise<string> => {
     return page.evaluate((runIndex) => {
         const row = document.querySelector(".staff-measure-track-row");
-        const run = row?.querySelectorAll<HTMLElement>(".staff-note-viewer-run")[runIndex];
+        const runs = [...(row?.querySelectorAll<HTMLElement>(".staff-note-viewer-run") ?? [])];
+        const total = runs.reduce((sum, run) => {
+            return sum + run.getBoundingClientRect().width;
+        }, 0);
+        const width = runs[runIndex]?.getBoundingClientRect().width ?? Number.NaN;
 
-        return run?.style.flex.split(" ")[0] ?? "";
+        return String(Number((width / total).toFixed(4)));
     }, index);
 };
 
@@ -85,12 +89,16 @@ const leftOf = async (page: Page, index: number): Promise<number> => {
 const restSpanOf = async (page: Page): Promise<string> => {
     const total = await page.evaluate(() => {
         const runs = [...document.querySelectorAll<HTMLElement>(".staff-note-viewer-run")];
-
-        return runs.reduce((sum, run) => {
+        const rowWidth = runs.reduce((sum, run) => {
+            return sum + run.getBoundingClientRect().width;
+        }, 0);
+        const restWidth = runs.reduce((sum, run) => {
             return run.querySelector(".staff-note-viewer-rest-symbol") === null
                 ? sum
-                : sum + Number.parseFloat(run.style.flex);
+                : sum + run.getBoundingClientRect().width;
         }, 0);
+
+        return restWidth / rowWidth;
     });
 
     return total.toFixed(3);

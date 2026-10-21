@@ -90,6 +90,8 @@ export interface IStaffMeasureViewerProps extends ICommonUIProperties {
      * The print view states its halved width, so the same engraving rules hold on paper.
      */
     measureWidth: number;
+    /** The column width at the default layout, which the bar's outer events keep their places to. */
+    nominalWidth?: number;
     /** The shared row geometry of every track, so all measures and side controls lay a track out alike. */
     rowGeometries?: ReadonlyMap<number, IStaffRowGeometry>;
     /**
@@ -314,8 +316,8 @@ export class StaffMeasureViewer extends UIComponent<IStaffMeasureViewerProps, IS
 
     public override render(): ComponentChild {
         const { barNumber, arrangement, arrangementPlayer, inEditMode,
-            dataModel, measureWidth, rowGeometries, scoreElementRegistry, style, showRangeArticulations,
-            focusButton } = this.props;
+            dataModel, measureWidth, nominalWidth, rowGeometries, scoreElementRegistry, style,
+            showRangeArticulations, focusButton } = this.props;
         const { tracks } = this.state;
 
         // The barline closing the column is the resize handle, so it exists only where resizing is allowed.
@@ -371,6 +373,7 @@ export class StaffMeasureViewer extends UIComponent<IStaffMeasureViewerProps, IS
                     inEditMode={inEditMode}
                     dataModel={dataModel}
                     measureWidth={measureWidth}
+                    nominalWidth={nominalWidth}
                     rowGeometry={rowGeometry}
                     scoreElementRegistry={scoreElementRegistry}
                     articulations={articulations}

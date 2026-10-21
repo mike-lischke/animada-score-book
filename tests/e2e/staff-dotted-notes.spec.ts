@@ -44,10 +44,17 @@ const snapshot = {
 const growOf = (page: Page, index: number): Promise<string> => {
     return page.evaluate((runIndex) => {
         const row = document.querySelector(".staff-measure-track-row");
-        const run = row?.querySelectorAll<HTMLElement>(".staff-note-viewer-run")[runIndex];
+        const runs = [...(row?.querySelectorAll<HTMLElement>(".staff-note-viewer-run") ?? [])];
+        const total = runs.reduce((sum, run) => {
+            return sum + run.getBoundingClientRect().width;
+        }, 0);
+        const width = runs[runIndex]?.getBoundingClientRect().width ?? Number.NaN;
 
-        return run?.style.flex.split(" ")[0] ?? "";
-    }, index);
+        return width / total;
+    }, index).then((share) => {
+        // The runs share their row by duration, so a run's share of it is its duration in the bar.
+        return String(Number(share.toFixed(4)));
+    });
 };
 
 test.beforeEach(async ({ page }) => {

@@ -42,10 +42,11 @@
     flex: 0 0 auto;
 }
 
-/* A bar reads like the editor's tools bar: one gray surface with an uppercase heading and its controls on it. */
+/* A bar reads like the editor's tools bar: one gray surface with an uppercase heading and its controls on it. It
+ * floats above the sheets, their drag handles included, so its buttons stay reachable. */
 .print-preview-bar {
     position: absolute;
-    z-index: 2;
+    z-index: 4;
     display: flex;
     align-items: center;
     gap: 8px;
@@ -269,7 +270,7 @@
     position: absolute;
     left: 50%;
     bottom: 84px;
-    z-index: 2;
+    z-index: 4;
     transform: translateX(-50%);
 
     display: flex;
@@ -373,6 +374,54 @@
         gap: 0;
     }
 
+    /* The measure a system starts with, stated above the bracket's upper end in the digits of the music font. The
+     * music fonts have no italic face, so the number is leaned the way an oblique face would. */
+    .print-system-measure-number {
+        position: absolute;
+        z-index: 1;
+        display: flex;
+        color: #000;
+        transform: skewX(-12deg);
+        transform-origin: left bottom;
+        pointer-events: none;
+    }
+
+    /* The barline closing a staff measure is where its print width is dragged: the handle is the line itself, so
+     * the measures close up and the page shows what it prints. It covers no more than that line, so the page
+     * around it keeps taking the pointer. Its sizes are stated in screen px, so the print scale never shrinks the
+     * handle into an unhittable target. */
+    .print-system-resize-handle {
+        --handle-scale: var(--print-scale-inverse, 1);
+
+        position: absolute;
+        top: var(--barline-top, 0px);
+        height: var(--barline-height, 100%);
+        z-index: 3;
+        width: calc(9px * var(--handle-scale));
+        margin-left: calc(-4.5px * var(--handle-scale));
+        cursor: col-resize;
+        touch-action: none;
+
+        /* States the width of the dragged measure above the boundary, in the look of the editor's Play Focus
+         * switch. The handle covers only the staves, so the flag climbs back to the top edge of the system. */
+        .print-system-resize-flag {
+            position: absolute;
+            top: calc(-1 * var(--barline-top, 0px));
+            right: calc(11px * var(--handle-scale));
+            display: flex;
+            align-items: center;
+            height: calc(14px * var(--handle-scale));
+            min-height: calc(14px * var(--handle-scale));
+            padding: 0 calc(4.5px * var(--handle-scale));
+            border: 1px solid var(--border-subtle);
+            background: var(--color-base-100);
+            color: var(--color-base-content);
+            font-size: calc(5.5px * var(--handle-scale));
+            white-space: nowrap;
+            pointer-events: none;
+        }
+    }
+
     /* Groups the rows of one system: the font's bracket ends hang on the band's edges, the line runs between
      * them. Each end is drawn outside the band, so its arm ends where the band ends. */
     .print-system-bracket {
@@ -415,9 +464,15 @@
         overflow-wrap: anywhere;
     }
 
+    /* The name column keeps its width while a measure is dragged wider, so only the measures move. */
+    .print-system-names {
+        flex: 0 0 auto;
+    }
+
     /* Holds the clef column, whose left edge is where the staves open. */
     .print-system-prefix {
         position: relative;
+        flex: 0 0 auto;
     }
 
     /* The line that opens the measures and ties the staves of a system together. It ends where the clef's ink
@@ -452,6 +507,18 @@
 
     .staff-measure-viewer {
         min-width: 0;
+        padding-left: 0;
+        padding-right: 0;
+
+        /* The measures of a system close up: the column separator belongs to the editor, not to paper. */
+        border-right: 0;
+    }
+
+    /* The staff lines run through the barlines, so the notes keep their air from the row itself, where the editor
+     * keeps it in the column. */
+    .staff-note-viewer-runs {
+        padding-left: calc(11px + var(--staff-opening-barline-room, 0px));
+        padding-right: calc(11px + var(--staff-closing-barline-room, 0px));
     }
 
     .grid-measure-row {

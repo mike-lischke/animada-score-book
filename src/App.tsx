@@ -2477,8 +2477,10 @@ export class App extends UIComponent<{}, IAppState> {
     };
 
     private handleScoreBookLoaded = (reason: ScoreBookChangeReason): Promise<boolean> => {
-        // A newly loaded arrangement starts unsaved; library refreshes and renames leave the edit state alone.
+        // A newly loaded arrangement starts unsaved; library refreshes and renames leave the edit state alone. The
+        // temporary print widths and the print track selection belong to the score that was shown before.
         if (reason === ScoreBookChangeReason.ScoreLoaded) {
+            this.printSession.forgetAllArrangements();
             this.setState({ scoreSaved: false });
         }
 

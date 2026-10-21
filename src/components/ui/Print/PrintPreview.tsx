@@ -42,9 +42,9 @@ const marginValues = Array.from({ length: 12 }, (_, index) => {
     return -5 + (index * 5);
 });
 
-/** Print scale percentages the preview offers: 10 % to 200 % in steps of 10. */
-const scaleValues = Array.from({ length: 20 }, (_, index) => {
-    return 10 + (index * 10);
+/** Print scale percentages the preview offers: 10 % to 200 % in steps of 5. */
+const scaleValues = Array.from({ length: 39 }, (_, index) => {
+    return 10 + (index * 5);
 });
 
 export interface IPrintPreviewProperties extends ICommonUIProperties {
@@ -103,12 +103,14 @@ export class PrintPreview extends UIComponent<IPrintPreviewProperties, IPrintPre
         requisitions.register("arrangementMutated", this.handleArrangementChanged);
         requisitions.register("arrangementReverted", this.handleArrangementChanged);
         requisitions.register("timeParamsChanged", this.handleArrangementChanged);
+        requisitions.register("scoreBookLoaded", this.handleArrangementChanged);
     }
 
     public override componentWillUnmount(): void {
         requisitions.unregister("arrangementMutated", this.handleArrangementChanged);
         requisitions.unregister("arrangementReverted", this.handleArrangementChanged);
         requisitions.unregister("timeParamsChanged", this.handleArrangementChanged);
+        requisitions.unregister("scoreBookLoaded", this.handleArrangementChanged);
     }
 
     public override render(): ComponentChild {
@@ -211,6 +213,7 @@ export class PrintPreview extends UIComponent<IPrintPreviewProperties, IPrintPre
                     <span className="print-preview-divider" />
                     <span className="print-preview-label">Borders</span>
                     {this.renderMarginInputs()}
+                    {this.renderWidthReset(arrangement)}
                 </div>
                 <div className="print-preview-bar print-preview-bar-print">
                     <span className="print-preview-heading">Print Details</span>
@@ -332,6 +335,32 @@ export class PrintPreview extends UIComponent<IPrintPreviewProperties, IPrintPre
                 <rect className="print-preview-margin-icon-frame" x="3.5" y="3.5" width="9" height="9" />
                 <line className="print-preview-margin-icon-side" x1={x1} y1={y1} x2={x2} y2={y2} />
             </svg>
+        );
+    }
+
+    /**
+     * @param arrangement The arrangement whose print widths are reset.
+     *
+     * @returns The reset of the temporary measure widths, or nothing in grid mode, which has no widths to drag.
+     */
+    private renderWidthReset(arrangement: ISbDmArrangement): ComponentChild {
+        if (this.props.viewMode !== TrackViewMode.Staff) {
+            return undefined;
+        }
+
+        const hasOverrides = this.props.session.widthOverrides(arrangement).size > 0;
+
+        return (
+            <>
+                <span className="print-preview-divider" />
+                <Button
+                    className="print-preview-tool-button"
+                    caption="Reset widths"
+                    title="Restore the measure widths of the score"
+                    disabled={!hasOverrides}
+                    onClick={this.handleResetWidths}
+                />
+            </>
         );
     }
 
@@ -558,6 +587,8 @@ export class PrintPreview extends UIComponent<IPrintPreviewProperties, IPrintPre
                         dataModel={this.props.dataModel}
                         arrangementPlayer={this.props.arrangementPlayer}
                         selectionManager={this.props.selectionManager}
+                        onMeasureResized={this.handleMeasureResized}
+                        onMeasureReset={this.handleMeasureReset}
                     />
                 </div>
             );
@@ -615,6 +646,43 @@ export class PrintPreview extends UIComponent<IPrintPreviewProperties, IPrintPre
 
     private handleTrackToggle = (arrangement: ISbDmArrangement, trackId: number, checked: boolean): void => {
         this.props.session.setTrackSelected(arrangement, trackId, checked);
+        this.invalidate();
+    };
+
+    /**
+     * Takes a dragged staff measure boundary. The width stays in the session, so it never reaches the arrangement,
+     * its autosave or its undo history.
+     *
+     * @param bar The 1-based measure number.
+     * @param widthPx The new print width, in layout px at 100% zoom.
+     */
+    private handleMeasureResized = (bar: number, widthPx: number): void => {
+        const arrangement = this.props.dataModel.arrangement;
+        if (!arrangement) {
+            return;
+        }
+
+        this.props.session.setWidthOverride(arrangement, bar, widthPx);
+        this.invalidate();
+    };
+
+    private handleMeasureReset = (bar: number): void => {
+        const arrangement = this.props.dataModel.arrangement;
+        if (!arrangement) {
+            return;
+        }
+
+        this.props.session.resetWidthOverride(arrangement, bar);
+        this.invalidate();
+    };
+
+    private handleResetWidths = (): void => {
+        const arrangement = this.props.dataModel.arrangement;
+        if (!arrangement) {
+            return;
+        }
+
+        this.props.session.resetWidthOverrides(arrangement);
         this.invalidate();
     };
 

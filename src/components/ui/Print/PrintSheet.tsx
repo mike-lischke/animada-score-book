@@ -35,6 +35,12 @@ export interface IPrintSheetProperties extends ICommonUIProperties {
     dataModel: ScoreBookDataModel;
     arrangementPlayer: ArrangementPlayer;
     selectionManager: SelectionManager;
+
+    /** Invoked when a staff measure boundary was dragged to a new print width, in layout px at 100% zoom. */
+    onMeasureResized?: (bar: number, widthPx: number) => void;
+
+    /** Invoked when the print width of one measure returns to the width the score states. */
+    onMeasureReset?: (bar: number) => void;
 }
 
 /**
@@ -79,6 +85,9 @@ export class PrintSheet extends UIComponent<IPrintSheetProperties> {
             zoom: printScale,
             width: `${page.availableWidthPx}px`,
             height: `${page.availableHeightPx}px`,
+
+            // Lets the preview's controls keep their screen size inside the scaled content.
+            "--print-scale-inverse": 1 / printScale,
         };
 
         const headerTitle = page.number === 1
@@ -98,6 +107,10 @@ export class PrintSheet extends UIComponent<IPrintSheetProperties> {
                     arrangementPlayer={this.props.arrangementPlayer}
                     dataModel={this.props.dataModel}
                     selectionManager={this.props.selectionManager}
+                    contentZoom={previewZoom * printScale}
+                    availableWidthPx={page.availableWidthPx}
+                    onMeasureResized={this.props.onMeasureResized}
+                    onMeasureReset={this.props.onMeasureReset}
                 />
             );
         });

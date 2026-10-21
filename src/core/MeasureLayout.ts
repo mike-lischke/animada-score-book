@@ -4,8 +4,7 @@
  */
 
 import type { ISbDmArrangement } from "./ScoreBookDataModel.js";
-import { subtractFractions } from "./serialisation/numeric-functions.js";
-import type { IFraction } from "./types/general.js";
+import type { IFraction, IMeasureEvent } from "./types/general.js";
 import { clampValue } from "./utils.js";
 
 /**
@@ -42,9 +41,6 @@ export const staffPrefixWidth = 48;
 /** Width an event keeps at least, in px at 100% zoom: a notehead plus the room for its stem and flags. */
 export const minEventWidth = 25;
 
-/** Distance two adjacent event anchors keep at least, in px at 100% zoom, so noteheads do not collide. */
-export const minEventGap = 12;
-
 /** Air a rest keeps on either side of its symbol, in px at 100% zoom. */
 export const minRestAir = 4;
 
@@ -68,6 +64,15 @@ export const minMeasureRepeatWidth = 3 * staffSpacePx;
 
 /** Horizontal insets of a staff measure column — its padding plus the closing barline — in px at 100% zoom. */
 export const staffMeasureInsets = 24;
+
+/** One child of a measure row, whose room the row distributes. */
+export interface IRowItem {
+    /** Part of the row the item spans, as a fraction of the row. */
+    readonly fraction: number;
+
+    /** Least room the item takes, in px at 100 % zoom. */
+    readonly minimumPx: number;
+}
 
 /**
  * Width of the bar action strip — seven 34 px buttons, with 4 px between the per-bar actions and 16 px to the
@@ -251,13 +256,10 @@ export class MeasureLayout {
      * Resolves the smallest column width a measure still draws its notation in, without the room the editor's bar
      * action strip takes. A view that shows no editor controls — the print layout — may go down to this width.
      *
-     * The staff lays its events out proportionally, so a requirement stated as a length scales with the column:
-     * an event's slot is its duration fraction of the column and the distance between two anchors is the fraction
-     * between their starts. A note needs the room its symbol takes ({@link minEventWidth}), and where a note stands
-     * at one of two neighbouring anchors, their air ({@link minEventGap}). A rest needs the width of its symbol,
-     * the widest rest glyph and the room of a dot ({@link restDotWidth}), with its own air on both sides
-     * ({@link minRestAir}): rests are the elastic slack of a measure (ADR-0003), so a measure holding rests alone
-     * keeps the room its controls need.
+     * Every event of a row takes the room its own symbol needs ({@link minimumRoomOf}), and whatever the column
+     * holds beyond that is shared by duration ({@link spacedWidths}). The floor is therefore the sum of those
+     * rooms, not the room a proportionally laid out slot would need: a column may narrow until the long events
+     * have given up their empty tails, and only the symbols themselves set the limit.
      *
      * @param arrangement The arrangement the measure belongs to.
      * @param bar The 1-based measure number.
@@ -265,9 +267,7 @@ export class MeasureLayout {
      * @returns The smallest column width in px at 100% zoom, the column insets included.
      */
     public static contentMinimumWidthOfMeasure(arrangement: Readonly<ISbDmArrangement>, bar: number): number {
-        let noteSlotWidth = 0;
-        let noteGapWidth = 0;
-        let restSlotWidth = 0;
+        let contentWidth = 0;
         let hasSimile = false;
 
         for (const track of arrangement.tracks) {
@@ -276,50 +276,80 @@ export class MeasureLayout {
                 hasSimile = true;
             }
 
-            for (let index = 0; index < measure.events.length; index++) {
-                const event = measure.events[index];
-                const previous = index === 0 ? undefined : measure.events[index - 1];
-                const isNote = event.noteStyleId !== undefined;
-                const isPreviousNote = previous?.noteStyleId !== undefined;
-
-                if (isNote) {
-                    noteSlotWidth = Math.max(noteSlotWidth, MeasureLayout.columnWidthFor(minEventWidth,
-                        event.duration));
-                } else {
-                    restSlotWidth = Math.max(restSlotWidth, MeasureLayout.columnWidthFor(
-                        MeasureLayout.restSymbolWidth(event.duration), event.duration));
-                }
-
-                if (previous !== undefined && (isNote || isPreviousNote)) {
-                    const gap = subtractFractions(event.start, previous.start);
-                    noteGapWidth = Math.max(noteGapWidth,
-                        MeasureLayout.columnWidthFor(minEventWidth + minEventGap, gap));
-                }
-            }
+            const trackWidth = measure.events.reduce((sum, event) => {
+                return sum + MeasureLayout.minimumRoomOf(event);
+            }, 0);
+            contentWidth = Math.max(contentWidth, trackWidth);
         }
 
-        const contentWidth = Math.max(
-            hasSimile ? minMeasureRepeatWidth : 0,
-            noteSlotWidth,
-            noteGapWidth,
-            restSlotWidth,
-        );
+        const minimumWidth = Math.max(hasSimile ? minMeasureRepeatWidth : 0, contentWidth);
 
-        return Math.ceil(contentWidth) + staffMeasureInsets;
+        return Math.ceil(minimumWidth) + staffMeasureInsets;
     }
 
     /**
-     * States how wide a column has to be for a span of it to hold a length.
+     * @param event The measure event to measure.
      *
-     * @param length The room an event's symbol or the air between two anchors needs, in px at 100% zoom.
-     * @param span The part of the column the length has to fit into, as a bar fraction.
-     *
-     * @returns The column width in px at 100% zoom, or 0 when the span holds nothing.
+     * @returns The smallest room the event's symbol takes, in px at 100% zoom. Where two events of that room
+     *          stand next to each other, the air between their anchors comes with it.
      */
-    private static columnWidthFor(length: number, span: IFraction): number {
-        const ratio = span.numerator > 0 && span.denominator > 0 ? span.numerator / span.denominator : 0;
+    public static minimumRoomOf(event: IMeasureEvent): number {
+        if (event.noteStyleId !== undefined) {
+            return minEventWidth;
+        }
 
-        return ratio > 0 ? length / ratio : 0;
+        return MeasureLayout.restSymbolWidth(event.duration);
+    }
+
+    /**
+     * Distributes the room of a row over its items. Each item takes its share of the row, and where the row is too
+     * narrow for that, it falls back on the room its symbol takes: from there the row blends over to the
+     * proportional layout as it grows, so nothing jumps when a measure is resized.
+     *
+     * @param items The items of the row, in order.
+     * @param rowWidthPx The room the row takes, in px at 100 % zoom.
+     *
+     * @returns The width of every item, in px at 100 % zoom, in item order.
+     */
+    public static spacedWidths(items: readonly IRowItem[], rowWidthPx: number): number[] {
+        let shareTotal = 0;
+        let minimumTotal = 0;
+        let proportionalWidthPx = 0;
+
+        for (const item of items) {
+            shareTotal += item.fraction;
+            minimumTotal += item.minimumPx;
+            if (item.fraction > 0) {
+                proportionalWidthPx = Math.max(proportionalWidthPx, item.minimumPx / item.fraction);
+            }
+        }
+
+        if (shareTotal <= 0) {
+            return items.map(() => {
+                return 0;
+            });
+        }
+
+        const shareOf = (item: IRowItem): number => {
+            return (item.fraction / shareTotal) * proportionalWidthPx;
+        };
+
+        // A row wide enough for the proportional layout keeps it.
+        if (rowWidthPx >= proportionalWidthPx) {
+            return items.map((item) => {
+                return (item.fraction / shareTotal) * rowWidthPx;
+            });
+        }
+
+        // Narrower than that, the row blends from the room its symbols take to their proportional shares.
+        const blendablePx = proportionalWidthPx - minimumTotal;
+        const blend = blendablePx <= 0
+            ? 0
+            : Math.max(0, Math.min(1, (rowWidthPx - minimumTotal) / blendablePx));
+
+        return items.map((item) => {
+            return item.minimumPx + (blend * (shareOf(item) - item.minimumPx));
+        });
     }
 
     /**

@@ -3,12 +3,12 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import { cleanup, render, type RenderResult } from "@testing-library/preact";
+import { cleanup, fireEvent, render, type RenderResult } from "@testing-library/preact";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { PrintSystemView } from "../../src/components/ui/Print/PrintSystemView.js";
 import {
-    printGridHeadRoom, printRowGap, printStaffHeadRoom, type IPrintSystem,
+    printGridHeadRoom, printRowGap, printStaffHeadRoom, type IPrintMeasureColumn, type IPrintSystem,
 } from "../../src/core/PrintLayout.js";
 import {
     ScoreBookDataModel, type ISbDmInstrument, type ISbDmTrack,
@@ -39,10 +39,14 @@ describe("PrintSystemView", { concurrent: false }, () => {
      * @param viewMode The view mode the system is drawn in.
      * @param trackCount Number of tracks the system holds.
      * @param noteLine Highest staff line of the tracks' instruments.
+     * @param measures The measure columns the system holds, in measure order.
+     * @param onMeasureResized What a dragged boundary reports, which the drag handles exist for.
      *
      * @returns The rendered container and the system it was rendered from.
      */
-    const renderSystem = (viewMode: TrackViewMode, trackCount = 2, noteLine?: number): IRenderSystemResult => {
+    const renderSystem = (viewMode: TrackViewMode, trackCount = 2, noteLine?: number,
+        measures: readonly IPrintMeasureColumn[] = [],
+        onMeasureResized?: (bar: number, widthPx: number) => void): IRenderSystemResult => {
         const dataModel = new ScoreBookDataModel();
         const instruments: ISbDmInstrument[] = [];
         for (let index = 0; index < trackCount; index++) {
@@ -54,7 +58,9 @@ describe("PrintSystemView", { concurrent: false }, () => {
             instruments.push(instrument);
         }
 
-        const arrangement = dataModel.startNewArrangement(instruments);
+        // The system states its measures, so the arrangement has to hold them.
+        const arrangement = dataModel.startNewArrangement(instruments,
+            measures.length > 0 ? { length: measures.length } : undefined);
         const tracks = arrangement.tracks;
         const headRoom = viewMode === TrackViewMode.Staff ? printStaffHeadRoom : printGridHeadRoom;
         const rowGap = viewMode === TrackViewMode.Staff ? printRowGap : 0;
@@ -67,7 +73,7 @@ describe("PrintSystemView", { concurrent: false }, () => {
             rowHeightsPx: tracks.map(() => {
                 return geometry.heightPx;
             }),
-            measures: [],
+            measures,
         };
         const rowGeometries = new Map<number, IStaffRowGeometry>(tracks.map((track: ISbDmTrack) => {
             return [track.id, geometry];
@@ -84,6 +90,7 @@ describe("PrintSystemView", { concurrent: false }, () => {
                 arrangementPlayer={new ArrangementPlayer(dataModel)}
                 dataModel={dataModel}
                 selectionManager={selectionManager}
+                onMeasureResized={onMeasureResized}
             />,
         );
 
@@ -177,5 +184,72 @@ describe("PrintSystemView", { concurrent: false }, () => {
         expect(Number.parseFloat(bracket.style.height)).toBeCloseTo(system.heightPx - printGridHeadRoom);
         expect(container.querySelector(".print-system-barline")).toBeNull();
         expect(container.querySelector(".print-system-prefix")).toBeNull();
+    });
+
+    it("closes every measure with a line and a drag handle on the same boundary", () => {
+        const measures: IPrintMeasureColumn[] = [
+            { bar: 1, offsetPx: 200, widthPx: 400 },
+            { bar: 2, offsetPx: 600, widthPx: 400 },
+        ];
+        const { container } = renderSystem(TrackViewMode.Staff, 2, undefined, measures, () => {
+            // The drag is not part of this test.
+        });
+
+        const barlines = [...container.querySelectorAll<HTMLElement>(".print-system > .print-system-barline")];
+        const handles = [...container.querySelectorAll<HTMLElement>(".print-system-resize-handle")];
+        const staves = stavesSpan(2);
+
+        expect(barlines.map((barline) => {
+            return barline.style.left;
+        })).toEqual(["600px", "1000px"]);
+        expect(handles.map((handle) => {
+            return handle.style.left;
+        })).toEqual(["600px", "1000px"]);
+
+        // A handle covers no more than the line it sits on, so the page around it keeps taking the pointer.
+        expect(handles[0].style.getPropertyValue("--barline-top")).toBe(`${staves.topPx}px`);
+        expect(handles[0].style.getPropertyValue("--barline-height")).toBe(`${staves.bottomPx - staves.topPx}px`);
+    });
+
+    it("moves the lines of the following measures with the width of the dragged one", () => {
+        const measures: IPrintMeasureColumn[] = [
+            { bar: 1, offsetPx: 200, widthPx: 400 },
+            { bar: 2, offsetPx: 600, widthPx: 400 },
+        ];
+        const resized: Array<{ bar: number; widthPx: number; }> = [];
+        const { container } = renderSystem(TrackViewMode.Staff, 2, undefined, measures, (bar, widthPx) => {
+            resized.push({ bar, widthPx });
+        });
+
+        const boundaries = (): string[] => {
+            const lines = [...container.querySelectorAll<HTMLElement>(".print-system > .print-system-barline")];
+
+            return lines.map((line) => {
+                return line.style.left;
+            });
+        };
+
+        expect(boundaries()).toEqual(["600px", "1000px"]);
+
+        // The gesture follows the pointer on the window, so the boundary keeps growing while it is dragged.
+        fireEvent.pointerDown(container.querySelector(".print-system-resize-handle")!, {
+            button: 0, clientX: 400,
+            pointerId: 1
+        });
+        fireEvent.pointerMove(window, { clientX: 500, pointerId: 1 });
+
+        // Measure 1 is 100 px wider, and measure 2 starts and ends 100 px further right.
+        expect(boundaries()).toEqual(["700px", "1100px"]);
+
+        const handles = [...container.querySelectorAll<HTMLElement>(".print-system-resize-handle")];
+        expect(handles.map((handle) => {
+            return handle.style.left;
+        })).toEqual(["700px", "1100px"]);
+
+        fireEvent.pointerUp(window, { pointerId: 1 });
+        expect(resized).toEqual([{ bar: 1, widthPx: 500 }]);
+
+        // The gesture ends, so the system states the widths of the layout again.
+        expect(boundaries()).toEqual(["600px", "1000px"]);
     });
 });

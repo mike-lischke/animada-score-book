@@ -23,6 +23,9 @@ export interface IStaffMeasureTrackRowProps extends ICommonUIProperties {
     /** The measure column's layout width in px at 100 % zoom, which a beam's slope is derived from. */
     measureWidth: number;
 
+    /** The column width at the default layout, which the bar's outer events keep their places to. */
+    nominalWidth?: number;
+
     /** The track's shared row geometry, so every measure lays the track out at the same height. */
     rowGeometry: IStaffRowGeometry;
 
@@ -62,7 +65,7 @@ export class StaffMeasureTrackRow extends UIComponent<IStaffMeasureTrackRowProps
 
     public override render(): ComponentChild {
         const { arrangementPlayer, barNumber, dataModel, measureWidth, rowGeometry, timeParams, track,
-            scoreElementRegistry, articulations, trackPlayer } = this.props;
+            scoreElementRegistry, articulations, trackPlayer, nominalWidth } = this.props;
 
         const measure = track.measures[barNumber - 1];
         const playbackSource = measure.simile && arrangementPlayer.state === PlayerPlayState.Playing
@@ -89,6 +92,7 @@ export class StaffMeasureTrackRow extends UIComponent<IStaffMeasureTrackRowProps
                 trackId={track.id}
                 maxNoteLine={maxNoteLine}
                 measureWidth={measureWidth}
+                nominalWidth={nominalWidth}
                 rowGeometry={rowGeometry}
                 repeatBars={repeatBars}
                 scoreElementRegistry={playbackSource === undefined ? scoreElementRegistry : undefined}

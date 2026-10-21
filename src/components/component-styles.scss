@@ -1614,7 +1614,13 @@
     }
 
     position: absolute;
-    inset: 0;
+
+    /* The grid keeps the room the outer events hold at the default width, so resizing a measure only spreads the
+       events between them. */
+    top: 0;
+    bottom: 0;
+    right: var(--staff-grid-inset-right, 0px);
+    left: var(--staff-grid-inset-left, 0px);
 
     /* The middle of the run box is the line the staff is drawn around, so it is offset by twice that. */
     margin-top: calc(var(--staff-centre) * 2);
@@ -1663,7 +1669,10 @@
     --tuplet-bracket-depth: 9px;
 
     position: absolute;
-    inset: 0;
+    top: 0;
+    bottom: 0;
+    right: var(--staff-grid-inset-right, 0px);
+    left: var(--staff-grid-inset-left, 0px);
     pointer-events: none;
 }
 
@@ -2296,7 +2305,10 @@
  * layer is pointer-transparent: a printed marking is never editable. */
 .staff-note-viewer-articulations {
     position: absolute;
-    inset: 0;
+    top: 0;
+    bottom: 0;
+    right: var(--staff-grid-inset-right, 0px);
+    left: var(--staff-grid-inset-left, 0px);
     pointer-events: none;
 }
 

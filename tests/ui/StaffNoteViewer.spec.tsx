@@ -1093,3 +1093,155 @@ describe("StaffNoteViewer printed markings", { concurrent: false }, () => {
         expect(renderResult.container.querySelectorAll(".staff-note-viewer-articulations")).toHaveLength(0);
     });
 });
+
+/** Where a bar's first and last event are drawn, and the room the row keeps before its closing barline. */
+interface IBarRooms {
+    /** Room the row keeps at the opening barline, in px. */
+    readonly leftPx: number;
+
+    /** Room the row keeps before its closing barline, in px. */
+    readonly rightPx: number;
+
+    /** Room between the opening barline and the first event's anchor, in px. */
+    readonly leadingPx: number;
+
+    /** Room between the last event's anchor and the closing barline, in px. */
+    readonly trailingPx: number;
+
+    /** Room between the opening barline and the first event's anchor at the nominal width, in px. */
+    readonly nominalLeadingPx: number;
+}
+
+describe("StaffNoteViewer measure width", { concurrent: false }, () => {
+    let renderResult: RenderResult | null;
+
+    /** Half a grid step: the offset a notehead is drawn at behind its onset, as a fraction of the bar. */
+    const halfStep = 1 / 32;
+
+    afterEach(() => {
+        renderResult?.unmount();
+        cleanup();
+        renderResult = null;
+    });
+
+    /**
+     * @returns A measure of four quarter notes, whose last note keeps most of the bar to the closing barline.
+     */
+    const quarterBar = (): ISbDmTrackPiece => {
+        return buildMeasure(Array.from({ length: 4 }, (_, index) => {
+            return event(fraction(index, 4), fraction(1, 4), "1");
+        }), []);
+    };
+
+    /**
+     * @returns A measure of sixteen sixteenth notes, whose outer notes sit close to both barlines.
+     */
+    const sixteenthBar = (): ISbDmTrackPiece => {
+        return buildMeasure(Array.from({ length: 16 }, (_, index) => {
+            return event(fraction(index, 16), fraction(1, 16), "1");
+        }), []);
+    };
+
+    /**
+     * Renders a bar in a column of the given width.
+     *
+     * @param measureWidth The width the column is drawn at.
+     * @param nominalWidth The width the bar's notation is opened up from.
+     * @param measure The bar to render, a bar of sixteenth notes by default.
+     *
+     * @returns The room the row keeps before its closing barline, and the room either side of its notation at the
+     *          drawn and the nominal width, in px.
+     */
+    const roomsOf = (measureWidth: number, nominalWidth: number, measure = sixteenthBar()): IBarRooms => {
+        renderResult = render(
+            <StaffNoteViewer
+                isLastBar={true}
+                timeSignature="4/4"
+                scoreMetrics={scoreMetrics}
+                baseSteps={16}
+                measure={measure}
+                barNumber={1}
+                trackId={100}
+                measureWidth={measureWidth}
+                nominalWidth={nominalWidth}
+            />,
+        );
+
+        const row = renderResult.container.querySelector<HTMLElement>(".staff-note-viewer")!;
+        const leftPx = Number.parseFloat(row.style.getPropertyValue("--staff-grid-inset-left"));
+        const rightPx = Number.parseFloat(row.style.getPropertyValue("--staff-grid-inset-right"));
+        const gridWidthPx = measureWidth - leftPx - rightPx;
+
+        // The first event starts at the opening barline, the bar to sixteenths ends at the closing one.
+        return {
+            leftPx,
+            rightPx,
+            leadingPx: leftPx + (halfStep * gridWidthPx),
+            trailingPx: measureWidth - (leftPx + ((1 - halfStep) * gridWidthPx)),
+            nominalLeadingPx: halfStep * nominalWidth,
+        };
+    };
+
+    it("fills a column at its nominal width without an inset", () => {
+        const rooms = roomsOf(1280, 1280);
+
+        expect(rooms.leadingPx).toBe(rooms.nominalLeadingPx);
+        expect(rooms.rightPx).toBe(0);
+    });
+
+    it("holds the first note in place when the column grows", () => {
+        const rooms = roomsOf(1680, 1280);
+
+        // The note is drawn half a step into the bar; its room is 40 px at the nominal width and stays there.
+        expect(rooms.nominalLeadingPx).toBeCloseTo(40, 2);
+        expect(rooms.leadingPx).toBeCloseTo(rooms.nominalLeadingPx, 1);
+    });
+
+    it("holds the first note in place when the column shrinks", () => {
+        const rooms = roomsOf(1080, 1280);
+
+        expect(rooms.leadingPx).toBeCloseTo(rooms.nominalLeadingPx, 1);
+    });
+
+    it("closes the room before the closing barline no further than the room of the first note", () => {
+        // Sixteenths keep only an eighth of the bar themselves, so a column of 700 px would squeeze the last one
+        // to 12 px: the grid keeps the first note's 40 px on that side as well.
+        const rooms = roomsOf(700, 1280);
+
+        expect(rooms.leadingPx).toBeCloseTo(rooms.nominalLeadingPx, 1);
+        expect(rooms.rightPx).toBeGreaterThan(0);
+        expect(rooms.trailingPx).toBeCloseTo(rooms.nominalLeadingPx, 1);
+    });
+
+    it("holds the first note in place where its own duration keeps most of the bar to the closing barline", () => {
+        // The last quarter note keeps 280 px to the barline at the nominal width, which the closed-up gap gives up
+        // first: the grid then narrows only by what the first note's room gains.
+        const rooms = roomsOf(1680, 1280, quarterBar());
+
+        expect(rooms.leadingPx).toBeCloseTo(rooms.nominalLeadingPx, 1);
+        expect(rooms.rightPx).toBe(0);
+    });
+
+    it("holds the first note in place in a column at its content minimum", () => {
+        // Four quarter notes make a column of 286 px, whose notation is compressed behind the first note.
+        const rooms = roomsOf(286, 1280, quarterBar());
+
+        expect(rooms.leadingPx).toBeCloseTo(rooms.nominalLeadingPx, 1);
+    });
+
+    it("holds a whole note in place, which is the only event of its bar", () => {
+        const rooms = roomsOf(1680, 1280, buildMeasure([event(fraction(0, 1), fraction(1, 1), "1")], []));
+
+        expect(rooms.leadingPx).toBeCloseTo(rooms.nominalLeadingPx, 1);
+        expect(rooms.rightPx).toBe(0);
+    });
+
+    it("leaves a whole-bar rest in the proportional layout where its own room no longer fits", () => {
+        // A rest covering the bar is anchored at its middle, so its room is half the bar: a column of 300 px cannot
+        // hold that, and the rest stays centred in the column instead.
+        const rooms = roomsOf(300, 1280, buildMeasure([event(fraction(0, 1), fraction(1, 1))], []));
+
+        expect(rooms.leftPx).toBe(0);
+        expect(rooms.rightPx).toBe(0);
+    });
+});

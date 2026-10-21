@@ -433,6 +433,7 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
                         focusButton={this.renderFocusButton(bar)}
                         {...barViewerProps}
                         measureWidth={measureWidth}
+                        nominalWidth={MeasureLayout.defaultWidth()}
                         rowGeometries={rowGeometries}
                         scoreElementRegistry={this.scoreElementRegistry}
                         style={{

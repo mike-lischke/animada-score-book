@@ -3,7 +3,7 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import { MeasureLayout, noteHeightPx, staffPrefixWidth } from "./MeasureLayout.js";
+import { MeasureLayout, noteHeightPx, staffPrefixWidth, staffSpacePx } from "./MeasureLayout.js";
 import type { INotationGrid } from "./MeasureProjection.js";
 import type { ISbDmArrangement, ISbDmTrack } from "./ScoreBookDataModel.js";
 import { StaffRowGeometry, type IStaffRowGeometry } from "./StaffRowGeometry.js";
@@ -37,11 +37,17 @@ export const printRowGap = 20;
 /** Height of one grid track row of a printed system: the note cell and the 8 px margins of its row. */
 export const printGridRowHeight = noteHeightPx + 16;
 
-/** Room the grid's beat marker strip takes above the first row of a system, in layout px at 100% zoom. */
-export const printGridHeadRoom = 16;
+/** Room the grid keeps above its first row for the bracket end and the system's measure number, in layout px. */
+export const printGridHeadRoom = 32;
 
 /** Distance two systems keep on a page, in layout px at 100% zoom. */
 export const printSystemGap = 24;
+
+/** Distance a system's measure number keeps above the bracket's upper end, in layout px at 100% zoom. */
+export const printSystemNumberGap = 16;
+
+/** Staff space the digits of a system's measure number are drawn at: a little smaller than the notation. */
+export const printSystemNumberStaffSpace = staffSpacePx * 0.65;
 
 /** Orientation of the printed paper. The values are the CSS keyword of the `@page size` rule. */
 export enum PageOrientation {

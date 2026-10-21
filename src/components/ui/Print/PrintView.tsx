@@ -310,6 +310,7 @@ export class PrintView extends UIComponent<IPrintViewProps> {
                 dataModel={dataModel}
                 tracks={tracks}
                 measureWidth={width}
+                nominalWidth={MeasureLayout.defaultWidth() / printWidthScale}
                 rowGeometries={rowGeometries}
                 showRangeArticulations
                 style={measureStyle}

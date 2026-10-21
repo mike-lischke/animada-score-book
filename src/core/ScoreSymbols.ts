@@ -17,6 +17,7 @@
 import { NoteDisplayType } from "./ScoreBookDataModel.js";
 import { NoteLength } from "./rest-notation.js";
 import { SmuflGlyph } from "./smufl/SmuflGlyphs.js";
+import type { IRepeatBar } from "./types/general.js";
 
 /** A notation symbol the score draws, named by what it is in the score. */
 export enum ScoreSymbol {
@@ -602,6 +603,25 @@ export class ScoreSymbols {
      */
     public static definition(symbol: ScoreSymbol): IScoreSymbolDefinition {
         return ScoreSymbols.definitions[symbol];
+    }
+
+    /**
+     * Names the barline a bar closes with: the one its own repeat mark states, and none where the bar after it
+     * opens a repeat.
+     *
+     * @param repeatBars The repeat marks of the arrangement, keyed by 1-based bar number.
+     * @param bar The 1-based bar whose closing barline is wanted.
+     * @param isLastBar Whether the bar is the last of the score.
+     *
+     * @returns The symbol the closing barline is drawn with, or undefined where the bar after it opens a repeat.
+     */
+    public static closingBarlineAt(repeatBars: ReadonlyMap<number, IRepeatBar> | undefined, bar: number,
+        isLastBar: boolean): ScoreSymbol | undefined {
+        if (repeatBars?.get(bar + 1)?.start === true && repeatBars.get(bar)?.end !== true) {
+            return undefined;
+        }
+
+        return ScoreSymbols.barlineAt({ closesRepeat: repeatBars?.get(bar)?.end === true, endsScore: isLastBar });
     }
 
     /**

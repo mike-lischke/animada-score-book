@@ -13,7 +13,9 @@ import {
 } from "../../../core/ScoreBookDataModel.js";
 import { ScoreSymbols, ScoreSymbol, ScoreSymbolSource } from "../../../core/ScoreSymbols.js";
 import { RangeArticulations } from "../../../core/RangeArticulations.js";
-import { MeasureLayout, staffMeasureInsets, staffSpacePx } from "../../../core/MeasureLayout.js";
+import {
+    MeasureLayout, minEventWidth, minRestWidth, restDotWidth, staffMeasureInsets, staffSpacePx, type IRowItem,
+} from "../../../core/MeasureLayout.js";
 import { NoteLength } from "../../../core/rest-notation.js";
 import { StaffRowGeometry, type IStaffRowGeometry } from "../../../core/StaffRowGeometry.js";
 import { HeadMark } from "../../../core/StaffInk.js";
@@ -60,6 +62,13 @@ export interface IStaffNoteViewerProperties extends ICommonUIProperties {
     measureWidth?: number;
 
     /**
+     * The column width the bar's notation is opened up from, in px at the same scale as `measureWidth`: the width
+     * the column has at the default layout. The first event then keeps the place it holds there, and the room before
+     * the closing barline closes no further than that same room. Omitted falls back to `measureWidth`.
+     */
+    nominalWidth?: number;
+
+    /**
      * The hairpins and `f` markings to draw for this bar and track, which the print view supplies. Omitted for the
      * screen view, whose markings are drawn into the decoration layer of the arrangement viewer.
      */
@@ -104,6 +113,12 @@ interface IDrawnAnchors {
     lastReach?: string;
 }
 
+/** Room a note grid keeps from the edges of its measure column, in px at 100 % zoom. */
+interface INoteGridInsets {
+    readonly leftPx: number;
+    readonly rightPx: number;
+}
+
 /**
  * Width the final barline occupies at the right edge of the last bar, which is what the notes of that bar keep
  * clear of.
@@ -129,17 +144,13 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
     public override render(): ComponentChild {
         const { isLastBar, scoreMetrics, measure, barNumber, trackId, maxNoteLine = 1,
             scoreElementRegistry, repeatBars, articulations, rowGeometry,
-            measureWidth = MeasureLayout.defaultWidth() } = this.props;
+            measureWidth = MeasureLayout.defaultWidth(), nominalWidth = measureWidth } = this.props;
 
         // A repeat mark stands on the bar it belongs to: one that closes a section ends its bar, one that opens a
-        // section starts its bar, so two marks meeting at one boundary stay two barlines. A bar that carries no
+        // section starts its bar, so two marks meeting at one boundary stay two bar lines. A bar that carries no
         // mark of its own draws no barline where the bar after it opens a section.
-        const closesRepeat = repeatBars?.get(barNumber)?.end === true;
         const opensWithRepeat = repeatBars?.get(barNumber)?.start === true;
-        const nextOpensRepeat = repeatBars?.get(barNumber + 1)?.start === true;
-        const closingBarline = nextOpensRepeat && !closesRepeat
-            ? undefined
-            : ScoreSymbols.barlineAt({ closesRepeat, endsScore: isLastBar });
+        const closingBarline = ScoreSymbols.closingBarlineAt(repeatBars, barNumber, isLastBar);
         const openingBarline = opensWithRepeat ? ScoreSymbol.RepeatStart : undefined;
         const className = this.generateFinalClassName([
             "staff-note-viewer",
@@ -174,13 +185,21 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
         // A simile holds no content of its own; its mark replaces the notes the measure would draw.
         const usesSimile = measure.simile === true;
 
+        // A measure is resized around its notation: the grid keeps the room the first event holds at the default
+        // width, and the room before the closing barline closes down to that same room.
+        const gridInsets = StaffNoteViewer.gridInsetsOf(nodes, measureWidth, nominalWidth,
+            scoreMetrics.stepsPerBar);
+
         let runs: ComponentChild[];
         if (usesSimile) {
             runs = [this.renderSimileSlot(barNumber, trackId, measure, scoreElementRegistry)];
         } else if (usesWholeBarRest) {
             runs = [this.renderWholeBarRestSlot(restLineOffset, barNumber, trackId, measure, scoreElementRegistry)];
         } else {
-            runs = this.renderItems(nodes, beamSpans, "", centerLine, restLineOffset);
+            // The room the notes share is what the column offers after its insets, so the events can fall back on
+            // the room their symbols take where a measure is narrowed.
+            const gridWidthPx = Math.max(1, rowWidthPx - gridInsets.leftPx - gridInsets.rightPx);
+            runs = this.renderItems(nodes, beamSpans, "", centerLine, restLineOffset, 1, true, gridWidthPx);
         }
 
         // Render the staff lines around the line the notes sit on. The stylesheet states where that line is in
@@ -282,6 +301,8 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                     "--staff-note-clearance": clearance,
                     "--staff-ink-top": StaffRowGeometry.formatPx(ink.topPx),
                     "--staff-ink-bottom": StaffRowGeometry.formatPx(ink.bottomPx),
+                    "--staff-grid-inset-left": StaffRowGeometry.formatPx(gridInsets.leftPx),
+                    "--staff-grid-inset-right": StaffRowGeometry.formatPx(gridInsets.rightPx),
                 }}
                 aria-hidden
                 {...this.dataAttributes}
@@ -326,6 +347,108 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                 {openingBarlineElement}
             </div>
         );
+    }
+
+    /**
+     * @param nodes The top-level nodes of the bar.
+     * @param widthPx The width the column is drawn at, in px at 100 % zoom.
+     * @param nominalWidthPx The width the column holds the bar's notation at, in px at 100 % zoom.
+     * @param stepsPerBar The number of base-grid steps in a bar, which states the anchor of an event.
+     *
+     * @returns The room the note grid keeps from the column's edges: the first event holds the room it has at the
+     *          nominal width, and the room before the closing barline closes no further than that same room.
+     */
+    private static gridInsetsOf(nodes: IStaffTreeNode[], widthPx: number, nominalWidthPx: number,
+        stepsPerBar: number): INoteGridInsets {
+        if (widthPx === nominalWidthPx) {
+            return { leftPx: 0, rightPx: 0 };
+        }
+
+        const halfStep = { numerator: 1, denominator: 2 * stepsPerBar };
+        const { firstAnchor, lastAnchor } = StaffNoteViewer.drawnAnchors(nodes, halfStep);
+        if (firstAnchor === undefined || lastAnchor === undefined) {
+            return { leftPx: 0, rightPx: 0 };
+        }
+
+        const firstFraction = StaffNoteViewer.fractionValue(firstAnchor);
+        const lastFraction = StaffNoteViewer.fractionValue(lastAnchor);
+        const spanFraction = lastFraction - firstFraction;
+        if (firstFraction >= 1) {
+            return { leftPx: 0, rightPx: 0 };
+        }
+
+        // Without a room before the closing barline, the grid narrows only by what the first event's room gains.
+        const roomPx = firstFraction * nominalWidthPx;
+        const freeSpanPx = (widthPx - roomPx) / (1 - firstFraction);
+
+        if (spanFraction > 0 && (1 - lastFraction) * freeSpanPx < roomPx) {
+            // The closing barline keeps the room of the first event as well, so the grid spans no more than both
+            // rooms leave: span * (last − first) = width − 2 * room, and the insets take the rest of the column.
+            const spanPx = (widthPx - (2 * roomPx)) / spanFraction;
+            if (spanPx > 0) {
+                const leftPx = firstFraction * (nominalWidthPx - spanPx);
+
+                return { leftPx, rightPx: widthPx - leftPx - spanPx };
+            }
+        }
+
+        // A bar of a single event has no span to spread, so it only holds its own room. Where that room no longer
+        // fits — a whole-bar rest keeps its centre — the notation is left proportional.
+        const leftPx = firstFraction * (nominalWidthPx - freeSpanPx);
+        if (widthPx - leftPx <= 0) {
+            return { leftPx: 0, rightPx: 0 };
+        }
+
+        return { leftPx, rightPx: 0 };
+    }
+
+    /**
+     * @param nodes The nodes of one container of the row.
+     * @param containerSpan The span of the container as a fraction of the whole bar.
+     * @param containerWidthPx The room the container takes, in px at 100 % zoom.
+     *
+     * @returns The width of every node, in px at 100 % zoom, so a narrowed measure leaves each event the room its
+     *          symbol takes.
+     */
+    private static spacedWidthsOf(nodes: IStaffTreeNode[], containerSpan: number, containerWidthPx: number): number[] {
+        const items: IRowItem[] = nodes.map((node) => {
+            return {
+                fraction: StaffNoteViewer.nodeFraction(node) / containerSpan,
+                minimumPx: StaffNoteViewer.nodeMinimumRoomOf(node),
+            };
+        });
+
+        return MeasureLayout.spacedWidths(items, containerWidthPx);
+    }
+
+    /**
+     * @param node The node to measure.
+     *
+     * @returns The part of the bar the node spans, as a fraction of the whole bar.
+     */
+    private static nodeFraction(node: IStaffTreeNode): number {
+        const span = node.kind === StaffNodeKind.Subdivision ? node.span : node.duration;
+
+        return span.denominator > 0 ? span.numerator / span.denominator : 0;
+    }
+
+    /**
+     * @param node The node to measure.
+     *
+     * @returns The least room the node's symbols take, in px at 100 % zoom: a subdivision sums up its children.
+     */
+    private static nodeMinimumRoomOf(node: IStaffTreeNode): number {
+        if (node.kind === StaffNodeKind.Subdivision) {
+            return node.children.reduce((sum, child) => {
+                return sum + StaffNoteViewer.nodeMinimumRoomOf(child);
+            }, 0);
+        }
+
+        if (node.noteStyle !== undefined) {
+            return minEventWidth;
+        }
+
+        return minRestWidth + (node.glyph.dotted ? restDotWidth : 0);
     }
 
     /**
@@ -502,7 +625,7 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
         const topOffset = bandOffset - (opening / 2);
 
         // The wedge is one line from its tip to its opening. A hairpin over a barline is drawn per bar, so each bar
-        // keeps the opening the wedge has at its own edges, which lets the parts meet at the barlines.
+        // keeps the opening the wedge has at its own edges, which lets the parts meet at the bar lines.
         const tip = hairpin.kind === RangeArticulationKind.Crescendo ? hairpin.from : hairpin.to;
         const open = hairpin.kind === RangeArticulationKind.Crescendo ? hairpin.to : hairpin.from;
         const tipParameter = StaffNoteViewer.parameterOf(tip.bar, tip.start);
@@ -671,28 +794,30 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
     }
 
     /**
-     * Renders the hierarchical flex tree. Each note/rest cell grows proportionally to its duration
-     * relative to the current container's span, and each tuplet container grows proportionally to
-     * its span. Relative values keep every flex level's grow factors summing to 1, so all children
-     * fill their container.
+     * Renders the hierarchical row tree. The room of every container is distributed over its children by duration,
+     * and where a measure is narrowed, each event falls back on the room its own symbol takes
+     * ({@link MeasureLayout.spacedWidths}). A subdivision distributes its own room over its children the same way.
      *
      * @param nodes The tree nodes to render at this level.
      * @param beamSpans Map of note event indices to beam info (these render with attached beam segments).
      * @param keyPrefix A prefix for React keys to ensure uniqueness across recursive calls.
      * @param centerLine The centre line index ((maxNoteLine + 1) / 2), used to compute per-note vertical offsets.
      * @param restLineOffset Vertical offset in px for whole/half rests so they sit on the centre line.
-     * @param containerSpan The total span of the current flex container as a fraction of the whole bar.
+     * @param containerSpan The total span of the current container as a fraction of the whole bar.
      * @param atMeasureEnd Whether the current container ends with the measure.
+     * @param containerWidthPx The room the current container takes, in px at 100 % zoom.
      *
      * @returns List of VNodes representing the rendered items at this level.
      */
     private renderItems(nodes: IStaffTreeNode[], beamSpans: Map<number, IBeamNotePlan>,
         keyPrefix: string, centerLine: number, restLineOffset: number, containerSpan = 1,
-        atMeasureEnd = true): ComponentChild[] {
+        atMeasureEnd = true, containerWidthPx = 0): ComponentChild[] {
         const { scoreMetrics, measure, barNumber, trackId, scoreElementRegistry } = this.props;
+        const widths = StaffNoteViewer.spacedWidthsOf(nodes, containerSpan, containerWidthPx);
 
         return nodes.map((node, index) => {
             const isMeasureEnd = atMeasureEnd && index === nodes.length - 1;
+            const widthPx = Math.max(0, widths[index]);
 
             if (node.kind === StaffNodeKind.Subdivision) {
                 const spanFraction = node.span.numerator / node.span.denominator;
@@ -701,7 +826,7 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                     <div
                         key={`${keyPrefix}tuplet-${index}`}
                         style={{
-                            flex: `${spanFraction / containerSpan} 1 0`,
+                            flex: `0 1 ${widthPx}px`,
                             minWidth: 0,
                             display: "flex",
                             alignItems: "center",
@@ -710,14 +835,10 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                         }}
                     >
                         {this.renderItems(node.children, beamSpans, `${keyPrefix}${index}-`, centerLine,
-                            restLineOffset, spanFraction, isMeasureEnd)}
+                            restLineOffset, spanFraction, isMeasureEnd, widthPx)}
                     </div>
                 );
             }
-
-            const grow = node.duration.denominator > 0
-                ? (node.duration.numerator / node.duration.denominator) / containerSpan
-                : 1;
 
             // Noteheads are anchored at the note's onset plus half a grid step. As a fraction of
             // this run's width that is 1 / (2 * durationInSteps), so a top-level step note sits at
@@ -742,7 +863,7 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                 : `${anchorPercent}%`;
 
             const slotStyle = {
-                flex: `${grow} 1 0`,
+                flex: `0 1 ${widthPx}px`,
                 minWidth: 0,
                 "--note-anchor": anchor,
                 ...(beamInfo === undefined ? {} : {
