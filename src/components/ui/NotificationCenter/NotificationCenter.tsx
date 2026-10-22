@@ -5,6 +5,7 @@
 
 import { createRef, type ComponentChild, type RefObject } from "preact";
 
+import { escapeStack } from "../../../supplement/EscapeStack.js";
 import { requisitions } from "../../../supplement/Requisitions.js";
 import { Button } from "../framework/Button.js";
 import { UIIcon } from "../framework/UIIcon.js";
@@ -140,16 +141,20 @@ export class NotificationCenter extends UIComponent<ICommonUIProperties, INotifi
     }
 
     public override componentDidMount(): void {
-        document.addEventListener("keydown", this.handleKeyDown);
         requisitions.register("showInfo", this.handleShowInfo);
         requisitions.register("showWarning", this.handleShowWarning);
         requisitions.register("showError", this.handleShowError);
 
+        this.updateEscapeRegistration();
         this.publishState();
     }
 
+    public override componentDidUpdate(): void {
+        this.updateEscapeRegistration();
+    }
+
     public override componentWillUnmount(): void {
-        document.removeEventListener("keydown", this.handleKeyDown);
+        escapeStack.remove(this.handleEscape);
         requisitions.unregister("showInfo", this.handleShowInfo);
         requisitions.unregister("showWarning", this.handleShowWarning);
         requisitions.unregister("showError", this.handleShowError);
@@ -576,20 +581,27 @@ export class NotificationCenter extends UIComponent<ICommonUIProperties, INotifi
     }
 
     /**
-     * A handler for global key down. We are only interested in the escape key to close the first open toast.
-     *
-     * @param e The keyboard event.
+     * Closes the history panel, or hides the first open toast.
      */
-    private handleKeyDown = (e: KeyboardEvent): void => {
-        if (e.key === "Escape") {
-            const { mainList, showHistory } = this.state;
-            if (showHistory) {
-                this.setState({ showHistory: false });
-            } else if (mainList.length > 0) {
-                this.hideToast(mainList[0]);
-            }
+    private handleEscape = (): void => {
+        const { mainList, showHistory } = this.state;
+        if (showHistory) {
+            this.setState({ showHistory: false });
+        } else if (mainList.length > 0) {
+            this.hideToast(mainList[0]);
         }
     };
+
+    /** Registers for Escape only while there is something the key can close. */
+    private updateEscapeRegistration(): void {
+        const { mainList, showHistory } = this.state;
+
+        if (showHistory || mainList.length > 0) {
+            escapeStack.register(this.handleEscape);
+        } else {
+            escapeStack.remove(this.handleEscape);
+        }
+    }
 
     private publishState(): void {
         const { history, silent, showHistory } = this.state;

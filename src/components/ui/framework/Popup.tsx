@@ -261,8 +261,11 @@ export class Popup extends UIComponent<IPopupProperties, IPopupState> {
         this.returnFocusElement = undefined;
         this.anchorElement = undefined;
 
-        if (restoreFocusOnClose && reason !== PortalCloseReason.OutsideClick
-            && reason !== PortalCloseReason.Replaced && returnFocusElement?.isConnected) {
+        // A dismissal keeps the focus where the user is, only a deliberate close returns it to the anchor.
+        const dismissed = reason === PortalCloseReason.OutsideClick || reason === PortalCloseReason.Replaced
+            || reason === PortalCloseReason.Superseded;
+
+        if (restoreFocusOnClose && !dismissed && returnFocusElement?.isConnected) {
             requestAnimationFrame(() => {
                 if (returnFocusElement.isConnected) {
                     returnFocusElement.focus({ preventScroll: true });

@@ -38,6 +38,7 @@ import { Dialog, DialogResponseClosure } from "./components/ui/framework/Dialog.
 import { DrawerSidebar } from "./components/ui/framework/DrawerSidebar.js";
 import { Icon } from "./components/ui/framework/Icon.js";
 import { Label } from "./components/ui/framework/Label.js";
+import { Portal } from "./components/ui/framework/Portal.js";
 import { UIIcon } from "./components/ui/framework/UIIcon.js";
 import { PrintPreview } from "./components/ui/Print/PrintPreview.js";
 import { PrintView, type IPrintOptions } from "./components/ui/Print/PrintView.js";
@@ -227,6 +228,7 @@ export class App extends UIComponent<{}, IAppState> {
         }
 
         window.addEventListener("afterprint", this.handleAfterPrint);
+        escapeStack.setFallback(this.handleEscapeFallback);
         escapeStack.attach();
 
         requisitions.register("settingsChanged", this.handleSettingsChanged);
@@ -276,6 +278,7 @@ export class App extends UIComponent<{}, IAppState> {
         }
 
         window.removeEventListener("afterprint", this.handleAfterPrint);
+        escapeStack.setFallback(undefined);
         escapeStack.detach();
 
         requisitions.unregister("settingsChanged", this.handleSettingsChanged);
@@ -1296,6 +1299,9 @@ export class App extends UIComponent<{}, IAppState> {
     };
 
     private handleScoreLibraryClick = () => {
+        // The sidebar covers the screen, so overlays that are still open would float above it.
+        Portal.closeAll();
+
         this.setState({ sidebarOpen: true }, () => {
             escapeStack.push(this.onSidebarEscape);
         });
@@ -1947,6 +1953,15 @@ export class App extends UIComponent<{}, IAppState> {
         this.setState({ sidebarOpen: false });
     };
 
+    /** Runs for Escape only when no portal, popup or popover is open. */
+    private handleEscapeFallback = (): void => {
+        const { zenMode } = this.state;
+
+        if (!zenMode) {
+            this.selectionManager.clearSelection();
+        }
+    };
+
     private handleKeyDown(event: KeyboardEvent): void {
         const { editMode: requestedEditMode, zenMode } = this.state;
         const editMode = requestedEditMode && !zenMode;
@@ -2008,14 +2023,6 @@ export class App extends UIComponent<{}, IAppState> {
         }
 
         switch (event.key) {
-            case "Escape": {
-                if (!zenMode) {
-                    this.selectionManager.clearSelection();
-                }
-
-                break;
-            }
-
             case "Alt": {
                 event.preventDefault();
 

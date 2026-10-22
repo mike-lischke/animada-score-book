@@ -5,6 +5,8 @@
 
 import { type ComponentChild } from "preact";
 import { createPortal } from "preact/compat";
+
+import { escapeStack } from "../../../supplement/EscapeStack.js";
 import { Button } from "./Button.js";
 import { ComponentPlacement, ICommonUIProperties, UIComponent } from "./UIComponent.js";
 
@@ -75,12 +77,8 @@ export class RadialMenu extends UIComponent<IRadialMenuProps, IRadialMenuState> 
     private angleSpan?: number;
     private clockwise = false;
 
-    public override componentDidMount(): void {
-        document.addEventListener("keydown", this.handleKeyDown);
-    }
-
     public override componentWillUnmount(): void {
-        document.removeEventListener("keydown", this.handleKeyDown);
+        escapeStack.remove(this.handleEscape);
         document.body.classList.remove(RadialMenu.openClass);
     }
 
@@ -92,6 +90,8 @@ export class RadialMenu extends UIComponent<IRadialMenuProps, IRadialMenuState> 
         this.clockwise = options?.clockwise ?? false;
         document.body.classList.add(RadialMenu.openClass);
         this.setState({ open: true, expanded: false, anchorRect, placement, items });
+        escapeStack.register(this.handleEscape);
+
         requestAnimationFrame(() => {
             requestAnimationFrame(() => {
                 this.setState({ expanded: true });
@@ -103,6 +103,8 @@ export class RadialMenu extends UIComponent<IRadialMenuProps, IRadialMenuState> 
         const { open } = this.state;
 
         if (open) {
+            escapeStack.remove(this.handleEscape);
+
             this.setState({ expanded: false });
             setTimeout(() => {
                 this.setState({ open: false });
@@ -254,12 +256,8 @@ export class RadialMenu extends UIComponent<IRadialMenuProps, IRadialMenuState> 
         ].join(" ");
     }
 
-    private handleKeyDown = (event: KeyboardEvent): void => {
-        const { open } = this.state;
-
-        if (event.key === "Escape" && open) {
-            this.close();
-        }
+    private handleEscape = (): void => {
+        this.close();
     };
 
     // Angle range depending on item count and placement.

@@ -119,6 +119,9 @@ export class ArrangementTitle extends UIComponent<IArrangementTitleProperties, I
                     input.value = arrangement.title;
                 }
 
+                // Reverting the title owns the key, so it must not also clear the score selection.
+                e.stopPropagation();
+
                 this.setState({ inputValue: arrangement.title }, () => {
                     this.inputRef.current?.blur();
                 });

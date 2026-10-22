@@ -78,7 +78,6 @@ export class Menu extends UIComponent<IMenuProperties, IMenuState> {
                     id={this.popoverId}
                     popover="auto"
                     style={{ positionAnchor: this.anchorName }}
-                    onKeyDown={this.handleKeyDown}
                     onToggle={this.handlePopoverToggle}
                 >
                     {items.map((item) => {
@@ -115,12 +114,6 @@ export class Menu extends UIComponent<IMenuProperties, IMenuState> {
 
         this.setState({ open: false });
     }
-
-    private handleKeyDown = (e: KeyboardEvent): void => {
-        if (e.key === "Escape") {
-            this.close();
-        }
-    };
 
     private handlePopoverToggle = (e: Event): void => {
         const popover = e.target as HTMLElement;

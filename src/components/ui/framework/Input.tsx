@@ -188,7 +188,11 @@ export class Input extends UIComponent<IInputProperties, IInputState> {
             }
 
             case KeyboardKeys.Escape: {
-                onCancel?.(e, this.props);
+                if (onCancel) {
+                    // A canceled edit owns the key, so it must not also close the layer the field lives in.
+                    e.stopPropagation();
+                    onCancel(e, this.props);
+                }
 
                 break;
             }
