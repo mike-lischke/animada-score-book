@@ -6,8 +6,8 @@
 /**
  * Verifies the SMuFL fonts shipped in `public/fonts/smufl/`.
  *
- * Runs as part of `npm run build`, so a font that cannot be used never ships. A `limited` font is
- * reported but does not fail the build; only a broken index or an unusable font does.
+ * Runs as part of `npm run build`, so a font that cannot be used never ships. It stays quiet unless the index is
+ * broken or a font cannot be used at all; a `limited` font does not fail the build.
  */
 
 import { fileURLToPath } from "node:url";
@@ -22,8 +22,8 @@ const unusable = report.fonts.filter((font) => {
     return font.status === SmuflFontStatus.Invalid;
 });
 
-console.log(SmuflFontVerifier.formatReport(report));
-
 if (report.errors.length > 0 || unusable.length > 0) {
+    console.error(SmuflFontVerifier.formatReport(report));
+
     throw new Error(`${report.errors.length + unusable.length} SMuFL font problem(s) in ${fontFolder}`);
 }

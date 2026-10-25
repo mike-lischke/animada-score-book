@@ -137,7 +137,7 @@ Keep this terminal open. The server will confirm it's running — you'll see som
 npm run build
 ```
 
-This creates a `dist/` folder with everything the browser needs. Serve that folder with any static web server — nginx, Apache, Caddy, or even a simple file server. The frontend automatically talks to the backend on the same domain, so point both to the same address and you're done.
+This creates a `dist/` folder with everything the browser needs. Serve that folder with any static web server — nginx, Apache, Caddy, or even a simple file server. The frontend automatically talks to the backend on the same domain, so point both to the same address and you're done. The build checks the bundle budget before it finishes and fails when the initial load or a single file outgrows it (see [Build Output Contract](docs/design/build-output-contract.md)).
 
 > **First run:** When you open the app in your browser for the first time, a setup wizard will guide you through creating an admin account and connecting to the backend. No further manual steps needed.
 

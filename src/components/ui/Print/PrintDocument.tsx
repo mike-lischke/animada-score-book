@@ -23,6 +23,9 @@ export interface IPrintDocumentProperties extends ICommonUIProperties {
     session: PrintSession;
 
     viewMode: TrackViewMode;
+
+    /** Called once the document is in the DOM, so the native print dialog can wait for its content. */
+    onReady?: () => void;
 }
 
 /**
@@ -33,6 +36,12 @@ export interface IPrintDocumentProperties extends ICommonUIProperties {
  * (see `print.scss`), so the native dialog prints exactly the sheets the preview shows.
  */
 export class PrintDocument extends UIComponent<IPrintDocumentProperties> {
+    public override componentDidMount(): void {
+        const { onReady } = this.props;
+
+        onReady?.();
+    }
+
     public override render(): ComponentChild {
         const { dataModel, arrangementPlayer, selectionManager, session, viewMode } = this.props;
         const arrangement = dataModel.arrangement;

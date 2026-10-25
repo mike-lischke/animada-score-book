@@ -30,7 +30,7 @@ import { ToolsBar } from "./components/ui/Arrangement/ToolsBar.js";
 import { UndoRedoControls } from "./components/ui/Arrangement/UndoRedoControls.js";
 import { ConfirmDialog } from "./components/ui/composites/ConfirmDialog.js";
 import { NewScoreDialog } from "./components/ui/composites/NewScoreDialog.js";
-import { ReleaseNotesDialog } from "./components/ui/composites/ReleaseNotesDialog.js";
+import type { ReleaseNotesDialog } from "./components/ui/composites/ReleaseNotesDialog.js";
 import {
     ValueDialog, ValueEditorEntryType, type IValueEditorValueEntry
 } from "./components/ui/composites/ValueDialog.js";
@@ -40,8 +40,6 @@ import { Icon } from "./components/ui/framework/Icon.js";
 import { Label } from "./components/ui/framework/Label.js";
 import { Portal } from "./components/ui/framework/Portal.js";
 import { UIIcon } from "./components/ui/framework/UIIcon.js";
-import { PrintDocument } from "./components/ui/Print/PrintDocument.js";
-import { PrintPreview } from "./components/ui/Print/PrintPreview.js";
 import { AppStorage, type IUISettings } from "./core/AppStorage.js";
 import { Arrangement, type IArrangementCreationOptions } from "./core/Arrangement.js";
 import { getSharedAudioContext } from "./core/audio-context.js";
@@ -68,17 +66,30 @@ import { AdminSetupDialog } from "./ui/AdminSetupDialog.js";
 import { BackendDisconnectedDialog } from "./ui/BackendDisconnectedDialog.js";
 import { BackendSetupDialog, BackendSetupMode } from "./ui/BackendSetupDialog.js";
 import { LoginDialog } from "./ui/LoginDialog.js";
-import { PermissionEditor } from "./ui/PermissionEditor.js";
+import type { PermissionEditor } from "./ui/PermissionEditor.js";
 import { PrintSession } from "./ui/PrintSession.js";
 import { SelectionManager } from "./ui/SelectionManager.js";
-import { SettingsDialog } from "./ui/SettingsDialog.js";
-import { TutorialWizard } from "./ui/TutorialWizard.js";
-import { UserGroupEditor } from "./ui/UserGroupEditor.js";
+import type { SettingsDialog } from "./ui/SettingsDialog.js";
+import type { TutorialWizard } from "./ui/TutorialWizard.js";
+import type { UserGroupEditor } from "./ui/UserGroupEditor.js";
 import { isMobile } from "./ui/index.js";
 
 const ScoreLibrary = lazy(() => {
     return import("./ui/ScoreLibrary.js").then((m) => {
         return { default: m.ScoreLibrary };
+    });
+});
+
+// The print document and its preview are only needed while printing, so the initial bundle leaves them out.
+const PrintDocument = lazy(() => {
+    return import("./components/ui/Print/PrintDocument.js").then((m) => {
+        return { default: m.PrintDocument };
+    });
+});
+
+const PrintPreview = lazy(() => {
+    return import("./components/ui/Print/PrintPreview.js").then((m) => {
+        return { default: m.PrintPreview };
     });
 });
 
@@ -97,6 +108,20 @@ enum AppPhase {
 
     /** App fully loaded and running. */
     Running,
+}
+
+/**
+ * The dialog components `App` has loaded so far, keyed by their class name.
+ *
+ * A dialog's module is imported when the user opens it the first time; from then on the loaded component stays mounted
+ * and is opened through its ref. The PascalCase keys are deliberate: the render tree uses them directly as components.
+ */
+interface IAppDialogs {
+    SettingsDialog?: typeof SettingsDialog;
+    UserGroupEditor?: typeof UserGroupEditor;
+    PermissionEditor?: typeof PermissionEditor;
+    TutorialWizard?: typeof TutorialWizard;
+    ReleaseNotesDialog?: typeof ReleaseNotesDialog;
 }
 
 interface IAppState {
@@ -146,6 +171,9 @@ interface IAppState {
 
     /** Error message shown during startup when the backend or database is unreachable. */
     startupError?: string;
+
+    /** Dialog components loaded on demand; empty until the user opens one of them. */
+    dialogs: IAppDialogs;
 }
 
 export class App extends UIComponent<{}, IAppState> {
@@ -166,6 +194,10 @@ export class App extends UIComponent<{}, IAppState> {
 
     /** Document title to restore after the native print dialog finishes. */
     private printDocumentTitle?: string;
+
+    /** Resolves once the on-demand print document is mounted, so the native dialog waits for its content. */
+    private printDocumentReady?: Promise<void>;
+    private resolvePrintDocumentReady?: () => void;
 
     private dataModel = new ScoreBookDataModel();
     private scoreClipboard = new ScoreClipboard(this.dataModel);
@@ -211,6 +243,7 @@ export class App extends UIComponent<{}, IAppState> {
             compactLayout: this.compactLayoutQuery.matches,
             scoreSaved: false,
             backendUnreachable: false,
+            dialogs: {},
         };
 
         this.selectionManager = new SelectionManager(this.dataModel);
@@ -249,7 +282,7 @@ export class App extends UIComponent<{}, IAppState> {
     public override shouldComponentUpdate(nextProps: {}, nextState: IAppState): boolean {
         const { editMode, zenMode, sidebarOpen, phase, trackViewMode, printing, backendUnreachable,
             startupError, preferredEntryMode, notificationState, zoom, compactHeader, compactLayout,
-            scoreSaved, printPreviewOpen } = this.state;
+            scoreSaved, printPreviewOpen, dialogs } = this.state;
 
         return editMode !== nextState.editMode
             || zenMode !== nextState.zenMode
@@ -264,7 +297,8 @@ export class App extends UIComponent<{}, IAppState> {
             || zoom !== nextState.zoom
             || compactHeader !== nextState.compactHeader
             || compactLayout !== nextState.compactLayout
-            || scoreSaved !== nextState.scoreSaved;
+            || scoreSaved !== nextState.scoreSaved
+            || dialogs !== nextState.dialogs;
     }
 
     public override componentWillUnmount() {
@@ -296,7 +330,8 @@ export class App extends UIComponent<{}, IAppState> {
     public render() {
         const { phase, editMode: requestedEditMode, zenMode, sidebarOpen, trackViewMode, notificationState, zoom,
             printing, printPreviewOpen, backendUnreachable, startupError, preferredEntryMode,
-            compactHeader, compactLayout } = this.state;
+            compactHeader, compactLayout, dialogs } = this.state;
+
         const editMode = requestedEditMode && !zenMode;
         const entryMode = this.effectiveEntryMode(trackViewMode, preferredEntryMode);
         const isRunning = phase === AppPhase.Running;
@@ -641,15 +676,19 @@ export class App extends UIComponent<{}, IAppState> {
                             {renderNotificationCenter()}
                         </Container>
                         <ValueDialog ref={this.valueDialogRef} />
-                        <SettingsDialog ref={this.settingsDialogRef} fontLoader={this.smuflFontLoader} />
-                        <TutorialWizard
-                            ref={this.tutorialWizardRef}
-                            steps={tutorialSteps}
-                            tutorialEnabled={AppStorage.loadUISettings()?.tutorialEnabled ?? true}
-                            onTutorialEnabledChange={this.handleTutorialEnabledChange}
-                            onStepChange={this.handleTutorialStepChange}
-                            onClose={this.handleTutorialClose}
-                        />
+                        {dialogs.SettingsDialog &&
+                            <dialogs.SettingsDialog ref={this.settingsDialogRef} fontLoader={this.smuflFontLoader} />
+                        }
+                        {dialogs.TutorialWizard &&
+                            <dialogs.TutorialWizard
+                                ref={this.tutorialWizardRef}
+                                steps={tutorialSteps}
+                                tutorialEnabled={AppStorage.loadUISettings()?.tutorialEnabled ?? true}
+                                onTutorialEnabledChange={this.handleTutorialEnabledChange}
+                                onStepChange={this.handleTutorialStepChange}
+                                onClose={this.handleTutorialClose}
+                            />
+                        }
                         <BackendDisconnectedDialog
                             ref={this.backendDisconnectedDialogRef}
                             onReconnected={() => {
@@ -663,41 +702,50 @@ export class App extends UIComponent<{}, IAppState> {
                         <BackendSetupDialog
                             ref={this.backendSetupDialogRef}
                         />
-                        <UserGroupEditor
-                            ref={this.userGroupEditorRef}
-                            dataModel={this.dataModel}
-                            showUsers={this.dataModel.user?.isAdmin === true}
-                        />
-                        <PermissionEditor
-                            ref={this.permissionEditorRef}
-                            dataModel={this.dataModel}
-                            confirmRef={this.confirmDialogRef}
-                            onSaved={(entry) => {
-                                void requisitions.execute("permChanged", entry);
-                            }}
-                        />
+                        {dialogs.UserGroupEditor &&
+                            <dialogs.UserGroupEditor
+                                ref={this.userGroupEditorRef}
+                                dataModel={this.dataModel}
+                                showUsers={this.dataModel.user?.isAdmin === true}
+                            />
+                        }
+                        {dialogs.PermissionEditor &&
+                            <dialogs.PermissionEditor
+                                ref={this.permissionEditorRef}
+                                dataModel={this.dataModel}
+                                confirmRef={this.confirmDialogRef}
+                                onSaved={(entry) => {
+                                    void requisitions.execute("permChanged", entry);
+                                }}
+                            />
+                        }
                         {
                             printPreviewOpen && this.dataModel.arrangement && this.arrangementPlayer && (
-                                <PrintPreview
-                                    dataModel={this.dataModel}
-                                    arrangementPlayer={this.arrangementPlayer}
-                                    selectionManager={this.selectionManager}
-                                    session={this.printSession}
-                                    viewMode={trackViewMode}
-                                    onClose={this.handlePrintPreviewClose}
-                                    onPrint={this.handlePrintPreviewPrint}
-                                />
+                                <Suspense fallback={undefined}>
+                                    <PrintPreview
+                                        dataModel={this.dataModel}
+                                        arrangementPlayer={this.arrangementPlayer}
+                                        selectionManager={this.selectionManager}
+                                        session={this.printSession}
+                                        viewMode={trackViewMode}
+                                        onClose={this.handlePrintPreviewClose}
+                                        onPrint={this.handlePrintPreviewPrint}
+                                    />
+                                </Suspense>
                             )
                         }
                         {
                             printing && this.arrangementPlayer && (
-                                <PrintDocument
-                                    dataModel={this.dataModel}
-                                    arrangementPlayer={this.arrangementPlayer}
-                                    selectionManager={this.selectionManager}
-                                    session={this.printSession}
-                                    viewMode={trackViewMode}
-                                />
+                                <Suspense fallback={undefined}>
+                                    <PrintDocument
+                                        dataModel={this.dataModel}
+                                        arrangementPlayer={this.arrangementPlayer}
+                                        selectionManager={this.selectionManager}
+                                        session={this.printSession}
+                                        viewMode={trackViewMode}
+                                        onReady={this.handlePrintDocumentReady}
+                                    />
+                                </Suspense>
                             )
                         }
                     </ErrorBoundary>
@@ -705,7 +753,7 @@ export class App extends UIComponent<{}, IAppState> {
 
                 <ConfirmDialog ref={this.confirmDialogRef} />
                 <NewScoreDialog ref={this.newScoreDialogRef} />
-                <ReleaseNotesDialog ref={this.releaseNotesDialogRef} />
+                {dialogs.ReleaseNotesDialog && <dialogs.ReleaseNotesDialog ref={this.releaseNotesDialogRef} />}
                 <Dialog
                     id="exportDialog"
                     ref={this.exportDialogRef}
@@ -1201,7 +1249,7 @@ export class App extends UIComponent<{}, IAppState> {
         if (showTutorial) {
             this.initAppState();
             this.setState({ phase: AppPhase.Running }, () => {
-                this.tutorialWizardRef.current?.open();
+                void this.openTutorialWizard();
             });
 
             return;
@@ -1398,7 +1446,7 @@ export class App extends UIComponent<{}, IAppState> {
                 label: "Users & Groups",
                 icon: <Icon src={UIIcon.Organization} />,
                 onClick: () => {
-                    this.userGroupEditorRef.current?.open();
+                    void this.openUserGroupEditor();
                 },
             });
             items.push({
@@ -1415,7 +1463,7 @@ export class App extends UIComponent<{}, IAppState> {
                 label: "My Groups",
                 icon: <Icon src={UIIcon.Organization} />,
                 onClick: () => {
-                    this.userGroupEditorRef.current?.open();
+                    void this.openUserGroupEditor();
                 },
             });
         }
@@ -1472,6 +1520,11 @@ export class App extends UIComponent<{}, IAppState> {
 
         document.body.classList.add("printing");
 
+        // The document is loaded on demand, so printing waits for the mount that its component reports.
+        this.printDocumentReady = new Promise<void>((resolve) => {
+            this.resolvePrintDocumentReady = resolve;
+        });
+
         this.setState({ printing: true }, () => {
             void this.printAfterLayout();
         });
@@ -1481,6 +1534,8 @@ export class App extends UIComponent<{}, IAppState> {
      * Waits for the print document's fonts and layout, then opens the native print dialog.
      */
     private async printAfterLayout(): Promise<void> {
+        await this.printDocumentReady;
+
         const fontsReady = (document as { fonts?: { ready?: Promise<unknown>; }; }).fonts?.ready
             ?? Promise.resolve();
         await fontsReady;
@@ -1507,8 +1562,13 @@ export class App extends UIComponent<{}, IAppState> {
         this.setState({ printing: false });
     };
 
-    private handleDisplayOptionsClick = () => {
-        this.settingsDialogRef.current?.open();
+    /** Releases the print handshake once the on-demand document is in the DOM. */
+    private handlePrintDocumentReady = (): void => {
+        this.resolvePrintDocumentReady?.();
+    };
+
+    private handleDisplayOptionsClick = (): void => {
+        void this.openSettingsDialog();
     };
 
     private handleSettingsChanged = (settings: IUISettings): Promise<boolean> => {
@@ -1809,16 +1869,12 @@ export class App extends UIComponent<{}, IAppState> {
             }
 
             case "managePerm": {
-                if (!this.permissionEditorRef.current) {
-                    return false;
-                }
-
                 const row = document.querySelector<HTMLElement>(
                     `.score-tree-entry[data-entry-type="${String(data.type)}"][data-entry-id="${data.id}"]`,
                 );
 
                 if (row) {
-                    void this.permissionEditorRef.current.open(row.getBoundingClientRect(), data);
+                    void this.openPermissionEditor(row.getBoundingClientRect(), data);
                 }
 
                 return false;
@@ -2483,8 +2539,94 @@ export class App extends UIComponent<{}, IAppState> {
     };
 
     private handleShowReleaseNotes = (): void => {
-        this.releaseNotesDialogRef.current?.open();
+        void this.openReleaseNotesDialog();
     };
+
+    /**
+     * Opens the settings dialog, importing its code on first use.
+     */
+    private async openSettingsDialog(): Promise<void> {
+        const { dialogs } = this.state;
+        if (dialogs.SettingsDialog) {
+            this.settingsDialogRef.current?.open();
+
+            return;
+        }
+
+        const { SettingsDialog } = await import("./ui/SettingsDialog.js");
+        this.setState({ dialogs: { ...dialogs, SettingsDialog } }, () => {
+            this.settingsDialogRef.current?.open();
+        });
+    }
+
+    /**
+     * Opens the users and groups editor, importing its code on first use.
+     */
+    private async openUserGroupEditor(): Promise<void> {
+        const { dialogs } = this.state;
+        if (dialogs.UserGroupEditor) {
+            this.userGroupEditorRef.current?.open();
+
+            return;
+        }
+
+        const { UserGroupEditor } = await import("./ui/UserGroupEditor.js");
+        this.setState({ dialogs: { ...dialogs, UserGroupEditor } }, () => {
+            this.userGroupEditorRef.current?.open();
+        });
+    }
+
+    /**
+     * Opens the permission editor for a score or folder, importing its code on first use.
+     *
+     * @param target The rectangle the editor is anchored at.
+     * @param entry The score or folder the permissions belong to.
+     */
+    private async openPermissionEditor(target: DOMRect, entry: ISbDmScoreFolder | ISbDmScore): Promise<void> {
+        const { dialogs } = this.state;
+        if (!dialogs.PermissionEditor) {
+            const { PermissionEditor } = await import("./ui/PermissionEditor.js");
+            await new Promise<void>((resolve) => {
+                this.setState({ dialogs: { ...dialogs, PermissionEditor } }, resolve);
+            });
+        }
+
+        await this.permissionEditorRef.current?.open(target, entry);
+    }
+
+    /**
+     * Opens the tutorial, importing its code on first use.
+     */
+    private async openTutorialWizard(): Promise<void> {
+        const { dialogs } = this.state;
+        if (dialogs.TutorialWizard) {
+            this.tutorialWizardRef.current?.open();
+
+            return;
+        }
+
+        const { TutorialWizard } = await import("./ui/TutorialWizard.js");
+        this.setState({ dialogs: { ...dialogs, TutorialWizard } }, () => {
+            this.tutorialWizardRef.current?.open();
+        });
+    }
+
+    /**
+     * Opens the release notes, importing their code on first use.
+     */
+    private async openReleaseNotesDialog(): Promise<void> {
+        const { dialogs } = this.state;
+        if (dialogs.ReleaseNotesDialog) {
+            this.releaseNotesDialogRef.current?.open();
+
+            return;
+        }
+
+        const { ReleaseNotesDialog } = await import("./components/ui/composites/ReleaseNotesDialog.js");
+        this.setState({ dialogs: { ...dialogs, ReleaseNotesDialog } }, () => {
+            this.releaseNotesDialogRef.current?.open();
+        });
+    }
 
     private handleExportClick = async (): Promise<void> => {
         const { arrangementPlayer } = this;
