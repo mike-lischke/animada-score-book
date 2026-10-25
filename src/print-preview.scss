@@ -539,11 +539,13 @@
         isolation: isolate;
     }
 
+    /* The staff lines are lighter than the notation they carry, as the score draws them, and stated in a fixed
+     * tone so a printed sheet reads the same whatever theme the application shows. */
     .staff-note-viewer-line {
         top: calc(50% + var(--staff-centre, 32px) + var(--staff-line-offset, 0px) - var(--staff-line-thickness, 1px) / 2);
         height: var(--staff-line-thickness, 1px);
         border-top: 0;
-        background: #000;
+        background: #c4c4c4;
     }
 
     .staff-note-head-damped-plus,

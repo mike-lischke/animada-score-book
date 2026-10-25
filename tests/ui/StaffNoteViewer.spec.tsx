@@ -1199,19 +1199,25 @@ describe("StaffNoteViewer measure width", { concurrent: false }, () => {
         expect(rooms.leadingPx).toBeCloseTo(rooms.nominalLeadingPx, 1);
     });
 
-    it("holds a whole note in place, which is the only event of its bar", () => {
+    it("lets a whole note follow its column, which holds nothing but that note", () => {
+        // The note is the bar's only slot, so it keeps its share of the column instead of its room at the nominal
+        // width: widening the column moves the note with it.
         const rooms = roomsOf(1680, 1280, buildMeasure([event(fraction(0, 1), fraction(1, 1), "1")], []));
 
-        expect(rooms.leadingPx).toBeCloseTo(rooms.nominalLeadingPx, 1);
+        expect(rooms.leadingPx).toBeCloseTo(halfStep * 1680, 1);
         expect(rooms.rightPx).toBe(0);
     });
 
-    it("leaves a whole-bar rest in the proportional layout where its own room no longer fits", () => {
-        // A rest covering the bar is anchored at its middle, so its room is half the bar: a column of 300 px cannot
-        // hold that, and the rest stays centred in the column instead.
-        const rooms = roomsOf(300, 1280, buildMeasure([event(fraction(0, 1), fraction(1, 1))], []));
+    it("centres a whole-bar rest in its column at every width", () => {
+        // A rest covering the bar is the bar's only slot, so it stays centred whatever width the column is drawn at,
+        // instead of hanging on the position it holds at the nominal width.
+        const measure = buildMeasure([event(fraction(0, 1), fraction(1, 1))], []);
+        const narrow = roomsOf(300, 1280, measure);
+        const shrunk = roomsOf(780, 1280, measure);
 
-        expect(rooms.leftPx).toBe(0);
-        expect(rooms.rightPx).toBe(0);
+        expect(narrow.leftPx).toBe(0);
+        expect(narrow.rightPx).toBe(0);
+        expect(shrunk.leftPx).toBe(0);
+        expect(shrunk.rightPx).toBe(0);
     });
 });

@@ -1396,7 +1396,7 @@
     top: 50%;
     left: 0;
     right: 0;
-    border-top: var(--staff-line-thickness, 1px) solid var(--color-base-300);
+    border-top: var(--staff-line-thickness, 1px) solid var(--staff-line-colour);
     transform: translateY(-50%);
     z-index: -1;
 }
@@ -1515,7 +1515,7 @@
     /* Centred on the line the notes sit on, which the viewer states; the offset is the line's place in the
        staff. Whole pixels, so the line lands on the pixel grid. */
     top: calc(50% + var(--staff-centre, 32px) + var(--staff-line-offset, 0px) - round(nearest, var(--staff-line-thickness, 1px) / 2, 1px));
-    border-top: var(--staff-line-thickness, 1px) solid var(--color-base-300);
+    border-top: var(--staff-line-thickness, 1px) solid var(--staff-line-colour);
     z-index: -1;
 }
 
@@ -1864,7 +1864,8 @@
         pointer-events: none;
     }
 
-    /* The parentheses of a ghost note hug the head's ink on both sides. */
+    /* The parentheses of a ghost note hug the head's ink on both sides with the same gap. Both glyphs end on
+     * the right edge of their box, so each parenthesis hangs on its gap plus its own ink width. */
     .staff-note-head-paren-left {
         position: absolute;
         left: calc(0% - var(--staff-space) * 0.2);
@@ -1875,7 +1876,7 @@
 
     .staff-note-head-paren-right {
         position: absolute;
-        left: calc(100% + var(--staff-space) * 0.8 + var(--glyph-ink-width-noteheadparenthesisright));
+        left: calc(100% + var(--staff-space) * 0.2 + var(--glyph-ink-width-noteheadparenthesisright));
         top: 50%;
         transform: translate(-100%, -50%);
         pointer-events: none;
@@ -1883,7 +1884,7 @@
 
     /* A dotted note needs room for its dot before the closing parenthesis. */
     &.staff-note-head-dotted .staff-note-head-paren-right {
-        left: calc(100% + var(--staff-space) * 1.6 + var(--glyph-ink-width-noteheadparenthesisright));
+        left: calc(100% + var(--staff-space) * 0.6 + var(--glyph-ink-width-augmentationdot) + var(--glyph-ink-width-noteheadparenthesisright));
     }
 
     /* The accent sits centred under the head's ink, where the score's accents have always been drawn. A

@@ -383,11 +383,18 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
             return { leftPx: 0, rightPx: 0 };
         }
 
+        // A bar of a single event has no outer events to keep in place: its slot is the whole bar, so the event
+        // follows the column. A whole note keeps its onset's share, and a whole-bar rest stays in the middle of
+        // the bar at whatever width the column is drawn at.
+        if (spanFraction === 0) {
+            return { leftPx: 0, rightPx: 0 };
+        }
+
         // Without a room before the closing barline, the grid narrows only by what the first event's room gains.
         const roomPx = firstFraction * nominalWidthPx;
         const freeSpanPx = (widthPx - roomPx) / (1 - firstFraction);
 
-        if (spanFraction > 0 && (1 - lastFraction) * freeSpanPx < roomPx) {
+        if ((1 - lastFraction) * freeSpanPx < roomPx) {
             // The closing barline keeps the room of the first event as well, so the grid spans no more than both
             // rooms leave: span * (last − first) = width − 2 * room, and the insets take the rest of the column.
             const spanPx = (widthPx - (2 * roomPx)) / spanFraction;
@@ -398,8 +405,8 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
             }
         }
 
-        // A bar of a single event has no span to spread, so it only holds its own room. Where that room no longer
-        // fits — a whole-bar rest keeps its centre — the notation is left proportional.
+        // The grid narrows only by what the first event's room gains, and stays proportional where that no longer
+        // fits into the column.
         const leftPx = firstFraction * (nominalWidthPx - freeSpanPx);
         if (widthPx - leftPx <= 0) {
             return { leftPx: 0, rightPx: 0 };

@@ -97,6 +97,43 @@ const toggleTrack = async (preview: Locator, index: number): Promise<void> => {
     await items.nth(index).locator("a").click();
 };
 
+/**
+ * @param preview The preview dialog.
+ * @param selector The id selector of the value dropdown to change.
+ * @param label The caption of the value to pick.
+ */
+const chooseValue = async (preview: Locator, selector: string, label: string): Promise<void> => {
+    const dropdown = preview.locator(selector);
+    await dropdown.locator(".value-dropdown-trigger").click();
+    await dropdown.locator(".dropdown-popup").getByText(label, { exact: true }).click();
+};
+
+/**
+ * @param scope The preview dialog or the printed document.
+ *
+ * @returns The scale the sheets state their notation at, which is the print scale.
+ */
+const printScaleOf = (scope: Locator): Promise<number> => {
+    // The printed document is hidden on screen, where a computed transform reads as `none`.
+    return scope.locator(".print-sheet-content-scale").first().evaluate((element) => {
+        const match = /scale\(([\d.]+)\)/.exec((element as HTMLElement).style.transform);
+
+        return match === null ? Number.NaN : Number.parseFloat(match[1]);
+    });
+};
+
+/**
+ * @param preview The preview dialog.
+ *
+ * @returns The number of pages the preview shows.
+ */
+const pageCountOf = async (preview: Locator): Promise<number> => {
+    const label = await preview.locator(".print-preview-pager-label").textContent() ?? "";
+    const match = /\/\s*(\d+)/.exec(label);
+
+    return match === null ? 0 : Number(match[1]);
+};
+
 test("print button opens the preview of the arrangement", async ({ page }) => {
     await page.goto("/");
 
@@ -376,10 +413,12 @@ test("printed engraving keeps vector beams and connects stems to the actual note
                 const ink = glyph.getBBox();
                 const right = new DOMPoint(ink.x + ink.width, ink.y).matrixTransform(glyph.getScreenCTM()!);
 
-                return Math.abs(right.x - stem.getBoundingClientRect().right);
+                // A text run reports its advances in whole pixels on some platforms, so the ink a browser lays out
+                // ends within a pixel of the edge the head's box states.
+                return Math.round(Math.abs(right.x - stem.getBoundingClientRect().right));
             });
         });
-    expect(Math.max(...attachments)).toBeLessThan(0.1);
+    expect(Math.max(...attachments)).toBeLessThanOrEqual(1);
     const beamPieces = await root.locator(".staff-note-viewer").first().evaluate((row) => {
         const runs = [...row.querySelectorAll(".staff-note-viewer-note-run")].slice(0, 4);
 
@@ -490,34 +529,51 @@ test("preview lays the measures out at their stored widths", async ({ page }) =>
  * @param displayMode The view mode to open the score in.
  * @param sessionId The session the seeded settings are stored under, which has to differ between tests.
  * @param barCount The number of measures to print.
+ * @param measureWidth The stored width of every measure, in layout px.
+ * @param sixteenthsPerBar The number of sixteenths a measure holds; 0 states quarter notes instead.
+ * @param instrumentIds The instruments to seed, one track each.
  */
-const seedNarrowScore = async (page: Page, displayMode: string, sessionId: string, barCount = 4): Promise<void> => {
-    const narrowWidth = 500;
-    const measures = Array.from({ length: barCount }, (_, index) => {
-        return {
-            number: index + 1,
-            meter: { beats: 4, beatUnits: 4, stepResolution: 16, beatGroups: [4, 4, 4, 4] },
-            events: Array.from({ length: 4 }, (_, beat) => {
-                return {
-                    start: { numerator: beat, denominator: 4 },
-                    duration: { numerator: 1, denominator: 4 },
-                    noteStyleId: "1",
-                };
-            }),
-            subdivisions: [],
-        };
-    });
+const seedNarrowScore = async (page: Page, displayMode: string, sessionId: string, barCount = 4,
+    measureWidth = 500, sixteenthsPerBar = 0, instrumentIds = ["0"]): Promise<void> => {
+    const events = sixteenthsPerBar > 0
+        ? Array.from({ length: sixteenthsPerBar }, (_, step) => {
+            return {
+                start: { numerator: step, denominator: 16 },
+                duration: { numerator: 1, denominator: 16 },
+                noteStyleId: "1",
+            };
+        })
+        : Array.from({ length: 4 }, (_, beat) => {
+            return {
+                start: { numerator: beat, denominator: 4 },
+                duration: { numerator: 1, denominator: 4 },
+                noteStyleId: "1",
+            };
+        });
+
+    const measuresOf = () => {
+        return Array.from({ length: barCount }, (_, index) => {
+            return {
+                number: index + 1,
+                meter: { beats: 4, beatUnits: 4, stepResolution: 16, beatGroups: [4, 4, 4, 4] },
+                events,
+                subdivisions: [],
+            };
+        });
+    };
 
     const measureWidths: Record<number, number> = {};
     for (let bar = 1; bar <= barCount; bar++) {
-        measureWidths[bar] = narrowWidth;
+        measureWidths[bar] = measureWidth;
     }
 
     const packed = stringifyPackedArrangement({
         version: arrangementSnapshotVersion,
         title: "E2E Print Resize",
         timeParams: { timeSignature: "4/4", tempo: 120, length: barCount, pulse: "1/4", stepResolution: 16 },
-        tracks: [{ id: 231, instrumentId: "0", measures }],
+        tracks: instrumentIds.map((instrumentId, index) => {
+            return { id: 231 + index, instrumentId, measures: measuresOf() };
+        }),
         extensions: { measureWidths },
     });
 
@@ -603,4 +659,195 @@ test("offers no width dragging where the preview prints grid rows", async ({ pag
     const preview = await openPreview(page);
     await expect(preview.locator(".print-system").first()).toBeVisible();
     await expect(preview.locator(".print-system-resize-handle")).toHaveCount(0);
+});
+
+test.describe("print preview settings", () => {
+    test("keeps its settings when the preview is closed and reopened", async ({ page }) => {
+        await page.goto("/");
+
+        let preview = await openPreview(page);
+        await preview.getByRole("button", { name: "Landscape", exact: true }).click();
+        await chooseValue(preview, "#print-scale", "150%");
+        await toggleTrack(preview, 0);
+        const caption = await trackChooser(preview).caption.textContent();
+
+        await preview.locator('.print-preview-tool-button[title="Close the preview (ESC)"]').click();
+        await expect(page.locator(".print-preview")).toHaveCount(0);
+
+        preview = await openPreview(page);
+        await expect(preview.getByRole("button", { name: "Landscape", exact: true }))
+            .toHaveAttribute("aria-pressed", "true");
+        await expect(preview.locator("#print-scale .value-dropdown-value")).toHaveText("150%");
+        await expect(trackChooser(preview).caption).toHaveText(caption ?? "");
+    });
+
+    test("states the printed paper in the page rule the browser prints", async ({ page }) => {
+        await seedNarrowScore(page, "staff", "e2e-print-paper");
+        await stubPrint(page);
+
+        const preview = await openPreview(page);
+
+        // The top margin moves the running header down the sheet, which the layout states in millimetres.
+        const headerOffset = (): Promise<number> => {
+            return preview.locator(".print-sheet-header").first().evaluate((header) => {
+                const sheet = header.closest(".print-sheet")!;
+                const sheetBox = sheet.getBoundingClientRect();
+
+                return (header.getBoundingClientRect().top - sheetBox.top) / sheetBox.height;
+            });
+        };
+
+        const narrow = await headerOffset();
+        await chooseValue(preview, "#print-margin-top", "40");
+        expect(await headerOffset()).toBeGreaterThan(narrow);
+
+        await preview.getByRole("button", { name: "Landscape", exact: true }).click();
+        await preview.locator(".print-preview-emphasis").click();
+        await expect.poll(() => {
+            return printWasCalled(page);
+        }).toBe(true);
+
+        const printed = page.locator(".print-root .print-sheet").first();
+        await expect(printed).toBeAttached();
+        expect(await printed.evaluate((element) => {
+            const sheet = element as HTMLElement;
+
+            return { width: sheet.style.width, height: sheet.style.height };
+        })).toEqual({ width: "297mm", height: "210mm" });
+        expect(await page.locator("#print-page-style").textContent()).toBe("@page { size: A4 landscape; margin: 0; }");
+
+        await page.evaluate(() => {
+            window.dispatchEvent(new Event("afterprint"));
+        });
+        await expect(page.locator(".print-root")).toHaveCount(0);
+        await expect(preview).toBeVisible();
+    });
+
+    test("changes the notation size with the print scale but not with the preview zoom", async ({ page }) => {
+        await seedNarrowScore(page, "staff", "e2e-print-scale", 6);
+        await stubPrint(page);
+
+        const preview = await openPreview(page);
+        const pagesBefore = await pageCountOf(preview);
+        const scaleBefore = await printScaleOf(preview);
+
+        // The preview zoom only magnifies the sheets on screen.
+        await preview.getByTitle("Zoom in", { exact: true }).click();
+        await expect(preview.locator(".print-preview-zoom-value")).toHaveText("110%");
+        expect(await printScaleOf(preview)).toBeCloseTo(scaleBefore, 3);
+
+        await chooseValue(preview, "#print-scale", "150%");
+        const scaleAfter = await printScaleOf(preview);
+        expect(scaleAfter).toBeGreaterThan(scaleBefore);
+        expect(await pageCountOf(preview)).toBeGreaterThanOrEqual(pagesBefore);
+
+        // The printed document states the same scale, and the preview keeps its magnification.
+        await preview.locator(".print-preview-emphasis").click();
+        await expect.poll(() => {
+            return printWasCalled(page);
+        }).toBe(true);
+        expect(await printScaleOf(page.locator(".print-root"))).toBeCloseTo(scaleAfter, 3);
+        expect(await page.locator(".print-root .print-sheet").first().evaluate((element) => {
+            return (element as HTMLElement).style.zoom;
+        })).toBe("");
+        await expect(preview.locator(".print-preview-zoom-value")).toHaveText("110%");
+    });
+
+    test("restores the score's measure widths with the width reset", async ({ page }) => {
+        await seedNarrowScore(page, "staff", "e2e-print-width-reset");
+
+        const preview = await openPreview(page);
+        const reset = preview.locator('.print-preview-tool-button[title="Restore the measure widths of the score"]');
+        await expect(reset).toBeDisabled();
+
+        /**
+         * @returns The widths of the printed measure columns, in layout px.
+         */
+        const widths = (): Promise<number[]> => {
+            return preview.evaluate(() => {
+                return [...document.querySelectorAll<HTMLElement>(".print-sheet .staff-measure-viewer")]
+                    .map((column) => {
+                        return Number.parseFloat(column.style.flex.split(" ")[2]);
+                    });
+            });
+        };
+
+        const before = await widths();
+
+        const handle = preview.locator(".print-system-resize-handle").first();
+        await handle.dispatchEvent("pointerdown", { button: 0, pointerId: 1, clientX: 400, clientY: 300 });
+        await page.evaluate(() => {
+            window.dispatchEvent(new PointerEvent("pointermove", { pointerId: 1, clientX: 460 }));
+        });
+        await page.evaluate(() => {
+            window.dispatchEvent(new PointerEvent("pointerup", { pointerId: 1, clientX: 460 }));
+        });
+
+        await expect(reset).toBeEnabled();
+        await expect.poll(async () => {
+            return (await widths())[0];
+        }).toBeGreaterThan(before[0]);
+
+        await reset.click();
+
+        await expect(reset).toBeDisabled();
+        expect(await widths()).toEqual(before);
+    });
+});
+
+test.describe("print preview with extreme content", () => {
+    test("warns about a measure wider than the page instead of shrinking it", async ({ page }) => {
+        await seedNarrowScore(page, "staff", "e2e-print-overflow", 1, 4000);
+
+        const preview = await openPreview(page);
+
+        const warning = preview.locator(".print-preview-warning");
+        await expect(warning).toBeVisible();
+        await expect(warning).toContainText("Measure 1 is wider than the page content");
+        await expect(warning).toContainText("Reduce the print scale");
+
+        // The layout states the scale the user set and reports the overflow instead of fitting the content to the
+        // page, so the wide measure keeps the width it was given.
+        const caption = await preview.locator("#print-scale .value-dropdown-value").textContent() ?? "";
+        expect(await printScaleOf(preview)).toBeCloseTo(Number.parseFloat(caption) / 100, 3);
+        expect(await preview.locator(".print-sheet .staff-measure-viewer").first().evaluate((column) => {
+            return Number.parseFloat((column as HTMLElement).style.flex.split(" ")[2]);
+        })).toBe(4000);
+    });
+
+    test("prints dense notation with long instrument names across pages", async ({ page }) => {
+        // Sixteen sixteenths per measure over a score of three pages, on the instruments whose names are the longest.
+        await seedNarrowScore(page, "staff", "e2e-print-dense", 24, 500, 16, ["4", "7", "8"]);
+        await stubPrint(page);
+
+        const preview = await openPreview(page);
+        await expect(preview.locator(".print-preview-warning")).toHaveCount(0);
+
+        const pages = await pageCountOf(preview);
+        expect(pages).toBeGreaterThan(1);
+        await expect(preview.locator(".print-sheet")).toHaveCount(pages);
+        await expect(preview.locator(".print-sheet-page-number")).toHaveCount(pages);
+
+        // A long name wraps in its column instead of reaching into the measures beside it.
+        const names = preview.locator(".print-system-name");
+        expect(await names.count()).toBeGreaterThan(pages);
+        expect(await names.evaluateAll((elements) => {
+            return elements.filter((element) => {
+                return element.scrollWidth > element.clientWidth + 1;
+            }).length;
+        })).toBe(0);
+
+        await preview.locator(".print-preview-emphasis").click();
+        await expect.poll(() => {
+            return printWasCalled(page);
+        }).toBe(true);
+        await expect(page.locator(".print-root .print-sheet")).toHaveCount(pages);
+        await expect(page.locator(".print-root .print-sheet-page-number")).toHaveCount(pages);
+
+        await page.evaluate(() => {
+            window.dispatchEvent(new Event("afterprint"));
+        });
+        await expect(page.locator(".print-root")).toHaveCount(0);
+        await expect(preview).toBeVisible();
+    });
 });
