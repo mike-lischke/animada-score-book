@@ -2582,3 +2582,234 @@ body.range-articulation-mode #toolsBarHost * {
     color: color-mix(in srgb, var(--color-base-content) 60%, transparent);
     margin: 12px 4px 4px 4px;
 }
+
+/* Full-page fallback of the ErrorBoundary. It replaces the app shell, so it centers its panel itself. */
+.error-boundary {
+    display: flex;
+    height: calc(100vh - 2 * var(--page-gap));
+    padding: 24px 16px;
+    box-sizing: border-box;
+    overflow-y: auto;
+    background-color: var(--color-base-200);
+    color: var(--color-base-content);
+
+    @supports (height: 100dvh) {
+        height: calc(100dvh - 2 * var(--page-gap));
+    }
+
+    /* Auto margins center the panel and, unlike align-items, do not clip it when it outgrows the viewport. */
+    .error-boundary-panel {
+        display: flex;
+        flex-direction: column;
+        gap: 22px;
+        width: 100%;
+        max-width: 600px;
+        margin: auto;
+        padding: 28px;
+        box-sizing: border-box;
+        border: 1px solid color-mix(in srgb, var(--color-base-content) 12%, transparent);
+        border-radius: var(--radius-app);
+        background-color: var(--color-base-100);
+        box-shadow: 0 16px 40px -28px var(--color-base-content);
+    }
+
+    .error-boundary-brand {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+
+    .error-boundary-logo {
+        width: 44px;
+        height: 44px;
+        flex: 0 0 auto;
+        border-radius: 8px;
+    }
+
+    .error-boundary-identity {
+        display: flex;
+        flex-direction: column;
+        line-height: 1.3;
+    }
+
+    .error-boundary-app-name {
+        font-size: 16px;
+        font-weight: 600;
+    }
+
+    .error-boundary-app-tagline {
+        font-size: 12px;
+        color: color-mix(in srgb, var(--color-base-content) 70%, transparent);
+    }
+
+    .error-boundary-message {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .error-boundary-heading {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .error-boundary-badge {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex: 0 0 auto;
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        background-color: color-mix(in srgb, var(--color-warning) 16%, transparent);
+        color: var(--color-warning);
+
+        .icon {
+            font-size: 20px;
+        }
+    }
+
+    .error-boundary-title {
+        display: block;
+        margin: 0;
+        font-size: 24px;
+        font-weight: 600;
+        line-height: 1.25;
+        overflow-wrap: anywhere;
+    }
+
+    .error-boundary-description {
+        max-width: 52ch;
+        margin: 0;
+        font-size: 15px;
+        line-height: 1.55;
+        color: color-mix(in srgb, var(--color-base-content) 82%, transparent);
+    }
+
+    .error-boundary-recovery {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .error-boundary-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+
+    .error-boundary-action-hint {
+        margin: 0;
+        font-size: 13px;
+        line-height: 1.5;
+        color: color-mix(in srgb, var(--color-base-content) 72%, transparent);
+    }
+
+    .error-boundary-help {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        padding: 16px 18px;
+        border: 1px solid color-mix(in srgb, var(--color-base-content) 12%, transparent);
+        border-radius: 10px;
+        background-color: color-mix(in srgb, var(--color-base-content) 4%, var(--color-base-100));
+    }
+
+    .error-boundary-section-title {
+        display: block;
+        margin: 0;
+        font-size: 14px;
+        font-weight: 600;
+    }
+
+    .error-boundary-help-text {
+        margin: 0;
+        font-size: 13px;
+        line-height: 1.55;
+        color: color-mix(in srgb, var(--color-base-content) 78%, transparent);
+    }
+
+    .error-boundary-report-link {
+        align-self: flex-start;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--color-primary);
+        text-decoration: underline;
+        text-underline-offset: 2px;
+        border-radius: 4px;
+
+        &:hover {
+            text-decoration-thickness: 2px;
+        }
+
+        &:focus-visible {
+            outline: 2px solid var(--color-primary);
+            outline-offset: 2px;
+        }
+    }
+
+    .error-boundary-details {
+        font-size: 13px;
+
+        summary {
+            cursor: pointer;
+            width: fit-content;
+            padding: 2px 0;
+            font-weight: 600;
+            border-radius: 4px;
+
+            &:focus-visible {
+                outline: 2px solid var(--color-primary);
+                outline-offset: 2px;
+            }
+        }
+    }
+
+    .error-boundary-details-body {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+        margin-top: 10px;
+    }
+
+    .error-boundary-details-text {
+        width: 100%;
+        max-height: 240px;
+        margin: 0;
+        padding: 12px;
+        box-sizing: border-box;
+        overflow: auto;
+        border: 1px solid color-mix(in srgb, var(--color-base-content) 15%, transparent);
+        border-radius: 8px;
+        background-color: color-mix(in srgb, var(--color-base-content) 5%, var(--color-base-100));
+        color: inherit;
+        font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+    }
+
+    .error-boundary-details-actions {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .error-boundary-copy-status {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--color-success);
+    }
+
+    @media (max-width: 600px) {
+        .error-boundary-panel {
+            gap: 18px;
+            padding: 22px 18px;
+        }
+
+        .error-boundary-title {
+            font-size: 20px;
+        }
+    }
+}
