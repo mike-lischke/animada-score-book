@@ -134,6 +134,42 @@ const pageCountOf = async (preview: Locator): Promise<number> => {
     return match === null ? 0 : Number(match[1]);
 };
 
+/**
+ * @param text The text a printed measure number holds, glyph by glyph.
+ *
+ * @returns The digits those glyphs stand for.
+ */
+const digitsOfPrintedNumber = (text: string): string => {
+    // The score draws measure numbers with the music font's digits, which start at U+E080.
+    return [...text].map((character) => {
+        const codePoint = character.codePointAt(0) ?? 0;
+        const value = codePoint - 0xE080;
+        if (value < 0 || value > 9) {
+            throw new Error(`The printed number holds U+${codePoint.toString(16)}, which is no digit.`);
+        }
+
+        return String(value);
+    }).join("");
+};
+
+/**
+ * Drags one measure boundary of the preview and drops it again.
+ *
+ * @param page The page holding the preview.
+ * @param handle The resize handle to drag.
+ * @param distancePx How far the pointer travels, in px.
+ */
+const dragMeasureBoundary = async (page: Page, handle: Locator, distancePx: number): Promise<void> => {
+    const pointerId = 1;
+    await handle.dispatchEvent("pointerdown", { button: 0, pointerId, clientX: 400, clientY: 300 });
+    await page.evaluate((data: { pointerId: number; x: number; }) => {
+        window.dispatchEvent(new PointerEvent("pointermove", { pointerId: data.pointerId, clientX: data.x }));
+    }, { pointerId, x: 400 + distancePx });
+    await page.evaluate((data: { pointerId: number; x: number; }) => {
+        window.dispatchEvent(new PointerEvent("pointerup", { pointerId: data.pointerId, clientX: data.x }));
+    }, { pointerId, x: 400 + distancePx });
+};
+
 test("print button opens the preview of the arrangement", async ({ page }) => {
     await page.goto("/");
 
@@ -231,6 +267,31 @@ test("native print completion returns to the unchanged preview", async ({ page }
     expect(await page.title()).toBe(originalTitle);
     expect(await page.locator("#print-page-style").count()).toBe(0);
     expect(await page.locator("body").getAttribute("class")).not.toContain("printing");
+});
+
+test("native print cancellation returns to the preview with its settings", async ({ page }) => {
+    await page.goto("/");
+    await stubPrint(page);
+
+    const preview = await openPreview(page);
+    await preview.getByRole("button", { name: "Landscape", exact: true }).click({ timeout: 5000 });
+    await preview.getByTitle("Zoom in", { exact: true }).click({ timeout: 5000 });
+    await preview.locator(".print-preview-emphasis").click();
+    await expect.poll(() => {
+        return printWasCalled(page);
+    }).toBe(true);
+
+    // A dialog the user cancels ends with the same event the browser fires after printing.
+    await page.evaluate(() => {
+        window.dispatchEvent(new Event("afterprint"));
+    });
+
+    await expect(page.locator(".print-root")).toHaveCount(0);
+    await expect(preview).toBeVisible();
+    await expect(preview.getByRole("button", { name: "Landscape", exact: true }))
+        .toHaveAttribute("aria-pressed", "true");
+    await expect(preview.locator(".print-preview-zoom-value")).toHaveText("110%");
+    expect(await page.locator("#print-page-style").count()).toBe(0);
 });
 
 test("native print waits for fonts before opening the browser dialog", async ({ page }) => {
@@ -522,6 +583,44 @@ test("preview lays the measures out at their stored widths", async ({ page }) =>
     expect(widths[3]).toBeGreaterThan(widths[1]);
 });
 
+for (const viewMode of ["staff", "grid"]) {
+    test(`states the measure every ${viewMode} system starts with`, async ({ page }) => {
+        await seedNarrowScore(page, viewMode, `e2e-print-numbers-${viewMode}`, 12);
+
+        const preview = await openPreview(page);
+        const systems = preview.locator(".print-system");
+        const numbers = preview.locator(".print-system-measure-number");
+        const systemCount = await systems.count();
+        expect(systemCount).toBeGreaterThan(1);
+        await expect(numbers).toHaveCount(systemCount);
+
+        // The first system starts the score, and every further one starts a later measure than the one before.
+        const starts = (await numbers.allTextContents()).map(digitsOfPrintedNumber);
+        const values = starts.map((start) => {
+            return Number.parseInt(start, 10);
+        });
+        expect(values[0]).toBe(1);
+        expect(values).toEqual([...values].sort((left, right) => {
+            return left - right;
+        }));
+        expect(new Set(values).size).toBe(values.length);
+    });
+}
+
+for (const [viewMode, watermark] of [["staff", ".staff-measure-number"], ["grid", ".grid-measure-number"]] as const) {
+    test(`keeps the ${viewMode} editor's measure numbers off the paper`, async ({ page }) => {
+        await seedNarrowScore(page, viewMode, `e2e-print-watermarks-${viewMode}`);
+
+        const preview = await openPreview(page);
+        const marks = preview.locator(`.print-sheet ${watermark}`);
+
+        // The viewer draws its per-measure numbers as a background aid; on paper the system's own number states
+        // where a line starts.
+        expect(await marks.count()).toBeGreaterThan(0);
+        await expect(marks.first()).toBeHidden();
+    });
+}
+
 /**
  * Opens the view on a score whose measures are stored narrow enough that one printed system holds two of them.
  *
@@ -661,6 +760,137 @@ test("offers no width dragging where the preview prints grid rows", async ({ pag
     await expect(preview.locator(".print-system-resize-handle")).toHaveCount(0);
 });
 
+test("stops a width drag where the measure's notation ends", async ({ page }) => {
+    await seedNarrowScore(page, "staff", "e2e-print-width-minimum");
+
+    const preview = await openPreview(page);
+    const firstWidth = (): Promise<number> => {
+        return preview.locator(".print-sheet .staff-measure-viewer").first().evaluate((column) => {
+            return Number.parseFloat((column as HTMLElement).style.flex.split(" ")[2]);
+        });
+    };
+
+    const before = await firstWidth();
+    await dragMeasureBoundary(page, preview.locator(".print-system-resize-handle").first(), -600);
+    const clamped = await firstWidth();
+    expect(clamped).toBeGreaterThan(0);
+    expect(clamped).toBeLessThan(before);
+
+    // Dragging further left keeps the width the measure's notation needs instead of narrowing it any further.
+    await dragMeasureBoundary(page, preview.locator(".print-system-resize-handle").first(), -600);
+    expect(await firstWidth()).toBeCloseTo(clamped, 0);
+});
+
+test("keeps a dragged measure width when the printed tracks change", async ({ page }) => {
+    await seedNarrowScore(page, "staff", "e2e-print-width-tracks", 4, 400, 0, ["0", "5"]);
+
+    const preview = await openPreview(page);
+    const firstWidth = (): Promise<number> => {
+        return preview.locator(".print-sheet .staff-measure-viewer").first().evaluate((column) => {
+            return Number.parseFloat((column as HTMLElement).style.flex.split(" ")[2]);
+        });
+    };
+
+    const before = await firstWidth();
+    await dragMeasureBoundary(page, preview.locator(".print-system-resize-handle").first(), 60);
+    const dragged = await firstWidth();
+    expect(dragged).toBeGreaterThan(before);
+
+    // The width belongs to the measure, which every printed track draws at that own width.
+    await toggleTrack(preview, 0);
+    expect(await firstWidth()).toBeCloseTo(dragged, 0);
+    await toggleTrack(preview, 0);
+    expect(await firstWidth()).toBeCloseTo(dragged, 0);
+    expect(await preview.locator(".print-sheet .staff-measure-track-row").count()).toBeGreaterThan(0);
+});
+
+test("leaves the score and its undo history untouched by a width drag", async ({ page }) => {
+    await seedNarrowScore(page, "staff", "e2e-print-width-untouched");
+
+    const appWidths = (): Promise<number[]> => {
+        return page.evaluate(() => {
+            return [...document.querySelectorAll<HTMLElement>("#trackViewerHost .staff-measure-viewer")]
+                .map((column) => {
+                    return column.getBoundingClientRect().width;
+                });
+        });
+    };
+
+    const before = await appWidths();
+    expect(before.length).toBeGreaterThan(0);
+    const undoBefore = await page.locator("#undoButton").getAttribute("class");
+
+    const preview = await openPreview(page);
+    await dragMeasureBoundary(page, preview.locator(".print-system-resize-handle").first(), 60);
+    await preview.locator('.print-preview-tool-button[title="Close the preview (ESC)"]').click();
+    await expect(page.locator(".print-preview")).toHaveCount(0);
+
+    // The dragged width is the preview's own: the score keeps the widths it was loaded with, and no edit is recorded.
+    expect(await appWidths()).toEqual(before);
+    expect(await page.locator("#undoButton").getAttribute("class")).toBe(undoBefore);
+});
+
+test.describe("print preview across pages", () => {
+    test("drops a track from every printed page", async ({ page }) => {
+        // Sixteen sixteenths over three pages, so a track spans several systems on several sheets.
+        await seedNarrowScore(page, "staff", "e2e-print-track-pages", 24, 500, 16, ["4", "7", "8"]);
+
+        const preview = await openPreview(page);
+        const sheets = preview.locator(".print-sheet");
+        expect(await sheets.count()).toBeGreaterThan(1);
+
+        const namesOn = (index: number): Promise<string[]> => {
+            return sheets.nth(index).locator(".print-system-name").allTextContents();
+        };
+
+        const before = [...new Set(await namesOn(0))];
+        expect(before).toHaveLength(3);
+
+        await toggleTrack(preview, 0);
+
+        const remaining = new Set(await namesOn(0));
+        expect(remaining.size).toBe(2);
+        expect(before.filter((name) => {
+            return !remaining.has(name);
+        })).toHaveLength(1);
+
+        // Every page prints what is left of the tracks, and none of the dropped one.
+        const pages = await sheets.count();
+        expect(pages).toBeGreaterThan(1);
+        for (let index = 0; index < pages; index++) {
+            const names = await namesOn(index);
+            expect(names.length).toBeGreaterThan(0);
+            expect(names.every((name) => {
+                return remaining.has(name);
+            })).toBe(true);
+        }
+    });
+
+    test("pages through the preview without changing the layout", async ({ page }) => {
+        await seedNarrowScore(page, "staff", "e2e-print-pager", 24, 500, 16, ["4", "7", "8"]);
+
+        const preview = await openPreview(page);
+        const pages = await pageCountOf(preview);
+        const label = preview.locator(".print-preview-pager-label");
+        const previous = preview.locator('.print-preview-pager-button[title="Previous page"]');
+        const next = preview.locator('.print-preview-pager-button[title="Next page"]');
+        expect(pages).toBeGreaterThan(1);
+        await expect(label).toHaveText(`Page 1 / ${pages}`);
+        await expect(previous).toBeDisabled();
+
+        await next.click();
+        await expect(label).toHaveText(`Page 2 / ${pages}`);
+        await expect(previous).toBeEnabled();
+
+        await previous.click();
+        await expect(label).toHaveText(`Page 1 / ${pages}`);
+
+        // Paging moves the view, not the document.
+        expect(await pageCountOf(preview)).toBe(pages);
+        await expect(preview.locator(".print-sheet")).toHaveCount(pages);
+    });
+});
+
 test.describe("print preview settings", () => {
     test("keeps its settings when the preview is closed and reopened", async ({ page }) => {
         await page.goto("/");
@@ -735,6 +965,7 @@ test.describe("print preview settings", () => {
         await preview.getByTitle("Zoom in", { exact: true }).click();
         await expect(preview.locator(".print-preview-zoom-value")).toHaveText("110%");
         expect(await printScaleOf(preview)).toBeCloseTo(scaleBefore, 3);
+        expect(await pageCountOf(preview)).toBe(pagesBefore);
 
         await chooseValue(preview, "#print-scale", "150%");
         const scaleAfter = await printScaleOf(preview);

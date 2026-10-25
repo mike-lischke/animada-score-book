@@ -19,7 +19,7 @@ export const pxPerMillimeter = 96 / 25.4;
 /** Height of the running header band above the content of every page, in printed px. */
 const runningHeaderHeight = 28;
 
-/** Extra height the title and tempo block takes above the content of the first page, in printed px. */
+/** Extra height the title block takes above the content of the first page, in printed px. */
 const titleBlockHeight = 60;
 
 /** Width of the printed instrument-name column, in layout px at 100% zoom. Mirrors print.scss. */
@@ -101,7 +101,7 @@ export interface IPrintPageGeometry {
     /** Height the running header takes at the top of every page, in printed px. */
     readonly runningHeaderHeightPx: number;
 
-    /** Extra height the title and tempo block takes at the top of the first page, in printed px. */
+    /** Extra height the title block takes at the top of the first page, in printed px. */
     readonly titleBlockHeightPx: number;
 }
 
