@@ -308,7 +308,7 @@ export class NotificationCenter extends UIComponent<ICommonUIProperties, INotifi
         const newlyAdded = history.filter((toast) => {
             return toast.isNew;
         }).length;
-        let caption = "";
+        let caption: string;
         if (history.length === 0) {
             caption = "NO NOTIFICATIONS";
         } else if (newlyAdded === 0) {

@@ -146,7 +146,7 @@ export class SplitSlider extends UIComponent<ISplitSliderProperties> {
 
     private handleKeyDown = (e: KeyboardEvent): void => {
         const { min = 0, max = 100, value, step = 1, onChange } = this.props;
-        let newValue = value;
+        let newValue: number;
 
         if (e.key === "ArrowRight" || e.key === "ArrowUp") {
             newValue = Math.min(max, value + step);

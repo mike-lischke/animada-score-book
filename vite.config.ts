@@ -5,8 +5,9 @@
 
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { env } from "node:process";
 
-import preact from "@preact/preset-vite";
+import { preact } from "@preact/preset-vite";
 import tailwindcss from "@tailwindcss/vite";
 import { defineConfig, Plugin } from "vite";
 
@@ -63,8 +64,7 @@ const spaDocumentFallback = (): Plugin => {
 
 // https://vitejs.dev/config/
 export default defineConfig(({ command }) => {
-    // eslint-disable-next-line no-restricted-syntax
-    const home = process.env.HOME ?? process.env.USERPROFILE ?? "";
+    const home = env.HOME ?? env.USERPROFILE ?? "";
 
     return {
         server: command === "serve" ? {
@@ -107,7 +107,9 @@ export default defineConfig(({ command }) => {
                             "/node_modules/preact/",
                             "/node_modules/@mdi/js/",
                             "/node_modules/classnames/",
-                        ].some((packagePath) => normalizedId.includes(packagePath));
+                        ].some((packagePath) => {
+                            return normalizedId.includes(packagePath);
+                        });
 
                         if (isVendorModule) {
                             return "vendor";

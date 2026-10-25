@@ -489,8 +489,6 @@ export class Router {
 
         // Connectivity is confirmed — schema and data queries are trusted to produce
         // meaningful errors if they fail.
-        let hasData = false;
-        let anyUsers = false;
         let dbError: string | undefined;
         let dbStatus: string | undefined;
 
@@ -507,8 +505,8 @@ export class Router {
             "SELECT COUNT(*) AS cnt FROM folders",
         );
 
-        hasData = (rows[0]?.cnt ?? 0) > 0;
-        anyUsers = await this.auth.hasUsers();
+        const hasData = (rows[0]?.cnt ?? 0) > 0;
+        const anyUsers = await this.auth.hasUsers();
 
         this.ctx.sendJson(res, {
             status: dbStatus ? "error" : "ok",

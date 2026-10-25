@@ -3,8 +3,7 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-import { createRef, type ComponentChild } from "preact";
-import type { RefObject } from "preact";
+import { createRef, type ComponentChild, type RefObject } from "preact";
 
 import { Button } from "../components/ui/framework/Button.js";
 import { UIIcon } from "../components/ui/framework/UIIcon.js";

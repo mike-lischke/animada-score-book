@@ -1280,10 +1280,7 @@ export class SelectionView {
                     && !isAdjacentBar && !isAdjacentSubdivision) {
                     noteOverlayGroups.push({ elements: groupElements, bars: groupBars });
                     groupElements = [];
-                    lastEndCell = undefined;
-                    lastBar = undefined;
                     groupBars = new Set<number>();
-                    groupSubdivision = undefined;
                 }
 
                 groupElements.push(...elements);

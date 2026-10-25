@@ -6,30 +6,32 @@
 import { type ComponentChild, type CSSProperties, type VNode } from "preact";
 
 import { BeamGeometry, type IBeamNotePlan } from "../../../core/BeamGeometry.js";
-import type { ISbDmTrackPiece } from "../../../core/ScoreBookDataModel.js";
-import {
-    Damping, ExcitationMode, HandTechnique, NoteDisplayType, StickTechnique,
-    type INoteArticulation,
-} from "../../../core/ScoreBookDataModel.js";
-import { ScoreSymbols, ScoreSymbol, ScoreSymbolSource } from "../../../core/ScoreSymbols.js";
-import { RangeArticulations } from "../../../core/RangeArticulations.js";
 import {
     MeasureLayout, minEventWidth, minRestWidth, restDotWidth, staffMeasureInsets, staffSpacePx, type IRowItem,
 } from "../../../core/MeasureLayout.js";
+import { RangeArticulations } from "../../../core/RangeArticulations.js";
 import { NoteLength } from "../../../core/rest-notation.js";
-import { StaffRowGeometry, type IStaffRowGeometry } from "../../../core/StaffRowGeometry.js";
+import {
+    Damping, ExcitationMode, HandTechnique, NoteDisplayType, StickTechnique,
+    type INoteArticulation, type ISbDmTrackPiece,
+} from "../../../core/ScoreBookDataModel.js";
+import { ScoreSymbol, ScoreSymbols, ScoreSymbolSource } from "../../../core/ScoreSymbols.js";
+import {
+    addFractions, compareFractions, divideFraction, subtractFractions
+} from "../../../core/serialisation/numeric-functions.js";
+import { stemEndVariablePrefix } from "../../../core/smufl/SmuflFontLoader.js";
 import { HeadMark } from "../../../core/StaffInk.js";
 import {
-    StaffNotation, StaffNodeKind, type IStaffNoteNode, type IStaffSubdivisionNode, type IStaffTreeNode,
+    StaffNodeKind,
+    StaffNotation,
+    type IStaffNoteNode, type IStaffSubdivisionNode, type IStaffTreeNode,
 } from "../../../core/StaffNotation.js";
-import { stemEndVariablePrefix } from "../../../core/smufl/SmuflFontLoader.js";
+import { StaffRowGeometry, type IStaffRowGeometry } from "../../../core/StaffRowGeometry.js";
 import type {
     IArticulationPortion, IAudioData, IForteMark, IFraction, IHairpin, IRangeArticulation, IRepeatBar, ISubdivision,
 } from "../../../core/types/general.js";
 import { RangeArticulationKind } from "../../../core/types/general.js";
 import type { IScoreMetrics } from "../../../player/TimeCoordinator.js";
-import { addFractions, compareFractions, divideFraction, subtractFractions }
-    from "../../../core/serialisation/numeric-functions.js";
 import { ScoreElementKind, type ScoreElementRegistry } from "../../../ui/ScoreElementRegistry.js";
 import { BarlineView } from "../framework/BarlineView.js";
 import { ScoreSymbolView } from "../framework/ScoreSymbolView.js";
