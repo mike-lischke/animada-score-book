@@ -296,28 +296,64 @@ test.describe("Staff view multi-line rendering", () => {
 
         const { beamTops, beamBottoms, stemTops, stemHeights, lineOffsets } = await page.evaluate(() => {
             const row = document.querySelector(".staff-measure-track-row");
-            const runs = [...(row?.querySelectorAll(".staff-note-viewer-note-run") ?? [])];
+            const runs = [...(row?.querySelectorAll<HTMLElement>(".staff-note-viewer-note-run") ?? [])];
+            const strokes = [...(row?.querySelectorAll<SVGRectElement>(".staff-note-viewer-beam rect") ?? [])]
+                .flatMap((rect) => {
+                    const matrix = rect.getScreenCTM();
+                    if (matrix === null) {
+                        return [];
+                    }
+
+                    const box = rect.getBBox();
+
+                    return [{
+                        matrix,
+                        originX: matrix.e,
+                        scale: Math.abs(matrix.d),
+                        startX: rect.x.baseVal.value,
+                        width: box.width,
+                        height: box.height,
+                    }];
+                });
+
+            // The beam's top edge and thickness at one horizontal position, taken from the stroke covering it.
+            const strokeEdgeAt = (screenX: number): { top: number; bottom: number; } | undefined => {
+                let edge: { top: number; bottom: number; } | undefined;
+
+                for (const stroke of strokes) {
+                    const localX = (screenX - stroke.originX) / stroke.scale;
+                    if (localX < stroke.startX || localX > stroke.startX + stroke.width) {
+                        continue;
+                    }
+
+                    const top = new DOMPoint(localX, 0).matrixTransform(stroke.matrix).y;
+                    if (edge === undefined || top < edge.top) {
+                        edge = { top, bottom: top + (stroke.height * stroke.scale) };
+                    }
+                }
+
+                return edge;
+            };
+
+            const stemBoxes = runs.map((run) => {
+                return run.querySelector(".staff-note-viewer-custom-stem")?.getBoundingClientRect();
+            });
+            const edgeBoxes = stemBoxes.map((box) => {
+                return box === undefined ? undefined : strokeEdgeAt(box.left + (box.width / 2));
+            });
 
             return {
-                beamTops: runs.map((run) => {
-                    const beam = run.querySelector(".staff-note-viewer-beam");
-
-                    return beam === null ? null : beam.getBoundingClientRect().top;
+                beamTops: edgeBoxes.map((edge) => {
+                    return edge?.top;
                 }),
-                beamBottoms: runs.map((run) => {
-                    const beam = run.querySelector(".staff-note-viewer-beam");
-
-                    return beam === null ? null : beam.getBoundingClientRect().bottom;
+                beamBottoms: edgeBoxes.map((edge) => {
+                    return edge?.bottom;
                 }),
-                stemTops: runs.map((run) => {
-                    const stem = run.querySelector(".staff-note-viewer-custom-stem");
-
-                    return stem === null ? null : stem.getBoundingClientRect().top;
+                stemTops: stemBoxes.map((box) => {
+                    return box?.top;
                 }),
-                stemHeights: runs.map((run) => {
-                    const stem = run.querySelector(".staff-note-viewer-custom-stem");
-
-                    return stem === null ? null : stem.getBoundingClientRect().height;
+                stemHeights: stemBoxes.map((box) => {
+                    return box?.height;
                 }),
                 lineOffsets: runs.map((run) => {
                     const head = run.querySelector<HTMLElement>(".staff-note-head");

@@ -29,7 +29,7 @@ import { UIIcon } from "../framework/UIIcon.js";
 import { ChildAlignment, Orientation } from "../framework/ui-types.js";
 import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.js";
 import { ValueDropdown } from "../framework/ValueDropdown.js";
-import { PrintSheet } from "./PrintSheet.js";
+import { PrintSheet, PrintSheetRendering } from "./PrintSheet.js";
 
 /** Room the sheet stack keeps from the edges of the scrollable document area, in px. */
 const documentPadding = 24;
@@ -162,7 +162,7 @@ export class PrintPreview extends UIComponent<IPrintPreviewProperties, IPrintPre
         }
 
         const { arrangementPlayer, session, viewMode } = this.props;
-        const tracks = this.selectedTracks(arrangement);
+        const tracks = session.printedTracks(arrangement);
         const layout = PrintLayout.layout({
             arrangement,
             barCount: arrangementPlayer.scoreMetrics.bars,
@@ -175,22 +175,6 @@ export class PrintPreview extends UIComponent<IPrintPreviewProperties, IPrintPre
         this.data = { revision, layout, tracks };
 
         return this.data;
-    }
-
-    /**
-     * @param arrangement The arrangement whose selection is read.
-     *
-     * @returns The tracks to print, in display order.
-     */
-    private selectedTracks(arrangement: ISbDmArrangement): ISbDmTrack[] {
-        const selectedTrackIds = this.props.session.selectedTrackIds(arrangement);
-        if (selectedTrackIds === undefined) {
-            return [...arrangement.tracks];
-        }
-
-        return arrangement.tracks.filter((track) => {
-            return selectedTrackIds.has(track.id);
-        });
     }
 
     /**
@@ -371,7 +355,7 @@ export class PrintPreview extends UIComponent<IPrintPreviewProperties, IPrintPre
      */
     private renderTracksDropdown(arrangement: ISbDmArrangement): ComponentChild {
         const { session } = this.props;
-        const selectedCount = this.selectedTracks(arrangement).length;
+        const selectedCount = session.printedTracks(arrangement).length;
 
         const items: IDropdownItem[] = arrangement.tracks.map((track): IDropdownItem => {
             const selected = session.isTrackSelected(arrangement, track.id);
@@ -577,6 +561,7 @@ export class PrintPreview extends UIComponent<IPrintPreviewProperties, IPrintPre
                     ref={ref}
                 >
                     <PrintSheet
+                        rendering={PrintSheetRendering.Preview}
                         layout={layout}
                         page={page}
                         arrangement={arrangement}

@@ -195,9 +195,9 @@ test.describe("Staff view selection", () => {
     });
 
     test("clicking a beam selects the beamed note group", async ({ page }) => {
-        // Find a beam element in the staff view. Beams have pointer-events: none,
+        // Find a beam stroke in the staff view. Beams have pointer-events: none,
         // so we must click by coordinates, not via element.click().
-        const beam = page.locator(".staff-note-viewer-beam").first();
+        const beam = page.locator(".staff-note-viewer-beam rect").first();
         await expect(beam).toBeVisible();
 
         const box = await beam.boundingBox();
@@ -226,24 +226,37 @@ test.describe("Staff view selection", () => {
 
         await expect(page.locator(".staff-measure-track-row").first()).toBeVisible();
 
-        // Find a shared beam whose run sits inside a subdivision container (not a direct child of
-        // the top-level runs container), i.e. a beam that crosses a subdivision boundary.
+        // Find a beam stroke whose run sits inside a subdivision container and reaches past it, i.e. a beam
+        // that crosses a subdivision boundary.
         const crossingBeamBox = await page.evaluate(() => {
-            const nestedRun = Array.from(document.querySelectorAll<HTMLElement>(".staff-note-viewer-run"))
-                .find((run) => {
-                    return run.parentElement !== null
-                        && !run.parentElement.classList.contains("staff-note-viewer-runs");
+            const runsContainer = document.querySelector(".staff-note-viewer-runs");
+            const nestedRuns = [...document.querySelectorAll<HTMLElement>(".staff-note-viewer-run")]
+                .filter((run) => {
+                    return run.parentElement !== null && run.parentElement !== runsContainer;
                 });
 
-            const beam = nestedRun?.querySelector<HTMLElement>(".staff-note-viewer-beam");
+            for (const run of nestedRuns) {
+                const container = run.parentElement;
+                if (container === null) {
+                    continue;
+                }
 
-            if (!beam) {
-                return null;
+                const containerRight = container.getBoundingClientRect().right;
+                const crossing = [...run.querySelectorAll<SVGRectElement>(".staff-note-viewer-beam rect")]
+                    .find((stroke) => {
+                        const box = stroke.getBoundingClientRect();
+
+                        return box.left < containerRight - 1 && box.right > containerRight + 1;
+                    });
+
+                if (crossing !== undefined) {
+                    const box = crossing.getBoundingClientRect();
+
+                    return { x: box.left, y: box.top, width: box.width, height: box.height };
+                }
             }
 
-            const rect = beam.getBoundingClientRect();
-
-            return { x: rect.left, y: rect.top, width: rect.width, height: rect.height };
+            return null;
         });
 
         if (!crossingBeamBox) {
@@ -554,7 +567,7 @@ test.describe("Staff view sloped beam selection", () => {
         // pitch. Every stroke of the group, at any level, addresses the whole group.
         await openSlopedBeamStaff(page, ["1", "2", "3", "4"], "e2e-sloped-beam-rising");
 
-        const strokes = page.locator(".staff-note-viewer-beam");
+        const strokes = page.locator(".staff-note-viewer-beam rect");
         await expect(strokes.first()).toBeVisible();
 
         // The primary beam of the first note.
@@ -575,7 +588,7 @@ test.describe("Staff view sloped beam selection", () => {
         // The same four sixteenths, highest line first, so the beam falls.
         await openSlopedBeamStaff(page, ["4", "3", "2", "1"], "e2e-sloped-beam-falling");
 
-        const strokes = page.locator(".staff-note-viewer-beam");
+        const strokes = page.locator(".staff-note-viewer-beam rect");
         await expect(strokes.first()).toBeVisible();
 
         await clickCenter(page, strokes.first());
@@ -587,7 +600,7 @@ test.describe("Staff view sloped beam selection", () => {
         // Two sixteenths a tenth apart, so the beam's box spans a wide rise around a thin stroke.
         await openSlopedBeamStaff(page, ["1", "4"], "e2e-sloped-beam-room");
 
-        const stroke = page.locator(".staff-note-viewer-beam").first();
+        const stroke = page.locator(".staff-note-viewer-beam rect").first();
         await expect(stroke).toBeVisible();
 
         const box = await stroke.boundingBox();

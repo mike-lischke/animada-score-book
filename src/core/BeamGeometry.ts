@@ -46,6 +46,11 @@ export interface IBeamNote {
 
     /** Number of beam levels the note carries. */
     beamCount: number;
+
+    /**
+     * Room beyond the normal stem length that a decoration drawn on the stem keeps free below the beam line, in px.
+     */
+    stemRoomPx?: number;
 }
 
 /** One beam stroke of a group. */
@@ -63,11 +68,24 @@ export interface IBeamStroke {
 }
 
 /** The engraving of one note of a beam group. */
+export interface IBeamGroupStroke {
+    level: number;
+    startPx: number;
+    endPx: number;
+}
+
+/** The engraving of one note of a beam group. */
 export interface IBeamNotePlan {
+    /** Shared rise per horizontal layout pixel for every stroke of the group. */
+    slope: number;
+
     /** Distance from the note's own line up to the beam's top edge at its anchor, in px. */
     stemLengthPx: number;
 
     strokes: IBeamStroke[];
+
+    /** Continuous strokes owned by the first note, relative to that note's horizontal anchor. */
+    groupStrokes?: IBeamGroupStroke[];
 }
 
 /** What the beam geometry needs to know about the row it draws in. */
@@ -118,11 +136,14 @@ export class BeamGeometry {
         const normalStemPx = normalStemLengthSpaces * staffSpacePx;
 
         // The line passes the normal stem length above the note that comes closest to it, and no
-        // closer to any other note of the group, so no stem is shorter than the normal length.
+        // closer to any other note of the group, so no stem is shorter than the normal length. A note
+        // that draws on its stem states the room it needs there, which lengthens that note's stem and,
+        // through the shared line, the whole group's.
         let basePx = Infinity;
         for (const note of notes) {
             const noteY = BeamGeometry.noteYPx(note.noteLine, centerLine);
-            basePx = Math.min(basePx, noteY - normalStemPx - (slope * (note.anchor - first.anchor) * rowWidthPx));
+            const stemPx = normalStemPx + (note.stemRoomPx ?? 0);
+            basePx = Math.min(basePx, noteY - stemPx - (slope * (note.anchor - first.anchor) * rowWidthPx));
         }
 
         const topAt = (anchor: number): number => {
@@ -131,12 +152,55 @@ export class BeamGeometry {
 
         const partialSpan = (partialBeamLengthSpaces * staffSpacePx) / rowWidthPx;
 
-        return notes.map((note, index) => {
+        const plans: IBeamNotePlan[] = notes.map((note, index) => {
             return {
+                slope,
                 stemLengthPx: BeamGeometry.noteYPx(note.noteLine, centerLine) - topAt(note.anchor),
                 strokes: BeamGeometry.strokesOf(notes, index, partialSpan, topAt),
             };
         });
+
+        plans[0].groupStrokes = BeamGeometry.groupStrokesOf(notes, plans, rowWidthPx);
+
+        return plans;
+    }
+
+    private static groupStrokesOf(notes: readonly IBeamNote[], plans: readonly IBeamNotePlan[],
+        rowWidthPx: number): IBeamGroupStroke[] {
+        const firstAnchor = notes[0].anchor;
+        const stubWidth = partialBeamLengthSpaces * staffSpacePx;
+        const intervals = plans.flatMap((plan, index) => {
+            const anchorPx = (notes[index].anchor - firstAnchor) * rowWidthPx;
+
+            return plan.strokes.map((stroke): IBeamGroupStroke => {
+                if (stroke.kind === BeamSegmentKind.SharedRight) {
+                    return {
+                        level: stroke.level,
+                        startPx: anchorPx,
+                        endPx: (notes[index + 1].anchor - firstAnchor) * rowWidthPx,
+                    };
+                }
+
+                const startPx = stroke.kind === BeamSegmentKind.PartialLeft ? anchorPx - stubWidth : anchorPx;
+
+                return { level: stroke.level, startPx, endPx: startPx + stubWidth };
+            });
+        });
+        intervals.sort((left, right) => {
+            return left.level - right.level || left.startPx - right.startPx;
+        });
+
+        const merged: IBeamGroupStroke[] = [];
+        for (const interval of intervals) {
+            const previous = merged.at(-1);
+            if (previous?.level === interval.level && interval.startPx <= previous.endPx + 1e-9) {
+                previous.endPx = Math.max(previous.endPx, interval.endPx);
+            } else {
+                merged.push({ ...interval });
+            }
+        }
+
+        return merged;
     }
 
     /**

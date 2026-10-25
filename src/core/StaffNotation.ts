@@ -11,7 +11,8 @@ import {
     type INotationGrid, type IProjectedEvent, type IProjectedItem,
 } from "./MeasureProjection.js";
 import { beamCountOf, fallbackNoteValue, noteValueForEvent, NoteLength, type INoteValue } from "./rest-notation.js";
-import { NoteDisplayType, type INoteArticulation, type ISbDmTrackPiece } from "./ScoreBookDataModel.js";
+import { NoteDisplayType, ExcitationMode, StickTechnique, type INoteArticulation, type ISbDmTrackPiece }
+    from "./ScoreBookDataModel.js";
 import { HeadMark, StaffInk, type IStaffInk, type IStaffInkNote } from "./StaffInk.js";
 import type { IAudioData, IFraction, ISubdivision } from "./types/general.js";
 
@@ -77,6 +78,19 @@ export class StaffNotation {
     /**
      * @param measure The measure to project.
      * @param grid The arrangement's timing grid.
+     *
+     * @returns The measure's node tree.
+     */
+    public static nodesOf(measure: ISbDmTrackPiece, grid: INotationGrid): IStaffTreeNode[] {
+        // A simile holds no content of its own; its mark replaces the notes the measure would draw.
+        const items = measure.simile === true ? [] : MeasureProjection.project(measure);
+
+        return StaffNotation.buildNodes(items, measure, grid);
+    }
+
+    /**
+     * @param measure The measure to project.
+     * @param grid The arrangement's timing grid.
      * @param centerLine The line the row is drawn around.
      * @param rowWidthPx The row's content width in px, which a beam's slope is derived from.
      *
@@ -84,10 +98,8 @@ export class StaffNotation {
      */
     public static project(measure: ISbDmTrackPiece, grid: INotationGrid, centerLine: number,
         rowWidthPx: number): IStaffNotation {
-        // A simile holds no content of its own; its mark replaces the notes the measure would draw.
-        const items = measure.simile === true ? [] : MeasureProjection.project(measure);
-        const nodes = StaffNotation.buildNodes(items, measure, grid);
-        const beamSpans = StaffNotation.computeBeamSpans(nodes, measure, grid, centerLine, rowWidthPx);
+        const nodes = StaffNotation.nodesOf(measure, grid);
+        const beamSpans = StaffNotation.beamSpansOf(nodes, measure, grid, centerLine, rowWidthPx);
 
         return { nodes, beamSpans };
     }
@@ -163,6 +175,69 @@ export class StaffNotation {
     }
 
     /**
+     * Resolves the beam engraving of every note from the measure's beam groups. Which events share a
+     * beam is a composition rule of the measure and not of the rendering, so the groups come from
+     * `MeasureProjection`; `BeamGeometry` then derives the one line a group shares and the strokes and
+     * stem endpoints that follow from it.
+     *
+     * @param nodes The nodes holding the render data of the measure's events.
+     * @param measure The measure the nodes belong to.
+     * @param grid Timing metrics for the grouping rules.
+     * @param centerLine The line the row is drawn around.
+     * @param rowWidthPx The row's content width in px, which a beam's slope is derived from.
+     * @param noteAnchors Optional rendered note anchors in layout px, keyed by event index.
+     *
+     * @returns Map of note event indices to their beam engraving.
+     */
+    public static beamSpansOf(nodes: IStaffTreeNode[], measure: ISbDmTrackPiece, grid: INotationGrid,
+        centerLine: number, rowWidthPx: number, noteAnchors?: ReadonlyMap<number, number>): Map<number, IBeamNotePlan> {
+        const target = new Map<number, IBeamNotePlan>();
+        const notesByEvent = new Map<number, IStaffNoteNode>();
+        const halfStep = 1 / (2 * grid.stepsPerBar);
+
+        for (const note of StaffNotation.collectNotes(nodes)) {
+            notesByEvent.set(note.eventIndex, note);
+        }
+
+        for (const group of MeasureProjection.noteGroups(measure, grid)) {
+            if (group.kind !== NoteGroupKind.Beam) {
+                continue;
+            }
+
+            const run: IStaffNoteNode[] = [];
+            for (const eventIndex of group.eventIndexes) {
+                const note = notesByEvent.get(eventIndex);
+                if (note !== undefined) {
+                    run.push(note);
+                }
+            }
+
+            if (run.length === 0) {
+                continue;
+            }
+
+            const plans = BeamGeometry.plan(run.map((note) => {
+                const renderedAnchor = noteAnchors?.get(note.eventIndex);
+
+                return {
+                    anchor: renderedAnchor === undefined
+                        ? StaffNotation.fractionValue(note.start) + halfStep
+                        : renderedAnchor / rowWidthPx,
+                    noteLine: note.noteLine ?? 1,
+                    beamCount: note.beamCount,
+                    stemRoomPx: StaffNotation.stemRoomPxOf(note),
+                };
+            }), { centerLine, rowWidthPx });
+
+            run.forEach((note, index) => {
+                target.set(note.eventIndex, plans[index]);
+            });
+        }
+
+        return target;
+    }
+
+    /**
      * Converts projected render items into the staff tree, enriching note events with glyph,
      * beam and style data resolved from the measure's note events.
      *
@@ -231,60 +306,19 @@ export class StaffNotation {
     }
 
     /**
-     * Resolves the beam engraving of every note from the measure's beam groups. Which events share a
-     * beam is a composition rule of the measure and not of the rendering, so the groups come from
-     * `MeasureProjection`; `BeamGeometry` then derives the one line a group shares and the strokes and
-     * stem endpoints that follow from it.
+     * @param note The note to inspect.
      *
-     * @param nodes The nodes holding the render data of the measure's events.
-     * @param measure The measure the nodes belong to.
-     * @param grid Timing metrics for the grouping rules.
-     * @param centerLine The line the row is drawn around.
-     * @param rowWidthPx The row's content width in px, which a beam's slope is derived from.
-     *
-     * @returns Map of note event indices to their beam engraving.
+     * @returns The room the note's play technique draws on its stem below the beam line, in px; undefined when it
+     *          draws nothing there.
      */
-    private static computeBeamSpans(nodes: IStaffTreeNode[], measure: ISbDmTrackPiece, grid: INotationGrid,
-        centerLine: number, rowWidthPx: number): Map<number, IBeamNotePlan> {
-        const target = new Map<number, IBeamNotePlan>();
-        const notesByEvent = new Map<number, IStaffNoteNode>();
-        const halfStep = 1 / (2 * grid.stepsPerBar);
+    private static stemRoomPxOf(note: IStaffNoteNode): number | undefined {
+        const characteristics = note.noteStyle?.characteristics;
+        const drawsOnStem = characteristics?.excitationMode === ExcitationMode.Struck
+            && "stickTechnique" in characteristics && characteristics.stickTechnique === StickTechnique.PressRoll;
 
-        for (const note of StaffNotation.collectNotes(nodes)) {
-            notesByEvent.set(note.eventIndex, note);
-        }
-
-        for (const group of MeasureProjection.noteGroups(measure, grid)) {
-            if (group.kind !== NoteGroupKind.Beam) {
-                continue;
-            }
-
-            const run: IStaffNoteNode[] = [];
-            for (const eventIndex of group.eventIndexes) {
-                const note = notesByEvent.get(eventIndex);
-                if (note !== undefined) {
-                    run.push(note);
-                }
-            }
-
-            if (run.length === 0) {
-                continue;
-            }
-
-            const plans = BeamGeometry.plan(run.map((note) => {
-                return {
-                    anchor: StaffNotation.fractionValue(note.start) + halfStep,
-                    noteLine: note.noteLine ?? 1,
-                    beamCount: note.beamCount,
-                };
-            }), { centerLine, rowWidthPx });
-
-            run.forEach((note, index) => {
-                target.set(note.eventIndex, plans[index]);
-            });
-        }
-
-        return target;
+        // The slashes of a press roll hang on the stem below the beam line, so the note keeps the stack's depth free
+        // there. Every other technique draws on the head or beside the stem.
+        return drawsOnStem ? BeamGeometry.stackDepthSpaces(note.beamCount) * staffSpacePx : undefined;
     }
 
     private static displayTypeOf(noteStyle: IAudioData): NoteDisplayType {

@@ -22,9 +22,6 @@ const fraction = (numerator: number, denominator: number): IFraction => {
     return { numerator, denominator };
 };
 
-/** Width of a partial beam: its staff-space based length plus the stem's right edge, which it ends on. */
-const beamStubWidth = "calc(var(--staff-space) * 1.2 + var(--stem-right-edge, 0px))";
-
 /**
  * @param value The style value of a tuplet label.
  *
@@ -244,29 +241,11 @@ describe("StaffNoteViewer beams", { concurrent: false }, () => {
             return run.classList.contains("staff-note-viewer-note-run");
         })).toBe(true);
 
-        const beamWidths = runs.map((run) => {
-            return [...run.querySelectorAll<HTMLElement>(".staff-note-viewer-beam")].map((beam) => {
-                return beam.style.width;
-            });
+        const beamCounts = runs.map((run) => {
+            return run.querySelectorAll(".staff-note-viewer-beam rect").length;
         });
 
-        // The eight sixteenths are beamed in two pulse groups with two beams each.
-        // The last sixteenth of the second group must not carry a beam into the tuplet.
-        for (let index = 0; index < 8; index++) {
-            expect(beamWidths[index]).toHaveLength(2);
-        }
-
-        expect(beamWidths[3]).toEqual([beamStubWidth, beamStubWidth]);
-        expect(beamWidths[7]).toEqual([beamStubWidth, beamStubWidth]);
-
-        // The 3:8 slots (events 8 and 12) are eighths; the outer 2:1 slot (event 11) is a
-        // sixteenth and the inner 2:1 slots (events 9 and 10) are thirty-seconds. The tuplet
-        // group is beamed as one run whose outer beam spans all five notes.
-        expect(beamWidths[8]).toEqual(["100%"]);
-        expect(beamWidths[9]).toEqual(["100%", "100%", "100%"]);
-        expect(beamWidths[10]).toEqual(["100%", "100%", beamStubWidth]);
-        expect(beamWidths[11]).toEqual(["100%", beamStubWidth]);
-        expect(beamWidths[12]).toEqual([beamStubWidth]);
+        expect(beamCounts).toEqual([2, 0, 0, 0, 2, 0, 0, 0, 3, 0, 0, 0, 0]);
     });
 
     it("positions the tuplet marker over the first and last noteheads", () => {
@@ -361,15 +340,11 @@ describe("StaffNoteViewer beams", { concurrent: false }, () => {
         );
 
         const runs = [...renderResult.container.querySelectorAll<HTMLElement>(".staff-note-viewer-run")];
-        const beams = runs.map((run) => {
-            return [...run.querySelectorAll<HTMLElement>(".staff-note-viewer-beam")].map((beam) => {
-                return beam.style.width;
-            });
+        const beamCounts = runs.map((run) => {
+            return run.querySelectorAll(".staff-note-viewer-beam rect").length;
         });
 
-        // Both notes carry three beam levels: the first bridges to its neighbour, the second stubs back.
-        expect(beams[0]).toEqual(["100%", "100%", "100%"]);
-        expect(beams[1]).toEqual([beamStubWidth, beamStubWidth, beamStubWidth]);
+        expect(beamCounts.slice(0, 2)).toEqual([3, 0]);
     });
 
     it("beams a pair of dotted thirty-seconds with three beams", () => {
@@ -393,10 +368,10 @@ describe("StaffNoteViewer beams", { concurrent: false }, () => {
 
         const runs = [...renderResult.container.querySelectorAll<HTMLElement>(".staff-note-viewer-run")];
         const beamCounts = runs.map((run) => {
-            return run.querySelectorAll(".staff-note-viewer-beam").length;
+            return run.querySelectorAll(".staff-note-viewer-beam rect").length;
         });
 
-        expect(beamCounts.slice(0, 2)).toEqual([3, 3]);
+        expect(beamCounts.slice(0, 2)).toEqual([3, 0]);
     });
 
     it("beams a 2:1 split of a step as thirty-seconds", () => {
@@ -420,11 +395,10 @@ describe("StaffNoteViewer beams", { concurrent: false }, () => {
 
         const runs = [...renderResult.container.querySelectorAll<HTMLElement>(".staff-note-viewer-run")];
         const beamCounts = runs.map((run) => {
-            return run.querySelectorAll(".staff-note-viewer-beam").length;
+            return run.querySelectorAll(".staff-note-viewer-beam rect").length;
         });
 
-        // The slots hold thirty-seconds, so they need three beams even though the split nests once.
-        expect(beamCounts.slice(0, 2)).toEqual([3, 3]);
+        expect(beamCounts.slice(0, 2)).toEqual([3, 0]);
     });
 
     it("points the trailing beam stub towards the group for mixed durations", () => {
@@ -449,25 +423,17 @@ describe("StaffNoteViewer beams", { concurrent: false }, () => {
         const runs = [...renderResult.container.querySelectorAll<HTMLElement>(".staff-note-viewer-run")];
         expect(runs).toHaveLength(3);
 
-        const beams = runs.map((run) => {
-            return [...run.querySelectorAll<HTMLElement>(".staff-note-viewer-beam")].map((beam) => {
-                return { left: beam.style.left, width: beam.style.width };
-            });
-        });
+        const beam = runs[0].querySelector<SVGSVGElement>(".staff-note-viewer-beam")!;
+        const strokes = [...beam.querySelectorAll<SVGRectElement>("g > rect")];
 
-        // The first sixteenth stubs right, the middle eighth bridges the primary beam, and the last
-        // sixteenth stubs both its beams left towards the group.
-        expect(beams[0]).toEqual([
-            { left: "calc(var(--note-anchor) - var(--stem-half-width, 1px))", width: "100%" },
-            { left: "calc(var(--note-anchor) - var(--stem-half-width, 1px))", width: beamStubWidth },
-        ]);
-        expect(beams[1]).toEqual([
-            { left: "calc(var(--note-anchor) - var(--stem-half-width, 1px))", width: "100%" },
-        ]);
-        expect(beams[2]).toEqual([
-            { left: "calc(var(--note-anchor) - var(--staff-space) * 1.2)", width: beamStubWidth },
-            { left: "calc(var(--note-anchor) - var(--staff-space) * 1.2)", width: beamStubWidth },
-        ]);
+        expect(strokes).toHaveLength(3);
+        expect(strokes[0].style.width).toBe(beam.style.width);
+        expect(strokes[1].getAttribute("x")).toBe("0");
+        expect(Number.parseFloat(strokes[2].getAttribute("x") ?? "")).toBeGreaterThan(0);
+        expect(strokes[1].style.width).toBe("calc(12px + var(--stem-thickness, 2px))");
+        expect(strokes[2].style.width).toBe(strokes[1].style.width);
+        expect(runs[1].querySelector(".staff-note-viewer-beam")).toBeNull();
+        expect(runs[2].querySelector(".staff-note-viewer-beam")).toBeNull();
     });
 
     it("applies one shared beam line to the runs of a group across staff lines", () => {
@@ -500,12 +466,16 @@ describe("StaffNoteViewer beams", { concurrent: false }, () => {
             return run.style.getPropertyValue("--stem-tip");
         })).toEqual(["45px", "55px", "35px", "45px"]);
 
-        // The first shared stroke starts at the group's line and rises 10 px over one sixteenth.
         const stroke = runs[0].querySelector<HTMLElement>(".staff-note-viewer-beam");
-        expect(stroke?.style.top).toBe(
-            "calc(50% + -60px + 0 * (var(--beam-thickness, 4px) + var(--beam-spacing, 2px)))",
-        );
-        expect(stroke?.style.height).toBe("calc(10px + var(--beam-thickness, 4px))");
+        expect(stroke?.style.top).toBe("calc(50% - 60px)");
+        expect(stroke?.style.height).toBe("calc(var(--beam-thickness, 4px) + 1 * (var(--beam-thickness, 4px)"
+            + " + var(--beam-spacing, 2px)))");
+        expect(stroke?.tagName.toLowerCase()).toBe("svg");
+        expect(stroke?.style.clipPath).toBe("");
+        expect(stroke?.querySelectorAll("rect")).toHaveLength(2);
+        const slope = Number.parseFloat(stroke?.querySelector("g")?.getAttribute("transform")?.split(" ")[1] ?? "");
+        expect(slope).toBeCloseTo(0.1);
+        expect(stroke?.querySelector("rect")?.style.height).toBe("var(--beam-thickness, 4px)");
     });
 
     it("draws adjacent rests in one pulse as the measure holds them", () => {

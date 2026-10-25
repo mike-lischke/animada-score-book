@@ -7,7 +7,7 @@ import { MeasureLayout } from "../core/MeasureLayout.js";
 import {
     PageOrientation, type IPageMargins, type IPrintPageSetup,
 } from "../core/PrintLayout.js";
-import type { ISbDmArrangement } from "../core/ScoreBookDataModel.js";
+import type { ISbDmArrangement, ISbDmTrack } from "../core/ScoreBookDataModel.js";
 import { clampValue } from "../core/utils.js";
 
 /** Least factor the print scale may take. */
@@ -121,6 +121,22 @@ export class PrintSession {
      */
     public selectedTrackIds(arrangement: ISbDmArrangement): ReadonlySet<number> | undefined {
         return this.stateOf(arrangement).selectedTrackIds;
+    }
+
+    /**
+     * @param arrangement The arrangement whose printed tracks are requested.
+     *
+     * @returns The tracks to print, in display order.
+     */
+    public printedTracks(arrangement: ISbDmArrangement): ISbDmTrack[] {
+        const selectedTrackIds = this.selectedTrackIds(arrangement);
+        if (selectedTrackIds === undefined) {
+            return [...arrangement.tracks];
+        }
+
+        return arrangement.tracks.filter((track) => {
+            return selectedTrackIds.has(track.id);
+        });
     }
 
     /**

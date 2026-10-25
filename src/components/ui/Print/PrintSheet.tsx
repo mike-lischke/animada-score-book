@@ -14,6 +14,9 @@ import { UIComponent, type ICommonUIProperties } from "../framework/UIComponent.
 import { PrintSystemView } from "./PrintSystemView.js";
 
 export interface IPrintSheetProperties extends ICommonUIProperties {
+    /** Where the sheet is shown. */
+    rendering: PrintSheetRendering;
+
     /** The complete page layout, which states the paper and the staff row geometry. */
     layout: IPrintLayout;
 
@@ -43,26 +46,34 @@ export interface IPrintSheetProperties extends ICommonUIProperties {
     onMeasureReset?: (bar: number) => void;
 }
 
+/** Where a sheet is shown. */
+export enum PrintSheetRendering {
+    /** On screen, at 100 % paper size and zoomed by the preview magnification. */
+    Preview,
+
+    /** In the printed document, stated in millimeters so one sheet fills one page exactly. */
+    Print,
+}
+
 /**
  * One sheet of paper: the running header, the title block of the first page, the margin guides and the systems the
  * print layout placed on it.
  *
- * The sheet itself is paper-sized in printed px. Its content area is zoomed by the print scale and holds the
- * systems at their layout px offsets, so the printed output and the preview place every system at the same
- * position.
+ * The sheet itself is paper-sized. Its content area is zoomed by the print scale and holds the systems at their
+ * layout px offsets, so the printed output and the preview place every system at the same position.
  */
 export class PrintSheet extends UIComponent<IPrintSheetProperties> {
     public override render(): ComponentChild {
-        const { layout, page, arrangement, viewMode, tracks, printScale, previewZoom } = this.props;
+        const { rendering, layout, page, arrangement, viewMode, tracks, printScale, previewZoom } = this.props;
         const geometry = layout.geometry;
         const leftPx = geometry.marginsMm.left * pxPerMillimeter;
         const topPx = geometry.marginsMm.top * pxPerMillimeter;
 
-        const sheetStyle: CSSProperties = {
-            width: `${geometry.widthPx}px`,
-            height: `${geometry.heightPx}px`,
-            zoom: previewZoom,
-        };
+        // The preview sheet is stated in printed px and zoomed on screen; the printed one takes the paper's own
+        // millimeters, so the browser maps it onto the page without a rounding gap.
+        const sheetStyle: CSSProperties = rendering === PrintSheetRendering.Print
+            ? { width: `${geometry.widthMm}mm`, height: `${geometry.heightMm}mm` }
+            : { width: `${geometry.widthPx}px`, height: `${geometry.heightPx}px`, zoom: previewZoom };
         const guideStyle: CSSProperties = {
             left: `${leftPx}px`,
             top: `${topPx}px`,
@@ -82,7 +93,7 @@ export class PrintSheet extends UIComponent<IPrintSheetProperties> {
             height: `${page.availableHeightPx * printScale}px`,
         };
         const scaleStyle: CSSProperties = {
-            zoom: printScale,
+            transform: `scale(${printScale})`,
             width: `${page.availableWidthPx}px`,
             height: `${page.availableHeightPx}px`,
 
@@ -94,6 +105,9 @@ export class PrintSheet extends UIComponent<IPrintSheetProperties> {
             ? undefined
             : <span className="print-sheet-running-title">{arrangement.title}</span>;
         const titleBlock = this.renderTitleBlock(leftPx, topPx + geometry.runningHeaderHeightPx);
+        const guides = rendering === PrintSheetRendering.Preview
+            ? <div className="print-sheet-guides" style={guideStyle} aria-hidden="true" />
+            : undefined;
 
         const systems = page.systems.map((system) => {
             return (
@@ -117,7 +131,7 @@ export class PrintSheet extends UIComponent<IPrintSheetProperties> {
 
         return (
             <div className={this.generateFinalClassName(["print-sheet"])} style={sheetStyle} data-page={page.number}>
-                <div className="print-sheet-guides" style={guideStyle} aria-hidden="true" />
+                {guides}
                 <div className="print-sheet-header" style={headerStyle}>
                     {headerTitle}
                     <span className="print-sheet-page-number">Page {page.number}</span>

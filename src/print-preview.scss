@@ -540,7 +540,10 @@
     }
 
     .staff-note-viewer-line {
-        border-top-color: #000 !important;
+        top: calc(50% + var(--staff-centre, 32px) + var(--staff-line-offset, 0px) - var(--staff-line-thickness, 1px) / 2);
+        height: var(--staff-line-thickness, 1px);
+        border-top: 0;
+        background: #000;
     }
 
     .staff-note-head-damped-plus,
@@ -558,7 +561,7 @@
     }
 
     .staff-note-viewer-beam {
-        background: #000 !important;
+        color: #000 !important;
     }
 
     /* The system's height holds the air between its rows, so the last row needs none below it. */

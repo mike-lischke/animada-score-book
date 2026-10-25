@@ -42,19 +42,17 @@ interface IBeamHitPoint {
     y: number;
 }
 
+interface IBeamHitSegment {
+    start: IBeamHitPoint;
+    end: IBeamHitPoint;
+}
+
 /**
- * The zone a beam group can be selected through: the band the group's strokes run through, derived
- * from the height of the beam line at each of its stems.
+ * The zone a beam group can be selected through, taken from its rendered stroke segments.
  */
 interface IBeamBand {
-    /** Points on the primary beam line, at the group's stems, in viewport coordinates. */
-    points: IBeamHitPoint[];
-
-    /** Number of beam levels the group draws, the stack that hangs below the primary line. */
-    levels: number;
-
-    /** Vertical distance between two beam levels, in viewport px. */
-    advance: number;
+    /** Every visible segment of every beam level, in viewport coordinates. */
+    segments: IBeamHitSegment[];
 
     /** Bounds of the group's stems, which a hit entry reports as the marker it was found at. */
     rect: DOMRect;
@@ -243,10 +241,12 @@ export class StaffMeasureViewer extends UIComponent<IStaffMeasureViewerProps, IS
                         // The top of a beamed stem is where its beam sits, so that zone falls through to
                         // the note group check instead: the beam itself, whose thickness the font states,
                         // and two staff spaces of slack below it, where a click aims at the beam.
-                        const beam = runEl.querySelector<HTMLElement>(".staff-note-viewer-beam");
-                        const reserve = beam === null
+                        const strokes = [...runEl.querySelectorAll<SVGRectElement>(".staff-note-viewer-beam rect")];
+                        const reserve = strokes.length === 0
                             ? 0
-                            : (beam.getBoundingClientRect().bottom - r.top) + (staffSpacePx * 2);
+                            : (Math.max(...strokes.map((stroke) => {
+                                return stroke.getBoundingClientRect().bottom;
+                            })) - r.top) + (staffSpacePx * 2);
                         if (StaffMeasureViewer.rectsIntersect(rect, r.left, r.top + reserve, r.right,
                             r.bottom, hitTolerance)) {
                             hitRect = new DOMRect(r.left, r.top + reserve, r.width, Math.max(0, r.height - reserve));
@@ -530,13 +530,10 @@ export class StaffMeasureViewer extends UIComponent<IStaffMeasureViewerProps, IS
         const right = selection.right + tolerance;
         const bottom = selection.bottom + tolerance;
 
-        for (let level = 0; level < band.levels; level++) {
-            const offset = level * band.advance;
-            for (let i = 0; i + 1 < band.points.length; i++) {
-                if (StaffMeasureViewer.segmentIntersectsRect(band.points[i].x, band.points[i].y + offset,
-                    band.points[i + 1].x, band.points[i + 1].y + offset, left, top, right, bottom)) {
-                    return true;
-                }
+        for (const segment of band.segments) {
+            if (StaffMeasureViewer.segmentIntersectsRect(segment.start.x, segment.start.y,
+                segment.end.x, segment.end.y, left, top, right, bottom)) {
+                return true;
             }
         }
 
@@ -585,53 +582,52 @@ export class StaffMeasureViewer extends UIComponent<IStaffMeasureViewerProps, IS
             return undefined;
         }
 
-        const stemByEvent = new Map<number, HTMLElement>();
+        const runByEvent = new Map<number, HTMLElement>();
         for (const run of runs) {
             const target = registry?.getTarget(run);
             const eventIndex = target !== undefined && "duration" in target ? measure.events.indexOf(target) : -1;
-            const stem = run.querySelector<HTMLElement>(".staff-note-viewer-custom-stem");
-            if (eventIndex >= 0 && stem !== null) {
-                stemByEvent.set(eventIndex, stem);
+            if (eventIndex >= 0) {
+                runByEvent.set(eventIndex, run);
             }
         }
 
-        const points: IBeamHitPoint[] = [];
-        let levels = 0;
-        let advance = 0;
+        const firstRun = runByEvent.get(group.eventIndexes[0]);
+        if (firstRun === undefined) {
+            return undefined;
+        }
+
+        const strokes = firstRun.querySelectorAll<SVGRectElement>(".staff-note-viewer-beam rect");
+        const segments: IBeamHitSegment[] = [];
         let left = Infinity;
         let top = Infinity;
         let right = -Infinity;
         let bottom = -Infinity;
 
-        for (const eventIndex of group.eventIndexes) {
-            const stem = stemByEvent.get(eventIndex);
-            if (stem === undefined) {
-                return undefined;
+        for (const stroke of strokes) {
+            const matrix = stroke.getScreenCTM();
+            if (matrix === null) {
+                continue;
             }
 
-            const bounds = stem.getBoundingClientRect();
-            points.push({ x: bounds.left + (bounds.width / 2), y: bounds.top });
-            left = Math.min(left, bounds.left);
-            top = Math.min(top, bounds.top);
-            right = Math.max(right, bounds.right);
-            bottom = Math.max(bottom, bounds.bottom);
-
-            const strokes = stem.closest<HTMLElement>(".staff-note-viewer-run")
-                ?.querySelectorAll<HTMLElement>(".staff-note-viewer-beam") ?? [];
-            levels = Math.max(levels, strokes.length);
-            if (advance === 0 && strokes.length >= 2) {
-                advance = strokes[1].getBoundingClientRect().top - strokes[0].getBoundingClientRect().top;
-            }
+            // A stroke's box is the band between the beam's edge and its far side, so its top edge is the line a
+            // click aims at.
+            const startX = stroke.x.baseVal.value;
+            const endX = startX + stroke.getBBox().width;
+            const start = new DOMPoint(startX, 0).matrixTransform(matrix);
+            const end = new DOMPoint(endX, 0).matrixTransform(matrix);
+            segments.push({ start: { x: start.x, y: start.y }, end: { x: end.x, y: end.y } });
+            left = Math.min(left, start.x, end.x);
+            top = Math.min(top, start.y, end.y);
+            right = Math.max(right, start.x, end.x);
+            bottom = Math.max(bottom, start.y, end.y);
         }
 
-        if (points.length < 2) {
+        if (segments.length === 0) {
             return undefined;
         }
 
         return {
-            points,
-            levels: Math.max(levels, 1),
-            advance,
+            segments,
             rect: new DOMRect(left, top, right - left, bottom - top),
         };
     }

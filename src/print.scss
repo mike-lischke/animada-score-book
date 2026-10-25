@@ -3,16 +3,27 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
-@use "grid-shared" as score;
-
 /*
- * Print stylesheet for the score / PDF export feature. Page size, orientation and
- * running headers are injected at print time via a dynamic <style id="print-page-style">.
+ * Native print stylesheet. The printed document is the preview's page layout: one paper sheet per page, drawn at
+ * the print scale, without the preview's magnification, its floating bars or its margin guides. Page size and
+ * orientation are injected at print time via a dynamic <style id="print-page-style">.
  */
 
-/* Hidden in normal screen mode; shown only via `body.printing` under @media print. */
+/* Hidden on screen; the sheets show only while `body` carries the `printing` class. */
 .print-root {
     display: none;
+
+    /* The sheets of the document follow each other, one per page. They are stated in the paper's millimeters, so
+     * each of them fills a page without a rounding gap. */
+    .print-sheet {
+        position: relative;
+        box-shadow: none;
+        break-after: page;
+
+        &:last-child {
+            break-after: auto;
+        }
+    }
 }
 
 @media print {
@@ -22,219 +33,26 @@
         width: auto !important;
         height: auto !important;
         overflow: visible !important;
-        background: white !important;
         margin: 0;
         padding: 0 !important;
+        background: white !important;
     }
 
+    /* The document is the printed sheets; the application, its portals (the preview) and dialogs are screen-only. */
     body.printing #appRoot,
-    body.printing dialog.modal {
-        display: none !important;
-    }
-
-    /* Overlays (the print preview) are screen-only: the print document is the .print-root. */
+    body.printing dialog.modal,
     body.printing .portal {
         display: none !important;
     }
 
     body.printing .print-root {
         display: block !important;
-        color: black;
-        background: white;
-
-        /*
-         * Render the score exactly like the on-screen player and use one CSS `zoom` to fit the widest row
-         * into the printable page width. PrintView sets `--print-zoom` inline on .print-root from the
-         * measures' widths; the fallback is the value two default measures per row produce and keeps this
-         * stylesheet usable on its own. The variable is exposed so stem widths and pixel offsets can
-         * compensate for the scaling and stay pixel-perfect (integer px after zoom).
-         */
-        --print-zoom: 0.66;
-        zoom: var(--print-zoom);
     }
 
-    /* Preserve background colors / SVG fills. */
+    /* Preserve background colors and SVG fills. */
     body.printing,
     body.printing * {
         print-color-adjust: exact;
         -webkit-print-color-adjust: exact;
-    }
-}
-
-.print-root {
-    color: black;
-    background: white;
-    font-family: system-ui, "Open Sans", "Helvetica Neue", "Segoe UI", Roboto, sans-serif;
-
-    .print-header {
-        margin-bottom: 8mm;
-
-        /* The title is reproduced in the @page top-left margin box on every page. */
-        .print-title {
-            font-size: 18pt;
-            font-weight: 700;
-            margin: 0 0 3mm 0;
-            display: none;
-        }
-
-        .print-tempo {
-            font-size: 16.5pt;
-            margin: 0;
-        }
-    }
-
-    .print-bar-block {
-        break-inside: avoid;
-        page-break-inside: avoid;
-        margin-bottom: 12mm;
-    }
-
-    .print-bar-row {
-        display: flex;
-        flex-direction: row;
-        align-items: stretch;
-        gap: 0;
-    }
-
-    /* Shared score grid rules — no decorative beam strip, fixed black/gray colors. */
-    @include score.score-grid-rules($useThemeColors: false, $renderBeam: false, $beatNumberTop: 0);
-
-    /*
-     * Halve the bar's horizontal extent for print. On screen the bar's min-width has to
-     * match a full grid cell per step (for play-head positioning); on paper there is no
-     * play head, so the same content fits into half the horizontal space.
-     */
-    .staff-measure-viewer {
-        --bar-step-width: calc((var(--measure-step-width) + 5px) / 2);
-
-        min-width: calc(var(--steps-per-bar) * var(--measure-step-width) / 2);
-    }
-
-    /* Compensate the 1px border-left of the first beat tick. */
-    .grid-measure-beam .grid-measure-beat.bar-start {
-        margin-left: -1px;
-    }
-
-    /* Drop the row min-width so the row stays inside the viewer when adding margins. */
-    .grid-measure-row {
-        min-width: 0 !important;
-        margin-left: 2px;
-        margin-right: 2px;
-    }
-
-    /* Keep bars at their natural size; don't stretch a partial trailing row. */
-    .grid-measure-viewer {
-        flex: 0 0 auto !important;
-    }
-
-    /* Suppress live-editor selection / focus highlight. */
-    .note-viewer {
-        outline: none !important;
-        border: 0.5px solid #d8d8d8 !important;
-        box-shadow: none !important;
-    }
-
-    .print-instrument-column {
-        flex: 0 0 140px;
-        width: 140px;
-        margin-right: 12px;
-        margin-top: calc(var(--note-height) * -0.35 + 5px);
-    }
-
-    /* Matches the beam strip + its margin above the first row. */
-    .print-instrument-beam-spacer {
-        flex: 0 0 auto;
-        height: 16px;
-    }
-
-    .print-instrument-cell {
-        flex: 0 0 auto;
-        height: calc(var(--note-height) + 20px);
-    }
-
-    .print-instrument-name {
-        width: 100%;
-        font-size: 18px;
-        font-weight: 600;
-        line-height: 1.2;
-        text-align: right;
-        overflow-wrap: anywhere;
-        margin-top: calc(var(--staff-centre, 0px) * 2);
-    }
-
-    /* Staff rows have no beam strip and a different stride than grid rows. */
-    &.view-staff {
-        .print-instrument-column {
-            /* The printed staff column keeps the same head room above its first row. */
-            margin-top: 24px;
-        }
-
-        .print-instrument-beam-spacer {
-            display: none;
-        }
-
-        .print-instrument-cell {
-            height: var(--staff-row-height, var(--note-height));
-            margin-bottom: 20px;
-        }
-    }
-
-    /* Grid view: nudge the instrument column down a touch so it lines up with
-       the first track row in the printed output. */
-    &.view-grid .print-instrument-column {
-        margin-top: -4px;
-    }
-
-    /*
-     * Staff line fix: `.staff-note-viewer-line` uses z-index: -1, which would drop it
-     * behind the white .print-root background (zoom creates a stacking context). Give
-     * each row its own stacking context and force a print-friendly black line color.
-     */
-    .staff-note-viewer,
-    .staff-prefix-row {
-        isolation: isolate;
-    }
-
-    .staff-note-viewer-line {
-        border-top-color: #000 !important;
-    }
-
-    /* Note decorations: force black for print. */
-    .staff-note-head-damped-plus,
-    .staff-note-head {
-        color: #000 !important;
-    }
-
-    /* Hairpins and f markings: force black for print. */
-    .staff-note-viewer-articulation {
-        color: #000 !important;
-    }
-
-    /*
-     * Stem overrides for print: compensate CSS zoom so stems always render at
-     * exactly 1 px width.  Without compensation, zoom values like 0.66 shrink a
-     * 1-px stem to 0.66 px, causing visibly uneven stem thickness.
-     *
-     * Position offsets (top / left) are intentionally left untouched — they are
-     * CSS-pixel values that must scale with zoom just like every other layout
-     * measurement.
-     */
-    .staff-note-head-stem,
-    .staff-note-viewer-custom-stem {
-        background: #000 !important;
-        width: calc(1px / var(--print-zoom, 1)) !important;
-    }
-
-    .staff-note-viewer-beam {
-        background: #000 !important;
-
-        /* The stroke's own box spans the beam line's rise, so its height may not be overridden:
-           the thickness the inline geometry builds on is what print has to pin to whole pixels. */
-        --beam-thickness: calc(3px / var(--print-zoom, 1));
-    }
-
-    .grid-measure-number,
-    .staff-measure-number {
-        display: none;
     }
 }

@@ -40,8 +40,8 @@ import { Icon } from "./components/ui/framework/Icon.js";
 import { Label } from "./components/ui/framework/Label.js";
 import { Portal } from "./components/ui/framework/Portal.js";
 import { UIIcon } from "./components/ui/framework/UIIcon.js";
+import { PrintDocument } from "./components/ui/Print/PrintDocument.js";
 import { PrintPreview } from "./components/ui/Print/PrintPreview.js";
-import { PrintView, type IPrintOptions } from "./components/ui/Print/PrintView.js";
 import { AppStorage, type IUISettings } from "./core/AppStorage.js";
 import { Arrangement, type IArrangementCreationOptions } from "./core/Arrangement.js";
 import { getSharedAudioContext } from "./core/audio-context.js";
@@ -120,9 +120,8 @@ interface IAppState {
     /** Conflict info when another user holds the lock. */
     lockConflict?: { username: string; lockedAt: string; };
 
-    /** When true, the print view is rendered into the DOM and `window.print()` will be triggered. */
+    /** When true, the printed document is rendered into the DOM and `window.print()` will be triggered. */
     printing: boolean;
-    printOptions?: IPrintOptions;
 
     /** When true, the full-window print preview overlay is shown. */
     printPreviewOpen: boolean;
@@ -165,8 +164,8 @@ export class App extends UIComponent<{}, IAppState> {
     private newScoreDialogRef = createRef<NewScoreDialog | null>();
     private releaseNotesDialogRef = createRef<ReleaseNotesDialog | null>();
 
-    /** Saved theme/title to restore after the print job finishes. */
-    private printRestoreState?: { theme: string; documentTitle: string; };
+    /** Document title to restore after the native print dialog finishes. */
+    private printDocumentTitle?: string;
 
     private dataModel = new ScoreBookDataModel();
     private scoreClipboard = new ScoreClipboard(this.dataModel);
@@ -296,7 +295,7 @@ export class App extends UIComponent<{}, IAppState> {
 
     public render() {
         const { phase, editMode: requestedEditMode, zenMode, sidebarOpen, trackViewMode, notificationState, zoom,
-            printing, printOptions, printPreviewOpen, backendUnreachable, startupError, preferredEntryMode,
+            printing, printPreviewOpen, backendUnreachable, startupError, preferredEntryMode,
             compactHeader, compactLayout } = this.state;
         const editMode = requestedEditMode && !zenMode;
         const entryMode = this.effectiveEntryMode(trackViewMode, preferredEntryMode);
@@ -691,14 +690,13 @@ export class App extends UIComponent<{}, IAppState> {
                             )
                         }
                         {
-                            printing && this.dataModel.arrangement && printOptions
-                            && this.arrangementPlayer && this.undoManager && (
-                                <PrintView
-                                    arrangement={this.dataModel.arrangement as Arrangement}
-                                    options={printOptions}
+                            printing && this.arrangementPlayer && (
+                                <PrintDocument
                                     dataModel={this.dataModel}
                                     arrangementPlayer={this.arrangementPlayer}
                                     selectionManager={this.selectionManager}
+                                    session={this.printSession}
+                                    viewMode={trackViewMode}
                                 />
                             )
                         }
@@ -1450,93 +1448,63 @@ export class App extends UIComponent<{}, IAppState> {
      * the unchanged preview.
      */
     private handlePrintPreviewPrint = (): void => {
+        this.startPrint();
+    };
+
+    /**
+     * Opens the native print dialog on the print document. The document is drawn from the preview's layout data and
+     * renderers at the print scale only: the preview's magnification, controls and margin guides are not part of it.
+     */
+    private startPrint(): void {
         const arrangement = this.dataModel.arrangement;
         if (!arrangement) {
             return;
         }
 
-        const selectedTrackIds = this.printSession.selectedTrackIds(arrangement);
-        this.startPrint({
-            barsPerLine: "auto",
-            selectedTrackIds: selectedTrackIds === undefined ? undefined : new Set(selectedTrackIds),
-            viewMode: this.state.trackViewMode,
-        });
-    };
+        this.printDocumentTitle = document.title;
+        document.title = `${arrangement.title} \u2014 Animada Score Book`;
 
-    private startPrint(options: IPrintOptions): void {
-        this.printRestoreState = {
-            theme: this.selectedThemePreference,
-            documentTitle: document.title,
-        };
-
-        // Always print with the Light+ theme for consistent, paper-friendly output.
-        document.documentElement.setAttribute("data-theme", "Light+");
-
-        // Inject a dynamic @page rule so the browser uses the chosen paper size and orientation,
-        // and place a running header on every printed page: arrangement title left, "Page N" right.
-        const arrangement = this.dataModel.arrangement;
-        const headerTitle = (arrangement?.title ?? "").replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+        // The sheets state their own margins, running headers and page numbers, so a page holds them edge to edge.
         const pageStyle = document.createElement("style");
         pageStyle.id = "print-page-style";
-        pageStyle.textContent =
-            `@page { ` +
-            // Slightly bigger top margin so the header band fits without clipping the
-            // 14pt title glyphs.
-            `margin: 25mm 15mm 15mm 15mm; ` +
-            `@top-left { ` +
-            `content: "${headerTitle}"; ` +
-            `font-family: system-ui, sans-serif; ` +
-            `font-size: 14pt; ` +
-            `font-weight: 700; ` +
-            `color: #000; ` +
-            `vertical-align: middle; ` +
-            `} ` +
-            `@top-right { ` +
-            `content: "Page " counter(page); ` +
-            `font-family: system-ui, sans-serif; ` +
-            `font-size: 10pt; ` +
-            `color: #444; ` +
-            `vertical-align: middle; ` +
-            `} ` +
-            `}`;
+        pageStyle.textContent = `@page { size: A4 ${this.printSession.pageSetup.orientation}; margin: 0; }`;
         document.head.appendChild(pageStyle);
-
-        // Use the arrangement title as default PDF filename.
-        if (arrangement) {
-            document.title = `${arrangement.title} \u2014 Animada Score Book`;
-        }
 
         document.body.classList.add("printing");
 
-        this.setState({ printing: true, printOptions: options }, () => {
-            // Wait for layout, fonts, then trigger the browser print dialog.
-            const fontsReady = (document as { fonts?: { ready?: Promise<unknown>; }; }).fonts?.ready
-                ?? Promise.resolve();
-            void fontsReady.then(() => {
-                // One more rAF tick so the print DOM is laid out.
-                requestAnimationFrame(() => {
-                    window.print();
-                });
+        this.setState({ printing: true }, () => {
+            void this.printAfterLayout();
+        });
+    }
+
+    /**
+     * Waits for the print document's fonts and layout, then opens the native print dialog.
+     */
+    private async printAfterLayout(): Promise<void> {
+        const fontsReady = (document as { fonts?: { ready?: Promise<unknown>; }; }).fonts?.ready
+            ?? Promise.resolve();
+        await fontsReady;
+
+        // One more frame, so the print DOM is laid out before the dialog takes its snapshot.
+        await new Promise<void>((resolve) => {
+            requestAnimationFrame(() => {
+                resolve();
             });
         });
+
+        window.print();
     }
 
     private handleAfterPrint = (): void => {
         document.body.classList.remove("printing");
+        document.getElementById("print-page-style")?.remove();
 
-        const pageStyle = document.getElementById("print-page-style");
-        if (pageStyle) {
-            pageStyle.remove();
+        if (this.printDocumentTitle !== undefined) {
+            document.title = this.printDocumentTitle;
+            this.printDocumentTitle = undefined;
         }
 
-        if (this.printRestoreState) {
-            const { theme, documentTitle } = this.printRestoreState;
-            this.applyThemePreference(theme);
-            document.title = documentTitle;
-            this.printRestoreState = undefined;
-        }
-
-        this.setState({ printing: false, printOptions: undefined });
+        this.setState({ printing: false });
     };
 
     private handleDisplayOptionsClick = () => {

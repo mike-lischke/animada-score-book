@@ -1656,7 +1656,8 @@
 .staff-note-viewer-beam {
     position: absolute;
     height: var(--beam-thickness, 4px);
-    background: var(--color-base-content);
+    color: var(--color-base-content);
+    overflow: visible;
     pointer-events: none;
     z-index: 2;
 }
@@ -1905,11 +1906,11 @@
         pointer-events: none;
     }
 
-    /* ---- Press roll: the slashes run along the stem, from its tip down ---- */
+    /* ---- Press roll: the slashes run along the stem, from below the beam stack down ---- */
     .staff-note-head-press-roll-svg {
         position: absolute;
         left: calc(100% - var(--staff-space) * 0.7 - 1px);
-        top: calc(50% - var(--stem-tip, 35px) + 1px);
+        top: calc(50% - var(--stem-tip, 35px) + var(--beam-stack-depth, 0px) + 1px);
         pointer-events: none;
     }
 

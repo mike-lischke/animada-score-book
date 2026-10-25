@@ -419,11 +419,15 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
         const renderStaffBars = (rowGeometries: Map<number, IStaffRowGeometry>): ComponentChild => {
             const { staffWindow } = this.state;
             const offsets = this.staffOffsets;
+
+            // An undo that removes a measure leaves the window reaching past the last one until the view has
+            // re-measured, and a bar the arrangement no longer holds has no track piece to draw.
+            const lastBar = Math.min(staffWindow.last, arrangement.timeParams.length);
             const leadingWidth = offsets[staffWindow.first - 1] ?? 0;
-            const trailingWidth = Math.max(0, MeasureLayout.totalWidth(offsets) - (offsets[staffWindow.last] ?? 0));
+            const trailingWidth = Math.max(0, MeasureLayout.totalWidth(offsets) - (offsets[lastBar] ?? 0));
 
             const measures: ComponentChild[] = [];
-            for (let bar = staffWindow.first; bar <= staffWindow.last; bar++) {
+            for (let bar = staffWindow.first; bar <= lastBar; bar++) {
                 const measureWidth = this.staffColumns[bar - 1]
                     ?? MeasureLayout.widthOf(bar, arrangement.measureWidths);
                 measures.push(
@@ -1365,14 +1369,16 @@ export class ArrangementViewer extends UIComponent<IArrangementViewerProps, IArr
      * nothing there.
      */
     private updateStaffWindow(): void {
-        const { arrangementPlayer } = this.props;
+        const { arrangementPlayer, dataModel } = this.props;
         const { trackViewMode, staffWindow } = this.state;
         const host = this.viewerRef.current;
         if (trackViewMode !== TrackViewMode.Staff || !host) {
             return;
         }
 
-        const barCount = arrangementPlayer.scoreMetrics.bars;
+        // The measure count comes from the arrangement: the player's metrics lag behind an undo that adds or
+        // removes measures, and its count would lay out measures the arrangement no longer holds.
+        const barCount = dataModel.arrangement?.timeParams.length ?? arrangementPlayer.scoreMetrics.bars;
         this.updateStaffGeometry(barCount);
 
         const visible = MeasureLayout.rangeFor(this.staffOffsets, host.scrollLeft,

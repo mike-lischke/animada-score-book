@@ -82,6 +82,13 @@ export interface IPrintPageSetup {
 export interface IPrintPageGeometry {
     readonly orientation: PageOrientation;
     readonly marginsMm: IPageMargins;
+
+    /** Paper width in millimeters. The printed sheets state their size in this unit, so they fill the paper. */
+    readonly widthMm: number;
+
+    /** Paper height in millimeters. */
+    readonly heightMm: number;
+
     readonly widthPx: number;
     readonly heightPx: number;
 
@@ -238,13 +245,17 @@ export class PrintLayout {
      */
     public static pageGeometry(setup: IPrintPageSetup): IPrintPageGeometry {
         const isLandscape = setup.orientation === PageOrientation.Landscape;
-        const widthPx = (isLandscape ? a4HeightMm : a4WidthMm) * pxPerMillimeter;
-        const heightPx = (isLandscape ? a4WidthMm : a4HeightMm) * pxPerMillimeter;
+        const widthMm = isLandscape ? a4HeightMm : a4WidthMm;
+        const heightMm = isLandscape ? a4WidthMm : a4HeightMm;
+        const widthPx = widthMm * pxPerMillimeter;
+        const heightPx = heightMm * pxPerMillimeter;
         const { margins } = setup;
 
         return {
             orientation: setup.orientation,
             marginsMm: { ...margins },
+            widthMm,
+            heightMm,
             widthPx,
             heightPx,
             contentWidthPx: Math.max(1, widthPx - ((margins.left + margins.right) * pxPerMillimeter)),

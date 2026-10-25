@@ -5,7 +5,7 @@
 
 import { type ComponentChild, type CSSProperties, type VNode } from "preact";
 
-import { BeamSegmentKind, partialBeamLengthSpaces, type IBeamNotePlan } from "../../../core/BeamGeometry.js";
+import { BeamGeometry, type IBeamNotePlan } from "../../../core/BeamGeometry.js";
 import type { ISbDmTrackPiece } from "../../../core/ScoreBookDataModel.js";
 import {
     Damping, ExcitationMode, HandTechnique, NoteDisplayType, StickTechnique,
@@ -23,8 +23,9 @@ import {
     StaffNotation, StaffNodeKind, type IStaffNoteNode, type IStaffSubdivisionNode, type IStaffTreeNode,
 } from "../../../core/StaffNotation.js";
 import { stemEndVariablePrefix } from "../../../core/smufl/SmuflFontLoader.js";
-import type { IFraction, IAudioData, IArticulationPortion, IHairpin, IRangeArticulation, IRepeatBar, ISubdivision }
-    from "../../../core/types/general.js";
+import type {
+    IArticulationPortion, IAudioData, IForteMark, IFraction, IHairpin, IRangeArticulation, IRepeatBar, ISubdivision,
+} from "../../../core/types/general.js";
 import { RangeArticulationKind } from "../../../core/types/general.js";
 import type { IScoreMetrics } from "../../../player/TimeCoordinator.js";
 import { addFractions, compareFractions, divideFraction, subtractFractions }
@@ -163,7 +164,7 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
         // the view states it as data instead of measuring the rendered row.
         const rowWidthPx = Math.max(1, measureWidth - staffMeasureInsets);
 
-        const { nodes, beamSpans } = StaffNotation.project(measure, scoreMetrics, centerLine, rowWidthPx);
+        const nodes = StaffNotation.nodesOf(measure, scoreMetrics);
         const tupletLabels = this.computeTupletLabels(nodes, scoreMetrics.stepsPerBar);
 
         const hasAnyNote = nodes.some((node) => {
@@ -189,6 +190,11 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
         // width, and the room before the closing barline closes down to that same room.
         const gridInsets = StaffNoteViewer.gridInsetsOf(nodes, measureWidth, nominalWidth,
             scoreMetrics.stepsPerBar);
+        const gridWidthPx = Math.max(1, rowWidthPx - gridInsets.leftPx - gridInsets.rightPx);
+        const noteAnchors = StaffNoteViewer.noteAnchorsOf(nodes, scoreMetrics.stepsPerBar, gridWidthPx);
+        const articulationHeadWidths = StaffNoteViewer.articulationHeadWidthsOf(nodes);
+        const beamSpans = StaffNotation.beamSpansOf(nodes, measure, scoreMetrics, centerLine, gridWidthPx,
+            noteAnchors);
 
         let runs: ComponentChild[];
         if (usesSimile) {
@@ -198,7 +204,6 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
         } else {
             // The room the notes share is what the column offers after its insets, so the events can fall back on
             // the room their symbols take where a measure is narrowed.
-            const gridWidthPx = Math.max(1, rowWidthPx - gridInsets.leftPx - gridInsets.rightPx);
             runs = this.renderItems(nodes, beamSpans, "", centerLine, restLineOffset, 1, true, gridWidthPx);
         }
 
@@ -266,7 +271,8 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
             ? ((maxNoteLine - centerLine) * staffSpacePx) + (staffSpacePx * 2)
             : rowGeometry.bandCentrePx - rowGeometry.centrePx;
 
-        const articulationLayer = this.renderArticulations(articulations ?? [], barNumber, bandOffset);
+        const articulationLayer = this.renderArticulations(articulations ?? [], barNumber, bandOffset,
+            measure, noteAnchors, articulationHeadWidths, gridWidthPx);
 
         // The stylesheet places the tuplet markers by the row's own ink, so it states the bounds the notation takes
         // around the staff line. The row's height and the line's place in it come from the row geometry, which
@@ -422,6 +428,64 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
     }
 
     /**
+     * Resolves the point every event is anchored at, in layout px: the notehead of a note and the centre of the
+     * slot of a rest, which is where the renderer draws them.
+     *
+     * @param nodes The nodes of one container of the row.
+     * @param stepsPerBar The number of steps a bar holds.
+     * @param containerWidthPx The room the container takes, in px at 100 % zoom.
+     * @param containerSpan The span of the container as a fraction of the whole bar.
+     * @param offsetPx The left edge of the container, in layout px.
+     * @param target The anchors collected so far, which the recursion extends.
+     *
+     * @returns Every event's anchor, keyed by event index.
+     */
+    private static noteAnchorsOf(nodes: IStaffTreeNode[], stepsPerBar: number, containerWidthPx: number,
+        containerSpan = 1, offsetPx = 0, target = new Map<number, number>()): Map<number, number> {
+        const widths = StaffNoteViewer.spacedWidthsOf(nodes, containerSpan, containerWidthPx);
+        let leftPx = offsetPx;
+
+        nodes.forEach((node, index) => {
+            const widthPx = Math.max(0, widths[index]);
+            if (node.kind === StaffNodeKind.Subdivision) {
+                const span = StaffNoteViewer.nodeFraction(node);
+                StaffNoteViewer.noteAnchorsOf(node.children, stepsPerBar, widthPx, span, leftPx, target);
+            } else {
+                const duration = StaffNoteViewer.nodeFraction(node);
+                const anchor = node.noteStyle === undefined || duration <= 0
+                    ? 0.5
+                    : 1 / (2 * duration * stepsPerBar);
+                target.set(node.eventIndex, leftPx + (widthPx * anchor));
+            }
+
+            leftPx += widthPx;
+        });
+
+        return target;
+    }
+
+    private static articulationHeadWidthsOf(nodes: IStaffTreeNode[],
+        target = new Map<number, string>()): Map<number, string> {
+        const collect = (items: IStaffTreeNode[]): void => {
+            for (const node of items) {
+                if (node.kind === StaffNodeKind.Subdivision) {
+                    collect(node.children);
+                    continue;
+                }
+
+                if (node.noteStyle !== undefined) {
+                    const head = ScoreSymbols.notehead(node.displayType, node.glyph.length);
+                    target.set(node.eventIndex, ScoreSymbols.inkBox(head).width);
+                }
+            }
+        };
+
+        collect(nodes);
+
+        return target;
+    }
+
+    /**
      * @param node The node to measure.
      *
      * @returns The part of the bar the node spans, as a fraction of the whole bar.
@@ -542,6 +606,26 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
         return fraction.numerator / fraction.denominator;
     }
 
+    private static anchorPositionOf(measure: ISbDmTrackPiece, fraction: IFraction,
+        noteAnchors: Map<number, number>, headWidths: Map<number, string>, gridWidthPx: number): string {
+        const eventIndex = StaffNoteViewer.eventIndexOf(measure, fraction);
+        const anchorPx = noteAnchors.get(eventIndex);
+        const anchorPercent = anchorPx === undefined
+            ? StaffNoteViewer.percentOf(fraction)
+            : (anchorPx / gridWidthPx) * 100;
+        const headWidth = headWidths.get(eventIndex);
+
+        return headWidth === undefined
+            ? `${anchorPercent}%`
+            : `calc(${anchorPercent}% - (${headWidth} / 2))`;
+    }
+
+    private static eventIndexOf(measure: ISbDmTrackPiece, fraction: IFraction): number {
+        return measure.events.findIndex((event) => {
+            return compareFractions(event.start, fraction) === 0;
+        });
+    }
+
     /**
      * @param fraction The fraction to read.
      *
@@ -587,11 +671,17 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
      * @param articulations The markings to draw in the bar.
      * @param barNumber The one-based measure the row draws.
      * @param bandOffset The middle of the marking band, in px below the notes' line.
+     * @param measure The events in the bar.
+     * @param noteAnchors The rendered horizontal anchors of the events.
+     * @param headWidths The notehead ink widths, keyed by event index.
+     * @param gridWidthPx The width of the rendered note grid.
      *
      * @returns The marking layer, or null when the bar holds none.
      */
     private renderArticulations(articulations: readonly IRangeArticulation[], barNumber: number,
-        bandOffset: number): ComponentChild {
+        bandOffset: number, measure: ISbDmTrackPiece, noteAnchors: Map<number, number>,
+        headWidths: Map<number, string>,
+        gridWidthPx: number): ComponentChild {
         const marks: ComponentChild[] = [];
 
         for (const articulation of articulations) {
@@ -601,8 +691,9 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
             }
 
             marks.push(RangeArticulations.isHairpin(articulation)
-                ? this.renderPrintedHairpin(articulation, portion, barNumber, bandOffset)
-                : this.renderPrintedForte(articulation, portion, bandOffset));
+                ? this.renderPrintedHairpin(articulation, portion, barNumber, bandOffset,
+                    measure, noteAnchors, headWidths, gridWidthPx)
+                : this.renderPrintedForte(articulation, bandOffset, measure, noteAnchors, headWidths, gridWidthPx));
         }
 
         return marks.length > 0 ? <div className="staff-note-viewer-articulations">{marks}</div> : null;
@@ -613,14 +704,23 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
      * @param portion The part of the hairpin that lies in this bar.
      * @param barNumber The one-based measure the row draws.
      * @param bandOffset The top of the marking band, in px below the notes' line.
+     * @param measure The events in the bar.
+     * @param noteAnchors The rendered horizontal anchors of the events.
+     * @param headWidths The notehead ink widths, keyed by event index.
+     * @param gridWidthPx The width of the rendered note grid.
      *
      * @returns The hairpin portion as scalable line geometry.
      */
-    private renderPrintedHairpin(hairpin: IHairpin, portion: IArticulationPortion, barNumber: number,
-        bandOffset: number): ComponentChild {
-        const startPercent = StaffNoteViewer.percentOf(portion.start);
-        const endPercent = StaffNoteViewer.percentOf(portion.end);
-        const widthPercent = Math.max(endPercent - startPercent, minimumPrintedHairpinPercent);
+    private renderPrintedHairpin(hairpin: IHairpin, portion: IArticulationPortion,
+        barNumber: number, bandOffset: number, measure: ISbDmTrackPiece,
+        noteAnchors: Map<number, number>, headWidths: Map<number, string>, gridWidthPx: number): ComponentChild {
+        const startPosition = hairpin.from.bar === barNumber
+            ? StaffNoteViewer.anchorPositionOf(measure, hairpin.from.start, noteAnchors, headWidths, gridWidthPx)
+            : "0%";
+        const endPosition = hairpin.to.bar === barNumber
+            ? StaffNoteViewer.anchorPositionOf(measure, hairpin.to.start, noteAnchors, headWidths, gridWidthPx)
+            : "100%";
+        const width = `max(${minimumPrintedHairpinPercent}%, calc(${endPosition} - ${startPosition}))`;
         const opening = staffSpacePx * printedHairpinOpeningSpaces;
         const topOffset = bandOffset - (opening / 2);
 
@@ -641,8 +741,8 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
         const rightHalf = openingAt(portion.end) * 50;
         const path = `M 0 ${50 - leftHalf} L 100 ${50 - rightHalf} M 0 ${50 + leftHalf} L 100 ${50 + rightHalf}`;
         const style: CSSProperties = {
-            left: `${startPercent}%`,
-            width: `${widthPercent}%`,
+            left: startPosition,
+            width,
             top: `calc(50% + var(--staff-centre, 32px) + ${topOffset}px)`,
             height: `${opening}px`,
         };
@@ -662,15 +762,18 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
 
     /**
      * @param mark The `f` marking to draw.
-     * @param portion The position of the marking in this bar.
      * @param bandOffset The top of the marking band, in px below the notes' line.
+     * @param measure The events in the bar.
+     * @param noteAnchors The rendered horizontal anchors of the events.
+     * @param headWidths The notehead ink widths, keyed by event index.
+     * @param gridWidthPx The width of the rendered note grid.
      *
      * @returns The `f` glyph, centred on its event.
      */
-    private renderPrintedForte(mark: IRangeArticulation, portion: IArticulationPortion,
-        bandOffset: number): ComponentChild {
+    private renderPrintedForte(mark: IForteMark, bandOffset: number, measure: ISbDmTrackPiece,
+        noteAnchors: Map<number, number>, headWidths: Map<number, string>, gridWidthPx: number): ComponentChild {
         const style: CSSProperties = {
-            left: `${StaffNoteViewer.percentOf(portion.start)}%`,
+            left: StaffNoteViewer.anchorPositionOf(measure, mark.at.start, noteAnchors, headWidths, gridWidthPx),
             top: `calc(50% + var(--staff-centre, 32px) + ${bandOffset}px)`,
         };
 
@@ -867,8 +970,11 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
                 minWidth: 0,
                 "--note-anchor": anchor,
                 ...(beamInfo === undefined ? {} : {
-                    // The stem ends on the group's beam line at this note's own horizontal position.
+                    // The stem ends on the group's beam line at this note's own horizontal position. The stack's
+                    // depth is where a decoration drawn on the stem has to start.
                     "--stem-tip": StaffRowGeometry.formatPx(beamInfo.stemLengthPx),
+                    "--beam-stack-depth": StaffRowGeometry.formatPx(
+                        BeamGeometry.stackDepthSpaces(beamInfo.strokes.length) * staffSpacePx),
                 }),
             } as CSSProperties;
             const stepIndex = Math.floor(
@@ -1022,58 +1128,61 @@ export class StaffNoteViewer extends UIComponent<IStaffNoteViewerProperties> {
      * carries the line's height at its own horizontal position, so all strokes of a group stay
      * collinear, without a kink or a seam.
      *
+     * The top beam's top edge sits on the line the stems end on; every further level hangs one beam
+     * advance below it, which is a thickness plus the beam spacing.
+     *
      * @param stepIndex The note event index to render beams for (used for keying).
      * @param plan The beam engraving of this note.
      *
      * @returns List of VNodes representing the beam strokes attached to this note.
      */
     private renderBeamSegments(stepIndex: number, plan: IBeamNotePlan): VNode[] {
-        // Further beam levels hang below the primary one in the font's own rhythm: one beam thickness
-        // plus one beam space per level. The stroke box spans the beam line's own rise, so the
-        // parallelogram is one line and its vertical thickness hangs from that line.
+        const { groupStrokes, slope } = plan;
+        if (groupStrokes === undefined || groupStrokes.length === 0) {
+            return [];
+        }
+
         const beamAdvance = "(var(--beam-thickness, 4px) + var(--beam-spacing, 2px))";
         const beamThickness = "var(--beam-thickness, 4px)";
         const halfStem = "var(--stem-half-width, 1px)";
-        const stubWidth = `calc(var(--staff-space) * ${partialBeamLengthSpaces} + var(--stem-right-edge, 0px))`;
+        const widthPx = Math.max(...groupStrokes.map((stroke) => {
+            return stroke.endPx;
+        }));
+        const levels = Math.max(...groupStrokes.map((stroke) => {
+            return stroke.level;
+        }));
 
-        return plan.strokes.map((stroke) => {
-            const boxTopPx = Math.min(stroke.leftPx, stroke.rightPx);
-            const leftLocal = StaffRowGeometry.formatPx(stroke.leftPx - boxTopPx);
-            const rightLocal = StaffRowGeometry.formatPx(stroke.rightPx - boxTopPx);
-            const clipPath = `polygon(0 ${leftLocal}, 100% ${rightLocal},`
-                + ` 100% calc(${rightLocal} + ${beamThickness}), 0 calc(${leftLocal} + ${beamThickness}))`;
-            const top = `calc(50% + ${StaffRowGeometry.formatPx(boxTopPx)} + ${stroke.level - 1} * ${beamAdvance})`;
-            const height = `calc(${StaffRowGeometry.formatPx(Math.abs(stroke.rightPx - stroke.leftPx))}`
-                + ` + ${beamThickness})`;
-            const key = `beam-${stepIndex}-${stroke.level}-${stroke.kind}`;
+        // The box's top edge is the beam's top edge at the first note's anchor; the strokes are stated from
+        // there, and the group is sheared by the slope. The box states where the beam starts, not how far it
+        // reaches: it paints outside it where the line rises or the strokes run on.
+        const style: CSSProperties = {
+            top: `calc(50% + ${StaffRowGeometry.formatPx(plan.strokes[0].leftPx)})`,
+            left: `calc(var(--note-anchor) - ${halfStem})`,
+            width: `calc(${StaffRowGeometry.formatPx(widthPx)} + var(--stem-thickness, 2px))`,
+            height: `calc(${beamThickness} + ${levels - 1} * ${beamAdvance})`,
 
-            let left: string;
-            let width: string;
-            if (stroke.kind === BeamSegmentKind.SharedRight) {
-                left = `calc(var(--note-anchor) - ${halfStem})`;
-                width = "100%";
-            } else if (stroke.kind === BeamSegmentKind.PartialRight) {
-                left = `calc(var(--note-anchor) - ${halfStem})`;
-                width = stubWidth;
-            } else {
-                left = `calc(var(--note-anchor) - var(--staff-space) * ${partialBeamLengthSpaces})`;
-                width = stubWidth;
-            }
+            // The strokes are stated from the anchor, which sits half a stem right of the box's edge.
+            transform: `translateY(calc(-1 * ${slope} * ${halfStem}))`,
+        };
+        const strokes = groupStrokes.map((stroke, index) => {
+            const strokeStyle: CSSProperties = {
+                width: `calc(${StaffRowGeometry.formatPx(stroke.endPx - stroke.startPx)}`
+                    + " + var(--stem-thickness, 2px))",
+                height: beamThickness,
+                fill: "currentColor",
+                transform: `translateY(calc(${stroke.level - 1} * ${beamAdvance}))`,
+            };
 
-            return (
-                <span
-                    key={key}
-                    className="staff-note-viewer-beam"
-                    style={{
-                        top,
-                        left,
-                        width,
-                        height,
-                        clipPath,
-                    }}
-                />
-            );
+            return <rect key={index} x={stroke.startPx} y={0} style={strokeStyle} />;
         });
+
+        return [
+            <svg key={`beam-group-${stepIndex}`} className="staff-note-viewer-beam" style={style} aria-hidden="true">
+                <g transform={`matrix(1 ${slope} 0 1 0 0)`}>
+                    {strokes}
+                </g>
+            </svg>,
+        ];
     }
 
     /**

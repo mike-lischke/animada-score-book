@@ -46,6 +46,16 @@ Animada Score Book is your ensemble's digital home for rhythm — a rich, browse
 > copied, pasted, subdivided and removed in the grid view and in the staff view; the staff view additionally offers
 > the note length toolbar. What arrived with each version is listed in the [release notes](release-notes.md).
 
+### Printing and PDF Export
+
+Open **Print** to adjust the paginated preview, then choose **Print / PDF** to open the browser's print dialog.
+Print scale controls the notation size; preview zoom only changes its on-screen magnification. Closing or canceling
+the browser dialog returns to the preview with its settings intact.
+
+For output matching the preview, select **A4** and the same portrait or landscape orientation, use **100% scale**,
+and disable browser-added **headers and footers**. The document supplies its own margins, title, and page numbers;
+do not add extra browser margins. Browser and printer-driver settings can still alter the final output.
+
 ## Getting Started
 
 Animada Score Book consists of two parts that work together: a **backend server** that stores your scores and manages users, and a **frontend** that runs in the browser. The setup is the same whether you install on your own laptop or on a web server — both need Node.js and a database.
@@ -159,12 +169,12 @@ This opens the app at `http://localhost:5173` and updates automatically as you e
 
 **Useful commands while developing:**
 
-| Command | What it does |
-|---|---|
-| `npm run check` | Type-checks all TypeScript source and test files |
-| `npm run lint` | Runs ESLint across the codebase |
-| `npm run test` | Runs the unit test suite (Vitest) |
-| `npm run test:e2e` | Runs end-to-end browser tests (Playwright) |
+| Command            | What it does                                     |
+| ------------------ | ------------------------------------------------ |
+| `npm run check`    | Type-checks all TypeScript source and test files |
+| `npm run lint`     | Runs ESLint across the codebase                  |
+| `npm run test`     | Runs the unit test suite (Vitest)                |
+| `npm run test:e2e` | Runs end-to-end browser tests (Playwright)       |
 
 The project is written in **TypeScript** with **Preact** for the UI, **SCSS** and **Tailwind** for styling, and **DaisyUI** for components. The backend is a plain Node.js HTTP server with MySQL/MariaDB/PostgreSQL adapters.
 
