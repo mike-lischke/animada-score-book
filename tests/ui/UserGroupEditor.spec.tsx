@@ -11,10 +11,7 @@ import { renderNotificationCenter } from "../../src/components/ui/NotificationCe
 import type { IGroupRow, IUserRow, ScoreBookDataModel } from "../../src/core/ScoreBookDataModel.js";
 import * as utils from "../../src/core/utils.js";
 import { UserGroupEditor } from "../../src/ui/UserGroupEditor.js";
-
-// ---------------------------------------------------------------------------------------------------------------------
-// Test helpers
-// ---------------------------------------------------------------------------------------------------------------------
+import { requireCurrent } from "../unit-test-helpers.js";
 
 interface IMockDataModel {
     listUsers: ReturnType<typeof vi.fn>;
@@ -119,7 +116,7 @@ describe("UserGroupEditor", { concurrent: false }, () => {
         };
 
         renderResult = render(<Wrapper />);
-        ref.current.open();
+        requireCurrent(ref).open();
 
         await waitFor(() => {
             expect(document.body.querySelector("#userGroupEditorDialog")).toBeTruthy();
@@ -144,7 +141,7 @@ describe("UserGroupEditor", { concurrent: false }, () => {
         };
 
         renderResult = render(<Wrapper />);
-        ref.current.open();
+        requireCurrent(ref).open();
 
         await waitFor(() => {
             expect(document.body.querySelector("#userGroupEditorDialog")).toBeTruthy();
@@ -168,7 +165,7 @@ describe("UserGroupEditor", { concurrent: false }, () => {
         };
 
         renderResult = render(<Wrapper />);
-        ref.current.open();
+        requireCurrent(ref).open();
 
         await waitFor(() => {
             const dialog = document.body.querySelector("#userGroupEditorDialog");
@@ -194,7 +191,7 @@ describe("UserGroupEditor", { concurrent: false }, () => {
         };
 
         renderResult = render(<Wrapper />);
-        ref.current.open();
+        requireCurrent(ref).open();
 
         await waitFor(() => {
             const dialog = document.body.querySelector("#userGroupEditorDialog")!;
@@ -217,7 +214,7 @@ describe("UserGroupEditor", { concurrent: false }, () => {
         };
 
         renderResult = render(<Wrapper />);
-        ref.current.open();
+        requireCurrent(ref).open();
 
         await waitFor(() => {
             const dialog = document.body.querySelector("#userGroupEditorDialog")!;
@@ -237,7 +234,7 @@ describe("UserGroupEditor", { concurrent: false }, () => {
         };
 
         renderResult = render(<Wrapper />);
-        ref.current.open();
+        requireCurrent(ref).open();
 
         await waitFor(() => {
             const dialog = document.body.querySelector("#userGroupEditorDialog")!;
@@ -259,7 +256,7 @@ describe("UserGroupEditor", { concurrent: false }, () => {
         };
 
         renderResult = render(<Wrapper />);
-        ref.current.open();
+        requireCurrent(ref).open();
 
         await waitFor(() => {
             const dialog = document.body.querySelector("#userGroupEditorDialog")!;
@@ -284,7 +281,7 @@ describe("UserGroupEditor", { concurrent: false }, () => {
         };
 
         renderResult = render(<Wrapper />);
-        ref.current.open();
+        requireCurrent(ref).open();
 
         await waitFor(() => {
             const dialog = document.body.querySelector("#userGroupEditorDialog")!;
@@ -309,7 +306,7 @@ describe("UserGroupEditor", { concurrent: false }, () => {
         };
 
         renderResult = render(<Wrapper />);
-        ref.current.open();
+        requireCurrent(ref).open();
 
         await waitFor(() => {
             const dialog = document.body.querySelector("#userGroupEditorDialog")!;
@@ -331,7 +328,7 @@ describe("UserGroupEditor", { concurrent: false }, () => {
         };
 
         renderResult = render(<Wrapper />);
-        ref.current.open();
+        requireCurrent(ref).open();
 
         await waitFor(() => {
             const dialog = document.body.querySelector("#userGroupEditorDialog")!;
@@ -353,7 +350,7 @@ describe("UserGroupEditor", { concurrent: false }, () => {
         };
 
         renderResult = render(<Wrapper />);
-        ref.current.open();
+        requireCurrent(ref).open();
 
         await waitFor(() => {
             expect(document.body.querySelector("#ug-add-user")).toBeTruthy();
@@ -385,7 +382,7 @@ describe("UserGroupEditor", { concurrent: false }, () => {
         };
 
         renderResult = render(<Wrapper />);
-        ref.current.open();
+        requireCurrent(ref).open();
 
         await waitFor(() => {
             expect(document.body.querySelector("#ug-add-group")).toBeTruthy();
@@ -419,7 +416,7 @@ describe("UserGroupEditor", { concurrent: false }, () => {
         };
 
         renderResult = render(<Wrapper />);
-        ref.current.open();
+        requireCurrent(ref).open();
 
         await waitFor(() => {
             expect(document.body.querySelector("#ug-add-group")).toBeTruthy();
@@ -466,7 +463,7 @@ describe("UserGroupEditor", { concurrent: false }, () => {
         };
 
         renderResult = render(<Wrapper />);
-        ref.current.open();
+        requireCurrent(ref).open();
 
         await waitFor(() => {
             expect(document.body.querySelector("#ug-add-group")).toBeTruthy();
@@ -507,7 +504,7 @@ describe("UserGroupEditor", { concurrent: false }, () => {
         };
 
         renderResult = render(<Wrapper />);
-        ref.current.open();
+        requireCurrent(ref).open();
 
         await waitFor(() => {
             expect(document.body.querySelector("#ug-add-group")).toBeTruthy();
@@ -558,7 +555,7 @@ describe("UserGroupEditor", { concurrent: false }, () => {
         };
 
         renderResult = render(<Wrapper />);
-        ref.current.open();
+        requireCurrent(ref).open();
 
         await waitFor(() => {
             expect(document.body.querySelector("#ug-add-group")).toBeTruthy();
@@ -604,7 +601,7 @@ describe("UserGroupEditor", { concurrent: false }, () => {
         };
 
         renderResult = render(<Wrapper />);
-        ref.current.open();
+        requireCurrent(ref).open();
 
         await waitFor(() => {
             expect(document.body.querySelector("#userGroupEditorDialog")).toBeTruthy();

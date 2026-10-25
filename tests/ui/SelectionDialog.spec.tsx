@@ -11,6 +11,7 @@ import {
     SelectionDialog, type ISelectionDialogItem, type ISelectionDialogResult
 } from "../../src/components/ui/composites/SelectionDialog.js";
 import { DialogResponseClosure } from "../../src/components/ui/framework/Dialog.js";
+import { requireCurrent } from "../unit-test-helpers.js";
 
 interface IShowOptions {
     multiSelect?: boolean;
@@ -44,7 +45,7 @@ describe("SelectionDialog", { concurrent: false }, () => {
 
         renderResult = render(<Wrapper />);
 
-        return ref.current;
+        return requireCurrent(ref);
     };
 
     const show = (dialog: SelectionDialog, options: IShowOptions = {}): Promise<ISelectionDialogResult | undefined> => {

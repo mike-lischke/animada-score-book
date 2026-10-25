@@ -11,6 +11,7 @@ import { Popup } from "../../src/components/ui/framework/Popup.js";
 import { PortalCloseReason } from "../../src/components/ui/framework/Portal.js";
 import { ComponentPlacement } from "../../src/components/ui/framework/UIComponent.js";
 import { Orientation } from "../../src/components/ui/framework/ui-types.js";
+import { requireCurrent } from "../unit-test-helpers.js";
 
 const rectOf = (left: number, top: number, width: number, height: number): DOMRect => {
     return {
@@ -52,7 +53,7 @@ describe("Popup", { concurrent: false }, () => {
 
         renderResult = render(<Wrapper />);
         await act(() => {
-            popupRef.current.openAtRect(rectOf(24, 40, 80, 24));
+            requireCurrent(popupRef).openAtRect(rectOf(24, 40, 80, 24));
         });
 
         const popup = await waitFor(() => {
@@ -101,7 +102,7 @@ describe("Popup", { concurrent: false }, () => {
 
         renderResult = render(<Wrapper />);
         await act(() => {
-            popupRef.current.openAtRect(rectOf(40, 60, 100, 28));
+            requireCurrent(popupRef).openAtRect(rectOf(40, 60, 100, 28));
         });
 
         const popup = await waitFor(() => {
@@ -125,7 +126,7 @@ describe("Popup", { concurrent: false }, () => {
 
         renderResult = render(<Wrapper />);
         await act(() => {
-            popupRef.current.openAtRect(rectOf(12, 18, 64, 24));
+            requireCurrent(popupRef).openAtRect(rectOf(12, 18, 64, 24));
         });
 
         const popup = await waitFor(() => {
@@ -164,14 +165,14 @@ describe("Popup", { concurrent: false }, () => {
 
         renderResult = render(<Wrapper />);
         await act(() => {
-            firstRef.current.openAtRect(rectOf(10, 10, 40, 20));
+            requireCurrent(firstRef).openAtRect(rectOf(10, 10, 40, 20));
         });
         await waitFor(() => {
             expect(document.body.querySelector(".popup")?.textContent).toContain("First popup");
         });
 
         await act(() => {
-            secondRef.current.openAtRect(rectOf(80, 80, 40, 20));
+            requireCurrent(secondRef).openAtRect(rectOf(80, 80, 40, 20));
         });
 
         await waitFor(() => {

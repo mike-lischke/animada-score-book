@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { ConfirmDialog } from "../../src/components/ui/composites/ConfirmDialog.js";
 import { DialogResponseClosure } from "../../src/components/ui/framework/Dialog.js";
+import { requireCurrent } from "../unit-test-helpers.js";
 
 describe("ConfirmDialog", { concurrent: false }, () => {
     let renderResult: RenderResult | null;
@@ -31,7 +32,7 @@ describe("ConfirmDialog", { concurrent: false }, () => {
 
         renderResult = render(<Wrapper />);
 
-        return ref.current;
+        return requireCurrent(ref);
     };
 
     const show = (dialog: ConfirmDialog,

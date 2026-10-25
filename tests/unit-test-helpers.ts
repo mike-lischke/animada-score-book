@@ -3,25 +3,26 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  */
 
+import type { RefObject } from "preact";
+
+import { afterEach } from "vitest";
 import { Arrangement } from "../src/core/Arrangement.js";
 import { modelEventAt } from "../src/core/MeasureProjection.js";
+import { NoteLength, type INoteValue } from "../src/core/rest-notation.js";
 import {
     SbDmEntityType, type ISbDmInstrument, type ISbDmTrack, type ISbDmTrackPiece, type ScoreBookDataModel,
 } from "../src/core/ScoreBookDataModel.js";
 import { addFractions, reduceFraction } from "../src/core/serialisation/numeric-functions.js";
-import { NoteLength, type INoteValue } from "../src/core/rest-notation.js";
 import type { IFraction, IMeasureEvent, ITrackSnapshot } from "../src/core/types/general.js";
+import { PlayerPlayState } from "../src/player/ArrangementPlayer.js";
+import { TimeCoordinator } from "../src/player/TimeCoordinator.js";
+import { TrackPlayer } from "../src/player/TrackPlayer.js";
 import { GridMeasureEditor } from "../src/ui/GridMeasureEditor.js";
 import type { IMeasureEditorInput } from "../src/ui/MeasureEditor.js";
 import { ScoreElementRegistry } from "../src/ui/ScoreElementRegistry.js";
 import { SelectionManager } from "../src/ui/SelectionManager.js";
-import { SelectionGranularity, SelectionSerializer, type ISelectionEntry }
-    from "../src/ui/SelectionSerializer.js";
+import { SelectionGranularity, SelectionSerializer, type ISelectionEntry } from "../src/ui/SelectionSerializer.js";
 import { StaffMeasureEditor } from "../src/ui/StaffMeasureEditor.js";
-import { PlayerPlayState } from "../src/player/ArrangementPlayer.js";
-import { TimeCoordinator } from "../src/player/TimeCoordinator.js";
-import { TrackPlayer } from "../src/player/TrackPlayer.js";
-import { afterEach } from "vitest";
 
 const selectionManagers = new Set<SelectionManager>();
 
@@ -333,4 +334,20 @@ export const createGridEditor = (model: ScoreBookDataModel): GridMeasureEditor =
  */
 export const createStaffEditor = (model: ScoreBookDataModel): StaffMeasureEditor => {
     return new StaffMeasureEditor(model, createEditorInput(model));
+};
+
+/**
+ * Reads the instance a ref points to, failing when the component was not mounted.
+ *
+ * @param ref The ref handed to the rendered component.
+ *
+ * @returns The mounted instance.
+ */
+export const requireCurrent = <T>(ref: RefObject<T | null>): T => {
+    const instance = ref.current;
+    if (!instance) {
+        throw new Error("Component was not mounted");
+    }
+
+    return instance;
 };

@@ -9,12 +9,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { IUISettings } from "../../src/core/AppStorage.js";
 import { AppStorage } from "../../src/core/AppStorage.js";
-import { SmuflGlyph, SmuflGlyphs } from "../../src/core/smufl/SmuflGlyphs.js";
-import { SmuflFontFormat } from "../../src/core/smufl/SmuflFonts.js";
 import type { ISmuflFontChoice, SmuflFontLoader } from "../../src/core/smufl/SmuflFontLoader.js";
+import { SmuflFontFormat } from "../../src/core/smufl/SmuflFonts.js";
+import { SmuflGlyph, SmuflGlyphs } from "../../src/core/smufl/SmuflGlyphs.js";
 import * as utils from "../../src/core/utils.js";
 import { requisitions } from "../../src/supplement/Requisitions.js";
 import { SettingsDialog } from "../../src/ui/SettingsDialog.js";
+import { requireCurrent } from "../unit-test-helpers.js";
 
 class TestableSettingsDialog extends SettingsDialog {
     public testHandleClose(returnValue: string): void {
@@ -149,13 +150,13 @@ describe("SettingsDialog (class)", { concurrent: false }, () => {
         };
 
         renderResult = render(<Wrapper />);
-        dialogRef.current.open();
+        requireCurrent(dialogRef).open();
 
         await waitFor(() => {
             expect(document.body.querySelector("#settingsDialog")).toBeTruthy();
         });
 
-        return dialogRef.current;
+        return requireCurrent(dialogRef);
     };
 
     beforeEach(() => {

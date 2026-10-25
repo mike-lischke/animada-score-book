@@ -7,11 +7,12 @@ import { cleanup, fireEvent, render, waitFor, type RenderResult } from "@testing
 import { createRef, type FunctionComponent } from "preact";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import type { ISelectionDialogItem } from "../../src/components/ui/composites/SelectionDialog.js";
 import {
     NewScoreDialog, type INewScoreResult, type INewScoreShowOptions
 } from "../../src/components/ui/composites/NewScoreDialog.js";
+import type { ISelectionDialogItem } from "../../src/components/ui/composites/SelectionDialog.js";
 import { DialogResponseClosure } from "../../src/components/ui/framework/Dialog.js";
+import { requireCurrent } from "../unit-test-helpers.js";
 
 describe("NewScoreDialog", { concurrent: false }, () => {
     let renderResult: RenderResult | null;
@@ -40,7 +41,7 @@ describe("NewScoreDialog", { concurrent: false }, () => {
 
         renderResult = render(<Wrapper />);
 
-        return ref.current;
+        return requireCurrent(ref);
     };
 
     const show = (dialog: NewScoreDialog, options?: INewScoreShowOptions): Promise<INewScoreResult | undefined> => {

@@ -214,7 +214,6 @@ MySQL does not support `IF NOT EXISTS` for `ALTER TABLE ADD COLUMN` — check wi
 
 ## Testing
 
-- Vitest runs with `isolate=false` and concurrent file execution; specs that mock shared singletons or rely on module state should use `describe.sequential` or otherwise isolate state explicitly.
 - UI structure changes in `SettingsDialog` require updating snapshot at `tests/ui/__snapshots__/SettingsDialog.spec.tsx.snap`.
 - Legacy arrangement snapshots (version 1) and BananaDrum URL params must be migrated via `ArrangementMigrator.migrateToArrangement()` (returns `{ arrangement, migrated }`). Tests should use the public API, not private `migrate()`.
 
