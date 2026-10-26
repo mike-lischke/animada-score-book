@@ -1348,9 +1348,19 @@ export class App extends UIComponent<{}, IAppState> {
             }
         }
 
-        await this.dataModel.resetDatabase();
+        const result = await this.dataModel.resetDatabase();
 
-        // Restart the boot sequence; the health check reports the result of the reset.
+        if (!result.ok) {
+            // The toast center is not mounted outside the running phase, so the failure uses the dialog.
+            await this.confirmDialogRef.current?.show(
+                result.error ?? "The database reset failed.",
+                { accept: "OK" },
+                "Database Reset Failed",
+                ["The database may be empty now. Check the server log for details."],
+            );
+        }
+
+        // Restart the boot sequence; the health check reports the state the database is in now.
         await this.checkBackendThenInitialize();
     }
 

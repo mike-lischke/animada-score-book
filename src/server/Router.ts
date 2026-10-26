@@ -390,6 +390,34 @@ export class Router {
         console.log("Seeded anonymous system user.");
     };
 
+    /**
+     * Reduces an exception to one line — stack traces and echoed SQL statements help nobody in the UI.
+     *
+     * @param e The exception to summarise.
+     *
+     * @returns The first line of the exception message, shortened to fit a message box.
+     */
+    private static summarizeError(e: unknown): string {
+        const details = convertErrorToString(e).split("\n")[0];
+
+        return details.length > 300 ? `${details.slice(0, 300)}…` : details;
+    }
+
+    /**
+     * Installs the given adapter again after a failed database reset closed its pool.
+     *
+     * @param adapter The adapter used for the failed reset attempt.
+     */
+    private async restoreAdapter(adapter: IDatabaseAdapter): Promise<void> {
+        try {
+            await adapter.initialize(this.config.database);
+            await this.auth.adapter.shutdown();
+            this.auth.adapter = adapter;
+        } catch (e) {
+            console.error("Restoring the database adapter failed:", convertErrorToString(e));
+        }
+    }
+
     private async handleHealth(req: IncomingMessage, res: ServerResponse) {
         // Auth may not be injected yet during early startup.
         if (!this.authenticator) {
@@ -582,8 +610,12 @@ export class Router {
                     this.ctx.sendJson(res, { success: true });
                 } catch (e) {
                     console.error("Overwrite failed:", convertErrorToString(e));
+
+                    // The reset closes the pool of the adapter it was given, so a failing reset
+                    // (e.g. a broken seed file) would leave the backend without a working adapter.
+                    await this.restoreAdapter(newAdapter);
                     this.ctx.sendError(
-                        res, "Database overwrite failed. Check server logs for details.", 500,
+                        res, `Database overwrite failed: ${Router.summarizeError(e)}`, 500,
                     );
                 }
 
@@ -598,7 +630,7 @@ export class Router {
         } catch (e) {
             console.error("Database initialisation failed:", convertErrorToString(e));
             this.ctx.sendError(
-                res, "Database initialisation failed. Check server logs for details.", 500,
+                res, `Database initialisation failed: ${Router.summarizeError(e)}`, 500,
             );
 
             return;

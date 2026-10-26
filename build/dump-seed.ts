@@ -47,6 +47,27 @@ const escapeSql = (s: string): string => {
     return s.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
 };
 
+/**
+ * Appends a section with a multi-row insert, or a placeholder comment when there are no rows.
+ *
+ * @param lines The output buffer.
+ * @param comment The section headline.
+ * @param statement The insert statement, without values.
+ * @param values The formatted value rows.
+ */
+const pushInsert = (lines: string[], comment: string, statement: string, values: string[]): void => {
+    lines.push(comment);
+
+    if (values.length === 0) {
+        lines.push("-- No rows.");
+    } else {
+        lines.push(statement);
+        lines.push(values.join(",\n") + ";");
+    }
+
+    lines.push("");
+};
+
 const main = async (): Promise<void> => {
     const lines: string[] = [
         "-- Seed data for Animada Score Book",
@@ -75,29 +96,19 @@ const main = async (): Promise<void> => {
     console.log("Collecting…");
     await collect(undefined);
 
-    lines.push("-- Folders");
-    lines.push("INSERT INTO folders (id, parentid, name) VALUES");
-
     const folderValues = folders.map((f) => {
         const pid = f.parentid === -1 || f.parentid === null ? "NULL" : String(f.parentid);
 
         return `  (${f.id}, ${pid}, '${escapeSql(f.name)}')`;
     });
-
-    lines.push(folderValues.join(",\n") + ";");
-    lines.push("");
-
-    lines.push("-- Scores");
-    lines.push("INSERT INTO scores (id, folderid, name, content) VALUES");
+    pushInsert(lines, "-- Folders", "INSERT INTO folders (id, parentid, name) VALUES", folderValues);
 
     const scoreValues = scores.map((s) => {
         const fid = s.folderid === null ? "NULL" : String(s.folderid);
 
         return `  (${s.id}, ${fid}, '${escapeSql(s.name)}', '${escapeSql(s.content)}')`;
     });
-
-    lines.push(scoreValues.join(",\n") + ";");
-    lines.push("");
+    pushInsert(lines, "-- Scores", "INSERT INTO scores (id, folderid, name, content) VALUES", scoreValues);
 
     const dumpPath = resolve(process.cwd(), "build", "seed.sql");
 

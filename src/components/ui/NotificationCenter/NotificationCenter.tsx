@@ -104,6 +104,9 @@ export class NotificationCenter extends UIComponent<ICommonUIProperties, INotifi
     private autoHideTimeout = 15000; // 15 seconds to hide any unhandled message.
     private containerRef = createRef<HTMLDivElement | null>();
 
+    /** Toast timers outlive the component (e.g. when the app leaves the running phase), so re-renders are guarded. */
+    private isMounted = false;
+
     public constructor(props: ICommonUIProperties) {
         super(props);
         this.state = {
@@ -141,6 +144,8 @@ export class NotificationCenter extends UIComponent<ICommonUIProperties, INotifi
     }
 
     public override componentDidMount(): void {
+        this.isMounted = true;
+
         requisitions.register("showInfo", this.handleShowInfo);
         requisitions.register("showWarning", this.handleShowWarning);
         requisitions.register("showError", this.handleShowError);
@@ -154,6 +159,13 @@ export class NotificationCenter extends UIComponent<ICommonUIProperties, INotifi
     }
 
     public override componentWillUnmount(): void {
+        this.isMounted = false;
+
+        // Auto-hide timers would otherwise fire into an unmounted component.
+        for (const toast of this.state.mainList) {
+            clearTimeout(toast.timer);
+        }
+
         escapeStack.remove(this.handleEscape);
         requisitions.unregister("showInfo", this.handleShowInfo);
         requisitions.unregister("showWarning", this.handleShowWarning);
@@ -491,7 +503,7 @@ export class NotificationCenter extends UIComponent<ICommonUIProperties, INotifi
                         if (toast.ref.current) {
                             toast.ref.current.style.marginBottom = "";
                             toast.state = "normal";
-                            this.forceUpdate();
+                            this.updateIfMounted();
                         }
                     }, 0);
                 }
@@ -499,7 +511,7 @@ export class NotificationCenter extends UIComponent<ICommonUIProperties, INotifi
         } else {
             this.publishState();
             if (showHistory) {
-                this.forceUpdate();
+                this.updateIfMounted();
             }
         }
     }
@@ -526,7 +538,7 @@ export class NotificationCenter extends UIComponent<ICommonUIProperties, INotifi
             this.setState({ mainList });
         }, { once: true });
 
-        this.forceUpdate();
+        this.updateIfMounted();
     }
 
     /**
@@ -600,6 +612,13 @@ export class NotificationCenter extends UIComponent<ICommonUIProperties, INotifi
             escapeStack.register(this.handleEscape);
         } else {
             escapeStack.remove(this.handleEscape);
+        }
+    }
+
+    /** Re-renders only while the component is mounted, since timers and animation handlers outlive it. */
+    private updateIfMounted(): void {
+        if (this.isMounted) {
+            this.forceUpdate();
         }
     }
 

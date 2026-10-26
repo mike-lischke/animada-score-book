@@ -835,6 +835,15 @@ export interface ITrackPieceInsertion {
     events: IMeasureEvent[];
 }
 
+/** The outcome of a destructive database reset. */
+export interface IDatabaseResetResult {
+    /** True if the backend dropped and rebuilt the database including its seed data. */
+    ok: boolean;
+
+    /** The reason the reset failed, as reported by the backend. */
+    error?: string;
+}
+
 export class ScoreBookDataModel {
     /**
      * Indicates whether the current session is allowed to mutate scores on the backend.
@@ -2659,16 +2668,31 @@ export class ScoreBookDataModel {
      * Resets the database by dropping and recreating all tables.
      * This is a destructive operation — all data is lost.
      *
-     * @returns True if the reset succeeded.
+     * @returns The outcome of the reset, with the backend's error text when it failed.
      */
-    public async resetDatabase(): Promise<boolean> {
+    public async resetDatabase(): Promise<IDatabaseResetResult> {
         const res = await this.fetchApi("/api?action=setup", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ overwrite: true }),
-        });
+        }, true, true);
 
-        return res?.ok === true;
+        if (!res) {
+            return { ok: false, error: "The backend could not be reached." };
+        }
+
+        if (res.ok) {
+            return { ok: true };
+        }
+
+        let body: { error?: string; } = {};
+        try {
+            body = await res.json() as { error?: string; };
+        } catch {
+            // Not a JSON body — the status line remains the only information available.
+        }
+
+        return { ok: false, error: body.error ?? `HTTP ${res.status} ${res.statusText}` };
     }
 
     public async deleteEntry(entry: ISbDmScoreFolder | ISbDmScore): Promise<void> {
