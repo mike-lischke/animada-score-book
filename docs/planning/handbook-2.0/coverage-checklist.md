@@ -9,21 +9,21 @@
 
 ## A. Product and Getting Started
 
-| ID   | Feature                                                                     | UI location                   | Destination                      | Image | Notes                                                                  |
-| ---- | --------------------------------------------------------------------------- | ----------------------------- | -------------------------------- | ----- | ---------------------------------------------------------------------- |
-| A-01 | Product purpose and audience                                                | —                             | `getting-started/overview.md`    | S-01  | Describe Samba/Bateria use, not generic notation software              |
-| A-02 | Two-part architecture (backend + browser frontend)                          | —                             | `getting-started/overview.md`    | —     | Explain what "running locally" and "hosted" both mean                  |
-| A-03 | Core concepts: score, track, bar, instrument, note style, articulation      | Header identity, track column | `getting-started/overview.md`    | S-01  | Terms fixed in `audit.md` → Terminology                                |
-| A-04 | Supported meters in New Song (4/4, 6/8, 5/4, 7/8)                           | `New Song` dialog             | `getting-started/overview.md`    | S-14  | Meter list is fixed by the dialog                                      |
-| A-05 | Browser requirements (Web Audio, localStorage, MP3 encoding, ES-next build) | —                             | `getting-started/overview.md`    | —     | No browser support statement exists in the repo; state tested browsers |
-| A-06 | Desktop, tablet and phone support                                           | Responsive layout             | `getting-started/overview.md`    | S-47  | Cross-link presentation chapter                                        |
-| A-07 | Demo access (planned; separate application task)                            | Login dialog / demo entry     | `getting-started/overview.md`    | S-55  | Document agreed behaviour only once implemented                        |
-| A-08 | Onboarding tutorial (disabled in 2.0.0)                     | Out of scope — issue #63       | —     | Tutorial rework tracked separately                                      |
-| A-09 | Sign-in options: user, group, continue anonymously                          | Login dialog                  | `getting-started/first-steps.md` | S-11  | Group tab documented in administration chapter too                     |
-| A-10 | Opening a score: library, direct `?score=` URL, shared link                 | Library, URL                  | `getting-started/first-steps.md` | S-04  | Access-denied and not-found dialogs belong to troubleshooting          |
-| A-11 | First playback and view switch                                              | Playback bar, view switch     | `getting-started/first-steps.md` | S-38  | Short workflow, details in chapter 5 and 8                             |
-| A-12 | Where settings, version, release notes and help live                        | Header gear, footer version   | `getting-started/first-steps.md` | S-41  | Releases notes dialog: S-53                                            |
-| A-13 | Saving behaviour: save badge, `Save Score`, unsaved-changes prompt          | Header identity, save switch  | `getting-started/first-steps.md` | S-01  | Anonymous versus persistent saving must be explicit                    |
+| ID   | Feature                                                                     | UI location                   | Destination                      | Image                              | Notes                                                                  |
+| ---- | --------------------------------------------------------------------------- | ----------------------------- | -------------------------------- | ---------------------------------- | ---------------------------------------------------------------------- |
+| A-01 | Product purpose and audience                                                | —                             | `getting-started/overview.md`    | S-01                               | Describe Samba/Bateria use, not generic notation software              |
+| A-02 | Two-part architecture (backend + browser frontend)                          | —                             | `getting-started/overview.md`    | —                                  | Explain what "running locally" and "hosted" both mean                  |
+| A-03 | Core concepts: score, track, bar, instrument, note style, articulation      | Header identity, track column | `getting-started/overview.md`    | S-01                               | Terms fixed in `audit.md` → Terminology                                |
+| A-04 | Supported meters in New Song (4/4, 6/8, 5/4, 7/8)                           | `New Song` dialog             | `getting-started/overview.md`    | S-14                               | Meter list is fixed by the dialog                                      |
+| A-05 | Browser requirements (Web Audio, localStorage, MP3 encoding, ES-next build) | —                             | `getting-started/overview.md`    | —                                  | No browser support statement exists in the repo; state tested browsers |
+| A-06 | Desktop, tablet and phone support                                           | Responsive layout             | `getting-started/overview.md`    | S-47                               | Cross-link presentation chapter                                        |
+| A-07 | Demo access (planned; separate application task)                            | Login dialog / demo entry     | `getting-started/overview.md`    | S-55                               | Document agreed behaviour only once implemented                        |
+| A-08 | Onboarding tutorial (disabled in 2.0.0)                                     | Out of scope — issue #63      | —                                | Tutorial rework tracked separately |
+| A-09 | Sign-in options: user, group, continue anonymously                          | Login dialog                  | `getting-started/first-steps.md` | S-11                               | Group tab documented in administration chapter too                     |
+| A-10 | Opening a score: library, direct `?score=` URL, shared link                 | Library, URL                  | `getting-started/first-steps.md` | S-04                               | Access-denied and not-found dialogs belong to troubleshooting          |
+| A-11 | First playback and view switch                                              | Playback bar, view switch     | `getting-started/first-steps.md` | S-38                               | Short workflow, details in chapter 5 and 8                             |
+| A-12 | Where settings, version, release notes and help live                        | Header gear, footer version   | `getting-started/first-steps.md` | S-41                               | Releases notes dialog: S-53                                            |
+| A-13 | Saving behaviour: save badge, `Save Score`, unsaved-changes prompt          | Header identity, save switch  | `getting-started/first-steps.md` | S-01                               | Anonymous versus persistent saving must be explicit                    |
 
 ## B. Score Library
 
@@ -233,7 +233,7 @@
 | J-13 | Print result differs from preview                                                                           | `troubleshooting.md`              | —     | Browser settings, scale, margins                       |
 | J-14 | Migration checksum error after an update                                                                    | `troubleshooting.md`              | —     | Branch database hint                                   |
 | J-15 | Database and setup problems (`Initialize Database`, `Reset Database`)                                       | `troubleshooting.md`              | S-52  | Backend setup dialog                                   |
-| J-16 | Settings and session selection lost                                                         | `troubleshooting.md`              | —     | Browser storage is local; no server copy               |
+| J-16 | Settings and session selection lost                                                                         | `troubleshooting.md`              | —     | Browser storage is local; no server copy               |
 | J-17 | Known limitations list (product, security, operations)                                                      | `troubleshooting.md`              | —     | Kept in sync with `audit.md` during the release        |
 
 ## K. Development
@@ -265,5 +265,5 @@
 | Force unlock, `clearAll`                                              | API-only, no UI                                                     |
 | Recording or live input                                               | Not implemented                                                     |
 | `Diamond` notehead, unused hand and stick techniques                  | Not used by any instrument                                          |
-| Onboarding tutorial (disabled for 2.0.0)                              | Reclassified to issue #63 |
+| Onboarding tutorial (disabled for 2.0.0)                              | Reclassified to issue #63                                           |
 | Roadmap and demo-access implementation                                | Separate application task                                           |

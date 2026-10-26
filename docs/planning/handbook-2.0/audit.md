@@ -51,11 +51,11 @@ Groups`, `Score Library`). Descriptive terms are lower case in running text (`gr
 The application was inconsistent in three places. The first two were approved and applied on 2026-10-26; the
 remaining occurrences await a decision.
 
-| Inconsistency                       | Instances                                                                                                       | State                                                                                           |
-| ----------------------------------- | --------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| "bar" versus "measure"              | `Number of bars`, `Insert Bars`, `Clear bar`, `Delete bar`, `bar N` versus the footer caption `Measure 5 of 32` | **Applied:** the footer captions now read `Bar 5 of 32` / `Bars 5 – 9 of 32` in `AppFooter.tsx` |
+| Inconsistency                       | Instances                                                                                                       | State                                                                                                   |
+| ----------------------------------- | --------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| "bar" versus "measure"              | `Number of bars`, `Insert Bars`, `Clear bar`, `Delete bar`, `bar N` versus the footer caption `Measure 5 of 32` | **Applied:** the footer captions now read `Bar 5 of 32` / `Bars 5 – 9 of 32` in `AppFooter.tsx`         |
 | `Display Options` versus `Settings` | Gear tooltip and overflow item said `Display Options`; the dialog header says `Settings`                        | **Applied:** tooltip, overflow item and tutorial texts now say `Settings` (tutorial removed, issue #63) |
-| `Edit Mode` versus `Editing`        | The switch shows `Edit Mode` outside and `Editing` inside edit mode                                             | Keep both (they describe state changes) and document the pair                                   |
+| `Edit Mode` versus `Editing`        | The switch shows `Edit Mode` outside and `Editing` inside edit mode                                             | Keep both (they describe state changes) and document the pair                                           |
 
 Remaining "measure" labels outside the footer awaited approval: the print-preview overflow warning (`Measure 3`) and
 the selection toolbar caption (`Measure 5`). Both were changed to `Bar`/`Bars` on 2026-10-26 as well. The tutorial,
@@ -81,16 +81,16 @@ screenshot shows it.
 
 ### 2.2 Stale or incorrect statements in `readme.md`
 
-| Line     | Statement                                                                                                                                                                                                    | Reality                                                                                                           |
-| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------- |
-| 65, 152  | "Node.js version 20 or later", "Node.js 20+"                                                                                                                                                                 | `package.json` requires `^24.15.0 \|\| ^26.0.0`; `.nvmrc` is `26`; CI runs 24.x and 26.x                          |
-| 157      | `npm run start-with-dummy-secret`                                                                                                                                                                            | The script does not exist; the development start is `npm run start-debug` (`JWT_SECRET="for-debugging"`)          |
-| 168      | "opens the app at `http://localhost:5173`"                                                                                                                                                                   | `vite.config.ts` serves HTTPS with `~/.ssh/localhost-key.pem` and `localhost-cert.pem` → `https://localhost:5173` |
-| 132      | Expected log `Server running on http://0.0.0.0:3100`                                                                                                                                                         | Actual log: `Backend server listening on http://127.0.0.1:3100 (bound to 0.0.0.0:3100)`                           |
-| 23       | "automatic and manual zoom"                                                                                                                                                                                  | Zoom is manual only (50–150 %, step 10). `Fit width`/`Fit page` exist only in the print preview                   |
-| 74–77    | "Download the latest release and unzip it"                                                                                                                                                                   | No release contains a build artifact; only GitHub's source archives exist (section 3)                             |
+| Line     | Statement                                                                                                                                                                                          | Reality                                                                                                           |
+| -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| 65, 152  | "Node.js version 20 or later", "Node.js 20+"                                                                                                                                                       | `package.json` requires `^24.15.0 \|\| ^26.0.0`; `.nvmrc` is `26`; CI runs 24.x and 26.x                          |
+| 157      | `npm run start-with-dummy-secret`                                                                                                                                                                  | The script does not exist; the development start is `npm run start-debug` (`JWT_SECRET="for-debugging"`)          |
+| 168      | "opens the app at `http://localhost:5173`"                                                                                                                                                         | `vite.config.ts` serves HTTPS with `~/.ssh/localhost-key.pem` and `localhost-cert.pem` → `https://localhost:5173` |
+| 132      | Expected log `Server running on http://0.0.0.0:3100`                                                                                                                                               | Actual log: `Backend server listening on http://127.0.0.1:3100 (bound to 0.0.0.0:3100)`                           |
+| 23       | "automatic and manual zoom"                                                                                                                                                                        | Zoom is manual only (50–150 %, step 10). `Fit width`/`Fit page` exist only in the print preview                   |
+| 74–77    | "Download the latest release and unzip it"                                                                                                                                                         | No release contains a build artifact; only GitHub's source archives exist (section 3)                             |
 | Features | Feature list omits Zen mode, Play Focus, notification center, settings, users/groups, group login, dynamics, tuplets, insert/overwrite, simile, measure widths, seven music fonts, thirteen themes | Covered by the coverage checklist and the README refresh in Phase 5                                               |
-| 98–107   | `backend-config.json` example lists four config groups                                                                                                                                                       | Missing `allowedOrigins` and `trustProxy`; environment variables are not mentioned at all                         |
+| 98–107   | `backend-config.json` example lists four config groups                                                                                                                                             | Missing `allowedOrigins` and `trustProxy`; environment variables are not mentioned at all                         |
 
 Correct and reused as-is: system requirements (MySQL/MariaDB/PostgreSQL), `JWT_SECRET` explanation, `npm run start`
 and `npm run build` split, migration runner and `@mysql`/`@postgres` markers, branch-specific databases,
@@ -233,20 +233,20 @@ feature.
 | Release artifact                       | Introduce a deployment package script; releases then carry a real archive                                                                       |
 | Demo material                          | Database is emptied first; the maintainer adds the Ijexá and I-Break demo scores for Phases 4 and 6                                             |
 | Language                               | English only; `docs/de/` and `docs/pt/` stay reserved                                                                                           |
-| Onboarding tutorial                    | Disabled for 2.0.0; wizard, steps, setting, styles and tests removed; rework tracked in issue #63 |
+| Onboarding tutorial                    | Disabled for 2.0.0; wizard, steps, setting, styles and tests removed; rework tracked in issue #63                                               |
 | Roadmap and demo-access implementation | Out of scope for the documentation work                                                                                                         |
 | Release blockers                       | None; all candidates are documented as limitations (2026-10-26)                                                                                 |
-| UI wording                             | Footer says `Bar`/`Bars`; `Display Options` renamed to `Settings`; print warning and selection caption use `Bar` (applied 2026-10-26) |
+| UI wording                             | Footer says `Bar`/`Bars`; `Display Options` renamed to `Settings`; print warning and selection caption use `Bar` (applied 2026-10-26)           |
 | Terminology and table of contents      | Confirmed by the maintainer (2026-10-26)                                                                                                        |
 
 ### Still open
 
-| Decision                                                            | Owner                    | Needed by |
-| ------------------------------------------------------------------- | ------------------------ | --------- |
-| Archive format and whether to ship `node_modules`                   | maintainer               | Phase 6   |
-| Website URL path, source consumption mechanism, GitHub Pages        | separate website project | Phase 2   |
-| Leading screenshot fonts and themes beyond the proposed sets        | maintainer               | Phase 4   |
-| Final 2.0.0 release notes wording                                   | maintainer review        | Phase 6   |
+| Decision                                                     | Owner                    | Needed by |
+| ------------------------------------------------------------ | ------------------------ | --------- |
+| Archive format and whether to ship `node_modules`            | maintainer               | Phase 6   |
+| Website URL path, source consumption mechanism, GitHub Pages | separate website project | Phase 2   |
+| Leading screenshot fonts and themes beyond the proposed sets | maintainer               | Phase 4   |
+| Final 2.0.0 release notes wording                            | maintainer review        | Phase 6   |
 
 ## 6. Phase 1 Exit Status
 

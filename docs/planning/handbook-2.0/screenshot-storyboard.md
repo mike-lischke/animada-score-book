@@ -46,8 +46,8 @@ personal data and is deleted after the crops are captured.
 | S-06  | P1  | Music font comparison            | Same two bars of Ijexá in Bravura, Leipzig, Petaluma, Sebastian         | presentation, README showcase       | `en/presentation/music-fonts.png`         |
 | S-07  | P2  | Settings with font dropdown open | Settings dialog, `Music font` list open with per-font samples           | presentation                        | `en/settings/music-font-picker.png`       |
 | S-08  | P3  | Font information popup           | Settings, font info popup with version, copyright, licence, source      | presentation                        | `en/settings/music-font-info.png`         |
-| S-09  | P2  | Settings, remaining rows         | Settings dialog scrolled to zoom, auto-extend, permission                 | presentation                        | `en/settings/settings-rows.png`           |
-| S-10  | —   | Onboarding tutorial (removed)    | Not captured: the tutorial is disabled for 2.0.0 (issue #63)               | —                                   | —                                         |
+| S-09  | P2  | Settings, remaining rows         | Settings dialog scrolled to zoom, auto-extend, permission               | presentation                        | `en/settings/settings-rows.png`           |
+| S-10  | —   | Onboarding tutorial (removed)    | Not captured: the tutorial is disabled for 2.0.0 (issue #63)            | —                                   | —                                         |
 | S-11  | P2  | Login dialog, user tab           | Login dialog, user tab, empty fields                                    | first steps                         | `en/getting-started/login.png`            |
 | S-12  | P3  | Login dialog, group tab          | Login dialog, group tab with group dropdown                             | administration                      | `en/administration/group-login.png`       |
 | S-13  | P3  | Finish Installation wizard       | Admin user and initial group blocks                                     | administration                      | `en/administration/first-run.png`         |
