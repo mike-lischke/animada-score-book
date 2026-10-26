@@ -106,7 +106,7 @@ test.describe("Settings — Permission Matrix Toggle", () => {
         await page.waitForTimeout(300);
 
         // Open the Settings dialog.
-        const gearButton = page.locator("[title='Display Options']");
+        const gearButton = page.locator("[title='Settings']");
         await gearButton.click();
         await page.waitForSelector("#settingsDialog", { timeout: 5000 });
 

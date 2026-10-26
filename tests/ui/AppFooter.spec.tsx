@@ -83,14 +83,14 @@ describe("AppFooter", { concurrent: false }, () => {
     it("shows the visible range the viewer reports", async () => {
         const container = renderFooter();
 
-        expect(container.querySelector(".appFooterRange")?.textContent).toBe("Measure 1 of 16");
+        expect(container.querySelector(".appFooterRange")?.textContent).toBe("Bar 1 of 16");
 
         await requisitions.execute("scoreViewportChanged", {
             position: 0, width: 0.125, startBar: 1, endBar: 2,
         });
 
         await waitFor(() => {
-            expect(container.querySelector(".appFooterRange")?.textContent).toBe("Measures 1 – 2 of 16");
+            expect(container.querySelector(".appFooterRange")?.textContent).toBe("Bars 1 – 2 of 16");
         });
     });
 
@@ -169,7 +169,7 @@ describe("AppFooter", { concurrent: false }, () => {
         });
 
         await waitFor(() => {
-            expect(container.querySelector(".appFooterRange")?.textContent).toBe("Measure 2 of 16");
+            expect(container.querySelector(".appFooterRange")?.textContent).toBe("Bar 2 of 16");
         });
 
         const rail = container.querySelector<HTMLDivElement>(".scoreNavigator")!;

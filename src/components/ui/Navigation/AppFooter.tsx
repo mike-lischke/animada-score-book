@@ -82,8 +82,8 @@ export class AppFooter extends UIComponent<IAppFooterProps, IAppFooterState> {
         const { viewport } = this.state;
 
         const rangeCaption = viewport.startBar === viewport.endBar
-            ? `Measure ${viewport.startBar} of ${barCount}`
-            : `Measures ${viewport.startBar} – ${viewport.endBar} of ${barCount}`;
+            ? `Bar ${viewport.startBar} of ${barCount}`
+            : `Bars ${viewport.startBar} – ${viewport.endBar} of ${barCount}`;
 
         const { newCount, totalCount, silent, showHistory } = notifications;
         let notificationIcon: ComponentChild;

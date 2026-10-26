@@ -10,7 +10,7 @@ exports[`AppFooter > renders the compact footer 1`] = `
     <span
       class="label appFooterRange"
     >
-      Measure 1 of 16
+      Bar 1 of 16
     </span>
     <div
       class="scoreNavigator appFooterNavigator appFooterNavigator"
@@ -223,7 +223,7 @@ exports[`AppFooter > renders with all props set 1`] = `
     <span
       class="label appFooterRange"
     >
-      Measure 1 of 8
+      Bar 1 of 8
     </span>
     <div
       class="scoreNavigator appFooterNavigator appFooterNavigator"
@@ -356,7 +356,7 @@ exports[`AppFooter > renders with the minimum props 1`] = `
     <span
       class="label appFooterRange"
     >
-      Measure 1 of 16
+      Bar 1 of 16
     </span>
     <div
       class="scoreNavigator appFooterNavigator appFooterNavigator"

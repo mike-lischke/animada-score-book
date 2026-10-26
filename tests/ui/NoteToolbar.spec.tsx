@@ -99,7 +99,7 @@ describe("NoteToolbar", { concurrent: false }, () => {
 
         expect(result.container.querySelector(".selection-toolbar-instrument")?.textContent)
             .toBe(track.instrument.displayName);
-        expect(result.container.querySelector(".selection-toolbar-position")?.textContent).toBe("Measure 1");
+        expect(result.container.querySelector(".selection-toolbar-position")?.textContent).toBe("Bar 1");
     });
 
     it("captions the sections of a note selection and keeps the styles on a tray of their own", () => {

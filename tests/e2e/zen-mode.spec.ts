@@ -48,7 +48,6 @@ const openScore = async (page: Page, mode: TrackViewMode, repeatSecondBar = fals
             entryMode: data.entryMode,
             loop: false,
             countIn: false,
-            tutorialEnabled: false,
             viewSettings: { arrangementViewSettings: { displayMode: data.mode } },
         }));
     }, { packed: stringifyPackedArrangement(snapshot), mode, entryMode: EditEntryMode.Overwrite });

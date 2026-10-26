@@ -155,7 +155,7 @@ test("sets the mark on a track piece and clears it again", async ({ page }) => {
     await expect(pieceTray(page)).toBeVisible();
     await expect(page.locator("#selectionEditPopup .selection-toolbar-instrument"))
         .toHaveText(instrumentName!.trim());
-    await expect(page.locator("#selectionEditPopup .selection-toolbar-position")).toHaveText("Measure 2");
+    await expect(page.locator("#selectionEditPopup .selection-toolbar-position")).toHaveText("Bar 2");
     await expect(pieceTray(page).locator(".selection-toolbar-action")).toHaveCount(2);
     await expect(page.locator("#selectionEditPopup .selection-toolbar-section")).toHaveCount(0);
 

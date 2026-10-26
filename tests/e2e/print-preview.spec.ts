@@ -1034,7 +1034,7 @@ test.describe("print preview with extreme content", () => {
 
         const warning = preview.locator(".print-preview-warning");
         await expect(warning).toBeVisible();
-        await expect(warning).toContainText("Measure 1 is wider than the page content");
+        await expect(warning).toContainText("Bar 1 is wider than the page content");
         await expect(warning).toContainText("Reduce the print scale");
 
         // The layout states the scale the user set and reports the overflow instead of fitting the content to the

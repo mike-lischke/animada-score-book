@@ -6,7 +6,7 @@
             "localStorage": [
                 {
                     "name": "asb-ui-settings",
-                    "value": "{\"tutorialEnabled\":false}"
+                    "value": "{}"
                 }
             ]
         }

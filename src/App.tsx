@@ -53,7 +53,6 @@ import {
 import { ArrangementMigrator } from "./core/serialisation/migration/ArrangementMigrator.js";
 import { stringifyPackedArrangement, tryParsePackedArrangement } from "./core/serialisation/snapshot-packing.js";
 import { SmuflFontLoader } from "./core/smufl/SmuflFontLoader.js";
-import { mixerStepIndex, tutorialSteps } from "./core/TutorialSteps.js";
 import { EditEntryMode, TrackViewMode, type IArrangementSnapshot } from "./core/types/general.js";
 import { SelectionGranularity } from "./ui/SelectionSerializer.js";
 import { UndoManager } from "./core/UndoManager.js";
@@ -70,7 +69,6 @@ import type { PermissionEditor } from "./ui/PermissionEditor.js";
 import { PrintSession } from "./ui/PrintSession.js";
 import { SelectionManager } from "./ui/SelectionManager.js";
 import type { SettingsDialog } from "./ui/SettingsDialog.js";
-import type { TutorialWizard } from "./ui/TutorialWizard.js";
 import type { UserGroupEditor } from "./ui/UserGroupEditor.js";
 import { isMobile } from "./ui/index.js";
 
@@ -120,7 +118,6 @@ interface IAppDialogs {
     SettingsDialog?: typeof SettingsDialog;
     UserGroupEditor?: typeof UserGroupEditor;
     PermissionEditor?: typeof PermissionEditor;
-    TutorialWizard?: typeof TutorialWizard;
     ReleaseNotesDialog?: typeof ReleaseNotesDialog;
 }
 
@@ -186,7 +183,6 @@ export class App extends UIComponent<{}, IAppState> {
     private userGroupEditorRef = createRef<UserGroupEditor | null>();
     private permissionEditorRef = createRef<PermissionEditor | null>();
     private exportDialogRef = createRef<Dialog | null>();
-    private tutorialWizardRef = createRef<TutorialWizard | null>();
     private valueDialogRef = createRef<ValueDialog | null>();
     private confirmDialogRef = createRef<ConfirmDialog | null>();
     private newScoreDialogRef = createRef<NewScoreDialog | null>();
@@ -221,8 +217,6 @@ export class App extends UIComponent<{}, IAppState> {
 
     /** True while an MP3 export is running, to keep the export button disabled. */
     private exporting = false;
-
-    private currentTutorialStep = 0;
 
     public constructor(props: {}) {
         super(props);
@@ -505,7 +499,7 @@ export class App extends UIComponent<{}, IAppState> {
                 <img id="titleLogo" src="/logo.svg" />
                 <Button
                     className="du-btn-ghost displayOptionsButton"
-                    title="Display Options"
+                    title="Settings"
                     data-tutorial="display-options"
                     onClick={this.handleDisplayOptionsClick}
                 >
@@ -679,16 +673,6 @@ export class App extends UIComponent<{}, IAppState> {
                         {dialogs.SettingsDialog &&
                             <dialogs.SettingsDialog ref={this.settingsDialogRef} fontLoader={this.smuflFontLoader} />
                         }
-                        {dialogs.TutorialWizard &&
-                            <dialogs.TutorialWizard
-                                ref={this.tutorialWizardRef}
-                                steps={tutorialSteps}
-                                tutorialEnabled={AppStorage.loadUISettings()?.tutorialEnabled ?? true}
-                                onTutorialEnabledChange={this.handleTutorialEnabledChange}
-                                onStepChange={this.handleTutorialStepChange}
-                                onClose={this.handleTutorialClose}
-                            />
-                        }
                         <BackendDisconnectedDialog
                             ref={this.backendDisconnectedDialogRef}
                             onReconnected={() => {
@@ -834,7 +818,7 @@ export class App extends UIComponent<{}, IAppState> {
 
         const items: IDropdownItem[] = [
             {
-                label: "Display Options",
+                label: "Settings",
                 icon: <Icon src={UIIcon.Gear} />,
                 onClick: this.handleDisplayOptionsClick,
             },
@@ -1240,20 +1224,6 @@ export class App extends UIComponent<{}, IAppState> {
         ]);
 
         const params = new URL(window.location.href).searchParams;
-        const hasBananaDrum = params.has("a") || params.has("a2");
-        const hasScoreParam = params.has("score");
-
-        const showTutorial = !hasBananaDrum && !hasScoreParam
-            && (AppStorage.loadUISettings()?.tutorialEnabled ?? true);
-
-        if (showTutorial) {
-            this.initAppState();
-            this.setState({ phase: AppPhase.Running }, () => {
-                void this.openTutorialWizard();
-            });
-
-            return;
-        }
 
         await this.loadInitialScore(params);
     }
@@ -1298,47 +1268,6 @@ export class App extends UIComponent<{}, IAppState> {
             }
         });
     }
-
-    private handleTutorialClose = (completed: boolean): void => {
-        this.tutorialWizardRef.current?.close(completed);
-
-        // Closing on the mixer step must restore the panel state the tutorial expanded.
-        if (this.currentTutorialStep === mixerStepIndex) {
-            this.toggleMixerIf(this.isMixerExpanded());
-        }
-
-        this.currentTutorialStep = 0;
-        this.loadScorebook(undefined);
-    };
-
-    private handleTutorialStepChange = (stepIndex: number): void => {
-        const prevStep = this.currentTutorialStep;
-        this.currentTutorialStep = stepIndex;
-
-        if (stepIndex === mixerStepIndex) {
-            this.toggleMixerIf(!this.isMixerExpanded());
-        }
-
-        if (prevStep === mixerStepIndex && stepIndex !== mixerStepIndex) {
-            this.toggleMixerIf(this.isMixerExpanded());
-        }
-    };
-
-    private isMixerExpanded(): boolean {
-        return document.querySelector(".track-controls-list")?.classList.contains("expanded") ?? false;
-    }
-
-    private toggleMixerIf(condition: boolean): void {
-        if (!condition) {
-            return;
-        }
-
-        document.querySelector<HTMLElement>("#trackControlsToggle")?.click();
-    }
-
-    private handleTutorialEnabledChange = (enabled: boolean): void => {
-        AppStorage.saveSetting("tutorialEnabled", enabled);
-    };
 
     private handleGithubClick = () => {
         window.open("https://github.com/mike-lischke/animada-score-book", "_blank");
@@ -1898,12 +1827,6 @@ export class App extends UIComponent<{}, IAppState> {
         return new UndoManager(this.dataModel, () => {
             return this.selectionManager.serialisedSelection;
         });
-    }
-
-    private initAppState(): void {
-        this.undoManager?.dispose();
-        this.undoManager = this.createUndoManager();
-        this.arrangementPlayer = new ArrangementPlayer(this.dataModel);
     }
 
     private loadScorebook(source?: IArrangementSnapshot | URLSearchParams | ISbDmScore) {
@@ -2592,23 +2515,6 @@ export class App extends UIComponent<{}, IAppState> {
         }
 
         await this.permissionEditorRef.current?.open(target, entry);
-    }
-
-    /**
-     * Opens the tutorial, importing its code on first use.
-     */
-    private async openTutorialWizard(): Promise<void> {
-        const { dialogs } = this.state;
-        if (dialogs.TutorialWizard) {
-            this.tutorialWizardRef.current?.open();
-
-            return;
-        }
-
-        const { TutorialWizard } = await import("./ui/TutorialWizard.js");
-        this.setState({ dialogs: { ...dialogs, TutorialWizard } }, () => {
-            this.tutorialWizardRef.current?.open();
-        });
     }
 
     /**

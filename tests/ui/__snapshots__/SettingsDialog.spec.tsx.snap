@@ -7,6 +7,5 @@ exports[`SettingsDialog (class) > matches a snapshot of the offered settings 1`]
   "Track viewer zoom",
   "Add a bar when notes run past the last one",
   "Show permission indicator",
-  "Show tutorial on startup",
 ]
 `;

@@ -60,13 +60,13 @@ describe("SelectionToolbar", { concurrent: false }, () => {
     });
 
     it("draws the instrument, its dot and the position of the addressed elements", () => {
-        const result = renderCard({ instrument: "Caixa", position: "Measure 2", color: "#123456" }, [{ actions: [] }]);
+        const result = renderCard({ instrument: "Caixa", position: "Bar 2", color: "#123456" }, [{ actions: [] }]);
         const dot = result.container.querySelector<HTMLElement>(".selection-toolbar-dot");
 
         expect(dot?.style.backgroundColor).toBe("rgb(18, 52, 86)");
         expect(result.container.querySelector(".selection-toolbar-instrument")?.textContent).toBe("Caixa");
         expect(result.container.querySelector(".selection-toolbar-separator")?.textContent).toBe("-");
-        expect(result.container.querySelector(".selection-toolbar-position")?.textContent).toBe("Measure 2");
+        expect(result.container.querySelector(".selection-toolbar-position")?.textContent).toBe("Bar 2");
     });
 
     it("leaves the position out while the toolbar names one element", () => {

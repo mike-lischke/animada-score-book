@@ -162,16 +162,16 @@ export abstract class SelectionToolbar<P extends ICommonUIProperties, S> extends
         });
 
         if (measures.length === 1) {
-            return `Measure ${measures[0]}`;
+            return `Bar ${measures[0]}`;
         }
 
         const first = measures[0];
         const last = measures[measures.length - 1];
         if (last - first === measures.length - 1) {
-            return `Measures ${first} – ${last}`;
+            return `Bars ${first} – ${last}`;
         }
 
-        return `${measures.length} measures`;
+        return `${measures.length} bars`;
     }
 
     /**

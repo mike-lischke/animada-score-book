@@ -66,7 +66,7 @@ describe("TrackPieceToolbar", { concurrent: false }, () => {
 
         expect(result.container.querySelector(".selection-toolbar-instrument")?.textContent)
             .toBe(track.instrument.displayName);
-        expect(result.container.querySelector(".selection-toolbar-position")?.textContent).toBe("Measure 2");
+        expect(result.container.querySelector(".selection-toolbar-position")?.textContent).toBe("Bar 2");
         expect(result.container.querySelectorAll(".selection-toolbar-action")).toHaveLength(2);
         expect(result.container.querySelector(".selection-toolbar-section")).toBeNull();
     });
@@ -74,7 +74,7 @@ describe("TrackPieceToolbar", { concurrent: false }, () => {
     it("names the range of measures the selection covers", () => {
         const result = renderToolbar([measure(2), measure(3)]);
 
-        expect(result.container.querySelector(".selection-toolbar-position")?.textContent).toBe("Measures 2 – 3");
+        expect(result.container.querySelector(".selection-toolbar-position")?.textContent).toBe("Bars 2 – 3");
     });
 
     it("offers the one-bar repeat from the second measure on", () => {

@@ -516,12 +516,12 @@ export class PrintPreview extends UIComponent<IPrintPreviewProperties, IPrintPre
      */
     private overflowMessage(overflow: IPrintOverflow): string {
         const bars = overflow.firstBar === overflow.lastBar
-            ? `Measure ${overflow.firstBar}`
-            : `Measures ${overflow.firstBar}–${overflow.lastBar}`;
+            ? `Bar ${overflow.firstBar}`
+            : `Bars ${overflow.firstBar}–${overflow.lastBar}`;
 
         if (overflow.kind === PrintOverflowKind.MeasureTooWide) {
             return `${bars} is wider than the page content. Reduce the print scale to ${this.fitPercent(overflow)}% or`
-                + " narrow the measure.";
+                + " narrow the bar.";
         }
 
         return `${bars} is taller than the page content. Reduce the print scale or the number of printed tracks.`;
