@@ -231,7 +231,7 @@ feature.
 | Instrument reference layout            | **One document** (`docs/en/instruments.md`) with one section per instrument type                                                                |
 | Instrument sections                    | 11 sections: Agogô, 4-Bell Agogo, Chocalho, Tamborim, Repinique, Repinique (Whippy Sticks), Caixa, Timbau, Terceira Surdo, Mid Surdo, Low Surdo |
 | Release artifact                       | Introduce a deployment package script; releases then carry a real archive                                                                       |
-| Demo material                          | Database is emptied first; the maintainer adds the Ijexá and I-Break demo scores for Phases 4 and 6                                             |
+| Demo material                          | Seeded: `build/seed.sql` holds the folder `Common Scores` with `Ijexá` and `Beija Flor 2004 - Bossa 2 ("I-Break")`                              |
 | Language                               | English only; `docs/de/` and `docs/pt/` stay reserved                                                                                           |
 | Onboarding tutorial                    | Disabled for 2.0.0; wizard, steps, setting, styles and tests removed; rework tracked in issue #63                                               |
 | Roadmap and demo-access implementation | Out of scope for the documentation work                                                                                                         |

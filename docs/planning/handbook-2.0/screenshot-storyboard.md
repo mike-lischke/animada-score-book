@@ -2,8 +2,8 @@
 
 - Status: Phase 1 draft for maintainer review (issue #62)
 - Scope: every image the handbook and the refreshed README need, with capture context so images can be reproduced
-- Dependency: Ijexá and I-Break demo scores. The maintainer empties the database and adds both scores before Phase 4
-  starts; until then the corresponding captures stay blocked
+- Dependency: Ijexá and I-Break demo scores. Both are seeded in `build/seed.sql` under `Common Scores`, so the
+  corresponding captures are unblocked
 - Storage: `docs/images/en/` for screenshots with English UI, `docs/images/notation/` for notation crops without UI
   text. `docs/grid-view.png` and `docs/staff-view.png` are from before 1.3.0 and are replaced, not reused
 
