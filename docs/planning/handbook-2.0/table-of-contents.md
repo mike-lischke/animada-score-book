@@ -49,17 +49,17 @@ articulations and dynamics look), then one section per instrument type:
 
 | Section | Instrument                | Note styles | Special drawing                               |
 | ------- | ------------------------- | ----------- | --------------------------------------------- |
-| 1       | Agogô                     | 2           | Two staff lines, low/high bell                |
-| 2       | 4-Bell Agogo              | 4           | Four staff lines, four bells                  |
+| 1       | Agogô 2-Bell              | 2           | Two staff lines, low/high bell                |
+| 2       | Agogô 4-Bell              | 4           | Four staff lines, four bells                  |
 | 3       | Chocalho                  | 2           | One line, triangle head, ghost parenthesis    |
 | 4       | Tamborim                  | 2           | One line, cross head, accent and ghost        |
 | 5       | Repinique                 | 7           | One line, stick and hand techniques, rim shot |
 | 6       | Repinique (Whippy Sticks) | 2           | One line, accent and ghost                    |
 | 7       | Caixa                     | 4           | One line, press roll, rim shot                |
 | 8       | Timbau                    | 3           | One line, square head, open/slap/bass         |
-| 9       | Terceira Surdo            | 2           | One line, open/muted, damped plus sign        |
-| 10      | Mid Surdo                 | 2           | Same as Terceira Surdo                        |
-| 11      | Low Surdo                 | 2           | Same as Terceira Surdo                        |
+| 9       | Surdo Terceira            | 2           | One line, open/muted, damped plus sign        |
+| 10      | Surdo Segunda             | 2           | Same as Surdo Terceira                        |
+| 11      | Surdo Primeira            | 2           | Same as Surdo Terceira                        |
 
 Each section uses the same internal order: what the instrument is, how it sits on the staff, a table of note styles
 (name, marker, meaning, sample), the articulations the track offers, playback notes, and a cross-reference to the
@@ -69,12 +69,12 @@ editing instructions that create these marks.
 
 ```
 docs/
-  en/            English handbook (created in Phase 2)
+  en/            English handbook (structure established in Phase 2)
   de/            reserved, not created
   pt/            reserved, not created
-  images/
-    en/          screenshots with English UI
-    notation/    notation crops without UI text
+  images/        shared visual assets, see images/README.md
+    en/          screenshots with English UI (created with the first image)
+    notation/    notation crops without UI text (created with the first image)
   adr/           architecture decisions (unchanged)
   design/        design contracts (unchanged)
   planning/      phase artifacts for issue #62 (not published)

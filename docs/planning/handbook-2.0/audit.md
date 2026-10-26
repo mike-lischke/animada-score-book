@@ -225,19 +225,19 @@ feature.
 
 ### Taken in Phase 1
 
-| Decision                               | Result                                                                                                                                          |
-| -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| Library term                           | **Score Library**; "Score Tree" is not used                                                                                                     |
-| Instrument reference layout            | **One document** (`docs/en/instruments.md`) with one section per instrument type                                                                |
-| Instrument sections                    | 11 sections: Agogô, 4-Bell Agogo, Chocalho, Tamborim, Repinique, Repinique (Whippy Sticks), Caixa, Timbau, Terceira Surdo, Mid Surdo, Low Surdo |
-| Release artifact                       | Introduce a deployment package script; releases then carry a real archive                                                                       |
-| Demo material                          | Seeded: `build/seed.sql` holds the folder `Common Scores` with `Ijexá` and `Beija Flor 2004 - Bossa 2 ("I-Break")`                              |
-| Language                               | English only; `docs/de/` and `docs/pt/` stay reserved                                                                                           |
-| Onboarding tutorial                    | Disabled for 2.0.0; wizard, steps, setting, styles and tests removed; rework tracked in issue #63                                               |
-| Roadmap and demo-access implementation | Out of scope for the documentation work                                                                                                         |
-| Release blockers                       | None; all candidates are documented as limitations (2026-10-26)                                                                                 |
-| UI wording                             | Footer says `Bar`/`Bars`; `Display Options` renamed to `Settings`; print warning and selection caption use `Bar` (applied 2026-10-26)           |
-| Terminology and table of contents      | Confirmed by the maintainer (2026-10-26)                                                                                                        |
+| Decision                               | Result                                                                                                                                                          |
+| -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Library term                           | **Score Library**; "Score Tree" is not used                                                                                                                     |
+| Instrument reference layout            | **One document** (`docs/en/instruments.md`) with one section per instrument type                                                                                |
+| Instrument sections                    | 11 sections: Agogô 2-Bell, Agogô 4-Bell, Chocalho, Tamborim, Repinique, Repinique (Whippy Sticks), Caixa, Timbau, Surdo Terceira, Surdo Segunda, Surdo Primeira |
+| Release artifact                       | Introduce a deployment package script; releases then carry a real archive                                                                                       |
+| Demo material                          | Seeded: `build/seed.sql` holds the folder `Common Scores` with `Ijexá` and `Beija Flor 2004 - Bossa 2 ("I-Break")`                                              |
+| Language                               | English only; `docs/de/` and `docs/pt/` stay reserved                                                                                                           |
+| Onboarding tutorial                    | Disabled for 2.0.0; wizard, steps, setting, styles and tests removed; rework tracked in issue #63                                                               |
+| Roadmap and demo-access implementation | Out of scope for the documentation work                                                                                                                         |
+| Release blockers                       | None; all candidates are documented as limitations (2026-10-26)                                                                                                 |
+| UI wording                             | Footer says `Bar`/`Bars`; `Display Options` renamed to `Settings`; print warning and selection caption use `Bar` (applied 2026-10-26)                           |
+| Terminology and table of contents      | Confirmed by the maintainer (2026-10-26)                                                                                                                        |
 
 ### Still open
 

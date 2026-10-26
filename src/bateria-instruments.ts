@@ -88,7 +88,7 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
     typeId: "0",
     icon: agogo2Icon,
     displayOrder: 0,
-    displayName: "Agogô",
+    displayName: "Agogô 2-Bell",
     variants: [
         {
             id: "1",
@@ -96,7 +96,7 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             symbol: {
                 src: arrowDownIcon,
                 shortDescription: "Low",
-                description: "Low Agogo Bell"
+                description: "Low bell"
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
@@ -112,7 +112,7 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             symbol: {
                 src: arrowUpIcon,
                 shortDescription: "High",
-                description: "High Agogo Bell"
+                description: "High bell"
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
@@ -129,7 +129,7 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
     typeId: "a",
     icon: agogo4Icon,
     displayOrder: 1,
-    displayName: "4-Bell Agogo",
+    displayName: "Agogô 4-Bell",
     variants: [
         {
             id: "1",
@@ -137,7 +137,7 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             symbol: {
                 src: arrowDownWithLineIcon,
                 shortDescription: "Lowest",
-                description: "Lowest 4-Bell Agogo"
+                description: "Lowest bell"
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
@@ -153,7 +153,7 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             symbol: {
                 src: arrowHalfDownIcon,
                 shortDescription: "Lower",
-                description: "Lower 4-Bell Agogo"
+                description: "Lower bell"
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
@@ -169,7 +169,7 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             symbol: {
                 src: arrowHalfUpIcon,
                 shortDescription: "Higher",
-                description: "Higher 4-Bell Agogo"
+                description: "Higher bell"
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
@@ -185,7 +185,7 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
             symbol: {
                 src: arrowUpWithLineIcon,
                 shortDescription: "Highest",
-                description: "Highest 4-Bell Agogo"
+                description: "Highest bell"
             },
             characteristics: {
                 excitationMode: ExcitationMode.Struck,
@@ -538,7 +538,7 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
     typeId: "7",
     icon: highSurdoIcon,
     displayOrder: 8,
-    displayName: "Terceira Surdo",
+    displayName: "Surdo Terceira",
     variants: [
         {
             id: "1",
@@ -575,7 +575,7 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
     typeId: "8",
     icon: midSurdoIcon,
     displayOrder: 9,
-    displayName: "Mid Surdo",
+    displayName: "Surdo Segunda",
     variants: [
         {
             id: "1",
@@ -612,7 +612,7 @@ export const bateriaInstruments: IInstrumentMeta[] = [{
     typeId: "9",
     icon: lowSurdoIcon,
     displayOrder: 10,
-    displayName: "Low Surdo",
+    displayName: "Surdo Primeira",
     variants: [
         {
             id: "1",

@@ -91,17 +91,17 @@ personal data and is deleted after the crops are captured.
 | S-51  | P3  | Error page                       | Error boundary with retry, reload, report, details                      | troubleshooting                     | `en/troubleshooting/error-page.png`       |
 | S-52  | P3  | Backend setup                    | `Initialize Database` dialog with engine, host, port, database          | installation, troubleshooting       | `en/administration/backend-setup.png`     |
 | S-53  | P3  | Release notes dialog             | Dialog with the 2.0.0 notes once written                                | presentation                        | `en/presentation/release-notes.png`       |
-| S-54a | P1  | Agogô notation                   | Instrument reference score, Agogô track, both bells, accent and ghost   | instruments                         | `notation/agogo.png`                      |
-| S-54b | P1  | 4-Bell Agogo notation            | Four bells on four lines                                                | instruments                         | `notation/agogo-4-bell.png`               |
+| S-54a | P1  | Agogô 2-Bell notation            | Reference score, Agogô 2-Bell track, both bells, accent and ghost       | instruments                         | `notation/agogo-2-bell.png`               |
+| S-54b | P1  | Agogô 4-Bell notation            | Four bells on four lines                                                | instruments                         | `notation/agogo-4-bell.png`               |
 | S-54c | P1  | Chocalho notation                | Accent and ghost variants                                               | instruments                         | `notation/chocalho.png`                   |
 | S-54d | P1  | Tamborim notation                | Accent and ghost variants                                               | instruments                         | `notation/tamborim.png`                   |
 | S-54e | P1  | Repinique notation               | All seven styles, including rim shot, rim, buzz, open and slap          | instruments                         | `notation/repinique.png`                  |
 | S-54f | P1  | Repinique Whippy notation        | Accent and ghost variants                                               | instruments                         | `notation/repinique-whippy.png`           |
 | S-54g | P1  | Caixa notation                   | Normal, ghost, press roll, rim shot                                     | instruments                         | `notation/caixa.png`                      |
 | S-54h | P1  | Timbau notation                  | Open, slap and bass                                                     | instruments                         | `notation/timbau.png`                     |
-| S-54i | P1  | Terceira Surdo notation          | Center and muted                                                        | instruments                         | `notation/surdo-terceira.png`             |
-| S-54j | P1  | Mid Surdo notation               | Center and muted                                                        | instruments                         | `notation/surdo-mid.png`                  |
-| S-54k | P1  | Low Surdo notation               | Center and muted                                                        | instruments                         | `notation/surdo-low.png`                  |
+| S-54i | P1  | Surdo Terceira notation          | Center and muted                                                        | instruments                         | `notation/surdo-terceira.png`             |
+| S-54j | P1  | Surdo Segunda notation           | Center and muted                                                        | instruments                         | `notation/surdo-segunda.png`              |
+| S-54k | P1  | Surdo Primeira notation          | Center and muted                                                        | instruments                         | `notation/surdo-primeira.png`             |
 | S-55  | P2  | Demo entry                       | Demo access screen once the separate task is implemented                | overview, first steps               | `en/getting-started/demo-access.png`      |
 
 ## Priority
